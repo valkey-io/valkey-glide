@@ -64,4 +64,31 @@ internal partial class Request
 
         return Simple<long>(RequestType.ZAdd, [.. args]);
     }
+
+    public static Cmd<long, bool> SortedSetRemoveAsync(ValkeyKey key, ValkeyValue member, CommandFlags flags = CommandFlags.None)
+    {
+        if (flags != CommandFlags.None)
+        {
+            throw new NotImplementedException("Command flags are not supported by GLIDE");
+        }
+
+        GlideString[] args = [key.ToGlideString(), member.ToGlideString()];
+        return new(RequestType.ZRem, args, false, response => response == 1);
+    }
+
+    public static Cmd<long, long> SortedSetRemoveAsync(ValkeyKey key, ValkeyValue[] members, CommandFlags flags = CommandFlags.None)
+    {
+        if (flags != CommandFlags.None)
+        {
+            throw new NotImplementedException("Command flags are not supported by GLIDE");
+        }
+
+        List<GlideString> args = [key.ToGlideString()];
+        foreach (ValkeyValue member in members)
+        {
+            args.Add(member.ToGlideString());
+        }
+
+        return Simple<long>(RequestType.ZRem, [.. args]);
+    }
 }

@@ -170,4 +170,93 @@ public class SortedSetCommandTests
         Assert.Equal("0", 0.0.ToGlideString().ToString());
         Assert.Equal("10.5", 10.5.ToGlideString().ToString());
     }
+
+    [Fact]
+    public void SortedSetRemoveAsync_SingleMember_ReturnsCorrectArgs()
+    {
+        // Act
+        var result = Request.SortedSetRemoveAsync("key", "member");
+
+        // Assert
+        Assert.Equal(["ZREM", "key", "member"], result.GetArgs());
+    }
+
+    [Fact]
+    public void SortedSetRemoveAsync_SingleMemberWithFlags_ReturnsCorrectArgs()
+    {
+        // Act
+        var result = Request.SortedSetRemoveAsync("key", "member", CommandFlags.None);
+
+        // Assert
+        Assert.Equal(["ZREM", "key", "member"], result.GetArgs());
+    }
+
+    [Fact]
+    public void SortedSetRemoveAsync_MultipleMembers_ReturnsCorrectArgs()
+    {
+        // Arrange
+        var members = new ValkeyValue[] { "member1", "member2", "member3" };
+
+        // Act
+        var result = Request.SortedSetRemoveAsync("key", members);
+
+        // Assert
+        Assert.Equal(["ZREM", "key", "member1", "member2", "member3"], result.GetArgs());
+    }
+
+    [Fact]
+    public void SortedSetRemoveAsync_MultipleMembersWithFlags_ReturnsCorrectArgs()
+    {
+        // Arrange
+        var members = new ValkeyValue[] { "member1", "member2" };
+
+        // Act
+        var result = Request.SortedSetRemoveAsync("key", members, CommandFlags.None);
+
+        // Assert
+        Assert.Equal(["ZREM", "key", "member1", "member2"], result.GetArgs());
+    }
+
+    [Fact]
+    public void SortedSetRemoveAsync_EmptyMembersArray_ReturnsCorrectArgs()
+    {
+        // Arrange
+        var emptyMembers = Array.Empty<ValkeyValue>();
+
+        // Act
+        var result = Request.SortedSetRemoveAsync("key", emptyMembers);
+
+        // Assert
+        Assert.Equal(["ZREM", "key"], result.GetArgs());
+    }
+
+    [Fact]
+    public void SortedSetRemoveAsync_SingleMemberThrowsOnUnsupportedFlags()
+    {
+        // Act & Assert
+        Assert.Throws<NotImplementedException>(() => Request.SortedSetRemoveAsync("key", "member", CommandFlags.DemandReplica));
+    }
+
+    [Fact]
+    public void SortedSetRemoveAsync_MultipleMembersThrowsOnUnsupportedFlags()
+    {
+        // Arrange
+        var members = new ValkeyValue[] { "member1", "member2" };
+
+        // Act & Assert
+        Assert.Throws<NotImplementedException>(() => Request.SortedSetRemoveAsync("key", members, CommandFlags.DemandReplica));
+    }
+
+    [Fact]
+    public void SortedSetRemoveAsync_SpecialMemberValues_ReturnsCorrectArgs()
+    {
+        // Test with special string values
+        var specialMembers = new ValkeyValue[] { "", " ", "null", "0", "-1" };
+
+        // Act
+        var result = Request.SortedSetRemoveAsync("key", specialMembers);
+
+        // Assert
+        Assert.Equal(["ZREM", "key", "", " ", "null", "0", "-1"], result.GetArgs());
+    }
 }

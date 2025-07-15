@@ -200,4 +200,176 @@ public class SortedSetCommandTests(TestConfiguration config)
         Assert.Equal(1, await client.SortedSetAddAsync(key, entries, CommandFlags.None));
         Assert.Equal(0, await client.SortedSetAddAsync(key, entries, When.Exists));
     }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
+    public async Task TestSortedSetRemove_SingleMember(BaseClient client)
+    {
+        string key = Guid.NewGuid().ToString();
+
+        // Test removing from non-existent key
+        Assert.False(await client.SortedSetRemoveAsync(key, "member1"));
+
+        // Add members first
+        Assert.True(await client.SortedSetAddAsync(key, "member1", 10.5));
+        Assert.True(await client.SortedSetAddAsync(key, "member2", 8.2));
+
+        // Test removing existing member
+        Assert.True(await client.SortedSetRemoveAsync(key, "member1"));
+
+        // Test removing already removed member
+        Assert.False(await client.SortedSetRemoveAsync(key, "member1"));
+
+        // Test removing non-existent member
+        Assert.False(await client.SortedSetRemoveAsync(key, "nonexistent"));
+
+        // Verify remaining member still exists
+        Assert.True(await client.SortedSetRemoveAsync(key, "member2"));
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
+    public async Task TestSortedSetRemove_MultipleMembers(BaseClient client)
+    {
+        string key = Guid.NewGuid().ToString();
+
+        // Test removing from non-existent key
+        Assert.Equal(0, await client.SortedSetRemoveAsync(key, new ValkeyValue[] { "member1", "member2" }));
+
+        // Add members first
+        var entries = new SortedSetEntry[]
+        {
+            new("member1", 10.5),
+            new("member2", 8.2),
+            new("member3", 15.0),
+            new("member4", 12.0)
+        };
+        Assert.Equal(4, await client.SortedSetAddAsync(key, entries));
+
+        // Test removing multiple existing members
+        Assert.Equal(2, await client.SortedSetRemoveAsync(key, new ValkeyValue[] { "member1", "member3" }));
+
+        // Test removing mix of existing and non-existing members
+        Assert.Equal(1, await client.SortedSetRemoveAsync(key, new ValkeyValue[] { "member2", "nonexistent", "member5" }));
+
+        // Test removing already removed members
+        Assert.Equal(0, await client.SortedSetRemoveAsync(key, new ValkeyValue[] { "member1", "member2" }));
+
+        // Verify only member4 remains
+        Assert.Equal(1, await client.SortedSetRemoveAsync(key, new ValkeyValue[] { "member4" }));
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
+    public async Task TestSortedSetRemove_EmptyArray(BaseClient client)
+    {
+        string key = Guid.NewGuid().ToString();
+
+        // Add some members first
+        Assert.True(await client.SortedSetAddAsync(key, "member1", 10.5));
+
+        // Test removing empty array
+        var emptyMembers = Array.Empty<ValkeyValue>();
+        Assert.Equal(0, await client.SortedSetRemoveAsync(key, emptyMembers));
+
+        // Verify member still exists
+        Assert.True(await client.SortedSetRemoveAsync(key, "member1"));
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
+    public async Task TestSortedSetRemove_DuplicateMembers(BaseClient client)
+    {
+        string key = Guid.NewGuid().ToString();
+
+        // Add members first
+        Assert.True(await client.SortedSetAddAsync(key, "member1", 10.5));
+        Assert.True(await client.SortedSetAddAsync(key, "member2", 8.2));
+
+        // Test removing with duplicate member names in array
+        var membersWithDuplicates = new ValkeyValue[] { "member1", "member1", "member2", "member1" };
+        Assert.Equal(2, await client.SortedSetRemoveAsync(key, membersWithDuplicates));
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
+    public async Task TestSortedSetRemove_SpecialValues(BaseClient client)
+    {
+        string key = Guid.NewGuid().ToString();
+
+        // Test with special string values
+        var specialMembers = new ValkeyValue[] { "", " ", "null", "0", "-1", "true", "false" };
+        
+        // Add special members with various scores
+        for (int i = 0; i < specialMembers.Length; i++)
+        {
+            Assert.True(await client.SortedSetAddAsync(key, specialMembers[i], i * 1.5));
+        }
+
+        // Remove some special members
+        Assert.Equal(3, await client.SortedSetRemoveAsync(key, new ValkeyValue[] { "", "null", "false" }));
+
+        // Remove remaining members one by one
+        Assert.True(await client.SortedSetRemoveAsync(key, " "));
+        Assert.True(await client.SortedSetRemoveAsync(key, "0"));
+        Assert.True(await client.SortedSetRemoveAsync(key, "-1"));
+        Assert.True(await client.SortedSetRemoveAsync(key, "true"));
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
+    public async Task TestSortedSetRemove_LargeSet(BaseClient client)
+    {
+        string key = Guid.NewGuid().ToString();
+
+        // Create a large set
+        var entries = new SortedSetEntry[100];
+        for (int i = 0; i < 100; i++)
+        {
+            entries[i] = new($"member{i}", i * 0.1);
+        }
+        Assert.Equal(100, await client.SortedSetAddAsync(key, entries));
+
+        // Remove members in batches
+        var firstBatch = new ValkeyValue[25];
+        for (int i = 0; i < 25; i++)
+        {
+            firstBatch[i] = $"member{i}";
+        }
+        Assert.Equal(25, await client.SortedSetRemoveAsync(key, firstBatch));
+
+        // Remove individual members
+        for (int i = 25; i < 50; i++)
+        {
+            Assert.True(await client.SortedSetRemoveAsync(key, $"member{i}"));
+        }
+
+        // Remove remaining members in one batch
+        var remainingBatch = new ValkeyValue[50];
+        for (int i = 50; i < 100; i++)
+        {
+            remainingBatch[i - 50] = $"member{i}";
+        }
+        Assert.Equal(50, await client.SortedSetRemoveAsync(key, remainingBatch));
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
+    public async Task TestSortedSetRemove_WithCommandFlags(BaseClient client)
+    {
+        string key = Guid.NewGuid().ToString();
+
+        // Add a member first
+        Assert.True(await client.SortedSetAddAsync(key, "member1", 10.5));
+
+        // Test single member remove with CommandFlags.None
+        Assert.True(await client.SortedSetRemoveAsync(key, "member1", CommandFlags.None));
+
+        // Add multiple members
+        var entries = new SortedSetEntry[] { new("member2", 8.0), new("member3", 12.0) };
+        Assert.Equal(2, await client.SortedSetAddAsync(key, entries));
+
+        // Test multiple member remove with CommandFlags.None
+        Assert.Equal(2, await client.SortedSetRemoveAsync(key, new ValkeyValue[] { "member2", "member3" }, CommandFlags.None));
+    }
 }

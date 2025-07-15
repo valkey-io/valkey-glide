@@ -193,6 +193,22 @@ internal class BatchTestUtils
         _ = batch.SortedSetAdd(key2, "newMember", 7.5, SortedSetWhen.NotExists);
         testData.Add(new(true, "SortedSetAdd(key2, newMember, 7.5, NotExists)"));
 
+        // Test single member remove
+        _ = batch.SortedSetRemove(key1, "member1");
+        testData.Add(new(true, "SortedSetRemove(key1, member1)"));
+
+        // Test multiple member remove
+        _ = batch.SortedSetRemove(key1, new ValkeyValue[] { "member2", "member3" });
+        testData.Add(new(2L, "SortedSetRemove(key1, [member2, member3])"));
+
+        // Test remove non-existent member
+        _ = batch.SortedSetRemove(key1, "nonexistent");
+        testData.Add(new(false, "SortedSetRemove(key1, nonexistent)"));
+
+        // Test remove from key2
+        _ = batch.SortedSetRemove(key2, "newMember");
+        testData.Add(new(true, "SortedSetRemove(key2, newMember)"));
+
         return testData;
     }
 
