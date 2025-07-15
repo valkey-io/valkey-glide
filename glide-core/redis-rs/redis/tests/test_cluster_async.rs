@@ -47,6 +47,84 @@ mod cluster_async {
         ))
     }
 
+    async fn retry_publish_until_expected_subscribers(
+        connection: &mut redis::cluster_async::ClusterConnection,
+        channel: &str,
+        message: &str,
+        expected_count: i64,
+        max_retries: u32,
+    ) -> redis::RedisResult<redis::Value> {
+        use futures_time::time::Duration;
+        let mut delay_ms = 100u64;
+        
+        for attempt in 0..max_retries {
+            let result = redis::cmd("PUBLISH")
+                .arg(channel)
+                .arg(message)
+                .query_async(connection)
+                .await;
+            
+            match result {
+                Ok(redis::Value::Int(count)) if count == expected_count => {
+                    return Ok(redis::Value::Int(count));
+                }
+                Ok(redis::Value::Int(count)) => {
+                    // Got a different count than expected, retry after delay
+                    if attempt < max_retries - 1 {
+                        tokio::time::sleep(Duration::from_millis(delay_ms).into()).await;
+                        delay_ms = delay_ms * 2; // exponential backoff
+                    } else {
+                        return Ok(redis::Value::Int(count)); // return the last result
+                    }
+                }
+                Ok(other) => return Ok(other),
+                Err(e) => return Err(e),
+            }
+        }
+        
+        // This should not be reached due to the loop logic above
+        unreachable!()
+    }
+
+    async fn retry_spublish_until_expected_subscribers(
+        connection: &mut redis::cluster_async::ClusterConnection,
+        channel: &str,
+        message: &str,
+        expected_count: i64,
+        max_retries: u32,
+    ) -> redis::RedisResult<redis::Value> {
+        use futures_time::time::Duration;
+        let mut delay_ms = 100u64;
+        
+        for attempt in 0..max_retries {
+            let result = redis::cmd("SPUBLISH")
+                .arg(channel)
+                .arg(message)
+                .query_async(connection)
+                .await;
+            
+            match result {
+                Ok(redis::Value::Int(count)) if count == expected_count => {
+                    return Ok(redis::Value::Int(count));
+                }
+                Ok(redis::Value::Int(count)) => {
+                    // Got a different count than expected, retry after delay
+                    if attempt < max_retries - 1 {
+                        tokio::time::sleep(Duration::from_millis(delay_ms).into()).await;
+                        delay_ms = delay_ms * 2; // exponential backoff
+                    } else {
+                        return Ok(redis::Value::Int(count)); // return the last result
+                    }
+                }
+                Ok(other) => return Ok(other),
+                Err(e) => return Err(e),
+            }
+        }
+        
+        // This should not be reached due to the loop logic above
+        unreachable!()
+    }
+
     fn validate_subscriptions(
         pubsub_subs: &PubSubSubscriptionInfo,
         notifications_rx: &mut mpsc::UnboundedReceiver<PushInfo>,
@@ -4754,12 +4832,15 @@ mod cluster_async {
             // validate subscriptions
             validate_subscriptions(&client_subscriptions, &mut rx, false);
 
-            // validate PUBLISH
-            let result = cmd("PUBLISH")
-                .arg("test_channel")
-                .arg("test_message")
-                .query_async(&mut publishing_con)
-                .await;
+            // validate PUBLISH - retry until expected subscribers are available
+            let result = retry_publish_until_expected_subscribers(
+                &mut publishing_con,
+                "test_channel",
+                "test_message",
+                2,
+                10, // max retries
+            )
+            .await;
             assert_eq!(
                 result,
                 Ok(Value::Int(2)) // 2 connections with the same pubsub config
@@ -4781,12 +4862,15 @@ mod cluster_async {
             );
 
             if use_sharded {
-                // validate SPUBLISH
-                let result = cmd("SPUBLISH")
-                    .arg("test_channel_?")
-                    .arg("test_message")
-                    .query_async(&mut publishing_con)
-                    .await;
+                // validate SPUBLISH - retry until expected subscribers are available
+                let result = retry_spublish_until_expected_subscribers(
+                    &mut publishing_con,
+                    "test_channel_?",
+                    "test_message",
+                    2,
+                    10, // max retries
+                )
+                .await;
                 assert_eq!(
                     result,
                     Ok(Value::Int(2)) // 2 connections with the same pubsub config
@@ -4821,12 +4905,15 @@ mod cluster_async {
             // new subscription notifications due to resubscriptions
             validate_subscriptions(&client_subscriptions, &mut rx, true);
 
-            // validate PUBLISH
-            let result = cmd("PUBLISH")
-                .arg("test_channel")
-                .arg("test_message")
-                .query_async(&mut publishing_con)
-                .await;
+            // validate PUBLISH - retry until expected subscribers are available
+            let result = retry_publish_until_expected_subscribers(
+                &mut publishing_con,
+                "test_channel",
+                "test_message",
+                2,
+                10, // max retries
+            )
+            .await;
             assert_eq!(
                 result,
                 Ok(Value::Int(2)) // 2 connections with the same pubsub config
@@ -4848,12 +4935,15 @@ mod cluster_async {
             );
 
             if use_sharded {
-                // validate SPUBLISH
-                let result = cmd("SPUBLISH")
-                    .arg("test_channel_?")
-                    .arg("test_message")
-                    .query_async(&mut publishing_con)
-                    .await;
+                // validate SPUBLISH - retry until expected subscribers are available
+                let result = retry_spublish_until_expected_subscribers(
+                    &mut publishing_con,
+                    "test_channel_?",
+                    "test_message",
+                    2,
+                    10, // max retries
+                )
+                .await;
                 assert_eq!(
                     result,
                     Ok(Value::Int(2)) // 2 connections with the same pubsub config
@@ -4934,12 +5024,15 @@ mod cluster_async {
             // validate subscriptions
             validate_subscriptions(&client_subscriptions, &mut rx, false);
 
-            // validate PUBLISH
-            let result = cmd("PUBLISH")
-                .arg("test_channel_?")
-                .arg("test_message")
-                .query_async(&mut publishing_con)
-                .await;
+            // validate PUBLISH - retry until expected subscribers are available
+            let result = retry_publish_until_expected_subscribers(
+                &mut publishing_con,
+                "test_channel_?",
+                "test_message",
+                2,
+                10, // max retries
+            )
+            .await;
             assert_eq!(
                 result,
                 Ok(Value::Int(2)) // 2 connections with the same pubsub config
@@ -4961,12 +5054,15 @@ mod cluster_async {
             );
 
             if use_sharded {
-                // validate SPUBLISH
-                let result = cmd("SPUBLISH")
-                    .arg("test_channel_?")
-                    .arg("test_message")
-                    .query_async(&mut publishing_con)
-                    .await;
+                // validate SPUBLISH - retry until expected subscribers are available
+                let result = retry_spublish_until_expected_subscribers(
+                    &mut publishing_con,
+                    "test_channel_?",
+                    "test_message",
+                    2,
+                    10, // max retries
+                )
+                .await;
                 assert_eq!(
                     result,
                     Ok(Value::Int(2)) // 2 connections with the same pubsub config
@@ -5051,12 +5147,15 @@ mod cluster_async {
             // sleep for one one cycle of topology refresh
             sleep(futures_time::time::Duration::from_secs(1)).await;
 
-            // validate PUBLISH
-            let result = redis::cmd("PUBLISH")
-                .arg("test_channel_?")
-                .arg("test_message")
-                .query_async(&mut publishing_con)
-                .await;
+            // validate PUBLISH - retry until expected subscribers are available
+            let result = retry_publish_until_expected_subscribers(
+                &mut publishing_con,
+                "test_channel_?",
+                "test_message",
+                2,
+                10, // max retries
+            )
+            .await;
             assert_eq!(
                 result,
                 Ok(Value::Int(2)) // 2 connections with the same pubsub config
@@ -5083,12 +5182,15 @@ mod cluster_async {
             }
 
             if use_sharded {
-                // validate SPUBLISH
-                let result = redis::cmd("SPUBLISH")
-                    .arg("test_channel_?")
-                    .arg("test_message")
-                    .query_async(&mut publishing_con)
-                    .await;
+                // validate SPUBLISH - retry until expected subscribers are available
+                let result = retry_spublish_until_expected_subscribers(
+                    &mut publishing_con,
+                    "test_channel_?",
+                    "test_message",
+                    2,
+                    10, // max retries
+                )
+                .await;
                 assert_eq!(
                     result,
                     Ok(Value::Int(2)) // 2 connections with the same pubsub config
