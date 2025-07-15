@@ -1,6 +1,6 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-from typing import Any, AsyncGenerator, Optional, Union, cast
+from typing import Any, AsyncGenerator, Union, cast
 
 import pytest
 
