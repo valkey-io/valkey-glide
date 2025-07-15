@@ -82,15 +82,9 @@ public sealed class GlideClusterClient : BaseClient, IGenericClusterCommands, IS
     public async Task<ClusterValue<string>> Info(InfoOptions.Section[] sections, Route route)
         => await Command(Request.Info(sections).ToClusterValue(route is SingleNodeRoute), route);
 
-    public async Task<TimeSpan> PingAsync(Route route = null, CommandFlags flags = CommandFlags.None)
-        => await Command(Request.Ping(flags), route ?? Route.Random);
-
-    public async Task<TimeSpan> PingAsync(ValkeyValue message, Route route = null, CommandFlags flags = CommandFlags.None)
-        => await Command(Request.Ping(message, flags), route ?? Route.Random);
-
     public async Task<ClusterValue<ValkeyValue>> EchoAsync(ValkeyValue message, Route route, CommandFlags flags = CommandFlags.None)
         => await Command(Request.Echo(message, flags).ToClusterValue(route is SingleNodeRoute), route);
 
     public async Task<ValkeyValue> EchoAsync(ValkeyValue message, CommandFlags flags = CommandFlags.None)
-        => (await EchoAsync(message, Route.Random, flags)).SingleValue;
+        => await Command(Request.Echo(message, flags), Route.Random);
 }
