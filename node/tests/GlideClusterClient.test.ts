@@ -65,8 +65,8 @@ describe("GlideClusterClient", () => {
     let testsFailed = 0;
     let cluster: ValkeyCluster;
     let azCluster: ValkeyCluster;
-    let client: GlideClusterClient;
-    let azClient: GlideClusterClient;
+    let client: GlideClusterClient | undefined;
+    let azClient: GlideClusterClient | undefined;
     beforeAll(async () => {
         const clusterAddresses = global.CLUSTER_ENDPOINTS;
 
