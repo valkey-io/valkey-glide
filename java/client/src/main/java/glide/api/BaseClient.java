@@ -6,6 +6,7 @@ import glide.api.models.BaseBatch;
 import io.valkey.glide.core.client.GlideClient;
 import io.valkey.glide.core.commands.Command;
 import io.valkey.glide.core.commands.CommandType;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -158,7 +159,7 @@ public abstract class BaseClient {
      * @param keyValuePairs Map of key-value pairs to set (supports binary data)
      * @return A CompletableFuture containing "OK" if successful
      */
-    public CompletableFuture<String> mset(Map<GlideString, GlideString> keyValuePairs) {
+    public CompletableFuture<String> msetBinary(Map<GlideString, GlideString> keyValuePairs) {
         String[] args = new String[keyValuePairs.size() * 2];
         int i = 0;
         for (Map.Entry<GlideString, GlideString> entry : keyValuePairs.entrySet()) {
@@ -330,7 +331,23 @@ public abstract class BaseClient {
      * @return A CompletableFuture containing an array of results
      */
     public CompletableFuture<Object[]> exec(BaseBatch<?> batch) {
-        return client.exec(batch);
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                List<Command> commands = batch.getCommands();
+                Object[] results = new Object[commands.size()];
+                
+                for (int i = 0; i < commands.size(); i++) {
+                    Command command = commands.get(i);
+                    // Execute each command individually
+                    CompletableFuture<Object> result = client.executeCommand(command);
+                    results[i] = result.get(); // Wait for each command to complete
+                }
+                
+                return results;
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to execute batch", e);
+            }
+        });
     }
 
     /**
