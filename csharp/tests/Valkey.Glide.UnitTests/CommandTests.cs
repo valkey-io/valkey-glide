@@ -32,9 +32,9 @@ public class CommandTests
             () => Assert.Equal(["INFO", "CLIENTS", "CPU"], Request.Info([InfoOptions.Section.CLIENTS, InfoOptions.Section.CPU]).GetArgs()),
 
             // Connection Management Commands
-            () => Assert.Equal(["PING"], Request.PingAsync().GetArgs()),
-            () => Assert.Equal(["PING", "Hello"], Request.PingAsync("Hello").GetArgs()),
-            () => Assert.Equal(["ECHO", "message"], Request.EchoAsync("message").GetArgs()),
+            () => Assert.Equal(["PING"], Request.Ping().GetArgs()),
+            () => Assert.Equal(["PING", "Hello"], Request.Ping("Hello").GetArgs()),
+            () => Assert.Equal(["ECHO", "message"], Request.Echo("message").GetArgs()),
 
             // Set Commands
             () => Assert.Equal(["SADD", "key", "member"], Request.SetAddAsync("key", "member").GetArgs()),
@@ -98,9 +98,9 @@ public class CommandTests
 
             () => Assert.Equal("info", Request.Info([]).Converter("info")),
 
-            () => Assert.IsType<TimeSpan>(Request.PingAsync().Converter("PONG")),
-            () => Assert.IsType<TimeSpan>(Request.PingAsync("Hello").Converter("Hello")),
-            () => Assert.Equal<ValkeyValue>("message", Request.EchoAsync("message").Converter("message")),
+            () => Assert.IsType<TimeSpan>(Request.Ping().Converter("PONG")),
+            () => Assert.IsType<TimeSpan>(Request.Ping("Hello").Converter("Hello")),
+            () => Assert.Equal<ValkeyValue>("message", Request.Echo("message").Converter("message")),
 
             () => Assert.True(Request.SetAddAsync("key", "member").Converter(1L)),
             () => Assert.False(Request.SetAddAsync("key", "member").Converter(0L)),

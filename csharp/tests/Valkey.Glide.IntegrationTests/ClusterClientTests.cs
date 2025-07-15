@@ -189,9 +189,8 @@ public class ClusterClientTests(TestConfiguration config)
     [MemberData(nameof(Config.TestClusterClients), MemberType = typeof(TestConfiguration))]
     public async Task TestPing_NoMessage_WithRoute(GlideClusterClient client)
     {
-        ClusterValue<TimeSpan> result = await client.PingAsync(AllNodes);
-        Assert.True(result.HasSingleData);
-        Assert.True(result.SingleValue >= TimeSpan.Zero);
+        TimeSpan result = await client.PingAsync(AllNodes);
+        Assert.True(result >= TimeSpan.Zero);
     }
 
     [Theory(DisableDiscoveryEnumeration = true)]
@@ -208,11 +207,9 @@ public class ClusterClientTests(TestConfiguration config)
     public async Task TestPing_WithMessage_WithRoute(GlideClusterClient client)
     {
         ValkeyValue message = "Hello, Valkey!";
-        ClusterValue<TimeSpan> result = await client.PingAsync(message, AllNodes);
-        Assert.True(result.HasSingleData);
-        Assert.True(result.SingleValue >= TimeSpan.Zero);
+        TimeSpan result = await client.PingAsync(message, AllNodes);
+        Assert.True(result >= TimeSpan.Zero);
     }
-
 
     [Theory(DisableDiscoveryEnumeration = true)]
     [MemberData(nameof(Config.TestClusterClients), MemberType = typeof(TestConfiguration))]

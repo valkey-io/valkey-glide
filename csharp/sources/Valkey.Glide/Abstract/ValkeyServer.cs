@@ -53,11 +53,11 @@ internal class ValkeyServer(DatabaseImpl conn, EndPoint endpoint) : IServer
         => InfoAsync(section, flags).GetAwaiter().GetResult();
 
     public async Task<TimeSpan> PingAsync(CommandFlags flags = CommandFlags.None)
-        => await _conn.Command(Request.PingAsync(flags), new ByAddressRoute(EndPoint.ToString()!));
+        => await _conn.Command(Request.Ping(flags), new ByAddressRoute(EndPoint.ToString()!));
 
     public async Task<TimeSpan> PingAsync(ValkeyValue message, CommandFlags flags = CommandFlags.None)
-        => await _conn.Command(Request.PingAsync(message, flags), new ByAddressRoute(EndPoint.ToString()!));
+        => await _conn.Command(Request.Ping(message, flags), new ByAddressRoute(EndPoint.ToString()!));
 
     public async Task<ValkeyValue> EchoAsync(ValkeyValue message, CommandFlags flags = CommandFlags.None)
-        => await _conn.Command(Request.EchoAsync(message, flags), new ByAddressRoute(EndPoint.ToString()!));
+        => await _conn.Command(Request.Echo(message, flags), new ByAddressRoute(EndPoint.ToString()!));
 }

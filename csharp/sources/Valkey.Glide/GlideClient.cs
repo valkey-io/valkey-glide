@@ -74,11 +74,11 @@ public class GlideClient : BaseClient, IDatabase
         => await Command(Request.Info(sections));
 
     public async Task<TimeSpan> PingAsync(CommandFlags flags = CommandFlags.None)
-        => await Command(Request.PingAsync(flags));
+        => await Command(Request.Ping(flags));
 
     public async Task<TimeSpan> PingAsync(ValkeyValue message, CommandFlags flags = CommandFlags.None)
-        => await Command(Request.PingAsync(message, flags));
+        => await Command(Request.Ping(message, flags));
 
     public async Task<ValkeyValue> EchoAsync(ValkeyValue message, CommandFlags flags = CommandFlags.None)
-        => await Command(Request.EchoAsync(message, flags));
+        => await Command(Request.Echo(message, flags));
 }

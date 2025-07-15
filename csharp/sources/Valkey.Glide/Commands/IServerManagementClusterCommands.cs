@@ -96,41 +96,41 @@ public interface IServerManagementClusterCommands
     /// <summary>
     /// Ping the server and measure the round-trip time.
     /// </summary>
-    /// <seealso href="https://valkey.io/commands/ping/">valkey.io</see> for details.
+    /// <seealso href="https://valkey.io/commands/ping/">valkey.io</seealso> for details.
     /// <param name="route">Specifies the routing configuration for the command. The client will route the
     /// command to the nodes defined by <c>route</c>.</param>
     /// <param name="flags">The command flags. Currently flags are ignored.</param>
     /// <returns>
-    /// A <see cref="ClusterValue{T}" /> containing the round-trip time as a <see cref="TimeSpan"/>.<br />
+    /// The round-trip time as a <see cref="TimeSpan"/>.<br />
     /// </returns>
     /// <remarks>
     /// <example>
     /// <code>
-    /// ClusterValue&lt;TimeSpan&gt; response = await client.PingAsync(Route.AllPrimaries);
+    /// TimeSpan response = await client.PingAsync(Route.AllPrimaries);
     /// </code>
     /// </example>
     /// </remarks>
-    Task<ClusterValue<TimeSpan>> PingAsync(Route route, CommandFlags flags = CommandFlags.None);
+    Task<TimeSpan> PingAsync(Route route, CommandFlags flags = CommandFlags.None);
 
     /// <summary>
     /// Ping the server and measure the round-trip time.
     /// </summary>
-    /// <seealso href="https://valkey.io/commands/ping/">valkey.io</see> for details.
+    /// <seealso href="https://valkey.io/commands/ping/">valkey.io</seealso> for details.
     /// <param name="message">The message to send with the ping</param>
     /// <param name="route">Specifies the routing configuration for the command. The client will route the
     /// command to the nodes defined by <c>route</c>.</param>
     /// <param name="flags">The command flags. Currently flags are ignored.</param>
     /// <returns>
-    /// A <see cref="ClusterValue{T}" /> containing the round-trip time as a <see cref="TimeSpan"/>.<br />
+    /// The round-trip time as a <see cref="TimeSpan"/>.<br />
     /// </returns>
     /// <remarks>
     /// <example>
     /// <code>
-    /// ClusterValue&lt;TimeSpan&gt; response = await client.PingAsync("Hello World", Route.AllPrimaries);
+    /// TimeSpan response = await client.PingAsync("Hello World", Route.AllPrimaries);
     /// </code>
     /// </example>
     /// </remarks>
-    Task<ClusterValue<TimeSpan>> PingAsync(ValkeyValue message, Route route, CommandFlags flags = CommandFlags.None);
+    Task<TimeSpan> PingAsync(ValkeyValue message, Route route, CommandFlags flags = CommandFlags.None);
 
     /// <summary>
     /// Echo the given message back from the server.
