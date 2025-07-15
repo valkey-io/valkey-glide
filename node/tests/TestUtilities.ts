@@ -489,7 +489,7 @@ export async function testTeardown(
             ? await GlideClusterClient.createClient(option)
             : await GlideClient.createClient(option);
 
-        await client.customCommand(["FLUSHALL"]);
+        await client.flushall();
     } catch (error) {
         // If teardown fails, log the error but don't throw to avoid masking the original test failure
         console.warn("Test teardown failed:", error);
