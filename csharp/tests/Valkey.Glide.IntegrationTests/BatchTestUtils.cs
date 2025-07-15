@@ -161,6 +161,90 @@ internal class BatchTestUtils
         return testData;
     }
 
+    public static List<TestInfo> CreateGenericTest(IBatch batch, bool isAtomic)
+    {
+        List<TestInfo> testData = [];
+        string prefix = "{genericKey}-";
+        string atomicPrefix = isAtomic ? "{genericKey}-" : "";
+        string genericKey1 = $"{atomicPrefix}generic1-{Guid.NewGuid()}";
+        string genericKey2 = $"{atomicPrefix}generic2-{Guid.NewGuid()}";
+        string genericKey3 = $"{atomicPrefix}generic3-{Guid.NewGuid()}";
+
+        _ = batch.StringSet(genericKey1, "value1");
+        testData.Add(new(true, "StringSet(genericKey1, value1)"));
+
+        _ = batch.StringSet(genericKey2, "value2");
+        testData.Add(new(true, "StringSet(genericKey2, value2)"));
+
+        _ = batch.KeyExists(genericKey1);
+        testData.Add(new(true, "KeyExists(genericKey1)"));
+
+        _ = batch.KeyExists([genericKey1, genericKey2, genericKey3]);
+        testData.Add(new(2L, "KeyExists([genericKey1, genericKey2, genericKey3])"));
+
+        _ = batch.KeyType(genericKey1);
+        testData.Add(new(ValkeyType.String, "KeyType(genericKey1)"));
+
+        _ = batch.KeyExpire(genericKey1, TimeSpan.FromSeconds(60));
+        testData.Add(new(true, "KeyExpire(genericKey1, 60s)"));
+
+        _ = batch.KeyTimeToLive(genericKey1);
+        testData.Add(new(TimeSpan.FromSeconds(60), "KeyTimeToLive(genericKey1)", true));
+
+        _ = batch.KeyPersist(genericKey1);
+        testData.Add(new(true, "KeyPersist(genericKey1)"));
+
+        _ = batch.KeyTimeToLive(genericKey1);
+        testData.Add(new(null, "KeyTimeToLive(genericKey1) after persist"));
+
+        _ = batch.KeyTouch(genericKey1);
+        testData.Add(new(true, "KeyTouch(genericKey1)"));
+
+        _ = batch.KeyTouch([genericKey1, genericKey2, genericKey3]);
+        testData.Add(new(2L, "KeyTouch([genericKey1, genericKey2, genericKey3])"));
+
+        _ = batch.StringSet(prefix + genericKey2, "value2");
+        testData.Add(new(true, "StringSet(prefix + genericKey2, value2)"));
+
+        string renamedKey = $"{prefix}renamed-{Guid.NewGuid()}";
+        _ = batch.KeyRename(prefix + genericKey2, renamedKey);
+        testData.Add(new(true, "KeyRename(prefix + genericKey2, renamedKey)"));
+
+        _ = batch.KeyExists(prefix + genericKey2);
+        testData.Add(new(false, "KeyExists(prefix + genericKey2) after rename"));
+
+        _ = batch.KeyExists(renamedKey);
+        testData.Add(new(true, "KeyExists(renamedKey) after rename"));
+
+        string renameNXKey = $"{prefix}renamenx-{Guid.NewGuid()}";
+        _ = batch.KeyRenameNX(renamedKey, renameNXKey);
+        testData.Add(new(true, "KeyRenameNX(renamedKey, renameNXKey)"));
+
+        _ = batch.KeyExists(renamedKey);
+        testData.Add(new(false, "KeyExists(renamedKey) after renamenx"));
+
+        _ = batch.KeyExists(renameNXKey);
+        testData.Add(new(true, "KeyExists(renameNXKey) after renamenx"));
+
+        _ = batch.StringSet(prefix + genericKey1, "value1");
+        testData.Add(new(true, "StringSet(prefix + genericKey1, value1)"));
+
+        string copiedKey = $"{prefix}copied-{Guid.NewGuid()}";
+        _ = batch.KeyCopy(prefix + genericKey1, copiedKey);
+        testData.Add(new(true, "KeyCopy(genericKey1, copiedKey)"));
+
+        _ = batch.KeyExists(copiedKey);
+        testData.Add(new(true, "KeyExists(copiedKey) after copy"));
+
+        _ = batch.KeyDelete(copiedKey);
+        testData.Add(new(true, "KeyDelete(copiedKey)"));
+
+        _ = batch.KeyUnlink([genericKey1, renamedKey, genericKey3]);
+        testData.Add(new(1L, "KeyUnlink([genericKey1, renamedKey, genericKey3])"));
+
+        return testData;
+    }
+
     public static List<TestInfo> CreateSortedSetTest(IBatch batch, bool isAtomic)
     {
         List<TestInfo> testData = [];
@@ -245,6 +329,7 @@ internal class BatchTestUtils
             new BatchTestData[] {
                 new("String commands", r.Data, CreateStringTest, isAtomic),
                 new("Set commands", r.Data, CreateSetTest, isAtomic),
+                new("Generic commands", r.Data, CreateGenericTest, isAtomic),
                 new("List commands", r.Data, CreateListTest, isAtomic),
             }))];
 }

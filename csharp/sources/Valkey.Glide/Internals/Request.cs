@@ -25,4 +25,23 @@ internal partial class Request
     /// </summary>
     private static Cmd<T, T> Simple<T>(RequestType request, GlideString[] args, bool isNullable = false)
         => new(request, args, isNullable, o => o);
+
+    /// <summary>
+    /// Create a Cmd which returns a Boolean value based on the response being 1 or not.
+    /// </summary>
+    /// <typeparam name="T">Any type that can be implicitly cast to a numeric value for comparison</typeparam>
+    /// <param name="request">The request type</param>
+    /// <param name="args">The command arguments</param>
+    /// <returns>A command that converts the response to a boolean value (true if response equals 1)</returns>
+    private static Cmd<T, bool> Boolean<T>(RequestType request, GlideString[] args)
+        => new(request, args, false, response => Convert.ToInt64(response) == 1);
+
+    /// <summary>
+    /// Create a Cmd which returns a Boolean value based on the response being OK or not.
+    /// </summary>
+    /// <param name="request">The request type</param>
+    /// <param name="args">The command arguments</param>
+    /// <returns>A command that converts the response to a boolean value (true if response equals OK)</returns>
+    private static Cmd<string, bool> OKToBool(RequestType request, GlideString[] args)
+        => new(request, args, false, response => response == "OK");
 }
