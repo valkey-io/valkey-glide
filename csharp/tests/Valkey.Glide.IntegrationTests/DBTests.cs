@@ -5,17 +5,14 @@ using Valkey.Glide.Commands.Options;
 
 namespace Valkey.Glide.IntegrationTests;
 
-public class DBTests
+public class DBTests(TestConfiguration config)
 {
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task Basic(bool isCluster)
+    public TestConfiguration Config { get; } = config;
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestConnections), MemberType = typeof(TestConfiguration))]
+    public async Task Basic(ConnectionMultiplexer conn, bool isCluster)
     {
-        (string host, ushort port) = isCluster ? TestConfiguration.CLUSTER_HOSTS[0] : TestConfiguration.STANDALONE_HOSTS[0];
-
-        ConnectionMultiplexer conn = await ConnectionMultiplexer.ConnectAsync(host, port);
-
         IDatabase db = conn.GetDatabase();
         string key = Guid.NewGuid().ToString();
 
@@ -26,6 +23,7 @@ public class DBTests
         Assert.Equal("val", retrievedValue.ToString());
 
         string info = await db.Info([InfoOptions.Section.CLUSTER]);
+
         Assert.True(isCluster
             ? info.Contains("cluster_enabled:1")
             : info.Contains("cluster_enabled:0"));

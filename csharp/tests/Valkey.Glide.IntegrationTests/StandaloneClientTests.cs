@@ -4,7 +4,6 @@ using Valkey.Glide.Pipeline;
 
 using static Valkey.Glide.Commands.Options.InfoOptions;
 
-using gs = Valkey.Glide.GlideString;
 namespace Valkey.Glide.IntegrationTests;
 
 public class StandaloneClientTests(TestConfiguration config)
@@ -55,10 +54,10 @@ public class StandaloneClientTests(TestConfiguration config)
             .WithTls(false).Build());
 
         _ = GlideClient.CreateClient(TestConfiguration.DefaultClientConfig()
-            .WithConnectionTimeout(2000).Build());
+            .WithConnectionTimeout(TimeSpan.FromSeconds(2)).Build());
 
         _ = GlideClient.CreateClient(TestConfiguration.DefaultClientConfig()
-            .WithRequestTimeout(2000).Build());
+            .WithRequestTimeout(TimeSpan.FromSeconds(2)).Build());
 
         _ = GlideClient.CreateClient(TestConfiguration.DefaultClientConfig()
             .WithDataBaseId(4).Build());
