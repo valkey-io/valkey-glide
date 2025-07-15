@@ -117,6 +117,9 @@ describe("GlideClusterClient", () => {
         // Reset client variables to ensure clean state for next test
         client = undefined;
         azClient = undefined;
+        
+        // Small delay to allow socket cleanup to complete
+        await new Promise(resolve => setTimeout(resolve, 10));
     });
 
     afterAll(async () => {

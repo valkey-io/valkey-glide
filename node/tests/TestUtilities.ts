@@ -482,12 +482,32 @@ export async function testTeardown(
     cluster_mode: boolean,
     option: BaseClientConfiguration,
 ) {
-    const client = cluster_mode
-        ? await GlideClusterClient.createClient(option)
-        : await GlideClient.createClient(option);
+    let client;
+    try {
+        client = cluster_mode
+            ? await GlideClusterClient.createClient({
+                ...option,
+                requestTimeout: 5000, // Override with a reasonable timeout
+            })
+            : await GlideClient.createClient({
+                ...option,
+                requestTimeout: 5000, // Override with a reasonable timeout
+            });
 
-    await client.customCommand(["FLUSHALL"]);
-    client.close();
+        await client.customCommand(["FLUSHALL"]);
+    } catch (error) {
+        // Log error but don't fail the cleanup
+        console.warn("Error in testTeardown:", error);
+    } finally {
+        // Always close the client, even if commands failed
+        if (client) {
+            try {
+                client.close();
+            } catch (error) {
+                console.warn("Error closing teardown client:", error);
+            }
+        }
+    }
 }
 
 export const getClientConfigurationOption = (
