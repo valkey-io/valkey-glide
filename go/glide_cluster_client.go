@@ -643,7 +643,7 @@ func (client *ClusterClient) clusterScan(
 	client.pending[resultChannelPtr] = struct{}{}
 
 	c_cursor := C.CString(cursor.GetCursor())
-        // These will be run in LIFO order; make sure not to free c_cursor before remove_scan_cursor
+	// These will be run in LIFO order; make sure not to free c_cursor before remove_scan_cursor
 	defer C.free(unsafe.Pointer(c_cursor))
 	defer C.remove_scan_cursor(c_cursor)
 
