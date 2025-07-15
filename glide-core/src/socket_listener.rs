@@ -683,7 +683,7 @@ pub fn close_socket(socket_path: &String) {
 /// Clean up all socket files in the socket directory that match the glide pattern.
 /// This function helps prevent socket address exhaustion by removing leftover socket files
 /// that weren't cleaned up properly due to process crashes or test failures.
-/// 
+///
 /// On Unix systems, this removes files matching "glide-socket-*-*.sock" pattern from /tmp.
 /// On Windows, this removes files matching the same pattern from the local app data directory.
 pub fn cleanup_socket_files() {
@@ -691,42 +691,63 @@ pub fn cleanup_socket_files() {
         if let Some(base_dirs) = BaseDirs::new() {
             base_dirs.data_local_dir().to_path_buf()
         } else {
-            log_error("cleanup_socket_files", "Failed to get local app data directory");
+            log_error(
+                "cleanup_socket_files",
+                "Failed to get local app data directory",
+            );
             return;
         }
     } else {
         std::path::PathBuf::from(UNIX_SOCKER_DIR)
     };
 
-    let pattern = format!("{}-", SOCKET_FILE_NAME);
+    let pattern = format!("{SOCKET_FILE_NAME}-");
     match std::fs::read_dir(&socket_dir) {
         Ok(entries) => {
             let mut cleaned_count = 0;
-            for entry in entries {
-                if let Ok(entry) = entry {
-                    let file_name = entry.file_name();
-                    if let Some(name_str) = file_name.to_str() {
-                        if name_str.starts_with(&pattern) && name_str.ends_with(".sock") {
-                            let file_path = entry.path();
-                            match std::fs::remove_file(&file_path) {
-                                Ok(_) => {
-                                    cleaned_count += 1;
-                                    log_debug("cleanup_socket_files", format!("Removed socket file: {}", file_path.display()));
-                                }
-                                Err(e) => {
-                                    log_debug("cleanup_socket_files", format!("Failed to remove socket file {}: {}", file_path.display(), e));
-                                }
+            for entry in entries.flatten() {
+                let file_name = entry.file_name();
+                if let Some(name_str) = file_name.to_str() {
+                    if name_str.starts_with(&pattern) && name_str.ends_with(".sock") {
+                        let file_path = entry.path();
+                        match std::fs::remove_file(&file_path) {
+                            Ok(_) => {
+                                cleaned_count += 1;
+                                log_debug(
+                                    "cleanup_socket_files",
+                                    format!("Removed socket file: {}", file_path.display()),
+                                );
+                            }
+                            Err(e) => {
+                                log_debug(
+                                    "cleanup_socket_files",
+                                    format!(
+                                        "Failed to remove socket file {}: {}",
+                                        file_path.display(),
+                                        e
+                                    ),
+                                );
                             }
                         }
                     }
                 }
             }
             if cleaned_count > 0 {
-                log_info("cleanup_socket_files", format!("Cleaned up {} socket files", cleaned_count));
+                log_info(
+                    "cleanup_socket_files",
+                    format!("Cleaned up {cleaned_count} socket files"),
+                );
             }
         }
         Err(e) => {
-            log_debug("cleanup_socket_files", format!("Failed to read socket directory {}: {}", socket_dir.display(), e));
+            log_debug(
+                "cleanup_socket_files",
+                format!(
+                    "Failed to read socket directory {}: {}",
+                    socket_dir.display(),
+                    e
+                ),
+            );
         }
     }
 }
