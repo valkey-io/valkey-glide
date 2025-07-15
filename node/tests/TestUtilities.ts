@@ -514,16 +514,36 @@ export async function flushAndCloseClient(
     tlsConfig?: TestTLSConfig,
 ) {
     try {
-        await testTeardown(
-            cluster_mode,
-            getClientConfigurationOption(addresses, ProtocolVersion.RESP3, {
-                ...tlsConfig,
-                requestTimeout: 2000,
-            }),
-        );
+        // Only flush if we have a client to work with
+        if (client && !client.isClientClosed) {
+            try {
+                await client.customCommand(["FLUSHALL"]);
+            } catch (error) {
+                // If flush fails, create a new client to flush
+                console.warn("Direct flush failed, creating new client for flush:", error);
+                await testTeardown(
+                    cluster_mode,
+                    getClientConfigurationOption(addresses, ProtocolVersion.RESP3, {
+                        ...tlsConfig,
+                        requestTimeout: 2000,
+                    }),
+                );
+            }
+        } else {
+            // If no client or client is closed, create a new one to flush
+            await testTeardown(
+                cluster_mode,
+                getClientConfigurationOption(addresses, ProtocolVersion.RESP3, {
+                    ...tlsConfig,
+                    requestTimeout: 2000,
+                }),
+            );
+        }
     } finally {
-        // some tests don't initialize a client
-        client?.close();
+        // Close the original client if it exists and isn't closed
+        if (client && !client.isClientClosed) {
+            client.close();
+        }
     }
 }
 
