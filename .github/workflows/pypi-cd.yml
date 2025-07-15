@@ -143,7 +143,7 @@ jobs:
             - name: Update package version in config.toml
               uses: ./.github/workflows/update-glide-version
               with:
-                  folder_path: "${{ github.workspace }}/python/.cargo"
+                  folder_path: "${{ github.workspace }}/python/glide-async/.cargo"
                   named_os: ${{ matrix.build.NAMED_OS }}
 
             ### BUILD ###
@@ -169,10 +169,9 @@ jobs:
             - name: Symlink .gitignore into the sync and async folders
               working-directory: ./python
               run: |
-                # Ensures packaging tools exclude ignored files during build
-                ln -sf .gitignore glide-sync/.gitignore
-                ln -sf .gitignore glide-async/.gitignore
-
+                  # Ensures packaging tools exclude ignored files during build
+                  ln -sf .gitignore glide-sync/.gitignore
+                  ln -sf .gitignore glide-async/.gitignore
 
             - name: Setup PyPy for macOS
               if: startsWith(matrix.build.NAMED_OS, 'darwin')
@@ -232,7 +231,7 @@ jobs:
               with:
                   working-directory: ./python/glide-async
                   target: ${{ matrix.build.TARGET }}
-                  args: --release --strip --out wheels -i ${{ github.event_name != 'pull_request' && 'python3.9 python3.10 python3.11 python3.12 python3.13 pypy3.9 pypy3.10 pypy3.11' || 'python3.12' }}
+                  args: --release --strip --out wheels -i ${{ (github.event_name != 'pull_request' && github.event_name != 'workflow_dispatch') && 'python3.9 python3.10 python3.11 python3.12 python3.13 pypy3.9 pypy3.10 pypy3.11' || 'python3.12' }}
                   manylinux: auto
                   container: ${{ matrix.build.CONTAINER != '' && matrix.build.CONTAINER || '2014' }}
                   before-script-linux: |
@@ -309,26 +308,42 @@ jobs:
                   maturin-version: 0.14.17
                   working-directory: ./python/glide-async
                   target: ${{ matrix.build.TARGET }}
-                  args: --release --strip --out wheels -i  ${{ github.event_name != 'pull_request' && 'python3.9 python3.10 python3.11 python3.12 python3.13 pypy3.9 pypy3.10 pypy3.11' || 'python3.12' }}
+                  args: --release --strip --out wheels -i  ${{ (github.event_name != 'pull_request' && github.event_name != 'workflow_dispatch') && 'python3.9 python3.10 python3.11 python3.12 python3.13 pypy3.9 pypy3.10 pypy3.11' || 'python3.12' }}
 
             ### SYNC CLIENT ###
 
             - name: Install cibuildwheel
-              run: python3 -m pip install cibuildwheel==3.0.1
+              run: python3 -m pip install cibuildwheel
 
-            - name: Build wheels
+            - name: Determine cibuildwheel version and set enable flags
+              id: cibw_config
               run: |
-                # we call cibuildwheel from the root folder in order to copy the whole folder tree to the docker
-                cibuildwheel python/glide-sync --output-dir python/glide-sync/wheels
+                  python3 -m pip install setuptools
+                  # PyPy builds are disabled by default from version 3
+                  CIBW_VERSION=$(python3 -c "import pkg_resources; print(pkg_resources.get_distribution('cibuildwheel').version)")
+                  echo "Detected cibuildwheel version: $CIBW_VERSION"
+
+                  ENABLE_FLAGS=""
+                  # Use version sort to compare
+                  if [[ "$(printf '%s\n' "3.0.0" "$CIBW_VERSION" | sort -V | head -n1)" == "3.0.0" ]]; then
+                    ENABLE_FLAGS="pypy pypy-eol"
+                  fi
+                  echo "enable_flags=$ENABLE_FLAGS" >> "$GITHUB_OUTPUT"
+
+            - name: Build Python Sync client wheels
+              run: |
+                  # we call cibuildwheel from the root folder in order to copy the whole folder tree to the docker
+                  cibuildwheel python/glide-sync --output-dir python/glide-sync/wheels
               env:
-                CIBW_BUILD: ${{ github.event_name != 'pull_request' && 'cp39-* cp310-* cp311-* cp312-* cp313-* pp39-* pp310-* pp311-*' || 'cp313-*' }}
-                CIBW_SKIP: "*-musl* *i686*"
-                CIBW_ARCHS_LINUX: auto
-                CIBW_ARCHS_MACOS: universal2
+                  CIBW_BUILD: ${{ github.event_name != 'pull_request' && 'cp39-* cp310-* cp311-* cp312-* cp313-* pp39-* pp310-* pp311-*' || 'cp313-*' }}
+                  CIBW_SKIP: "*-musl* *i686* *i386*"
+                  CIBW_ARCHS_LINUX: auto
+                  CIBW_ARCHS_MACOS: universal2
+                  CIBW_ENABLE: ${{ steps.cibw_config.outputs.enable_flags }}
 
             ### UPLOAD WHEELS ###
 
-            - name: Upload Python Async wheels
+            - name: Upload Python Async client wheels
               if: github.event_name != 'pull_request'
               uses: actions/upload-artifact@v4
               with:
@@ -336,7 +351,7 @@ jobs:
                   path: python/glide-async/wheels
                   if-no-files-found: error
 
-            - name: Upload Python Sync wheels
+            - name: Upload Python Sync client wheels
               if: github.event_name != 'pull_request'
               uses: actions/upload-artifact@v4
               with:
@@ -398,17 +413,17 @@ jobs:
             - name: Async client - Upload built wheels and sdist as GitHub artifacts
               uses: actions/upload-artifact@v4
               with:
-                name: python-async-packages
-                path: |
-                  python/glide-async/wheels/*.whl
-                  python/glide-async/dist/*.tar.gz
+                  name: python-async-packages
+                  path: |
+                      python/glide-async/wheels/*.whl
+                      python/glide-async/dist/*.tar.gz
 
             ### SYNC CLIENT ###
 
             - name: Install build & twine
               run: |
-                python3 -m pip install --upgrade pip
-                python3 -m pip install build twine
+                  python3 -m pip install --upgrade pip
+                  python3 -m pip install build twine
 
             - name: Sync client - Build source distributions
               working-directory: ./python/glide-sync
@@ -424,18 +439,18 @@ jobs:
             - name: Sync client - Publish binaries and source to PyPI
               if: ${{ github.event_name == 'push' || inputs.publish == true }}
               env:
-                TWINE_USERNAME: __token__
-                TWINE_PASSWORD: ${{ secrets.LIVEPYPI_API_TOKEN }}
+                  TWINE_USERNAME: __token__
+                  TWINE_PASSWORD: ${{ secrets.LIVEPYPI_API_TOKEN }}
               run: |
-                twine upload python/glide-sync/wheels/* python/glide-sync/dist/* 
+                  twine upload python/glide-sync/wheels/* python/glide-sync/dist/*
 
             - name: Sync client - Upload built wheels and sdist as GitHub artifacts
               uses: actions/upload-artifact@v4
               with:
-                name: python-sync-packages
-                path: |
-                  python/glide-sync/wheels/*.whl
-                  python/glide-sync/dist/*.tar.gz
+                  name: python-sync-packages
+                  path: |
+                      python/glide-sync/wheels/*.whl
+                      python/glide-sync/dist/*.tar.gz
 
     test-release:
         if: ${{ github.event_name == 'push' || inputs.publish == true }}
