@@ -269,8 +269,7 @@ public class SortedSetCommandTests(TestConfiguration config)
         Assert.True(await client.SortedSetAddAsync(key, "member1", 10.5));
 
         // Test removing empty array
-        var emptyMembers = Array.Empty<ValkeyValue>();
-        Assert.Equal(0, await client.SortedSetRemoveAsync(key, emptyMembers));
+        Assert.Equal(0, await client.SortedSetRemoveAsync(key, []));
 
         // Verify member still exists
         Assert.True(await client.SortedSetRemoveAsync(key, "member1"));
