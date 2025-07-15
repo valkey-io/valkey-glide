@@ -92,8 +92,8 @@ async def isolated_valkey_cluster(
     use the default shared cluster.
     """
     # Get the cluster_mode parameter from the test
-    cluster_mode = request.node.callspec.params.get('cluster_mode', False)
-    
+    cluster_mode = request.node.callspec.params.get("cluster_mode", False)
+
     if cluster_mode:
         # For cluster mode, return None to use the default shared cluster
         return None
