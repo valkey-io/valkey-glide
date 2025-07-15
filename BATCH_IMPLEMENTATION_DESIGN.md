@@ -1,51 +1,131 @@
-# Batch Implementation Design
+# Batch Implementation Design - Current Progress
 
-## Overview
-This document outlines the design for implementing batch operations in the new Valkey GLIDE Java client architecture. The goal is to replicate the functionality of the original protobuf-based batch system while adapting it to work with the new core implementation.
+## ✅ COMPLETED: Basic Implementation
 
-## Current State Analysis
+### Successfully Implemented
+- **Command Class**: String-based command representation with factory methods
+- **BaseBatch Class**: Base class for batch operations with method chaining
+- **Integration**: BaseClient.exec() method working with batch system
+- **Testing**: All SharedCommandTests passing (6+ minutes of tests)
 
-### Original Implementation (java-old)
-The original system used a sophisticated protobuf-based batch architecture:
+### Current Architecture
+```
+BaseBatch<T> → List<Command> → BaseClient.exec() → GlideClient.executeCommand()
+```
 
-1. **BaseBatch<T>** - Abstract base class for all batch operations
-   - Contains `Batch.Builder protobufBatch` - protobuf batch builder
-   - Provides method chaining with generic return type T
-   - Supports binary output mode via `binaryOutput` flag
-   - Uses `ArgsBuilder` for type-safe argument construction
+### Working Features
+- Command accumulation with method chaining
+- Basic command factory methods (get, set, mget, hget, etc.)
+- Atomic and non-atomic batch execution
+- Full integration with existing test suite
 
-2. **ArgsBuilder** - Utility for building command arguments
-   - Converts various argument types to `GlideString[]`
-   - Provides type checking with `checkTypeOrThrow()`
-   - Supports conditional argument addition with `addIf()`
-   - Maintains arguments as `ArrayList<GlideString>`
+## 🔄 IN PROGRESS: Binary Data Support
 
-3. **Command Building Pattern**
+### Current Goal
+Implement comprehensive binary data support across the entire client, not just for batching.
+
+### Binary Data Requirements
+Based on user feedback: "The support is for all the client implementation and not special to the batching, so make sure it is available for the usual commands as well"
+
+### Implementation Strategy
+1. **Move Command to Client Module**: Access to GlideString class
+2. **Enhance Command Class**: Add GlideString[] support while maintaining String[] compatibility
+3. **Update BaseBatch**: Add binary data methods
+4. **Extend BaseClient**: Binary data support for all operations
+
+## Next Steps
+
+### Phase 1: Binary Data Foundation
+1. **Command Class Enhancement**
    ```java
-   protobufBatch.addCommands(buildCommand(RequestType.GET, newArgsBuilder().add(key)));
+   public class Command {
+       private final String command;
+       private final GlideString[] arguments;
+       
+       // Multiple constructors for different use cases
+       public Command(String command, GlideString... arguments);
+       public Command(String command, String... arguments);
+       public Command(CommandType commandType, GlideString... arguments);
+       
+       // Binary data access methods
+       public GlideString[] getArguments();
+       public String[] getArgumentsAsStrings();
+       public byte[][] getArgumentsAsBytes();
+   }
    ```
 
-4. **Execution Flow**
-   - `GlideClient.exec(Batch)` → `CommandManager.submitNewBatch()`
-   - Protobuf batch sent to glide-core via JNI
-   - Results returned as `Object[]` array
+2. **BaseBatch Binary Methods**
+   ```java
+   public abstract class BaseBatch<T extends BaseBatch<T>> {
+       // Binary data methods
+       public T set(GlideString key, GlideString value);
+       public T get(GlideString key);
+       public T mget(GlideString... keys);
+       
+       // String convenience methods (existing)
+       public T set(String key, String value);
+       public T get(String key);
+       public T mget(String... keys);
+   }
+   ```
 
-### New Implementation (java)
-The new system uses a cleaner, non-protobuf approach:
+### Phase 2: Client-Wide Binary Support
+1. **BaseClient Enhancement**: Add binary data methods to all operations
+2. **GlideClient Integration**: Ensure binary data flows through to native layer
+3. **Testing**: Comprehensive binary data tests
 
-1. **Command** - Simple command representation
-   - Contains `String command` and `String[] arguments`
-   - Factory methods for common commands
-   - No protobuf dependencies
+### Phase 3: Advanced Features
+1. **Performance Optimization**: Memory and execution efficiency
+2. **Error Handling**: Comprehensive error management
+3. **Documentation**: Complete API documentation
 
-2. **CommandType** - Enum with all supported commands
-   - Maps to actual command strings (e.g., `GET("GET")`)
-   - Cleaner than protobuf RequestType
+## Technical Considerations
 
-3. **GlideClient** - Direct glide-core integration
-   - Uses JNI for direct communication
-   - Async operations with `CompletableFuture<T>`
-   - No Unix Domain Sockets overhead
+### Binary Data Handling
+- **GlideString Integration**: Full support for binary data through existing GlideString class
+- **Backward Compatibility**: Maintain all existing String-based APIs
+- **Performance**: Minimal overhead for binary operations
+
+### Module Architecture
+- **Command Location**: Must be in client module for GlideString access
+- **Dependency Management**: Clean separation between core and client modules
+- **Import Structure**: Proper import hierarchy for binary data support
+
+## Success Metrics
+
+- ✅ All existing tests pass
+- ✅ Basic batch operations functional
+- 🔄 Binary data support implemented
+- 🔄 Backward compatibility maintained
+- 🔄 Performance acceptable
+- 🔄 Clean API design
+
+## Current Implementation Status
+
+### Completed ✅
+- [x] Command class with String[] arguments
+- [x] BaseBatch base class with method chaining
+- [x] Common command factory methods
+- [x] Integration with BaseClient.exec()
+- [x] All SharedCommandTests passing
+
+### In Progress 🔄
+- [ ] Command class with GlideString[] arguments
+- [ ] BaseBatch binary data methods
+- [ ] BaseClient binary data support
+- [ ] Comprehensive binary data tests
+
+### Future 📋
+- [ ] Performance optimization
+- [ ] Advanced error handling
+- [ ] Complete documentation
+- [ ] Migration guide
+
+## Implementation Notes
+
+The current implementation provides a solid foundation for binary data support. The next critical step is implementing GlideString support in the Command class, which requires moving it to the client module where GlideString is available.
+
+Key insight: Binary data support should be implemented across the entire client, not just for batching operations, as requested by the user.
 
 ## Design Challenges
 

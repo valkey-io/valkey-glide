@@ -68,7 +68,7 @@ public class GlideClient extends BaseClient {
      * @return A CompletableFuture containing the info response
      */
     public CompletableFuture<String> info(InfoOptions.Section[] sections) {
-        return executeCommand(io.valkey.glide.core.commands.CommandType.INFO)
+        return executeCommand(io.valkey.glide.api.commands.CommandType.INFO)
             .thenApply(result -> result.toString());
     }
 
@@ -79,7 +79,7 @@ public class GlideClient extends BaseClient {
      * @return A CompletableFuture containing "OK" if successful
      */
     public CompletableFuture<String> select(int index) {
-        return executeCommand(io.valkey.glide.core.commands.CommandType.SELECT, String.valueOf(index))
+        return executeCommand(io.valkey.glide.api.commands.CommandType.SELECT, String.valueOf(index))
             .thenApply(result -> result.toString());
     }
 
@@ -89,7 +89,7 @@ public class GlideClient extends BaseClient {
      * @return A CompletableFuture containing the number of keys
      */
     public CompletableFuture<Long> dbsize() {
-        return executeCommand(io.valkey.glide.core.commands.CommandType.DBSIZE)
+        return executeCommand(io.valkey.glide.api.commands.CommandType.DBSIZE)
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -99,7 +99,7 @@ public class GlideClient extends BaseClient {
      * @return A CompletableFuture containing "OK" if successful
      */
     public CompletableFuture<String> flushdb() {
-        return executeCommand(io.valkey.glide.core.commands.CommandType.FLUSHDB)
+        return executeCommand(io.valkey.glide.api.commands.CommandType.FLUSHDB)
             .thenApply(result -> result.toString());
     }
 
@@ -109,7 +109,7 @@ public class GlideClient extends BaseClient {
      * @return A CompletableFuture containing "OK" if successful
      */
     public CompletableFuture<String> flushall() {
-        return executeCommand(io.valkey.glide.core.commands.CommandType.FLUSHALL)
+        return executeCommand(io.valkey.glide.api.commands.CommandType.FLUSHALL)
             .thenApply(result -> result.toString());
     }
 }

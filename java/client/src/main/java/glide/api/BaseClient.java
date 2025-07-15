@@ -4,8 +4,8 @@ package glide.api;
 import glide.api.models.GlideString;
 import glide.api.models.BaseBatch;
 import io.valkey.glide.core.client.GlideClient;
-import io.valkey.glide.core.commands.Command;
-import io.valkey.glide.core.commands.CommandType;
+import io.valkey.glide.api.commands.Command;
+import io.valkey.glide.api.commands.CommandType;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -47,6 +47,17 @@ public abstract class BaseClient {
     }
 
     /**
+     * Get the value of a key (supports binary data).
+     *
+     * @param key The key to get (supports binary data)
+     * @return A CompletableFuture containing the value or null if key doesn't exist
+     */
+    public CompletableFuture<GlideString> get(GlideString key) {
+        return executeCommand(CommandType.GET, key.toString())
+                .thenApply(result -> result == null ? null : GlideString.of(result.toString()));
+    }
+
+    /**
      * Set key to hold the string value.
      *
      * @param key   The key to set
@@ -55,6 +66,18 @@ public abstract class BaseClient {
      */
     public CompletableFuture<String> set(String key, String value) {
         return client.set(key, value);
+    }
+
+    /**
+     * Set key to hold the string value (supports binary data).
+     *
+     * @param key   The key to set (supports binary data)
+     * @param value The value to set (supports binary data)
+     * @return A CompletableFuture containing "OK" if successful
+     */
+    public CompletableFuture<String> set(GlideString key, GlideString value) {
+        return executeCommand(CommandType.SET, key.toString(), value.toString())
+                .thenApply(result -> result.toString());
     }
 
     /**
@@ -88,6 +111,31 @@ public abstract class BaseClient {
     }
 
     /**
+     * Get multiple values for the given keys (supports binary data).
+     *
+     * @param keys The keys to get (supports binary data)
+     * @return A CompletableFuture containing an array of values
+     */
+    public CompletableFuture<GlideString[]> mget(GlideString... keys) {
+        String[] stringKeys = new String[keys.length];
+        for (int i = 0; i < keys.length; i++) {
+            stringKeys[i] = keys[i].toString();
+        }
+        return executeCommand(CommandType.MGET, stringKeys)
+                .thenApply(result -> {
+                    if (result instanceof Object[]) {
+                        Object[] objects = (Object[]) result;
+                        GlideString[] glideStrings = new GlideString[objects.length];
+                        for (int i = 0; i < objects.length; i++) {
+                            glideStrings[i] = objects[i] == null ? null : GlideString.of(objects[i].toString());
+                        }
+                        return glideStrings;
+                    }
+                    return new GlideString[0];
+                });
+    }
+
+    /**
      * Set multiple keys to multiple values.
      *
      * @param keyValuePairs Map of key-value pairs to set
@@ -105,6 +153,23 @@ public abstract class BaseClient {
     }
 
     /**
+     * Set multiple keys to multiple values (supports binary data).
+     *
+     * @param keyValuePairs Map of key-value pairs to set (supports binary data)
+     * @return A CompletableFuture containing "OK" if successful
+     */
+    public CompletableFuture<String> mset(Map<GlideString, GlideString> keyValuePairs) {
+        String[] args = new String[keyValuePairs.size() * 2];
+        int i = 0;
+        for (Map.Entry<GlideString, GlideString> entry : keyValuePairs.entrySet()) {
+            args[i++] = entry.getKey().toString();
+            args[i++] = entry.getValue().toString();
+        }
+        return executeCommand(CommandType.MSET, args)
+                .thenApply(result -> result.toString());
+    }
+
+    /**
      * Delete one or more keys.
      *
      * @param keys The keys to delete
@@ -112,6 +177,21 @@ public abstract class BaseClient {
      */
     public CompletableFuture<Long> del(String... keys) {
         return executeCommand(CommandType.DEL, keys)
+            .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Delete one or more keys (supports binary data).
+     *
+     * @param keys The keys to delete (supports binary data)
+     * @return A CompletableFuture containing the number of keys that were removed
+     */
+    public CompletableFuture<Long> del(GlideString... keys) {
+        String[] stringKeys = new String[keys.length];
+        for (int i = 0; i < keys.length; i++) {
+            stringKeys[i] = keys[i].toString();
+        }
+        return executeCommand(CommandType.DEL, stringKeys)
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -140,6 +220,19 @@ public abstract class BaseClient {
     }
 
     /**
+     * Set the string value of a hash field (supports binary data).
+     *
+     * @param key   The key of the hash (supports binary data)
+     * @param field The field in the hash (supports binary data)
+     * @param value The value to set (supports binary data)
+     * @return A CompletableFuture containing the number of fields that were added
+     */
+    public CompletableFuture<Long> hset(GlideString key, GlideString field, GlideString value) {
+        return executeCommand(CommandType.HSET, key.toString(), field.toString(), value.toString())
+            .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
      * Get the value of a hash field.
      *
      * @param key   The key of the hash
@@ -149,6 +242,18 @@ public abstract class BaseClient {
     public CompletableFuture<String> hget(String key, String field) {
         return executeCommand(CommandType.HGET, key, field)
             .thenApply(result -> result == null ? null : result.toString());
+    }
+
+    /**
+     * Get the value of a hash field (supports binary data).
+     *
+     * @param key   The key of the hash (supports binary data)
+     * @param field The field in the hash (supports binary data)
+     * @return A CompletableFuture containing the value or null if field doesn't exist
+     */
+    public CompletableFuture<GlideString> hget(GlideString key, GlideString field) {
+        return executeCommand(CommandType.HGET, key.toString(), field.toString())
+            .thenApply(result -> result == null ? null : GlideString.of(result.toString()));
     }
 
     /**
@@ -216,6 +321,16 @@ public abstract class BaseClient {
         }
 
         return customCommand(stringArgs);
+    }
+
+    /**
+     * Execute a batch of commands.
+     *
+     * @param batch The batch of commands to execute
+     * @return A CompletableFuture containing an array of results
+     */
+    public CompletableFuture<Object[]> exec(BaseBatch<?> batch) {
+        return client.exec(batch);
     }
 
     /**

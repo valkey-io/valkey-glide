@@ -8,7 +8,7 @@ import static glide.api.models.commands.SetOptions.ExpiryType.UNIX_MILLISECONDS;
 import static glide.api.models.commands.SetOptions.ExpiryType.UNIX_SECONDS;
 
 import glide.api.commands.StringBaseCommands;
-import io.valkey.glide.core.commands.Command;
+import io.valkey.glide.api.commands.Command;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.Builder;

@@ -1,7 +1,7 @@
 package io.valkey.glide.core.client;
 
-import io.valkey.glide.core.commands.Command;
-import io.valkey.glide.core.commands.CommandType;
+import io.valkey.glide.api.commands.Command;
+import io.valkey.glide.api.commands.CommandType;
 import java.lang.ref.Cleaner;
 import java.util.Arrays;
 import java.util.List;
