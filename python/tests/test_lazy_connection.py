@@ -81,6 +81,27 @@ async def function_scoped_standalone_cluster():
     del cluster
 
 
+# Conditional fixture that provides the appropriate cluster based on test mode
+@pytest.fixture(scope="function")
+async def isolated_valkey_cluster(
+    request, function_scoped_standalone_cluster: ValkeyCluster
+):
+    """
+    Provides an isolated cluster for standalone mode tests, or None for cluster mode tests.
+    This ensures that standalone mode tests get proper isolation while cluster mode tests
+    use the default shared cluster.
+    """
+    # Get the cluster_mode parameter from the test
+    cluster_mode = request.node.callspec.params.get('cluster_mode', False)
+    
+    if cluster_mode:
+        # For cluster mode, return None to use the default shared cluster
+        return None
+    else:
+        # For standalone mode, return the isolated cluster
+        return function_scoped_standalone_cluster
+
+
 # Client fixture that uses the dedicated standalone cluster
 @pytest.fixture(scope="function")
 async def glide_standalone_client_scoped(
@@ -119,7 +140,7 @@ class TestLazyConnection:
         request: Any,
         cluster_mode: bool,
         protocol: ProtocolVersion,
-        function_scoped_standalone_cluster: Optional[ValkeyCluster] = None,
+        isolated_valkey_cluster: Optional[ValkeyCluster],
     ):
         """
         Test that lazy connections are only established when the first command is executed.
@@ -133,9 +154,8 @@ class TestLazyConnection:
         of connections before and after client operations, which can be affected by other tests
         running in parallel against the same Valkey instance.
 
-        Without this isolation, the test can be flaky as other tests might establish or close
-        connections to the same Valkey instance during test execution, causing the connection
-        count assertions to fail unpredictably.
+        For cluster mode, the test uses the shared cluster instance since cluster tests typically
+        have different isolation requirements.
         """
         monitoring_client: Union[GlideClient, GlideClusterClient, None] = None
         lazy_glide_client: Union[GlideClient, GlideClusterClient, None] = None
@@ -146,26 +166,16 @@ class TestLazyConnection:
 
         try:
             # 1. Create a monitoring client (eagerly connected)
-            # Use the dedicated standalone cluster for standalone mode
-            if not cluster_mode and function_scoped_standalone_cluster:
-                monitoring_client = await create_client(
-                    request,
-                    cluster_mode=cluster_mode,
-                    protocol=protocol,
-                    lazy_connect=False,
-                    request_timeout=3000,
-                    connection_timeout=3000,
-                    valkey_cluster=function_scoped_standalone_cluster,
-                )
-            else:
-                monitoring_client = await create_client(
-                    request,
-                    cluster_mode=cluster_mode,
-                    protocol=protocol,
-                    lazy_connect=False,
-                    request_timeout=3000,
-                    connection_timeout=3000,
-                )
+            # Use the isolated cluster for standalone mode to ensure proper isolation
+            monitoring_client = await create_client(
+                request,
+                cluster_mode=cluster_mode,
+                protocol=protocol,
+                lazy_connect=False,
+                request_timeout=3000,
+                connection_timeout=3000,
+                valkey_cluster=isolated_valkey_cluster,
+            )
 
             if cluster_mode:
                 assert isinstance(monitoring_client, GlideClusterClient)
@@ -177,26 +187,16 @@ class TestLazyConnection:
             clients_before_lazy_init = await get_client_count(monitoring_client)
 
             # 3. Create the "lazy" client
-            # Use the dedicated standalone cluster for standalone mode
-            if not cluster_mode and function_scoped_standalone_cluster:
-                lazy_glide_client = await create_client(
-                    request,
-                    cluster_mode=cluster_mode,
-                    protocol=protocol,
-                    lazy_connect=True,  # Lazy
-                    request_timeout=3000,
-                    connection_timeout=3000,
-                    valkey_cluster=function_scoped_standalone_cluster,
-                )
-            else:
-                lazy_glide_client = await create_client(
-                    request,
-                    cluster_mode=cluster_mode,
-                    protocol=protocol,
-                    lazy_connect=True,  # Lazy
-                    request_timeout=3000,
-                    connection_timeout=3000,
-                )
+            # Use the isolated cluster for standalone mode to ensure proper isolation
+            lazy_glide_client = await create_client(
+                request,
+                cluster_mode=cluster_mode,
+                protocol=protocol,
+                lazy_connect=True,  # Lazy
+                request_timeout=3000,
+                connection_timeout=3000,
+                valkey_cluster=isolated_valkey_cluster,
+            )
 
             # 4. Check count (should not change)
             clients_after_lazy_init = await get_client_count(monitoring_client)
