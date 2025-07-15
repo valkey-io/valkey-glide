@@ -130,6 +130,61 @@ func (suite *GlideTestSuite) SetupSuite() {
 	}
 }
 
+// createClient creates a new Glide client based on the provided configuration
+func createClient(
+	clusterMode bool,
+	addresses []config.NodeAddress,
+	requestTimeout time.Duration,
+	connectionTimeout time.Duration,
+	valkeyCluster *ValkeyCluster,
+	lazyConnect bool,
+) (interfaces.BaseClientCommands, error) {
+	if valkeyCluster == nil {
+		return nil, fmt.Errorf("valkeyCluster is required")
+	}
+
+	if len(addresses) == 0 {
+		addresses = valkeyCluster.GetNodesAddresses()
+	}
+
+	if clusterMode {
+		cfg := config.NewClusterClientConfiguration()
+		for _, addr := range addresses {
+			cfg.WithAddress(&addr)
+		}
+
+		if requestTimeout > 0 {
+			cfg.WithRequestTimeout(requestTimeout)
+		}
+
+		advCfg := config.NewAdvancedClusterClientConfiguration()
+		if connectionTimeout > 0 {
+			advCfg.WithConnectionTimeout(connectionTimeout)
+		}
+		cfg.WithAdvancedConfiguration(advCfg)
+		cfg.WithLazyConnect(lazyConnect)
+
+		return glide.NewClusterClient(cfg)
+	}
+
+	cfg := config.NewClientConfiguration()
+	for _, addr := range addresses {
+		cfg.WithAddress(&addr)
+	}
+	if requestTimeout > 0 {
+		cfg.WithRequestTimeout(requestTimeout)
+	}
+
+	advCfg := config.NewAdvancedClientConfiguration()
+	if connectionTimeout > 0 {
+		advCfg.WithConnectionTimeout(connectionTimeout)
+	}
+	cfg.WithAdvancedConfiguration(advCfg)
+	cfg.WithLazyConnect(lazyConnect)
+
+	return glide.NewClient(cfg)
+}
+
 func parseHosts(suite *GlideTestSuite, addresses string) []config.NodeAddress {
 	var result []config.NodeAddress
 
