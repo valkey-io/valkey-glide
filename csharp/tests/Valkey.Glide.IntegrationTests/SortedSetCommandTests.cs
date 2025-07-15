@@ -299,7 +299,7 @@ public class SortedSetCommandTests(TestConfiguration config)
 
         // Test with special string values
         var specialMembers = new ValkeyValue[] { "", " ", "null", "0", "-1", "true", "false" };
-        
+
         // Add special members with various scores
         for (int i = 0; i < specialMembers.Length; i++)
         {
