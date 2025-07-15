@@ -390,7 +390,13 @@ async fn invoke_script(
         .unwrap_or_default();
 
     client
-        .invoke_script(&hash, &keys, &args, code.as_ref().map(|c| c.as_ref()), routing)
+        .invoke_script(
+            &hash,
+            &keys,
+            &args,
+            code.as_ref().map(|c| c.as_ref()),
+            routing,
+        )
         .await
         .map_err(|err| err.into())
 }

@@ -595,13 +595,16 @@ impl Script {
             Either::A(code_str) => code_str.as_bytes().to_vec(),
             Either::B(code_bytes) => code_bytes.to_vec(),
         };
-        
+
         let hash = match code {
             Either::A(code_str) => glide_core::scripts_container::add_script(code_str.as_bytes()),
             Either::B(code_bytes) => glide_core::scripts_container::add_script(&code_bytes),
         };
-        
-        Self { hash, code: code_bytes }
+
+        Self {
+            hash,
+            code: code_bytes,
+        }
     }
 
     /// Returns the hash of the script.

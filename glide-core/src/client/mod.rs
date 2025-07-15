@@ -4,6 +4,7 @@ mod types;
 
 use crate::cluster_scan_container::insert_cluster_scan_cursor;
 use crate::scripts_container::get_script;
+use bytes::BytesMut;
 use futures::FutureExt;
 use logger_core::{log_error, log_info, log_warn};
 use once_cell::sync::OnceCell;
@@ -17,10 +18,9 @@ use redis::{
     ClusterScanArgs, Cmd, ErrorKind, FromRedisValue, PipelineRetryStrategy, PushInfo, RedisError,
     RedisResult, RetryStrategy, ScanStateRC, Value,
 };
-use std::sync::Arc;
-use bytes::BytesMut;
 pub use standalone_client::StandaloneClient;
 use std::io;
+use std::sync::Arc;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicIsize, Ordering};
 use std::thread;
@@ -723,7 +723,7 @@ impl Client {
                 // No script code available
                 return Err(err);
             };
-            
+
             let load = load_cmd(&script_code);
             self.send_command(&load, None).await?;
             self.send_command(&eval, routing).await
