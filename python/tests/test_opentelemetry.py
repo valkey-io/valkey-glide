@@ -4,7 +4,7 @@ import gc
 import json
 import os
 import time
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import anyio
 import psutil  # type: ignore[import-untyped]
@@ -34,7 +34,8 @@ def read_and_parse_span_file(path: str) -> Tuple[str, List[Dict], List[str]]:
         path: The path to the span file
 
     Returns:
-        A tuple containing the raw span data, array of spans, and array of span names
+        A tuple containing the raw span data, array of spans, and array of
+        span names
 
     Raises:
         Exception: If the file cannot be read or parsed
@@ -68,6 +69,7 @@ def read_and_parse_span_file(path: str) -> Tuple[str, List[Dict], List[str]]:
 async def wait_for_spans_to_be_flushed(
     span_file_path: str,
     expected_span_names: List[str],
+    expected_span_counts: Optional[Dict[str, int]] = None,
     timeout: float = 15.0,
     check_interval: float = 0.5,
 ) -> None:
@@ -77,6 +79,8 @@ async def wait_for_spans_to_be_flushed(
     Args:
         span_file_path: Path to the span file
         expected_span_names: List of expected span names to wait for
+        expected_span_counts: Optional dict mapping span names to expected
+            counts
         timeout: Maximum time to wait in seconds
         check_interval: Interval between checks in seconds
 
@@ -87,17 +91,45 @@ async def wait_for_spans_to_be_flushed(
 
     while time.time() - start_time < timeout:
         # Check if file exists and is readable
-        if os.path.exists(span_file_path) and os.path.getsize(span_file_path) > 0:
+        if (
+            os.path.exists(span_file_path)
+            and os.path.getsize(span_file_path) > 0
+        ):
             try:
-                _, _, span_names = read_and_parse_span_file(span_file_path)
+                _, _, span_names = read_and_parse_span_file(
+                    span_file_path
+                )
+
                 # Check if all expected spans are present
                 missing_spans = [
-                    name for name in expected_span_names if name not in span_names
+                    name
+                    for name in expected_span_names
+                    if name not in span_names
                 ]
-                if not missing_spans:
-                    return  # All expected spans found
+
+                # If expected_span_counts is provided, check counts as well
+                if expected_span_counts:
+                    insufficient_counts = []
+                    for (
+                        span_name,
+                        expected_count,
+                    ) in expected_span_counts.items():
+                        actual_count = span_names.count(span_name)
+                        if actual_count < expected_count:
+                            insufficient_counts.append(
+                                f"{span_name} (expected: {expected_count}, "
+                                f"actual: {actual_count})"
+                            )
+
+                    if not missing_spans and not insufficient_counts:
+                        return  # All expected spans with correct counts found
+                else:
+                    if not missing_spans:
+                        return  # All expected spans found
+
             except Exception:
-                # File might be in the process of being written, continue waiting
+                # File might be in the process of being written, continue
+                # waiting
                 pass
 
         await anyio.sleep(check_interval)
@@ -106,16 +138,28 @@ async def wait_for_spans_to_be_flushed(
     if os.path.exists(span_file_path):
         try:
             _, _, span_names = read_and_parse_span_file(span_file_path)
-            raise Exception(
-                f"Timeout waiting for spans. Expected {expected_span_names}, but found {span_names}"
-            )
+            if expected_span_counts:
+                count_info = {}
+                for span_name in expected_span_names:
+                    count_info[span_name] = span_names.count(span_name)
+                raise Exception(
+                    f"Timeout waiting for spans. Expected {expected_span_names} "
+                    f"with counts {expected_span_counts}, but found {count_info}"
+                )
+            else:
+                raise Exception(
+                    f"Timeout waiting for spans. Expected {expected_span_names}, "
+                    f"but found {span_names}"
+                )
         except Exception as e:
             raise Exception(
-                f"Timeout waiting for spans. File exists but couldn't be read: {str(e)}"
+                f"Timeout waiting for spans. File exists but couldn't be read: "
+                f"{str(e)}"
             )
     else:
         raise Exception(
-            f"Timeout waiting for spans. Span file {span_file_path} does not exist"
+            f"Timeout waiting for spans. Span file {span_file_path} does not "
+            f"exist"
         )
 
 
@@ -487,7 +531,9 @@ class TestOpenTelemetryGlide:
 
         # Wait for spans to be flushed
         await wait_for_spans_to_be_flushed(
-            VALID_ENDPOINT_TRACES, expected_span_names=["Get"]
+            VALID_ENDPOINT_TRACES,
+            expected_span_names=["Get"],
+            expected_span_counts={"Get": 10},
         )
 
         # Read the span file and check span names
