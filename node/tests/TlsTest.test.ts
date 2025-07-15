@@ -62,7 +62,7 @@ describe("tls GlideClusterClient", () => {
             if (!cluster) {
                 throw new Error("Cluster not available for testing");
             }
-            
+
             const config = {
                 ...getClientConfigurationOption(
                     cluster.getAddresses(),
@@ -124,7 +124,7 @@ describe("tls GlideClient", () => {
             if (!cluster) {
                 throw new Error("Cluster not available for testing");
             }
-            
+
             const config = {
                 ...getClientConfigurationOption(
                     cluster.getAddresses(),

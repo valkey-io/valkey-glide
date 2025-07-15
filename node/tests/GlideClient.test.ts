@@ -81,8 +81,13 @@ describe("GlideClient", () => {
         if (cluster) {
             await flushAndCloseClient(false, cluster.getAddresses(), client);
         }
+
         if (azCluster) {
-            await flushAndCloseClient(false, azCluster.getAddresses(), azClient);
+            await flushAndCloseClient(
+                false,
+                azCluster.getAddresses(),
+                azClient,
+            );
         }
     });
 
@@ -91,6 +96,7 @@ describe("GlideClient", () => {
             if (cluster) {
                 await cluster.close();
             }
+
             if (azCluster) {
                 await azCluster.close();
             }
@@ -98,6 +104,7 @@ describe("GlideClient", () => {
             if (cluster) {
                 await cluster.close(true);
             }
+
             if (azCluster) {
                 await azCluster.close();
             }

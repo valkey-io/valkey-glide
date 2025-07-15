@@ -105,6 +105,7 @@ describe("GlideClusterClient", () => {
         if (cluster) {
             await flushAndCloseClient(true, cluster.getAddresses(), client);
         }
+
         if (azCluster) {
             await flushAndCloseClient(true, azCluster.getAddresses(), azClient);
         }

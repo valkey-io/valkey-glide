@@ -206,6 +206,7 @@ describe("OpenTelemetry GlideClusterClient", () => {
 
     afterEach(async () => {
         await teardown_otel_test();
+
         if (cluster) {
             await flushAndCloseClient(true, cluster.getAddresses(), client);
         }

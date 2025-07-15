@@ -69,7 +69,11 @@ describe("Server Module Tests", () => {
 
             afterEach(async () => {
                 if (cluster) {
-                    await flushAndCloseClient(true, cluster.getAddresses(), client);
+                    await flushAndCloseClient(
+                        true,
+                        cluster.getAddresses(),
+                        client,
+                    );
                 }
             });
 
