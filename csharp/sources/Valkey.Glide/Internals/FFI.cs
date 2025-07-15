@@ -667,8 +667,6 @@ internal class FFI
         SetNX = 1519, // deprecated in 2.6.12
         SetRange = 1520,
         Strlen = 1521,
-        ZAdd = 1304,
-        ZRem = 1324,
         Substr = 1522,
 
         //// Transaction commands
