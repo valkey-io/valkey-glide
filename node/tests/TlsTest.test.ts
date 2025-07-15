@@ -21,7 +21,7 @@ const TLS_OPTIONS = {
 // tls cluster tests
 describe("tls GlideClusterClient", () => {
     let cluster: ValkeyCluster;
-    let client: GlideClusterClient;
+    let client: GlideClusterClient | undefined;
 
     beforeAll(async () => {
         cluster = await ValkeyCluster.createCluster(
@@ -41,11 +41,17 @@ describe("tls GlideClusterClient", () => {
             client,
             TLS_OPTIONS,
         );
+        client = undefined;
     });
 
     afterAll(async () => {
-        if (cluster) {
-            await cluster.close();
+        try {
+            if (cluster) {
+                await cluster.close();
+            }
+        } catch (error) {
+            // Log the error but don't throw to avoid masking test results
+            console.warn("Error closing cluster:", error);
         }
     });
 
@@ -72,7 +78,7 @@ describe("tls GlideClusterClient", () => {
 // tls cluster tests
 describe("tls GlideClient", () => {
     let cluster: ValkeyCluster;
-    let client: GlideClient;
+    let client: GlideClient | undefined;
 
     beforeAll(async () => {
         cluster = await ValkeyCluster.createCluster(
@@ -92,11 +98,17 @@ describe("tls GlideClient", () => {
             client,
             TLS_OPTIONS,
         );
+        client = undefined;
     });
 
     afterAll(async () => {
-        if (cluster) {
-            await cluster.close();
+        try {
+            if (cluster) {
+                await cluster.close();
+            }
+        } catch (error) {
+            // Log the error but don't throw to avoid masking test results
+            console.warn("Error closing cluster:", error);
         }
     });
 

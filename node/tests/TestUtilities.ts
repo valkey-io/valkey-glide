@@ -482,12 +482,22 @@ export async function testTeardown(
     cluster_mode: boolean,
     option: BaseClientConfiguration,
 ) {
-    const client = cluster_mode
-        ? await GlideClusterClient.createClient(option)
-        : await GlideClient.createClient(option);
+    let client: BaseClient | undefined;
 
-    await client.customCommand(["FLUSHALL"]);
-    client.close();
+    try {
+        client = cluster_mode
+            ? await GlideClusterClient.createClient(option)
+            : await GlideClient.createClient(option);
+
+        await client.customCommand(["FLUSHALL"]);
+    } catch (error) {
+        // If teardown fails, log the error but don't throw to avoid masking the original test failure
+        console.warn("Test teardown failed:", error);
+    } finally {
+        if (client) {
+            client.close();
+        }
+    }
 }
 
 export const getClientConfigurationOption = (
