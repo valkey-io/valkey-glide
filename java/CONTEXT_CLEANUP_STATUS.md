@@ -14,7 +14,7 @@ These files are part of the old protobuf architecture and need to be either:
 **Connection/Network Layer (OLD UDS+Protobuf):**
 - `/home/ubuntu/valkey-glide/java/client/src/main/java/glide/connectors/handlers/`
   - `MessageHandler.java`
-  - `CallbackDispatcher.java` 
+  - `CallbackDispatcher.java`
   - `ChannelHandler.java`
   - `ReadHandler.java`
   - `ProtobufSocketChannelInitializer.java`
@@ -32,7 +32,7 @@ These files are part of the old protobuf architecture and need to be either:
 
 ## ✅ WORKING IMPLEMENTATION FILES
 These files are COMPLETE and working:
-- `BaseClient.java` - Full API compatibility layer ✅ 
+- `BaseClient.java` - Full API compatibility layer ✅
 - `GlideClient.java` - Standalone client implementation ✅
 - Core `GlideClient.java` - Direct JNI implementation ✅
 - `Command.java` & `CommandType.java` - New command system ✅
@@ -47,7 +47,7 @@ These files are COMPLETE and working:
 # Create legacy folder
 mkdir -p /home/ubuntu/valkey-glide/java/client/src/main/java/legacy/old-architecture
 
-# Move old infrastructure files  
+# Move old infrastructure files
 mv /home/ubuntu/valkey-glide/java/client/src/main/java/glide/connectors /home/ubuntu/valkey-glide/java/client/src/main/java/legacy/old-architecture/
 mv /home/ubuntu/valkey-glide/java/client/src/main/java/glide/managers/BaseResponseResolver.java /home/ubuntu/valkey-glide/java/client/src/main/java/legacy/old-architecture/
 
@@ -71,7 +71,7 @@ After cleanup, the build should succeed:
 
 ## Current Status Summary
 - ✅ **Core Implementation**: COMPLETE and working
-- ✅ **Compatibility Layer**: COMPLETE (BaseClient/GlideClient)  
+- ✅ **Compatibility Layer**: COMPLETE (BaseClient/GlideClient)
 - ❌ **Build System**: Blocked by legacy protobuf files
 - 🔄 **Action Needed**: Clean up legacy files to enable compilation
 

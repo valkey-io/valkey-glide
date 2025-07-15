@@ -57,13 +57,13 @@ CompletableFuture<String> result = commandManager.executeStringCommand(Get, args
        SET("SET"),
        PING("PING"),
        // ...more commands
-       
+
        private final String commandName;
-       
+
        CommandType(String commandName) {
            this.commandName = commandName;
        }
-       
+
        public String getCommandName() {
            return commandName;
        }
@@ -115,7 +115,7 @@ CompletableFuture<String> result = commandManager.executeStringCommand(Get, args
 
 ### GlideJniClient Native Methods
 ```java
-private static native long createClient(String[] addresses, int dbId, String username, 
+private static native long createClient(String[] addresses, int dbId, String username,
                                      String password, boolean useTls, boolean clusterMode,
                                      int requestTimeout, int connectionTimeout);
 private static native void closeClient(long clientPtr);
