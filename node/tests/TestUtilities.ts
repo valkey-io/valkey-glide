@@ -495,7 +495,7 @@ export async function testTeardown(
                   requestTimeout: 5000, // Override with a reasonable timeout
               });
 
-        await client.customCommand(["FLUSHALL"]);
+        await client.flushall();
     } catch (error) {
         // Log error but don't fail the cleanup
         console.warn("Error in testTeardown:", error);
