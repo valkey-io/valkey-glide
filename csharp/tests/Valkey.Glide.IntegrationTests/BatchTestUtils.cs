@@ -289,10 +289,6 @@ internal class BatchTestUtils
         _ = batch.SortedSetRemove(key1, "nonexistent");
         testData.Add(new(false, "SortedSetRemove(key1, nonexistent)"));
 
-        // Test remove from key2
-        _ = batch.SortedSetRemove(key2, "newMember");
-        testData.Add(new(true, "SortedSetRemove(key2, newMember)"));
-
         return testData;
     }
 

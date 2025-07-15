@@ -70,7 +70,7 @@ internal partial class Request
         Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
 
         GlideString[] args = [key.ToGlideString(), member.ToGlideString()];
-        return new(RequestType.ZRem, args, false, response => response == 1);
+        return Boolean<long>(RequestType.ZRem, args);
     }
 
     public static Cmd<long, long> SortedSetRemoveAsync(ValkeyKey key, ValkeyValue[] members, CommandFlags flags = CommandFlags.None)
