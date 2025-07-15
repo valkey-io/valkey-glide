@@ -99,8 +99,14 @@ tasks.register('cleanRust') {
 }
 
 tasks.register('buildRust', Exec) {
-    // Temporarily disable zigbuild for development/testing
-    commandLine 'cargo', 'build', '--release'
+    if (osdetector.os == 'linux' && osdetector.release.id != 'alpine') {
+        // TODO: Install zig and cargo-zigbuild for production builds
+        // For now, use regular cargo build to focus on test fixes
+        commandLine 'cargo', 'build', '--release' 
+        // Original line: commandLine 'cargo', 'zigbuild', '--target', "${arch}-unknown-linux-gnu.2.17", '--release'
+    } else {
+        commandLine 'cargo', 'build', '--release'
+    }
 
     workingDir project.rootDir
     environment CARGO_TERM_COLOR: 'always'
