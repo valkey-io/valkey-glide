@@ -344,8 +344,7 @@ class TestPubSub:
 
             # Create a map of channels to random messages with shard prefix
             channels_and_messages = {
-                f"{shard_prefix}{i}": get_random_string(5)
-                for i in range(NUM_CHANNELS)
+                f"{shard_prefix}{i}": get_random_string(5) for i in range(NUM_CHANNELS)
             }
 
             callback, context = None, None
@@ -423,8 +422,7 @@ class TestPubSub:
 
             # Create a map of channels to random messages with shard prefix
             channels_and_messages = {
-                f"{shard_prefix}{i}": get_random_string(5)
-                for i in range(NUM_CHANNELS)
+                f"{shard_prefix}{i}": get_random_string(5) for i in range(NUM_CHANNELS)
             }
 
             pub_sub = create_pubsub_subscription(
@@ -635,8 +633,7 @@ class TestPubSub:
 
             # Create a map of channels to random messages with shard prefix
             channels_and_messages = {
-                f"{shard_prefix}{i}": get_random_string(5)
-                for i in range(NUM_CHANNELS)
+                f"{shard_prefix}{i}": get_random_string(5) for i in range(NUM_CHANNELS)
             }
 
             callback, context = None, None
