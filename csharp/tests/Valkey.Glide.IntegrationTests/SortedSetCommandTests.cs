@@ -234,7 +234,7 @@ public class SortedSetCommandTests(TestConfiguration config)
         string key = Guid.NewGuid().ToString();
 
         // Test removing from non-existent key
-        Assert.Equal(0, await client.SortedSetRemoveAsync(key, new ValkeyValue[] { "member1", "member2" }));
+        Assert.Equal(0, await client.SortedSetRemoveAsync(key, ["member1", "member2"]));
 
         // Add members first
         var entries = new SortedSetEntry[]
@@ -247,16 +247,16 @@ public class SortedSetCommandTests(TestConfiguration config)
         Assert.Equal(4, await client.SortedSetAddAsync(key, entries));
 
         // Test removing multiple existing members
-        Assert.Equal(2, await client.SortedSetRemoveAsync(key, new ValkeyValue[] { "member1", "member3" }));
+        Assert.Equal(2, await client.SortedSetRemoveAsync(key, ["member1", "member3"]));
 
         // Test removing mix of existing and non-existing members
-        Assert.Equal(1, await client.SortedSetRemoveAsync(key, new ValkeyValue[] { "member2", "nonexistent", "member5" }));
+        Assert.Equal(1, await client.SortedSetRemoveAsync(key, ["member2", "nonexistent", "member5"]));
 
         // Test removing already removed members
-        Assert.Equal(0, await client.SortedSetRemoveAsync(key, new ValkeyValue[] { "member1", "member2" }));
+        Assert.Equal(0, await client.SortedSetRemoveAsync(key, ["member1", "member2"]));
 
         // Verify only member4 remains
-        Assert.Equal(1, await client.SortedSetRemoveAsync(key, new ValkeyValue[] { "member4" }));
+        Assert.Equal(1, await client.SortedSetRemoveAsync(key, ["member4"]));
     }
 
     [Theory(DisableDiscoveryEnumeration = true)]
@@ -307,7 +307,7 @@ public class SortedSetCommandTests(TestConfiguration config)
         }
 
         // Remove some special members
-        Assert.Equal(3, await client.SortedSetRemoveAsync(key, new ValkeyValue[] { "", "null", "false" }));
+        Assert.Equal(3, await client.SortedSetRemoveAsync(key, ["", "null", "false"]));
 
         // Remove remaining members one by one
         Assert.True(await client.SortedSetRemoveAsync(key, " "));
@@ -370,6 +370,6 @@ public class SortedSetCommandTests(TestConfiguration config)
         Assert.Equal(2, await client.SortedSetAddAsync(key, entries));
 
         // Test multiple member remove with CommandFlags.None
-        Assert.Equal(2, await client.SortedSetRemoveAsync(key, new ValkeyValue[] { "member2", "member3" }, CommandFlags.None));
+        Assert.Equal(2, await client.SortedSetRemoveAsync(key, ["member2", "member3"], CommandFlags.None));
     }
 }
