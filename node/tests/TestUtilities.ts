@@ -482,14 +482,14 @@ export async function testTeardown(
     cluster_mode: boolean,
     option: BaseClientConfiguration,
 ) {
-    let client: BaseClient | undefined;
+    let client: GlideClient | GlideClusterClient | undefined;
 
     try {
         client = cluster_mode
             ? await GlideClusterClient.createClient(option)
             : await GlideClient.createClient(option);
 
-        await client.flushall();
+        await client.customCommand(["FLUSHALL"]);
     } catch (error) {
         // If teardown fails, log the error but don't throw to avoid masking the original test failure
         console.warn("Test teardown failed:", error);
