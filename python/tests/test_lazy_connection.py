@@ -119,7 +119,7 @@ class TestLazyConnection:
         request: Any,
         cluster_mode: bool,
         protocol: ProtocolVersion,
-        function_scoped_standalone_cluster: Optional[ValkeyCluster] = None,
+        function_scoped_standalone_cluster: ValkeyCluster,
     ):
         """
         Test that lazy connections are only established when the first command is executed.
@@ -147,7 +147,8 @@ class TestLazyConnection:
         try:
             # 1. Create a monitoring client (eagerly connected)
             # Use the dedicated standalone cluster for standalone mode
-            if not cluster_mode and function_scoped_standalone_cluster:
+            if not cluster_mode:
+                # For standalone mode, always use the dedicated cluster to ensure isolation
                 monitoring_client = await create_client(
                     request,
                     cluster_mode=cluster_mode,
@@ -158,6 +159,7 @@ class TestLazyConnection:
                     valkey_cluster=function_scoped_standalone_cluster,
                 )
             else:
+                # For cluster mode, use the shared cluster
                 monitoring_client = await create_client(
                     request,
                     cluster_mode=cluster_mode,
@@ -178,7 +180,8 @@ class TestLazyConnection:
 
             # 3. Create the "lazy" client
             # Use the dedicated standalone cluster for standalone mode
-            if not cluster_mode and function_scoped_standalone_cluster:
+            if not cluster_mode:
+                # For standalone mode, always use the dedicated cluster to ensure isolation
                 lazy_glide_client = await create_client(
                     request,
                     cluster_mode=cluster_mode,
@@ -189,6 +192,7 @@ class TestLazyConnection:
                     valkey_cluster=function_scoped_standalone_cluster,
                 )
             else:
+                # For cluster mode, use the shared cluster
                 lazy_glide_client = await create_client(
                     request,
                     cluster_mode=cluster_mode,
