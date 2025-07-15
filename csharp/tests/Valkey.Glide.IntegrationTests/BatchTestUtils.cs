@@ -241,10 +241,10 @@ internal class BatchTestUtils
 
         _ = batch.KeyUnlink([genericKey1, renamedKey, genericKey3]);
         testData.Add(new(1L, "KeyUnlink([genericKey1, renamedKey, genericKey3])"));
-        
+
         return testData;
     }
-  
+
     public static List<TestInfo> CreateSortedSetTest(IBatch batch, bool isAtomic)
     {
         List<TestInfo> testData = [];
