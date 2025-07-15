@@ -486,14 +486,8 @@ export async function testTeardown(
 
     try {
         client = cluster_mode
-            ? await GlideClusterClient.createClient({
-                  ...option,
-                  requestTimeout: 5000, // Override with a reasonable timeout
-              })
-            : await GlideClient.createClient({
-                  ...option,
-                  requestTimeout: 5000, // Override with a reasonable timeout
-              });
+            ? await GlideClusterClient.createClient(option)
+            : await GlideClient.createClient(option);
 
         await client.flushall();
     } catch (error) {
