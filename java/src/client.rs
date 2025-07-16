@@ -237,7 +237,7 @@ where
 
 /// Create a new Glide client with full configuration
 #[no_mangle]
-pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_createClient(
+pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_createClient(
     mut env: JNIEnv,
     _class: JClass,
     addresses: jobject,
@@ -341,7 +341,7 @@ pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_createClie
 
 /// Close and free a Glide client
 #[no_mangle]
-pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_closeClient(
+pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_closeClient(
     mut env: JNIEnv,
     _class: JClass,
     client_handle: jlong,
@@ -361,7 +361,7 @@ pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_closeClien
 
 /// Execute any command with arguments
 #[no_mangle]
-pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_executeCommand(
+pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_executeCommand(
     mut env: JNIEnv,
     _class: JClass,
     client_handle: jlong,
@@ -448,7 +448,7 @@ fn convert_value_to_java_object(env: &mut JNIEnv, value: Value) -> JniResult<job
 
 /// Execute a command expecting a String result
 #[no_mangle]
-pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_executeStringCommand(
+pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_executeStringCommand(
     mut env: JNIEnv,
     _class: JClass,
     client_handle: jlong,
@@ -505,7 +505,7 @@ pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_executeStr
 
 /// Execute a command expecting a Long result
 #[no_mangle]
-pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_executeLongCommand(
+pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_executeLongCommand(
     mut env: JNIEnv,
     _class: JClass,
     client_handle: jlong,
@@ -551,7 +551,7 @@ pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_executeLon
 
 /// Get client statistics
 #[no_mangle]
-pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_getClientStats(
+pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_getClientStats(
     mut env: JNIEnv,
     _class: JClass,
     client_handle: jlong,
@@ -572,7 +572,7 @@ pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_getClientS
 
 /// Clean up expired callbacks for a client
 #[no_mangle]
-pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_cleanupExpiredCallbacks(
+pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_cleanupExpiredCallbacks(
     mut env: JNIEnv,
     _class: JClass,
     client_handle: jlong,
