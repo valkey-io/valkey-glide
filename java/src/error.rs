@@ -69,6 +69,10 @@ pub enum JniError {
     /// Invalid handle error
     #[error("Invalid handle: {0}")]
     InvalidHandle(String),
+
+    /// Runtime shutdown error
+    #[error("Runtime shutdown: {0}")]
+    RuntimeShutdown(String),
 }
 
 impl From<jni::errors::Error> for JniError {
@@ -106,6 +110,7 @@ pub fn throw_java_exception(env: &mut JNIEnv, error: &JniError) {
         JniError::ConversionError(msg) => ("java/lang/IllegalArgumentException", format!("Conversion error: {}", msg)),
         JniError::LockPoisoned(msg) => ("java/lang/IllegalStateException", format!("Lock poisoned: {}", msg)),
         JniError::InvalidHandle(msg) => ("java/lang/IllegalArgumentException", format!("Invalid handle: {}", msg)),
+        JniError::RuntimeShutdown(msg) => ("java/lang/IllegalStateException", format!("Runtime shutdown: {}", msg)),
     };
 
     // Attempt to throw the exception, ignoring errors since we're already in error handling

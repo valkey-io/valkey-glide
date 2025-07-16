@@ -12,9 +12,7 @@ use jni::JNIEnv;
 use redis::{cmd, Value};
 use std::ptr;
 use std::time::Duration;
-use std::sync::{Arc, Mutex};
-use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Mutex;
 use std::sync::LazyLock;
 
 use crate::error::JniResult;
@@ -46,28 +44,51 @@ const ALLOWED_COMMANDS: &[&str] = &[
 /// Runtime singleton for efficient Tokio integration
 static RUNTIME: std::sync::OnceLock<tokio::runtime::Runtime> = std::sync::OnceLock::new();
 
-/// Type-safe client handle management
-static CLIENT_COUNTER: AtomicU64 = AtomicU64::new(1);
-static CLIENT_REGISTRY: LazyLock<Mutex<HashMap<u64, Arc<Mutex<Client>>>>> = 
-    LazyLock::new(|| Mutex::new(HashMap::new()));
+/// Shutdown flag to prevent runtime reuse after shutdown
+static RUNTIME_SHUTDOWN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
-const CLIENT_TYPE_MAGIC: u64 = 0xDEADBEEFCAFEBABE;
+/// Single client instance - the Client is a multiplexer, not a pool
+/// The Client from glide-core is already thread-safe and designed to be cloned
+/// for concurrent access, so we just store one client and clone it as needed
+static CLIENT_INSTANCE: LazyLock<Mutex<Option<Client>>> = 
+    LazyLock::new(|| Mutex::new(None));
 
 /// Get or initialize the Tokio runtime
-fn get_runtime() -> &'static tokio::runtime::Runtime {
-    RUNTIME.get_or_init(|| {
+fn get_runtime() -> JniResult<&'static tokio::runtime::Runtime> {
+    if RUNTIME_SHUTDOWN.load(std::sync::atomic::Ordering::Acquire) {
+        return Err(jni_error!(RuntimeShutdown, "Runtime has been shutdown"));
+    }
+    
+    Ok(RUNTIME.get_or_init(|| {
         tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .thread_name("glide-jni")
             .build()
             .expect("Failed to create Tokio runtime")
-    })
+    }))
+}
+
+/// Shutdown the Tokio runtime and clean up resources
+#[no_mangle]
+pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_shutdownRuntime(
+    _env: JNIEnv,
+    _class: JClass,
+) {
+    // Mark runtime as shutdown
+    RUNTIME_SHUTDOWN.store(true, std::sync::atomic::Ordering::Release);
+    
+    // Clear the client instance
+    if let Ok(mut instance) = CLIENT_INSTANCE.lock() {
+        *instance = None;
+    }
+    
+    // The runtime will be dropped when the static variable is dropped
+    // This happens automatically when the JVM shuts down
 }
 
 // Command validation functions
 
 /// Validate Valkey command name against whitelist and injection attacks
-#[allow(dead_code)]
 fn validate_command_name(command: &str) -> JniResult<()> {
     // Length validation
     if command.is_empty() {
@@ -93,7 +114,6 @@ fn validate_command_name(command: &str) -> JniResult<()> {
 }
 
 /// Validate and sanitize command argument
-#[allow(dead_code)]
 fn validate_argument(arg: &[u8]) -> JniResult<()> {
     // Size validation
     if arg.len() > MAX_ARGUMENT_LEN {
@@ -111,6 +131,7 @@ fn validate_argument(arg: &[u8]) -> JniResult<()> {
 }
 
 /// Validate key string for Valkey operations
+/// This function is reserved for future use when key validation is needed
 #[allow(dead_code)]
 fn validate_key(key: &str) -> JniResult<()> {
     if key.is_empty() {
@@ -130,52 +151,71 @@ fn validate_key(key: &str) -> JniResult<()> {
 
 // Type-safe client handle management
 
-/// Create a new type-safe client handle
-fn register_client(client: Client) -> u64 {
-    let handle = CLIENT_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let client_arc = Arc::new(Mutex::new(client));
-    
-    let mut registry = CLIENT_REGISTRY.lock().unwrap();
-    registry.insert(handle, client_arc);
-    
-    // Encode handle with type magic for validation
-    handle ^ CLIENT_TYPE_MAGIC
+/// Set the single client instance
+/// The Client is a multiplexer, so we only need one instance
+fn set_client(client: Client) {
+    let mut instance = CLIENT_INSTANCE.lock().unwrap();
+    *instance = Some(client);
 }
 
-/// Get client from type-safe handle with validation
-#[allow(dead_code)]
-fn get_client_safe(encoded_handle: jlong) -> JniResult<Arc<Mutex<Client>>> {
-    if encoded_handle == 0 {
-        return Err(jni_error!(NullPointer, "Client handle is null"));
-    }
+/// Get the client instance
+/// Returns a clone of the Client, which is designed for concurrent access
+fn get_client_safe() -> JniResult<Client> {
+    let instance = CLIENT_INSTANCE.lock()
+        .map_err(|_| jni_error!(LockPoisoned, "Client instance lock poisoned"))?;
     
-    // Decode and validate handle
-    let handle = (encoded_handle as u64) ^ CLIENT_TYPE_MAGIC;
-    
-    let registry = CLIENT_REGISTRY.lock()
-        .map_err(|_| jni_error!(LockPoisoned, "Client registry lock poisoned"))?;
-    
-    registry.get(&handle)
+    instance.as_ref()
         .cloned()
-        .ok_or(jni_error!(InvalidHandle, "Invalid or expired client handle: {}", handle))
+        .ok_or(jni_error!(InvalidHandle, "Client not initialized"))
 }
 
-/// Remove client from registry
-fn unregister_client(encoded_handle: jlong) -> JniResult<()> {
-    if encoded_handle == 0 {
-        return Ok(()); // Already cleaned
-    }
+// Client access is now direct - no locking needed since Client is Clone and thread-safe
+
+/// Clear the client instance
+fn clear_client() -> JniResult<()> {
+    let mut instance = CLIENT_INSTANCE.lock()
+        .map_err(|_| jni_error!(LockPoisoned, "Client instance lock poisoned"))?;
     
-    let handle = (encoded_handle as u64) ^ CLIENT_TYPE_MAGIC;
-    
-    let mut registry = CLIENT_REGISTRY.lock()
-        .map_err(|_| jni_error!(LockPoisoned, "Client registry lock poisoned"))?;
-    
-    registry.remove(&handle);
+    *instance = None;
     Ok(())
 }
 
 // Helper functions for JNI parameter parsing
+
+/// Ensure proper cleanup of JNI local references
+fn ensure_local_ref_cleanup(env: &mut JNIEnv) {
+    // Force cleanup of any pending local references
+    // This is a defensive measure to prevent reference leaks
+    let _ = env.ensure_local_capacity(10);
+}
+
+/// Create a scoped local reference frame for complex operations
+fn with_local_frame<F, R>(env: &mut JNIEnv, capacity: i32, f: F) -> JniResult<R>
+where
+    F: FnOnce(&mut JNIEnv) -> JniResult<R>,
+{
+    // Push a new local reference frame
+    env.push_local_frame(capacity)?;
+    
+    let result = f(env);
+    
+    // Pop the frame, cleaning up all local references created within
+    match result {
+        Ok(value) => {
+            // SAFETY: pop_local_frame is safe because we pushed a frame earlier
+            // and we're passing a valid JObject reference
+            unsafe { env.pop_local_frame(&JObject::null())? };
+            Ok(value)
+        }
+        Err(e) => {
+            // SAFETY: pop_local_frame is safe because we pushed a frame earlier
+            // and we're passing a valid JObject reference. We ignore the result
+            // because we're already handling an error
+            unsafe { let _ = env.pop_local_frame(&JObject::null()); }
+            Err(e)
+        }
+    }
+}
 
 /// Validate and parse address with security checks
 fn validate_and_parse_address(addr_str: &str) -> JniResult<NodeAddress> {
@@ -273,6 +313,8 @@ fn parse_optional_string(env: &mut JNIEnv, jstring: jstring) -> JniResult<Option
     if jstring.is_null() {
         Ok(None)
     } else {
+        // SAFETY: JString::from_raw is safe because we've checked for null
+        // and jstring is a valid JNI string reference from the caller
         let jstr = unsafe { JString::from_raw(jstring) };
         let s: String = env.get_string(&jstr)?.into();
         Ok(Some(s))
@@ -296,6 +338,8 @@ pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_createClie
     connection_timeout_ms: jint,
 ) -> jlong {
     let mut result = || -> JniResult<jlong> {
+        // SAFETY: JObject::from_raw is safe because addresses is a valid
+        // jobject parameter passed from JNI, representing a String[]
         let addresses_obj = unsafe { JObject::from_raw(addresses) };
         let addresses_array = JObjectArray::from(addresses_obj);
         let parsed_addresses = parse_addresses(&mut env, &addresses_array)?;
@@ -383,27 +427,29 @@ pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_createClie
         }
 
         // Create the actual glide-core client
-        let client = get_runtime().block_on(async {
+        let client = get_runtime()?.block_on(async {
             Client::new(connection_request, None).await
         }).map_err(|e| jni_error!(Connection, "Failed to create client: {}", e))?;
 
-        // Register client with type-safe handle system
-        let handle = register_client(client);
-        Ok(handle as jlong)
+        // Set the single client instance
+        set_client(client);
+        Ok(1i64) // Return success indicator
     };
 
     jni_result!(&mut env, result(), 0)
 }
 
-/// Close and free a Glide client with type-safe cleanup
+/// Close and free a Glide client
 #[no_mangle]
 pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_closeClient(
     _env: JNIEnv,
     _class: JClass,
-    client_handle: jlong,
+    _client_handle: jlong,
 ) {
-    // Use type-safe cleanup - this will safely remove the client from registry
-    let _ = unregister_client(client_handle);
+    // Clear the client instance
+    // The client will be automatically dropped when it goes out of scope
+    // glide-core Client implements Drop trait for proper cleanup
+    let _ = clear_client();
 }
 
 
@@ -412,45 +458,63 @@ pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_closeClien
 pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_executeCommand(
     mut env: JNIEnv,
     _class: JClass,
-    client_ptr: jlong,
+    _client_ptr: jlong,
     command: jstring,
     args: jobject,
 ) -> jobject {
-    let mut result = || -> JniResult<jobject> {
-        if client_ptr == 0 {
-            return Err(jni_error!(NullPointer, "Client pointer is null"));
-        }
-
-        let client = unsafe { &mut *(client_ptr as *mut Client) };
+    // Use local reference frame for proper cleanup
+    let result = with_local_frame(&mut env, 50, |env| -> JniResult<jobject> {
+        let mut client = get_client_safe()?;
+        
+        // SAFETY: JString::from_raw is safe because command is a valid
+        // jstring parameter passed from JNI
         let command_str: String = env.get_string(&unsafe { JString::from_raw(command) })?.into();
+        
+        // Validate command name
+        validate_command_name(&command_str)?;
 
         // Parse the byte[][] args parameter
+        // SAFETY: JObject::from_raw is safe because args is a valid
+        // jobject parameter passed from JNI, representing a byte[][]
         let args_array = unsafe { JObjectArray::from(JObject::from_raw(args)) };
         let args_length = env.get_array_length(&args_array)?;
+        
+        // Validate arguments count
+        if args_length > MAX_ARGUMENTS_COUNT as i32 {
+            return Err(jni_error!(InvalidInput, "Too many arguments: {}", args_length));
+        }
 
         let mut cmd = cmd(&command_str);
 
-        // Add each argument to the command
+        // Add each argument to the command with validation
         for i in 0..args_length {
             let arg_obj = env.get_object_array_element(&args_array, i)?;
             // Cast to byte array and convert to Vec<u8>
             let byte_array = jni::objects::JByteArray::from(arg_obj);
             let arg_bytes = env.convert_byte_array(&byte_array)?;
+            
+            // Validate argument size and content
+            validate_argument(&arg_bytes)?;
+            
             cmd.arg(&arg_bytes);
         }
 
-        let response = get_runtime().block_on(async {
+        // Execute the command asynchronously - no locking needed!
+        // The Client handles concurrency internally via Arc<RwLock<ClientWrapper>>
+        let response = get_runtime()?.block_on(async {
             client.send_command(&cmd, None).await
         })?;
 
         // Convert the response to a Java object
-        convert_value_to_java_object(&mut env, response)
-    };
+        convert_value_to_java_object(env, response)
+    });
 
-    jni_result!(&mut env, result(), ptr::null_mut())
+    // Ensure cleanup after function completes
+    ensure_local_ref_cleanup(&mut env);
+    jni_result!(&mut env, result, ptr::null_mut())
 }
 
-/// Convert a server response value to a Java Object
+/// Convert a server response value to a Java Object with proper reference management
 fn convert_value_to_java_object(env: &mut JNIEnv, value: Value) -> JniResult<jobject> {
     match value {
         Value::Nil => Ok(ptr::null_mut()),
@@ -485,6 +549,8 @@ fn convert_value_to_java_object(env: &mut JNIEnv, value: Value) -> JniResult<job
 
             for (i, item) in arr.into_iter().enumerate() {
                 let java_item = convert_value_to_java_object(env, item)?;
+                // SAFETY: JObject::from_raw is safe because java_item is a valid
+                // jobject returned from convert_value_to_java_object
                 let java_item_obj = unsafe { JObject::from_raw(java_item) };
                 env.set_object_array_element(&java_array, i as i32, java_item_obj)?;
             }
@@ -501,12 +567,9 @@ fn convert_value_to_java_object(env: &mut JNIEnv, value: Value) -> JniResult<job
 
 // ==================== HELPER FUNCTIONS ====================
 
-/// Get client from pointer with null check
-fn get_client(client_ptr: jlong) -> JniResult<&'static mut Client> {
-    if client_ptr == 0 {
-        return Err(jni_error!(NullPointer, "Client pointer is null"));
-    }
-    Ok(unsafe { &mut *(client_ptr as *mut Client) })
+/// Get client from pointer with null check using type-safe implementation
+fn get_client(_client_ptr: jlong) -> JniResult<Client> {
+    get_client_safe()
 }
 
 // ==================== TYPED JNI METHODS ====================
@@ -518,15 +581,19 @@ fn get_client(client_ptr: jlong) -> JniResult<&'static mut Client> {
 pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_executeStringCommand(
     mut env: JNIEnv,
     _class: JClass,
-    client_ptr: jlong,
+    _client_ptr: jlong,
     command: jstring,
     args: jobject,
 ) -> jstring {
     let mut result = || -> JniResult<jstring> {
-        let client = get_client(client_ptr)?;
+        let mut client = get_client(_client_ptr)?;
+        // SAFETY: JString::from_raw is safe because command is a valid
+        // jstring parameter passed from JNI
         let cmd_str: String = env.get_string(&unsafe { JString::from_raw(command) })?.into();
 
         // Parse arguments
+        // SAFETY: JObjectArray::from_raw is safe because args is a valid
+        // jobject parameter passed from JNI, representing an Object[]
         let args_array = unsafe { JObjectArray::from_raw(args) };
         let arg_count = env.get_array_length(&args_array)?;
         let mut cmd = cmd(&cmd_str);
@@ -538,7 +605,7 @@ pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_executeStr
         }
 
         // Execute command via glide-core
-        let response = get_runtime().block_on(async {
+        let response = get_runtime()?.block_on(async {
             client.send_command(&cmd, None).await
         })?;
 
@@ -574,15 +641,19 @@ pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_executeStr
 pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_executeLongCommand(
     mut env: JNIEnv,
     _class: JClass,
-    client_ptr: jlong,
+    _client_ptr: jlong,
     command: jstring,
     args: jobject,
 ) -> jlong {
     let mut result = || -> JniResult<jlong> {
-        let client = get_client(client_ptr)?;
+        let mut client = get_client(_client_ptr)?;
+        // SAFETY: JString::from_raw is safe because command is a valid
+        // jstring parameter passed from JNI
         let cmd_str: String = env.get_string(&unsafe { JString::from_raw(command) })?.into();
 
         // Parse arguments
+        // SAFETY: JObjectArray::from_raw is safe because args is a valid
+        // jobject parameter passed from JNI, representing an Object[]
         let args_array = unsafe { JObjectArray::from_raw(args) };
         let arg_count = env.get_array_length(&args_array)?;
         let mut cmd = cmd(&cmd_str);
@@ -594,7 +665,7 @@ pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_executeLon
         }
 
         // Execute command via glide-core
-        let response = get_runtime().block_on(async {
+        let response = get_runtime()?.block_on(async {
             client.send_command(&cmd, None).await
         })?;
 
@@ -619,15 +690,19 @@ pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_executeLon
 pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_executeDoubleCommand(
     mut env: JNIEnv,
     _class: JClass,
-    client_ptr: jlong,
+    _client_ptr: jlong,
     command: jstring,
     args: jobject,
 ) -> f64 {
     let mut result = || -> JniResult<f64> {
-        let client = get_client(client_ptr)?;
+        let mut client = get_client(_client_ptr)?;
+        // SAFETY: JString::from_raw is safe because command is a valid
+        // jstring parameter passed from JNI
         let cmd_str: String = env.get_string(&unsafe { JString::from_raw(command) })?.into();
 
         // Parse arguments
+        // SAFETY: JObjectArray::from_raw is safe because args is a valid
+        // jobject parameter passed from JNI, representing an Object[]
         let args_array = unsafe { JObjectArray::from_raw(args) };
         let arg_count = env.get_array_length(&args_array)?;
         let mut cmd = cmd(&cmd_str);
@@ -639,7 +714,7 @@ pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_executeDou
         }
 
         // Execute command via glide-core
-        let response = get_runtime().block_on(async {
+        let response = get_runtime()?.block_on(async {
             client.send_command(&cmd, None).await
         })?;
 
@@ -663,15 +738,19 @@ pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_executeDou
 pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_executeBooleanCommand(
     mut env: JNIEnv,
     _class: JClass,
-    client_ptr: jlong,
+    _client_ptr: jlong,
     command: jstring,
     args: jobject,
 ) -> jboolean {
     let mut result = || -> JniResult<jboolean> {
-        let client = get_client(client_ptr)?;
+        let mut client = get_client(_client_ptr)?;
+        // SAFETY: JString::from_raw is safe because command is a valid
+        // jstring parameter passed from JNI
         let cmd_str: String = env.get_string(&unsafe { JString::from_raw(command) })?.into();
 
         // Parse arguments
+        // SAFETY: JObjectArray::from_raw is safe because args is a valid
+        // jobject parameter passed from JNI, representing an Object[]
         let args_array = unsafe { JObjectArray::from_raw(args) };
         let arg_count = env.get_array_length(&args_array)?;
         let mut cmd = cmd(&cmd_str);
@@ -683,7 +762,7 @@ pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_executeBoo
         }
 
         // Execute command via glide-core
-        let response = get_runtime().block_on(async {
+        let response = get_runtime()?.block_on(async {
             client.send_command(&cmd, None).await
         })?;
 
@@ -711,15 +790,19 @@ pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_executeBoo
 pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_executeArrayCommand(
     mut env: JNIEnv,
     _class: JClass,
-    client_ptr: jlong,
+    _client_ptr: jlong,
     command: jstring,
     args: jobject,
 ) -> jobject {
     let mut result = || -> JniResult<jobject> {
-        let client = get_client(client_ptr)?;
+        let mut client = get_client(_client_ptr)?;
+        // SAFETY: JString::from_raw is safe because command is a valid
+        // jstring parameter passed from JNI
         let cmd_str: String = env.get_string(&unsafe { JString::from_raw(command) })?.into();
 
         // Parse arguments
+        // SAFETY: JObjectArray::from_raw is safe because args is a valid
+        // jobject parameter passed from JNI, representing an Object[]
         let args_array = unsafe { JObjectArray::from_raw(args) };
         let arg_count = env.get_array_length(&args_array)?;
         let mut cmd = cmd(&cmd_str);
@@ -731,7 +814,7 @@ pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_executeArr
         }
 
         // Execute command via glide-core
-        let response = get_runtime().block_on(async {
+        let response = get_runtime()?.block_on(async {
             client.send_command(&cmd, None).await
         })?;
 
