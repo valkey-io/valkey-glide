@@ -171,10 +171,9 @@ public class SortedSetCommandTests(TestConfiguration config)
     public async Task TestSortedSetAdd_EmptyArray(BaseClient client)
     {
         string key = Guid.NewGuid().ToString();
-        SortedSetEntry[] emptyEntries = Array.Empty<SortedSetEntry>();
 
         // Adding empty array should return 0 without error
-        Assert.Equal(0, await client.SortedSetAddAsync(key, emptyEntries));
+        Assert.Equal(0, await client.SortedSetAddAsync(key, []));
     }
 
     [Theory(DisableDiscoveryEnumeration = true)]
