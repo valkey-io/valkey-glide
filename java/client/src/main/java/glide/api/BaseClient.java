@@ -1552,6 +1552,263 @@ public abstract class BaseClient {
             });
     }
 
+    // Key Management Commands
+
+    /**
+     * Set a timeout on a key.
+     *
+     * @param key The key to set timeout on
+     * @param seconds The timeout in seconds
+     * @return A CompletableFuture containing true if the timeout was set, false if key does not exist
+     */
+    public CompletableFuture<Boolean> expire(String key, long seconds) {
+        return executeCommand(CommandType.EXPIRE, key, String.valueOf(seconds))
+            .thenApply(result -> "1".equals(result.toString()));
+    }
+
+    /**
+     * Set a timeout on a key (supports binary data).
+     *
+     * @param key The key to set timeout on (supports binary data)
+     * @param seconds The timeout in seconds
+     * @return A CompletableFuture containing true if the timeout was set, false if key does not exist
+     */
+    public CompletableFuture<Boolean> expire(GlideString key, long seconds) {
+        return executeCommand(CommandType.EXPIRE, key.toString(), String.valueOf(seconds))
+            .thenApply(result -> "1".equals(result.toString()));
+    }
+
+    /**
+     * Get the remaining time to live of a key that has a timeout.
+     *
+     * @param key The key to check
+     * @return A CompletableFuture containing the TTL in seconds, or -1 if key exists but has no timeout, or -2 if key does not exist
+     */
+    public CompletableFuture<Long> ttl(String key) {
+        return executeCommand(CommandType.TTL, key)
+            .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Get the remaining time to live of a key that has a timeout (supports binary data).
+     *
+     * @param key The key to check (supports binary data)
+     * @return A CompletableFuture containing the TTL in seconds, or -1 if key exists but has no timeout, or -2 if key does not exist
+     */
+    public CompletableFuture<Long> ttl(GlideString key) {
+        return executeCommand(CommandType.TTL, key.toString())
+            .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+
+    // Sorted Set Commands
+
+    /**
+     * Add one or more members to a sorted set, or update the score if the member already exists.
+     *
+     * @param key The key of the sorted set
+     * @param membersAndScores A map of members to their scores
+     * @return A CompletableFuture containing the number of elements added to the sorted set
+     */
+    public CompletableFuture<Long> zadd(String key, Map<String, Double> membersAndScores) {
+        String[] args = new String[membersAndScores.size() * 2 + 1];
+        args[0] = key;
+        int i = 1;
+        for (Map.Entry<String, Double> entry : membersAndScores.entrySet()) {
+            args[i++] = String.valueOf(entry.getValue());
+            args[i++] = entry.getKey();
+        }
+        return executeCommand(CommandType.ZADD, args)
+            .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Add one or more members to a sorted set, or update the score if the member already exists (supports binary data).
+     *
+     * @param key The key of the sorted set (supports binary data)
+     * @param membersAndScores A map of members to their scores (supports binary data)
+     * @return A CompletableFuture containing the number of elements added to the sorted set
+     */
+    public CompletableFuture<Long> zadd(GlideString key, Map<GlideString, Double> membersAndScores) {
+        String[] args = new String[membersAndScores.size() * 2 + 1];
+        args[0] = key.toString();
+        int i = 1;
+        for (Map.Entry<GlideString, Double> entry : membersAndScores.entrySet()) {
+            args[i++] = String.valueOf(entry.getValue());
+            args[i++] = entry.getKey().toString();
+        }
+        return executeCommand(CommandType.ZADD, args)
+            .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Return a range of members in a sorted set, by index.
+     *
+     * @param key The key of the sorted set
+     * @param start The start index
+     * @param end The end index
+     * @return A CompletableFuture containing the members in the specified range
+     */
+    public CompletableFuture<String[]> zrange(String key, long start, long end) {
+        return executeCommand(CommandType.ZRANGE, key, String.valueOf(start), String.valueOf(end))
+            .thenApply(result -> {
+                if (result instanceof Object[]) {
+                    Object[] objects = (Object[]) result;
+                    String[] members = new String[objects.length];
+                    for (int i = 0; i < objects.length; i++) {
+                        members[i] = objects[i] == null ? null : objects[i].toString();
+                    }
+                    return members;
+                }
+                return new String[0];
+            });
+    }
+
+    /**
+     * Return a range of members in a sorted set, by index (supports binary data).
+     *
+     * @param key The key of the sorted set (supports binary data)
+     * @param start The start index
+     * @param end The end index
+     * @return A CompletableFuture containing the members in the specified range
+     */
+    public CompletableFuture<GlideString[]> zrange(GlideString key, long start, long end) {
+        return executeCommand(CommandType.ZRANGE, key.toString(), String.valueOf(start), String.valueOf(end))
+            .thenApply(result -> {
+                if (result instanceof Object[]) {
+                    Object[] objects = (Object[]) result;
+                    GlideString[] members = new GlideString[objects.length];
+                    for (int i = 0; i < objects.length; i++) {
+                        members[i] = GlideString.of(objects[i].toString());
+                    }
+                    return members;
+                }
+                return new GlideString[0];
+            });
+    }
+
+    /**
+     * Remove one or more members from a sorted set.
+     *
+     * @param key The key of the sorted set
+     * @param members The members to remove
+     * @return A CompletableFuture containing the number of members removed from the sorted set
+     */
+    public CompletableFuture<Long> zrem(String key, String... members) {
+        String[] args = new String[members.length + 1];
+        args[0] = key;
+        System.arraycopy(members, 0, args, 1, members.length);
+        return executeCommand(CommandType.ZREM, args)
+            .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Remove one or more members from a sorted set (supports binary data).
+     *
+     * @param key The key of the sorted set (supports binary data)
+     * @param members The members to remove (supports binary data)
+     * @return A CompletableFuture containing the number of members removed from the sorted set
+     */
+    public CompletableFuture<Long> zrem(GlideString key, GlideString... members) {
+        String[] args = new String[members.length + 1];
+        args[0] = key.toString();
+        for (int i = 0; i < members.length; i++) {
+            args[i + 1] = members[i].toString();
+        }
+        return executeCommand(CommandType.ZREM, args)
+            .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Get the number of members in a sorted set.
+     *
+     * @param key The key of the sorted set
+     * @return A CompletableFuture containing the cardinality (number of elements) of the sorted set
+     */
+    public CompletableFuture<Long> zcard(String key) {
+        return executeCommand(CommandType.ZCARD, key)
+            .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Get the number of members in a sorted set (supports binary data).
+     *
+     * @param key The key of the sorted set (supports binary data)
+     * @return A CompletableFuture containing the cardinality (number of elements) of the sorted set
+     */
+    public CompletableFuture<Long> zcard(GlideString key) {
+        return executeCommand(CommandType.ZCARD, key.toString())
+            .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Get the score associated with the given member in a sorted set.
+     *
+     * @param key The key of the sorted set
+     * @param member The member whose score to retrieve
+     * @return A CompletableFuture containing the score of the member (null if member does not exist)
+     */
+    public CompletableFuture<Double> zscore(String key, String member) {
+        return executeCommand(CommandType.ZSCORE, key, member)
+            .thenApply(result -> {
+                if (result == null) {
+                    return null;
+                }
+                return Double.parseDouble(result.toString());
+            });
+    }
+
+    /**
+     * Get the score associated with the given member in a sorted set (supports binary data).
+     *
+     * @param key The key of the sorted set (supports binary data)
+     * @param member The member whose score to retrieve (supports binary data)
+     * @return A CompletableFuture containing the score of the member (null if member does not exist)
+     */
+    public CompletableFuture<Double> zscore(GlideString key, GlideString member) {
+        return executeCommand(CommandType.ZSCORE, key.toString(), member.toString())
+            .thenApply(result -> {
+                if (result == null) {
+                    return null;
+                }
+                return Double.parseDouble(result.toString());
+            });
+    }
+
+    /**
+     * Get the rank of the member in the sorted set, with scores ordered from low to high.
+     *
+     * @param key The key of the sorted set
+     * @param member The member whose rank to determine
+     * @return A CompletableFuture containing the rank of the member (null if member does not exist)
+     */
+    public CompletableFuture<Long> zrank(String key, String member) {
+        return executeCommand(CommandType.ZRANK, key, member)
+            .thenApply(result -> {
+                if (result == null) {
+                    return null;
+                }
+                return Long.parseLong(result.toString());
+            });
+    }
+
+    /**
+     * Get the rank of the member in the sorted set, with scores ordered from low to high (supports binary data).
+     *
+     * @param key The key of the sorted set (supports binary data)
+     * @param member The member whose rank to determine (supports binary data)
+     * @return A CompletableFuture containing the rank of the member (null if member does not exist)
+     */
+    public CompletableFuture<Long> zrank(GlideString key, GlideString member) {
+        return executeCommand(CommandType.ZRANK, key.toString(), member.toString())
+            .thenApply(result -> {
+                if (result == null) {
+                    return null;
+                }
+                return Long.parseLong(result.toString());
+            });
+    }
+
     /**
      * Get client statistics.
      *

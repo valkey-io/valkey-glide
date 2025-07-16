@@ -1027,4 +1027,214 @@ public class Batch extends BaseBatch<Batch> {
         }
         return addCommand(CommandType.SUNION, stringKeys);
     }
+
+    // Key Management Commands
+    
+    /**
+     * Set a timeout on a key.
+     *
+     * @see <a href="https://valkey.io/commands/expire/">valkey.io</a> for details.
+     * @param key The key to set timeout on.
+     * @param seconds The timeout in seconds.
+     * @return This batch instance for method chaining.
+     */
+    public Batch expire(String key, long seconds) {
+        return addCommand(CommandType.EXPIRE, key, String.valueOf(seconds));
+    }
+
+    /**
+     * Set a timeout on a key.
+     *
+     * @see <a href="https://valkey.io/commands/expire/">valkey.io</a> for details.
+     * @param key The key to set timeout on.
+     * @param seconds The timeout in seconds.
+     * @return This batch instance for method chaining.
+     */
+    public Batch expire(GlideString key, long seconds) {
+        return addCommand(CommandType.EXPIRE, key.toString(), String.valueOf(seconds));
+    }
+
+    /**
+     * Get the remaining time to live of a key that has a timeout.
+     *
+     * @see <a href="https://valkey.io/commands/ttl/">valkey.io</a> for details.
+     * @param key The key to check.
+     * @return This batch instance for method chaining.
+     */
+    public Batch ttl(String key) {
+        return addCommand(CommandType.TTL, key);
+    }
+
+    /**
+     * Get the remaining time to live of a key that has a timeout.
+     *
+     * @see <a href="https://valkey.io/commands/ttl/">valkey.io</a> for details.
+     * @param key The key to check.
+     * @return This batch instance for method chaining.
+     */
+    public Batch ttl(GlideString key) {
+        return addCommand(CommandType.TTL, key.toString());
+    }
+
+    // Sorted Set Commands
+    
+    /**
+     * Add one or more members to a sorted set, or update the score if the member already exists.
+     *
+     * @see <a href="https://valkey.io/commands/zadd/">valkey.io</a> for details.
+     * @param key The key of the sorted set.
+     * @param scoreMembers Alternating scores and members (score1, member1, score2, member2, ...).
+     * @return This batch instance for method chaining.
+     */
+    public Batch zadd(String key, String... scoreMembers) {
+        String[] args = new String[scoreMembers.length + 1];
+        args[0] = key;
+        System.arraycopy(scoreMembers, 0, args, 1, scoreMembers.length);
+        return addCommand(CommandType.ZADD, args);
+    }
+
+    /**
+     * Add one or more members to a sorted set, or update the score if the member already exists.
+     *
+     * @see <a href="https://valkey.io/commands/zadd/">valkey.io</a> for details.
+     * @param key The key of the sorted set.
+     * @param scoreMembers Alternating scores and members (score1, member1, score2, member2, ...).
+     * @return This batch instance for method chaining.
+     */
+    public Batch zadd(GlideString key, GlideString... scoreMembers) {
+        String[] args = new String[scoreMembers.length + 1];
+        args[0] = key.toString();
+        for (int i = 0; i < scoreMembers.length; i++) {
+            args[i + 1] = scoreMembers[i].toString();
+        }
+        return addCommand(CommandType.ZADD, args);
+    }
+
+    /**
+     * Return a range of members in a sorted set, by index.
+     *
+     * @see <a href="https://valkey.io/commands/zrange/">valkey.io</a> for details.
+     * @param key The key of the sorted set.
+     * @param start The start index.
+     * @param end The end index.
+     * @return This batch instance for method chaining.
+     */
+    public Batch zrange(String key, long start, long end) {
+        return addCommand(CommandType.ZRANGE, key, String.valueOf(start), String.valueOf(end));
+    }
+
+    /**
+     * Return a range of members in a sorted set, by index.
+     *
+     * @see <a href="https://valkey.io/commands/zrange/">valkey.io</a> for details.
+     * @param key The key of the sorted set.
+     * @param start The start index.
+     * @param end The end index.
+     * @return This batch instance for method chaining.
+     */
+    public Batch zrange(GlideString key, long start, long end) {
+        return addCommand(CommandType.ZRANGE, key.toString(), String.valueOf(start), String.valueOf(end));
+    }
+
+    /**
+     * Remove one or more members from a sorted set.
+     *
+     * @see <a href="https://valkey.io/commands/zrem/">valkey.io</a> for details.
+     * @param key The key of the sorted set.
+     * @param members The members to remove.
+     * @return This batch instance for method chaining.
+     */
+    public Batch zrem(String key, String... members) {
+        String[] args = new String[members.length + 1];
+        args[0] = key;
+        System.arraycopy(members, 0, args, 1, members.length);
+        return addCommand(CommandType.ZREM, args);
+    }
+
+    /**
+     * Remove one or more members from a sorted set.
+     *
+     * @see <a href="https://valkey.io/commands/zrem/">valkey.io</a> for details.
+     * @param key The key of the sorted set.
+     * @param members The members to remove.
+     * @return This batch instance for method chaining.
+     */
+    public Batch zrem(GlideString key, GlideString... members) {
+        String[] args = new String[members.length + 1];
+        args[0] = key.toString();
+        for (int i = 0; i < members.length; i++) {
+            args[i + 1] = members[i].toString();
+        }
+        return addCommand(CommandType.ZREM, args);
+    }
+
+    /**
+     * Get the number of members in a sorted set.
+     *
+     * @see <a href="https://valkey.io/commands/zcard/">valkey.io</a> for details.
+     * @param key The key of the sorted set.
+     * @return This batch instance for method chaining.
+     */
+    public Batch zcard(String key) {
+        return addCommand(CommandType.ZCARD, key);
+    }
+
+    /**
+     * Get the number of members in a sorted set.
+     *
+     * @see <a href="https://valkey.io/commands/zcard/">valkey.io</a> for details.
+     * @param key The key of the sorted set.
+     * @return This batch instance for method chaining.
+     */
+    public Batch zcard(GlideString key) {
+        return addCommand(CommandType.ZCARD, key.toString());
+    }
+
+    /**
+     * Get the score associated with the given member in a sorted set.
+     *
+     * @see <a href="https://valkey.io/commands/zscore/">valkey.io</a> for details.
+     * @param key The key of the sorted set.
+     * @param member The member whose score to retrieve.
+     * @return This batch instance for method chaining.
+     */
+    public Batch zscore(String key, String member) {
+        return addCommand(CommandType.ZSCORE, key, member);
+    }
+
+    /**
+     * Get the score associated with the given member in a sorted set.
+     *
+     * @see <a href="https://valkey.io/commands/zscore/">valkey.io</a> for details.
+     * @param key The key of the sorted set.
+     * @param member The member whose score to retrieve.
+     * @return This batch instance for method chaining.
+     */
+    public Batch zscore(GlideString key, GlideString member) {
+        return addCommand(CommandType.ZSCORE, key.toString(), member.toString());
+    }
+
+    /**
+     * Get the rank of the member in the sorted set, with scores ordered from low to high.
+     *
+     * @see <a href="https://valkey.io/commands/zrank/">valkey.io</a> for details.
+     * @param key The key of the sorted set.
+     * @param member The member whose rank to determine.
+     * @return This batch instance for method chaining.
+     */
+    public Batch zrank(String key, String member) {
+        return addCommand(CommandType.ZRANK, key, member);
+    }
+
+    /**
+     * Get the rank of the member in the sorted set, with scores ordered from low to high.
+     *
+     * @see <a href="https://valkey.io/commands/zrank/">valkey.io</a> for details.
+     * @param key The key of the sorted set.
+     * @param member The member whose rank to determine.
+     * @return This batch instance for method chaining.
+     */
+    public Batch zrank(GlideString key, GlideString member) {
+        return addCommand(CommandType.ZRANK, key.toString(), member.toString());
+    }
 }

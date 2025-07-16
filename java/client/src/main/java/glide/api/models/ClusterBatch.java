@@ -669,4 +669,426 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
     public ClusterBatch lrem(GlideString key, long count, GlideString element) {
         return addCommand(CommandType.LREM, key.toString(), String.valueOf(count), element.toString());
     }
+
+    // Set Commands
+    
+    /**
+     * Add one or more members to a set.
+     *
+     * @see <a href="https://valkey.io/commands/sadd/">valkey.io</a> for details.
+     * @param key The key of the set.
+     * @param members The members to add.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch sadd(String key, String... members) {
+        String[] args = new String[members.length + 1];
+        args[0] = key;
+        System.arraycopy(members, 0, args, 1, members.length);
+        return addCommand(CommandType.SADD, args);
+    }
+
+    /**
+     * Add one or more members to a set.
+     *
+     * @see <a href="https://valkey.io/commands/sadd/">valkey.io</a> for details.
+     * @param key The key of the set.
+     * @param members The members to add.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch sadd(GlideString key, GlideString... members) {
+        String[] args = new String[members.length + 1];
+        args[0] = key.toString();
+        for (int i = 0; i < members.length; i++) {
+            args[i + 1] = members[i].toString();
+        }
+        return addCommand(CommandType.SADD, args);
+    }
+
+    /**
+     * Remove one or more members from a set.
+     *
+     * @see <a href="https://valkey.io/commands/srem/">valkey.io</a> for details.
+     * @param key The key of the set.
+     * @param members The members to remove.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch srem(String key, String... members) {
+        String[] args = new String[members.length + 1];
+        args[0] = key;
+        System.arraycopy(members, 0, args, 1, members.length);
+        return addCommand(CommandType.SREM, args);
+    }
+
+    /**
+     * Remove one or more members from a set.
+     *
+     * @see <a href="https://valkey.io/commands/srem/">valkey.io</a> for details.
+     * @param key The key of the set.
+     * @param members The members to remove.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch srem(GlideString key, GlideString... members) {
+        String[] args = new String[members.length + 1];
+        args[0] = key.toString();
+        for (int i = 0; i < members.length; i++) {
+            args[i + 1] = members[i].toString();
+        }
+        return addCommand(CommandType.SREM, args);
+    }
+
+    /**
+     * Get all members of a set.
+     *
+     * @see <a href="https://valkey.io/commands/smembers/">valkey.io</a> for details.
+     * @param key The key of the set.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch smembers(String key) {
+        return addCommand(CommandType.SMEMBERS, key);
+    }
+
+    /**
+     * Get all members of a set.
+     *
+     * @see <a href="https://valkey.io/commands/smembers/">valkey.io</a> for details.
+     * @param key The key of the set.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch smembers(GlideString key) {
+        return addCommand(CommandType.SMEMBERS, key.toString());
+    }
+
+    /**
+     * Get the number of members in a set.
+     *
+     * @see <a href="https://valkey.io/commands/scard/">valkey.io</a> for details.
+     * @param key The key of the set.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch scard(String key) {
+        return addCommand(CommandType.SCARD, key);
+    }
+
+    /**
+     * Get the number of members in a set.
+     *
+     * @see <a href="https://valkey.io/commands/scard/">valkey.io</a> for details.
+     * @param key The key of the set.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch scard(GlideString key) {
+        return addCommand(CommandType.SCARD, key.toString());
+    }
+
+    /**
+     * Check if a member is in a set.
+     *
+     * @see <a href="https://valkey.io/commands/sismember/">valkey.io</a> for details.
+     * @param key The key of the set.
+     * @param member The member to check.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch sismember(String key, String member) {
+        return addCommand(CommandType.SISMEMBER, key, member);
+    }
+
+    /**
+     * Check if a member is in a set.
+     *
+     * @see <a href="https://valkey.io/commands/sismember/">valkey.io</a> for details.
+     * @param key The key of the set.
+     * @param member The member to check.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch sismember(GlideString key, GlideString member) {
+        return addCommand(CommandType.SISMEMBER, key.toString(), member.toString());
+    }
+
+    /**
+     * Return the difference of multiple sets.
+     *
+     * @see <a href="https://valkey.io/commands/sdiff/">valkey.io</a> for details.
+     * @param keys The keys of the sets.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch sdiff(String... keys) {
+        return addCommand(CommandType.SDIFF, keys);
+    }
+
+    /**
+     * Return the difference of multiple sets.
+     *
+     * @see <a href="https://valkey.io/commands/sdiff/">valkey.io</a> for details.
+     * @param keys The keys of the sets.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch sdiff(GlideString... keys) {
+        String[] stringKeys = new String[keys.length];
+        for (int i = 0; i < keys.length; i++) {
+            stringKeys[i] = keys[i].toString();
+        }
+        return addCommand(CommandType.SDIFF, stringKeys);
+    }
+
+    /**
+     * Return the intersection of multiple sets.
+     *
+     * @see <a href="https://valkey.io/commands/sinter/">valkey.io</a> for details.
+     * @param keys The keys of the sets.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch sinter(String... keys) {
+        return addCommand(CommandType.SINTER, keys);
+    }
+
+    /**
+     * Return the intersection of multiple sets.
+     *
+     * @see <a href="https://valkey.io/commands/sinter/">valkey.io</a> for details.
+     * @param keys The keys of the sets.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch sinter(GlideString... keys) {
+        String[] stringKeys = new String[keys.length];
+        for (int i = 0; i < keys.length; i++) {
+            stringKeys[i] = keys[i].toString();
+        }
+        return addCommand(CommandType.SINTER, stringKeys);
+    }
+
+    /**
+     * Return the union of multiple sets.
+     *
+     * @see <a href="https://valkey.io/commands/sunion/">valkey.io</a> for details.
+     * @param keys The keys of the sets.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch sunion(String... keys) {
+        return addCommand(CommandType.SUNION, keys);
+    }
+
+    /**
+     * Return the union of multiple sets.
+     *
+     * @see <a href="https://valkey.io/commands/sunion/">valkey.io</a> for details.
+     * @param keys The keys of the sets.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch sunion(GlideString... keys) {
+        String[] stringKeys = new String[keys.length];
+        for (int i = 0; i < keys.length; i++) {
+            stringKeys[i] = keys[i].toString();
+        }
+        return addCommand(CommandType.SUNION, stringKeys);
+    }
+
+    // Key Management Commands
+    
+    /**
+     * Set a timeout on a key.
+     *
+     * @see <a href="https://valkey.io/commands/expire/">valkey.io</a> for details.
+     * @param key The key to set timeout on.
+     * @param seconds The timeout in seconds.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch expire(String key, long seconds) {
+        return addCommand(CommandType.EXPIRE, key, String.valueOf(seconds));
+    }
+
+    /**
+     * Set a timeout on a key.
+     *
+     * @see <a href="https://valkey.io/commands/expire/">valkey.io</a> for details.
+     * @param key The key to set timeout on.
+     * @param seconds The timeout in seconds.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch expire(GlideString key, long seconds) {
+        return addCommand(CommandType.EXPIRE, key.toString(), String.valueOf(seconds));
+    }
+
+    /**
+     * Get the remaining time to live of a key that has a timeout.
+     *
+     * @see <a href="https://valkey.io/commands/ttl/">valkey.io</a> for details.
+     * @param key The key to check.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch ttl(String key) {
+        return addCommand(CommandType.TTL, key);
+    }
+
+    /**
+     * Get the remaining time to live of a key that has a timeout.
+     *
+     * @see <a href="https://valkey.io/commands/ttl/">valkey.io</a> for details.
+     * @param key The key to check.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch ttl(GlideString key) {
+        return addCommand(CommandType.TTL, key.toString());
+    }
+
+    // Sorted Set Commands
+    
+    /**
+     * Add one or more members to a sorted set, or update the score if the member already exists.
+     *
+     * @see <a href="https://valkey.io/commands/zadd/">valkey.io</a> for details.
+     * @param key The key of the sorted set.
+     * @param scoreMembers Alternating scores and members (score1, member1, score2, member2, ...).
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch zadd(String key, String... scoreMembers) {
+        String[] args = new String[scoreMembers.length + 1];
+        args[0] = key;
+        System.arraycopy(scoreMembers, 0, args, 1, scoreMembers.length);
+        return addCommand(CommandType.ZADD, args);
+    }
+
+    /**
+     * Add one or more members to a sorted set, or update the score if the member already exists.
+     *
+     * @see <a href="https://valkey.io/commands/zadd/">valkey.io</a> for details.
+     * @param key The key of the sorted set.
+     * @param scoreMembers Alternating scores and members (score1, member1, score2, member2, ...).
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch zadd(GlideString key, GlideString... scoreMembers) {
+        String[] args = new String[scoreMembers.length + 1];
+        args[0] = key.toString();
+        for (int i = 0; i < scoreMembers.length; i++) {
+            args[i + 1] = scoreMembers[i].toString();
+        }
+        return addCommand(CommandType.ZADD, args);
+    }
+
+    /**
+     * Return a range of members in a sorted set, by index.
+     *
+     * @see <a href="https://valkey.io/commands/zrange/">valkey.io</a> for details.
+     * @param key The key of the sorted set.
+     * @param start The start index.
+     * @param end The end index.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch zrange(String key, long start, long end) {
+        return addCommand(CommandType.ZRANGE, key, String.valueOf(start), String.valueOf(end));
+    }
+
+    /**
+     * Return a range of members in a sorted set, by index.
+     *
+     * @see <a href="https://valkey.io/commands/zrange/">valkey.io</a> for details.
+     * @param key The key of the sorted set.
+     * @param start The start index.
+     * @param end The end index.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch zrange(GlideString key, long start, long end) {
+        return addCommand(CommandType.ZRANGE, key.toString(), String.valueOf(start), String.valueOf(end));
+    }
+
+    /**
+     * Remove one or more members from a sorted set.
+     *
+     * @see <a href="https://valkey.io/commands/zrem/">valkey.io</a> for details.
+     * @param key The key of the sorted set.
+     * @param members The members to remove.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch zrem(String key, String... members) {
+        String[] args = new String[members.length + 1];
+        args[0] = key;
+        System.arraycopy(members, 0, args, 1, members.length);
+        return addCommand(CommandType.ZREM, args);
+    }
+
+    /**
+     * Remove one or more members from a sorted set.
+     *
+     * @see <a href="https://valkey.io/commands/zrem/">valkey.io</a> for details.
+     * @param key The key of the sorted set.
+     * @param members The members to remove.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch zrem(GlideString key, GlideString... members) {
+        String[] args = new String[members.length + 1];
+        args[0] = key.toString();
+        for (int i = 0; i < members.length; i++) {
+            args[i + 1] = members[i].toString();
+        }
+        return addCommand(CommandType.ZREM, args);
+    }
+
+    /**
+     * Get the number of members in a sorted set.
+     *
+     * @see <a href="https://valkey.io/commands/zcard/">valkey.io</a> for details.
+     * @param key The key of the sorted set.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch zcard(String key) {
+        return addCommand(CommandType.ZCARD, key);
+    }
+
+    /**
+     * Get the number of members in a sorted set.
+     *
+     * @see <a href="https://valkey.io/commands/zcard/">valkey.io</a> for details.
+     * @param key The key of the sorted set.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch zcard(GlideString key) {
+        return addCommand(CommandType.ZCARD, key.toString());
+    }
+
+    /**
+     * Get the score associated with the given member in a sorted set.
+     *
+     * @see <a href="https://valkey.io/commands/zscore/">valkey.io</a> for details.
+     * @param key The key of the sorted set.
+     * @param member The member whose score to retrieve.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch zscore(String key, String member) {
+        return addCommand(CommandType.ZSCORE, key, member);
+    }
+
+    /**
+     * Get the score associated with the given member in a sorted set.
+     *
+     * @see <a href="https://valkey.io/commands/zscore/">valkey.io</a> for details.
+     * @param key The key of the sorted set.
+     * @param member The member whose score to retrieve.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch zscore(GlideString key, GlideString member) {
+        return addCommand(CommandType.ZSCORE, key.toString(), member.toString());
+    }
+
+    /**
+     * Get the rank of the member in the sorted set, with scores ordered from low to high.
+     *
+     * @see <a href="https://valkey.io/commands/zrank/">valkey.io</a> for details.
+     * @param key The key of the sorted set.
+     * @param member The member whose rank to determine.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch zrank(String key, String member) {
+        return addCommand(CommandType.ZRANK, key, member);
+    }
+
+    /**
+     * Get the rank of the member in the sorted set, with scores ordered from low to high.
+     *
+     * @see <a href="https://valkey.io/commands/zrank/">valkey.io</a> for details.
+     * @param key The key of the sorted set.
+     * @param member The member whose rank to determine.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch zrank(GlideString key, GlideString member) {
+        return addCommand(CommandType.ZRANK, key.toString(), member.toString());
+    }
 }
