@@ -71,4 +71,25 @@ public class ServerTests(TestConfiguration config)
             }
         }
     }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestConnections), MemberType = typeof(TestConfiguration))]
+    public async Task CanPingAndEcho(ConnectionMultiplexer conn, bool isCluster)
+    {
+        foreach (IServer server in conn.GetServers())
+        {
+            Assert.Equal(conn.RawConfig.Protocol, server.Protocol);
+            Assert.Equal(TestConfiguration.SERVER_VERSION, server.Version);
+            Assert.Equal(isCluster ? ServerType.Cluster : ServerType.Standalone, server.ServerType);
+
+            ValkeyValue randomMessage = "hello";
+            TimeSpan ping = await server.PingAsync();
+            TimeSpan pingWithMessage = await server.PingAsync(randomMessage);
+            ValkeyValue echo = await server.EchoAsync(randomMessage);
+
+            Assert.True(ping > TimeSpan.Zero);
+            Assert.True(pingWithMessage > TimeSpan.Zero);
+            Assert.Equal(randomMessage, echo);
+        }
+    }
 }

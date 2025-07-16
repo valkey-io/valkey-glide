@@ -40,6 +40,7 @@ public class SharedCommandTests(TestConfiguration config)
             }
             catch (Exception e)
             {
+                TestContext.Current.TestOutputHelper?.WriteLine($"{expectedInfo[i].TestName} failed: {e.Message}");
                 failedChecks.Add($"{expectedInfo[i].TestName} failed: {e.Message}");
             }
         }

@@ -23,7 +23,9 @@ internal class ResponseConverters
     public static Func<object, ClusterValue<T>> MakeClusterValueHandler<R, T>(Func<R, T> converter, bool isSingleValue)
         => isSingleValue
             ? value => ClusterValue<T>.OfSingleValue(converter((R)value))
-            : value => ClusterValue<T>.OfMultiValue(((Dictionary<GlideString, object>)value).ConvertValues(converter));
+            : value => value is Dictionary<GlideString, object> dict
+                ? ClusterValue<T>.OfMultiValue(dict.ConvertValues(converter))
+                : ClusterValue<T>.OfSingleValue(converter((R)value)); // In case the nodes combine multiple results to a single result
 
     /// <summary>
     /// Process and convert a cluster multi-node response.

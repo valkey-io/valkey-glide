@@ -51,4 +51,13 @@ internal class ValkeyServer(DatabaseImpl conn, EndPoint endpoint) : IServer
 
     public IGrouping<string, KeyValuePair<string, string>>[] Info(ValkeyValue section = default, CommandFlags flags = CommandFlags.None)
         => InfoAsync(section, flags).GetAwaiter().GetResult();
+
+    public async Task<TimeSpan> PingAsync(CommandFlags flags = CommandFlags.None)
+        => await _conn.Command(Request.Ping(flags), new ByAddressRoute(EndPoint.ToString()!));
+
+    public async Task<TimeSpan> PingAsync(ValkeyValue message, CommandFlags flags = CommandFlags.None)
+        => await _conn.Command(Request.Ping(message, flags), new ByAddressRoute(EndPoint.ToString()!));
+
+    public async Task<ValkeyValue> EchoAsync(ValkeyValue message, CommandFlags flags = CommandFlags.None)
+        => await _conn.Command(Request.Echo(message, flags), new ByAddressRoute(EndPoint.ToString()!));
 }
