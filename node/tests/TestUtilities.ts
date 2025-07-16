@@ -33,6 +33,7 @@ import {
     InsertPosition,
     JsonBatch,
     ListDirection,
+    Logger,
     ProtocolVersion,
     ReturnTypeMap,
     ScoreFilter,
@@ -492,7 +493,7 @@ export async function testTeardown(
         await client.flushall();
     } catch (error) {
         // If teardown fails, log the error but don't throw to avoid masking the original test failure
-        console.warn("Test teardown failed:", error);
+        Logger.log("warn", "TestUtilities", "Test teardown failed", error as Error);
     } finally {
         if (client) {
             client.close();
