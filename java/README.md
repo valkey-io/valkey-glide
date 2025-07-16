@@ -1,284 +1,76 @@
-# Valkey GLIDE Java Client (JNI Implementation)
+# Java Valkey GLIDE JNI Implementation
 
-Valkey General Language Independent Driver for the Enterprise (GLIDE), is an open-source Valkey client library. This is the **Java implementation** using a **JNI-based architecture** for maximum performance.
+## Status: Critical Architecture Issues Identified
 
-> **Architecture Note**: This implementation uses JNI (Java Native Interface) instead of Unix Domain Sockets, providing **1.8-2.9x better performance** through direct integration with the Rust glide-core library.
+⚠️ **IMPORTANT**: This implementation requires **complete architectural restructuring** before production use.
 
-## 🚀 Performance Benefits
+## Quick Start
 
-- **1.8-2.9x faster** than UDS-based implementation
-- **Direct memory access** eliminates serialization overhead
-- **Reduced process overhead** through native integration
-- **Better scalability** under high-concurrency scenarios
+The current implementation has fundamental architectural problems that must be addressed:
 
-## 📋 Current Status
+- **Global Singleton Anti-Pattern**: Only one client can exist globally
+- **Ignored Client Handles**: Multi-client scenarios are broken
+- **Blocking Operations**: Deadlock potential in JNI threads
+- **Missing Callback System**: No proper request/response correlation
 
-- ✅ **Complete**: JNI infrastructure and basic operations (GET, SET, PING)
-- ✅ **Complete**: Security hardening with comprehensive vulnerability fixes ([see security summary](docs/SECURITY_FIXES_SUMMARY.md))
-- ✅ **Complete**: Memory safety validation with Valgrind analysis
-- ✅ **Complete**: Type-safe client management with atomic operations
-- 🔄 **In Progress**: Extended command coverage and testing
-- ⏳ **Planned**: Batch/transaction system restoration
+## Documentation
 
-## 🏗️ Architecture
+| File | Description |
+|------|-------------|
+| **[HANDOVER.md](HANDOVER.md)** | **Complete architectural analysis and implementation roadmap** |
+| **[docs/CURRENT_STATUS.md](docs/CURRENT_STATUS.md)** | Current implementation status and problems |
+| **[docs/MISSING_IMPLEMENTATIONS.md](docs/MISSING_IMPLEMENTATIONS.md)** | Required architectural changes |
 
-```
-Java Application
-       ↓
-    JNI Layer (this implementation)
-       ↓
-  Rust glide-core
-       ↓
-   Valkey/Redis
+## Architecture Overview
+
+### Current (Broken)
+```rust
+// Global singleton - only one client can exist
+static CLIENT_INSTANCE: LazyLock<Mutex<Option<Client>>> = LazyLock::new(|| Mutex::new(None));
 ```
 
-### Comparison with Legacy UDS Implementation
+### Required (Correct)
+```rust
+// Per-client registry with meaningful handles
+static CLIENT_REGISTRY: LazyLock<Mutex<HashMap<u64, JniClient>>> = 
+    LazyLock::new(|| Mutex::new(HashMap::new()));
 
-| Aspect | JNI Implementation | Legacy UDS | Advantage |
-|--------|-------------------|------------|-----------|
-| **Performance** | 1.8-2.9x faster | Baseline | 🚀 JNI |
-| **Latency** | Direct calls | IPC overhead | 🚀 JNI |
-| **Memory** | Shared memory | Process isolation | 🚀 JNI |
-| **Scalability** | Native threading | Process limits | 🚀 JNI |
-| **Complexity** | Single process | Multi-process | 🚀 JNI |
-
-## 🔧 System Requirements
-
-**Supported Platforms:**
-- **Linux**: Ubuntu 20+, Amazon Linux 2/2023 (x86_64, aarch64)
-- **macOS**: 13.7+ (x86_64), 14.7+ (Apple Silicon)
-
-**Java Requirements:**
-- **JDK 11 or later** required
-
-```bash
-java -version  # Verify Java 11+
-echo $JAVA_HOME
-```
-
-## 📦 Installation
-
-### Gradle
-```groovy
-dependencies {
-    implementation 'io.valkey:glide-jni:0.1.0-SNAPSHOT'
+struct JniClient {
+    core_client: Client,
+    runtime: tokio::runtime::Runtime,
+    callback_registry: Arc<Mutex<HashMap<u32, oneshot::Sender<Value>>>>,
 }
 ```
 
-### Maven
-```xml
-<dependency>
-    <groupId>io.valkey</groupId>
-    <artifactId>glide-jni</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
-</dependency>
-```
+## Required Implementation Phases
 
-## 🚀 Quick Start
+1. **Phase 1: Foundation Restructure** - Remove global singleton, implement per-client registry
+2. **Phase 2: Callback System** - Request/response correlation system
+3. **Phase 3: Advanced Features** - Script management, cluster scan, OpenTelemetry
+4. **Phase 4: Production Testing** - Stress testing, memory leak detection
 
-### Standalone Valkey
-```java
-import io.valkey.glide.core.client.GlideClient;
-import glide.api.BaseClient;
+## Performance Target
 
-public class QuickStart {
-    public static void main(String[] args) {
-        // Create a client configuration
-        GlideClient.Config config = new GlideClient.Config(
-            Arrays.asList("localhost:6379")
-        ).requestTimeout(1000); // 1 second timeout
+- **Expected**: 1.8-2.9x improvement over UDS implementation
+- **Current**: Basic operations work but architecture is fundamentally broken
 
-        try (var client = new GlideClient(config)) {
-            // Basic operations using the BaseClient API
-            BaseClient baseClient = new BaseClient(client);
-            
-            System.out.println("PING: " + baseClient.ping().get());
-            baseClient.set("key", "value").get();
-            System.out.println("GET: " + baseClient.get("key").get());
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-}
-```
+## Getting Started
 
-### Cluster Valkey
-```java
-import glide.api.GlideClusterClient;
-import glide.api.models.configuration.GlideClusterClientConfiguration;
+1. **Read the complete handover document**: `HANDOVER.md`
+2. **Understand the architectural issues**: `docs/CURRENT_STATUS.md`
+3. **Begin implementation in a fresh session** with clean context
 
-GlideClusterClientConfiguration config = GlideClusterClientConfiguration.builder()
-    .address(NodeAddress.builder().host("localhost").port(7001).build())
-    .address(NodeAddress.builder().host("localhost").port(7002).build())
-    .address(NodeAddress.builder().host("localhost").port(7003).build())
-    .requestTimeout(1000)
-    .build();
+## Success Criteria
 
-try (var client = GlideClusterClient.createClient(config).get()) {
-    client.set(gs("cluster-key"), gs("cluster-value")).get();
-    System.out.println("Cluster GET: " + client.get(gs("cluster-key")).get());
-}
-```
+✅ **Multi-Client Support**: Multiple clients can exist simultaneously  
+✅ **True Async**: No blocking operations in request path  
+✅ **Callback Correlation**: Proper request/response matching  
+✅ **Resource Isolation**: Each client has independent resources  
+✅ **Performance**: Match or exceed UDS implementation  
+✅ **Memory Safety**: No memory leaks or unsafe operations  
 
-## ⚡ Batch Operations (Planned)
+## Conclusion
 
-The batch system is currently being restored. Once complete, you'll be able to use:
+The current implementation requires **complete architectural restructuring** to properly integrate with glide-core. The key insight is that **each client is a separate entity**, not a shared resource.
 
-```java
-// Standalone batches (coming in Phase 1)
-Batch batch = new Batch();
-batch.set(gs("key1"), gs("value1"));
-batch.set(gs("key2"), gs("value2"));
-batch.get(gs("key1"));
-Object[] results = client.exec(batch, true).get();
-
-// Cluster batches (coming in Phase 1)  
-ClusterBatch clusterBatch = new ClusterBatch();
-clusterBatch.set(gs("key1"), gs("value1"));
-clusterBatch.get(gs("key1"));
-Object[] results = clusterClient.exec(clusterBatch, true).get();
-
-// Transaction support (coming in Phase 2)
-client.multi();
-client.set(gs("key"), gs("value"));
-client.get(gs("key"));
-Object[] results = client.exec().get();
-```
-
-## 🧪 Building from Source
-
-### Prerequisites
-- **Rust toolchain** (for native library)
-- **JDK 11+** 
-- **Gradle 8+**
-
-### Build Steps
-```bash
-# Clone repository
-git clone https://github.com/valkey-io/valkey-glide.git
-cd valkey-glide/java
-
-# Build native library and Java code
-./gradlew build
-
-# Run tests
-./gradlew test
-
-# Run integration tests (requires Valkey server)
-./gradlew integTest:test
-```
-
-### Development Build
-```bash
-# Build in development mode
-./gradlew build -x test
-
-# Build native library only
-cargo build --release
-
-# Copy native library manually
-cp target/release/libglide_jni.* src/main/resources/native/
-```
-
-## 📊 Performance Benchmarks
-
-See [`benchmarks/`](benchmarks/) for comprehensive performance comparisons.
-
-**Sample Results** (vs UDS implementation):
-- **SET operations**: 2.9x faster
-- **GET operations**: 2.1x faster  
-- **Batch operations**: 1.8x faster
-- **Mixed workload**: 2.3x faster
-
-## 📖 Documentation
-
-- **[Security Fixes Summary](docs/SECURITY_FIXES_SUMMARY.md)** - Comprehensive security audit and fixes completed
-- **[Current Status](docs/CURRENT_STATUS.md)** - Implementation status and architecture
-- **[Restoration Plan](docs/RESTORATION_PLAN.md)** - Plan for completing functionality
-- **[API Compatibility](docs/API_COMPATIBILITY.md)** - Compatibility with legacy implementation
-- **[Design Documents](docs/DESIGN/)** - Detailed design for each phase
-
-## 🧪 Testing
-
-### Unit Tests
-```bash
-./gradlew test
-```
-
-### Integration Tests
-```bash
-# Start local Valkey server first
-valkey-server --port 6379
-
-# Run integration tests
-./gradlew integTest:test
-```
-
-### Benchmark Tests
-```bash
-./gradlew benchmarks:run --args="--help"
-```
-
-## 🔄 Migration from UDS Implementation
-
-If you're migrating from the UDS-based implementation:
-
-1. **Dependencies**: Update to `glide-jni` artifact
-2. **Performance**: Expect 1.8-2.9x performance improvement
-3. **API**: Public API remains 100% compatible
-4. **Behavior**: All operations behave identically
-
-See [API Compatibility Guide](docs/API_COMPATIBILITY.md) for details.
-
-## 🗂️ Project Structure
-
-```
-java/
-├── client/                    # Java client implementation
-│   ├── src/main/java/glide/   # Public API (compatible with legacy)
-│   └── src/main/java/io/      # JNI core implementation
-├── src/                       # Rust JNI bindings
-├── benchmarks/                # Performance benchmarks
-├── integTest/                 # Integration test suite
-├── docs/                      # Comprehensive documentation
-└── archive/                   # Legacy UDS implementation (reference)
-```
-
-## ✅ Production Readiness
-
-**Security Status**: ✅ **PRODUCTION-READY**
-- All critical security vulnerabilities have been resolved
-- Memory safety validated with Valgrind analysis
-- Type-safe pointer management implemented
-- Thread-safe operations with atomic coordination
-- Comprehensive input validation framework
-
-**Basic Operations Available**: GET, SET, PING and generic command execution
-
-## 🐛 Known Issues
-
-- **Batch Operations**: Currently being restored (see [Restoration Plan](docs/RESTORATION_PLAN.md))
-- **Extended Commands**: Some specialized commands may need additional testing
-- **Module Support**: JSON/FT modules planned for future phases
-
-## 🤝 Contributing
-
-1. See [DEVELOPER.md](archive/java-old/DEVELOPER.md) for development setup
-2. Check [Restoration Plan](docs/RESTORATION_PLAN.md) for current priorities
-3. Run tests: `./gradlew test integTest:test`
-4. Follow existing code style and patterns
-
-## 📄 License
-
-This project is licensed under the same terms as Valkey GLIDE.
-
-## 🔗 Links
-
-- **[Valkey GLIDE Repository](https://github.com/valkey-io/valkey-glide)**
-- **[Valkey Server](https://valkey.io/)**
-- **[Issue Tracker](https://github.com/valkey-io/valkey-glide/issues)**
-- **[Legacy Documentation](archive/java-old/README.md)** (UDS implementation)
-
----
-
-> **Note**: This JNI implementation provides significant performance improvements while maintaining 100% API compatibility with the legacy UDS implementation. See our [documentation](docs/) for detailed technical information.
+**Next Steps**: Review `HANDOVER.md` for complete implementation details and begin Phase 1 in a fresh session.
