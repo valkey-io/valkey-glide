@@ -92,4 +92,28 @@ public interface IServerManagementClusterCommands
     /// value is the information for the node. For a single node route it returns a <see cref="ClusterValue{T}" /> with a single value.
     /// </returns>
     Task<ClusterValue<string>> Info(Section[] sections, Route route);
+
+
+    /// <summary>
+    /// Echo the given message back from the server.
+    /// See <see href="https://valkey.io/commands/echo/">valkey.io</see> for details.
+    /// </summary>
+    /// <param name="message">The message to echo</param>
+    /// <param name="route">Specifies the routing configuration for the command. The client will route the
+    /// command to the nodes defined by <c>route</c>.</param>
+    /// <param name="flags">The command flags. Currently flags are ignored.</param>
+    /// <returns>
+    /// A <see cref="ClusterValue{T}" /> containing the echoed message as a <see cref="ValkeyValue"/>.<br />
+    /// When specifying a <paramref name="route" /> other than a single node, it returns a multi-value <see cref="ClusterValue{T}" />
+    /// with a <c>Dictionary&lt;string, ValkeyValue&gt;</c> with each address as the key and its corresponding
+    /// echoed message. For a single node route it returns a <see cref="ClusterValue{T}" /> with a single value.
+    /// </returns>
+    /// <remarks>
+    /// <example>
+    /// <code>
+    /// ClusterValue&lt;ValkeyValue&gt; response = await client.EchoAsync("Hello World", Route.AllPrimaries);
+    /// </code>
+    /// </example>
+    /// </remarks>
+    Task<ClusterValue<ValkeyValue>> EchoAsync(ValkeyValue message, Route route, CommandFlags flags = CommandFlags.None);
 }
