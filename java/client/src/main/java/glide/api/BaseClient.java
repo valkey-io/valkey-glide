@@ -328,26 +328,105 @@ public abstract class BaseClient {
      * Execute a batch of commands.
      *
      * @param batch The batch of commands to execute
+     * @param raiseOnError Whether to raise an exception on command failure
      * @return A CompletableFuture containing an array of results
      */
-    public CompletableFuture<Object[]> exec(BaseBatch<?> batch) {
+    public CompletableFuture<Object[]> exec(BaseBatch<?> batch, boolean raiseOnError) {
         return CompletableFuture.supplyAsync(() -> {
             try {
                 List<Command> commands = batch.getCommands();
-                Object[] results = new Object[commands.size()];
                 
-                for (int i = 0; i < commands.size(); i++) {
-                    Command command = commands.get(i);
-                    // Execute each command individually
-                    CompletableFuture<Object> result = client.executeCommand(command);
-                    results[i] = result.get(); // Wait for each command to complete
+                if (batch.isAtomic()) {
+                    // Execute as atomic transaction using MULTI/EXEC
+                    return executeAtomicBatch(commands, raiseOnError);
+                } else {
+                    // Execute as pipeline (non-atomic)
+                    return executeNonAtomicBatch(commands, raiseOnError);
                 }
-                
-                return results;
             } catch (Exception e) {
-                throw new RuntimeException("Failed to execute batch", e);
+                if (raiseOnError) {
+                    throw new RuntimeException("Failed to execute batch", e);
+                }
+                return new Object[0];
             }
         });
+    }
+
+    /**
+     * Execute commands as an atomic transaction using MULTI/EXEC.
+     */
+    private Object[] executeAtomicBatch(List<Command> commands, boolean raiseOnError) throws Exception {
+        // Start transaction
+        client.executeCommand(new Command(CommandType.MULTI)).get();
+        
+        try {
+            // Queue all commands (they return "QUEUED")
+            for (Command command : commands) {
+                client.executeCommand(command).get();
+            }
+            
+            // Execute the transaction
+            CompletableFuture<Object> execResult = client.executeCommand(new Command(CommandType.EXEC));
+            Object result = execResult.get();
+            
+            if (result instanceof Object[]) {
+                return (Object[]) result;
+            } else if (result == null) {
+                // Transaction was discarded (e.g., due to WATCH)
+                return null;
+            } else {
+                // Single result, wrap in array
+                return new Object[] { result };
+            }
+        } catch (Exception e) {
+            // If any error occurs, discard the transaction
+            try {
+                client.executeCommand(new Command(CommandType.DISCARD)).get();
+            } catch (Exception discardError) {
+                // Ignore discard errors
+            }
+            
+            if (raiseOnError) {
+                throw new RuntimeException("Atomic batch execution failed", e);
+            }
+            return new Object[0];
+        }
+    }
+
+    /**
+     * Execute commands as a pipeline (non-atomic).
+     */
+    private Object[] executeNonAtomicBatch(List<Command> commands, boolean raiseOnError) throws Exception {
+        Object[] results = new Object[commands.size()];
+        
+        for (int i = 0; i < commands.size(); i++) {
+            Command command = commands.get(i);
+            try {
+                // Execute each command individually
+                CompletableFuture<Object> result = client.executeCommand(command);
+                results[i] = result.get(); // Wait for each command to complete
+            } catch (Exception e) {
+                if (raiseOnError) {
+                    throw new RuntimeException("Command failed: " + command.getType(), e);
+                }
+                // Store null as the result for failed commands
+                results[i] = null;
+            }
+        }
+        
+        return results;
+    }
+
+    /**
+     * Execute a batch of commands.
+     *
+     * @param batch The batch of commands to execute
+     * @return A CompletableFuture containing an array of results
+     * @deprecated Use exec(batch, raiseOnError) instead
+     */
+    @Deprecated
+    public CompletableFuture<Object[]> exec(BaseBatch<?> batch) {
+        return exec(batch, true); // Default to raising errors
     }
 
     /**

@@ -11,4 +11,6 @@ module glide.client {
 
     requires java.base;
     requires java.logging;
+    requires static lombok;
+    requires org.apache.commons.lang3;
 }

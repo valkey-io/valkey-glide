@@ -158,6 +158,9 @@ public enum CommandType {
     PUBSUB_SHARDNUMSUB("PUBSUB SHARDNUMSUB"),
 
     // Transaction commands
+    MULTI("MULTI"),
+    EXEC("EXEC"),
+    DISCARD("DISCARD"),
     WATCH("WATCH"),
     UNWATCH("UNWATCH"),
 

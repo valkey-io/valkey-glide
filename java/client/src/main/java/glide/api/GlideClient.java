@@ -4,13 +4,17 @@ package glide.api;
 // Note: Using fully qualified name to avoid collision with this class
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.commands.InfoOptions;
+import glide.api.models.Batch;
+import glide.api.models.Transaction;
+import glide.api.models.commands.batch.BatchOptions;
+import glide.api.commands.TransactionsCommands;
 import java.util.concurrent.CompletableFuture;
 
 /**
  * Glide client for connecting to a single Valkey/Redis instance.
  * This class provides the integration test API while using the refactored core client underneath.
  */
-public class GlideClient extends BaseClient {
+public class GlideClient extends BaseClient implements TransactionsCommands {
 
     private GlideClient(io.valkey.glide.core.client.GlideClient client) {
         super(client);
@@ -111,5 +115,52 @@ public class GlideClient extends BaseClient {
     public CompletableFuture<String> flushall() {
         return executeCommand(io.valkey.glide.core.commands.CommandType.FLUSHALL)
             .thenApply(result -> result.toString());
+    }
+
+    /**
+     * Execute a batch of commands.
+     *
+     * @param batch The batch of commands to execute
+     * @param raiseOnError Whether to raise an exception on command failure
+     * @return A CompletableFuture containing an array of results
+     */
+    public CompletableFuture<Object[]> exec(Batch batch, boolean raiseOnError) {
+        return super.exec(batch, raiseOnError);
+    }
+
+    /**
+     * Execute a transaction (atomic batch).
+     *
+     * @param transaction The transaction to execute
+     * @param raiseOnError Whether to raise an exception on command failure
+     * @return A CompletableFuture containing an array of results
+     */
+    public CompletableFuture<Object[]> exec(Transaction transaction, boolean raiseOnError) {
+        return super.exec(transaction, raiseOnError);
+    }
+
+    /**
+     * @deprecated Use {@link #exec(Batch, boolean)} instead. This method is being replaced by
+     *     a more flexible approach using {@link Batch}.
+     */
+    @Deprecated
+    @Override
+    public CompletableFuture<Object[]> exec(Transaction transaction) {
+        return exec(transaction, true);
+    }
+
+    /**
+     * Execute a batch with additional options.
+     *
+     * @param batch The batch to execute
+     * @param raiseOnError Whether to raise an exception on command failure
+     * @param options Additional execution options
+     * @return A CompletableFuture containing an array of results
+     */
+    @Override
+    public CompletableFuture<Object[]> exec(Batch batch, boolean raiseOnError, BatchOptions options) {
+        // For now, we implement this by ignoring options and delegating to the base implementation
+        // In a full implementation, options would be passed to the core client
+        return exec(batch, raiseOnError);
     }
 }
