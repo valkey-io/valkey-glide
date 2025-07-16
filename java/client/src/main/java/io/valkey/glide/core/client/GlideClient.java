@@ -310,7 +310,8 @@ public class GlideClient implements AutoCloseable {
             for (int i = 0; i < args.length; i++) {
                 byteArgs[i] = args[i].getBytes(java.nio.charset.StandardCharsets.UTF_8);
             }
-            Object result = executeCommand(nativeClientPtr, command, byteArgs);
+            long handle = nativeClientHandle.get();
+            Object result = executeCommand(handle, command, byteArgs);
             return CompletableFuture.completedFuture(result);
         } catch (Exception e) {
             CompletableFuture<Object> future = new CompletableFuture<>();

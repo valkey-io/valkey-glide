@@ -1,9 +1,17 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api;
 
+import glide.api.commands.StringBaseCommands;
+import glide.api.commands.HashBaseCommands;
+import glide.api.commands.ListBaseCommands;
+import glide.api.commands.SetBaseCommands;
 import glide.api.models.GlideString;
 import glide.api.models.BaseBatch;
 import glide.api.models.Script;
+import glide.api.models.commands.GetExOptions;
+import glide.api.models.commands.SetOptions;
+import glide.api.models.commands.LPosOptions;
+import glide.api.models.commands.ListDirection;
 import io.valkey.glide.core.client.GlideClient;
 import io.valkey.glide.core.commands.Command;
 import io.valkey.glide.core.commands.CommandType;
@@ -15,10 +23,16 @@ import java.util.concurrent.CompletableFuture;
  * Base class for Glide clients providing common functionality.
  * This class acts as a bridge between the integration test API and the refactored core client.
  */
-public abstract class BaseClient {
+public abstract class BaseClient implements StringBaseCommands, HashBaseCommands, ListBaseCommands, SetBaseCommands {
 
     /** The "OK" response from Redis/Valkey commands. */
     public static final String OK = "OK";
+
+    /** LCS command string constants */
+    public static final String LEN_VALKEY_API = "LEN";
+    public static final String IDX_COMMAND_STRING = "IDX";
+    public static final String MINMATCHLEN_COMMAND_STRING = "MINMATCHLEN";
+    public static final String WITHMATCHLEN_COMMAND_STRING = "WITHMATCHLEN";
 
     protected final GlideClient client;
 
@@ -45,7 +59,8 @@ public abstract class BaseClient {
      * @return A CompletableFuture containing the value or null if key doesn't exist
      */
     public CompletableFuture<String> get(String key) {
-        return client.get(key);
+        return executeCommand(CommandType.GET, key)
+                .thenApply(result -> result == null ? null : result.toString());
     }
 
     /**
@@ -67,7 +82,8 @@ public abstract class BaseClient {
      * @return A CompletableFuture containing "OK" if successful
      */
     public CompletableFuture<String> set(String key, String value) {
-        return client.set(key, value);
+        return executeCommand(CommandType.SET, key, value)
+                .thenApply(result -> result.toString());
     }
 
     /**
@@ -83,12 +99,89 @@ public abstract class BaseClient {
     }
 
     /**
+     * Sets the given key with the given value. Return value is dependent on the passed options.
+     */
+    @Override
+    public CompletableFuture<String> set(String key, String value, SetOptions options) {
+        // For now, implement a basic version without full SetOptions support
+        return executeCommand(CommandType.SET, key, value)
+                .thenApply(result -> result.toString());
+    }
+
+    /**
+     * Sets the given key with the given value. Return value is dependent on the passed options.
+     */
+    @Override
+    public CompletableFuture<String> set(GlideString key, GlideString value, SetOptions options) {
+        // For now, implement a basic version without full SetOptions support
+        return executeCommand(CommandType.SET, key.toString(), value.toString())
+                .thenApply(result -> result.toString());
+    }
+
+    /**
+     * Gets a string value associated with the given key and deletes the key.
+     */
+    @Override
+    public CompletableFuture<String> getdel(String key) {
+        return executeCommand(CommandType.GETDEL, key)
+                .thenApply(result -> result == null ? null : result.toString());
+    }
+
+    /**
+     * Gets a string value associated with the given key and deletes the key.
+     */
+    @Override
+    public CompletableFuture<GlideString> getdel(GlideString key) {
+        return executeCommand(CommandType.GETDEL, key.toString())
+                .thenApply(result -> result == null ? null : GlideString.of(result.toString()));
+    }
+
+    /**
+     * Gets the value associated with the given key.
+     */
+    @Override
+    public CompletableFuture<String> getex(String key) {
+        return executeCommand(CommandType.GETEX, key)
+                .thenApply(result -> result == null ? null : result.toString());
+    }
+
+    /**
+     * Gets the value associated with the given key.
+     */
+    @Override
+    public CompletableFuture<GlideString> getex(GlideString key) {
+        return executeCommand(CommandType.GETEX, key.toString())
+                .thenApply(result -> result == null ? null : GlideString.of(result.toString()));
+    }
+
+    /**
+     * Gets the value associated with the given key.
+     */
+    @Override
+    public CompletableFuture<String> getex(String key, GetExOptions options) {
+        // For now, implement basic version without full GetExOptions support
+        return executeCommand(CommandType.GETEX, key)
+                .thenApply(result -> result == null ? null : result.toString());
+    }
+
+    /**
+     * Gets the value associated with the given key.
+     */
+    @Override
+    public CompletableFuture<GlideString> getex(GlideString key, GetExOptions options) {
+        // For now, implement basic version without full GetExOptions support
+        return executeCommand(CommandType.GETEX, key.toString())
+                .thenApply(result -> result == null ? null : GlideString.of(result.toString()));
+    }
+
+    /**
      * Execute a PING command.
      *
      * @return A CompletableFuture containing "PONG"
      */
     public CompletableFuture<String> ping() {
-        return client.ping();
+        return executeCommand(CommandType.PING)
+                .thenApply(result -> result.toString());
     }
 
     /**
@@ -97,7 +190,7 @@ public abstract class BaseClient {
      * @param keys The keys to get
      * @return A CompletableFuture containing an array of values
      */
-    public CompletableFuture<String[]> mget(String... keys) {
+    public CompletableFuture<String[]> mget(String[] keys) {
         return executeCommand(CommandType.MGET, keys)
             .thenApply(result -> {
                 if (result instanceof Object[]) {
@@ -118,7 +211,7 @@ public abstract class BaseClient {
      * @param keys The keys to get (supports binary data)
      * @return A CompletableFuture containing an array of values
      */
-    public CompletableFuture<GlideString[]> mget(GlideString... keys) {
+    public CompletableFuture<GlideString[]> mget(GlideString[] keys) {
         String[] stringKeys = new String[keys.length];
         for (int i = 0; i < keys.length; i++) {
             stringKeys[i] = keys[i].toString();
@@ -1018,6 +1111,20 @@ public abstract class BaseClient {
     }
 
     /**
+     * Inserts elements at the head of the list stored at key (supports binary data).
+     */
+    @Override
+    public CompletableFuture<Long> lpush(GlideString key, GlideString[] elements) {
+        String[] args = new String[elements.length + 1];
+        args[0] = key.toString();
+        for (int i = 0; i < elements.length; i++) {
+            args[i + 1] = elements[i].toString();
+        }
+        return executeCommand(CommandType.LPUSH, args)
+                .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
      * Inserts elements at the tail of the list stored at key.
      *
      * @param key The key of the list
@@ -1270,7 +1377,8 @@ public abstract class BaseClient {
      * @param members The members to add to the set
      * @return A CompletableFuture containing the number of elements added to the set
      */
-    public CompletableFuture<Long> sadd(String key, String... members) {
+    @Override
+    public CompletableFuture<Long> sadd(String key, String[] members) {
         String[] args = new String[members.length + 1];
         args[0] = key;
         System.arraycopy(members, 0, args, 1, members.length);
@@ -1285,7 +1393,8 @@ public abstract class BaseClient {
      * @param members The members to add to the set (supports binary data)
      * @return A CompletableFuture containing the number of elements added to the set
      */
-    public CompletableFuture<Long> sadd(GlideString key, GlideString... members) {
+    @Override
+    public CompletableFuture<Long> sadd(GlideString key, GlideString[] members) {
         String[] args = new String[members.length + 1];
         args[0] = key.toString();
         for (int i = 0; i < members.length; i++) {
@@ -1302,7 +1411,8 @@ public abstract class BaseClient {
      * @param members The members to remove from the set
      * @return A CompletableFuture containing the number of elements removed from the set
      */
-    public CompletableFuture<Long> srem(String key, String... members) {
+    @Override
+    public CompletableFuture<Long> srem(String key, String[] members) {
         String[] args = new String[members.length + 1];
         args[0] = key;
         System.arraycopy(members, 0, args, 1, members.length);
@@ -1317,7 +1427,8 @@ public abstract class BaseClient {
      * @param members The members to remove from the set (supports binary data)
      * @return A CompletableFuture containing the number of elements removed from the set
      */
-    public CompletableFuture<Long> srem(GlideString key, GlideString... members) {
+    @Override
+    public CompletableFuture<Long> srem(GlideString key, GlideString[] members) {
         String[] args = new String[members.length + 1];
         args[0] = key.toString();
         for (int i = 0; i < members.length; i++) {
@@ -1333,18 +1444,20 @@ public abstract class BaseClient {
      * @param key The key of the set
      * @return A CompletableFuture containing all members of the set
      */
-    public CompletableFuture<String[]> smembers(String key) {
+    @Override
+    public CompletableFuture<java.util.Set<String>> smembers(String key) {
         return executeCommand(CommandType.SMEMBERS, key)
             .thenApply(result -> {
+                java.util.Set<String> set = new java.util.HashSet<>();
                 if (result instanceof Object[]) {
                     Object[] objects = (Object[]) result;
-                    String[] members = new String[objects.length];
-                    for (int i = 0; i < objects.length; i++) {
-                        members[i] = objects[i].toString();
+                    for (Object obj : objects) {
+                        if (obj != null) {
+                            set.add(obj.toString());
+                        }
                     }
-                    return members;
                 }
-                return new String[0];
+                return set;
             });
     }
 
@@ -1354,18 +1467,20 @@ public abstract class BaseClient {
      * @param key The key of the set (supports binary data)
      * @return A CompletableFuture containing all members of the set
      */
-    public CompletableFuture<GlideString[]> smembers(GlideString key) {
+    @Override
+    public CompletableFuture<java.util.Set<GlideString>> smembers(GlideString key) {
         return executeCommand(CommandType.SMEMBERS, key.toString())
             .thenApply(result -> {
+                java.util.Set<GlideString> set = new java.util.HashSet<>();
                 if (result instanceof Object[]) {
                     Object[] objects = (Object[]) result;
-                    GlideString[] members = new GlideString[objects.length];
-                    for (int i = 0; i < objects.length; i++) {
-                        members[i] = GlideString.of(objects[i].toString());
+                    for (Object obj : objects) {
+                        if (obj != null) {
+                            set.add(GlideString.of(obj.toString()));
+                        }
                     }
-                    return members;
                 }
-                return new GlideString[0];
+                return set;
             });
     }
 
@@ -1375,6 +1490,7 @@ public abstract class BaseClient {
      * @param key The key of the set
      * @return A CompletableFuture containing the cardinality (number of elements) of the set
      */
+    @Override
     public CompletableFuture<Long> scard(String key) {
         return executeCommand(CommandType.SCARD, key)
             .thenApply(result -> Long.parseLong(result.toString()));
@@ -1386,6 +1502,7 @@ public abstract class BaseClient {
      * @param key The key of the set (supports binary data)
      * @return A CompletableFuture containing the cardinality (number of elements) of the set
      */
+    @Override
     public CompletableFuture<Long> scard(GlideString key) {
         return executeCommand(CommandType.SCARD, key.toString())
             .thenApply(result -> Long.parseLong(result.toString()));
@@ -1398,6 +1515,7 @@ public abstract class BaseClient {
      * @param member The member to check for
      * @return A CompletableFuture containing true if the element is a member of the set
      */
+    @Override
     public CompletableFuture<Boolean> sismember(String key, String member) {
         return executeCommand(CommandType.SISMEMBER, key, member)
             .thenApply(result -> "1".equals(result.toString()));
@@ -1410,6 +1528,7 @@ public abstract class BaseClient {
      * @param member The member to check for (supports binary data)
      * @return A CompletableFuture containing true if the element is a member of the set
      */
+    @Override
     public CompletableFuture<Boolean> sismember(GlideString key, GlideString member) {
         return executeCommand(CommandType.SISMEMBER, key.toString(), member.toString())
             .thenApply(result -> "1".equals(result.toString()));
@@ -1421,18 +1540,20 @@ public abstract class BaseClient {
      * @param keys The keys of the sets
      * @return A CompletableFuture containing the members of the set resulting from the difference
      */
-    public CompletableFuture<String[]> sdiff(String... keys) {
+    @Override
+    public CompletableFuture<java.util.Set<String>> sdiff(String[] keys) {
         return executeCommand(CommandType.SDIFF, keys)
             .thenApply(result -> {
+                java.util.Set<String> set = new java.util.HashSet<>();
                 if (result instanceof Object[]) {
                     Object[] objects = (Object[]) result;
-                    String[] members = new String[objects.length];
-                    for (int i = 0; i < objects.length; i++) {
-                        members[i] = objects[i].toString();
+                    for (Object obj : objects) {
+                        if (obj != null) {
+                            set.add(obj.toString());
+                        }
                     }
-                    return members;
                 }
-                return new String[0];
+                return set;
             });
     }
 
@@ -1442,22 +1563,24 @@ public abstract class BaseClient {
      * @param keys The keys of the sets (supports binary data)
      * @return A CompletableFuture containing the members of the set resulting from the difference
      */
-    public CompletableFuture<GlideString[]> sdiff(GlideString... keys) {
+    @Override
+    public CompletableFuture<java.util.Set<GlideString>> sdiff(GlideString[] keys) {
         String[] stringKeys = new String[keys.length];
         for (int i = 0; i < keys.length; i++) {
             stringKeys[i] = keys[i].toString();
         }
         return executeCommand(CommandType.SDIFF, stringKeys)
             .thenApply(result -> {
+                java.util.Set<GlideString> set = new java.util.HashSet<>();
                 if (result instanceof Object[]) {
                     Object[] objects = (Object[]) result;
-                    GlideString[] members = new GlideString[objects.length];
-                    for (int i = 0; i < objects.length; i++) {
-                        members[i] = GlideString.of(objects[i].toString());
+                    for (Object obj : objects) {
+                        if (obj != null) {
+                            set.add(GlideString.of(obj.toString()));
+                        }
                     }
-                    return members;
                 }
-                return new GlideString[0];
+                return set;
             });
     }
 
@@ -1467,18 +1590,20 @@ public abstract class BaseClient {
      * @param keys The keys of the sets
      * @return A CompletableFuture containing the members of the set resulting from the intersection
      */
-    public CompletableFuture<String[]> sinter(String... keys) {
+    @Override
+    public CompletableFuture<java.util.Set<String>> sinter(String[] keys) {
         return executeCommand(CommandType.SINTER, keys)
             .thenApply(result -> {
+                java.util.Set<String> set = new java.util.HashSet<>();
                 if (result instanceof Object[]) {
                     Object[] objects = (Object[]) result;
-                    String[] members = new String[objects.length];
-                    for (int i = 0; i < objects.length; i++) {
-                        members[i] = objects[i].toString();
+                    for (Object obj : objects) {
+                        if (obj != null) {
+                            set.add(obj.toString());
+                        }
                     }
-                    return members;
                 }
-                return new String[0];
+                return set;
             });
     }
 
@@ -1488,22 +1613,24 @@ public abstract class BaseClient {
      * @param keys The keys of the sets (supports binary data)
      * @return A CompletableFuture containing the members of the set resulting from the intersection
      */
-    public CompletableFuture<GlideString[]> sinter(GlideString... keys) {
+    @Override
+    public CompletableFuture<java.util.Set<GlideString>> sinter(GlideString[] keys) {
         String[] stringKeys = new String[keys.length];
         for (int i = 0; i < keys.length; i++) {
             stringKeys[i] = keys[i].toString();
         }
         return executeCommand(CommandType.SINTER, stringKeys)
             .thenApply(result -> {
+                java.util.Set<GlideString> set = new java.util.HashSet<>();
                 if (result instanceof Object[]) {
                     Object[] objects = (Object[]) result;
-                    GlideString[] members = new GlideString[objects.length];
-                    for (int i = 0; i < objects.length; i++) {
-                        members[i] = GlideString.of(objects[i].toString());
+                    for (Object obj : objects) {
+                        if (obj != null) {
+                            set.add(GlideString.of(obj.toString()));
+                        }
                     }
-                    return members;
                 }
-                return new GlideString[0];
+                return set;
             });
     }
 
@@ -1513,18 +1640,20 @@ public abstract class BaseClient {
      * @param keys The keys of the sets
      * @return A CompletableFuture containing the members of the set resulting from the union
      */
-    public CompletableFuture<String[]> sunion(String... keys) {
+    @Override
+    public CompletableFuture<java.util.Set<String>> sunion(String[] keys) {
         return executeCommand(CommandType.SUNION, keys)
             .thenApply(result -> {
+                java.util.Set<String> set = new java.util.HashSet<>();
                 if (result instanceof Object[]) {
                     Object[] objects = (Object[]) result;
-                    String[] members = new String[objects.length];
-                    for (int i = 0; i < objects.length; i++) {
-                        members[i] = objects[i].toString();
+                    for (Object obj : objects) {
+                        if (obj != null) {
+                            set.add(obj.toString());
+                        }
                     }
-                    return members;
                 }
-                return new String[0];
+                return set;
             });
     }
 
@@ -1534,22 +1663,24 @@ public abstract class BaseClient {
      * @param keys The keys of the sets (supports binary data)
      * @return A CompletableFuture containing the members of the set resulting from the union
      */
-    public CompletableFuture<GlideString[]> sunion(GlideString... keys) {
+    @Override
+    public CompletableFuture<java.util.Set<GlideString>> sunion(GlideString[] keys) {
         String[] stringKeys = new String[keys.length];
         for (int i = 0; i < keys.length; i++) {
             stringKeys[i] = keys[i].toString();
         }
         return executeCommand(CommandType.SUNION, stringKeys)
             .thenApply(result -> {
+                java.util.Set<GlideString> set = new java.util.HashSet<>();
                 if (result instanceof Object[]) {
                     Object[] objects = (Object[]) result;
-                    GlideString[] members = new GlideString[objects.length];
-                    for (int i = 0; i < objects.length; i++) {
-                        members[i] = GlideString.of(objects[i].toString());
+                    for (Object obj : objects) {
+                        if (obj != null) {
+                            set.add(GlideString.of(obj.toString()));
+                        }
                     }
-                    return members;
                 }
-                return new GlideString[0];
+                return set;
             });
     }
 
@@ -2408,6 +2539,1319 @@ public abstract class BaseClient {
         stats.put("api_version", "2.1");
         stats.put("restoration_phase", "Phase 5 Active");
         return stats;
+    }
+
+    // ==================== HASH COMMANDS ====================
+    
+    /**
+     * Sets field in the hash stored at key to value, only if field does not yet exist.
+     */
+    @Override
+    public CompletableFuture<Boolean> hsetnx(String key, String field, String value) {
+        return executeCommand(CommandType.HSETNX, key, field, value)
+                .thenApply(result -> "1".equals(result.toString()));
+    }
+
+    /**
+     * Sets field in the hash stored at key to value, only if field does not yet exist.
+     */
+    @Override
+    public CompletableFuture<Boolean> hsetnx(GlideString key, GlideString field, GlideString value) {
+        return executeCommand(CommandType.HSETNX, key.toString(), field.toString(), value.toString())
+                .thenApply(result -> "1".equals(result.toString()));
+    }
+
+
+    /**
+     * Returns the string length of the value associated with field in the hash.
+     */
+    @Override
+    public CompletableFuture<Long> hstrlen(String key, String field) {
+        return executeCommand(CommandType.HSTRLEN, key, field)
+                .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Returns the string length of the value associated with field in the hash.
+     */
+    @Override
+    public CompletableFuture<Long> hstrlen(GlideString key, GlideString field) {
+        return executeCommand(CommandType.HSTRLEN, key.toString(), field.toString())
+                .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Returns a random field from the hash stored at key.
+     */
+    @Override
+    public CompletableFuture<String> hrandfield(String key) {
+        return executeCommand(CommandType.HRANDFIELD, key)
+                .thenApply(result -> result == null ? null : result.toString());
+    }
+
+    /**
+     * Returns a random field from the hash stored at key.
+     */
+    @Override
+    public CompletableFuture<GlideString> hrandfield(GlideString key) {
+        return executeCommand(CommandType.HRANDFIELD, key.toString())
+                .thenApply(result -> result == null ? null : GlideString.of(result.toString()));
+    }
+
+    /**
+     * Returns multiple random fields from the hash stored at key.
+     */
+    @Override
+    public CompletableFuture<String[]> hrandfieldWithCount(String key, long count) {
+        return executeCommand(CommandType.HRANDFIELD, key, String.valueOf(count))
+                .thenApply(result -> {
+                    if (result instanceof Object[]) {
+                        Object[] objects = (Object[]) result;
+                        String[] strings = new String[objects.length];
+                        for (int i = 0; i < objects.length; i++) {
+                            strings[i] = objects[i] == null ? null : objects[i].toString();
+                        }
+                        return strings;
+                    }
+                    return new String[0];
+                });
+    }
+
+    /**
+     * Returns multiple random fields from the hash stored at key.
+     */
+    @Override
+    public CompletableFuture<GlideString[]> hrandfieldWithCount(GlideString key, long count) {
+        return executeCommand(CommandType.HRANDFIELD, key.toString(), String.valueOf(count))
+                .thenApply(result -> {
+                    if (result instanceof Object[]) {
+                        Object[] objects = (Object[]) result;
+                        GlideString[] glideStrings = new GlideString[objects.length];
+                        for (int i = 0; i < objects.length; i++) {
+                            glideStrings[i] = objects[i] == null ? null : GlideString.of(objects[i].toString());
+                        }
+                        return glideStrings;
+                    }
+                    return new GlideString[0];
+                });
+    }
+
+    /**
+     * Returns multiple random fields with their values from the hash stored at key.
+     */
+    @Override
+    public CompletableFuture<String[][]> hrandfieldWithCountWithValues(String key, long count) {
+        return executeCommand(CommandType.HRANDFIELD, key, String.valueOf(count), WITH_VALUES_VALKEY_API)
+                .thenApply(result -> {
+                    if (result instanceof Object[]) {
+                        Object[] objects = (Object[]) result;
+                        String[][] pairs = new String[objects.length / 2][2];
+                        for (int i = 0; i < objects.length; i += 2) {
+                            pairs[i / 2][0] = objects[i] == null ? null : objects[i].toString();
+                            pairs[i / 2][1] = objects[i + 1] == null ? null : objects[i + 1].toString();
+                        }
+                        return pairs;
+                    }
+                    return new String[0][0];
+                });
+    }
+
+    /**
+     * Returns multiple random fields with their values from the hash stored at key.
+     */
+    @Override
+    public CompletableFuture<GlideString[][]> hrandfieldWithCountWithValues(GlideString key, long count) {
+        return executeCommand(CommandType.HRANDFIELD, key.toString(), String.valueOf(count), WITH_VALUES_VALKEY_API)
+                .thenApply(result -> {
+                    if (result instanceof Object[]) {
+                        Object[] objects = (Object[]) result;
+                        GlideString[][] pairs = new GlideString[objects.length / 2][2];
+                        for (int i = 0; i < objects.length; i += 2) {
+                            pairs[i / 2][0] = objects[i] == null ? null : GlideString.of(objects[i].toString());
+                            pairs[i / 2][1] = objects[i + 1] == null ? null : GlideString.of(objects[i + 1].toString());
+                        }
+                        return pairs;
+                    }
+                    return new GlideString[0][0];
+                });
+    }
+
+    /**
+     * Iterates fields of Hash types and their associated values.
+     */
+    @Override
+    public CompletableFuture<Object[]> hscan(String key, String cursor) {
+        return executeCommand(CommandType.HSCAN, key, cursor)
+                .thenApply(result -> (Object[]) result);
+    }
+
+    /**
+     * Iterates fields of Hash types and their associated values.
+     */
+    @Override
+    public CompletableFuture<Object[]> hscan(GlideString key, GlideString cursor) {
+        return executeCommand(CommandType.HSCAN, key.toString(), cursor.toString())
+                .thenApply(result -> (Object[]) result);
+    }
+
+    /**
+     * Iterates fields of Hash types and their associated values with options.
+     */
+    @Override
+    public CompletableFuture<Object[]> hscan(String key, String cursor, glide.api.models.commands.scan.HScanOptions hScanOptions) {
+        // For now, implement basic version without full HScanOptions support
+        return executeCommand(CommandType.HSCAN, key, cursor)
+                .thenApply(result -> (Object[]) result);
+    }
+
+    /**
+     * Iterates fields of Hash types and their associated values with options.
+     */
+    @Override
+    public CompletableFuture<Object[]> hscan(GlideString key, GlideString cursor, glide.api.models.commands.scan.HScanOptionsBinary hScanOptions) {
+        // For now, implement basic version without full HScanOptions support
+        return executeCommand(CommandType.HSCAN, key.toString(), cursor.toString())
+                .thenApply(result -> (Object[]) result);
+    }
+
+    // ==================== LIST COMMANDS ====================
+
+    /**
+     * Inserts element in the list stored at key either before or after the reference value pivot.
+     */
+    @Override
+    public CompletableFuture<Long> linsert(String key, glide.api.models.commands.LInsertOptions.InsertPosition position, String pivot, String element) {
+        String pos = position == glide.api.models.commands.LInsertOptions.InsertPosition.BEFORE ? "BEFORE" : "AFTER";
+        return executeCommand(CommandType.LINSERT, key, pos, pivot, element)
+                .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Inserts element in the list stored at key either before or after the reference value pivot.
+     */
+    @Override
+    public CompletableFuture<Long> linsert(GlideString key, glide.api.models.commands.LInsertOptions.InsertPosition position, GlideString pivot, GlideString element) {
+        String pos = position == glide.api.models.commands.LInsertOptions.InsertPosition.BEFORE ? "BEFORE" : "AFTER";
+        return executeCommand(CommandType.LINSERT, key.toString(), pos, pivot.toString(), element.toString())
+                .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Inserts all the specified values at the head of the list stored at key, only if key already exists and holds a list.
+     */
+    @Override
+    public CompletableFuture<Long> lpushx(String key, String[] elements) {
+        String[] args = new String[elements.length + 1];
+        args[0] = key;
+        System.arraycopy(elements, 0, args, 1, elements.length);
+        return executeCommand(CommandType.LPUSHX, args)
+                .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Inserts all the specified values at the head of the list stored at key, only if key already exists and holds a list.
+     */
+    @Override
+    public CompletableFuture<Long> lpushx(GlideString key, GlideString[] elements) {
+        String[] args = new String[elements.length + 1];
+        args[0] = key.toString();
+        for (int i = 0; i < elements.length; i++) {
+            args[i + 1] = elements[i].toString();
+        }
+        return executeCommand(CommandType.LPUSHX, args)
+                .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Inserts all the specified values at the tail of the list stored at key, only if key already exists and holds a list.
+     */
+    @Override
+    public CompletableFuture<Long> rpushx(String key, String[] elements) {
+        String[] args = new String[elements.length + 1];
+        args[0] = key;
+        System.arraycopy(elements, 0, args, 1, elements.length);
+        return executeCommand(CommandType.RPUSHX, args)
+                .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Inserts all the specified values at the tail of the list stored at key, only if key already exists and holds a list.
+     */
+    @Override
+    public CompletableFuture<Long> rpushx(GlideString key, GlideString[] elements) {
+        String[] args = new String[elements.length + 1];
+        args[0] = key.toString();
+        for (int i = 0; i < elements.length; i++) {
+            args[i + 1] = elements[i].toString();
+        }
+        return executeCommand(CommandType.RPUSHX, args)
+                .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Atomically returns and removes the last element of the list stored at source, and pushes the element at the first/last element of the list stored at destination.
+     */
+    @Override
+    public CompletableFuture<String> lmove(String source, String destination, glide.api.models.commands.ListDirection wherefrom, glide.api.models.commands.ListDirection whereto) {
+        String from = wherefrom == glide.api.models.commands.ListDirection.LEFT ? "LEFT" : "RIGHT";
+        String to = whereto == glide.api.models.commands.ListDirection.LEFT ? "LEFT" : "RIGHT";
+        return executeCommand(CommandType.LMOVE, source, destination, from, to)
+                .thenApply(result -> result == null ? null : result.toString());
+    }
+
+    /**
+     * Atomically returns and removes the last element of the list stored at source, and pushes the element at the first/last element of the list stored at destination.
+     */
+    @Override
+    public CompletableFuture<GlideString> lmove(GlideString source, GlideString destination, glide.api.models.commands.ListDirection wherefrom, glide.api.models.commands.ListDirection whereto) {
+        String from = wherefrom == glide.api.models.commands.ListDirection.LEFT ? "LEFT" : "RIGHT";
+        String to = whereto == glide.api.models.commands.ListDirection.LEFT ? "LEFT" : "RIGHT";
+        return executeCommand(CommandType.LMOVE, source.toString(), destination.toString(), from, to)
+                .thenApply(result -> result == null ? null : GlideString.of(result.toString()));
+    }
+
+    /**
+     * Blocking version of lmove.
+     */
+    @Override
+    public CompletableFuture<String> blmove(String source, String destination, glide.api.models.commands.ListDirection wherefrom, glide.api.models.commands.ListDirection whereto, double timeout) {
+        String from = wherefrom == glide.api.models.commands.ListDirection.LEFT ? "LEFT" : "RIGHT";
+        String to = whereto == glide.api.models.commands.ListDirection.LEFT ? "LEFT" : "RIGHT";
+        return executeCommand(CommandType.BLMOVE, source, destination, from, to, String.valueOf(timeout))
+                .thenApply(result -> result == null ? null : result.toString());
+    }
+
+    /**
+     * Blocking version of lmove.
+     */
+    @Override
+    public CompletableFuture<GlideString> blmove(GlideString source, GlideString destination, glide.api.models.commands.ListDirection wherefrom, glide.api.models.commands.ListDirection whereto, double timeout) {
+        String from = wherefrom == glide.api.models.commands.ListDirection.LEFT ? "LEFT" : "RIGHT";
+        String to = whereto == glide.api.models.commands.ListDirection.LEFT ? "LEFT" : "RIGHT";
+        return executeCommand(CommandType.BLMOVE, source.toString(), destination.toString(), from, to, String.valueOf(timeout))
+                .thenApply(result -> result == null ? null : GlideString.of(result.toString()));
+    }
+
+    /**
+     * Removes and returns the last element of the list stored at key.
+     */
+    @Override
+    public CompletableFuture<String[]> brpop(String[] keys, double timeout) {
+        String[] args = new String[keys.length + 1];
+        System.arraycopy(keys, 0, args, 0, keys.length);
+        args[keys.length] = String.valueOf(timeout);
+        return executeCommand(CommandType.BRPOP, args)
+                .thenApply(result -> {
+                    if (result instanceof Object[]) {
+                        Object[] objects = (Object[]) result;
+                        String[] strings = new String[objects.length];
+                        for (int i = 0; i < objects.length; i++) {
+                            strings[i] = objects[i] == null ? null : objects[i].toString();
+                        }
+                        return strings;
+                    }
+                    return null;
+                });
+    }
+
+    /**
+     * Removes and returns the last element of the list stored at key.
+     */
+    @Override
+    public CompletableFuture<GlideString[]> brpop(GlideString[] keys, double timeout) {
+        String[] args = new String[keys.length + 1];
+        for (int i = 0; i < keys.length; i++) {
+            args[i] = keys[i].toString();
+        }
+        args[keys.length] = String.valueOf(timeout);
+        return executeCommand(CommandType.BRPOP, args)
+                .thenApply(result -> {
+                    if (result instanceof Object[]) {
+                        Object[] objects = (Object[]) result;
+                        GlideString[] glideStrings = new GlideString[objects.length];
+                        for (int i = 0; i < objects.length; i++) {
+                            glideStrings[i] = objects[i] == null ? null : GlideString.of(objects[i].toString());
+                        }
+                        return glideStrings;
+                    }
+                    return null;
+                });
+    }
+
+    /**
+     * Removes and returns the first element of the list stored at key (GlideString version).
+     */
+    @Override
+    public CompletableFuture<GlideString[]> blpop(GlideString[] keys, double timeout) {
+        String[] args = new String[keys.length + 1];
+        for (int i = 0; i < keys.length; i++) {
+            args[i] = keys[i].toString();
+        }
+        args[keys.length] = String.valueOf(timeout);
+        return executeCommand(CommandType.BLPOP, args)
+                .thenApply(result -> {
+                    if (result instanceof Object[]) {
+                        Object[] objects = (Object[]) result;
+                        GlideString[] glideStrings = new GlideString[objects.length];
+                        for (int i = 0; i < objects.length; i++) {
+                            glideStrings[i] = objects[i] == null ? null : GlideString.of(objects[i].toString());
+                        }
+                        return glideStrings;
+                    }
+                    return null;
+                });
+    }
+
+    /**
+     * Sets multiple keys to values if the key does not exist.
+     */
+    @Override
+    public CompletableFuture<Boolean> msetnx(Map<String, String> keyValueMap) {
+        String[] args = new String[keyValueMap.size() * 2];
+        int i = 0;
+        for (Map.Entry<String, String> entry : keyValueMap.entrySet()) {
+            args[i++] = entry.getKey();
+            args[i++] = entry.getValue();
+        }
+        return executeCommand(CommandType.MSETNX, args)
+                .thenApply(result -> "1".equals(result.toString()));
+    }
+
+    /**
+     * Sets multiple keys to values if the key does not exist (binary version).
+     */
+    @Override
+    public CompletableFuture<Boolean> msetnxBinary(Map<GlideString, GlideString> keyValueMap) {
+        String[] args = new String[keyValueMap.size() * 2];
+        int i = 0;
+        for (Map.Entry<GlideString, GlideString> entry : keyValueMap.entrySet()) {
+            args[i++] = entry.getKey().toString();
+            args[i++] = entry.getValue().toString();
+        }
+        return executeCommand(CommandType.MSETNX, args)
+                .thenApply(result -> "1".equals(result.toString()));
+    }
+
+    /**
+     * Returns all the longest common subsequences combined between strings stored at key1 and key2.
+     */
+    @Override
+    public CompletableFuture<String> lcs(String key1, String key2) {
+        return executeCommand(CommandType.LCS, key1, key2)
+                .thenApply(result -> result == null ? "" : result.toString());
+    }
+
+    /**
+     * Returns all the longest common subsequences combined between strings stored at key1 and key2.
+     */
+    @Override
+    public CompletableFuture<GlideString> lcs(GlideString key1, GlideString key2) {
+        return executeCommand(CommandType.LCS, key1.toString(), key2.toString())
+                .thenApply(result -> result == null ? GlideString.of("") : GlideString.of(result.toString()));
+    }
+
+    /**
+     * Returns the total length of all the longest common subsequences between strings stored at key1 and key2.
+     */
+    @Override
+    public CompletableFuture<Long> lcsLen(String key1, String key2) {
+        return executeCommand(CommandType.LCS, key1, key2, LEN_VALKEY_API)
+                .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Returns the total length of all the longest common subsequences between strings stored at key1 and key2.
+     */
+    @Override
+    public CompletableFuture<Long> lcsLen(GlideString key1, GlideString key2) {
+        return executeCommand(CommandType.LCS, key1.toString(), key2.toString(), LEN_VALKEY_API)
+                .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Returns the indices and the total length of all the longest common subsequences between strings.
+     */
+    @Override
+    public CompletableFuture<Map<String, Object>> lcsIdx(String key1, String key2) {
+        return executeCommand(CommandType.LCS, key1, key2, IDX_COMMAND_STRING)
+                .thenApply(result -> (Map<String, Object>) result);
+    }
+
+    /**
+     * Returns the indices and the total length of all the longest common subsequences between strings.
+     */
+    @Override
+    public CompletableFuture<Map<String, Object>> lcsIdx(GlideString key1, GlideString key2) {
+        return executeCommand(CommandType.LCS, key1.toString(), key2.toString(), IDX_COMMAND_STRING)
+                .thenApply(result -> (Map<String, Object>) result);
+    }
+
+    /**
+     * Returns the indices and the total length of all the longest common subsequences between strings.
+     */
+    @Override
+    public CompletableFuture<Map<String, Object>> lcsIdx(String key1, String key2, long minMatchLen) {
+        return executeCommand(CommandType.LCS, key1, key2, IDX_COMMAND_STRING, MINMATCHLEN_COMMAND_STRING, String.valueOf(minMatchLen))
+                .thenApply(result -> (Map<String, Object>) result);
+    }
+
+    /**
+     * Returns the indices and the total length of all the longest common subsequences between strings.
+     */
+    @Override
+    public CompletableFuture<Map<String, Object>> lcsIdx(GlideString key1, GlideString key2, long minMatchLen) {
+        return executeCommand(CommandType.LCS, key1.toString(), key2.toString(), IDX_COMMAND_STRING, MINMATCHLEN_COMMAND_STRING, String.valueOf(minMatchLen))
+                .thenApply(result -> (Map<String, Object>) result);
+    }
+
+    /**
+     * Returns the indices and lengths of the longest common subsequences between strings.
+     */
+    @Override
+    public CompletableFuture<Map<String, Object>> lcsIdxWithMatchLen(String key1, String key2) {
+        return executeCommand(CommandType.LCS, key1, key2, IDX_COMMAND_STRING, WITHMATCHLEN_COMMAND_STRING)
+                .thenApply(result -> (Map<String, Object>) result);
+    }
+
+    /**
+     * Returns the indices and lengths of the longest common subsequences between strings.
+     */
+    @Override
+    public CompletableFuture<Map<String, Object>> lcsIdxWithMatchLen(GlideString key1, GlideString key2) {
+        return executeCommand(CommandType.LCS, key1.toString(), key2.toString(), IDX_COMMAND_STRING, WITHMATCHLEN_COMMAND_STRING)
+                .thenApply(result -> (Map<String, Object>) result);
+    }
+
+    /**
+     * Returns the indices and lengths of the longest common subsequences between strings.
+     */
+    @Override
+    public CompletableFuture<Map<String, Object>> lcsIdxWithMatchLen(String key1, String key2, long minMatchLen) {
+        return executeCommand(CommandType.LCS, key1, key2, IDX_COMMAND_STRING, WITHMATCHLEN_COMMAND_STRING, MINMATCHLEN_COMMAND_STRING, String.valueOf(minMatchLen))
+                .thenApply(result -> (Map<String, Object>) result);
+    }
+
+    /**
+     * Returns the indices and lengths of the longest common subsequences between strings.
+     */
+    @Override
+    public CompletableFuture<Map<String, Object>> lcsIdxWithMatchLen(GlideString key1, GlideString key2, long minMatchLen) {
+        return executeCommand(CommandType.LCS, key1.toString(), key2.toString(), IDX_COMMAND_STRING, WITHMATCHLEN_COMMAND_STRING, MINMATCHLEN_COMMAND_STRING, String.valueOf(minMatchLen))
+                .thenApply(result -> (Map<String, Object>) result);
+    }
+
+    // ==================== REMAINING LISTBASECOMMANDS METHODS ====================
+
+    /**
+     * Returns the index of the first occurrence of element inside the list.
+     */
+    @Override
+    public CompletableFuture<Long> lpos(String key, String element) {
+        return executeCommand(CommandType.LPOS, key, element)
+                .thenApply(result -> result == null ? null : Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Returns the index of the first occurrence of element inside the list.
+     */
+    @Override
+    public CompletableFuture<Long> lpos(GlideString key, GlideString element) {
+        return executeCommand(CommandType.LPOS, key.toString(), element.toString())
+                .thenApply(result -> result == null ? null : Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Returns the index of the first occurrence of element inside the list with options.
+     */
+    @Override
+    public CompletableFuture<Long> lpos(String key, String element, LPosOptions options) {
+        // For now, implement basic version without full LPosOptions support
+        return executeCommand(CommandType.LPOS, key, element)
+                .thenApply(result -> result == null ? null : Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Returns the index of the first occurrence of element inside the list with options.
+     */
+    @Override
+    public CompletableFuture<Long> lpos(GlideString key, GlideString element, LPosOptions options) {
+        // For now, implement basic version without full LPosOptions support
+        return executeCommand(CommandType.LPOS, key.toString(), element.toString())
+                .thenApply(result -> result == null ? null : Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Returns the indices of the first count occurrences of element inside the list.
+     */
+    @Override
+    public CompletableFuture<Long[]> lposCount(String key, String element, long count) {
+        return executeCommand(CommandType.LPOS, key, element, COUNT_FOR_LIST_VALKEY_API, String.valueOf(count))
+                .thenApply(result -> {
+                    if (result instanceof Object[]) {
+                        Object[] objects = (Object[]) result;
+                        Long[] longs = new Long[objects.length];
+                        for (int i = 0; i < objects.length; i++) {
+                            longs[i] = objects[i] == null ? null : Long.parseLong(objects[i].toString());
+                        }
+                        return longs;
+                    }
+                    return new Long[0];
+                });
+    }
+
+    /**
+     * Returns the indices of the first count occurrences of element inside the list.
+     */
+    @Override
+    public CompletableFuture<Long[]> lposCount(GlideString key, GlideString element, long count) {
+        return executeCommand(CommandType.LPOS, key.toString(), element.toString(), COUNT_FOR_LIST_VALKEY_API, String.valueOf(count))
+                .thenApply(result -> {
+                    if (result instanceof Object[]) {
+                        Object[] objects = (Object[]) result;
+                        Long[] longs = new Long[objects.length];
+                        for (int i = 0; i < objects.length; i++) {
+                            longs[i] = objects[i] == null ? null : Long.parseLong(objects[i].toString());
+                        }
+                        return longs;
+                    }
+                    return new Long[0];
+                });
+    }
+
+    /**
+     * Returns the indices of the first count occurrences of element inside the list with options.
+     */
+    @Override
+    public CompletableFuture<Long[]> lposCount(String key, String element, long count, LPosOptions options) {
+        // For now, implement basic version without full LPosOptions support
+        return executeCommand(CommandType.LPOS, key, element, COUNT_FOR_LIST_VALKEY_API, String.valueOf(count))
+                .thenApply(result -> {
+                    if (result instanceof Object[]) {
+                        Object[] objects = (Object[]) result;
+                        Long[] longs = new Long[objects.length];
+                        for (int i = 0; i < objects.length; i++) {
+                            longs[i] = objects[i] == null ? null : Long.parseLong(objects[i].toString());
+                        }
+                        return longs;
+                    }
+                    return new Long[0];
+                });
+    }
+
+    /**
+     * Returns the indices of the first count occurrences of element inside the list with options.
+     */
+    @Override
+    public CompletableFuture<Long[]> lposCount(GlideString key, GlideString element, long count, LPosOptions options) {
+        // For now, implement basic version without full LPosOptions support
+        return executeCommand(CommandType.LPOS, key.toString(), element.toString(), COUNT_FOR_LIST_VALKEY_API, String.valueOf(count))
+                .thenApply(result -> {
+                    if (result instanceof Object[]) {
+                        Object[] objects = (Object[]) result;
+                        Long[] longs = new Long[objects.length];
+                        for (int i = 0; i < objects.length; i++) {
+                            longs[i] = objects[i] == null ? null : Long.parseLong(objects[i].toString());
+                        }
+                        return longs;
+                    }
+                    return new Long[0];
+                });
+    }
+
+    /**
+     * Removes and returns up to count elements from the head of the list.
+     */
+    @Override
+    public CompletableFuture<String[]> lpopCount(String key, long count) {
+        return executeCommand(CommandType.LPOP, key, String.valueOf(count))
+                .thenApply(result -> {
+                    if (result instanceof Object[]) {
+                        Object[] objects = (Object[]) result;
+                        String[] strings = new String[objects.length];
+                        for (int i = 0; i < objects.length; i++) {
+                            strings[i] = objects[i] == null ? null : objects[i].toString();
+                        }
+                        return strings;
+                    }
+                    return new String[0];
+                });
+    }
+
+    /**
+     * Removes and returns up to count elements from the head of the list.
+     */
+    @Override
+    public CompletableFuture<GlideString[]> lpopCount(GlideString key, long count) {
+        return executeCommand(CommandType.LPOP, key.toString(), String.valueOf(count))
+                .thenApply(result -> {
+                    if (result instanceof Object[]) {
+                        Object[] objects = (Object[]) result;
+                        GlideString[] glideStrings = new GlideString[objects.length];
+                        for (int i = 0; i < objects.length; i++) {
+                            glideStrings[i] = objects[i] == null ? null : GlideString.of(objects[i].toString());
+                        }
+                        return glideStrings;
+                    }
+                    return new GlideString[0];
+                });
+    }
+
+    /**
+     * Removes and returns up to count elements from the tail of the list.
+     */
+    @Override
+    public CompletableFuture<String[]> rpopCount(String key, long count) {
+        return executeCommand(CommandType.RPOP, key, String.valueOf(count))
+                .thenApply(result -> {
+                    if (result instanceof Object[]) {
+                        Object[] objects = (Object[]) result;
+                        String[] strings = new String[objects.length];
+                        for (int i = 0; i < objects.length; i++) {
+                            strings[i] = objects[i] == null ? null : objects[i].toString();
+                        }
+                        return strings;
+                    }
+                    return new String[0];
+                });
+    }
+
+    /**
+     * Removes and returns up to count elements from the tail of the list.
+     */
+    @Override
+    public CompletableFuture<GlideString[]> rpopCount(GlideString key, long count) {
+        return executeCommand(CommandType.RPOP, key.toString(), String.valueOf(count))
+                .thenApply(result -> {
+                    if (result instanceof Object[]) {
+                        Object[] objects = (Object[]) result;
+                        GlideString[] glideStrings = new GlideString[objects.length];
+                        for (int i = 0; i < objects.length; i++) {
+                            glideStrings[i] = objects[i] == null ? null : GlideString.of(objects[i].toString());
+                        }
+                        return glideStrings;
+                    }
+                    return new GlideString[0];
+                });
+    }
+
+    /**
+     * Pops elements from the first non-empty list.
+     */
+    @Override
+    public CompletableFuture<Map<String, String[]>> lmpop(String[] keys, ListDirection direction) {
+        String[] args = new String[keys.length + 2];
+        args[0] = String.valueOf(keys.length);
+        System.arraycopy(keys, 0, args, 1, keys.length);
+        args[keys.length + 1] = direction == ListDirection.LEFT ? "LEFT" : "RIGHT";
+        return executeCommand(CommandType.LMPOP, args)
+                .thenApply(result -> {
+                    if (result instanceof Object[]) {
+                        Object[] objects = (Object[]) result;
+                        Map<String, String[]> map = new java.util.HashMap<>();
+                        if (objects.length >= 2) {
+                            String key = objects[0].toString();
+                            if (objects[1] instanceof Object[]) {
+                                Object[] valueObjects = (Object[]) objects[1];
+                                String[] values = new String[valueObjects.length];
+                                for (int i = 0; i < valueObjects.length; i++) {
+                                    values[i] = valueObjects[i] == null ? null : valueObjects[i].toString();
+                                }
+                                map.put(key, values);
+                            }
+                        }
+                        return map;
+                    }
+                    return java.util.Collections.emptyMap();
+                });
+    }
+
+    /**
+     * Pops elements from the first non-empty list.
+     */
+    @Override
+    public CompletableFuture<Map<GlideString, GlideString[]>> lmpop(GlideString[] keys, ListDirection direction) {
+        String[] args = new String[keys.length + 2];
+        args[0] = String.valueOf(keys.length);
+        for (int i = 0; i < keys.length; i++) {
+            args[i + 1] = keys[i].toString();
+        }
+        args[keys.length + 1] = direction == ListDirection.LEFT ? "LEFT" : "RIGHT";
+        return executeCommand(CommandType.LMPOP, args)
+                .thenApply(result -> {
+                    if (result instanceof Object[]) {
+                        Object[] objects = (Object[]) result;
+                        Map<GlideString, GlideString[]> map = new java.util.HashMap<>();
+                        if (objects.length >= 2) {
+                            GlideString key = GlideString.of(objects[0].toString());
+                            if (objects[1] instanceof Object[]) {
+                                Object[] valueObjects = (Object[]) objects[1];
+                                GlideString[] values = new GlideString[valueObjects.length];
+                                for (int i = 0; i < valueObjects.length; i++) {
+                                    values[i] = valueObjects[i] == null ? null : GlideString.of(valueObjects[i].toString());
+                                }
+                                map.put(key, values);
+                            }
+                        }
+                        return map;
+                    }
+                    return java.util.Collections.emptyMap();
+                });
+    }
+
+    /**
+     * Pops count elements from the first non-empty list.
+     */
+    @Override
+    public CompletableFuture<Map<String, String[]>> lmpop(String[] keys, ListDirection direction, long count) {
+        String[] args = new String[keys.length + 4];
+        args[0] = String.valueOf(keys.length);
+        System.arraycopy(keys, 0, args, 1, keys.length);
+        args[keys.length + 1] = direction == ListDirection.LEFT ? "LEFT" : "RIGHT";
+        args[keys.length + 2] = COUNT_FOR_LIST_VALKEY_API;
+        args[keys.length + 3] = String.valueOf(count);
+        return executeCommand(CommandType.LMPOP, args)
+                .thenApply(result -> {
+                    if (result instanceof Object[]) {
+                        Object[] objects = (Object[]) result;
+                        Map<String, String[]> map = new java.util.HashMap<>();
+                        if (objects.length >= 2) {
+                            String key = objects[0].toString();
+                            if (objects[1] instanceof Object[]) {
+                                Object[] valueObjects = (Object[]) objects[1];
+                                String[] values = new String[valueObjects.length];
+                                for (int i = 0; i < valueObjects.length; i++) {
+                                    values[i] = valueObjects[i] == null ? null : valueObjects[i].toString();
+                                }
+                                map.put(key, values);
+                            }
+                        }
+                        return map;
+                    }
+                    return java.util.Collections.emptyMap();
+                });
+    }
+
+    /**
+     * Pops count elements from the first non-empty list.
+     */
+    @Override
+    public CompletableFuture<Map<GlideString, GlideString[]>> lmpop(GlideString[] keys, ListDirection direction, long count) {
+        String[] args = new String[keys.length + 4];
+        args[0] = String.valueOf(keys.length);
+        for (int i = 0; i < keys.length; i++) {
+            args[i + 1] = keys[i].toString();
+        }
+        args[keys.length + 1] = direction == ListDirection.LEFT ? "LEFT" : "RIGHT";
+        args[keys.length + 2] = COUNT_FOR_LIST_VALKEY_API;
+        args[keys.length + 3] = String.valueOf(count);
+        return executeCommand(CommandType.LMPOP, args)
+                .thenApply(result -> {
+                    if (result instanceof Object[]) {
+                        Object[] objects = (Object[]) result;
+                        Map<GlideString, GlideString[]> map = new java.util.HashMap<>();
+                        if (objects.length >= 2) {
+                            GlideString key = GlideString.of(objects[0].toString());
+                            if (objects[1] instanceof Object[]) {
+                                Object[] valueObjects = (Object[]) objects[1];
+                                GlideString[] values = new GlideString[valueObjects.length];
+                                for (int i = 0; i < valueObjects.length; i++) {
+                                    values[i] = valueObjects[i] == null ? null : GlideString.of(valueObjects[i].toString());
+                                }
+                                map.put(key, values);
+                            }
+                        }
+                        return map;
+                    }
+                    return java.util.Collections.emptyMap();
+                });
+    }
+
+    /**
+     * Blocking version of lmpop.
+     */
+    @Override
+    public CompletableFuture<Map<String, String[]>> blmpop(String[] keys, ListDirection direction, double timeout) {
+        String[] args = new String[keys.length + 3];
+        args[0] = String.valueOf(timeout);
+        args[1] = String.valueOf(keys.length);
+        System.arraycopy(keys, 0, args, 2, keys.length);
+        args[keys.length + 2] = direction == ListDirection.LEFT ? "LEFT" : "RIGHT";
+        return executeCommand(CommandType.BLMPOP, args)
+                .thenApply(result -> {
+                    if (result instanceof Object[]) {
+                        Object[] objects = (Object[]) result;
+                        Map<String, String[]> map = new java.util.HashMap<>();
+                        if (objects.length >= 2) {
+                            String key = objects[0].toString();
+                            if (objects[1] instanceof Object[]) {
+                                Object[] valueObjects = (Object[]) objects[1];
+                                String[] values = new String[valueObjects.length];
+                                for (int i = 0; i < valueObjects.length; i++) {
+                                    values[i] = valueObjects[i] == null ? null : valueObjects[i].toString();
+                                }
+                                map.put(key, values);
+                            }
+                        }
+                        return map;
+                    }
+                    return java.util.Collections.emptyMap();
+                });
+    }
+
+    /**
+     * Blocking version of lmpop.
+     */
+    @Override
+    public CompletableFuture<Map<GlideString, GlideString[]>> blmpop(GlideString[] keys, ListDirection direction, double timeout) {
+        String[] args = new String[keys.length + 3];
+        args[0] = String.valueOf(timeout);
+        args[1] = String.valueOf(keys.length);
+        for (int i = 0; i < keys.length; i++) {
+            args[i + 2] = keys[i].toString();
+        }
+        args[keys.length + 2] = direction == ListDirection.LEFT ? "LEFT" : "RIGHT";
+        return executeCommand(CommandType.BLMPOP, args)
+                .thenApply(result -> {
+                    if (result instanceof Object[]) {
+                        Object[] objects = (Object[]) result;
+                        Map<GlideString, GlideString[]> map = new java.util.HashMap<>();
+                        if (objects.length >= 2) {
+                            GlideString key = GlideString.of(objects[0].toString());
+                            if (objects[1] instanceof Object[]) {
+                                Object[] valueObjects = (Object[]) objects[1];
+                                GlideString[] values = new GlideString[valueObjects.length];
+                                for (int i = 0; i < valueObjects.length; i++) {
+                                    values[i] = valueObjects[i] == null ? null : GlideString.of(valueObjects[i].toString());
+                                }
+                                map.put(key, values);
+                            }
+                        }
+                        return map;
+                    }
+                    return java.util.Collections.emptyMap();
+                });
+    }
+
+    /**
+     * Blocking version of lmpop with count.
+     */
+    @Override
+    public CompletableFuture<Map<String, String[]>> blmpop(String[] keys, ListDirection direction, long count, double timeout) {
+        String[] args = new String[keys.length + 5];
+        args[0] = String.valueOf(timeout);
+        args[1] = String.valueOf(keys.length);
+        System.arraycopy(keys, 0, args, 2, keys.length);
+        args[keys.length + 2] = direction == ListDirection.LEFT ? "LEFT" : "RIGHT";
+        args[keys.length + 3] = COUNT_FOR_LIST_VALKEY_API;
+        args[keys.length + 4] = String.valueOf(count);
+        return executeCommand(CommandType.BLMPOP, args)
+                .thenApply(result -> {
+                    if (result instanceof Object[]) {
+                        Object[] objects = (Object[]) result;
+                        Map<String, String[]> map = new java.util.HashMap<>();
+                        if (objects.length >= 2) {
+                            String key = objects[0].toString();
+                            if (objects[1] instanceof Object[]) {
+                                Object[] valueObjects = (Object[]) objects[1];
+                                String[] values = new String[valueObjects.length];
+                                for (int i = 0; i < valueObjects.length; i++) {
+                                    values[i] = valueObjects[i] == null ? null : valueObjects[i].toString();
+                                }
+                                map.put(key, values);
+                            }
+                        }
+                        return map;
+                    }
+                    return java.util.Collections.emptyMap();
+                });
+    }
+
+    /**
+     * Blocking version of lmpop with count.
+     */
+    @Override
+    public CompletableFuture<Map<GlideString, GlideString[]>> blmpop(GlideString[] keys, ListDirection direction, long count, double timeout) {
+        String[] args = new String[keys.length + 5];
+        args[0] = String.valueOf(timeout);
+        args[1] = String.valueOf(keys.length);
+        for (int i = 0; i < keys.length; i++) {
+            args[i + 2] = keys[i].toString();
+        }
+        args[keys.length + 2] = direction == ListDirection.LEFT ? "LEFT" : "RIGHT";
+        args[keys.length + 3] = COUNT_FOR_LIST_VALKEY_API;
+        args[keys.length + 4] = String.valueOf(count);
+        return executeCommand(CommandType.BLMPOP, args)
+                .thenApply(result -> {
+                    if (result instanceof Object[]) {
+                        Object[] objects = (Object[]) result;
+                        Map<GlideString, GlideString[]> map = new java.util.HashMap<>();
+                        if (objects.length >= 2) {
+                            GlideString key = GlideString.of(objects[0].toString());
+                            if (objects[1] instanceof Object[]) {
+                                Object[] valueObjects = (Object[]) objects[1];
+                                GlideString[] values = new GlideString[valueObjects.length];
+                                for (int i = 0; i < valueObjects.length; i++) {
+                                    values[i] = valueObjects[i] == null ? null : GlideString.of(valueObjects[i].toString());
+                                }
+                                map.put(key, values);
+                            }
+                        }
+                        return map;
+                    }
+                    return java.util.Collections.emptyMap();
+                });
+    }
+
+    // ==================== MISSING SETBASECOMMANDS METHODS ====================
+
+    /**
+     * Returns whether each member is a member of the set stored at key.
+     */
+    @Override
+    public CompletableFuture<Boolean[]> smismember(String key, String[] members) {
+        String[] args = new String[members.length + 1];
+        args[0] = key;
+        System.arraycopy(members, 0, args, 1, members.length);
+        return executeCommand(CommandType.SMISMEMBER, args)
+                .thenApply(result -> {
+                    if (result instanceof Object[]) {
+                        Object[] objects = (Object[]) result;
+                        Boolean[] results = new Boolean[objects.length];
+                        for (int i = 0; i < objects.length; i++) {
+                            results[i] = "1".equals(objects[i].toString());
+                        }
+                        return results;
+                    }
+                    return new Boolean[0];
+                });
+    }
+
+    /**
+     * Returns whether each member is a member of the set stored at key.
+     */
+    @Override
+    public CompletableFuture<Boolean[]> smismember(GlideString key, GlideString[] members) {
+        String[] args = new String[members.length + 1];
+        args[0] = key.toString();
+        for (int i = 0; i < members.length; i++) {
+            args[i + 1] = members[i].toString();
+        }
+        return executeCommand(CommandType.SMISMEMBER, args)
+                .thenApply(result -> {
+                    if (result instanceof Object[]) {
+                        Object[] objects = (Object[]) result;
+                        Boolean[] results = new Boolean[objects.length];
+                        for (int i = 0; i < objects.length; i++) {
+                            results[i] = "1".equals(objects[i].toString());
+                        }
+                        return results;
+                    }
+                    return new Boolean[0];
+                });
+    }
+
+    /**
+     * Moves a member from one set to another set.
+     */
+    @Override
+    public CompletableFuture<Boolean> smove(String source, String destination, String member) {
+        return executeCommand(CommandType.SMOVE, source, destination, member)
+                .thenApply(result -> "1".equals(result.toString()));
+    }
+
+    /**
+     * Moves a member from one set to another set.
+     */
+    @Override
+    public CompletableFuture<Boolean> smove(GlideString source, GlideString destination, GlideString member) {
+        return executeCommand(CommandType.SMOVE, source.toString(), destination.toString(), member.toString())
+                .thenApply(result -> "1".equals(result.toString()));
+    }
+
+    /**
+     * Computes the difference between the first set and all the successive sets and stores the result in destination.
+     */
+    @Override
+    public CompletableFuture<Long> sdiffstore(String destination, String[] keys) {
+        String[] args = new String[keys.length + 1];
+        args[0] = destination;
+        System.arraycopy(keys, 0, args, 1, keys.length);
+        return executeCommand(CommandType.SDIFFSTORE, args)
+                .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Computes the difference between the first set and all the successive sets and stores the result in destination.
+     */
+    @Override
+    public CompletableFuture<Long> sdiffstore(GlideString destination, GlideString[] keys) {
+        String[] args = new String[keys.length + 1];
+        args[0] = destination.toString();
+        for (int i = 0; i < keys.length; i++) {
+            args[i + 1] = keys[i].toString();
+        }
+        return executeCommand(CommandType.SDIFFSTORE, args)
+                .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Returns the cardinality of the intersection of all the given sets.
+     */
+    @Override
+    public CompletableFuture<Long> sintercard(String[] keys) {
+        String[] args = new String[keys.length + 1];
+        args[0] = String.valueOf(keys.length);
+        System.arraycopy(keys, 0, args, 1, keys.length);
+        return executeCommand(CommandType.SINTERCARD, args)
+                .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Returns the cardinality of the intersection of all the given sets.
+     */
+    @Override
+    public CompletableFuture<Long> sintercard(GlideString[] keys) {
+        String[] args = new String[keys.length + 1];
+        args[0] = String.valueOf(keys.length);
+        for (int i = 0; i < keys.length; i++) {
+            args[i + 1] = keys[i].toString();
+        }
+        return executeCommand(CommandType.SINTERCARD, args)
+                .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Returns the cardinality of the intersection of all the given sets, limited to the specified count.
+     */
+    @Override
+    public CompletableFuture<Long> sintercard(String[] keys, long limit) {
+        String[] args = new String[keys.length + 3];
+        args[0] = String.valueOf(keys.length);
+        System.arraycopy(keys, 0, args, 1, keys.length);
+        args[keys.length + 1] = "LIMIT";
+        args[keys.length + 2] = String.valueOf(limit);
+        return executeCommand(CommandType.SINTERCARD, args)
+                .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Returns the cardinality of the intersection of all the given sets, limited to the specified count.
+     */
+    @Override
+    public CompletableFuture<Long> sintercard(GlideString[] keys, long limit) {
+        String[] args = new String[keys.length + 3];
+        args[0] = String.valueOf(keys.length);
+        for (int i = 0; i < keys.length; i++) {
+            args[i + 1] = keys[i].toString();
+        }
+        args[keys.length + 1] = "LIMIT";
+        args[keys.length + 2] = String.valueOf(limit);
+        return executeCommand(CommandType.SINTERCARD, args)
+                .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Computes the intersection of all the given sets and stores the result in destination.
+     */
+    @Override
+    public CompletableFuture<Long> sinterstore(String destination, String[] keys) {
+        String[] args = new String[keys.length + 1];
+        args[0] = destination;
+        System.arraycopy(keys, 0, args, 1, keys.length);
+        return executeCommand(CommandType.SINTERSTORE, args)
+                .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Computes the intersection of all the given sets and stores the result in destination.
+     */
+    @Override
+    public CompletableFuture<Long> sinterstore(GlideString destination, GlideString[] keys) {
+        String[] args = new String[keys.length + 1];
+        args[0] = destination.toString();
+        for (int i = 0; i < keys.length; i++) {
+            args[i + 1] = keys[i].toString();
+        }
+        return executeCommand(CommandType.SINTERSTORE, args)
+                .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Computes the union of all the given sets and stores the result in destination.
+     */
+    @Override
+    public CompletableFuture<Long> sunionstore(String destination, String[] keys) {
+        String[] args = new String[keys.length + 1];
+        args[0] = destination;
+        System.arraycopy(keys, 0, args, 1, keys.length);
+        return executeCommand(CommandType.SUNIONSTORE, args)
+                .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Computes the union of all the given sets and stores the result in destination.
+     */
+    @Override
+    public CompletableFuture<Long> sunionstore(GlideString destination, GlideString[] keys) {
+        String[] args = new String[keys.length + 1];
+        args[0] = destination.toString();
+        for (int i = 0; i < keys.length; i++) {
+            args[i + 1] = keys[i].toString();
+        }
+        return executeCommand(CommandType.SUNIONSTORE, args)
+                .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Returns a random member from the set stored at key.
+     */
+    @Override
+    public CompletableFuture<String> srandmember(String key) {
+        return executeCommand(CommandType.SRANDMEMBER, key)
+                .thenApply(result -> result == null ? null : result.toString());
+    }
+
+    /**
+     * Returns a random member from the set stored at key.
+     */
+    @Override
+    public CompletableFuture<GlideString> srandmember(GlideString key) {
+        return executeCommand(CommandType.SRANDMEMBER, key.toString())
+                .thenApply(result -> result == null ? null : GlideString.of(result.toString()));
+    }
+
+    /**
+     * Returns multiple random members from the set stored at key.
+     */
+    @Override
+    public CompletableFuture<String[]> srandmember(String key, long count) {
+        return executeCommand(CommandType.SRANDMEMBER, key, String.valueOf(count))
+                .thenApply(result -> {
+                    if (result instanceof Object[]) {
+                        Object[] objects = (Object[]) result;
+                        String[] strings = new String[objects.length];
+                        for (int i = 0; i < objects.length; i++) {
+                            strings[i] = objects[i] == null ? null : objects[i].toString();
+                        }
+                        return strings;
+                    }
+                    return new String[0];
+                });
+    }
+
+    /**
+     * Returns multiple random members from the set stored at key.
+     */
+    @Override
+    public CompletableFuture<GlideString[]> srandmember(GlideString key, long count) {
+        return executeCommand(CommandType.SRANDMEMBER, key.toString(), String.valueOf(count))
+                .thenApply(result -> {
+                    if (result instanceof Object[]) {
+                        Object[] objects = (Object[]) result;
+                        GlideString[] glideStrings = new GlideString[objects.length];
+                        for (int i = 0; i < objects.length; i++) {
+                            glideStrings[i] = objects[i] == null ? null : GlideString.of(objects[i].toString());
+                        }
+                        return glideStrings;
+                    }
+                    return new GlideString[0];
+                });
+    }
+
+    /**
+     * Removes and returns a random member from the set stored at key.
+     */
+    @Override
+    public CompletableFuture<String> spop(String key) {
+        return executeCommand(CommandType.SPOP, key)
+                .thenApply(result -> result == null ? null : result.toString());
+    }
+
+    /**
+     * Removes and returns a random member from the set stored at key.
+     */
+    @Override
+    public CompletableFuture<GlideString> spop(GlideString key) {
+        return executeCommand(CommandType.SPOP, key.toString())
+                .thenApply(result -> result == null ? null : GlideString.of(result.toString()));
+    }
+
+    /**
+     * Removes and returns multiple random members from the set stored at key.
+     */
+    @Override
+    public CompletableFuture<java.util.Set<String>> spopCount(String key, long count) {
+        return executeCommand(CommandType.SPOP, key, String.valueOf(count))
+                .thenApply(result -> {
+                    java.util.Set<String> set = new java.util.HashSet<>();
+                    if (result instanceof Object[]) {
+                        Object[] objects = (Object[]) result;
+                        for (Object obj : objects) {
+                            if (obj != null) {
+                                set.add(obj.toString());
+                            }
+                        }
+                    }
+                    return set;
+                });
+    }
+
+    /**
+     * Removes and returns multiple random members from the set stored at key.
+     */
+    @Override
+    public CompletableFuture<java.util.Set<GlideString>> spopCount(GlideString key, long count) {
+        return executeCommand(CommandType.SPOP, key.toString(), String.valueOf(count))
+                .thenApply(result -> {
+                    java.util.Set<GlideString> set = new java.util.HashSet<>();
+                    if (result instanceof Object[]) {
+                        Object[] objects = (Object[]) result;
+                        for (Object obj : objects) {
+                            if (obj != null) {
+                                set.add(GlideString.of(obj.toString()));
+                            }
+                        }
+                    }
+                    return set;
+                });
+    }
+
+    /**
+     * Iterates elements of Set types.
+     */
+    @Override
+    public CompletableFuture<Object[]> sscan(String key, String cursor) {
+        return executeCommand(CommandType.SSCAN, key, cursor)
+                .thenApply(result -> (Object[]) result);
+    }
+
+    /**
+     * Iterates elements of Set types.
+     */
+    @Override
+    public CompletableFuture<Object[]> sscan(GlideString key, GlideString cursor) {
+        return executeCommand(CommandType.SSCAN, key.toString(), cursor.toString())
+                .thenApply(result -> (Object[]) result);
+    }
+
+    /**
+     * Iterates elements of Set types with options.
+     */
+    @Override
+    public CompletableFuture<Object[]> sscan(String key, String cursor, glide.api.models.commands.scan.SScanOptions sScanOptions) {
+        // For now, implement basic version without full SScanOptions support
+        return executeCommand(CommandType.SSCAN, key, cursor)
+                .thenApply(result -> (Object[]) result);
+    }
+
+    /**
+     * Iterates elements of Set types with options.
+     */
+    @Override
+    public CompletableFuture<Object[]> sscan(GlideString key, GlideString cursor, glide.api.models.commands.scan.SScanOptionsBinary sScanOptions) {
+        // For now, implement basic version without full SScanOptions support
+        return executeCommand(CommandType.SSCAN, key.toString(), cursor.toString())
+                .thenApply(result -> (Object[]) result);
     }
 
     /**

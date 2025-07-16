@@ -52,6 +52,7 @@ public enum CommandType {
     LMOVE("LMOVE"),
     LPOP("LPOP"),
     LPOS("LPOS"),
+    LMPOP("LMPOP"),
     LPUSH("LPUSH"),
     LPUSHX("LPUSHX"),
     LRANGE("LRANGE"),
@@ -76,8 +77,10 @@ public enum CommandType {
     SPOP("SPOP"),
     SRANDMEMBER("SRANDMEMBER"),
     SREM("SREM"),
+    SSCAN("SSCAN"),
     SUNION("SUNION"),
     SUNIONSTORE("SUNIONSTORE"),
+    SINTERCARD("SINTERCARD"),
 
     // Sorted set commands
     ZADD("ZADD"),

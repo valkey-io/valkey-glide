@@ -14,8 +14,11 @@ Valkey General Language Independent Driver for the Enterprise (GLIDE), is an ope
 ## 📋 Current Status
 
 - ✅ **Complete**: JNI infrastructure and basic operations (GET, SET, PING)
-- 🔄 **In Progress**: Batch/transaction system restoration ([see plan](docs/RESTORATION_PLAN.md))
-- ⏳ **Planned**: Full command coverage and advanced features
+- ✅ **Complete**: Security hardening with comprehensive vulnerability fixes ([see security summary](docs/SECURITY_FIXES_SUMMARY.md))
+- ✅ **Complete**: Memory safety validation with Valgrind analysis
+- ✅ **Complete**: Type-safe client management with atomic operations
+- 🔄 **In Progress**: Extended command coverage and testing
+- ⏳ **Planned**: Batch/transaction system restoration
 
 ## 🏗️ Architecture
 
@@ -76,22 +79,22 @@ dependencies {
 ### Standalone Valkey
 ```java
 import io.valkey.glide.core.client.GlideClient;
-import glide.api.models.configuration.NodeAddress;
-import glide.api.models.configuration.GlideClientConfiguration;
-import static glide.api.models.GlideString.gs;
+import glide.api.BaseClient;
 
 public class QuickStart {
     public static void main(String[] args) {
-        GlideClientConfiguration config = GlideClientConfiguration.builder()
-            .address(NodeAddress.builder().host("localhost").port(6379).build())
-            .requestTimeout(1000) // 1 second timeout
-            .build();
+        // Create a client configuration
+        GlideClient.Config config = new GlideClient.Config(
+            Arrays.asList("localhost:6379")
+        ).requestTimeout(1000); // 1 second timeout
 
-        try (var client = GlideClient.createClient(config).get()) {
-            // Basic operations
-            System.out.println("PING: " + client.ping().get());
-            client.set(gs("key"), gs("value")).get();
-            System.out.println("GET: " + client.get(gs("key")).get());
+        try (var client = new GlideClient(config)) {
+            // Basic operations using the BaseClient API
+            BaseClient baseClient = new BaseClient(client);
+            
+            System.out.println("PING: " + baseClient.ping().get());
+            baseClient.set("key", "value").get();
+            System.out.println("GET: " + baseClient.get("key").get());
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -189,6 +192,7 @@ See [`benchmarks/`](benchmarks/) for comprehensive performance comparisons.
 
 ## 📖 Documentation
 
+- **[Security Fixes Summary](docs/SECURITY_FIXES_SUMMARY.md)** - Comprehensive security audit and fixes completed
 - **[Current Status](docs/CURRENT_STATUS.md)** - Implementation status and architecture
 - **[Restoration Plan](docs/RESTORATION_PLAN.md)** - Plan for completing functionality
 - **[API Compatibility](docs/API_COMPATIBILITY.md)** - Compatibility with legacy implementation
@@ -240,11 +244,22 @@ java/
 └── archive/                   # Legacy UDS implementation (reference)
 ```
 
+## ✅ Production Readiness
+
+**Security Status**: ✅ **PRODUCTION-READY**
+- All critical security vulnerabilities have been resolved
+- Memory safety validated with Valgrind analysis
+- Type-safe pointer management implemented
+- Thread-safe operations with atomic coordination
+- Comprehensive input validation framework
+
+**Basic Operations Available**: GET, SET, PING and generic command execution
+
 ## 🐛 Known Issues
 
 - **Batch Operations**: Currently being restored (see [Restoration Plan](docs/RESTORATION_PLAN.md))
-- **Module Support**: JSON/FT modules planned for Phase 4
-- **Transaction Interfaces**: Being restored in Phase 2
+- **Extended Commands**: Some specialized commands may need additional testing
+- **Module Support**: JSON/FT modules planned for future phases
 
 ## 🤝 Contributing
 

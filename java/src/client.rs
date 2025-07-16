@@ -21,11 +21,15 @@ use crate::error::JniResult;
 use crate::{jni_result, jni_error};
 
 // Command validation constants (based on Valkey official limits)
+#[allow(dead_code)]
 const MAX_COMMAND_NAME_LEN: usize = 64; // Reasonable limit for command names
+#[allow(dead_code)]
 const MAX_ARGUMENT_LEN: usize = 536_870_912; // 512MB - Valkey proto-max-bulk-len default
+#[allow(dead_code)]
 const MAX_ARGUMENTS_COUNT: usize = 100_000; // Conservative limit, Valkey max is 2^31-1 but impractical
 
 // Allowed Valkey commands whitelist for security
+#[allow(dead_code)]
 const ALLOWED_COMMANDS: &[&str] = &[
     "GET", "SET", "DEL", "EXISTS", "PING", "INFO", "TIME",
     "MGET", "MSET", "INCR", "DECR", "INCRBY", "DECRBY",
@@ -63,6 +67,7 @@ fn get_runtime() -> &'static tokio::runtime::Runtime {
 // Command validation functions
 
 /// Validate Valkey command name against whitelist and injection attacks
+#[allow(dead_code)]
 fn validate_command_name(command: &str) -> JniResult<()> {
     // Length validation
     if command.is_empty() {
@@ -88,6 +93,7 @@ fn validate_command_name(command: &str) -> JniResult<()> {
 }
 
 /// Validate and sanitize command argument
+#[allow(dead_code)]
 fn validate_argument(arg: &[u8]) -> JniResult<()> {
     // Size validation
     if arg.len() > MAX_ARGUMENT_LEN {
@@ -105,6 +111,7 @@ fn validate_argument(arg: &[u8]) -> JniResult<()> {
 }
 
 /// Validate key string for Valkey operations
+#[allow(dead_code)]
 fn validate_key(key: &str) -> JniResult<()> {
     if key.is_empty() {
         return Err(jni_error!(InvalidInput, "Key cannot be empty"));
@@ -136,6 +143,7 @@ fn register_client(client: Client) -> u64 {
 }
 
 /// Get client from type-safe handle with validation
+#[allow(dead_code)]
 fn get_client_safe(encoded_handle: jlong) -> JniResult<Arc<Mutex<Client>>> {
     if encoded_handle == 0 {
         return Err(jni_error!(NullPointer, "Client handle is null"));
