@@ -28,7 +28,7 @@ import java.util.concurrent.CompletableFuture;
  */
 public abstract class BaseClient implements StringBaseCommands, HashBaseCommands, ListBaseCommands, SetBaseCommands, GenericBaseCommands {
 
-    /** The "OK" response from Redis/Valkey commands. */
+    /** The "OK" response from Valkey commands. */
     public static final String OK = "OK";
 
     /** LCS command string constants */
@@ -41,6 +41,25 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
 
     protected BaseClient(GlideClient client) {
         this.client = client;
+    }
+
+    /**
+     * Utility method to concatenate multiple string arrays.
+     */
+    private static String[] concatArrays(String[]... arrays) {
+        int totalLength = 0;
+        for (String[] array : arrays) {
+            totalLength += array.length;
+        }
+        
+        String[] result = new String[totalLength];
+        int currentIndex = 0;
+        for (String[] array : arrays) {
+            System.arraycopy(array, 0, result, currentIndex, array.length);
+            currentIndex += array.length;
+        }
+        
+        return result;
     }
 
     /**
@@ -3919,6 +3938,50 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
                 .thenApply(result -> (Object[]) result);
     }
 
+    /**
+     * Iterates elements of Sorted Set types.
+     */
+    public CompletableFuture<Object[]> zscan(String key, String cursor) {
+        return executeCommand(CommandType.ZSCAN, key, cursor)
+                .thenApply(result -> (Object[]) result);
+    }
+
+    /**
+     * Iterates elements of Sorted Set types (binary version).
+     */
+    public CompletableFuture<Object[]> zscan(GlideString key, GlideString cursor) {
+        return executeCommand(CommandType.ZSCAN, key.toString(), cursor.toString())
+                .thenApply(result -> (Object[]) result);
+    }
+
+    /**
+     * Iterates elements of Sorted Set types with options.
+     */
+    public CompletableFuture<Object[]> zscan(String key, String cursor, glide.api.models.commands.scan.ZScanOptions zScanOptions) {
+        List<String> args = new ArrayList<>();
+        args.add(key);
+        args.add(cursor);
+        if (zScanOptions != null) {
+            args.addAll(Arrays.asList(zScanOptions.toArgs()));
+        }
+        return executeCommand(CommandType.ZSCAN, args.toArray(new String[0]))
+                .thenApply(result -> (Object[]) result);
+    }
+
+    /**
+     * Iterates elements of Sorted Set types with options (binary version).
+     */
+    public CompletableFuture<Object[]> zscan(GlideString key, GlideString cursor, glide.api.models.commands.scan.ZScanOptionsBinary zScanOptions) {
+        List<String> args = new ArrayList<>();
+        args.add(key.toString());
+        args.add(cursor.toString());
+        if (zScanOptions != null) {
+            args.addAll(Arrays.asList(zScanOptions.toArgs()));
+        }
+        return executeCommand(CommandType.ZSCAN, args.toArray(new String[0]))
+                .thenApply(result -> (Object[]) result);
+    }
+
     // ==================== MISSING GENERICBASECOMMANDS METHODS ====================
 
     /**
@@ -4501,6 +4564,127 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         return executeCommand(CommandType.WAIT, String.valueOf(numreplicas), String.valueOf(timeout))
                 .thenApply(result -> Long.parseLong(result.toString()));
     }
+
+    // ============================================================================
+    // Function Commands  
+    // ============================================================================
+
+    /**
+     * Call a Valkey function.
+     *
+     * @param functionName The name of the function to call
+     * @param keys The keys that the function will access
+     * @param args The arguments to pass to the function
+     * @return A CompletableFuture containing the result of the function call
+     */
+    public CompletableFuture<Object> fcall(String functionName, String[] keys, String[] args) {
+        return executeCommand(CommandType.FCALL, concatArrays(new String[]{functionName, String.valueOf(keys.length)}, keys, args));
+    }
+
+    /**
+     * Call a Valkey function (read-only version).
+     *
+     * @param functionName The name of the function to call
+     * @param keys The keys that the function will access
+     * @param args The arguments to pass to the function
+     * @return A CompletableFuture containing the result of the function call
+     */
+    public CompletableFuture<Object> fcallReadOnly(String functionName, String[] keys, String[] args) {
+        return executeCommand(CommandType.FCALL_RO, concatArrays(new String[]{functionName, String.valueOf(keys.length)}, keys, args));
+    }
+
+    /**
+     * Load a function library.
+     *
+     * @param libraryCode The source code of the library
+     * @param replace Whether to replace existing library
+     * @return A CompletableFuture containing the library name
+     */
+    public CompletableFuture<String> functionLoad(String libraryCode, boolean replace) {
+        List<String> args = new ArrayList<>();
+        if (replace) {
+            args.add("REPLACE");
+        }
+        args.add(libraryCode);
+        return executeCommand(CommandType.FUNCTION_LOAD, args.toArray(new String[0]))
+                .thenApply(result -> result.toString());
+    }
+
+    /**
+     * Delete a function library.
+     *
+     * @param libraryName The name of the library to delete
+     * @return A CompletableFuture containing "OK" if successful
+     */
+    public CompletableFuture<String> functionDelete(String libraryName) {
+        return executeCommand(CommandType.FUNCTION_DELETE, libraryName)
+                .thenApply(result -> result.toString());
+    }
+
+    /**
+     * Flush all functions.
+     *
+     * @param mode The flush mode (ASYNC or SYNC), null for default
+     * @return A CompletableFuture containing "OK" if successful
+     */
+    public CompletableFuture<String> functionFlush(String mode) {
+        List<String> args = new ArrayList<>();
+        if (mode != null) {
+            args.add(mode);
+        }
+        return executeCommand(CommandType.FUNCTION_FLUSH, args.toArray(new String[0]))
+                .thenApply(result -> result.toString());
+    }
+
+    /**
+     * List functions.
+     *
+     * @param libraryName Filter by library name (null for all)
+     * @return A CompletableFuture containing the list of functions
+     */
+    public CompletableFuture<Object> functionList(String libraryName) {
+        List<String> args = new ArrayList<>();
+        if (libraryName != null) {
+            args.add("LIBRARYNAME");
+            args.add(libraryName);
+        }
+        return executeCommand(CommandType.FUNCTION_LIST, args.toArray(new String[0]));
+    }
+
+    /**
+     * Get function statistics.
+     *
+     * @return A CompletableFuture containing function statistics
+     */
+    public CompletableFuture<Object> functionStats() {
+        return executeCommand(CommandType.FUNCTION_STATS);
+    }
+
+    // ============================================================================
+    // Script Management Commands
+    // ============================================================================
+
+    /**
+     * Returns the source code of the script by its SHA1 hash.
+     *
+     * @param sha1Hash The SHA1 hash of the script to retrieve
+     * @return A CompletableFuture containing the script source code
+     */
+    public CompletableFuture<String> scriptShow(String sha1Hash) {
+        return client.executeStringCommand(CommandType.SCRIPT_SHOW.toString(), new String[]{sha1Hash});
+    }
+
+    /**
+     * Returns the source code of the script by its SHA1 hash (binary version).
+     *
+     * @param sha1Hash The SHA1 hash of the script to retrieve as GlideString
+     * @return A CompletableFuture containing the script source code as GlideString
+     */
+    public CompletableFuture<GlideString> scriptShow(GlideString sha1Hash) {
+        return client.executeStringCommand(CommandType.SCRIPT_SHOW.toString(), new String[]{sha1Hash.toString()})
+                .thenApply(GlideString::of);
+    }
+
 
     /**
      * Close the client connection.

@@ -1,13 +1,14 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
+import glide.ffi.resolvers.ScriptResolver;
 import lombok.Getter;
 
 /**
- * A wrapper for a Script object for script execution commands. As long as
- * this object is not closed, the script's code is saved in memory, and can be resent to the server.
+ * A wrapper for a Script object for script execution commands. The script's code is
+ * stored in the native script container with reference counting for efficient memory usage.
  * Script should be enclosed with a try-with-resource block or {@link Script#close()} must be called
- * to invalidate the code hash.
+ * to remove the script from native storage and invalidate the code hash.
  */
 public class Script implements AutoCloseable {
 
@@ -30,7 +31,8 @@ public class Script implements AutoCloseable {
      */
     public <T> Script(T code, Boolean binaryOutput) {
         this.code = GlideString.of(code).toString();
-        this.hash = computeScriptHash(this.code);
+        // Store script in native container and get SHA1 hash
+        this.hash = ScriptResolver.storeScript(this.code.getBytes(java.nio.charset.StandardCharsets.UTF_8));
         this.binaryOutput = binaryOutput;
     }
 
@@ -69,13 +71,14 @@ public class Script implements AutoCloseable {
     }
 
     /** 
-     * Drop the linked script. Currently a no-op since we don't have native script storage.
-     * The script hash is computed on-demand from the code.
+     * Drop the linked script from native script storage.
+     * This decrements the reference count and removes the script when it reaches zero.
      */
     @Override
     public void close() throws Exception {
         if (!isDropped) {
-            // Currently no native storage to clean up
+            // Drop script from native storage
+            ScriptResolver.dropScript(this.hash);
             isDropped = true;
         }
     }

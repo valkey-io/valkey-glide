@@ -114,6 +114,7 @@ public enum CommandType {
     BZMPOP("BZMPOP"),
     BZPOPMAX("BZPOPMAX"),
     BZPOPMIN("BZPOPMIN"),
+    ZSCAN("ZSCAN"),
 
     // Connection commands
     PING("PING"),

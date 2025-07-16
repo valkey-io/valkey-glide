@@ -596,3 +596,438 @@ pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_cleanupExpir
 
     jni_result!(&mut env, result(), 0)
 }
+
+// ============================================================================
+// Script Management Functions
+// ============================================================================
+
+/// Store a script in the native script container and return its SHA1 hash
+#[no_mangle]
+pub extern "system" fn Java_glide_ffi_resolvers_ScriptResolver_storeScript(
+    mut env: JNIEnv,
+    _class: JClass,
+    code: JByteArray,
+) -> jstring {
+    let result = || -> JniResult<jstring> {
+        // Convert Java byte array to Rust bytes
+        let code_bytes = env.convert_byte_array(&code)?;
+        
+        // Store script using glide_core scripts container
+        let hash = glide_core::scripts_container::add_script(&code_bytes);
+        
+        // Return SHA1 hash as JString
+        let java_string = env.new_string(&hash)?;
+        Ok(java_string.into_raw())
+    };
+
+    jni_result!(&mut env, result(), ptr::null_mut())
+}
+
+/// Remove a script from the native script container by its SHA1 hash
+#[no_mangle]
+pub extern "system" fn Java_glide_ffi_resolvers_ScriptResolver_dropScript(
+    mut env: JNIEnv,
+    _class: JClass,
+    hash: JString,
+) {
+    let mut result = || -> JniResult<()> {
+        // Convert JString hash to Rust String
+        let hash_str: String = env.get_string(&hash)?.into();
+        
+        // Remove script from glide_core scripts container
+        glide_core::scripts_container::remove_script(&hash_str);
+        
+        Ok(())
+    };
+
+    if let Err(e) = result() {
+        eprintln!("Error in dropScript: {:?}", e);
+    }
+}
+
+/// Execute SCRIPT SHOW command to retrieve script source by SHA1 hash
+#[no_mangle]
+pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_scriptShow(
+    mut env: JNIEnv,
+    _class: JClass,
+    client_handle: jlong,
+    hash: JString,
+) -> jstring {
+    let mut result = || -> JniResult<jstring> {
+        let handle = client_handle as u64;
+        let client = get_client(handle)?;
+        
+        // Convert JString hash to Rust String
+        let hash_str: String = env.get_string(&hash)?.into();
+        
+        // Execute SCRIPT SHOW command
+        let mut cmd = redis::cmd("SCRIPT");
+        cmd.arg("SHOW").arg(&hash_str);
+        let response = client.execute_command(cmd)?;
+        
+        // Convert response to String
+        let script_source = match response {
+            redis::Value::BulkString(bytes) => {
+                String::from_utf8(bytes)
+                    .map_err(|_| jni_error!(ConversionError, "Failed to convert script to UTF-8"))?
+            },
+            redis::Value::Nil => {
+                return Err(jni_error!(ConversionError, "Script not found"));
+            },
+            _ => {
+                return Err(jni_error!(ConversionError, "Unexpected response type from SCRIPT SHOW"));
+            }
+        };
+        
+        // Return script source as JString
+        let java_string = env.new_string(&script_source)?;
+        Ok(java_string.into_raw())
+    };
+
+    jni_result!(&mut env, result(), ptr::null_mut())
+}
+
+// ============================================================================
+// Function Commands
+// ============================================================================
+
+/// Execute Valkey FCALL command to call a function
+#[no_mangle]
+pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_fcall(
+    mut env: JNIEnv,
+    _class: JClass,
+    client_handle: jlong,
+    function_name: JString,
+    keys: JObjectArray,
+    args: JObjectArray,
+) -> jobject {
+    let mut result = || -> JniResult<jobject> {
+        let handle = client_handle as u64;
+        let client = get_client(handle)?;
+        
+        // Convert function name
+        let function_str: String = env.get_string(&function_name)?.into();
+        
+        // Convert keys array
+        let keys_vec = if keys.is_null() {
+            Vec::new()
+        } else {
+            let keys_len = env.get_array_length(&keys)?;
+            let mut keys_vec = Vec::with_capacity(keys_len as usize);
+            for i in 0..keys_len {
+                let key_obj = env.get_object_array_element(&keys, i)?;
+                let key_jstring = JString::from(key_obj);
+                let key_str = env.get_string(&key_jstring)?;
+                keys_vec.push(String::from(key_str));
+            }
+            keys_vec
+        };
+        
+        // Convert args array
+        let args_vec = if args.is_null() {
+            Vec::new()
+        } else {
+            let args_len = env.get_array_length(&args)?;
+            let mut args_vec = Vec::with_capacity(args_len as usize);
+            for i in 0..args_len {
+                let arg_obj = env.get_object_array_element(&args, i)?;
+                let arg_jstring = JString::from(arg_obj);
+                let arg_str = env.get_string(&arg_jstring)?;
+                args_vec.push(String::from(arg_str));
+            }
+            args_vec
+        };
+        
+        // Build Valkey FCALL command
+        let mut cmd = redis::cmd("FCALL");
+        cmd.arg(&function_str);
+        cmd.arg(keys_vec.len());
+        for key in &keys_vec {
+            cmd.arg(key);
+        }
+        for arg in &args_vec {
+            cmd.arg(arg);
+        }
+        
+        // Execute command
+        let response = client.execute_command(cmd)?;
+        
+        // Convert response to Java object (simplified - could be improved based on expected return types)
+        let java_result = match response {
+            redis::Value::BulkString(bytes) => {
+                let string_val = String::from_utf8_lossy(&bytes);
+                let java_string = env.new_string(&string_val)?;
+                java_string.into_raw()
+            },
+            redis::Value::Okay => {
+                let java_string = env.new_string("OK")?;
+                java_string.into_raw()
+            },
+            redis::Value::Nil => ptr::null_mut(),
+            redis::Value::Int(num) => {
+                let java_long = env.new_object("java/lang/Long", "(J)V", &[num.into()])?;
+                java_long.into_raw()
+            },
+            _ => {
+                let java_string = env.new_string(&format!("{:?}", response))?;
+                java_string.into_raw()
+            }
+        };
+        
+        Ok(java_result)
+    };
+
+    jni_result!(&mut env, result(), ptr::null_mut())
+}
+
+/// Execute FUNCTION LIST command to list functions
+#[no_mangle]
+pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_functionList(
+    mut env: JNIEnv,
+    _class: JClass,
+    client_handle: jlong,
+    library_name: JString,
+) -> jobject {
+    let mut result = || -> JniResult<jobject> {
+        let handle = client_handle as u64;
+        let client = get_client(handle)?;
+        
+        // Build FUNCTION LIST command
+        let mut cmd = redis::cmd("FUNCTION");
+        cmd.arg("LIST");
+        
+        // Add library name filter if provided
+        if !library_name.is_null() {
+            let lib_str: String = env.get_string(&library_name)?.into();
+            cmd.arg("LIBRARYNAME").arg(&lib_str);
+        }
+        
+        // Execute command
+        let response = client.execute_command(cmd)?;
+        
+        // Convert response to Java object (array of function info)
+        let java_result = match response {
+            redis::Value::BulkString(bytes) => {
+                let string_val = String::from_utf8_lossy(&bytes);
+                let java_string = env.new_string(&string_val)?;
+                java_string.into_raw()
+            },
+            redis::Value::Nil => ptr::null_mut(),
+            _ => {
+                let java_string = env.new_string(&format!("{:?}", response))?;
+                java_string.into_raw()
+            }
+        };
+        
+        Ok(java_result)
+    };
+
+    jni_result!(&mut env, result(), ptr::null_mut())
+}
+
+/// Execute FUNCTION LOAD command to load a function library
+#[no_mangle]
+pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_functionLoad(
+    mut env: JNIEnv,
+    _class: JClass,
+    client_handle: jlong,
+    library_code: JString,
+    replace: jboolean,
+) -> jstring {
+    let mut result = || -> JniResult<jstring> {
+        let handle = client_handle as u64;
+        let client = get_client(handle)?;
+        
+        // Convert library code
+        let code_str: String = env.get_string(&library_code)?.into();
+        
+        // Build FUNCTION LOAD command
+        let mut cmd = redis::cmd("FUNCTION");
+        cmd.arg("LOAD");
+        
+        if replace == JNI_TRUE {
+            cmd.arg("REPLACE");
+        }
+        
+        cmd.arg(&code_str);
+        
+        // Execute command
+        let response = client.execute_command(cmd)?;
+        
+        // Convert response to String (library name)
+        let library_name = match response {
+            redis::Value::BulkString(bytes) => {
+                String::from_utf8_lossy(&bytes).to_string()
+            },
+            redis::Value::Okay => "OK".to_string(),
+            _ => format!("{:?}", response),
+        };
+        
+        // Return library name as JString
+        let java_string = env.new_string(&library_name)?;
+        Ok(java_string.into_raw())
+    };
+
+    jni_result!(&mut env, result(), ptr::null_mut())
+}
+
+/// Execute FUNCTION DELETE command to delete a function library
+#[no_mangle]
+pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_functionDelete(
+    mut env: JNIEnv,
+    _class: JClass,
+    client_handle: jlong,
+    library_name: JString,
+) -> jstring {
+    let mut result = || -> JniResult<jstring> {
+        let handle = client_handle as u64;
+        let client = get_client(handle)?;
+        
+        // Convert library name
+        let lib_str: String = env.get_string(&library_name)?.into();
+        
+        // Build FUNCTION DELETE command
+        let mut cmd = redis::cmd("FUNCTION");
+        cmd.arg("DELETE").arg(&lib_str);
+        
+        // Execute command
+        let response = client.execute_command(cmd)?;
+        
+        // Convert response to String
+        let result_str = match response {
+            redis::Value::Okay => "OK".to_string(),
+            redis::Value::BulkString(bytes) => {
+                String::from_utf8_lossy(&bytes).to_string()
+            },
+            _ => format!("{:?}", response),
+        };
+        
+        // Return result as JString
+        let java_string = env.new_string(&result_str)?;
+        Ok(java_string.into_raw())
+    };
+
+    jni_result!(&mut env, result(), ptr::null_mut())
+}
+
+/// Execute FUNCTION FLUSH command to flush all functions
+#[no_mangle]
+pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_functionFlush(
+    mut env: JNIEnv,
+    _class: JClass,
+    client_handle: jlong,
+    flush_mode: JString,
+) -> jstring {
+    let mut result = || -> JniResult<jstring> {
+        let handle = client_handle as u64;
+        let client = get_client(handle)?;
+        
+        // Build FUNCTION FLUSH command
+        let mut cmd = redis::cmd("FUNCTION");
+        cmd.arg("FLUSH");
+        
+        // Add flush mode if provided (ASYNC or SYNC)
+        if !flush_mode.is_null() {
+            let mode_str: String = env.get_string(&flush_mode)?.into();
+            cmd.arg(&mode_str);
+        }
+        
+        // Execute command
+        let response = client.execute_command(cmd)?;
+        
+        // Convert response to String
+        let result_str = match response {
+            redis::Value::Okay => "OK".to_string(),
+            redis::Value::BulkString(bytes) => {
+                String::from_utf8_lossy(&bytes).to_string()
+            },
+            _ => format!("{:?}", response),
+        };
+        
+        // Return result as JString
+        let java_string = env.new_string(&result_str)?;
+        Ok(java_string.into_raw())
+    };
+
+    jni_result!(&mut env, result(), ptr::null_mut())
+}
+
+/// Execute FUNCTION STATS command to get function statistics
+#[no_mangle]
+pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_functionStats(
+    mut env: JNIEnv,
+    _class: JClass,
+    client_handle: jlong,
+) -> jobject {
+    let result = || -> JniResult<jobject> {
+        let handle = client_handle as u64;
+        let client = get_client(handle)?;
+        
+        // Build FUNCTION STATS command
+        let mut cmd = redis::cmd("FUNCTION");
+        cmd.arg("STATS");
+        
+        // Execute command
+        let response = client.execute_command(cmd)?;
+        
+        // Convert response to Java object
+        let java_result = match response {
+            redis::Value::BulkString(bytes) => {
+                let string_val = String::from_utf8_lossy(&bytes);
+                let java_string = env.new_string(&string_val)?;
+                java_string.into_raw()
+            },
+            redis::Value::Nil => ptr::null_mut(),
+            _ => {
+                let java_string = env.new_string(&format!("{:?}", response))?;
+                java_string.into_raw()
+            }
+        };
+        
+        Ok(java_result)
+    };
+
+    jni_result!(&mut env, result(), ptr::null_mut())
+}
+
+// ============================================================================
+// Cluster Scan Cursor Management
+// ============================================================================
+
+/// Release a native cluster scan cursor by its ID
+#[no_mangle]
+pub extern "system" fn Java_glide_ffi_resolvers_ClusterScanCursorResolver_releaseNativeCursor(
+    mut env: JNIEnv,
+    _class: JClass,
+    cursor: JString,
+) {
+    let mut result = || -> JniResult<()> {
+        // Convert JString cursor to Rust String
+        let cursor_str: String = env.get_string(&cursor)?.into();
+        
+        // Remove cursor from glide_core cluster scan container
+        glide_core::cluster_scan_container::remove_scan_state_cursor(cursor_str);
+        
+        Ok(())
+    };
+
+    if let Err(e) = result() {
+        eprintln!("Error in releaseNativeCursor: {:?}", e);
+    }
+}
+
+/// Get the finished cursor handle constant
+#[no_mangle]
+pub extern "system" fn Java_glide_ffi_resolvers_ClusterScanCursorResolver_getFinishedCursorHandleConstant(
+    mut env: JNIEnv,
+    _class: JClass,
+) -> jstring {
+    let result = || -> JniResult<jstring> {
+        // Return the finished scan cursor constant from glide_core
+        let finished_cursor = glide_core::client::FINISHED_SCAN_CURSOR;
+        let java_string = env.new_string(finished_cursor)?;
+        Ok(java_string.into_raw())
+    };
+
+    jni_result!(&mut env, result(), ptr::null_mut())
+}
