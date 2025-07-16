@@ -5,6 +5,7 @@ import glide.api.commands.StringBaseCommands;
 import glide.api.commands.HashBaseCommands;
 import glide.api.commands.ListBaseCommands;
 import glide.api.commands.SetBaseCommands;
+import glide.api.commands.GenericBaseCommands;
 import glide.api.models.GlideString;
 import glide.api.models.BaseBatch;
 import glide.api.models.Script;
@@ -23,7 +24,7 @@ import java.util.concurrent.CompletableFuture;
  * Base class for Glide clients providing common functionality.
  * This class acts as a bridge between the integration test API and the refactored core client.
  */
-public abstract class BaseClient implements StringBaseCommands, HashBaseCommands, ListBaseCommands, SetBaseCommands {
+public abstract class BaseClient implements StringBaseCommands, HashBaseCommands, ListBaseCommands, SetBaseCommands, GenericBaseCommands {
 
     /** The "OK" response from Redis/Valkey commands. */
     public static final String OK = "OK";
@@ -3852,6 +3853,512 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         // For now, implement basic version without full SScanOptions support
         return executeCommand(CommandType.SSCAN, key.toString(), cursor.toString())
                 .thenApply(result -> (Object[]) result);
+    }
+
+    // ==================== MISSING GENERICBASECOMMANDS METHODS ====================
+
+    /**
+     * Checks if one or more keys exist (array version).
+     */
+    @Override
+    public CompletableFuture<Long> exists(GlideString[] keys) {
+        String[] stringKeys = new String[keys.length];
+        for (int i = 0; i < keys.length; i++) {
+            stringKeys[i] = keys[i].toString();
+        }
+        return executeCommand(CommandType.EXISTS, stringKeys)
+                .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Unlinks (deletes) one or more keys in a non-blocking manner.
+     */
+    @Override
+    public CompletableFuture<Long> unlink(String[] keys) {
+        return executeCommand(CommandType.UNLINK, keys)
+                .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Unlinks (deletes) one or more keys in a non-blocking manner.
+     */
+    @Override
+    public CompletableFuture<Long> unlink(GlideString[] keys) {
+        String[] stringKeys = new String[keys.length];
+        for (int i = 0; i < keys.length; i++) {
+            stringKeys[i] = keys[i].toString();
+        }
+        return executeCommand(CommandType.UNLINK, stringKeys)
+                .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Sets a timeout on key with options.
+     */
+    @Override
+    public CompletableFuture<Boolean> expire(String key, long seconds, glide.api.models.commands.ExpireOptions expireOptions) {
+        // For now, implement basic version without full ExpireOptions support
+        return executeCommand(CommandType.EXPIRE, key, String.valueOf(seconds))
+                .thenApply(result -> "1".equals(result.toString()));
+    }
+
+    /**
+     * Sets a timeout on key with options.
+     */
+    @Override
+    public CompletableFuture<Boolean> expire(GlideString key, long seconds, glide.api.models.commands.ExpireOptions expireOptions) {
+        // For now, implement basic version without full ExpireOptions support
+        return executeCommand(CommandType.EXPIRE, key.toString(), String.valueOf(seconds))
+                .thenApply(result -> "1".equals(result.toString()));
+    }
+
+    /**
+     * Sets a timeout on key at a specific Unix timestamp.
+     */
+    @Override
+    public CompletableFuture<Boolean> expireAt(String key, long unixSeconds) {
+        return executeCommand(CommandType.EXPIREAT, key, String.valueOf(unixSeconds))
+                .thenApply(result -> "1".equals(result.toString()));
+    }
+
+    /**
+     * Sets a timeout on key at a specific Unix timestamp.
+     */
+    @Override
+    public CompletableFuture<Boolean> expireAt(GlideString key, long unixSeconds) {
+        return executeCommand(CommandType.EXPIREAT, key.toString(), String.valueOf(unixSeconds))
+                .thenApply(result -> "1".equals(result.toString()));
+    }
+
+    /**
+     * Sets a timeout on key at a specific Unix timestamp with options.
+     */
+    @Override
+    public CompletableFuture<Boolean> expireAt(String key, long unixSeconds, glide.api.models.commands.ExpireOptions expireOptions) {
+        // For now, implement basic version without full ExpireOptions support
+        return executeCommand(CommandType.EXPIREAT, key, String.valueOf(unixSeconds))
+                .thenApply(result -> "1".equals(result.toString()));
+    }
+
+    /**
+     * Sets a timeout on key at a specific Unix timestamp with options.
+     */
+    @Override
+    public CompletableFuture<Boolean> expireAt(GlideString key, long unixSeconds, glide.api.models.commands.ExpireOptions expireOptions) {
+        // For now, implement basic version without full ExpireOptions support
+        return executeCommand(CommandType.EXPIREAT, key.toString(), String.valueOf(unixSeconds))
+                .thenApply(result -> "1".equals(result.toString()));
+    }
+
+    /**
+     * Sets a timeout on key in milliseconds.
+     */
+    @Override
+    public CompletableFuture<Boolean> pexpire(String key, long milliseconds) {
+        return executeCommand(CommandType.PEXPIRE, key, String.valueOf(milliseconds))
+                .thenApply(result -> "1".equals(result.toString()));
+    }
+
+    /**
+     * Sets a timeout on key in milliseconds.
+     */
+    @Override
+    public CompletableFuture<Boolean> pexpire(GlideString key, long milliseconds) {
+        return executeCommand(CommandType.PEXPIRE, key.toString(), String.valueOf(milliseconds))
+                .thenApply(result -> "1".equals(result.toString()));
+    }
+
+    /**
+     * Sets a timeout on key in milliseconds with options.
+     */
+    @Override
+    public CompletableFuture<Boolean> pexpire(String key, long milliseconds, glide.api.models.commands.ExpireOptions expireOptions) {
+        // For now, implement basic version without full ExpireOptions support
+        return executeCommand(CommandType.PEXPIRE, key, String.valueOf(milliseconds))
+                .thenApply(result -> "1".equals(result.toString()));
+    }
+
+    /**
+     * Sets a timeout on key in milliseconds with options.
+     */
+    @Override
+    public CompletableFuture<Boolean> pexpire(GlideString key, long milliseconds, glide.api.models.commands.ExpireOptions expireOptions) {
+        // For now, implement basic version without full ExpireOptions support
+        return executeCommand(CommandType.PEXPIRE, key.toString(), String.valueOf(milliseconds))
+                .thenApply(result -> "1".equals(result.toString()));
+    }
+
+    /**
+     * Sets a timeout on key at a specific Unix timestamp in milliseconds.
+     */
+    @Override
+    public CompletableFuture<Boolean> pexpireAt(String key, long unixMilliseconds) {
+        return executeCommand(CommandType.PEXPIREAT, key, String.valueOf(unixMilliseconds))
+                .thenApply(result -> "1".equals(result.toString()));
+    }
+
+    /**
+     * Sets a timeout on key at a specific Unix timestamp in milliseconds.
+     */
+    @Override
+    public CompletableFuture<Boolean> pexpireAt(GlideString key, long unixMilliseconds) {
+        return executeCommand(CommandType.PEXPIREAT, key.toString(), String.valueOf(unixMilliseconds))
+                .thenApply(result -> "1".equals(result.toString()));
+    }
+
+    /**
+     * Sets a timeout on key at a specific Unix timestamp in milliseconds with options.
+     */
+    @Override
+    public CompletableFuture<Boolean> pexpireAt(String key, long unixMilliseconds, glide.api.models.commands.ExpireOptions expireOptions) {
+        // For now, implement basic version without full ExpireOptions support
+        return executeCommand(CommandType.PEXPIREAT, key, String.valueOf(unixMilliseconds))
+                .thenApply(result -> "1".equals(result.toString()));
+    }
+
+    /**
+     * Sets a timeout on key at a specific Unix timestamp in milliseconds with options.
+     */
+    @Override
+    public CompletableFuture<Boolean> pexpireAt(GlideString key, long unixMilliseconds, glide.api.models.commands.ExpireOptions expireOptions) {
+        // For now, implement basic version without full ExpireOptions support
+        return executeCommand(CommandType.PEXPIREAT, key.toString(), String.valueOf(unixMilliseconds))
+                .thenApply(result -> "1".equals(result.toString()));
+    }
+
+    /**
+     * Returns the absolute Unix timestamp at which the given key will expire.
+     */
+    @Override
+    public CompletableFuture<Long> expiretime(String key) {
+        return executeCommand(CommandType.EXPIRETIME, key)
+                .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Returns the absolute Unix timestamp at which the given key will expire.
+     */
+    @Override
+    public CompletableFuture<Long> expiretime(GlideString key) {
+        return executeCommand(CommandType.EXPIRETIME, key.toString())
+                .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Returns the absolute Unix timestamp in milliseconds at which the given key will expire.
+     */
+    @Override
+    public CompletableFuture<Long> pexpiretime(String key) {
+        return executeCommand(CommandType.PEXPIRETIME, key)
+                .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Returns the absolute Unix timestamp in milliseconds at which the given key will expire.
+     */
+    @Override
+    public CompletableFuture<Long> pexpiretime(GlideString key) {
+        return executeCommand(CommandType.PEXPIRETIME, key.toString())
+                .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Returns the remaining time to live in milliseconds.
+     */
+    @Override
+    public CompletableFuture<Long> pttl(String key) {
+        return executeCommand(CommandType.PTTL, key)
+                .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Returns the remaining time to live in milliseconds.
+     */
+    @Override
+    public CompletableFuture<Long> pttl(GlideString key) {
+        return executeCommand(CommandType.PTTL, key.toString())
+                .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Removes the timeout from a key.
+     */
+    @Override
+    public CompletableFuture<Boolean> persist(String key) {
+        return executeCommand(CommandType.PERSIST, key)
+                .thenApply(result -> "1".equals(result.toString()));
+    }
+
+    /**
+     * Removes the timeout from a key.
+     */
+    @Override
+    public CompletableFuture<Boolean> persist(GlideString key) {
+        return executeCommand(CommandType.PERSIST, key.toString())
+                .thenApply(result -> "1".equals(result.toString()));
+    }
+
+    /**
+     * Alters the last access time of one or more keys.
+     */
+    @Override
+    public CompletableFuture<Long> touch(String[] keys) {
+        return executeCommand(CommandType.TOUCH, keys)
+                .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Alters the last access time of one or more keys.
+     */
+    @Override
+    public CompletableFuture<Long> touch(GlideString[] keys) {
+        String[] stringKeys = new String[keys.length];
+        for (int i = 0; i < keys.length; i++) {
+            stringKeys[i] = keys[i].toString();
+        }
+        return executeCommand(CommandType.TOUCH, stringKeys)
+                .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Copies a key to another key with optional replace flag.
+     */
+    @Override
+    public CompletableFuture<Boolean> copy(String source, String destination, boolean replace) {
+        if (replace) {
+            return executeCommand(CommandType.COPY, source, destination, "REPLACE")
+                    .thenApply(result -> "1".equals(result.toString()));
+        } else {
+            return executeCommand(CommandType.COPY, source, destination)
+                    .thenApply(result -> "1".equals(result.toString()));
+        }
+    }
+
+    /**
+     * Copies a key to another key with optional replace flag.
+     */
+    @Override
+    public CompletableFuture<Boolean> copy(GlideString source, GlideString destination, boolean replace) {
+        if (replace) {
+            return executeCommand(CommandType.COPY, source.toString(), destination.toString(), "REPLACE")
+                    .thenApply(result -> "1".equals(result.toString()));
+        } else {
+            return executeCommand(CommandType.COPY, source.toString(), destination.toString())
+                    .thenApply(result -> "1".equals(result.toString()));
+        }
+    }
+
+    /**
+     * Restores a key using the provided serialized value with options.
+     */
+    @Override
+    public CompletableFuture<String> restore(GlideString key, long ttl, byte[] value, glide.api.models.commands.RestoreOptions restoreOptions) {
+        // For now, implement basic version without full RestoreOptions support
+        return executeCommand(CommandType.RESTORE, key.toString(), String.valueOf(ttl), new String(value))
+                .thenApply(result -> result.toString());
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at key.
+     */
+    @Override
+    public CompletableFuture<String[]> sort(String key) {
+        return executeCommand(CommandType.SORT, key)
+                .thenApply(result -> {
+                    if (result instanceof Object[]) {
+                        Object[] objects = (Object[]) result;
+                        String[] strings = new String[objects.length];
+                        for (int i = 0; i < objects.length; i++) {
+                            strings[i] = objects[i] == null ? null : objects[i].toString();
+                        }
+                        return strings;
+                    }
+                    return new String[0];
+                });
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at key.
+     */
+    @Override
+    public CompletableFuture<GlideString[]> sort(GlideString key) {
+        return executeCommand(CommandType.SORT, key.toString())
+                .thenApply(result -> {
+                    if (result instanceof Object[]) {
+                        Object[] objects = (Object[]) result;
+                        GlideString[] glideStrings = new GlideString[objects.length];
+                        for (int i = 0; i < objects.length; i++) {
+                            glideStrings[i] = objects[i] == null ? null : GlideString.of(objects[i].toString());
+                        }
+                        return glideStrings;
+                    }
+                    return new GlideString[0];
+                });
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at key with options.
+     */
+    @Override
+    public CompletableFuture<String[]> sort(String key, glide.api.models.commands.SortOptions sortOptions) {
+        // For now, implement basic version without full SortOptions support
+        return executeCommand(CommandType.SORT, key)
+                .thenApply(result -> {
+                    if (result instanceof Object[]) {
+                        Object[] objects = (Object[]) result;
+                        String[] strings = new String[objects.length];
+                        for (int i = 0; i < objects.length; i++) {
+                            strings[i] = objects[i] == null ? null : objects[i].toString();
+                        }
+                        return strings;
+                    }
+                    return new String[0];
+                });
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at key with options.
+     */
+    @Override
+    public CompletableFuture<GlideString[]> sort(GlideString key, glide.api.models.commands.SortOptionsBinary sortOptions) {
+        // For now, implement basic version without full SortOptions support
+        return executeCommand(CommandType.SORT, key.toString())
+                .thenApply(result -> {
+                    if (result instanceof Object[]) {
+                        Object[] objects = (Object[]) result;
+                        GlideString[] glideStrings = new GlideString[objects.length];
+                        for (int i = 0; i < objects.length; i++) {
+                            glideStrings[i] = objects[i] == null ? null : GlideString.of(objects[i].toString());
+                        }
+                        return glideStrings;
+                    }
+                    return new GlideString[0];
+                });
+    }
+
+    /**
+     * Read-only variant of SORT command.
+     */
+    @Override
+    public CompletableFuture<String[]> sortReadOnly(String key) {
+        return executeCommand(CommandType.SORT_RO, key)
+                .thenApply(result -> {
+                    if (result instanceof Object[]) {
+                        Object[] objects = (Object[]) result;
+                        String[] strings = new String[objects.length];
+                        for (int i = 0; i < objects.length; i++) {
+                            strings[i] = objects[i] == null ? null : objects[i].toString();
+                        }
+                        return strings;
+                    }
+                    return new String[0];
+                });
+    }
+
+    /**
+     * Read-only variant of SORT command.
+     */
+    @Override
+    public CompletableFuture<GlideString[]> sortReadOnly(GlideString key) {
+        return executeCommand(CommandType.SORT_RO, key.toString())
+                .thenApply(result -> {
+                    if (result instanceof Object[]) {
+                        Object[] objects = (Object[]) result;
+                        GlideString[] glideStrings = new GlideString[objects.length];
+                        for (int i = 0; i < objects.length; i++) {
+                            glideStrings[i] = objects[i] == null ? null : GlideString.of(objects[i].toString());
+                        }
+                        return glideStrings;
+                    }
+                    return new GlideString[0];
+                });
+    }
+
+    /**
+     * Read-only variant of SORT command with options.
+     */
+    @Override
+    public CompletableFuture<String[]> sortReadOnly(String key, glide.api.models.commands.SortOptions sortOptions) {
+        // For now, implement basic version without full SortOptions support
+        return executeCommand(CommandType.SORT_RO, key)
+                .thenApply(result -> {
+                    if (result instanceof Object[]) {
+                        Object[] objects = (Object[]) result;
+                        String[] strings = new String[objects.length];
+                        for (int i = 0; i < objects.length; i++) {
+                            strings[i] = objects[i] == null ? null : objects[i].toString();
+                        }
+                        return strings;
+                    }
+                    return new String[0];
+                });
+    }
+
+    /**
+     * Read-only variant of SORT command with options.
+     */
+    @Override
+    public CompletableFuture<GlideString[]> sortReadOnly(GlideString key, glide.api.models.commands.SortOptionsBinary sortOptions) {
+        // For now, implement basic version without full SortOptions support
+        return executeCommand(CommandType.SORT_RO, key.toString())
+                .thenApply(result -> {
+                    if (result instanceof Object[]) {
+                        Object[] objects = (Object[]) result;
+                        GlideString[] glideStrings = new GlideString[objects.length];
+                        for (int i = 0; i < objects.length; i++) {
+                            glideStrings[i] = objects[i] == null ? null : GlideString.of(objects[i].toString());
+                        }
+                        return glideStrings;
+                    }
+                    return new GlideString[0];
+                });
+    }
+
+    /**
+     * Sorts the elements and stores the result in destination.
+     */
+    @Override
+    public CompletableFuture<Long> sortStore(String key, String destination) {
+        return executeCommand(CommandType.SORT, key, "STORE", destination)
+                .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Sorts the elements and stores the result in destination.
+     */
+    @Override
+    public CompletableFuture<Long> sortStore(GlideString key, GlideString destination) {
+        return executeCommand(CommandType.SORT, key.toString(), "STORE", destination.toString())
+                .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Sorts the elements and stores the result in destination with options.
+     */
+    @Override
+    public CompletableFuture<Long> sortStore(String key, String destination, glide.api.models.commands.SortOptions sortOptions) {
+        // For now, implement basic version without full SortOptions support
+        return executeCommand(CommandType.SORT, key, "STORE", destination)
+                .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Sorts the elements and stores the result in destination with options.
+     */
+    @Override
+    public CompletableFuture<Long> sortStore(GlideString key, GlideString destination, glide.api.models.commands.SortOptionsBinary sortOptions) {
+        // For now, implement basic version without full SortOptions support
+        return executeCommand(CommandType.SORT, key.toString(), "STORE", destination.toString())
+                .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Blocks until all previously sent write commands complete.
+     */
+    @Override
+    public CompletableFuture<Long> wait(long numreplicas, long timeout) {
+        return executeCommand(CommandType.WAIT, String.valueOf(numreplicas), String.valueOf(timeout))
+                .thenApply(result -> Long.parseLong(result.toString()));
     }
 
     /**
