@@ -16,6 +16,8 @@ import glide.api.models.commands.ListDirection;
 import io.valkey.glide.core.client.GlideClient;
 import io.valkey.glide.core.commands.Command;
 import io.valkey.glide.core.commands.CommandType;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -104,9 +106,14 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<String> set(String key, String value, SetOptions options) {
-        // For now, implement a basic version without full SetOptions support
-        return executeCommand(CommandType.SET, key, value)
-                .thenApply(result -> result.toString());
+        List<String> args = new ArrayList<>();
+        args.add(key);
+        args.add(value);
+        if (options != null) {
+            args.addAll(Arrays.asList(options.toArgs()));
+        }
+        return executeCommand(CommandType.SET, args.toArray(new String[0]))
+                .thenApply(result -> result == null ? null : result.toString());
     }
 
     /**
@@ -114,9 +121,14 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<String> set(GlideString key, GlideString value, SetOptions options) {
-        // For now, implement a basic version without full SetOptions support
-        return executeCommand(CommandType.SET, key.toString(), value.toString())
-                .thenApply(result -> result.toString());
+        List<String> args = new ArrayList<>();
+        args.add(key.toString());
+        args.add(value.toString());
+        if (options != null) {
+            args.addAll(Arrays.asList(options.toArgs()));
+        }
+        return executeCommand(CommandType.SET, args.toArray(new String[0]))
+                .thenApply(result -> result == null ? null : result.toString());
     }
 
     /**
@@ -160,8 +172,12 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<String> getex(String key, GetExOptions options) {
-        // For now, implement basic version without full GetExOptions support
-        return executeCommand(CommandType.GETEX, key)
+        List<String> args = new ArrayList<>();
+        args.add(key);
+        if (options != null) {
+            args.addAll(Arrays.asList(options.toArgs()));
+        }
+        return executeCommand(CommandType.GETEX, args.toArray(new String[0]))
                 .thenApply(result -> result == null ? null : result.toString());
     }
 
@@ -170,8 +186,12 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<GlideString> getex(GlideString key, GetExOptions options) {
-        // For now, implement basic version without full GetExOptions support
-        return executeCommand(CommandType.GETEX, key.toString())
+        List<String> args = new ArrayList<>();
+        args.add(key.toString());
+        if (options != null) {
+            args.addAll(Arrays.asList(options.toArgs()));
+        }
+        return executeCommand(CommandType.GETEX, args.toArray(new String[0]))
                 .thenApply(result -> result == null ? null : GlideString.of(result.toString()));
     }
 
@@ -2700,8 +2720,13 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Object[]> hscan(String key, String cursor, glide.api.models.commands.scan.HScanOptions hScanOptions) {
-        // For now, implement basic version without full HScanOptions support
-        return executeCommand(CommandType.HSCAN, key, cursor)
+        List<String> args = new ArrayList<>();
+        args.add(key);
+        args.add(cursor);
+        if (hScanOptions != null) {
+            args.addAll(Arrays.asList(hScanOptions.toArgs()));
+        }
+        return executeCommand(CommandType.HSCAN, args.toArray(new String[0]))
                 .thenApply(result -> (Object[]) result);
     }
 
@@ -2710,8 +2735,13 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Object[]> hscan(GlideString key, GlideString cursor, glide.api.models.commands.scan.HScanOptionsBinary hScanOptions) {
-        // For now, implement basic version without full HScanOptions support
-        return executeCommand(CommandType.HSCAN, key.toString(), cursor.toString())
+        List<String> args = new ArrayList<>();
+        args.add(key.toString());
+        args.add(cursor.toString());
+        if (hScanOptions != null) {
+            args.addAll(Arrays.asList(hScanOptions.toArgs()));
+        }
+        return executeCommand(CommandType.HSCAN, args.toArray(new String[0]))
                 .thenApply(result -> (Object[]) result);
     }
 
@@ -3066,8 +3096,13 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Long> lpos(String key, String element, LPosOptions options) {
-        // For now, implement basic version without full LPosOptions support
-        return executeCommand(CommandType.LPOS, key, element)
+        List<String> args = new ArrayList<>();
+        args.add(key);
+        args.add(element);
+        if (options != null) {
+            args.addAll(Arrays.asList(options.toArgs()));
+        }
+        return executeCommand(CommandType.LPOS, args.toArray(new String[0]))
                 .thenApply(result -> result == null ? null : Long.parseLong(result.toString()));
     }
 
@@ -3076,8 +3111,13 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Long> lpos(GlideString key, GlideString element, LPosOptions options) {
-        // For now, implement basic version without full LPosOptions support
-        return executeCommand(CommandType.LPOS, key.toString(), element.toString())
+        List<String> args = new ArrayList<>();
+        args.add(key.toString());
+        args.add(element.toString());
+        if (options != null) {
+            args.addAll(Arrays.asList(options.toArgs()));
+        }
+        return executeCommand(CommandType.LPOS, args.toArray(new String[0]))
                 .thenApply(result -> result == null ? null : Long.parseLong(result.toString()));
     }
 
@@ -3086,7 +3126,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Long[]> lposCount(String key, String element, long count) {
-        return executeCommand(CommandType.LPOS, key, element, COUNT_FOR_LIST_VALKEY_API, String.valueOf(count))
+        return executeCommand(CommandType.LPOS, key, element, LPosOptions.COUNT_VALKEY_API, String.valueOf(count))
                 .thenApply(result -> {
                     if (result instanceof Object[]) {
                         Object[] objects = (Object[]) result;
@@ -3105,7 +3145,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Long[]> lposCount(GlideString key, GlideString element, long count) {
-        return executeCommand(CommandType.LPOS, key.toString(), element.toString(), COUNT_FOR_LIST_VALKEY_API, String.valueOf(count))
+        return executeCommand(CommandType.LPOS, key.toString(), element.toString(), LPosOptions.COUNT_VALKEY_API, String.valueOf(count))
                 .thenApply(result -> {
                     if (result instanceof Object[]) {
                         Object[] objects = (Object[]) result;
@@ -3124,8 +3164,15 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Long[]> lposCount(String key, String element, long count, LPosOptions options) {
-        // For now, implement basic version without full LPosOptions support
-        return executeCommand(CommandType.LPOS, key, element, COUNT_FOR_LIST_VALKEY_API, String.valueOf(count))
+        List<String> args = new ArrayList<>();
+        args.add(key);
+        args.add(element);
+        if (options != null) {
+            args.addAll(Arrays.asList(options.toArgs()));
+        }
+        args.add(LPosOptions.COUNT_VALKEY_API);
+        args.add(String.valueOf(count));
+        return executeCommand(CommandType.LPOS, args.toArray(new String[0]))
                 .thenApply(result -> {
                     if (result instanceof Object[]) {
                         Object[] objects = (Object[]) result;
@@ -3144,8 +3191,15 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Long[]> lposCount(GlideString key, GlideString element, long count, LPosOptions options) {
-        // For now, implement basic version without full LPosOptions support
-        return executeCommand(CommandType.LPOS, key.toString(), element.toString(), COUNT_FOR_LIST_VALKEY_API, String.valueOf(count))
+        List<String> args = new ArrayList<>();
+        args.add(key.toString());
+        args.add(element.toString());
+        if (options != null) {
+            args.addAll(Arrays.asList(options.toArgs()));
+        }
+        args.add(LPosOptions.COUNT_VALKEY_API);
+        args.add(String.valueOf(count));
+        return executeCommand(CommandType.LPOS, args.toArray(new String[0]))
                 .thenApply(result -> {
                     if (result instanceof Object[]) {
                         Object[] objects = (Object[]) result;
@@ -3308,7 +3362,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         args[0] = String.valueOf(keys.length);
         System.arraycopy(keys, 0, args, 1, keys.length);
         args[keys.length + 1] = direction == ListDirection.LEFT ? "LEFT" : "RIGHT";
-        args[keys.length + 2] = COUNT_FOR_LIST_VALKEY_API;
+        args[keys.length + 2] = LPosOptions.COUNT_VALKEY_API;
         args[keys.length + 3] = String.valueOf(count);
         return executeCommand(CommandType.LMPOP, args)
                 .thenApply(result -> {
@@ -3343,7 +3397,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
             args[i + 1] = keys[i].toString();
         }
         args[keys.length + 1] = direction == ListDirection.LEFT ? "LEFT" : "RIGHT";
-        args[keys.length + 2] = COUNT_FOR_LIST_VALKEY_API;
+        args[keys.length + 2] = LPosOptions.COUNT_VALKEY_API;
         args[keys.length + 3] = String.valueOf(count);
         return executeCommand(CommandType.LMPOP, args)
                 .thenApply(result -> {
@@ -3443,7 +3497,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         args[1] = String.valueOf(keys.length);
         System.arraycopy(keys, 0, args, 2, keys.length);
         args[keys.length + 2] = direction == ListDirection.LEFT ? "LEFT" : "RIGHT";
-        args[keys.length + 3] = COUNT_FOR_LIST_VALKEY_API;
+        args[keys.length + 3] = LPosOptions.COUNT_VALKEY_API;
         args[keys.length + 4] = String.valueOf(count);
         return executeCommand(CommandType.BLMPOP, args)
                 .thenApply(result -> {
@@ -3479,7 +3533,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
             args[i + 2] = keys[i].toString();
         }
         args[keys.length + 2] = direction == ListDirection.LEFT ? "LEFT" : "RIGHT";
-        args[keys.length + 3] = COUNT_FOR_LIST_VALKEY_API;
+        args[keys.length + 3] = LPosOptions.COUNT_VALKEY_API;
         args[keys.length + 4] = String.valueOf(count);
         return executeCommand(CommandType.BLMPOP, args)
                 .thenApply(result -> {
@@ -3840,8 +3894,13 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Object[]> sscan(String key, String cursor, glide.api.models.commands.scan.SScanOptions sScanOptions) {
-        // For now, implement basic version without full SScanOptions support
-        return executeCommand(CommandType.SSCAN, key, cursor)
+        List<String> args = new ArrayList<>();
+        args.add(key);
+        args.add(cursor);
+        if (sScanOptions != null) {
+            args.addAll(Arrays.asList(sScanOptions.toArgs()));
+        }
+        return executeCommand(CommandType.SSCAN, args.toArray(new String[0]))
                 .thenApply(result -> (Object[]) result);
     }
 
@@ -3850,8 +3909,13 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Object[]> sscan(GlideString key, GlideString cursor, glide.api.models.commands.scan.SScanOptionsBinary sScanOptions) {
-        // For now, implement basic version without full SScanOptions support
-        return executeCommand(CommandType.SSCAN, key.toString(), cursor.toString())
+        List<String> args = new ArrayList<>();
+        args.add(key.toString());
+        args.add(cursor.toString());
+        if (sScanOptions != null) {
+            args.addAll(Arrays.asList(sScanOptions.toArgs()));
+        }
+        return executeCommand(CommandType.SSCAN, args.toArray(new String[0]))
                 .thenApply(result -> (Object[]) result);
     }
 
@@ -3897,8 +3961,13 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Boolean> expire(String key, long seconds, glide.api.models.commands.ExpireOptions expireOptions) {
-        // For now, implement basic version without full ExpireOptions support
-        return executeCommand(CommandType.EXPIRE, key, String.valueOf(seconds))
+        List<String> args = new ArrayList<>();
+        args.add(key);
+        args.add(String.valueOf(seconds));
+        if (expireOptions != null) {
+            args.addAll(Arrays.asList(expireOptions.toArgs()));
+        }
+        return executeCommand(CommandType.EXPIRE, args.toArray(new String[0]))
                 .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -3907,8 +3976,13 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Boolean> expire(GlideString key, long seconds, glide.api.models.commands.ExpireOptions expireOptions) {
-        // For now, implement basic version without full ExpireOptions support
-        return executeCommand(CommandType.EXPIRE, key.toString(), String.valueOf(seconds))
+        List<String> args = new ArrayList<>();
+        args.add(key.toString());
+        args.add(String.valueOf(seconds));
+        if (expireOptions != null) {
+            args.addAll(Arrays.asList(expireOptions.toArgs()));
+        }
+        return executeCommand(CommandType.EXPIRE, args.toArray(new String[0]))
                 .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -3935,8 +4009,13 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Boolean> expireAt(String key, long unixSeconds, glide.api.models.commands.ExpireOptions expireOptions) {
-        // For now, implement basic version without full ExpireOptions support
-        return executeCommand(CommandType.EXPIREAT, key, String.valueOf(unixSeconds))
+        List<String> args = new ArrayList<>();
+        args.add(key);
+        args.add(String.valueOf(unixSeconds));
+        if (expireOptions != null) {
+            args.addAll(Arrays.asList(expireOptions.toArgs()));
+        }
+        return executeCommand(CommandType.EXPIREAT, args.toArray(new String[0]))
                 .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -3945,8 +4024,13 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Boolean> expireAt(GlideString key, long unixSeconds, glide.api.models.commands.ExpireOptions expireOptions) {
-        // For now, implement basic version without full ExpireOptions support
-        return executeCommand(CommandType.EXPIREAT, key.toString(), String.valueOf(unixSeconds))
+        List<String> args = new ArrayList<>();
+        args.add(key.toString());
+        args.add(String.valueOf(unixSeconds));
+        if (expireOptions != null) {
+            args.addAll(Arrays.asList(expireOptions.toArgs()));
+        }
+        return executeCommand(CommandType.EXPIREAT, args.toArray(new String[0]))
                 .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -3973,8 +4057,13 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Boolean> pexpire(String key, long milliseconds, glide.api.models.commands.ExpireOptions expireOptions) {
-        // For now, implement basic version without full ExpireOptions support
-        return executeCommand(CommandType.PEXPIRE, key, String.valueOf(milliseconds))
+        List<String> args = new ArrayList<>();
+        args.add(key);
+        args.add(String.valueOf(milliseconds));
+        if (expireOptions != null) {
+            args.addAll(Arrays.asList(expireOptions.toArgs()));
+        }
+        return executeCommand(CommandType.PEXPIRE, args.toArray(new String[0]))
                 .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -3983,8 +4072,13 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Boolean> pexpire(GlideString key, long milliseconds, glide.api.models.commands.ExpireOptions expireOptions) {
-        // For now, implement basic version without full ExpireOptions support
-        return executeCommand(CommandType.PEXPIRE, key.toString(), String.valueOf(milliseconds))
+        List<String> args = new ArrayList<>();
+        args.add(key.toString());
+        args.add(String.valueOf(milliseconds));
+        if (expireOptions != null) {
+            args.addAll(Arrays.asList(expireOptions.toArgs()));
+        }
+        return executeCommand(CommandType.PEXPIRE, args.toArray(new String[0]))
                 .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -4011,8 +4105,13 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Boolean> pexpireAt(String key, long unixMilliseconds, glide.api.models.commands.ExpireOptions expireOptions) {
-        // For now, implement basic version without full ExpireOptions support
-        return executeCommand(CommandType.PEXPIREAT, key, String.valueOf(unixMilliseconds))
+        List<String> args = new ArrayList<>();
+        args.add(key);
+        args.add(String.valueOf(unixMilliseconds));
+        if (expireOptions != null) {
+            args.addAll(Arrays.asList(expireOptions.toArgs()));
+        }
+        return executeCommand(CommandType.PEXPIREAT, args.toArray(new String[0]))
                 .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -4021,8 +4120,13 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Boolean> pexpireAt(GlideString key, long unixMilliseconds, glide.api.models.commands.ExpireOptions expireOptions) {
-        // For now, implement basic version without full ExpireOptions support
-        return executeCommand(CommandType.PEXPIREAT, key.toString(), String.valueOf(unixMilliseconds))
+        List<String> args = new ArrayList<>();
+        args.add(key.toString());
+        args.add(String.valueOf(unixMilliseconds));
+        if (expireOptions != null) {
+            args.addAll(Arrays.asList(expireOptions.toArgs()));
+        }
+        return executeCommand(CommandType.PEXPIREAT, args.toArray(new String[0]))
                 .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -4153,8 +4257,17 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<String> restore(GlideString key, long ttl, byte[] value, glide.api.models.commands.RestoreOptions restoreOptions) {
-        // For now, implement basic version without full RestoreOptions support
-        return executeCommand(CommandType.RESTORE, key.toString(), String.valueOf(ttl), new String(value))
+        List<String> args = new ArrayList<>();
+        args.add(key.toString());
+        args.add(String.valueOf(ttl));
+        args.add(new String(value));
+        if (restoreOptions != null) {
+            GlideString[] optionArgs = restoreOptions.toArgs();
+            for (GlideString arg : optionArgs) {
+                args.add(arg.toString());
+            }
+        }
+        return executeCommand(CommandType.RESTORE, args.toArray(new String[0]))
                 .thenApply(result -> result.toString());
     }
 
@@ -4201,8 +4314,12 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<String[]> sort(String key, glide.api.models.commands.SortOptions sortOptions) {
-        // For now, implement basic version without full SortOptions support
-        return executeCommand(CommandType.SORT, key)
+        List<String> args = new ArrayList<>();
+        args.add(key);
+        if (sortOptions != null) {
+            args.addAll(Arrays.asList(sortOptions.toArgs()));
+        }
+        return executeCommand(CommandType.SORT, args.toArray(new String[0]))
                 .thenApply(result -> {
                     if (result instanceof Object[]) {
                         Object[] objects = (Object[]) result;
@@ -4221,8 +4338,12 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<GlideString[]> sort(GlideString key, glide.api.models.commands.SortOptionsBinary sortOptions) {
-        // For now, implement basic version without full SortOptions support
-        return executeCommand(CommandType.SORT, key.toString())
+        List<String> args = new ArrayList<>();
+        args.add(key.toString());
+        if (sortOptions != null) {
+            args.addAll(Arrays.asList(sortOptions.toArgs()));
+        }
+        return executeCommand(CommandType.SORT, args.toArray(new String[0]))
                 .thenApply(result -> {
                     if (result instanceof Object[]) {
                         Object[] objects = (Object[]) result;
@@ -4279,8 +4400,12 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<String[]> sortReadOnly(String key, glide.api.models.commands.SortOptions sortOptions) {
-        // For now, implement basic version without full SortOptions support
-        return executeCommand(CommandType.SORT_RO, key)
+        List<String> args = new ArrayList<>();
+        args.add(key);
+        if (sortOptions != null) {
+            args.addAll(Arrays.asList(sortOptions.toArgs()));
+        }
+        return executeCommand(CommandType.SORT_RO, args.toArray(new String[0]))
                 .thenApply(result -> {
                     if (result instanceof Object[]) {
                         Object[] objects = (Object[]) result;
@@ -4299,8 +4424,12 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<GlideString[]> sortReadOnly(GlideString key, glide.api.models.commands.SortOptionsBinary sortOptions) {
-        // For now, implement basic version without full SortOptions support
-        return executeCommand(CommandType.SORT_RO, key.toString())
+        List<String> args = new ArrayList<>();
+        args.add(key.toString());
+        if (sortOptions != null) {
+            args.addAll(Arrays.asList(sortOptions.toArgs()));
+        }
+        return executeCommand(CommandType.SORT_RO, args.toArray(new String[0]))
                 .thenApply(result -> {
                     if (result instanceof Object[]) {
                         Object[] objects = (Object[]) result;
@@ -4337,8 +4466,14 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Long> sortStore(String key, String destination, glide.api.models.commands.SortOptions sortOptions) {
-        // For now, implement basic version without full SortOptions support
-        return executeCommand(CommandType.SORT, key, "STORE", destination)
+        List<String> args = new ArrayList<>();
+        args.add(key);
+        if (sortOptions != null) {
+            args.addAll(Arrays.asList(sortOptions.toArgs()));
+        }
+        args.add("STORE");
+        args.add(destination);
+        return executeCommand(CommandType.SORT, args.toArray(new String[0]))
                 .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -4347,8 +4482,14 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Long> sortStore(GlideString key, GlideString destination, glide.api.models.commands.SortOptionsBinary sortOptions) {
-        // For now, implement basic version without full SortOptions support
-        return executeCommand(CommandType.SORT, key.toString(), "STORE", destination.toString())
+        List<String> args = new ArrayList<>();
+        args.add(key.toString());
+        if (sortOptions != null) {
+            args.addAll(Arrays.asList(sortOptions.toArgs()));
+        }
+        args.add("STORE");
+        args.add(destination.toString());
+        return executeCommand(CommandType.SORT, args.toArray(new String[0]))
                 .thenApply(result -> Long.parseLong(result.toString()));
     }
 
