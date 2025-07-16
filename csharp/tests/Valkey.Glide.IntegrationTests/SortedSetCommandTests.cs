@@ -24,22 +24,20 @@ public class SortedSetCommandTests(TestConfiguration config)
     public async Task TestSortedSetAdd_MultipleMembers(BaseClient client)
     {
         string key = Guid.NewGuid().ToString();
-        SortedSetEntry[] entries = new SortedSetEntry[]
-        {
+        SortedSetEntry[] entries = [
             new("member1", 10.5),
             new("member2", 8.2),
             new("member3", 15.0)
-        };
+        ];
 
         // Test adding multiple new members
         Assert.Equal(3, await client.SortedSetAddAsync(key, entries));
 
         // Test adding mix of new and existing members
-        SortedSetEntry[] newEntries = new SortedSetEntry[]
-        {
+        SortedSetEntry[] newEntries = [
             new("member1", 20.0), // Update existing
             new("member4", 12.0)  // Add new
-        };
+        ];
         Assert.Equal(1, await client.SortedSetAddAsync(key, newEntries)); // Only member4 is new
     }
 
@@ -114,27 +112,24 @@ public class SortedSetCommandTests(TestConfiguration config)
         string key = Guid.NewGuid().ToString();
 
         // Add initial members
-        SortedSetEntry[] initialEntries = new SortedSetEntry[]
-        {
+        SortedSetEntry[] initialEntries = [
             new("member1", 10.0),
             new("member2", 8.0)
-        };
+        ];
         Assert.Equal(2, await client.SortedSetAddAsync(key, initialEntries));
 
         // Try to add with NX (should only add new members)
-        SortedSetEntry[] nxEntries = new SortedSetEntry[]
-        {
+        SortedSetEntry[] nxEntries = [
             new("member1", 15.0), // Existing, should not update
             new("member3", 12.0)  // New, should add
-        };
+        ];
         Assert.Equal(1, await client.SortedSetAddAsync(key, nxEntries, SortedSetWhen.NotExists));
 
         // Update existing members with XX
-        SortedSetEntry[] xxEntries = new SortedSetEntry[]
-        {
+        SortedSetEntry[] xxEntries = [
             new("member1", 20.0), // Existing, should update
             new("member4", 5.0)   // New, should not add
-        };
+        ];
         Assert.Equal(0, await client.SortedSetAddAsync(key, xxEntries, SortedSetWhen.Exists));
     }
 
@@ -148,11 +143,10 @@ public class SortedSetCommandTests(TestConfiguration config)
         Assert.True(await client.SortedSetAddAsync(key, "member1", -10.5));
         Assert.True(await client.SortedSetAddAsync(key, "member2", -5.0));
 
-        SortedSetEntry[] entries = new SortedSetEntry[]
-        {
+        SortedSetEntry[] entries = [
             new("member3", -15.0),
             new("member4", 0.0)
-        };
+        ];
         Assert.Equal(2, await client.SortedSetAddAsync(key, entries));
     }
 
@@ -196,7 +190,7 @@ public class SortedSetCommandTests(TestConfiguration config)
         Assert.False(await client.SortedSetAddAsync(key, "member1", 15.0, When.Exists));
 
         // Test obsolete array overloads
-        SortedSetEntry[] entries = new SortedSetEntry[] { new("member2", 8.0) };
+        SortedSetEntry[] entries = [new("member2", 8.0)];
         Assert.Equal(1, await client.SortedSetAddAsync(key, entries, CommandFlags.None));
         Assert.Equal(0, await client.SortedSetAddAsync(key, entries, When.Exists));
     }
@@ -237,13 +231,12 @@ public class SortedSetCommandTests(TestConfiguration config)
         Assert.Equal(0, await client.SortedSetRemoveAsync(key, ["member1", "member2"]));
 
         // Add members first
-        SortedSetEntry[] entries = new SortedSetEntry[]
-        {
+        SortedSetEntry[] entries = [
             new("member1", 10.5),
             new("member2", 8.2),
             new("member3", 15.0),
             new("member4", 12.0)
-        };
+        ];
         Assert.Equal(4, await client.SortedSetAddAsync(key, entries));
 
         // Test removing multiple existing members
@@ -286,7 +279,7 @@ public class SortedSetCommandTests(TestConfiguration config)
         Assert.True(await client.SortedSetAddAsync(key, "member2", 8.2));
 
         // Test removing with duplicate member names in array
-        ValkeyValue[] membersWithDuplicates = new ValkeyValue[] { "member1", "member1", "member2", "member1" };
+        ValkeyValue[] membersWithDuplicates = ["member1", "member1", "member2", "member1"];
         Assert.Equal(2, await client.SortedSetRemoveAsync(key, membersWithDuplicates));
     }
 
@@ -297,7 +290,7 @@ public class SortedSetCommandTests(TestConfiguration config)
         string key = Guid.NewGuid().ToString();
 
         // Test with special string values
-        ValkeyValue[] specialMembers = new ValkeyValue[] { "", " ", "null", "0", "-1", "true", "false" };
+        ValkeyValue[] specialMembers = ["", " ", "null", "0", "-1", "true", "false"];
 
         // Add special members with various scores
         for (int i = 0; i < specialMembers.Length; i++)

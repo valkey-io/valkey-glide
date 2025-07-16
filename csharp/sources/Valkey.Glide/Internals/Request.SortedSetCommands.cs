@@ -78,10 +78,7 @@ internal partial class Request
         Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
 
         List<GlideString> args = [key.ToGlideString()];
-        foreach (ValkeyValue member in members)
-        {
-            args.Add(member.ToGlideString());
-        }
+        args.AddRange(members.Select(member => member.ToGlideString()));
 
         return Simple<long>(RequestType.ZRem, [.. args]);
     }
