@@ -208,6 +208,220 @@ public abstract class BaseClient {
     }
 
     /**
+     * Increments the number stored at key by one.
+     *
+     * @param key The key to increment
+     * @return A CompletableFuture containing the value after increment
+     */
+    public CompletableFuture<Long> incr(String key) {
+        return executeCommand(CommandType.INCR, key)
+            .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Increments the number stored at key by one (supports binary data).
+     *
+     * @param key The key to increment (supports binary data)
+     * @return A CompletableFuture containing the value after increment
+     */
+    public CompletableFuture<Long> incr(GlideString key) {
+        return executeCommand(CommandType.INCR, key.toString())
+            .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Increments the number stored at key by amount.
+     *
+     * @param key The key to increment
+     * @param amount The amount to increment by
+     * @return A CompletableFuture containing the value after increment
+     */
+    public CompletableFuture<Long> incrBy(String key, long amount) {
+        return executeCommand(CommandType.INCRBY, key, String.valueOf(amount))
+            .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Increments the number stored at key by amount (supports binary data).
+     *
+     * @param key The key to increment (supports binary data)
+     * @param amount The amount to increment by
+     * @return A CompletableFuture containing the value after increment
+     */
+    public CompletableFuture<Long> incrBy(GlideString key, long amount) {
+        return executeCommand(CommandType.INCRBY, key.toString(), String.valueOf(amount))
+            .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Increments the floating-point number stored at key by amount.
+     *
+     * @param key The key to increment
+     * @param amount The amount to increment by
+     * @return A CompletableFuture containing the value after increment
+     */
+    public CompletableFuture<Double> incrByFloat(String key, double amount) {
+        return executeCommand(CommandType.INCRBYFLOAT, key, String.valueOf(amount))
+            .thenApply(result -> Double.parseDouble(result.toString()));
+    }
+
+    /**
+     * Increments the floating-point number stored at key by amount (supports binary data).
+     *
+     * @param key The key to increment (supports binary data)
+     * @param amount The amount to increment by
+     * @return A CompletableFuture containing the value after increment
+     */
+    public CompletableFuture<Double> incrByFloat(GlideString key, double amount) {
+        return executeCommand(CommandType.INCRBYFLOAT, key.toString(), String.valueOf(amount))
+            .thenApply(result -> Double.parseDouble(result.toString()));
+    }
+
+    /**
+     * Decrements the number stored at key by one.
+     *
+     * @param key The key to decrement
+     * @return A CompletableFuture containing the value after decrement
+     */
+    public CompletableFuture<Long> decr(String key) {
+        return executeCommand(CommandType.DECR, key)
+            .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Decrements the number stored at key by one (supports binary data).
+     *
+     * @param key The key to decrement (supports binary data)
+     * @return A CompletableFuture containing the value after decrement
+     */
+    public CompletableFuture<Long> decr(GlideString key) {
+        return executeCommand(CommandType.DECR, key.toString())
+            .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Decrements the number stored at key by amount.
+     *
+     * @param key The key to decrement
+     * @param amount The amount to decrement by
+     * @return A CompletableFuture containing the value after decrement
+     */
+    public CompletableFuture<Long> decrBy(String key, long amount) {
+        return executeCommand(CommandType.DECRBY, key, String.valueOf(amount))
+            .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Decrements the number stored at key by amount (supports binary data).
+     *
+     * @param key The key to decrement (supports binary data)
+     * @param amount The amount to decrement by
+     * @return A CompletableFuture containing the value after decrement
+     */
+    public CompletableFuture<Long> decrBy(GlideString key, long amount) {
+        return executeCommand(CommandType.DECRBY, key.toString(), String.valueOf(amount))
+            .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Returns the length of the string value stored at key.
+     *
+     * @param key The key to get length for
+     * @return A CompletableFuture containing the length of the string
+     */
+    public CompletableFuture<Long> strlen(String key) {
+        return executeCommand(CommandType.STRLEN, key)
+            .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Returns the length of the string value stored at key (supports binary data).
+     *
+     * @param key The key to get length for (supports binary data)
+     * @return A CompletableFuture containing the length of the string
+     */
+    public CompletableFuture<Long> strlen(GlideString key) {
+        return executeCommand(CommandType.STRLEN, key.toString())
+            .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Appends a value to a key.
+     *
+     * @param key The key to append to
+     * @param value The value to append
+     * @return A CompletableFuture containing the length of the string after append
+     */
+    public CompletableFuture<Long> append(String key, String value) {
+        return executeCommand(CommandType.APPEND, key, value)
+            .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Appends a value to a key (supports binary data).
+     *
+     * @param key The key to append to (supports binary data)
+     * @param value The value to append (supports binary data)
+     * @return A CompletableFuture containing the length of the string after append
+     */
+    public CompletableFuture<Long> append(GlideString key, GlideString value) {
+        return executeCommand(CommandType.APPEND, key.toString(), value.toString())
+            .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Returns a substring of the string value stored at key.
+     *
+     * @param key The key to get range from
+     * @param start The start index
+     * @param end The end index
+     * @return A CompletableFuture containing the substring
+     */
+    public CompletableFuture<String> getrange(String key, int start, int end) {
+        return executeCommand(CommandType.GETRANGE, key, String.valueOf(start), String.valueOf(end))
+            .thenApply(result -> result == null ? null : result.toString());
+    }
+
+    /**
+     * Returns a substring of the string value stored at key (supports binary data).
+     *
+     * @param key The key to get range from (supports binary data)
+     * @param start The start index
+     * @param end The end index
+     * @return A CompletableFuture containing the substring
+     */
+    public CompletableFuture<GlideString> getrange(GlideString key, int start, int end) {
+        return executeCommand(CommandType.GETRANGE, key.toString(), String.valueOf(start), String.valueOf(end))
+            .thenApply(result -> result == null ? null : GlideString.of(result.toString()));
+    }
+
+    /**
+     * Overwrites part of the string stored at key.
+     *
+     * @param key The key to modify
+     * @param offset The offset to start overwriting at
+     * @param value The value to overwrite with
+     * @return A CompletableFuture containing the length of the string after modification
+     */
+    public CompletableFuture<Long> setrange(String key, int offset, String value) {
+        return executeCommand(CommandType.SETRANGE, key, String.valueOf(offset), value)
+            .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Overwrites part of the string stored at key (supports binary data).
+     *
+     * @param key The key to modify (supports binary data)
+     * @param offset The offset to start overwriting at
+     * @param value The value to overwrite with (supports binary data)
+     * @return A CompletableFuture containing the length of the string after modification
+     */
+    public CompletableFuture<Long> setrange(GlideString key, int offset, GlideString value) {
+        return executeCommand(CommandType.SETRANGE, key.toString(), String.valueOf(offset), value.toString())
+            .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
      * Set the string value of a hash field.
      *
      * @param key   The key of the hash
@@ -279,6 +493,334 @@ public abstract class BaseClient {
                 }
                 return map;
             });
+    }
+
+    /**
+     * Get all the fields and values in a hash (supports binary data).
+     *
+     * @param key The key of the hash (supports binary data)
+     * @return A CompletableFuture containing a map of field-value pairs
+     */
+    public CompletableFuture<Map<GlideString, GlideString>> hgetall(GlideString key) {
+        return executeCommand(CommandType.HGETALL, key.toString())
+            .thenApply(result -> {
+                Map<GlideString, GlideString> map = new java.util.HashMap<>();
+                if (result instanceof Object[]) {
+                    Object[] objects = (Object[]) result;
+                    for (int i = 0; i < objects.length; i += 2) {
+                        if (i + 1 < objects.length) {
+                            GlideString field = GlideString.of(objects[i].toString());
+                            GlideString value = GlideString.of(objects[i + 1].toString());
+                            map.put(field, value);
+                        }
+                    }
+                }
+                return map;
+            });
+    }
+
+    /**
+     * Set multiple field-value pairs in a hash.
+     *
+     * @param key The key of the hash
+     * @param fieldValueMap Map of field-value pairs to set
+     * @return A CompletableFuture containing the number of fields that were added
+     */
+    public CompletableFuture<Long> hset(String key, Map<String, String> fieldValueMap) {
+        String[] args = new String[fieldValueMap.size() * 2 + 1];
+        args[0] = key;
+        int i = 1;
+        for (Map.Entry<String, String> entry : fieldValueMap.entrySet()) {
+            args[i++] = entry.getKey();
+            args[i++] = entry.getValue();
+        }
+        return executeCommand(CommandType.HSET, args)
+            .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Set multiple field-value pairs in a hash (supports binary data).
+     *
+     * @param key The key of the hash (supports binary data)
+     * @param fieldValueMap Map of field-value pairs to set (supports binary data)
+     * @return A CompletableFuture containing the number of fields that were added
+     */
+    public CompletableFuture<Long> hset(GlideString key, Map<GlideString, GlideString> fieldValueMap) {
+        String[] args = new String[fieldValueMap.size() * 2 + 1];
+        args[0] = key.toString();
+        int i = 1;
+        for (Map.Entry<GlideString, GlideString> entry : fieldValueMap.entrySet()) {
+            args[i++] = entry.getKey().toString();
+            args[i++] = entry.getValue().toString();
+        }
+        return executeCommand(CommandType.HSET, args)
+            .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Delete one or more hash fields.
+     *
+     * @param key The key of the hash
+     * @param fields The fields to delete
+     * @return A CompletableFuture containing the number of fields that were removed
+     */
+    public CompletableFuture<Long> hdel(String key, String... fields) {
+        String[] args = new String[fields.length + 1];
+        args[0] = key;
+        System.arraycopy(fields, 0, args, 1, fields.length);
+        return executeCommand(CommandType.HDEL, args)
+            .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Delete one or more hash fields (supports binary data).
+     *
+     * @param key The key of the hash (supports binary data)
+     * @param fields The fields to delete (supports binary data)
+     * @return A CompletableFuture containing the number of fields that were removed
+     */
+    public CompletableFuture<Long> hdel(GlideString key, GlideString... fields) {
+        String[] args = new String[fields.length + 1];
+        args[0] = key.toString();
+        for (int i = 0; i < fields.length; i++) {
+            args[i + 1] = fields[i].toString();
+        }
+        return executeCommand(CommandType.HDEL, args)
+            .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Check if a hash field exists.
+     *
+     * @param key The key of the hash
+     * @param field The field to check
+     * @return A CompletableFuture containing true if the field exists, false otherwise
+     */
+    public CompletableFuture<Boolean> hexists(String key, String field) {
+        return executeCommand(CommandType.HEXISTS, key, field)
+            .thenApply(result -> "1".equals(result.toString()));
+    }
+
+    /**
+     * Check if a hash field exists (supports binary data).
+     *
+     * @param key The key of the hash (supports binary data)
+     * @param field The field to check (supports binary data)
+     * @return A CompletableFuture containing true if the field exists, false otherwise
+     */
+    public CompletableFuture<Boolean> hexists(GlideString key, GlideString field) {
+        return executeCommand(CommandType.HEXISTS, key.toString(), field.toString())
+            .thenApply(result -> "1".equals(result.toString()));
+    }
+
+    /**
+     * Get the number of fields in a hash.
+     *
+     * @param key The key of the hash
+     * @return A CompletableFuture containing the number of fields in the hash
+     */
+    public CompletableFuture<Long> hlen(String key) {
+        return executeCommand(CommandType.HLEN, key)
+            .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Get the number of fields in a hash (supports binary data).
+     *
+     * @param key The key of the hash (supports binary data)
+     * @return A CompletableFuture containing the number of fields in the hash
+     */
+    public CompletableFuture<Long> hlen(GlideString key) {
+        return executeCommand(CommandType.HLEN, key.toString())
+            .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Get all field names in a hash.
+     *
+     * @param key The key of the hash
+     * @return A CompletableFuture containing an array of field names
+     */
+    public CompletableFuture<String[]> hkeys(String key) {
+        return executeCommand(CommandType.HKEYS, key)
+            .thenApply(result -> {
+                if (result instanceof Object[]) {
+                    Object[] objects = (Object[]) result;
+                    String[] keys = new String[objects.length];
+                    for (int i = 0; i < objects.length; i++) {
+                        keys[i] = objects[i].toString();
+                    }
+                    return keys;
+                }
+                return new String[0];
+            });
+    }
+
+    /**
+     * Get all field names in a hash (supports binary data).
+     *
+     * @param key The key of the hash (supports binary data)
+     * @return A CompletableFuture containing an array of field names
+     */
+    public CompletableFuture<GlideString[]> hkeys(GlideString key) {
+        return executeCommand(CommandType.HKEYS, key.toString())
+            .thenApply(result -> {
+                if (result instanceof Object[]) {
+                    Object[] objects = (Object[]) result;
+                    GlideString[] keys = new GlideString[objects.length];
+                    for (int i = 0; i < objects.length; i++) {
+                        keys[i] = GlideString.of(objects[i].toString());
+                    }
+                    return keys;
+                }
+                return new GlideString[0];
+            });
+    }
+
+    /**
+     * Get all values in a hash.
+     *
+     * @param key The key of the hash
+     * @return A CompletableFuture containing an array of values
+     */
+    public CompletableFuture<String[]> hvals(String key) {
+        return executeCommand(CommandType.HVALS, key)
+            .thenApply(result -> {
+                if (result instanceof Object[]) {
+                    Object[] objects = (Object[]) result;
+                    String[] values = new String[objects.length];
+                    for (int i = 0; i < objects.length; i++) {
+                        values[i] = objects[i] == null ? null : objects[i].toString();
+                    }
+                    return values;
+                }
+                return new String[0];
+            });
+    }
+
+    /**
+     * Get all values in a hash (supports binary data).
+     *
+     * @param key The key of the hash (supports binary data)
+     * @return A CompletableFuture containing an array of values
+     */
+    public CompletableFuture<GlideString[]> hvals(GlideString key) {
+        return executeCommand(CommandType.HVALS, key.toString())
+            .thenApply(result -> {
+                if (result instanceof Object[]) {
+                    Object[] objects = (Object[]) result;
+                    GlideString[] values = new GlideString[objects.length];
+                    for (int i = 0; i < objects.length; i++) {
+                        values[i] = objects[i] == null ? null : GlideString.of(objects[i].toString());
+                    }
+                    return values;
+                }
+                return new GlideString[0];
+            });
+    }
+
+    /**
+     * Get the values of all specified hash fields.
+     *
+     * @param key The key of the hash
+     * @param fields The fields to get
+     * @return A CompletableFuture containing an array of values
+     */
+    public CompletableFuture<String[]> hmget(String key, String... fields) {
+        String[] args = new String[fields.length + 1];
+        args[0] = key;
+        System.arraycopy(fields, 0, args, 1, fields.length);
+        return executeCommand(CommandType.HMGET, args)
+            .thenApply(result -> {
+                if (result instanceof Object[]) {
+                    Object[] objects = (Object[]) result;
+                    String[] values = new String[objects.length];
+                    for (int i = 0; i < objects.length; i++) {
+                        values[i] = objects[i] == null ? null : objects[i].toString();
+                    }
+                    return values;
+                }
+                return new String[0];
+            });
+    }
+
+    /**
+     * Get the values of all specified hash fields (supports binary data).
+     *
+     * @param key The key of the hash (supports binary data)
+     * @param fields The fields to get (supports binary data)
+     * @return A CompletableFuture containing an array of values
+     */
+    public CompletableFuture<GlideString[]> hmget(GlideString key, GlideString... fields) {
+        String[] args = new String[fields.length + 1];
+        args[0] = key.toString();
+        for (int i = 0; i < fields.length; i++) {
+            args[i + 1] = fields[i].toString();
+        }
+        return executeCommand(CommandType.HMGET, args)
+            .thenApply(result -> {
+                if (result instanceof Object[]) {
+                    Object[] objects = (Object[]) result;
+                    GlideString[] values = new GlideString[objects.length];
+                    for (int i = 0; i < objects.length; i++) {
+                        values[i] = objects[i] == null ? null : GlideString.of(objects[i].toString());
+                    }
+                    return values;
+                }
+                return new GlideString[0];
+            });
+    }
+
+    /**
+     * Increment the integer value of a hash field by amount.
+     *
+     * @param key The key of the hash
+     * @param field The field to increment
+     * @param amount The amount to increment by
+     * @return A CompletableFuture containing the value after increment
+     */
+    public CompletableFuture<Long> hincrBy(String key, String field, long amount) {
+        return executeCommand(CommandType.HINCRBY, key, field, String.valueOf(amount))
+            .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Increment the integer value of a hash field by amount (supports binary data).
+     *
+     * @param key The key of the hash (supports binary data)
+     * @param field The field to increment (supports binary data)
+     * @param amount The amount to increment by
+     * @return A CompletableFuture containing the value after increment
+     */
+    public CompletableFuture<Long> hincrBy(GlideString key, GlideString field, long amount) {
+        return executeCommand(CommandType.HINCRBY, key.toString(), field.toString(), String.valueOf(amount))
+            .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Increment the floating-point value of a hash field by amount.
+     *
+     * @param key The key of the hash
+     * @param field The field to increment
+     * @param amount The amount to increment by
+     * @return A CompletableFuture containing the value after increment
+     */
+    public CompletableFuture<Double> hincrByFloat(String key, String field, double amount) {
+        return executeCommand(CommandType.HINCRBYFLOAT, key, field, String.valueOf(amount))
+            .thenApply(result -> Double.parseDouble(result.toString()));
+    }
+
+    /**
+     * Increment the floating-point value of a hash field by amount (supports binary data).
+     *
+     * @param key The key of the hash (supports binary data)
+     * @param field The field to increment (supports binary data)
+     * @param amount The amount to increment by
+     * @return A CompletableFuture containing the value after increment
+     */
+    public CompletableFuture<Double> hincrByFloat(GlideString key, GlideString field, double amount) {
+        return executeCommand(CommandType.HINCRBYFLOAT, key.toString(), field.toString(), String.valueOf(amount))
+            .thenApply(result -> Double.parseDouble(result.toString()));
     }
 
     /**
@@ -472,6 +1014,542 @@ public abstract class BaseClient {
 
         return executeCommand(CommandType.LPUSH, args)
                 .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Inserts elements at the tail of the list stored at key.
+     *
+     * @param key The key of the list
+     * @param elements The elements to push
+     * @return A CompletableFuture containing the length of the list after the push operation
+     */
+    public CompletableFuture<Long> rpush(String key, String... elements) {
+        String[] args = new String[elements.length + 1];
+        args[0] = key;
+        System.arraycopy(elements, 0, args, 1, elements.length);
+        return executeCommand(CommandType.RPUSH, args)
+            .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Inserts elements at the tail of the list stored at key (supports binary data).
+     *
+     * @param key The key of the list (supports binary data)
+     * @param elements The elements to push (supports binary data)
+     * @return A CompletableFuture containing the length of the list after the push operation
+     */
+    public CompletableFuture<Long> rpush(GlideString key, GlideString... elements) {
+        String[] args = new String[elements.length + 1];
+        args[0] = key.toString();
+        for (int i = 0; i < elements.length; i++) {
+            args[i + 1] = elements[i].toString();
+        }
+        return executeCommand(CommandType.RPUSH, args)
+            .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Removes and returns the first element from the list stored at key.
+     *
+     * @param key The key of the list
+     * @return A CompletableFuture containing the first element or null if the list is empty
+     */
+    public CompletableFuture<String> lpop(String key) {
+        return executeCommand(CommandType.LPOP, key)
+            .thenApply(result -> result == null ? null : result.toString());
+    }
+
+    /**
+     * Removes and returns the first element from the list stored at key (supports binary data).
+     *
+     * @param key The key of the list (supports binary data)
+     * @return A CompletableFuture containing the first element or null if the list is empty
+     */
+    public CompletableFuture<GlideString> lpop(GlideString key) {
+        return executeCommand(CommandType.LPOP, key.toString())
+            .thenApply(result -> result == null ? null : GlideString.of(result.toString()));
+    }
+
+    /**
+     * Removes and returns the last element from the list stored at key.
+     *
+     * @param key The key of the list
+     * @return A CompletableFuture containing the last element or null if the list is empty
+     */
+    public CompletableFuture<String> rpop(String key) {
+        return executeCommand(CommandType.RPOP, key)
+            .thenApply(result -> result == null ? null : result.toString());
+    }
+
+    /**
+     * Removes and returns the last element from the list stored at key (supports binary data).
+     *
+     * @param key The key of the list (supports binary data)
+     * @return A CompletableFuture containing the last element or null if the list is empty
+     */
+    public CompletableFuture<GlideString> rpop(GlideString key) {
+        return executeCommand(CommandType.RPOP, key.toString())
+            .thenApply(result -> result == null ? null : GlideString.of(result.toString()));
+    }
+
+    /**
+     * Returns the specified elements of the list stored at key.
+     *
+     * @param key The key of the list
+     * @param start The starting index
+     * @param end The ending index
+     * @return A CompletableFuture containing an array of elements in the specified range
+     */
+    public CompletableFuture<String[]> lrange(String key, long start, long end) {
+        return executeCommand(CommandType.LRANGE, key, String.valueOf(start), String.valueOf(end))
+            .thenApply(result -> {
+                if (result instanceof Object[]) {
+                    Object[] objects = (Object[]) result;
+                    String[] elements = new String[objects.length];
+                    for (int i = 0; i < objects.length; i++) {
+                        elements[i] = objects[i] == null ? null : objects[i].toString();
+                    }
+                    return elements;
+                }
+                return new String[0];
+            });
+    }
+
+    /**
+     * Returns the specified elements of the list stored at key (supports binary data).
+     *
+     * @param key The key of the list (supports binary data)
+     * @param start The starting index
+     * @param end The ending index
+     * @return A CompletableFuture containing an array of elements in the specified range
+     */
+    public CompletableFuture<GlideString[]> lrange(GlideString key, long start, long end) {
+        return executeCommand(CommandType.LRANGE, key.toString(), String.valueOf(start), String.valueOf(end))
+            .thenApply(result -> {
+                if (result instanceof Object[]) {
+                    Object[] objects = (Object[]) result;
+                    GlideString[] elements = new GlideString[objects.length];
+                    for (int i = 0; i < objects.length; i++) {
+                        elements[i] = objects[i] == null ? null : GlideString.of(objects[i].toString());
+                    }
+                    return elements;
+                }
+                return new GlideString[0];
+            });
+    }
+
+    /**
+     * Returns the length of the list stored at key.
+     *
+     * @param key The key of the list
+     * @return A CompletableFuture containing the length of the list
+     */
+    public CompletableFuture<Long> llen(String key) {
+        return executeCommand(CommandType.LLEN, key)
+            .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Returns the length of the list stored at key (supports binary data).
+     *
+     * @param key The key of the list (supports binary data)
+     * @return A CompletableFuture containing the length of the list
+     */
+    public CompletableFuture<Long> llen(GlideString key) {
+        return executeCommand(CommandType.LLEN, key.toString())
+            .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Returns the element at index in the list stored at key.
+     *
+     * @param key The key of the list
+     * @param index The index of the element to return
+     * @return A CompletableFuture containing the element at index or null if index is out of range
+     */
+    public CompletableFuture<String> lindex(String key, long index) {
+        return executeCommand(CommandType.LINDEX, key, String.valueOf(index))
+            .thenApply(result -> result == null ? null : result.toString());
+    }
+
+    /**
+     * Returns the element at index in the list stored at key (supports binary data).
+     *
+     * @param key The key of the list (supports binary data)
+     * @param index The index of the element to return
+     * @return A CompletableFuture containing the element at index or null if index is out of range
+     */
+    public CompletableFuture<GlideString> lindex(GlideString key, long index) {
+        return executeCommand(CommandType.LINDEX, key.toString(), String.valueOf(index))
+            .thenApply(result -> result == null ? null : GlideString.of(result.toString()));
+    }
+
+    /**
+     * Sets the list element at index to element.
+     *
+     * @param key The key of the list
+     * @param index The index to set the element at
+     * @param element The element to set
+     * @return A CompletableFuture containing "OK" if successful
+     */
+    public CompletableFuture<String> lset(String key, long index, String element) {
+        return executeCommand(CommandType.LSET, key, String.valueOf(index), element)
+            .thenApply(result -> result.toString());
+    }
+
+    /**
+     * Sets the list element at index to element (supports binary data).
+     *
+     * @param key The key of the list (supports binary data)
+     * @param index The index to set the element at
+     * @param element The element to set (supports binary data)
+     * @return A CompletableFuture containing "OK" if successful
+     */
+    public CompletableFuture<String> lset(GlideString key, long index, GlideString element) {
+        return executeCommand(CommandType.LSET, key.toString(), String.valueOf(index), element.toString())
+            .thenApply(result -> result.toString());
+    }
+
+    /**
+     * Trim the list to the specified range.
+     *
+     * @param key The key of the list
+     * @param start The starting index
+     * @param end The ending index
+     * @return A CompletableFuture containing "OK" if successful
+     */
+    public CompletableFuture<String> ltrim(String key, long start, long end) {
+        return executeCommand(CommandType.LTRIM, key, String.valueOf(start), String.valueOf(end))
+            .thenApply(result -> result.toString());
+    }
+
+    /**
+     * Trim the list to the specified range (supports binary data).
+     *
+     * @param key The key of the list (supports binary data)
+     * @param start The starting index
+     * @param end The ending index
+     * @return A CompletableFuture containing "OK" if successful
+     */
+    public CompletableFuture<String> ltrim(GlideString key, long start, long end) {
+        return executeCommand(CommandType.LTRIM, key.toString(), String.valueOf(start), String.valueOf(end))
+            .thenApply(result -> result.toString());
+    }
+
+    /**
+     * Removes the first count occurrences of elements equal to element from the list.
+     *
+     * @param key The key of the list
+     * @param count The number of elements to remove
+     * @param element The element to remove
+     * @return A CompletableFuture containing the number of removed elements
+     */
+    public CompletableFuture<Long> lrem(String key, long count, String element) {
+        return executeCommand(CommandType.LREM, key, String.valueOf(count), element)
+            .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Removes the first count occurrences of elements equal to element from the list (supports binary data).
+     *
+     * @param key The key of the list (supports binary data)
+     * @param count The number of elements to remove
+     * @param element The element to remove (supports binary data)
+     * @return A CompletableFuture containing the number of removed elements
+     */
+    public CompletableFuture<Long> lrem(GlideString key, long count, GlideString element) {
+        return executeCommand(CommandType.LREM, key.toString(), String.valueOf(count), element.toString())
+            .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Add one or more members to a set.
+     *
+     * @param key The key of the set
+     * @param members The members to add to the set
+     * @return A CompletableFuture containing the number of elements added to the set
+     */
+    public CompletableFuture<Long> sadd(String key, String... members) {
+        String[] args = new String[members.length + 1];
+        args[0] = key;
+        System.arraycopy(members, 0, args, 1, members.length);
+        return executeCommand(CommandType.SADD, args)
+            .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Add one or more members to a set (supports binary data).
+     *
+     * @param key The key of the set (supports binary data)
+     * @param members The members to add to the set (supports binary data)
+     * @return A CompletableFuture containing the number of elements added to the set
+     */
+    public CompletableFuture<Long> sadd(GlideString key, GlideString... members) {
+        String[] args = new String[members.length + 1];
+        args[0] = key.toString();
+        for (int i = 0; i < members.length; i++) {
+            args[i + 1] = members[i].toString();
+        }
+        return executeCommand(CommandType.SADD, args)
+            .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Remove one or more members from a set.
+     *
+     * @param key The key of the set
+     * @param members The members to remove from the set
+     * @return A CompletableFuture containing the number of elements removed from the set
+     */
+    public CompletableFuture<Long> srem(String key, String... members) {
+        String[] args = new String[members.length + 1];
+        args[0] = key;
+        System.arraycopy(members, 0, args, 1, members.length);
+        return executeCommand(CommandType.SREM, args)
+            .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Remove one or more members from a set (supports binary data).
+     *
+     * @param key The key of the set (supports binary data)
+     * @param members The members to remove from the set (supports binary data)
+     * @return A CompletableFuture containing the number of elements removed from the set
+     */
+    public CompletableFuture<Long> srem(GlideString key, GlideString... members) {
+        String[] args = new String[members.length + 1];
+        args[0] = key.toString();
+        for (int i = 0; i < members.length; i++) {
+            args[i + 1] = members[i].toString();
+        }
+        return executeCommand(CommandType.SREM, args)
+            .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Return all the members of the set value stored at key.
+     *
+     * @param key The key of the set
+     * @return A CompletableFuture containing all members of the set
+     */
+    public CompletableFuture<String[]> smembers(String key) {
+        return executeCommand(CommandType.SMEMBERS, key)
+            .thenApply(result -> {
+                if (result instanceof Object[]) {
+                    Object[] objects = (Object[]) result;
+                    String[] members = new String[objects.length];
+                    for (int i = 0; i < objects.length; i++) {
+                        members[i] = objects[i].toString();
+                    }
+                    return members;
+                }
+                return new String[0];
+            });
+    }
+
+    /**
+     * Return all the members of the set value stored at key (supports binary data).
+     *
+     * @param key The key of the set (supports binary data)
+     * @return A CompletableFuture containing all members of the set
+     */
+    public CompletableFuture<GlideString[]> smembers(GlideString key) {
+        return executeCommand(CommandType.SMEMBERS, key.toString())
+            .thenApply(result -> {
+                if (result instanceof Object[]) {
+                    Object[] objects = (Object[]) result;
+                    GlideString[] members = new GlideString[objects.length];
+                    for (int i = 0; i < objects.length; i++) {
+                        members[i] = GlideString.of(objects[i].toString());
+                    }
+                    return members;
+                }
+                return new GlideString[0];
+            });
+    }
+
+    /**
+     * Return the number of elements in the set stored at key.
+     *
+     * @param key The key of the set
+     * @return A CompletableFuture containing the cardinality (number of elements) of the set
+     */
+    public CompletableFuture<Long> scard(String key) {
+        return executeCommand(CommandType.SCARD, key)
+            .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Return the number of elements in the set stored at key (supports binary data).
+     *
+     * @param key The key of the set (supports binary data)
+     * @return A CompletableFuture containing the cardinality (number of elements) of the set
+     */
+    public CompletableFuture<Long> scard(GlideString key) {
+        return executeCommand(CommandType.SCARD, key.toString())
+            .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Return if member is a member of the set stored at key.
+     *
+     * @param key The key of the set
+     * @param member The member to check for
+     * @return A CompletableFuture containing true if the element is a member of the set
+     */
+    public CompletableFuture<Boolean> sismember(String key, String member) {
+        return executeCommand(CommandType.SISMEMBER, key, member)
+            .thenApply(result -> "1".equals(result.toString()));
+    }
+
+    /**
+     * Return if member is a member of the set stored at key (supports binary data).
+     *
+     * @param key The key of the set (supports binary data)
+     * @param member The member to check for (supports binary data)
+     * @return A CompletableFuture containing true if the element is a member of the set
+     */
+    public CompletableFuture<Boolean> sismember(GlideString key, GlideString member) {
+        return executeCommand(CommandType.SISMEMBER, key.toString(), member.toString())
+            .thenApply(result -> "1".equals(result.toString()));
+    }
+
+    /**
+     * Return the set resulting from the difference between the first set and all the successive sets.
+     *
+     * @param keys The keys of the sets
+     * @return A CompletableFuture containing the members of the set resulting from the difference
+     */
+    public CompletableFuture<String[]> sdiff(String... keys) {
+        return executeCommand(CommandType.SDIFF, keys)
+            .thenApply(result -> {
+                if (result instanceof Object[]) {
+                    Object[] objects = (Object[]) result;
+                    String[] members = new String[objects.length];
+                    for (int i = 0; i < objects.length; i++) {
+                        members[i] = objects[i].toString();
+                    }
+                    return members;
+                }
+                return new String[0];
+            });
+    }
+
+    /**
+     * Return the set resulting from the difference between the first set and all the successive sets (supports binary data).
+     *
+     * @param keys The keys of the sets (supports binary data)
+     * @return A CompletableFuture containing the members of the set resulting from the difference
+     */
+    public CompletableFuture<GlideString[]> sdiff(GlideString... keys) {
+        String[] stringKeys = new String[keys.length];
+        for (int i = 0; i < keys.length; i++) {
+            stringKeys[i] = keys[i].toString();
+        }
+        return executeCommand(CommandType.SDIFF, stringKeys)
+            .thenApply(result -> {
+                if (result instanceof Object[]) {
+                    Object[] objects = (Object[]) result;
+                    GlideString[] members = new GlideString[objects.length];
+                    for (int i = 0; i < objects.length; i++) {
+                        members[i] = GlideString.of(objects[i].toString());
+                    }
+                    return members;
+                }
+                return new GlideString[0];
+            });
+    }
+
+    /**
+     * Return the set resulting from the intersection of all the given sets.
+     *
+     * @param keys The keys of the sets
+     * @return A CompletableFuture containing the members of the set resulting from the intersection
+     */
+    public CompletableFuture<String[]> sinter(String... keys) {
+        return executeCommand(CommandType.SINTER, keys)
+            .thenApply(result -> {
+                if (result instanceof Object[]) {
+                    Object[] objects = (Object[]) result;
+                    String[] members = new String[objects.length];
+                    for (int i = 0; i < objects.length; i++) {
+                        members[i] = objects[i].toString();
+                    }
+                    return members;
+                }
+                return new String[0];
+            });
+    }
+
+    /**
+     * Return the set resulting from the intersection of all the given sets (supports binary data).
+     *
+     * @param keys The keys of the sets (supports binary data)
+     * @return A CompletableFuture containing the members of the set resulting from the intersection
+     */
+    public CompletableFuture<GlideString[]> sinter(GlideString... keys) {
+        String[] stringKeys = new String[keys.length];
+        for (int i = 0; i < keys.length; i++) {
+            stringKeys[i] = keys[i].toString();
+        }
+        return executeCommand(CommandType.SINTER, stringKeys)
+            .thenApply(result -> {
+                if (result instanceof Object[]) {
+                    Object[] objects = (Object[]) result;
+                    GlideString[] members = new GlideString[objects.length];
+                    for (int i = 0; i < objects.length; i++) {
+                        members[i] = GlideString.of(objects[i].toString());
+                    }
+                    return members;
+                }
+                return new GlideString[0];
+            });
+    }
+
+    /**
+     * Return the set resulting from the union of all the given sets.
+     *
+     * @param keys The keys of the sets
+     * @return A CompletableFuture containing the members of the set resulting from the union
+     */
+    public CompletableFuture<String[]> sunion(String... keys) {
+        return executeCommand(CommandType.SUNION, keys)
+            .thenApply(result -> {
+                if (result instanceof Object[]) {
+                    Object[] objects = (Object[]) result;
+                    String[] members = new String[objects.length];
+                    for (int i = 0; i < objects.length; i++) {
+                        members[i] = objects[i].toString();
+                    }
+                    return members;
+                }
+                return new String[0];
+            });
+    }
+
+    /**
+     * Return the set resulting from the union of all the given sets (supports binary data).
+     *
+     * @param keys The keys of the sets (supports binary data)
+     * @return A CompletableFuture containing the members of the set resulting from the union
+     */
+    public CompletableFuture<GlideString[]> sunion(GlideString... keys) {
+        String[] stringKeys = new String[keys.length];
+        for (int i = 0; i < keys.length; i++) {
+            stringKeys[i] = keys[i].toString();
+        }
+        return executeCommand(CommandType.SUNION, stringKeys)
+            .thenApply(result -> {
+                if (result instanceof Object[]) {
+                    Object[] objects = (Object[]) result;
+                    GlideString[] members = new GlideString[objects.length];
+                    for (int i = 0; i < objects.length; i++) {
+                        members[i] = GlideString.of(objects[i].toString());
+                    }
+                    return members;
+                }
+                return new GlideString[0];
+            });
     }
 
     /**

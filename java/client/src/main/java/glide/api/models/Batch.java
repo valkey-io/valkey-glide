@@ -169,4 +169,862 @@ public class Batch extends BaseBatch<Batch> {
     public Batch ping(GlideString message) {
         return addCommand(CommandType.PING, message.toString());
     }
+
+    /**
+     * Increments the number stored at key by one.
+     *
+     * @see <a href="https://valkey.io/commands/incr/">valkey.io</a> for details.
+     * @param key The key to increment.
+     * @return This batch instance for method chaining.
+     */
+    public Batch incr(String key) {
+        return addCommand(CommandType.INCR, key);
+    }
+
+    /**
+     * Increments the number stored at key by one.
+     *
+     * @see <a href="https://valkey.io/commands/incr/">valkey.io</a> for details.
+     * @param key The key to increment.
+     * @return This batch instance for method chaining.
+     */
+    public Batch incr(GlideString key) {
+        return addCommand(CommandType.INCR, key.toString());
+    }
+
+    /**
+     * Increments the number stored at key by amount.
+     *
+     * @see <a href="https://valkey.io/commands/incrby/">valkey.io</a> for details.
+     * @param key The key to increment.
+     * @param amount The amount to increment by.
+     * @return This batch instance for method chaining.
+     */
+    public Batch incrBy(String key, long amount) {
+        return addCommand(CommandType.INCRBY, key, String.valueOf(amount));
+    }
+
+    /**
+     * Increments the number stored at key by amount.
+     *
+     * @see <a href="https://valkey.io/commands/incrby/">valkey.io</a> for details.
+     * @param key The key to increment.
+     * @param amount The amount to increment by.
+     * @return This batch instance for method chaining.
+     */
+    public Batch incrBy(GlideString key, long amount) {
+        return addCommand(CommandType.INCRBY, key.toString(), String.valueOf(amount));
+    }
+
+    /**
+     * Increments the floating-point number stored at key by amount.
+     *
+     * @see <a href="https://valkey.io/commands/incrbyfloat/">valkey.io</a> for details.
+     * @param key The key to increment.
+     * @param amount The amount to increment by.
+     * @return This batch instance for method chaining.
+     */
+    public Batch incrByFloat(String key, double amount) {
+        return addCommand(CommandType.INCRBYFLOAT, key, String.valueOf(amount));
+    }
+
+    /**
+     * Increments the floating-point number stored at key by amount.
+     *
+     * @see <a href="https://valkey.io/commands/incrbyfloat/">valkey.io</a> for details.
+     * @param key The key to increment.
+     * @param amount The amount to increment by.
+     * @return This batch instance for method chaining.
+     */
+    public Batch incrByFloat(GlideString key, double amount) {
+        return addCommand(CommandType.INCRBYFLOAT, key.toString(), String.valueOf(amount));
+    }
+
+    /**
+     * Decrements the number stored at key by one.
+     *
+     * @see <a href="https://valkey.io/commands/decr/">valkey.io</a> for details.
+     * @param key The key to decrement.
+     * @return This batch instance for method chaining.
+     */
+    public Batch decr(String key) {
+        return addCommand(CommandType.DECR, key);
+    }
+
+    /**
+     * Decrements the number stored at key by one.
+     *
+     * @see <a href="https://valkey.io/commands/decr/">valkey.io</a> for details.
+     * @param key The key to decrement.
+     * @return This batch instance for method chaining.
+     */
+    public Batch decr(GlideString key) {
+        return addCommand(CommandType.DECR, key.toString());
+    }
+
+    /**
+     * Decrements the number stored at key by amount.
+     *
+     * @see <a href="https://valkey.io/commands/decrby/">valkey.io</a> for details.
+     * @param key The key to decrement.
+     * @param amount The amount to decrement by.
+     * @return This batch instance for method chaining.
+     */
+    public Batch decrBy(String key, long amount) {
+        return addCommand(CommandType.DECRBY, key, String.valueOf(amount));
+    }
+
+    /**
+     * Decrements the number stored at key by amount.
+     *
+     * @see <a href="https://valkey.io/commands/decrby/">valkey.io</a> for details.
+     * @param key The key to decrement.
+     * @param amount The amount to decrement by.
+     * @return This batch instance for method chaining.
+     */
+    public Batch decrBy(GlideString key, long amount) {
+        return addCommand(CommandType.DECRBY, key.toString(), String.valueOf(amount));
+    }
+
+    /**
+     * Returns the length of the string value stored at key.
+     *
+     * @see <a href="https://valkey.io/commands/strlen/">valkey.io</a> for details.
+     * @param key The key to get length for.
+     * @return This batch instance for method chaining.
+     */
+    public Batch strlen(String key) {
+        return addCommand(CommandType.STRLEN, key);
+    }
+
+    /**
+     * Returns the length of the string value stored at key.
+     *
+     * @see <a href="https://valkey.io/commands/strlen/">valkey.io</a> for details.
+     * @param key The key to get length for.
+     * @return This batch instance for method chaining.
+     */
+    public Batch strlen(GlideString key) {
+        return addCommand(CommandType.STRLEN, key.toString());
+    }
+
+    /**
+     * Appends a value to a key.
+     *
+     * @see <a href="https://valkey.io/commands/append/">valkey.io</a> for details.
+     * @param key The key to append to.
+     * @param value The value to append.
+     * @return This batch instance for method chaining.
+     */
+    public Batch append(String key, String value) {
+        return addCommand(CommandType.APPEND, key, value);
+    }
+
+    /**
+     * Appends a value to a key.
+     *
+     * @see <a href="https://valkey.io/commands/append/">valkey.io</a> for details.
+     * @param key The key to append to.
+     * @param value The value to append.
+     * @return This batch instance for method chaining.
+     */
+    public Batch append(GlideString key, GlideString value) {
+        return addCommand(CommandType.APPEND, key.toString(), value.toString());
+    }
+
+    /**
+     * Returns a substring of the string value stored at key.
+     *
+     * @see <a href="https://valkey.io/commands/getrange/">valkey.io</a> for details.
+     * @param key The key to get range from.
+     * @param start The start index.
+     * @param end The end index.
+     * @return This batch instance for method chaining.
+     */
+    public Batch getrange(String key, int start, int end) {
+        return addCommand(CommandType.GETRANGE, key, String.valueOf(start), String.valueOf(end));
+    }
+
+    /**
+     * Returns a substring of the string value stored at key.
+     *
+     * @see <a href="https://valkey.io/commands/getrange/">valkey.io</a> for details.
+     * @param key The key to get range from.
+     * @param start The start index.
+     * @param end The end index.
+     * @return This batch instance for method chaining.
+     */
+    public Batch getrange(GlideString key, int start, int end) {
+        return addCommand(CommandType.GETRANGE, key.toString(), String.valueOf(start), String.valueOf(end));
+    }
+
+    /**
+     * Overwrites part of the string stored at key.
+     *
+     * @see <a href="https://valkey.io/commands/setrange/">valkey.io</a> for details.
+     * @param key The key to modify.
+     * @param offset The offset to start overwriting at.
+     * @param value The value to overwrite with.
+     * @return This batch instance for method chaining.
+     */
+    public Batch setrange(String key, int offset, String value) {
+        return addCommand(CommandType.SETRANGE, key, String.valueOf(offset), value);
+    }
+
+    /**
+     * Overwrites part of the string stored at key.
+     *
+     * @see <a href="https://valkey.io/commands/setrange/">valkey.io</a> for details.
+     * @param key The key to modify.
+     * @param offset The offset to start overwriting at.
+     * @param value The value to overwrite with.
+     * @return This batch instance for method chaining.
+     */
+    public Batch setrange(GlideString key, int offset, GlideString value) {
+        return addCommand(CommandType.SETRANGE, key.toString(), String.valueOf(offset), value.toString());
+    }
+
+    /**
+     * Delete one or more hash fields.
+     *
+     * @see <a href="https://valkey.io/commands/hdel/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param fields The fields to delete.
+     * @return This batch instance for method chaining.
+     */
+    public Batch hdel(String key, String... fields) {
+        String[] args = new String[fields.length + 1];
+        args[0] = key;
+        System.arraycopy(fields, 0, args, 1, fields.length);
+        return addCommand(CommandType.HDEL, args);
+    }
+
+    /**
+     * Delete one or more hash fields.
+     *
+     * @see <a href="https://valkey.io/commands/hdel/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param fields The fields to delete.
+     * @return This batch instance for method chaining.
+     */
+    public Batch hdel(GlideString key, GlideString... fields) {
+        String[] args = new String[fields.length + 1];
+        args[0] = key.toString();
+        for (int i = 0; i < fields.length; i++) {
+            args[i + 1] = fields[i].toString();
+        }
+        return addCommand(CommandType.HDEL, args);
+    }
+
+    /**
+     * Check if a hash field exists.
+     *
+     * @see <a href="https://valkey.io/commands/hexists/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param field The field to check.
+     * @return This batch instance for method chaining.
+     */
+    public Batch hexists(String key, String field) {
+        return addCommand(CommandType.HEXISTS, key, field);
+    }
+
+    /**
+     * Check if a hash field exists.
+     *
+     * @see <a href="https://valkey.io/commands/hexists/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param field The field to check.
+     * @return This batch instance for method chaining.
+     */
+    public Batch hexists(GlideString key, GlideString field) {
+        return addCommand(CommandType.HEXISTS, key.toString(), field.toString());
+    }
+
+    /**
+     * Get the number of fields in a hash.
+     *
+     * @see <a href="https://valkey.io/commands/hlen/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @return This batch instance for method chaining.
+     */
+    public Batch hlen(String key) {
+        return addCommand(CommandType.HLEN, key);
+    }
+
+    /**
+     * Get the number of fields in a hash.
+     *
+     * @see <a href="https://valkey.io/commands/hlen/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @return This batch instance for method chaining.
+     */
+    public Batch hlen(GlideString key) {
+        return addCommand(CommandType.HLEN, key.toString());
+    }
+
+    /**
+     * Get all field names in a hash.
+     *
+     * @see <a href="https://valkey.io/commands/hkeys/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @return This batch instance for method chaining.
+     */
+    public Batch hkeys(String key) {
+        return addCommand(CommandType.HKEYS, key);
+    }
+
+    /**
+     * Get all field names in a hash.
+     *
+     * @see <a href="https://valkey.io/commands/hkeys/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @return This batch instance for method chaining.
+     */
+    public Batch hkeys(GlideString key) {
+        return addCommand(CommandType.HKEYS, key.toString());
+    }
+
+    /**
+     * Get all values in a hash.
+     *
+     * @see <a href="https://valkey.io/commands/hvals/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @return This batch instance for method chaining.
+     */
+    public Batch hvals(String key) {
+        return addCommand(CommandType.HVALS, key);
+    }
+
+    /**
+     * Get all values in a hash.
+     *
+     * @see <a href="https://valkey.io/commands/hvals/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @return This batch instance for method chaining.
+     */
+    public Batch hvals(GlideString key) {
+        return addCommand(CommandType.HVALS, key.toString());
+    }
+
+    /**
+     * Get the values of all specified hash fields.
+     *
+     * @see <a href="https://valkey.io/commands/hmget/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param fields The fields to get.
+     * @return This batch instance for method chaining.
+     */
+    public Batch hmget(String key, String... fields) {
+        String[] args = new String[fields.length + 1];
+        args[0] = key;
+        System.arraycopy(fields, 0, args, 1, fields.length);
+        return addCommand(CommandType.HMGET, args);
+    }
+
+    /**
+     * Get the values of all specified hash fields.
+     *
+     * @see <a href="https://valkey.io/commands/hmget/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param fields The fields to get.
+     * @return This batch instance for method chaining.
+     */
+    public Batch hmget(GlideString key, GlideString... fields) {
+        String[] args = new String[fields.length + 1];
+        args[0] = key.toString();
+        for (int i = 0; i < fields.length; i++) {
+            args[i + 1] = fields[i].toString();
+        }
+        return addCommand(CommandType.HMGET, args);
+    }
+
+    /**
+     * Increment the integer value of a hash field by amount.
+     *
+     * @see <a href="https://valkey.io/commands/hincrby/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param field The field to increment.
+     * @param amount The amount to increment by.
+     * @return This batch instance for method chaining.
+     */
+    public Batch hincrBy(String key, String field, long amount) {
+        return addCommand(CommandType.HINCRBY, key, field, String.valueOf(amount));
+    }
+
+    /**
+     * Increment the integer value of a hash field by amount.
+     *
+     * @see <a href="https://valkey.io/commands/hincrby/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param field The field to increment.
+     * @param amount The amount to increment by.
+     * @return This batch instance for method chaining.
+     */
+    public Batch hincrBy(GlideString key, GlideString field, long amount) {
+        return addCommand(CommandType.HINCRBY, key.toString(), field.toString(), String.valueOf(amount));
+    }
+
+    /**
+     * Increment the floating-point value of a hash field by amount.
+     *
+     * @see <a href="https://valkey.io/commands/hincrbyfloat/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param field The field to increment.
+     * @param amount The amount to increment by.
+     * @return This batch instance for method chaining.
+     */
+    public Batch hincrByFloat(String key, String field, double amount) {
+        return addCommand(CommandType.HINCRBYFLOAT, key, field, String.valueOf(amount));
+    }
+
+    /**
+     * Increment the floating-point value of a hash field by amount.
+     *
+     * @see <a href="https://valkey.io/commands/hincrbyfloat/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param field The field to increment.
+     * @param amount The amount to increment by.
+     * @return This batch instance for method chaining.
+     */
+    public Batch hincrByFloat(GlideString key, GlideString field, double amount) {
+        return addCommand(CommandType.HINCRBYFLOAT, key.toString(), field.toString(), String.valueOf(amount));
+    }
+
+    /**
+     * Inserts elements at the tail of the list stored at key.
+     *
+     * @see <a href="https://valkey.io/commands/rpush/">valkey.io</a> for details.
+     * @param key The key of the list.
+     * @param elements The elements to push.
+     * @return This batch instance for method chaining.
+     */
+    public Batch rpush(String key, String... elements) {
+        String[] args = new String[elements.length + 1];
+        args[0] = key;
+        System.arraycopy(elements, 0, args, 1, elements.length);
+        return addCommand(CommandType.RPUSH, args);
+    }
+
+    /**
+     * Inserts elements at the tail of the list stored at key.
+     *
+     * @see <a href="https://valkey.io/commands/rpush/">valkey.io</a> for details.
+     * @param key The key of the list.
+     * @param elements The elements to push.
+     * @return This batch instance for method chaining.
+     */
+    public Batch rpush(GlideString key, GlideString... elements) {
+        String[] args = new String[elements.length + 1];
+        args[0] = key.toString();
+        for (int i = 0; i < elements.length; i++) {
+            args[i + 1] = elements[i].toString();
+        }
+        return addCommand(CommandType.RPUSH, args);
+    }
+
+    /**
+     * Removes and returns the first element from the list stored at key.
+     *
+     * @see <a href="https://valkey.io/commands/lpop/">valkey.io</a> for details.
+     * @param key The key of the list.
+     * @return This batch instance for method chaining.
+     */
+    public Batch lpop(String key) {
+        return addCommand(CommandType.LPOP, key);
+    }
+
+    /**
+     * Removes and returns the first element from the list stored at key.
+     *
+     * @see <a href="https://valkey.io/commands/lpop/">valkey.io</a> for details.
+     * @param key The key of the list.
+     * @return This batch instance for method chaining.
+     */
+    public Batch lpop(GlideString key) {
+        return addCommand(CommandType.LPOP, key.toString());
+    }
+
+    /**
+     * Removes and returns the last element from the list stored at key.
+     *
+     * @see <a href="https://valkey.io/commands/rpop/">valkey.io</a> for details.
+     * @param key The key of the list.
+     * @return This batch instance for method chaining.
+     */
+    public Batch rpop(String key) {
+        return addCommand(CommandType.RPOP, key);
+    }
+
+    /**
+     * Removes and returns the last element from the list stored at key.
+     *
+     * @see <a href="https://valkey.io/commands/rpop/">valkey.io</a> for details.
+     * @param key The key of the list.
+     * @return This batch instance for method chaining.
+     */
+    public Batch rpop(GlideString key) {
+        return addCommand(CommandType.RPOP, key.toString());
+    }
+
+    /**
+     * Returns the specified elements of the list stored at key.
+     *
+     * @see <a href="https://valkey.io/commands/lrange/">valkey.io</a> for details.
+     * @param key The key of the list.
+     * @param start The starting index.
+     * @param end The ending index.
+     * @return This batch instance for method chaining.
+     */
+    public Batch lrange(String key, long start, long end) {
+        return addCommand(CommandType.LRANGE, key, String.valueOf(start), String.valueOf(end));
+    }
+
+    /**
+     * Returns the specified elements of the list stored at key.
+     *
+     * @see <a href="https://valkey.io/commands/lrange/">valkey.io</a> for details.
+     * @param key The key of the list.
+     * @param start The starting index.
+     * @param end The ending index.
+     * @return This batch instance for method chaining.
+     */
+    public Batch lrange(GlideString key, long start, long end) {
+        return addCommand(CommandType.LRANGE, key.toString(), String.valueOf(start), String.valueOf(end));
+    }
+
+    /**
+     * Returns the length of the list stored at key.
+     *
+     * @see <a href="https://valkey.io/commands/llen/">valkey.io</a> for details.
+     * @param key The key of the list.
+     * @return This batch instance for method chaining.
+     */
+    public Batch llen(String key) {
+        return addCommand(CommandType.LLEN, key);
+    }
+
+    /**
+     * Returns the length of the list stored at key.
+     *
+     * @see <a href="https://valkey.io/commands/llen/">valkey.io</a> for details.
+     * @param key The key of the list.
+     * @return This batch instance for method chaining.
+     */
+    public Batch llen(GlideString key) {
+        return addCommand(CommandType.LLEN, key.toString());
+    }
+
+    /**
+     * Returns the element at index in the list stored at key.
+     *
+     * @see <a href="https://valkey.io/commands/lindex/">valkey.io</a> for details.
+     * @param key The key of the list.
+     * @param index The index of the element to return.
+     * @return This batch instance for method chaining.
+     */
+    public Batch lindex(String key, long index) {
+        return addCommand(CommandType.LINDEX, key, String.valueOf(index));
+    }
+
+    /**
+     * Returns the element at index in the list stored at key.
+     *
+     * @see <a href="https://valkey.io/commands/lindex/">valkey.io</a> for details.
+     * @param key The key of the list.
+     * @param index The index of the element to return.
+     * @return This batch instance for method chaining.
+     */
+    public Batch lindex(GlideString key, long index) {
+        return addCommand(CommandType.LINDEX, key.toString(), String.valueOf(index));
+    }
+
+    /**
+     * Sets the list element at index to element.
+     *
+     * @see <a href="https://valkey.io/commands/lset/">valkey.io</a> for details.
+     * @param key The key of the list.
+     * @param index The index to set the element at.
+     * @param element The element to set.
+     * @return This batch instance for method chaining.
+     */
+    public Batch lset(String key, long index, String element) {
+        return addCommand(CommandType.LSET, key, String.valueOf(index), element);
+    }
+
+    /**
+     * Sets the list element at index to element.
+     *
+     * @see <a href="https://valkey.io/commands/lset/">valkey.io</a> for details.
+     * @param key The key of the list.
+     * @param index The index to set the element at.
+     * @param element The element to set.
+     * @return This batch instance for method chaining.
+     */
+    public Batch lset(GlideString key, long index, GlideString element) {
+        return addCommand(CommandType.LSET, key.toString(), String.valueOf(index), element.toString());
+    }
+
+    /**
+     * Trim the list to the specified range.
+     *
+     * @see <a href="https://valkey.io/commands/ltrim/">valkey.io</a> for details.
+     * @param key The key of the list.
+     * @param start The starting index.
+     * @param end The ending index.
+     * @return This batch instance for method chaining.
+     */
+    public Batch ltrim(String key, long start, long end) {
+        return addCommand(CommandType.LTRIM, key, String.valueOf(start), String.valueOf(end));
+    }
+
+    /**
+     * Trim the list to the specified range.
+     *
+     * @see <a href="https://valkey.io/commands/ltrim/">valkey.io</a> for details.
+     * @param key The key of the list.
+     * @param start The starting index.
+     * @param end The ending index.
+     * @return This batch instance for method chaining.
+     */
+    public Batch ltrim(GlideString key, long start, long end) {
+        return addCommand(CommandType.LTRIM, key.toString(), String.valueOf(start), String.valueOf(end));
+    }
+
+    /**
+     * Removes the first count occurrences of elements equal to element from the list.
+     *
+     * @see <a href="https://valkey.io/commands/lrem/">valkey.io</a> for details.
+     * @param key The key of the list.
+     * @param count The number of elements to remove.
+     * @param element The element to remove.
+     * @return This batch instance for method chaining.
+     */
+    public Batch lrem(String key, long count, String element) {
+        return addCommand(CommandType.LREM, key, String.valueOf(count), element);
+    }
+
+    /**
+     * Removes the first count occurrences of elements equal to element from the list.
+     *
+     * @see <a href="https://valkey.io/commands/lrem/">valkey.io</a> for details.
+     * @param key The key of the list.
+     * @param count The number of elements to remove.
+     * @param element The element to remove.
+     * @return This batch instance for method chaining.
+     */
+    public Batch lrem(GlideString key, long count, GlideString element) {
+        return addCommand(CommandType.LREM, key.toString(), String.valueOf(count), element.toString());
+    }
+
+    // Set Commands
+    
+    /**
+     * Add one or more members to a set.
+     *
+     * @see <a href="https://valkey.io/commands/sadd/">valkey.io</a> for details.
+     * @param key The key of the set.
+     * @param members The members to add.
+     * @return This batch instance for method chaining.
+     */
+    public Batch sadd(String key, String... members) {
+        String[] args = new String[members.length + 1];
+        args[0] = key;
+        System.arraycopy(members, 0, args, 1, members.length);
+        return addCommand(CommandType.SADD, args);
+    }
+
+    /**
+     * Add one or more members to a set.
+     *
+     * @see <a href="https://valkey.io/commands/sadd/">valkey.io</a> for details.
+     * @param key The key of the set.
+     * @param members The members to add.
+     * @return This batch instance for method chaining.
+     */
+    public Batch sadd(GlideString key, GlideString... members) {
+        String[] args = new String[members.length + 1];
+        args[0] = key.toString();
+        for (int i = 0; i < members.length; i++) {
+            args[i + 1] = members[i].toString();
+        }
+        return addCommand(CommandType.SADD, args);
+    }
+
+    /**
+     * Remove one or more members from a set.
+     *
+     * @see <a href="https://valkey.io/commands/srem/">valkey.io</a> for details.
+     * @param key The key of the set.
+     * @param members The members to remove.
+     * @return This batch instance for method chaining.
+     */
+    public Batch srem(String key, String... members) {
+        String[] args = new String[members.length + 1];
+        args[0] = key;
+        System.arraycopy(members, 0, args, 1, members.length);
+        return addCommand(CommandType.SREM, args);
+    }
+
+    /**
+     * Remove one or more members from a set.
+     *
+     * @see <a href="https://valkey.io/commands/srem/">valkey.io</a> for details.
+     * @param key The key of the set.
+     * @param members The members to remove.
+     * @return This batch instance for method chaining.
+     */
+    public Batch srem(GlideString key, GlideString... members) {
+        String[] args = new String[members.length + 1];
+        args[0] = key.toString();
+        for (int i = 0; i < members.length; i++) {
+            args[i + 1] = members[i].toString();
+        }
+        return addCommand(CommandType.SREM, args);
+    }
+
+    /**
+     * Get all members of a set.
+     *
+     * @see <a href="https://valkey.io/commands/smembers/">valkey.io</a> for details.
+     * @param key The key of the set.
+     * @return This batch instance for method chaining.
+     */
+    public Batch smembers(String key) {
+        return addCommand(CommandType.SMEMBERS, key);
+    }
+
+    /**
+     * Get all members of a set.
+     *
+     * @see <a href="https://valkey.io/commands/smembers/">valkey.io</a> for details.
+     * @param key The key of the set.
+     * @return This batch instance for method chaining.
+     */
+    public Batch smembers(GlideString key) {
+        return addCommand(CommandType.SMEMBERS, key.toString());
+    }
+
+    /**
+     * Get the number of members in a set.
+     *
+     * @see <a href="https://valkey.io/commands/scard/">valkey.io</a> for details.
+     * @param key The key of the set.
+     * @return This batch instance for method chaining.
+     */
+    public Batch scard(String key) {
+        return addCommand(CommandType.SCARD, key);
+    }
+
+    /**
+     * Get the number of members in a set.
+     *
+     * @see <a href="https://valkey.io/commands/scard/">valkey.io</a> for details.
+     * @param key The key of the set.
+     * @return This batch instance for method chaining.
+     */
+    public Batch scard(GlideString key) {
+        return addCommand(CommandType.SCARD, key.toString());
+    }
+
+    /**
+     * Check if a member is in a set.
+     *
+     * @see <a href="https://valkey.io/commands/sismember/">valkey.io</a> for details.
+     * @param key The key of the set.
+     * @param member The member to check.
+     * @return This batch instance for method chaining.
+     */
+    public Batch sismember(String key, String member) {
+        return addCommand(CommandType.SISMEMBER, key, member);
+    }
+
+    /**
+     * Check if a member is in a set.
+     *
+     * @see <a href="https://valkey.io/commands/sismember/">valkey.io</a> for details.
+     * @param key The key of the set.
+     * @param member The member to check.
+     * @return This batch instance for method chaining.
+     */
+    public Batch sismember(GlideString key, GlideString member) {
+        return addCommand(CommandType.SISMEMBER, key.toString(), member.toString());
+    }
+
+    /**
+     * Return the difference of multiple sets.
+     *
+     * @see <a href="https://valkey.io/commands/sdiff/">valkey.io</a> for details.
+     * @param keys The keys of the sets.
+     * @return This batch instance for method chaining.
+     */
+    public Batch sdiff(String... keys) {
+        return addCommand(CommandType.SDIFF, keys);
+    }
+
+    /**
+     * Return the difference of multiple sets.
+     *
+     * @see <a href="https://valkey.io/commands/sdiff/">valkey.io</a> for details.
+     * @param keys The keys of the sets.
+     * @return This batch instance for method chaining.
+     */
+    public Batch sdiff(GlideString... keys) {
+        String[] stringKeys = new String[keys.length];
+        for (int i = 0; i < keys.length; i++) {
+            stringKeys[i] = keys[i].toString();
+        }
+        return addCommand(CommandType.SDIFF, stringKeys);
+    }
+
+    /**
+     * Return the intersection of multiple sets.
+     *
+     * @see <a href="https://valkey.io/commands/sinter/">valkey.io</a> for details.
+     * @param keys The keys of the sets.
+     * @return This batch instance for method chaining.
+     */
+    public Batch sinter(String... keys) {
+        return addCommand(CommandType.SINTER, keys);
+    }
+
+    /**
+     * Return the intersection of multiple sets.
+     *
+     * @see <a href="https://valkey.io/commands/sinter/">valkey.io</a> for details.
+     * @param keys The keys of the sets.
+     * @return This batch instance for method chaining.
+     */
+    public Batch sinter(GlideString... keys) {
+        String[] stringKeys = new String[keys.length];
+        for (int i = 0; i < keys.length; i++) {
+            stringKeys[i] = keys[i].toString();
+        }
+        return addCommand(CommandType.SINTER, stringKeys);
+    }
+
+    /**
+     * Return the union of multiple sets.
+     *
+     * @see <a href="https://valkey.io/commands/sunion/">valkey.io</a> for details.
+     * @param keys The keys of the sets.
+     * @return This batch instance for method chaining.
+     */
+    public Batch sunion(String... keys) {
+        return addCommand(CommandType.SUNION, keys);
+    }
+
+    /**
+     * Return the union of multiple sets.
+     *
+     * @see <a href="https://valkey.io/commands/sunion/">valkey.io</a> for details.
+     * @param keys The keys of the sets.
+     * @return This batch instance for method chaining.
+     */
+    public Batch sunion(GlideString... keys) {
+        String[] stringKeys = new String[keys.length];
+        for (int i = 0; i < keys.length; i++) {
+            stringKeys[i] = keys[i].toString();
+        }
+        return addCommand(CommandType.SUNION, stringKeys);
+    }
 }

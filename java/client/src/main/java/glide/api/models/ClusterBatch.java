@@ -168,4 +168,505 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
     public ClusterBatch ping(GlideString message) {
         return addCommand(CommandType.PING, message.toString());
     }
+
+    /**
+     * Increments the number stored at key by one.
+     *
+     * @see <a href="https://valkey.io/commands/incr/">valkey.io</a> for details.
+     * @param key The key to increment.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch incr(String key) {
+        return addCommand(CommandType.INCR, key);
+    }
+
+    /**
+     * Increments the number stored at key by one.
+     *
+     * @see <a href="https://valkey.io/commands/incr/">valkey.io</a> for details.
+     * @param key The key to increment.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch incr(GlideString key) {
+        return addCommand(CommandType.INCR, key.toString());
+    }
+
+    /**
+     * Increments the number stored at key by amount.
+     *
+     * @see <a href="https://valkey.io/commands/incrby/">valkey.io</a> for details.
+     * @param key The key to increment.
+     * @param amount The amount to increment by.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch incrBy(String key, long amount) {
+        return addCommand(CommandType.INCRBY, key, String.valueOf(amount));
+    }
+
+    /**
+     * Increments the number stored at key by amount.
+     *
+     * @see <a href="https://valkey.io/commands/incrby/">valkey.io</a> for details.
+     * @param key The key to increment.
+     * @param amount The amount to increment by.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch incrBy(GlideString key, long amount) {
+        return addCommand(CommandType.INCRBY, key.toString(), String.valueOf(amount));
+    }
+
+    /**
+     * Increments the floating-point number stored at key by amount.
+     *
+     * @see <a href="https://valkey.io/commands/incrbyfloat/">valkey.io</a> for details.
+     * @param key The key to increment.
+     * @param amount The amount to increment by.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch incrByFloat(String key, double amount) {
+        return addCommand(CommandType.INCRBYFLOAT, key, String.valueOf(amount));
+    }
+
+    /**
+     * Increments the floating-point number stored at key by amount.
+     *
+     * @see <a href="https://valkey.io/commands/incrbyfloat/">valkey.io</a> for details.
+     * @param key The key to increment.
+     * @param amount The amount to increment by.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch incrByFloat(GlideString key, double amount) {
+        return addCommand(CommandType.INCRBYFLOAT, key.toString(), String.valueOf(amount));
+    }
+
+    /**
+     * Decrements the number stored at key by one.
+     *
+     * @see <a href="https://valkey.io/commands/decr/">valkey.io</a> for details.
+     * @param key The key to decrement.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch decr(String key) {
+        return addCommand(CommandType.DECR, key);
+    }
+
+    /**
+     * Decrements the number stored at key by one.
+     *
+     * @see <a href="https://valkey.io/commands/decr/">valkey.io</a> for details.
+     * @param key The key to decrement.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch decr(GlideString key) {
+        return addCommand(CommandType.DECR, key.toString());
+    }
+
+    /**
+     * Decrements the number stored at key by amount.
+     *
+     * @see <a href="https://valkey.io/commands/decrby/">valkey.io</a> for details.
+     * @param key The key to decrement.
+     * @param amount The amount to decrement by.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch decrBy(String key, long amount) {
+        return addCommand(CommandType.DECRBY, key, String.valueOf(amount));
+    }
+
+    /**
+     * Decrements the number stored at key by amount.
+     *
+     * @see <a href="https://valkey.io/commands/decrby/">valkey.io</a> for details.
+     * @param key The key to decrement.
+     * @param amount The amount to decrement by.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch decrBy(GlideString key, long amount) {
+        return addCommand(CommandType.DECRBY, key.toString(), String.valueOf(amount));
+    }
+
+    /**
+     * Returns the length of the string value stored at key.
+     *
+     * @see <a href="https://valkey.io/commands/strlen/">valkey.io</a> for details.
+     * @param key The key to get length for.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch strlen(String key) {
+        return addCommand(CommandType.STRLEN, key);
+    }
+
+    /**
+     * Returns the length of the string value stored at key.
+     *
+     * @see <a href="https://valkey.io/commands/strlen/">valkey.io</a> for details.
+     * @param key The key to get length for.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch strlen(GlideString key) {
+        return addCommand(CommandType.STRLEN, key.toString());
+    }
+
+    /**
+     * Appends a value to a key.
+     *
+     * @see <a href="https://valkey.io/commands/append/">valkey.io</a> for details.
+     * @param key The key to append to.
+     * @param value The value to append.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch append(String key, String value) {
+        return addCommand(CommandType.APPEND, key, value);
+    }
+
+    /**
+     * Appends a value to a key.
+     *
+     * @see <a href="https://valkey.io/commands/append/">valkey.io</a> for details.
+     * @param key The key to append to.
+     * @param value The value to append.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch append(GlideString key, GlideString value) {
+        return addCommand(CommandType.APPEND, key.toString(), value.toString());
+    }
+
+    /**
+     * Returns a substring of the string value stored at key.
+     *
+     * @see <a href="https://valkey.io/commands/getrange/">valkey.io</a> for details.
+     * @param key The key to get range from.
+     * @param start The start index.
+     * @param end The end index.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch getrange(String key, int start, int end) {
+        return addCommand(CommandType.GETRANGE, key, String.valueOf(start), String.valueOf(end));
+    }
+
+    /**
+     * Returns a substring of the string value stored at key.
+     *
+     * @see <a href="https://valkey.io/commands/getrange/">valkey.io</a> for details.
+     * @param key The key to get range from.
+     * @param start The start index.
+     * @param end The end index.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch getrange(GlideString key, int start, int end) {
+        return addCommand(CommandType.GETRANGE, key.toString(), String.valueOf(start), String.valueOf(end));
+    }
+
+    /**
+     * Overwrites part of the string stored at key.
+     *
+     * @see <a href="https://valkey.io/commands/setrange/">valkey.io</a> for details.
+     * @param key The key to modify.
+     * @param offset The offset to start overwriting at.
+     * @param value The value to overwrite with.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch setrange(String key, int offset, String value) {
+        return addCommand(CommandType.SETRANGE, key, String.valueOf(offset), value);
+    }
+
+    /**
+     * Overwrites part of the string stored at key.
+     *
+     * @see <a href="https://valkey.io/commands/setrange/">valkey.io</a> for details.
+     * @param key The key to modify.
+     * @param offset The offset to start overwriting at.
+     * @param value The value to overwrite with.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch setrange(GlideString key, int offset, GlideString value) {
+        return addCommand(CommandType.SETRANGE, key.toString(), String.valueOf(offset), value.toString());
+    }
+
+    /**
+     * Delete one or more hash fields.
+     *
+     * @see <a href="https://valkey.io/commands/hdel/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param fields The fields to delete.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch hdel(String key, String... fields) {
+        String[] args = new String[fields.length + 1];
+        args[0] = key;
+        System.arraycopy(fields, 0, args, 1, fields.length);
+        return addCommand(CommandType.HDEL, args);
+    }
+
+    /**
+     * Delete one or more hash fields.
+     *
+     * @see <a href="https://valkey.io/commands/hdel/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param fields The fields to delete.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch hdel(GlideString key, GlideString... fields) {
+        String[] args = new String[fields.length + 1];
+        args[0] = key.toString();
+        for (int i = 0; i < fields.length; i++) {
+            args[i + 1] = fields[i].toString();
+        }
+        return addCommand(CommandType.HDEL, args);
+    }
+
+    /**
+     * Check if a hash field exists.
+     *
+     * @see <a href="https://valkey.io/commands/hexists/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param field The field to check.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch hexists(String key, String field) {
+        return addCommand(CommandType.HEXISTS, key, field);
+    }
+
+    /**
+     * Check if a hash field exists.
+     *
+     * @see <a href="https://valkey.io/commands/hexists/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param field The field to check.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch hexists(GlideString key, GlideString field) {
+        return addCommand(CommandType.HEXISTS, key.toString(), field.toString());
+    }
+
+    /**
+     * Get the number of fields in a hash.
+     *
+     * @see <a href="https://valkey.io/commands/hlen/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch hlen(String key) {
+        return addCommand(CommandType.HLEN, key);
+    }
+
+    /**
+     * Get the number of fields in a hash.
+     *
+     * @see <a href="https://valkey.io/commands/hlen/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch hlen(GlideString key) {
+        return addCommand(CommandType.HLEN, key.toString());
+    }
+
+    /**
+     * Get all field names in a hash.
+     *
+     * @see <a href="https://valkey.io/commands/hkeys/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch hkeys(String key) {
+        return addCommand(CommandType.HKEYS, key);
+    }
+
+    /**
+     * Get all field names in a hash.
+     *
+     * @see <a href="https://valkey.io/commands/hkeys/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch hkeys(GlideString key) {
+        return addCommand(CommandType.HKEYS, key.toString());
+    }
+
+    /**
+     * Get all values in a hash.
+     *
+     * @see <a href="https://valkey.io/commands/hvals/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch hvals(String key) {
+        return addCommand(CommandType.HVALS, key);
+    }
+
+    /**
+     * Get all values in a hash.
+     *
+     * @see <a href="https://valkey.io/commands/hvals/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch hvals(GlideString key) {
+        return addCommand(CommandType.HVALS, key.toString());
+    }
+
+    /**
+     * Get the values of all specified hash fields.
+     *
+     * @see <a href="https://valkey.io/commands/hmget/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param fields The fields to get.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch hmget(String key, String... fields) {
+        String[] args = new String[fields.length + 1];
+        args[0] = key;
+        System.arraycopy(fields, 0, args, 1, fields.length);
+        return addCommand(CommandType.HMGET, args);
+    }
+
+    /**
+     * Get the values of all specified hash fields.
+     *
+     * @see <a href="https://valkey.io/commands/hmget/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param fields The fields to get.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch hmget(GlideString key, GlideString... fields) {
+        String[] args = new String[fields.length + 1];
+        args[0] = key.toString();
+        for (int i = 0; i < fields.length; i++) {
+            args[i + 1] = fields[i].toString();
+        }
+        return addCommand(CommandType.HMGET, args);
+    }
+
+    /**
+     * Increment the integer value of a hash field by amount.
+     *
+     * @see <a href="https://valkey.io/commands/hincrby/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param field The field to increment.
+     * @param amount The amount to increment by.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch hincrBy(String key, String field, long amount) {
+        return addCommand(CommandType.HINCRBY, key, field, String.valueOf(amount));
+    }
+
+    /**
+     * Increment the integer value of a hash field by amount.
+     *
+     * @see <a href="https://valkey.io/commands/hincrby/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param field The field to increment.
+     * @param amount The amount to increment by.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch hincrBy(GlideString key, GlideString field, long amount) {
+        return addCommand(CommandType.HINCRBY, key.toString(), field.toString(), String.valueOf(amount));
+    }
+
+    /**
+     * Increment the floating-point value of a hash field by amount.
+     *
+     * @see <a href="https://valkey.io/commands/hincrbyfloat/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param field The field to increment.
+     * @param amount The amount to increment by.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch hincrByFloat(String key, String field, double amount) {
+        return addCommand(CommandType.HINCRBYFLOAT, key, field, String.valueOf(amount));
+    }
+
+    /**
+     * Increment the floating-point value of a hash field by amount.
+     *
+     * @see <a href="https://valkey.io/commands/hincrbyfloat/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param field The field to increment.
+     * @param amount The amount to increment by.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch hincrByFloat(GlideString key, GlideString field, double amount) {
+        return addCommand(CommandType.HINCRBYFLOAT, key.toString(), field.toString(), String.valueOf(amount));
+    }
+
+    // List Commands
+    public ClusterBatch rpush(String key, String... elements) {
+        String[] args = new String[elements.length + 1];
+        args[0] = key;
+        System.arraycopy(elements, 0, args, 1, elements.length);
+        return addCommand(CommandType.RPUSH, args);
+    }
+
+    public ClusterBatch rpush(GlideString key, GlideString... elements) {
+        String[] args = new String[elements.length + 1];
+        args[0] = key.toString();
+        for (int i = 0; i < elements.length; i++) {
+            args[i + 1] = elements[i].toString();
+        }
+        return addCommand(CommandType.RPUSH, args);
+    }
+
+    public ClusterBatch lpop(String key) {
+        return addCommand(CommandType.LPOP, key);
+    }
+
+    public ClusterBatch lpop(GlideString key) {
+        return addCommand(CommandType.LPOP, key.toString());
+    }
+
+    public ClusterBatch rpop(String key) {
+        return addCommand(CommandType.RPOP, key);
+    }
+
+    public ClusterBatch rpop(GlideString key) {
+        return addCommand(CommandType.RPOP, key.toString());
+    }
+
+    public ClusterBatch lrange(String key, long start, long end) {
+        return addCommand(CommandType.LRANGE, key, String.valueOf(start), String.valueOf(end));
+    }
+
+    public ClusterBatch lrange(GlideString key, long start, long end) {
+        return addCommand(CommandType.LRANGE, key.toString(), String.valueOf(start), String.valueOf(end));
+    }
+
+    public ClusterBatch llen(String key) {
+        return addCommand(CommandType.LLEN, key);
+    }
+
+    public ClusterBatch llen(GlideString key) {
+        return addCommand(CommandType.LLEN, key.toString());
+    }
+
+    public ClusterBatch lindex(String key, long index) {
+        return addCommand(CommandType.LINDEX, key, String.valueOf(index));
+    }
+
+    public ClusterBatch lindex(GlideString key, long index) {
+        return addCommand(CommandType.LINDEX, key.toString(), String.valueOf(index));
+    }
+
+    public ClusterBatch lset(String key, long index, String element) {
+        return addCommand(CommandType.LSET, key, String.valueOf(index), element);
+    }
+
+    public ClusterBatch lset(GlideString key, long index, GlideString element) {
+        return addCommand(CommandType.LSET, key.toString(), String.valueOf(index), element.toString());
+    }
+
+    public ClusterBatch ltrim(String key, long start, long end) {
+        return addCommand(CommandType.LTRIM, key, String.valueOf(start), String.valueOf(end));
+    }
+
+    public ClusterBatch ltrim(GlideString key, long start, long end) {
+        return addCommand(CommandType.LTRIM, key.toString(), String.valueOf(start), String.valueOf(end));
+    }
+
+    public ClusterBatch lrem(String key, long count, String element) {
+        return addCommand(CommandType.LREM, key, String.valueOf(count), element);
+    }
+
+    public ClusterBatch lrem(GlideString key, long count, GlideString element) {
+        return addCommand(CommandType.LREM, key.toString(), String.valueOf(count), element.toString());
+    }
 }
