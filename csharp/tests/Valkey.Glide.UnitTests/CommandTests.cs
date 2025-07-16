@@ -99,7 +99,18 @@ public class CommandTests
             // List Commands
             () => Assert.Equal(["LPOP", "a"], Request.ListLeftPopAsync("a").GetArgs()),
             () => Assert.Equal(["LPOP", "a", "3"], Request.ListLeftPopAsync("a", 3).GetArgs()),
-            () => Assert.Equal(["LPUSH", "a", "one", "two"], Request.ListLeftPushAsync("a", ["one", "two"]).GetArgs())
+            () => Assert.Equal(["LPUSH", "a", "one", "two"], Request.ListLeftPushAsync("a", ["one", "two"]).GetArgs()),
+            () => Assert.Equal(["RPOP", "a"], Request.ListRightPopAsync("a").GetArgs()),
+            () => Assert.Equal(["RPOP", "a", "2"], Request.ListRightPopAsync("a", 2).GetArgs()),
+            () => Assert.Equal(["RPUSH", "a", "one", "two"], Request.ListRightPushAsync("a", ["one", "two"]).GetArgs()),
+            () => Assert.Equal(["LLEN", "a"], Request.ListLengthAsync("a").GetArgs()),
+            () => Assert.Equal(["LREM", "a", "0", "value"], Request.ListRemoveAsync("a", "value", 0).GetArgs()),
+            () => Assert.Equal(["LREM", "a", "2", "value"], Request.ListRemoveAsync("a", "value", 2).GetArgs()),
+            () => Assert.Equal(["LREM", "a", "-1", "value"], Request.ListRemoveAsync("a", "value", -1).GetArgs()),
+            () => Assert.Equal(["LTRIM", "a", "0", "10"], Request.ListTrimAsync("a", 0, 10).GetArgs()),
+            () => Assert.Equal(["LTRIM", "a", "1", "-1"], Request.ListTrimAsync("a", 1, -1).GetArgs()),
+            () => Assert.Equal(["LRANGE", "a", "0", "-1"], Request.ListRangeAsync("a", 0, -1).GetArgs()),
+            () => Assert.Equal(["LRANGE", "a", "1", "5"], Request.ListRangeAsync("a", 1, 5).GetArgs())
         );
     }
 
@@ -188,7 +199,20 @@ public class CommandTests
 
             () => Assert.Equal("one", Request.ListLeftPopAsync("a").Converter("one")),
             () => Assert.Equal(["one", "two"], Request.ListLeftPopAsync("a", 2).Converter([(gs)"one", (gs)"two"])),
-            () => Assert.Equal(2L, Request.ListLeftPushAsync("a", ["one", "two"]).Converter(2L))
+            () => Assert.Equal(2L, Request.ListLeftPushAsync("a", ["one", "two"]).Converter(2L)),
+            () => Assert.Equal("three", Request.ListRightPopAsync("a").Converter("three")),
+            () => Assert.Null(Request.ListRightPopAsync("a").Converter(null)),
+            () => Assert.Equal(["three", "four"], Request.ListRightPopAsync("a", 2).Converter([(gs)"three", (gs)"four"])),
+            () => Assert.Null(Request.ListRightPopAsync("a", 2).Converter(null)),
+            () => Assert.Equal(3L, Request.ListRightPushAsync("a", ["three", "four"]).Converter(3L)),
+            () => Assert.Equal(5L, Request.ListLengthAsync("a").Converter(5L)),
+            () => Assert.Equal(0L, Request.ListLengthAsync("nonexistent").Converter(0L)),
+            () => Assert.Equal(2L, Request.ListRemoveAsync("a", "value", 0).Converter(2L)),
+            () => Assert.Equal(1L, Request.ListRemoveAsync("a", "value", 1).Converter(1L)),
+            () => Assert.Equal(0L, Request.ListRemoveAsync("a", "nonexistent", 0).Converter(0L)),
+            () => Assert.Equal("OK", Request.ListTrimAsync("a", 0, 10).Converter("OK")),
+            () => Assert.Equal(["one", "two", "three"], Request.ListRangeAsync("a", 0, -1).Converter([(gs)"one", (gs)"two", (gs)"three"])),
+            () => Assert.Equal([], Request.ListRangeAsync("nonexistent", 0, -1).Converter([]))
         );
     }
 
