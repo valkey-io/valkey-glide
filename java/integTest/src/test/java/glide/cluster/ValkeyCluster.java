@@ -12,7 +12,7 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /** ValkeyCluster class for managing test clusters */
-public class ValkeyCluster {
+public class ValkeyCluster implements AutoCloseable {
     private static final Path SCRIPT_FILE =
             Paths.get(System.getProperty("user.dir"))
                     .getParent()
@@ -170,7 +170,7 @@ public class ValkeyCluster {
     }
 
     @Override
-    protected void finalize() throws Throwable {
+    public void close() throws IOException {
         if (clusterFolder != null && !clusterFolder.isEmpty()) {
             List<String> command = new ArrayList<>();
             command.add("python3");
@@ -197,15 +197,19 @@ public class ValkeyCluster {
                 }
             }
 
-            if (!process.waitFor(20, TimeUnit.SECONDS)) {
-                process.destroy();
-                throw new RuntimeException("Timeout waiting for cluster shutdown");
-            }
+            try {
+                if (!process.waitFor(20, TimeUnit.SECONDS)) {
+                    process.destroy();
+                    throw new IOException("Timeout waiting for cluster shutdown");
+                }
 
-            if (process.exitValue() != 0) {
-                throw new RuntimeException("Failed to stop cluster: " + output);
+                if (process.exitValue() != 0) {
+                    throw new IOException("Failed to stop cluster: " + output);
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IOException("Interrupted while waiting for cluster shutdown", e);
             }
         }
-        super.finalize();
     }
 }

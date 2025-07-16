@@ -505,8 +505,7 @@ public class ConnectionTests {
         BaseClient monitoringClient = null;
         BaseClient lazyGlideClient = null;
         String modeString = clusterMode ? "Cluster" : "Standalone";
-        try {
-            ValkeyCluster dedicatedCluster = createDedicatedCluster(clusterMode);
+        try (ValkeyCluster dedicatedCluster = createDedicatedCluster(clusterMode)) {
             // 1. Create a monitoring client (eagerly connected)
             monitoringClient = createDedicatedClient(clusterMode, null, dedicatedCluster, false);
             if (clusterMode) {
