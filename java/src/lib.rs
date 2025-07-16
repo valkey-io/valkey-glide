@@ -8,6 +8,12 @@
 
 mod error;
 mod client;
+mod callback;
+mod runtime;
+mod async_bridge;
 
 pub use error::*;
 pub use client::*;
+pub use callback::*;
+pub use runtime::*;
+pub use async_bridge::*;

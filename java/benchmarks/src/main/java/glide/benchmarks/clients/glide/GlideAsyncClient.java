@@ -3,12 +3,7 @@ package glide.benchmarks.clients.glide;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 
-import glide.api.BaseClient;
-import glide.api.GlideClient;
-import glide.api.GlideClusterClient;
-import glide.api.models.configuration.GlideClientConfiguration;
-import glide.api.models.configuration.GlideClusterClientConfiguration;
-import glide.api.models.configuration.NodeAddress;
+import io.valkey.glide.core.client.GlideClient;
 import glide.benchmarks.clients.AsyncClient;
 import glide.benchmarks.utils.ConnectionSettings;
 import java.util.concurrent.CompletableFuture;
@@ -17,62 +12,44 @@ import java.util.concurrent.TimeoutException;
 
 /** A Glide client with async capabilities */
 public class GlideAsyncClient implements AsyncClient<String> {
-    private BaseClient glideClient;
+    private GlideClient glideClient;
 
     @Override
     public void connectToValkey(ConnectionSettings connectionSettings) {
-
+        // Use our new JNI implementation directly
+        GlideClient.Config config = new GlideClient.Config(
+            java.util.Arrays.asList(connectionSettings.host + ":" + connectionSettings.port)
+        );
+        
+        if (connectionSettings.useSsl) {
+            config.useTls(true);
+        }
+        
         if (connectionSettings.clusterMode) {
-            GlideClusterClientConfiguration config =
-                    GlideClusterClientConfiguration.builder()
-                            .address(
-                                    NodeAddress.builder()
-                                            .host(connectionSettings.host)
-                                            .port(connectionSettings.port)
-                                            .build())
-                            .useTLS(connectionSettings.useSsl)
-                            .build();
-            try {
-                glideClient = GlideClusterClient.createClient(config).get(10, SECONDS);
-            } catch (InterruptedException | ExecutionException | TimeoutException e) {
-                throw new RuntimeException(e);
-            }
+            config.clusterMode(true);
+        }
 
-        } else {
-            GlideClientConfiguration config =
-                    GlideClientConfiguration.builder()
-                            .address(
-                                    NodeAddress.builder()
-                                            .host(connectionSettings.host)
-                                            .port(connectionSettings.port)
-                                            .build())
-                            .useTLS(connectionSettings.useSsl)
-                            .build();
-
-            try {
-                glideClient = GlideClient.createClient(config).get(10, SECONDS);
-            } catch (InterruptedException | ExecutionException | TimeoutException e) {
-                throw new RuntimeException(e);
-            }
+        try {
+            glideClient = new GlideClient(config);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to create JNI client", e);
         }
     }
 
     @Override
     public CompletableFuture<String> asyncSet(String key, String value) {
-        return glideClient.set(key, value);
+        return glideClient.executeStringCommand("SET", new String[]{key, value});
     }
 
     @Override
     public CompletableFuture<String> asyncGet(String key) {
-        return glideClient.get(key);
+        return glideClient.executeStringCommand("GET", new String[]{key});
     }
 
     @Override
     public void closeConnection() {
-        try {
+        if (glideClient != null) {
             glideClient.close();
-        } catch (ExecutionException e) {
-            throw new RuntimeException(e);
         }
     }
 

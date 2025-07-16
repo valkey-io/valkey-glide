@@ -33,21 +33,6 @@ public class JsonWriter {
                 var json = new String(Files.readAllBytes(path));
                 recordings = gson.fromJson(json, collectionType);
             }
-            
-            // Create a unique identifier for this specific benchmark run configuration
-            String runId = client + "_" + clientCount + "_" + dataSize + "_" + numOfTasks;
-            
-            // For debugging - log each unique configuration
-            System.out.println("Adding benchmark result with configuration ID: " + runId);
-            for (Measurements existing : recordings) {
-                String existingId = existing.client + "_" + existing.client_count + "_" + 
-                                    existing.data_size + "_" + existing.num_of_tasks;
-                if (existingId.equals(runId)) {
-                    System.out.println("Note: Appending to existing configuration: " + existingId);
-                    break;
-                }
-            }
-            
             var data =
                     new Measurements(
                             client,
@@ -73,7 +58,6 @@ public class JsonWriter {
                             tps);
 
             recordings.add(data);
-            System.out.println("Added benchmark result for: " + client + ", concurrency: " + numOfTasks + ", data size: " + dataSize);
 
             Files.write(path, gson.toJson(recordings).getBytes());
         } catch (IOException e) {
