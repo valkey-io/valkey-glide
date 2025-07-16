@@ -229,7 +229,7 @@ public class ClusterClientTests(TestConfiguration config)
         ClusterValue<ValkeyValue> result = await client.EchoAsync(message, AllNodes);
 
         Assert.True(result.HasMultiData);
-        foreach (string echo in result.MultiValue.Values)
+        foreach (ValkeyValue echo in result.MultiValue.Values)
         {
             Assert.Equal(message, echo);
         }
@@ -252,8 +252,9 @@ public class ClusterClientTests(TestConfiguration config)
         ClusterValue<ValkeyValue> result = await client.EchoAsync(binaryData, AllNodes);
 
         Assert.True(result.HasMultiData);
-        foreach (string echo in result.MultiValue.Values)
+        foreach (ValkeyValue ev in result.MultiValue.Values)
         {
+            string echo = ev!.ToString();
             byte[] bytes = Encoding.ASCII.GetBytes(echo);
             Assert.Equivalent(binaryData, bytes);
         }

@@ -165,6 +165,8 @@ public class StandaloneClientTests(TestConfiguration config)
         Assert.Equal(binaryData, (byte[]?)result);
     }
 
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestStandaloneClients), MemberType = typeof(TestConfiguration))]
     public async Task KeyCopy_Move(GlideClient client)
     {
         string key = Guid.NewGuid().ToString();
