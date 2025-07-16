@@ -72,4 +72,51 @@ public interface IServer
 
     /// <inheritdoc cref="InfoAsync(ValkeyValue, CommandFlags)"/>
     IGrouping<string, KeyValuePair<string, string>>[] Info(ValkeyValue section = default, CommandFlags flags = CommandFlags.None);
+
+    /// <summary>
+    /// Pings the server.
+    /// </summary>
+    /// <seealso href="https://valkey.io/commands/ping"/>
+    /// <param name="flags">The command flags to use. Currently flags are ignored.</param>
+    /// <returns>The observed latency.</returns>
+    /// <remarks>
+    /// <example>
+    /// <code>
+    /// TimeSpan result = await client.PingAsync();
+    /// </code>
+    /// </example>
+    /// </remarks>
+    Task<TimeSpan> PingAsync(CommandFlags flags = CommandFlags.None);
+
+    /// <summary>
+    /// Pings the server.
+    /// </summary>
+    /// <seealso href="https://valkey.io/commands/ping"/>
+    /// <param name="message">The message to send.</param>
+    /// <param name="flags">The command flags to use. Currently flags are ignored.</param>
+    /// <returns>The observed latency.</returns>
+    /// <remarks>
+    /// <example>
+    /// <code>
+    /// TimeSpan result = await client.PingAsync("ping!");
+    /// </code>
+    /// </example>
+    /// </remarks>
+    Task<TimeSpan> PingAsync(ValkeyValue message, CommandFlags flags = CommandFlags.None);
+
+    /// <summary>
+    /// Echo the provided message back.
+    /// </summary>
+    /// <seealso href="https://valkey.io/commands/echo"/>
+    /// <param name="message">The provided message.</param>
+    /// <param name="flags">The command flags to use. Currently flags are ignored.</param>
+    /// <returns>The provided message.</returns>
+    /// <remarks>
+    /// <example>
+    /// <code>
+    /// ValkeyValue result = await client.EchoAsync(key, value);
+    /// </code>
+    /// </example>
+    /// </remarks>
+    Task<ValkeyValue> EchoAsync(ValkeyValue message, CommandFlags flags = CommandFlags.None);
 }
