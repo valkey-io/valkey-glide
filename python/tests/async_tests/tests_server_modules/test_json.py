@@ -7,7 +7,7 @@ import typing
 from typing import List, Optional
 
 import pytest
-from glide.async_commands import glide_json as json
+from glide import glide_json as json
 from glide.glide_client import GlideClusterClient, TGlideClient
 from glide_shared.commands.batch import ClusterBatch
 from glide_shared.commands.core_options import ConditionalChange

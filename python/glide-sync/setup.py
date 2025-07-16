@@ -24,20 +24,21 @@
 import os
 import shutil
 import subprocess
-from pathlib import Path
 import sys
-from setuptools import setup
-from setuptools.command.build_py import build_py as build_py_orig
+from pathlib import Path
+
+from setuptools import Command, setup
 from setuptools.command.build_ext import build_ext as build_ext_orig
+from setuptools.command.build_py import build_py as build_py_orig
 from setuptools.command.sdist import sdist as sdist_orig
 from setuptools.dist import Distribution
-from wheel.bdist_wheel import bdist_wheel as bdist_wheel_orig
-from distutils.core import Command
+from wheel.bdist_wheel import bdist_wheel as bdist_wheel_orig  # type: ignore
 
 # Paths
-ROOT = Path(__file__).resolve().parent                      # glide-sync/
-REAL_FFI_PATH = ROOT.parent.parent / "ffi"                 # ../../ffi
-LOCAL_FFI_SYMLINK = ROOT / "ffi"                           # glide-sync/ffi
+ROOT = Path(__file__).resolve().parent  # glide-sync/
+REAL_FFI_PATH = ROOT.parent.parent / "ffi"  # ../../ffi
+LOCAL_FFI_SYMLINK = ROOT / "ffi"  # glide-sync/ffi
+
 
 # Helper to safely remove files, directories, or symlinks
 def remove_existing(path: Path):
@@ -51,41 +52,59 @@ def remove_existing(path: Path):
         print(f"[INFO] Removing file: {path}")
         path.unlink()
 
+
 # ------------------------------------------------------------------------------
 # Custom setuptools commands
 # ------------------------------------------------------------------------------
 
+
 class CleanCommand(Command):
     """Custom clean command to remove build artifacts."""
-    user_options = []
 
-    def initialize_options(self): pass
-    def finalize_options(self): pass
+    user_options = []  # type: ignore
+
+    def initialize_options(self):
+        pass
+
+    def finalize_options(self):
+        pass
 
     def run(self):
         import glob
+
         paths_to_remove = [
-            "build", "dist", "*.egg-info", "glide_shared",
-            "ffi", "glide-core", "logger_core",
+            "build",
+            "dist",
+            "*.egg-info",
+            "glide_shared",
+            "ffi",
+            "glide-core",
+            "logger_core",
         ]
         for pattern in paths_to_remove:
             # Perform glob under ROOT only
             for match in glob.glob(str(ROOT / pattern)):
                 remove_existing(Path(match))
 
+
 class BinaryDistribution(Distribution):
     """Marks the package as containing binary extensions (e.g., .so)"""
+
     def has_ext_modules(self):
         return True
 
+
 class bdist_wheel(bdist_wheel_orig):
     """Customize wheel metadata to mark as non-pure Python"""
+
     def finalize_options(self):
         super().finalize_options()
         self.root_is_pure = False
 
+
 class build_ext(build_ext_orig):
     """Builds the Rust FFI library using Cargo"""
+
     def run(self):
         self.ensure_ffi_symlink()
 
@@ -94,26 +113,24 @@ class build_ext(build_ext_orig):
 
         # Set env for Cargo build
         env = os.environ.copy()
-        env.update({
-            "GLIDE_NAME": env.get("GLIDE_NAME", "GlidePySync"),
-            "GLIDE_VERSION": env.get("GLIDE_VERSION", "0.0.0"),
-        })
+        env.update(
+            {
+                "GLIDE_NAME": env.get("GLIDE_NAME", "GlidePySync"),
+                "GLIDE_VERSION": env.get("GLIDE_VERSION", "0.0.0"),
+            }
+        )
 
         print(f"[INFO] Building Rust FFI lib with cargo in {LOCAL_FFI_SYMLINK}")
         subprocess.run(
             ["cargo", "build"] + (["--release"] if release else []),
             cwd=LOCAL_FFI_SYMLINK,
             env=env,
-            check=True
+            check=True,
         )
 
         # Determine shared library path based on platform
         target_dir = "release" if release else "debug"
-        suffix = {
-            "linux": ".so",
-            "darwin": ".dylib",
-            "win32": ".dll"
-        }[sys.platform]
+        suffix = {"linux": ".so", "darwin": ".dylib", "win32": ".dll"}[sys.platform]
         lib_name = "libglide_ffi" + suffix
 
         built_lib = LOCAL_FFI_SYMLINK / "target" / target_dir / lib_name
@@ -130,8 +147,10 @@ class build_ext(build_ext_orig):
             print(f"[INFO] Creating symlink: {LOCAL_FFI_SYMLINK} → {REAL_FFI_PATH}")
             LOCAL_FFI_SYMLINK.symlink_to(REAL_FFI_PATH, target_is_directory=True)
 
+
 class sdist(sdist_orig):
     """Vendors Rust sources into the Python package before creating sdist"""
+
     def run(self):
         print("[INFO] Preparing source distribution (sdist) with vendored Rust sources")
 
@@ -157,8 +176,10 @@ class sdist(sdist_orig):
 
         super().run()
 
+
 class build_py(build_py_orig):
     """Ensure required tools are available and vendor glide_shared"""
+
     def run(self):
         # Check for required tools in PATH and extend PATH if missing
         for tool, hint_path in [("cargo", "~/.cargo/bin"), ("protoc", "~/.local/bin")]:
@@ -169,7 +190,11 @@ class build_py(build_py_orig):
 
         # Determine if building from sdist (PKG-INFO is a common heuristic)
         from_sdist = Path("PKG-INFO").exists()
-        source = ROOT / "glide_shared" if from_sdist else ROOT.parent / "glide-shared" / "glide_shared"
+        source = (
+            ROOT / "glide_shared"
+            if from_sdist
+            else ROOT.parent / "glide-shared" / "glide_shared"
+        )
         dest = Path(self.build_lib) / "glide_shared"
 
         print(f"[INFO] Vendoring glide_shared from {source} → {dest}")
@@ -177,17 +202,22 @@ class build_py(build_py_orig):
 
         super().run()
 
+
 # ------------------------------------------------------------------------------
 # Setup configuration
 # ------------------------------------------------------------------------------
 
 setup(
     name="valkey-glide-sync",
-    packages=["glide_sync", "glide_shared"],
-    install_requires=[
-        "cffi>=1.0.0",
-        "typing-extensions>=4.8.0",
-        "protobuf>=3.20",
+    classifiers=[
+        "Topic :: Database",
+        "Topic :: Utilities",
+        "License :: OSI Approved :: Apache Software License",
+        "Intended Audience :: Developers",
+        "Topic :: Software Development",
+        "Programming Language :: Rust",
+        "Programming Language :: Python :: Implementation :: CPython",
+        "Programming Language :: Python :: Implementation :: PyPy",
     ],
     package_data={"glide_sync": ["*.so", "*.dll", "*.dylib", "*.pyi", "py.typed"]},
     distclass=BinaryDistribution,
@@ -196,6 +226,6 @@ setup(
         "build_ext": build_ext,
         "bdist_wheel": bdist_wheel,
         "sdist": sdist,
-        "clean": CleanCommand,
+        "clean": CleanCommand,  # type: ignore
     },
 )

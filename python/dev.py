@@ -6,7 +6,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from shutil import copy2, rmtree, which, copytree
+from shutil import copy2, copytree, rmtree, which
 from typing import Any, Dict, List, Optional
 
 
@@ -116,7 +116,7 @@ def generate_protobuf_files() -> None:
     if not mypy_plugin_path.exists():
         print("❌ Error: protoc-gen-mypy not found in venv.")
         print(
-            "Hint: Try `pip install --requirement python/dev_requirements.txt` again."
+            f"Hint: Try `pip install --requirement {PYTHON_DIR}/dev_requirements.txt`"
         )
         sys.exit(1)
 
@@ -146,41 +146,43 @@ def install_glide_shared(env: Dict[str, str]) -> None:
         label="install glide-shared",
     )
 
+
 def build_async_client_wheel(env: Dict[str, str], release: bool) -> None:
-        # 1. Copy shared module
-        dest_shared = GLIDE_ASYNC_DIR / "python" / "glide_shared"
-        if dest_shared.exists():
-            rmtree(dest_shared)
-        dest_shared.parent.mkdir(parents=True, exist_ok=True)
-        origin_shared = GLIDE_SHARED_DIR / "glide_shared"
-        print(f"[INFO] Copying glide_shared from: {origin_shared} to: {dest_shared}")
-        copytree(origin_shared, dest_shared)
+    # 1. Copy shared module
+    dest_shared = GLIDE_ASYNC_DIR / "python" / "glide_shared"
+    if dest_shared.exists():
+        rmtree(dest_shared)
+    dest_shared.parent.mkdir(parents=True, exist_ok=True)
+    origin_shared = GLIDE_SHARED_DIR / "glide_shared"
+    print(f"[INFO] Copying glide_shared from: {origin_shared} to: {dest_shared}")
+    copytree(origin_shared, dest_shared)
 
-        # 2. Build wheel using maturin
-        maturin_cmd = ["maturin", "build"]
-        if release:
-            cmd += ["--release", "--strip"]
+    # 2. Build wheel using maturin
+    maturin_cmd = ["maturin", "build"]
+    if release:
+        maturin_cmd += ["--release", "--strip"]
 
-        run_command(
-            maturin_cmd,
-            cwd=GLIDE_ASYNC_DIR,
-            env=env,
-            label="maturin build async wheel",
-        )
+    run_command(
+        maturin_cmd,
+        cwd=GLIDE_ASYNC_DIR,
+        env=env,
+        label="maturin build async wheel",
+    )
 
-        # 3. Find and install wheel
-        wheel_dir = GLIDE_ASYNC_DIR / "target" / "wheels"
-        wheel_files = list(wheel_dir.glob("*.whl"))
-        if not wheel_files:
-            raise FileNotFoundError(f"No wheel found in {wheel_dir}")
+    # 3. Find and install wheel
+    wheel_dir = GLIDE_ASYNC_DIR / "target" / "wheels"
+    wheel_files = list(wheel_dir.glob("*.whl"))
+    if not wheel_files:
+        raise FileNotFoundError(f"No wheel found in {wheel_dir}")
 
-        wheel_path = wheel_files[0]
-        print(f"[INFO] Installing async client wheel: {wheel_path}")
-        run_command(
-            [str(PYTHON_EXE), "-m", "pip", "install", "--force-reinstall", str(wheel_path)],
-            env=env,
-            label="install async client wheel",
-        )
+    wheel_path = wheel_files[0]
+    print(f"[INFO] Installing async client wheel: {wheel_path}")
+    run_command(
+        [str(PYTHON_EXE), "-m", "pip", "install", "--force-reinstall", str(wheel_path)],
+        env=env,
+        label="install async client wheel",
+    )
+
 
 def build_async_client(
     glide_version: str, release: bool, no_cache: bool = False, wheel: bool = False
@@ -200,7 +202,7 @@ def build_async_client(
 
     if wheel:
         return build_async_client_wheel(env, release)
-    
+
     cmd = [str(PYTHON_EXE), "-m", "maturin", "develop"]
     if release:
         cmd += ["--release", "--strip"]
@@ -212,6 +214,7 @@ def build_async_client(
         label="maturin develop",
     )
     print("[OK] Async client build completed")
+
 
 def build_sync_client_wheel(env: Dict[str, str]) -> None:
     print("[INFO] Building sync client wheel with `python -m build`")
@@ -234,20 +237,23 @@ def build_sync_client_wheel(env: Dict[str, str]) -> None:
         label="install sync wheel",
     )
 
-def build_sync_client(glide_version: str, release: bool, no_cache: bool, wheel: bool = False) -> None:
+
+def build_sync_client(
+    glide_version: str, release: bool, no_cache: bool, wheel: bool = False
+) -> None:
     print(
         f"[INFO] Building sync client with version={glide_version} in {'release' if release else 'debug'} mode..."
     )
     generate_protobuf_files()
     env = activate_venv(no_cache)
     env = {
-            "GLIDE_NAME": GLIDE_SYNC_NAME,
-            "GLIDE_VERSION": glide_version,
-            **os.environ,
+        "GLIDE_NAME": GLIDE_SYNC_NAME,
+        "GLIDE_VERSION": glide_version,
+        **os.environ,
     }
     if release:
         env["RELEASE_MODE"] = "1"
-    
+
     # Optionally clean build artifacts
     if no_cache:
         run_command(
@@ -407,7 +413,7 @@ Examples:
         action="store_true",
         help="Build the client to wheel and install it from the built wheel.",
     )
-    
+
     subparsers.add_parser(
         "protobuf", help="Generate Python protobuf files including .pyi stubs"
     )
