@@ -9,10 +9,9 @@
 use redis::Value;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
-use tokio::sync::oneshot;
-use tokio::time::timeout;
 
 use crate::error::{JniError, JniResult};
 
@@ -21,7 +20,7 @@ pub type CallbackId = u32;
 
 /// Callback data structure containing the response sender and metadata
 pub struct CallbackData {
-    pub sender: oneshot::Sender<redis::RedisResult<Value>>,
+    pub sender: Sender<redis::RedisResult<Value>>,
     pub created_at: Instant,
     pub timeout_duration: Duration,
 }
@@ -48,9 +47,9 @@ impl CallbackRegistry {
     pub fn register_callback(
         &self,
         timeout_duration: Duration,
-    ) -> JniResult<(CallbackId, oneshot::Receiver<redis::RedisResult<Value>>)> {
+    ) -> JniResult<(CallbackId, Receiver<redis::RedisResult<Value>>)> {
         let callback_id = self.next_callback_id.fetch_add(1, Ordering::SeqCst);
-        let (sender, receiver) = oneshot::channel();
+        let (sender, receiver) = mpsc::channel();
 
         let callback_data = CallbackData {
             sender,
@@ -121,17 +120,6 @@ impl CallbackRegistry {
     }
 }
 
-/// Async helper function to wait for a callback with timeout
-pub async fn wait_for_callback(
-    receiver: oneshot::Receiver<redis::RedisResult<Value>>,
-    timeout_duration: Duration,
-) -> JniResult<Value> {
-    match timeout(timeout_duration, receiver).await {
-        Ok(Ok(result)) => result.map_err(JniError::from),
-        Ok(Err(_)) => Err(JniError::Runtime("Callback sender dropped".to_string())),
-        Err(_) => Err(JniError::Timeout("Callback timeout".to_string())),
-    }
-}
 
 impl Default for CallbackRegistry {
     fn default() -> Self {

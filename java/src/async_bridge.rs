@@ -11,7 +11,7 @@ use redis::{Cmd, Value};
 use redis::cluster_routing::RoutingInfo;
 use std::time::Duration;
 
-use crate::callback::{CallbackRegistry, wait_for_callback};
+use crate::callback::CallbackRegistry;
 use crate::error::{JniError, JniResult};
 use crate::runtime::JniRuntime;
 
@@ -60,8 +60,18 @@ impl AsyncBridge {
         // Spawn the task on the runtime
         self.runtime.spawn(task)?;
 
-        // Wait for the callback to complete
-        self.runtime.block_on(wait_for_callback(receiver, timeout))?
+        // Wait for the callback to complete using sync channel with timeout
+        match receiver.recv_timeout(timeout) {
+            Ok(result) => result.map_err(JniError::from),
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                // Clean up the callback on timeout
+                self.callback_registry.cleanup_expired_callbacks().ok();
+                Err(JniError::Timeout("Command timeout".to_string()))
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                Err(JniError::Runtime("Callback receiver dropped".to_string()))
+            }
+        }
     }
 
     /// Execute a command with a specific routing
@@ -92,8 +102,18 @@ impl AsyncBridge {
         // Spawn the task on the runtime
         self.runtime.spawn(task)?;
 
-        // Wait for the callback to complete
-        self.runtime.block_on(wait_for_callback(receiver, timeout))?
+        // Wait for the callback to complete using sync channel with timeout
+        match receiver.recv_timeout(timeout) {
+            Ok(result) => result.map_err(JniError::from),
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                // Clean up the callback on timeout
+                self.callback_registry.cleanup_expired_callbacks().ok();
+                Err(JniError::Timeout("Command timeout".to_string()))
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                Err(JniError::Runtime("Callback receiver dropped".to_string()))
+            }
+        }
     }
 
     /// Execute a pipeline asynchronously
@@ -125,8 +145,24 @@ impl AsyncBridge {
         // Spawn the task on the runtime
         self.runtime.spawn(task)?;
 
-        // Wait for the callback to complete
-        self.runtime.block_on(wait_for_callback(receiver, timeout))?
+        // Wait for the callback to complete using sync channel with timeout
+        println!("DEBUG: Waiting for callback {} with timeout {:?}", callback_id, timeout);
+        match receiver.recv_timeout(timeout) {
+            Ok(result) => {
+                println!("DEBUG: Callback {} received result: {:?}", callback_id, result);
+                result.map_err(JniError::from)
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                println!("DEBUG: Callback {} timed out", callback_id);
+                // Clean up the callback on timeout
+                self.callback_registry.cleanup_expired_callbacks().ok();
+                Err(JniError::Timeout("Operation timeout".to_string()))
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                println!("DEBUG: Callback {} receiver dropped", callback_id);
+                Err(JniError::Runtime("Callback receiver dropped".to_string()))
+            }
+        }
     }
 
     /// Execute a transaction asynchronously
@@ -158,8 +194,24 @@ impl AsyncBridge {
         // Spawn the task on the runtime
         self.runtime.spawn(task)?;
 
-        // Wait for the callback to complete
-        self.runtime.block_on(wait_for_callback(receiver, timeout))?
+        // Wait for the callback to complete using sync channel with timeout
+        println!("DEBUG: Waiting for callback {} with timeout {:?}", callback_id, timeout);
+        match receiver.recv_timeout(timeout) {
+            Ok(result) => {
+                println!("DEBUG: Callback {} received result: {:?}", callback_id, result);
+                result.map_err(JniError::from)
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                println!("DEBUG: Callback {} timed out", callback_id);
+                // Clean up the callback on timeout
+                self.callback_registry.cleanup_expired_callbacks().ok();
+                Err(JniError::Timeout("Operation timeout".to_string()))
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                println!("DEBUG: Callback {} receiver dropped", callback_id);
+                Err(JniError::Runtime("Callback receiver dropped".to_string()))
+            }
+        }
     }
 
     /// Get the number of pending callbacks
@@ -181,6 +233,11 @@ impl AsyncBridge {
     /// Shutdown the async bridge
     pub fn shutdown(&self) {
         self.runtime.shutdown();
+    }
+
+    /// Get access to the runtime for client creation
+    pub fn runtime(&self) -> &JniRuntime {
+        &self.runtime
     }
 }
 

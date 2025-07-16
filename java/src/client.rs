@@ -321,14 +321,23 @@ pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_createClient
         // Generate unique client handle
         let client_handle = generate_client_handle();
 
-        // Create the glide-core client using a temporary runtime
-        let temp_runtime = JniRuntime::new("temp-client-creation")?;
-        let core_client = temp_runtime.block_on(async {
+        // Create the permanent runtime first
+        let runtime = JniRuntime::new(&format!("glide-jni-{}", client_handle))?;
+        
+        // Create the async bridge first 
+        let async_bridge = AsyncBridge::new(runtime);
+        
+        // Create the glide-core client using the async bridge's runtime
+        let core_client = async_bridge.runtime().block_on(async {
             Client::new(connection_request, None).await
         })?.map_err(|e| jni_error!(Connection, "Failed to create client: {}", e))?;
 
         // Create the JniClient instance
-        let jni_client = JniClient::new(core_client, request_timeout, client_handle)?;
+        let jni_client = JniClient {
+            core_client,
+            async_bridge,
+            default_timeout: request_timeout,
+        };
 
         // Insert into registry
         insert_client(client_handle, jni_client)?;

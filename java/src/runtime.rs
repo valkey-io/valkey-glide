@@ -151,8 +151,10 @@ impl Default for RuntimeManager {
 
 impl Drop for JniRuntime {
     fn drop(&mut self) {
-        // Ensure graceful shutdown
-        self.shutdown();
+        // Only shutdown if this is the last reference to the runtime
+        if Arc::strong_count(&self.runtime) == 1 {
+            self.shutdown();
+        }
     }
 }
 
