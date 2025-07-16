@@ -147,6 +147,10 @@ public enum CommandType {
     SCRIPT_EXISTS("SCRIPT EXISTS"),
     SCRIPT_FLUSH("SCRIPT FLUSH"),
     SCRIPT_KILL("SCRIPT KILL"),
+    SCRIPT_LOAD("SCRIPT LOAD"),
+    SCRIPT_SHOW("SCRIPT SHOW"),
+    EVAL("EVAL"),
+    EVALSHA("EVALSHA"),
 
     // PubSub commands
     PUBLISH("PUBLISH"),

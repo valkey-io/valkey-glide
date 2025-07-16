@@ -6,6 +6,8 @@ import java.lang.ref.Cleaner;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * High-performance client for Valkey GLIDE with direct glide-core integration.
@@ -26,9 +28,14 @@ public class GlideClient implements AutoCloseable {
             throw e;
         }
     }    /**
-     * Native pointer to the client instance in Rust
+     * Native handle to the client instance in Rust (atomic for thread safety)
      */
-    private volatile long nativeClientPtr;
+    private final AtomicLong nativeClientHandle = new AtomicLong(0);
+    
+    /**
+     * Cleanup coordination flag to prevent double cleanup
+     */
+    private final AtomicBoolean cleanupInProgress = new AtomicBoolean(false);
 
     /**
      * Cleaner resource to ensure native cleanup
@@ -112,7 +119,7 @@ public class GlideClient implements AutoCloseable {
             throw new IllegalArgumentException("At least one address must be provided");
         }
 
-        this.nativeClientPtr = createClient(
+        long handle = createClient(
             config.getAddresses(),
             config.getDatabaseId(),
             config.getUsername(),
@@ -123,12 +130,14 @@ public class GlideClient implements AutoCloseable {
             config.getConnectionTimeoutMs()
         );
 
-        if (this.nativeClientPtr == 0) {
+        if (handle == 0) {
             throw new RuntimeException("Failed to create client");
         }
 
+        this.nativeClientHandle.set(handle);
+
         // Create shared state for proper cleanup coordination
-        this.nativeState = new NativeState(this.nativeClientPtr);
+        this.nativeState = new NativeState(handle);
 
         // Register cleanup action with Cleaner - modern replacement for finalize()
         this.cleanable = CLEANER.register(this, new CleanupAction(this.nativeState));
@@ -144,73 +153,6 @@ public class GlideClient implements AutoCloseable {
         this(new Config(Arrays.asList(host + ":" + port)));
     }
 
-    /**
-     * Execute a GET command - matches BaseClient API
-     *
-     * @param key the key to get
-     * @return CompletableFuture with the value as string, or null if key doesn't exist
-     */
-    public CompletableFuture<String> get(String key) {
-        if (key == null) {
-            throw new IllegalArgumentException("Key cannot be null");
-        }
-
-        checkNotClosed();
-
-        // Execute using native method
-        try {
-            String result = get(nativeClientPtr, key);
-            return CompletableFuture.completedFuture(result);
-        } catch (Exception e) {
-            CompletableFuture<String> future = new CompletableFuture<>();
-            future.completeExceptionally(e);
-            return future;
-        }
-    }
-
-    /**
-     * Execute a SET command - matches BaseClient API
-     *
-     * @param key the key to set
-     * @param value the value to set
-     * @return CompletableFuture with "OK" response
-     */
-    public CompletableFuture<String> set(String key, String value) {
-        if (key == null || value == null) {
-            throw new IllegalArgumentException("Key and value cannot be null");
-        }
-
-        checkNotClosed();
-
-        // Execute using native method
-        try {
-            boolean success = set(nativeClientPtr, key, value);
-            return CompletableFuture.completedFuture(success ? "OK" : null);
-        } catch (Exception e) {
-            CompletableFuture<String> future = new CompletableFuture<>();
-            future.completeExceptionally(e);
-            return future;
-        }
-    }
-
-    /**
-     * Execute a PING command - matches BaseClient API
-     *
-     * @return CompletableFuture with "PONG" response
-     */
-    public CompletableFuture<String> ping() {
-        checkNotClosed();
-
-        // Execute using native method
-        try {
-            String result = ping(nativeClientPtr);
-            return CompletableFuture.completedFuture(result);
-        } catch (Exception e) {
-            CompletableFuture<String> future = new CompletableFuture<>();
-            future.completeExceptionally(e);
-            return future;
-        }
-    }
 
     /**
      * Execute any server command using the generic command execution system.
@@ -234,7 +176,8 @@ public class GlideClient implements AutoCloseable {
                 byteArgs[i] = args[i].getBytes();
             }
 
-            Object result = executeCommand(nativeClientPtr, command.getType().getCommandName(), byteArgs);
+            long handle = nativeClientHandle.get();
+            Object result = executeCommand(handle, command.getType().getCommandName(), byteArgs);
             return CompletableFuture.completedFuture(result);
         } catch (Exception e) {
             CompletableFuture<Object> future = new CompletableFuture<>();
@@ -257,7 +200,8 @@ public class GlideClient implements AutoCloseable {
     public CompletableFuture<String> executeStringCommand(String command, String[] args) {
         checkNotClosed();
         try {
-            String result = executeStringCommand(nativeClientPtr, command, args);
+            long handle = nativeClientHandle.get();
+            String result = executeStringCommand(handle, command, args);
             return CompletableFuture.completedFuture(result);
         } catch (Exception e) {
             CompletableFuture<String> future = new CompletableFuture<>();
@@ -277,7 +221,8 @@ public class GlideClient implements AutoCloseable {
     public CompletableFuture<Long> executeLongCommand(String command, String[] args) {
         checkNotClosed();
         try {
-            long result = executeLongCommand(nativeClientPtr, command, args);
+            long handle = nativeClientHandle.get();
+            long result = executeLongCommand(handle, command, args);
             return CompletableFuture.completedFuture(result);
         } catch (Exception e) {
             CompletableFuture<Long> future = new CompletableFuture<>();
@@ -297,7 +242,8 @@ public class GlideClient implements AutoCloseable {
     public CompletableFuture<Double> executeDoubleCommand(String command, String[] args) {
         checkNotClosed();
         try {
-            double result = executeDoubleCommand(nativeClientPtr, command, args);
+            long handle = nativeClientHandle.get();
+            double result = executeDoubleCommand(handle, command, args);
             return CompletableFuture.completedFuture(result);
         } catch (Exception e) {
             CompletableFuture<Double> future = new CompletableFuture<>();
@@ -317,7 +263,8 @@ public class GlideClient implements AutoCloseable {
     public CompletableFuture<Boolean> executeBooleanCommand(String command, String[] args) {
         checkNotClosed();
         try {
-            boolean result = executeBooleanCommand(nativeClientPtr, command, args);
+            long handle = nativeClientHandle.get();
+            boolean result = executeBooleanCommand(handle, command, args);
             return CompletableFuture.completedFuture(result);
         } catch (Exception e) {
             CompletableFuture<Boolean> future = new CompletableFuture<>();
@@ -337,7 +284,8 @@ public class GlideClient implements AutoCloseable {
     public CompletableFuture<Object[]> executeArrayCommand(String command, String[] args) {
         checkNotClosed();
         try {
-            Object[] result = executeArrayCommand(nativeClientPtr, command, args);
+            long handle = nativeClientHandle.get();
+            Object[] result = executeArrayCommand(handle, command, args);
             return CompletableFuture.completedFuture(result);
         } catch (Exception e) {
             CompletableFuture<Object[]> future = new CompletableFuture<>();
@@ -400,18 +348,24 @@ public class GlideClient implements AutoCloseable {
      * @return true if the client is closed
      */
     public boolean isClosed() {
-        return nativeClientPtr == 0;
-    }    /**
-     * Close the client and release native resources
+        return nativeClientHandle.get() == 0;
+    }
+    
+    /**
+     * Close the client and release native resources with atomic operations
      */
     @Override
     public void close() {
-        long ptr = nativeClientPtr;
-        if (ptr != 0) {
-            nativeClientPtr = 0;
-            // Safely cleanup using shared state
-            nativeState.cleanup();
-            cleanable.clean(); // This will be a no-op since state is already cleaned
+        // Atomic compare-and-swap ensures only one cleanup
+        long handle = nativeClientHandle.getAndSet(0);
+        if (handle != 0 && cleanupInProgress.compareAndSet(false, true)) {
+            try {
+                nativeState.cleanup();
+                cleanable.clean();
+            } finally {
+                // Mark as permanently closed
+                cleanupInProgress.set(true);
+            }
         }
     }
 
@@ -497,32 +451,6 @@ public class GlideClient implements AutoCloseable {
      */
     private static native void closeClient(long clientPtr);
 
-    /**
-     * Execute GET command
-     *
-     * @param clientPtr native pointer to client instance
-     * @param key the key to get
-     * @return value as string, or null if key doesn't exist
-     */
-    private static native String get(long clientPtr, String key);
-
-    /**
-     * Execute SET command
-     *
-     * @param clientPtr native pointer to client instance
-     * @param key the key to set
-     * @param value the value to set
-     * @return true if successful
-     */
-    private static native boolean set(long clientPtr, String key, String value);
-
-    /**
-     * Execute PING command
-     *
-     * @param clientPtr native pointer to client instance
-     * @return "PONG" or similar response
-     */
-    private static native String ping(long clientPtr);
 
     /**
      * Execute any command with arguments

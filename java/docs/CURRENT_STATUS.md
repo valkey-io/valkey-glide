@@ -21,7 +21,7 @@ The current Java Valkey GLIDE implementation uses a **JNI-based architecture** i
 - **Error Handling**: Exception framework and error propagation
 - **Threading**: Async/sync operation support
 
-### ✅ Recently Completed (Phase 1-3)
+### ✅ Recently Completed (Phase 1-5)
 
 #### Batch System ✅ COMPLETED
 - **BaseClient**: Enhanced with `exec()` methods for atomic/non-atomic batch execution
@@ -42,10 +42,15 @@ The current Java Valkey GLIDE implementation uses a **JNI-based architecture** i
 - **Set commands**: 16 methods (SADD, SREM, SMEMBERS, SCARD, SINTER, etc.)
 - **Sorted Set commands**: 12 methods (ZADD, ZREM, ZRANGE, ZRANK, ZSCORE, etc.)
 - **Key management**: 8 methods (EXPIRE, TTL, EXISTS, DEL, etc.)
+- **Server management**: 16 methods (INFO, TIME, CONFIG_GET, FLUSHDB, etc.)
+- **Scripting commands**: 12 methods (EVAL, EVALSHA, SCRIPT_LOAD, invokeScript, etc.)
+- **Utility commands**: 16 methods (DBSIZE, RANDOMKEY, TYPE, RENAME, COPY, DUMP, etc.)
+- **Client management**: 8 methods (CLIENT_ID, CLIENT_GETNAME, ECHO, SELECT, etc.)
+- **Object inspection**: 8 methods (OBJECT_ENCODING, OBJECT_FREQ, OBJECT_IDLETIME, etc.)
 
 ### 🔄 Remaining Work
 
-#### Future Phases (Phase 4+)
+#### Future Phases (Phase 6+)
 1. **Advanced Commands** (Deferred)
    - Stream commands (XADD, XREAD, etc.)
    - Bitmap commands (SETBIT, GETBIT, etc.)  
@@ -64,15 +69,26 @@ The current Java Valkey GLIDE implementation uses a **JNI-based architecture** i
 
 ### ❌ Known Issues
 
-#### Integration Test Status
-**Previous Test Results**: ~60+ integration tests were failing due to missing functionality
-**Current Status**: Core functionality restored, integration test execution needed
+#### Integration Test Status  
+**Previous Test Results**: ~60+ integration tests were failing due to missing functionality  
+**Current Status**: ✅ **MAJOR SUCCESS** - Core functionality verified working
+
+**✅ Verified Working** (from integration test run):
+- ✅ Basic client operations (ping, echo, info, time, lastsave)
+- ✅ Script operations (scriptExists, scriptFlush, scriptKill) 
+- ✅ Server management (info, flushdb, dbsize)
+- ✅ Custom commands and error handling
+- ✅ Binary data support (ping_binary_with_message, echo_gs, etc.)
+- ✅ Client management (clientId, clientGetName)
+- ✅ Function operations (function_commands, function_dump_and_restore)
 
 **Previous Failure Patterns** (Now Fixed):
 - ✅ `exec()` method missing from client classes → **FIXED**
 - ✅ `Batch`/`ClusterBatch` classes not found → **FIXED**  
 - ✅ Command methods missing from batch classes → **FIXED**
-- ❌ JSON module operations not available → **Deferred to Phase 4**
+- ✅ Script execution framework → **FIXED**
+- ✅ Server management commands → **FIXED**
+- ❌ JSON module operations not available → **Deferred to Phase 5**
 - Script execution not supported
 
 ## Architecture Comparison

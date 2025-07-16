@@ -61,6 +61,14 @@ pub enum JniError {
     /// Redis/Valkey error
     #[error("Redis error: {0}")]
     Redis(#[from] redis::RedisError),
+
+    /// Lock poisoned error
+    #[error("Lock poisoned: {0}")]
+    LockPoisoned(String),
+
+    /// Invalid handle error
+    #[error("Invalid handle: {0}")]
+    InvalidHandle(String),
 }
 
 impl From<jni::errors::Error> for JniError {
@@ -96,6 +104,8 @@ pub fn throw_java_exception(env: &mut JNIEnv, error: &JniError) {
         JniError::Timeout(msg) => ("java/util/concurrent/TimeoutException", msg.clone()),
         JniError::Redis(err) => ("java/lang/RuntimeException", format!("Redis error: {}", err)),
         JniError::ConversionError(msg) => ("java/lang/IllegalArgumentException", format!("Conversion error: {}", msg)),
+        JniError::LockPoisoned(msg) => ("java/lang/IllegalStateException", format!("Lock poisoned: {}", msg)),
+        JniError::InvalidHandle(msg) => ("java/lang/IllegalArgumentException", format!("Invalid handle: {}", msg)),
     };
 
     // Attempt to throw the exception, ignoring errors since we're already in error handling

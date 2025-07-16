@@ -12,12 +12,42 @@ use jni::JNIEnv;
 use redis::{cmd, Value};
 use std::ptr;
 use std::time::Duration;
+use std::sync::{Arc, Mutex};
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::LazyLock;
 
 use crate::error::JniResult;
 use crate::{jni_result, jni_error};
 
+// Command validation constants (based on Valkey official limits)
+const MAX_COMMAND_NAME_LEN: usize = 64; // Reasonable limit for command names
+const MAX_ARGUMENT_LEN: usize = 536_870_912; // 512MB - Valkey proto-max-bulk-len default
+const MAX_ARGUMENTS_COUNT: usize = 100_000; // Conservative limit, Valkey max is 2^31-1 but impractical
+
+// Allowed Valkey commands whitelist for security
+const ALLOWED_COMMANDS: &[&str] = &[
+    "GET", "SET", "DEL", "EXISTS", "PING", "INFO", "TIME",
+    "MGET", "MSET", "INCR", "DECR", "INCRBY", "DECRBY",
+    "HGET", "HSET", "HDEL", "HEXISTS", "HKEYS", "HVALS",
+    "LPUSH", "RPUSH", "LPOP", "RPOP", "LLEN", "LRANGE",
+    "SADD", "SREM", "SMEMBERS", "SCARD", "SISMEMBER",
+    "ZADD", "ZREM", "ZRANGE", "ZRANK", "ZSCORE", "ZCARD",
+    "EXPIRE", "TTL", "FLUSHDB", "DBSIZE", "RANDOMKEY",
+    "TYPE", "RENAME", "COPY", "DUMP", "RESTORE",
+    "CLIENT", "ECHO", "SELECT", "OBJECT", "CONFIG",
+    "EVAL", "EVALSHA", "SCRIPT", "MULTI", "EXEC", "DISCARD"
+];
+
 /// Runtime singleton for efficient Tokio integration
 static RUNTIME: std::sync::OnceLock<tokio::runtime::Runtime> = std::sync::OnceLock::new();
+
+/// Type-safe client handle management
+static CLIENT_COUNTER: AtomicU64 = AtomicU64::new(1);
+static CLIENT_REGISTRY: LazyLock<Mutex<HashMap<u64, Arc<Mutex<Client>>>>> = 
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+const CLIENT_TYPE_MAGIC: u64 = 0xDEADBEEFCAFEBABE;
 
 /// Get or initialize the Tokio runtime
 fn get_runtime() -> &'static tokio::runtime::Runtime {
@@ -30,33 +60,207 @@ fn get_runtime() -> &'static tokio::runtime::Runtime {
     })
 }
 
+// Command validation functions
+
+/// Validate Valkey command name against whitelist and injection attacks
+fn validate_command_name(command: &str) -> JniResult<()> {
+    // Length validation
+    if command.is_empty() {
+        return Err(jni_error!(InvalidInput, "Command name cannot be empty"));
+    }
+    
+    if command.len() > MAX_COMMAND_NAME_LEN {
+        return Err(jni_error!(InvalidInput, "Command name too long: {}", command.len()));
+    }
+    
+    // Check for injection characters
+    if command.contains('\r') || command.contains('\n') || command.contains('\0') {
+        return Err(jni_error!(InvalidInput, "Command name contains invalid characters"));
+    }
+    
+    // Check whitelist
+    let normalized_command = command.to_uppercase();
+    if !ALLOWED_COMMANDS.contains(&normalized_command.as_str()) {
+        return Err(jni_error!(InvalidInput, "Command not allowed: {}", command));
+    }
+    
+    Ok(())
+}
+
+/// Validate and sanitize command argument
+fn validate_argument(arg: &[u8]) -> JniResult<()> {
+    // Size validation
+    if arg.len() > MAX_ARGUMENT_LEN {
+        return Err(jni_error!(InvalidInput, "Argument too large: {} bytes", arg.len()));
+    }
+    
+    // Check for protocol injection if it's text
+    if let Ok(arg_str) = std::str::from_utf8(arg) {
+        if arg_str.contains('\r') || arg_str.contains('\n') {
+            return Err(jni_error!(InvalidInput, "Argument contains invalid characters"));
+        }
+    }
+    
+    Ok(())
+}
+
+/// Validate key string for Valkey operations
+fn validate_key(key: &str) -> JniResult<()> {
+    if key.is_empty() {
+        return Err(jni_error!(InvalidInput, "Key cannot be empty"));
+    }
+    
+    if key.len() > MAX_ARGUMENT_LEN {
+        return Err(jni_error!(InvalidInput, "Key too large: {} bytes", key.len()));
+    }
+    
+    if key.contains('\0') || key.contains('\r') || key.contains('\n') {
+        return Err(jni_error!(InvalidInput, "Key contains invalid characters"));
+    }
+    
+    Ok(())
+}
+
+// Type-safe client handle management
+
+/// Create a new type-safe client handle
+fn register_client(client: Client) -> u64 {
+    let handle = CLIENT_COUNTER.fetch_add(1, Ordering::SeqCst);
+    let client_arc = Arc::new(Mutex::new(client));
+    
+    let mut registry = CLIENT_REGISTRY.lock().unwrap();
+    registry.insert(handle, client_arc);
+    
+    // Encode handle with type magic for validation
+    handle ^ CLIENT_TYPE_MAGIC
+}
+
+/// Get client from type-safe handle with validation
+fn get_client_safe(encoded_handle: jlong) -> JniResult<Arc<Mutex<Client>>> {
+    if encoded_handle == 0 {
+        return Err(jni_error!(NullPointer, "Client handle is null"));
+    }
+    
+    // Decode and validate handle
+    let handle = (encoded_handle as u64) ^ CLIENT_TYPE_MAGIC;
+    
+    let registry = CLIENT_REGISTRY.lock()
+        .map_err(|_| jni_error!(LockPoisoned, "Client registry lock poisoned"))?;
+    
+    registry.get(&handle)
+        .cloned()
+        .ok_or(jni_error!(InvalidHandle, "Invalid or expired client handle: {}", handle))
+}
+
+/// Remove client from registry
+fn unregister_client(encoded_handle: jlong) -> JniResult<()> {
+    if encoded_handle == 0 {
+        return Ok(()); // Already cleaned
+    }
+    
+    let handle = (encoded_handle as u64) ^ CLIENT_TYPE_MAGIC;
+    
+    let mut registry = CLIENT_REGISTRY.lock()
+        .map_err(|_| jni_error!(LockPoisoned, "Client registry lock poisoned"))?;
+    
+    registry.remove(&handle);
+    Ok(())
+}
+
 // Helper functions for JNI parameter parsing
 
-/// Parse Java string array to vector of NodeAddress
+/// Validate and parse address with security checks
+fn validate_and_parse_address(addr_str: &str) -> JniResult<NodeAddress> {
+    // Length validation
+    if addr_str.len() > 255 {
+        return Err(jni_error!(InvalidInput, "Address too long: {}", addr_str.len()));
+    }
+    
+    if addr_str.is_empty() {
+        return Err(jni_error!(InvalidInput, "Address cannot be empty"));
+    }
+    
+    // Check for suspicious characters
+    if addr_str.contains('\0') || addr_str.contains('\r') || addr_str.contains('\n') {
+        return Err(jni_error!(InvalidInput, "Address contains invalid characters"));
+    }
+    
+    let parts: Vec<&str> = addr_str.split(':').collect();
+    if parts.len() != 2 {
+        return Err(jni_error!(InvalidInput, "Address must be in format 'host:port'"));
+    }
+    
+    let host = parts[0];
+    let port_str = parts[1];
+    
+    // Validate hostname
+    if host.is_empty() || host.len() > 253 {
+        return Err(jni_error!(InvalidInput, "Invalid hostname length"));
+    }
+    
+    // Validate port
+    let port = port_str.parse::<u16>()
+        .map_err(|_| jni_error!(InvalidInput, "Invalid port number: {}", port_str))?;
+    
+    if port == 0 {
+        return Err(jni_error!(InvalidInput, "Port cannot be zero"));
+    }
+    
+    Ok(NodeAddress {
+        host: host.to_string(),
+        port,
+    })
+}
+
+/// Parse Java string array to vector of NodeAddress with validation
 fn parse_addresses(env: &mut JNIEnv, addresses_array: &JObjectArray) -> JniResult<Vec<NodeAddress>> {
     let length = env.get_array_length(addresses_array)?;
     let mut parsed_addresses = Vec::with_capacity(length as usize);
+
+    // Validate array size
+    if length > 100 {
+        return Err(jni_error!(InvalidInput, "Too many addresses: {}", length));
+    }
 
     for i in 0..length {
         let addr_obj = env.get_object_array_element(addresses_array, i)?;
         let addr_str: String = env.get_string(&JString::from(addr_obj))?.into();
 
-        let parts: Vec<&str> = addr_str.split(':').collect();
-        if parts.len() != 2 {
-            return Err(jni_error!(InvalidInput, "Address must be in format 'host:port'"));
-        }
-
-        let host = parts[0].to_string();
-        let port = parts[1].parse::<u16>()
-            .map_err(|e| jni_error!(InvalidInput, "Invalid port: {}", e))?;
-
-        parsed_addresses.push(NodeAddress { host, port });
+        // Use secure address parsing
+        let node_address = validate_and_parse_address(&addr_str)?;
+        parsed_addresses.push(node_address);
     }
 
     Ok(parsed_addresses)
 }
 
-/// Parse optional Java string to Rust Option<String>
+/// Validate credential string for security
+fn validate_credential(credential: &str, field_name: &str) -> JniResult<()> {
+    // Length validation
+    if credential.is_empty() {
+        return Err(jni_error!(InvalidInput, "{} cannot be empty", field_name));
+    }
+    
+    if credential.len() > 256 {
+        return Err(jni_error!(InvalidInput, "{} too long: {} chars", field_name, credential.len()));
+    }
+    
+    // Character validation - no control characters except tab
+    for ch in credential.chars() {
+        if ch.is_control() && ch != '\t' {
+            return Err(jni_error!(InvalidInput, "Invalid character in {}", field_name));
+        }
+    }
+    
+    // No newlines or carriage returns (protocol injection prevention)
+    if credential.contains('\r') || credential.contains('\n') {
+        return Err(jni_error!(InvalidInput, "Invalid characters in {}", field_name));
+    }
+    
+    Ok(())
+}
+
+/// Parse optional Java string to Rust Option<String> with validation
 fn parse_optional_string(env: &mut JNIEnv, jstring: jstring) -> JniResult<Option<String>> {
     if jstring.is_null() {
         Ok(None)
@@ -87,9 +291,41 @@ pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_createClie
         let addresses_obj = unsafe { JObject::from_raw(addresses) };
         let addresses_array = JObjectArray::from(addresses_obj);
         let parsed_addresses = parse_addresses(&mut env, &addresses_array)?;
-        let db_id = if database_id >= 0 { Some(database_id as i64) } else { None };
+        // Validate database ID (Valkey default supports 0-15, configurable up to larger values)
+        let db_id = if database_id >= 0 { 
+            if database_id > 255 {  // Conservative limit - Valkey supports configurable databases, default 16
+                return Err(jni_error!(InvalidInput, "Database ID too large: {}", database_id));
+            }
+            Some(database_id as i64) 
+        } else { 
+            None 
+        };
+        
         let username_opt = parse_optional_string(&mut env, username)?;
         let password_opt = parse_optional_string(&mut env, password)?;
+        
+        // Validate credentials if provided
+        if let Some(ref user) = username_opt {
+            validate_credential(user, "username")?;
+        }
+        
+        if let Some(ref pass) = password_opt {
+            validate_credential(pass, "password")?;
+            
+            // Ensure both username and password are provided together
+            if username_opt.is_none() {
+                return Err(jni_error!(InvalidInput, "Username required when password is provided"));
+            }
+        }
+        
+        // Validate timeout parameters
+        if request_timeout_ms < 0 || request_timeout_ms > 300_000 {  // 5 minutes max
+            return Err(jni_error!(InvalidInput, "Invalid request timeout: {}", request_timeout_ms));
+        }
+        
+        if connection_timeout_ms < 0 || connection_timeout_ms > 300_000 {
+            return Err(jni_error!(InvalidInput, "Invalid connection timeout: {}", connection_timeout_ms));
+        }
 
         let tls_mode = if use_tls == JNI_TRUE {
             Some(TlsMode::SecureTls)
@@ -143,131 +379,25 @@ pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_createClie
             Client::new(connection_request, None).await
         }).map_err(|e| jni_error!(Connection, "Failed to create client: {}", e))?;
 
-        let boxed_client = Box::new(client);
-        Ok(Box::into_raw(boxed_client) as jlong)
+        // Register client with type-safe handle system
+        let handle = register_client(client);
+        Ok(handle as jlong)
     };
 
     jni_result!(&mut env, result(), 0)
 }
 
-/// Close and free a Glide client
+/// Close and free a Glide client with type-safe cleanup
 #[no_mangle]
 pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_closeClient(
     _env: JNIEnv,
     _class: JClass,
-    client_ptr: jlong,
+    client_handle: jlong,
 ) {
-    if client_ptr != 0 {
-        unsafe {
-            let _ = Box::from_raw(client_ptr as *mut Client);
-        }
-    }
+    // Use type-safe cleanup - this will safely remove the client from registry
+    let _ = unregister_client(client_handle);
 }
 
-/// Execute GET command
-#[no_mangle]
-pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_get(
-    mut env: JNIEnv,
-    _class: JClass,
-    client_ptr: jlong,
-    key: jstring,
-) -> jstring {
-    let mut result = || -> JniResult<jstring> {
-        if client_ptr == 0 {
-            return Err(jni_error!(NullPointer, "Client pointer is null"));
-        }
-
-        let client = unsafe { &mut *(client_ptr as *mut Client) };
-        let key_str: String = env.get_string(&unsafe { JString::from_raw(key) })?.into();
-
-        let mut cmd = cmd("GET");
-        cmd.arg(&key_str);
-
-        let response = get_runtime().block_on(async {
-            client.send_command(&cmd, None).await
-        })?;
-
-        match response {
-            Value::BulkString(bytes) => {
-                let value_str = String::from_utf8(bytes)
-                    .map_err(|e| jni_error!(Utf8, "Failed to convert response to string: {}", e))?;
-                let java_string = env.new_string(&value_str)?;
-                Ok(java_string.into_raw())
-            }
-            Value::Nil => Ok(ptr::null_mut()),
-            other => Err(jni_error!(UnexpectedResponse, "GET returned unexpected type: {:?}", other)),
-        }
-    };
-
-    jni_result!(&mut env, result(), ptr::null_mut())
-}
-
-/// Execute SET command
-#[no_mangle]
-pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_set(
-    mut env: JNIEnv,
-    _class: JClass,
-    client_ptr: jlong,
-    key: jstring,
-    value: jstring,
-) -> jboolean {
-    let mut result = || -> JniResult<jboolean> {
-        if client_ptr == 0 {
-            return Err(jni_error!(NullPointer, "Client pointer is null"));
-        }
-
-        let client = unsafe { &mut *(client_ptr as *mut Client) };
-        let key_str: String = env.get_string(&unsafe { JString::from_raw(key) })?.into();
-        let value_str: String = env.get_string(&unsafe { JString::from_raw(value) })?.into();
-
-        let mut cmd = cmd("SET");
-        cmd.arg(&key_str).arg(&value_str);
-
-        let response = get_runtime().block_on(async {
-            client.send_command(&cmd, None).await
-        })?;
-
-        match response {
-            Value::SimpleString(ref s) if s.to_uppercase() == "OK" => Ok(JNI_TRUE),
-            Value::Okay => Ok(JNI_TRUE),
-            other => Err(jni_error!(UnexpectedResponse, "SET returned unexpected result: {:?}", other)),
-        }
-    };
-
-    jni_result!(&mut env, result(), JNI_FALSE)
-}
-
-/// Execute PING command
-#[no_mangle]
-pub extern "system" fn Java_io_valkey_glide_jni_client_GlideJniClient_ping(
-    mut env: JNIEnv,
-    _class: JClass,
-    client_ptr: jlong,
-) -> jstring {
-    let result = || -> JniResult<jstring> {
-        if client_ptr == 0 {
-            return Err(jni_error!(NullPointer, "Client pointer is null"));
-        }
-
-        let client = unsafe { &mut *(client_ptr as *mut Client) };
-
-        let cmd = cmd("PING");
-
-        let response = get_runtime().block_on(async {
-            client.send_command(&cmd, None).await
-        })?;
-
-        match response {
-            Value::SimpleString(s) => {
-                let java_string = env.new_string(&s)?;
-                Ok(java_string.into_raw())
-            }
-            other => Err(jni_error!(UnexpectedResponse, "PING returned unexpected type: {:?}", other)),
-        }
-    };
-
-    jni_result!(&mut env, result(), ptr::null_mut())
-}
 
 /// Execute any command with arguments
 #[no_mangle]
