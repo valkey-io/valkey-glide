@@ -1432,14 +1432,14 @@ export class GlideClusterClient extends BaseClient {
             res.length == 0
                 ? (res as FunctionListResponse) // no libs
                 : ((Array.isArray(res[0])
-                    ? // single node response
-                    ((res as GlideRecord<unknown>[]).map(
-                        convertGlideRecordToRecord,
-                    ) as FunctionListResponse)
-                    : // multi node response
-                    convertGlideRecordToRecord(
-                        res as GlideRecord<unknown>,
-                    )) as ClusterResponse<FunctionListResponse>),
+                      ? // single node response
+                        ((res as GlideRecord<unknown>[]).map(
+                            convertGlideRecordToRecord,
+                        ) as FunctionListResponse)
+                      : // multi node response
+                        convertGlideRecordToRecord(
+                            res as GlideRecord<unknown>,
+                        )) as ClusterResponse<FunctionListResponse>),
         );
     }
 
