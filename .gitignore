@@ -86,3 +86,11 @@ java/excluded_tests_legacy/
 java/temp/
 java/CoreFunctionalityTest.java
 java/SimpleJniTest.java
+java/CoreFunctionalityTest.class
+java/SimpleJniTest.class
+java/HANDOVER.md
+java/target/
+java/bin/
+
+# Temporary files in repo root
+temp/
