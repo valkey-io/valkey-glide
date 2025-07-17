@@ -200,4 +200,45 @@ public interface IStringBaseCommands
     /// </example>
     /// </remarks>
     Task<long> StringAppendAsync(ValkeyKey key, ValkeyValue value, CommandFlags flags = CommandFlags.None);
+
+    /// <summary>
+    /// Decrements the number stored at key by one. If the key does not exist, it is set to 0 before performing the operation.
+    /// An error is returned if the key contains a value of the wrong type or contains a string that is not representable as integer.
+    /// This operation is limited to 64 bit signed integers.
+    /// </summary>
+    /// <seealso href="https://valkey.io/commands/decr/">valkey.io</seealso>
+    /// <param name="key">The key of the string to decrement.</param>
+    /// <param name="flags">The flags to use for this operation. Currently flags are ignored.</param>
+    /// <returns>The value of key after the decrement.</returns>
+    /// <remarks>
+    /// <example>
+    /// <code>
+    /// await client.StringSetAsync("key", "10");
+    /// long newValue = await client.StringDecrAsync("key");
+    /// Console.WriteLine(newValue); // Output: 9
+    /// </code>
+    /// </example>
+    /// </remarks>
+    Task<long> StringDecrAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None);
+
+    /// <summary>
+    /// Decrements the number stored at key by the specified decrement. If the key does not exist, it is set to 0 before performing the operation.
+    /// An error is returned if the key contains a value of the wrong type or contains a string that is not representable as integer.
+    /// This operation is limited to 64 bit signed integers.
+    /// </summary>
+    /// <seealso href="https://valkey.io/commands/decrby/">valkey.io</seealso>
+    /// <param name="key">The key of the string to decrement.</param>
+    /// <param name="decrement">The amount to decrement by.</param>
+    /// <param name="flags">The flags to use for this operation. Currently flags are ignored.</param>
+    /// <returns>The value of key after the decrement.</returns>
+    /// <remarks>
+    /// <example>
+    /// <code>
+    /// await client.StringSetAsync("key", "10");
+    /// long newValue = await client.StringDecrByAsync("key", 5);
+    /// Console.WriteLine(newValue); // Output: 5
+    /// </code>
+    /// </example>
+    /// </remarks>
+    Task<long> StringDecrByAsync(ValkeyKey key, long decrement, CommandFlags flags = CommandFlags.None);
 }

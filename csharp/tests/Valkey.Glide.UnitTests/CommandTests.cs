@@ -28,6 +28,8 @@ public class CommandTests
             () => Assert.Equal(["GETRANGE", "key", "0", "5"], Request.StringGetRange("key", 0, 5).GetArgs()),
             () => Assert.Equal(["SETRANGE", "key", "10", "value"], Request.StringSetRange("key", 10, "value").GetArgs()),
             () => Assert.Equal(["APPEND", "key", "value"], Request.StringAppend("key", "value").GetArgs()),
+            () => Assert.Equal(["DECR", "key"], Request.StringDecr("key").GetArgs()),
+            () => Assert.Equal(["DECRBY", "key", "5"], Request.StringDecrBy("key", 5).GetArgs()),
 
             () => Assert.Equal(["INFO"], Request.Info([]).GetArgs()),
             () => Assert.Equal(["INFO", "CLIENTS", "CPU"], Request.Info([InfoOptions.Section.CLIENTS, InfoOptions.Section.CPU]).GetArgs()),
@@ -127,6 +129,8 @@ public class CommandTests
             () => Assert.Equal<GlideString>("", Request.StringGetRange("key", 0, 4).Converter("")),
             () => Assert.Equal(10L, Request.StringSetRange("key", 5, "world").Converter(10L)),
             () => Assert.Equal(11L, Request.StringAppend("key", "value").Converter(11L)),
+            () => Assert.Equal(9L, Request.StringDecr("key").Converter(9L)),
+            () => Assert.Equal(5L, Request.StringDecrBy("key", 5).Converter(5L)),
             () => Assert.True(Request.StringSetMultiple([
                 new KeyValuePair<ValkeyKey, ValkeyValue>("key1", "value1"),
                 new KeyValuePair<ValkeyKey, ValkeyValue>("key2", "value2")

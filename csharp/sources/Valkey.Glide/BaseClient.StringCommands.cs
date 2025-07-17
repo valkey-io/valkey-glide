@@ -30,4 +30,10 @@ public abstract partial class BaseClient : IStringBaseCommands
 
     public async Task<long> StringAppendAsync(ValkeyKey key, ValkeyValue value, CommandFlags flags = CommandFlags.None)
         => await Command(Request.StringAppend(key, value));
+
+    public async Task<long> StringDecrAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None)
+        => await Command(Request.StringDecr(key));
+
+    public async Task<long> StringDecrByAsync(ValkeyKey key, long decrement, CommandFlags flags = CommandFlags.None)
+        => await Command(Request.StringDecrBy(key, decrement));
 }

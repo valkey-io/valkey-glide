@@ -372,4 +372,88 @@ public class StringCommandTests(TestConfiguration config)
 
         await GetAndSetValuesAsync(client, key, value);
     }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
+    public async Task StringDecrAsync_ExistingKey(BaseClient client)
+    {
+        string key = Guid.NewGuid().ToString();
+
+        // Set initial value
+        await client.StringSetAsync(key, "10");
+
+        // Decrement by 1
+        long result = await client.StringDecrAsync(key);
+        Assert.Equal(9, result);
+
+        // Verify the value was decremented
+        ValkeyValue value = await client.StringGetAsync(key);
+        Assert.Equal("9", value.ToString());
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
+    public async Task StringDecrAsync_NonExistentKey(BaseClient client)
+    {
+        string key = Guid.NewGuid().ToString();
+
+        // Decrement non-existent key (should create it with value -1)
+        long result = await client.StringDecrAsync(key);
+        Assert.Equal(-1, result);
+
+        // Verify the key was created with value -1
+        ValkeyValue value = await client.StringGetAsync(key);
+        Assert.Equal("-1", value.ToString());
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
+    public async Task StringDecrByAsync_ExistingKey(BaseClient client)
+    {
+        string key = Guid.NewGuid().ToString();
+
+        // Set initial value
+        await client.StringSetAsync(key, "10");
+
+        // Decrement by 5
+        long result = await client.StringDecrByAsync(key, 5);
+        Assert.Equal(5, result);
+
+        // Verify the value was decremented
+        ValkeyValue value = await client.StringGetAsync(key);
+        Assert.Equal("5", value.ToString());
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
+    public async Task StringDecrByAsync_NonExistentKey(BaseClient client)
+    {
+        string key = Guid.NewGuid().ToString();
+
+        // Decrement non-existent key by 5 (should create it with value -5)
+        long result = await client.StringDecrByAsync(key, 5);
+        Assert.Equal(-5, result);
+
+        // Verify the key was created with value -5
+        ValkeyValue value = await client.StringGetAsync(key);
+        Assert.Equal("-5", value.ToString());
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
+    public async Task StringDecrByAsync_NegativeAmount(BaseClient client)
+    {
+        string key = Guid.NewGuid().ToString();
+
+        // Set initial value
+        await client.StringSetAsync(key, "10");
+
+        // Decrement by -5 (effectively incrementing by 5)
+        long result = await client.StringDecrByAsync(key, -5);
+        Assert.Equal(15, result);
+
+        // Verify the value was incremented
+        ValkeyValue value = await client.StringGetAsync(key);
+        Assert.Equal("15", value.ToString());
+    }
 }

@@ -38,4 +38,12 @@ internal interface IBatchStringCommands
     /// <inheritdoc cref="Commands.IStringBaseCommands.StringAppendAsync(ValkeyKey, ValkeyValue, CommandFlags)" path="/*[not(self::remarks) and not(self::returns)]" />
     /// <returns>Command Response - <inheritdoc cref="Commands.IStringBaseCommands.StringAppendAsync(ValkeyKey, ValkeyValue, CommandFlags)" /></returns>
     IBatch StringAppend(ValkeyKey key, ValkeyValue value);
+
+    /// <inheritdoc cref="Commands.IStringBaseCommands.StringDecrAsync(ValkeyKey, CommandFlags)" path="/*[not(self::remarks) and not(self::returns)]" />
+    /// <returns>Command Response - <inheritdoc cref="Commands.IStringBaseCommands.StringDecrAsync(ValkeyKey, CommandFlags)" /></returns>
+    IBatch StringDecr(ValkeyKey key);
+
+    /// <inheritdoc cref="Commands.IStringBaseCommands.StringDecrByAsync(ValkeyKey, long, CommandFlags)" path="/*[not(self::remarks) and not(self::returns)]" />
+    /// <returns>Command Response - <inheritdoc cref="Commands.IStringBaseCommands.StringDecrByAsync(ValkeyKey, long, CommandFlags)" /></returns>
+    IBatch StringDecrBy(ValkeyKey key, long decrement);
 }

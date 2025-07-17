@@ -43,4 +43,10 @@ internal partial class Request
 
     public static Cmd<long, long> StringAppend(ValkeyKey key, ValkeyValue value)
         => Simple<long>(RequestType.Append, [key.ToGlideString(), value.ToGlideString()]);
+
+    public static Cmd<long, long> StringDecr(ValkeyKey key)
+        => Simple<long>(RequestType.Decr, [key.ToGlideString()]);
+
+    public static Cmd<long, long> StringDecrBy(ValkeyKey key, long decrement)
+        => Simple<long>(RequestType.DecrBy, [key.ToGlideString(), decrement.ToGlideString()]);
 }
