@@ -1,5 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+using static Valkey.Glide.Errors;
+
 namespace Valkey.Glide.IntegrationTests;
 
 public class SortedSetCommandTests(TestConfiguration config)
@@ -172,8 +174,8 @@ public class SortedSetCommandTests(TestConfiguration config)
     {
         string key = Guid.NewGuid().ToString();
 
-        // Adding empty array should return 0 without error
-        Assert.Equal(0, await client.SortedSetAddAsync(key, []));
+        // Adding empty array should throw an exception
+        await Assert.ThrowsAsync<RequestException>(async () => await client.SortedSetAddAsync(key, []));
     }
 
     [Theory(DisableDiscoveryEnumeration = true)]
@@ -260,8 +262,8 @@ public class SortedSetCommandTests(TestConfiguration config)
         // Add some members first
         Assert.True(await client.SortedSetAddAsync(key, "member1", 10.5));
 
-        // Test removing empty array
-        Assert.Equal(0, await client.SortedSetRemoveAsync(key, []));
+        // Test removing empty array should throw an exception
+        await Assert.ThrowsAsync<RequestException>(async () => await client.SortedSetRemoveAsync(key, []));
 
         // Verify member still exists
         Assert.True(await client.SortedSetRemoveAsync(key, "member1"));

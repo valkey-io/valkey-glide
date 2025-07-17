@@ -23,11 +23,11 @@ public abstract partial class BaseClient : ISortedSetCommands
         => await SortedSetAddAsync(key, values, SortedSetWhenExtensions.Parse(when), flags);
 
     public async Task<long> SortedSetAddAsync(ValkeyKey key, SortedSetEntry[] values, SortedSetWhen when = SortedSetWhen.Always, CommandFlags flags = CommandFlags.None)
-        => values.Length == 0 ? 0 : await Command(Request.SortedSetAddAsync(key, values, when, flags));
+        => await Command(Request.SortedSetAddAsync(key, values, when, flags));
 
     public async Task<bool> SortedSetRemoveAsync(ValkeyKey key, ValkeyValue member, CommandFlags flags = CommandFlags.None)
         => await Command(Request.SortedSetRemoveAsync(key, member, flags));
 
     public async Task<long> SortedSetRemoveAsync(ValkeyKey key, ValkeyValue[] members, CommandFlags flags = CommandFlags.None)
-        => members.Length == 0 ? 0 : await Command(Request.SortedSetRemoveAsync(key, members, flags));
+        => await Command(Request.SortedSetRemoveAsync(key, members, flags));
 }
