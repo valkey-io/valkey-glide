@@ -33,7 +33,7 @@ import java.util.concurrent.CompletableFuture;
  * - Automatic cluster topology handling
  * - Interface segregation for cluster-specific APIs
  */
-public class GlideClusterClient extends BaseClient implements TransactionsClusterCommands, ClusterCommandExecutor, GenericClusterCommands, ServerManagementClusterCommands, AutoCloseable {
+public class GlideClusterClient extends BaseClient implements TransactionsClusterCommands, ClusterCommandExecutor, GenericClusterCommands, AutoCloseable {
 
     private GlideClusterClient(io.valkey.glide.core.client.GlideClient client) {
         super(client);
@@ -105,7 +105,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      *     a more flexible approach using {@link ClusterBatch}.
      */
     @Deprecated
-    @Override
     public CompletableFuture<Object[]> exec(ClusterTransaction transaction) {
         return exec(transaction, true);
     }
@@ -118,7 +117,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @param options Additional execution options
      * @return A CompletableFuture containing an array of results
      */
-    @Override
     public CompletableFuture<Object[]> exec(ClusterBatch batch, boolean raiseOnError, ClusterBatchOptions options) {
         // For now, we implement this by ignoring options and delegating to the base implementation
         // In a full implementation, options would be passed to the core client
@@ -133,7 +131,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @param args The command arguments
      * @return A CompletableFuture containing the result wrapped in ClusterValue
      */
-    @Override
     public CompletableFuture<ClusterValue<Object>> customClusterCommand(String[] args) {
         // Directly implement the logic to avoid override issues
         if (args.length == 0) {
@@ -162,7 +159,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @param args The command arguments as GlideString array
      * @return A CompletableFuture containing the result wrapped in ClusterValue
      */
-    @Override
     public CompletableFuture<ClusterValue<Object>> customClusterCommand(GlideString[] args) {
         if (args.length == 0) {
             return CompletableFuture.completedFuture(ClusterValue.ofSingleValue(null));
@@ -426,17 +422,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
     }
 
 
-    /**
-     * Get the last save time with routing.
-     *
-     * @param route The routing configuration for the command
-     * @return A CompletableFuture containing the last save time wrapped in ClusterValue
-     */
-    public CompletableFuture<ClusterValue<Long>> lastsave(Route route) {
-        // For now, ignore the route parameter and delegate to the base lastsave
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return super.lastsave().thenApply(ClusterValue::ofSingleValue);
-    }
 
 
 
@@ -736,7 +721,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @param args The command arguments
      * @return A CompletableFuture containing the result wrapped in ClusterValue
      */
-    @Override
     public CompletableFuture<ClusterValue<Object>> customCommand(String[] args) {
         return executeCustomCommand(args).thenApply(ClusterValue::ofSingleValue);
     }
@@ -748,7 +732,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @param args The command arguments as GlideString array
      * @return A CompletableFuture containing the result wrapped in ClusterValue
      */
-    @Override
     public CompletableFuture<ClusterValue<Object>> customCommand(GlideString[] args) {
         return executeCustomCommand(args).thenApply(ClusterValue::ofSingleValue);
     }
@@ -761,7 +744,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @param route The routing configuration for the command
      * @return A CompletableFuture containing the result wrapped in ClusterValue
      */
-    @Override
     public CompletableFuture<ClusterValue<Object>> customCommand(String[] args, Route route) {
         // For now, ignore the route parameter and delegate to the base executeCustomCommand
         // In a full cluster implementation, the route would be used to target specific nodes
@@ -776,7 +758,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @param route The routing configuration for the command
      * @return A CompletableFuture containing the result wrapped in ClusterValue
      */
-    @Override
     public CompletableFuture<ClusterValue<Object>> customCommand(GlideString[] args, Route route) {
         // For now, ignore the route parameter and delegate to the base executeCustomCommand
         // In a full cluster implementation, the route would be used to target specific nodes
@@ -800,7 +781,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      *
      * @return A CompletableFuture containing the info response wrapped in ClusterValue
      */
-    @Override
     public CompletableFuture<ClusterValue<String>> infoCluster() {
         // Delegate to the existing clusterInfo() method
         return clusterInfo();
@@ -816,7 +796,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @param cursor The cluster scan cursor
      * @return A CompletableFuture containing an array with [cursor, keys]
      */
-    @Override
     public CompletableFuture<Object[]> scan(ClusterScanCursor cursor) {
         // Cluster scanning implementation
         return CompletableFuture.supplyAsync(() -> {
@@ -843,7 +822,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @param cursor The cluster scan cursor
      * @return A CompletableFuture containing an array with [cursor, keys]
      */
-    @Override
     public CompletableFuture<Object[]> scanBinary(ClusterScanCursor cursor) {
         // Cluster binary scanning implementation
         return CompletableFuture.supplyAsync(() -> {
@@ -871,7 +849,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @param options The scan options for filtering results
      * @return A CompletableFuture containing an array with [cursor, keys]
      */
-    @Override
     public CompletableFuture<Object[]> scan(ClusterScanCursor cursor, ScanOptions options) {
         // Enhanced cluster scanning with options support
         return CompletableFuture.supplyAsync(() -> {
@@ -898,7 +875,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @param options The scan options for filtering results
      * @return A CompletableFuture containing an array with [cursor, keys]
      */
-    @Override
     public CompletableFuture<Object[]> scanBinary(ClusterScanCursor cursor, ScanOptions options) {
         // Enhanced cluster binary scanning with options support
         return CompletableFuture.supplyAsync(() -> {
@@ -922,7 +898,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      *
      * @return A CompletableFuture containing a random key, or null if no keys exist
      */
-    @Override
     public CompletableFuture<String> randomKey() {
         return super.randomkey();
     }
@@ -932,7 +907,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      *
      * @return A CompletableFuture containing a random key, or null if no keys exist
      */
-    @Override
     public CompletableFuture<GlideString> randomKeyBinary() {
         return super.randomkeyBinary();
     }
@@ -943,7 +917,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @param route The routing configuration for the command
      * @return A CompletableFuture containing a random key, or null if no keys exist
      */
-    @Override
     public CompletableFuture<String> randomKey(Route route) {
         // For now, ignore the route parameter and delegate to the basic randomKey
         // In a full cluster implementation, the route would be used to target specific nodes
@@ -956,7 +929,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @param route The routing configuration for the command
      * @return A CompletableFuture containing a random key, or null if no keys exist
      */
-    @Override
     public CompletableFuture<GlideString> randomKeyBinary(Route route) {
         // For now, ignore the route parameter and delegate to the basic randomKeyBinary
         // In a full cluster implementation, the route would be used to target specific nodes
@@ -965,18 +937,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
 
     // ========== Critical Missing Methods from ServerManagementClusterCommands ==========
 
-    /**
-     * Gets information and statistics about the server using the DEFAULT option.
-     * The command will be routed to all primary nodes.
-     * This method provides the cluster-compatible info() method that returns ClusterValue<String>.
-     *
-     * @see <a href="https://valkey.io/commands/info/">valkey.io</a> for details.
-     * @return A ClusterValue containing server information from multiple nodes.
-     */
-    @Override
-    public CompletableFuture<ClusterValue<String>> info() {
-        return super.info().thenApply(ClusterValue::ofSingleValue);
-    }
 
     /**
      * Gets information and statistics about the server with routing.
@@ -985,7 +945,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @param route Specifies the routing configuration for the command
      * @return A ClusterValue containing server information from specified nodes.
      */
-    @Override
     public CompletableFuture<ClusterValue<String>> info(Route route) {
         // For now, ignore the route parameter and delegate to the base info
         // In a full cluster implementation, the route would be used to target specific nodes
@@ -1000,7 +959,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @param sections A list of Section values specifying which sections to retrieve
      * @return A ClusterValue containing server information from multiple nodes.
      */
-    @Override
     public CompletableFuture<ClusterValue<String>> info(Section[] sections) {
         // Convert Section[] to String[] for BaseClient compatibility
         String[] sectionNames = new String[sections.length];
@@ -1018,7 +976,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @param route Specifies the routing configuration for the command
      * @return A ClusterValue containing server information from specified nodes.
      */
-    @Override
     public CompletableFuture<ClusterValue<String>> info(Section[] sections, Route route) {
         // Convert Section[] to String[] for BaseClient compatibility
         String[] sectionNames = new String[sections.length];
@@ -1039,7 +996,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @param route Specifies the routing configuration for the command (Object type as per interface)
      * @return A ClusterValue containing server information from specified nodes.
      */
-    @Override
     public CompletableFuture<ClusterValue<String>> info(InfoOptions.Section[] sections, Object route) {
         // Convert InfoOptions.Section[] to String[] for BaseClient compatibility
         String[] sectionNames = new String[sections.length];
@@ -1060,7 +1016,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @see <a href="https://valkey.io/commands/dbsize/">valkey.io</a> for details.
      * @return The total number of keys across the primary nodes.
      */
-    @Override
     public CompletableFuture<Long> dbsize() {
         return super.dbsize();
     }
@@ -1072,7 +1027,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @param route Specifies the routing configuration for the command
      * @return The number of keys in the database for specified nodes
      */
-    @Override
     public CompletableFuture<Long> dbsize(Route route) {
         // For now, ignore the route parameter and delegate to the base dbsize
         // In a full cluster implementation, the route would be used to target specific nodes
@@ -1086,7 +1040,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @see <a href="https://valkey.io/commands/time/">valkey.io</a> for details.
      * @return The current server time as a String array
      */
-    @Override
     public CompletableFuture<String[]> time() {
         return super.time();
     }
@@ -1098,7 +1051,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @param route Specifies the routing configuration for the command
      * @return The current server time as a String array wrapped in ClusterValue
      */
-    @Override
     public CompletableFuture<ClusterValue<String[]>> time(Route route) {
         // For now, ignore the route parameter and delegate to the base time
         // In a full cluster implementation, the route would be used to target specific nodes
@@ -1112,7 +1064,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @see <a href="https://valkey.io/commands/lastsave/">valkey.io</a> for details.
      * @return UNIX TIME of the last DB save
      */
-    @Override
     public CompletableFuture<Long> lastsave() {
         return super.lastsave();
     }
@@ -1124,7 +1075,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @param route Specifies the routing configuration for the command
      * @return UNIX TIME of the last DB save wrapped in ClusterValue
      */
-    @Override
     public CompletableFuture<ClusterValue<Long>> lastsave(Route route) {
         // For now, ignore the route parameter and delegate to the base lastsave
         // In a full cluster implementation, the route would be used to target specific nodes
@@ -1138,7 +1088,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @see <a href="https://valkey.io/commands/flushall/">valkey.io</a> for details.
      * @return OK response
      */
-    @Override
     public CompletableFuture<String> flushall() {
         return super.flushall();
     }
@@ -1151,7 +1100,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @param mode The flushing mode (SYNC or ASYNC)
      * @return OK response
      */
-    @Override
     public CompletableFuture<String> flushall(FlushMode mode) {
         return super.flushall(mode);
     }
@@ -1163,7 +1111,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @param route Specifies the routing configuration for the command
      * @return OK response
      */
-    @Override
     public CompletableFuture<String> flushall(Route route) {
         // For now, ignore the route parameter and delegate to the base flushall
         // In a full cluster implementation, the route would be used to target specific nodes
@@ -1178,7 +1125,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @param route Specifies the routing configuration for the command
      * @return OK response
      */
-    @Override
     public CompletableFuture<String> flushall(FlushMode mode, Route route) {
         // For now, ignore the route parameter and delegate to the base flushall with mode
         // In a full cluster implementation, the route would be used to target specific nodes
@@ -1192,7 +1138,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @see <a href="https://valkey.io/commands/flushdb/">valkey.io</a> for details.
      * @return OK response
      */
-    @Override
     public CompletableFuture<String> flushdb() {
         return super.flushdb();
     }
@@ -1205,7 +1150,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @param mode The flushing mode (SYNC or ASYNC)
      * @return OK response
      */
-    @Override
     public CompletableFuture<String> flushdb(FlushMode mode) {
         return super.flushdb(mode);
     }
@@ -1217,7 +1161,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @param route Specifies the routing configuration for the command
      * @return OK response
      */
-    @Override
     public CompletableFuture<String> flushdb(Route route) {
         // For now, ignore the route parameter and delegate to the base flushdb
         // In a full cluster implementation, the route would be used to target specific nodes
@@ -1232,7 +1175,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @param route Specifies the routing configuration for the command
      * @return OK response
      */
-    @Override
     public CompletableFuture<String> flushdb(FlushMode mode, Route route) {
         // For now, ignore the route parameter and delegate to the base flushdb with mode
         // In a full cluster implementation, the route would be used to target specific nodes
@@ -1246,7 +1188,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @see <a href="https://valkey.io/commands/config-rewrite/">valkey.io</a> for details.
      * @return OK when the configuration was rewritten properly
      */
-    @Override
     public CompletableFuture<String> configRewrite() {
         return super.configRewrite();
     }
@@ -1258,7 +1199,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @param route Specifies the routing configuration for the command
      * @return OK when the configuration was rewritten properly
      */
-    @Override
     public CompletableFuture<String> configRewrite(Route route) {
         // For now, ignore the route parameter and delegate to the base configRewrite
         // In a full cluster implementation, the route would be used to target specific nodes
@@ -1272,7 +1212,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @see <a href="https://valkey.io/commands/config-resetstat/">valkey.io</a> for details.
      * @return OK to confirm that the statistics were successfully reset
      */
-    @Override
     public CompletableFuture<String> configResetStat() {
         return super.configResetstat();
     }
@@ -1284,7 +1223,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @param route Specifies the routing configuration for the command
      * @return OK to confirm that the statistics were successfully reset
      */
-    @Override
     public CompletableFuture<String> configResetStat(Route route) {
         // For now, ignore the route parameter and delegate to the base configResetStat
         // In a full cluster implementation, the route would be used to target specific nodes
@@ -1299,25 +1237,10 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @param parameters An array of configuration parameter names to retrieve values for
      * @return A map of values corresponding to the configuration parameters
      */
-    @Override
     public CompletableFuture<Map<String, String>> configGet(String[] parameters) {
         return super.configGet(parameters);
     }
 
-    /**
-     * Get the values of configuration parameters with routing.
-     *
-     * @see <a href="https://valkey.io/commands/config-get/">valkey.io</a> for details.
-     * @param parameters An array of configuration parameter names to retrieve values for
-     * @param route Specifies the routing configuration for the command
-     * @return A map of values corresponding to the configuration parameters wrapped in ClusterValue
-     */
-    @Override
-    public CompletableFuture<ClusterValue<Map<String, String>>> configGet(String[] parameters, Route route) {
-        // For now, ignore the route parameter and delegate to the base configGet
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return super.configGet(parameters).thenApply(ClusterValue::ofSingleValue);
-    }
 
     /**
      * Sets configuration parameters to the specified values.
@@ -1327,7 +1250,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @param parameters A map consisting of configuration parameters and their respective values to set
      * @return OK if all configurations have been successfully set
      */
-    @Override
     public CompletableFuture<String> configSet(Map<String, String> parameters) {
         return super.configSet(parameters);
     }
@@ -1340,7 +1262,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @param route Specifies the routing configuration for the command
      * @return OK if all configurations have been successfully set
      */
-    @Override
     public CompletableFuture<String> configSet(Map<String, String> parameters, Route route) {
         // For now, ignore the route parameter and delegate to the base configSet
         // In a full cluster implementation, the route would be used to target specific nodes
@@ -1350,7 +1271,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
     /**
      * Closes the client and releases resources.
      */
-    @Override
     public void close() {
         try {
             client.close();
