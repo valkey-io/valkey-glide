@@ -14,5 +14,7 @@ sphinx >= 7.4.7
 sphinx-rtd-theme
 
 # Sync
-cffi
-types-cffi
+types-cffi # where is it used?
+setuptools
+wheel >= 0.45
+build

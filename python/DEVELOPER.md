@@ -294,6 +294,60 @@ cargo fmt --manifest-path ./Cargo.toml --all
 
 > These are not included in the `dev.py` utility and should be run separately from the `python` root folder.
 
+## Packaging
+---
+
+This section explains how the `valkey-glide` (async client) and `valkey-glide-sync` (sync client) packages are built into Python wheels for local use and PyPI publishing.
+
+### Async Client (`valkey-glide`)
+
+1. **Stage shared code**  
+   Before packaging, we copy the `glide-shared/glide_shared` package directory into the `glide-async/python/` folder. This ensures the shared code is included in the final wheel.
+
+2. **Make it discoverable**  
+   In `glide-async/pyproject.toml`, we add the appropriate `include` rule under `[tool.maturin]` to make sure the copied files are bundled with the wheel. For example:
+   ```toml
+   include = ["python/glide_shared/**/*.py"]
+   ```
+3. **Build the wheel**
+    We use `maturin build` from the `glide-async` directory to create a Python wheel that includes the compiled Rust extension and all Python code.
+
+4. **Multiplatform packaging for PyPI**
+    To publish wheels to PyPI, we use the `PyO3/maturin-action` GitHub Action, which builds manylinux and macOS wheels for different Python versions (both CPython and PyPy). This action runs in CI and uses prebuilt Docker containers for compatibility.
+
+5. **Local testing**
+    You can test building a wheel and installing it locally using:
+    ```bash
+    python dev.py build --client async --wheel
+    ```
+### Sync Client (`valkey-glide-sync`)
+
+1. **Source distribution (sdist)**  
+   If a source distribution is required, we copy the Rust crates (`ffi`, `glide-core`, and `logger_core`) into the `glide-sync` directory.  
+   This is necessary because `setup.py` must include these folders inside the sdist so that the package can be built from source on the target machine (e.g., on PyPI or in a CI environment).
+
+2. **Wheel-only builds**  
+   If a wheel is being built (e.g., via `python -m build --wheel`), we do **not** copy the Rust crates.  
+   Instead, we create a symbolic link (`symlink`) from `valkey-glide/python/glide-sync/ffi/` to the root `valkey-glide/ffi` directory.  
+   This ensures that Cargo can still find the source files, while avoiding duplication or unnecessary copying.
+
+3. **Build steps**  
+   - We run `cargo build` in the `glide-sync/ffi/` folder to compile the Rust FFI library.
+   - The resulting shared object file (`libglide_ffi.so`) is copied into the `glide-sync/glide_sync/` directory.
+   - We then use the `setup.py` script to build the Python package, either as a wheel or as an sdist.
+
+4. **Multiplatform packaging for PyPI**  
+   To support building wheels for multiple platforms (Linux, macOS, and different Python versions), we use the [`cibuildwheel`](https://github.com/pypa/cibuildwheel) tool.  
+   This tool installs all required Python versions and runs the build inside isolated Docker containers (e.g., manylinux2014).  
+   Because the sync client depends on external Rust code (`glide-core`, `ffi`, `logger_core`), we run `cibuildwheel` from the **project root** and specify `python/glide-sync` as the build target.  
+   This allows the tool to copy the full project context into the container.
+
+5. **Local testing**  
+   You can building a wheel and install it locally using:
+   ```bash
+   python dev.py build --client sync --wheel
+   ```
+
 ## Documentation
 ---
 
