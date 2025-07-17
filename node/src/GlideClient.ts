@@ -243,7 +243,7 @@ export class GlideClient extends BaseClient {
     ): Promise<GlideClient> {
         return super.createClientInternal<GlideClient>(
             options,
-            (socket: net.Socket, options?: GlideClientConfiguration) =>
+            (socket: net.Socket, options: GlideClientConfiguration) =>
                 new GlideClient(socket, options),
         );
     }

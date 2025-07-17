@@ -903,7 +903,7 @@ export class BaseClient {
     private readonly pubsubFutures: [PromiseFunction, ErrorFunction][] = [];
     private pendingPushNotification: response.Response[] = [];
     private readonly inflightRequestsLimit: number;
-    private config: BaseClientConfiguration | undefined;
+    private config: BaseClientConfiguration;
 
     protected configurePubsub(
         options: GlideClusterClientConfiguration | GlideClientConfiguration,
@@ -1043,7 +1043,7 @@ export class BaseClient {
                 if (split.length !== 2) {
                     throw new RequestError(
                         "No port provided, expected host to be formatted as `{hostname}:{port}`. Received " +
-                            host,
+                        host,
                     );
                 }
 
@@ -1133,7 +1133,7 @@ export class BaseClient {
         }
 
         const [callback, context] = this.getPubsubCallbackAndContext(
-            this.config!,
+            this.config,
         );
 
         if (callback) {
@@ -1154,7 +1154,7 @@ export class BaseClient {
      */
     protected constructor(
         socket: net.Socket,
-        options?: BaseClientConfiguration,
+        options: BaseClientConfiguration = { addresses: [] },
     ) {
         // if logger has been initialized by the external-user on info level this log will be shown
         Logger.log("info", "Client lifetime", `construct client`);
@@ -1474,13 +1474,13 @@ export class BaseClient {
             );
         }
 
-        if (!this.isPubsubConfigured(this.config!)) {
+        if (!this.isPubsubConfigured(this.config)) {
             throw new ConfigurationError(
                 "The operation will never complete since there was no pubsbub subscriptions applied to the client.",
             );
         }
 
-        if (this.getPubsubCallbackAndContext(this.config!)[0]) {
+        if (this.getPubsubCallbackAndContext(this.config)[0]) {
             throw new ConfigurationError(
                 "The operation will never complete since messages will be passed to the configured callback.",
             );
@@ -1499,13 +1499,13 @@ export class BaseClient {
             );
         }
 
-        if (!this.isPubsubConfigured(this.config!)) {
+        if (!this.isPubsubConfigured(this.config)) {
             throw new ConfigurationError(
                 "The operation will never complete since there was no pubsbub subscriptions applied to the client.",
             );
         }
 
-        if (this.getPubsubCallbackAndContext(this.config!)[0]) {
+        if (this.getPubsubCallbackAndContext(this.config)[0]) {
             throw new ConfigurationError(
                 "The operation will never complete since messages will be passed to the configured callback.",
             );
@@ -6541,7 +6541,9 @@ export class BaseClient {
     ): Promise<"OK"> {
         return this.createWritePromise(
             createXGroupCreate(key, groupName, id, options),
-            { decoder: Decoder.String },
+            {
+                decoder: Decoder.String,
+            },
         );
     }
 
@@ -6710,12 +6712,12 @@ export class BaseClient {
         ReadFrom,
         connection_request.ReadFrom
     > = {
-        primary: connection_request.ReadFrom.Primary,
-        preferReplica: connection_request.ReadFrom.PreferReplica,
-        AZAffinity: connection_request.ReadFrom.AZAffinity,
-        AZAffinityReplicasAndPrimary:
-            connection_request.ReadFrom.AZAffinityReplicasAndPrimary,
-    };
+            primary: connection_request.ReadFrom.Primary,
+            preferReplica: connection_request.ReadFrom.PreferReplica,
+            AZAffinity: connection_request.ReadFrom.AZAffinity,
+            AZAffinityReplicasAndPrimary:
+                connection_request.ReadFrom.AZAffinityReplicasAndPrimary,
+        };
 
     /**
      * Returns the number of messages that were successfully acknowledged by the consumer group member of a stream.
@@ -8126,8 +8128,8 @@ export class BaseClient {
             res === null
                 ? null
                 : res!.map((r) => {
-                      return { key: r.key, elements: r.value };
-                  })[0],
+                    return { key: r.key, elements: r.value };
+                })[0],
         );
     }
 
@@ -8170,8 +8172,8 @@ export class BaseClient {
             res === null
                 ? null
                 : res!.map((r) => {
-                      return { key: r.key, elements: r.value };
-                  })[0],
+                    return { key: r.key, elements: r.value };
+                })[0],
         );
     }
 
@@ -8391,11 +8393,11 @@ export class BaseClient {
             : connection_request.ReadFrom.Primary;
         const authenticationInfo =
             options.credentials !== undefined &&
-            "password" in options.credentials
+                "password" in options.credentials
                 ? {
-                      password: options.credentials.password,
-                      username: options.credentials.username,
-                  }
+                    password: options.credentials.password,
+                    username: options.credentials.username,
+                }
                 : undefined;
         const protocol = options.protocol as
             | connection_request.ProtocolVersion
@@ -8508,11 +8510,11 @@ export class BaseClient {
     protected static async __createClientInternal<
         TConnection extends BaseClient,
     >(
-        options: BaseClientConfiguration,
+        options: BaseClientConfiguration = { addresses: [] },
         connectedSocket: net.Socket,
         constructor: (
             socket: net.Socket,
-            options?: BaseClientConfiguration,
+            options: BaseClientConfiguration,
         ) => TConnection,
     ): Promise<TConnection> {
         const connection = constructor(connectedSocket, options);
@@ -8538,10 +8540,10 @@ export class BaseClient {
      * @internal
      */
     protected static async createClientInternal<TConnection extends BaseClient>(
-        options: BaseClientConfiguration,
+        options: BaseClientConfiguration = { addresses: [] },
         constructor: (
             socket: net.Socket,
-            options?: BaseClientConfiguration,
+            options: BaseClientConfiguration,
         ) => TConnection,
     ): Promise<TConnection> {
         const path = await StartSocketConnection();
@@ -8596,9 +8598,9 @@ export class BaseClient {
 
         if (response === "OK" && !this.config?.credentials) {
             this.config = {
-                ...this.config!,
+                ...this.config,
                 credentials: {
-                    ...this.config!.credentials,
+                    ...this.config.credentials,
                     password: password ? password : "",
                 },
             };
