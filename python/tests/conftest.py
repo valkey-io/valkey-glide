@@ -39,6 +39,10 @@ TEST_TEARDOWN_MAX_RETRIES = 3
 TEST_TEARDOWN_BASE_DELAY = 1  # seconds
 MAX_BACKOFF_TIME = 8  # seconds
 
+# Timeout settings optimized for CI environment
+DEFAULT_CLIENT_TIMEOUT = 3000  # 3 seconds
+DEFAULT_CONNECTION_TIMEOUT = 3000  # 3 seconds
+
 Logger.set_logger_config(DEFAULT_TEST_LOG_LEVEL)
 
 
@@ -332,7 +336,7 @@ async def glide_client(
         request,
         cluster_mode,
         protocol=protocol,
-        request_timeout=5000,
+        request_timeout=DEFAULT_CLIENT_TIMEOUT,
         lazy_connect=False,  # Explicitly false for general test client
     )
     try:
@@ -420,7 +424,7 @@ async def acl_glide_client(
         cluster_mode,
         protocol=protocol,
         credentials=ServerCredentials(username=USERNAME, password=INITIAL_PASSWORD),
-        request_timeout=2000,
+        request_timeout=DEFAULT_CLIENT_TIMEOUT,
         lazy_connect=False,
     )
     try:
@@ -440,8 +444,8 @@ async def create_client(
     addresses: Optional[List[NodeAddress]] = None,
     client_name: Optional[str] = None,
     protocol: ProtocolVersion = ProtocolVersion.RESP3,
-    request_timeout: Optional[int] = 1000,
-    connection_timeout: Optional[int] = 1000,
+    request_timeout: Optional[int] = DEFAULT_CLIENT_TIMEOUT,
+    connection_timeout: Optional[int] = DEFAULT_CONNECTION_TIMEOUT,
     cluster_mode_pubsub: Optional[
         GlideClusterClientConfiguration.PubSubSubscriptions
     ] = None,
@@ -604,8 +608,8 @@ async def _attempt_teardown(request, cluster_mode: bool, protocol: ProtocolVersi
             request,
             cluster_mode,
             protocol=protocol,
-            request_timeout=5000,  # Increased from 2000ms
-            connection_timeout=5000,  # Increased from default 1000ms
+            request_timeout=DEFAULT_CLIENT_TIMEOUT,
+            connection_timeout=DEFAULT_CONNECTION_TIMEOUT,
         )
         await client.custom_command(["FLUSHALL"])
         await client.close()
@@ -618,8 +622,8 @@ async def _attempt_teardown(request, cluster_mode: bool, protocol: ProtocolVersi
                 request,
                 cluster_mode,
                 protocol=protocol,
-                request_timeout=5000,  # Increased timeout
-                connection_timeout=5000,  # Increased timeout
+                request_timeout=DEFAULT_CLIENT_TIMEOUT,
+                connection_timeout=DEFAULT_CONNECTION_TIMEOUT,
                 credentials=credentials,
             )
             try:
