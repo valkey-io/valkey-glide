@@ -40,7 +40,7 @@ internal partial class Request
     {
         GlideString[] args = [key.ToGlideString(), hashField.ToGlideString(), value.ToGlideString()];
 
-        WhenAlwaysOrNotExists(when);
+        GuardClauses.WhenAlwaysOrNotExists(when);
         return value.IsNull
             ? Boolean<object>(RequestType.HDel, args[..2])
             : when == When.Always
@@ -101,18 +101,5 @@ internal partial class Request
         GlideString[] args = [key.ToGlideString(), count.ToGlideString(), "WITHVALUES"];
         return ObjectArrayToHashEntries(RequestType.HRandField, args);
     }
-
-    protected static void WhenAlwaysOrNotExists(When when)
-    {
-        switch (when)
-        {
-            case When.Always:
-            case When.NotExists:
-                break;
-            default:
-                throw new ArgumentException(when + " is not valid in this context; the permitted values are: Always, NotExists");
-        }
-    }
-
 
 }
