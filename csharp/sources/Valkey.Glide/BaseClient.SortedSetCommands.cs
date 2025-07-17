@@ -29,5 +29,5 @@ public abstract partial class BaseClient : ISortedSetCommands
         => await Command(Request.SortedSetRemoveAsync(key, member, flags));
 
     public async Task<long> SortedSetRemoveAsync(ValkeyKey key, ValkeyValue[] members, CommandFlags flags = CommandFlags.None)
-        => await Command(Request.SortedSetRemoveAsync(key, members, flags));
+        => members.Length == 0 ? 0 : await Command(Request.SortedSetRemoveAsync(key, members, flags));
 }
