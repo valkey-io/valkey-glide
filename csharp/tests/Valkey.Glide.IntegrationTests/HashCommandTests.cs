@@ -2,7 +2,7 @@
 
 namespace Valkey.Glide.IntegrationTests;
 
-public class HashCommandTests(TestConfiguration config, ITestOutputHelper output) : ConsoleCapturingTestBase(output)
+public class HashCommandTests(TestConfiguration config, ITestOutputHelper output)
 {
     public TestConfiguration Config { get; } = config;
 

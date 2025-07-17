@@ -1,7 +1,5 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-using System.Text.Json;
-
 using static Valkey.Glide.Internals.FFI;
 
 namespace Valkey.Glide.Internals;
@@ -66,8 +64,10 @@ internal partial class Request
         => new(request, args, false, set => [.. set.Cast<GlideString>().Select(gs => gs)]);
 
     private static Cmd<object[], HashEntry[]> ObjectArrayToHashEntries(RequestType request, GlideString[] args, bool isNullable = false)
-        => new(request, args, isNullable, objects => [.. objects.Select(he =>
-            new HashEntry((GlideString)((object[])he)[0], (GlideString)((object[])he)[1]))]);
+        => new(request, args, isNullable, objects => [.. objects.Select(he => {
+            var arr = (object[])he;
+            return new HashEntry((GlideString)arr[0], (GlideString)arr[1]);
+        })]);
 
     private static Cmd<Dictionary<GlideString, object>, HashEntry[]> DictionaryToHashEntries(RequestType request, GlideString[] args, bool isNullable = false)
         => new(request, args, isNullable, dict => [.. dict.Select(he =>
