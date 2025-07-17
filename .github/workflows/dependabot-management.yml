@@ -36,9 +36,6 @@ jobs:
         steps:
             - name: Checkout repository
               uses: actions/checkout@v4
-              with:
-                  token: ${{ secrets.GITHUB_TOKEN }}
-                  fetch-depth: 0
 
             - name: Setup Node.js
               uses: actions/setup-node@v4
@@ -47,14 +44,14 @@ jobs:
 
             - name: Install dependencies
               run: |
-                  cd .github/workflows
+                  cd .github/dependabot-deps
                   npm install
 
             - name: Create PR management script
               run: |
                   cat > dependabot-manager.js << 'EOF'
-                  const { Octokit } = require("./.github/workflows/node_modules/@octokit/rest");
-                  const semver = require("./.github/workflows/node_modules/semver");
+                  const { Octokit } = require("./.github/dependabot-deps/node_modules/@octokit/rest");
+                  const semver = require("./.github/dependabot-deps/node_modules/semver");
 
                   const octokit = new Octokit({
                     auth: process.env.GITHUB_TOKEN,
