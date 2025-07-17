@@ -45,7 +45,18 @@ public class StandaloneServerManagement implements ServerManagementCore {
      */
     @Override
     public CompletableFuture<Object> getInfo(String[] sections) {
-        return standaloneClient.info(sections).thenApply(result -> (Object) result);
+        // Convert String[] to Section[] for the standalone client API
+        glide.api.models.commands.InfoOptions.Section[] sectionEnums = 
+            new glide.api.models.commands.InfoOptions.Section[sections.length];
+        for (int i = 0; i < sections.length; i++) {
+            try {
+                sectionEnums[i] = glide.api.models.commands.InfoOptions.Section.valueOf(sections[i].toUpperCase());
+            } catch (IllegalArgumentException e) {
+                // If enum conversion fails, default to DEFAULT section
+                sectionEnums[i] = glide.api.models.commands.InfoOptions.Section.DEFAULT;
+            }
+        }
+        return standaloneClient.info(sectionEnums).thenApply(result -> (Object) result);
     }
     
     /**

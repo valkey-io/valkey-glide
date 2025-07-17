@@ -37,9 +37,13 @@ public class GlideClient extends BaseClient implements TransactionsCommands, Gen
             }
 
             @Override
-            public CompletableFuture<String> info(String[] sections) {
+            public CompletableFuture<String> info(glide.api.models.commands.InfoOptions.Section[] sections) {
+                String[] sectionNames = new String[sections.length];
+                for (int i = 0; i < sections.length; i++) {
+                    sectionNames[i] = sections[i].name().toLowerCase();
+                }
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    io.valkey.glide.core.commands.CommandType.INFO, sections))
+                    io.valkey.glide.core.commands.CommandType.INFO, sectionNames))
                     .thenApply(result -> result.toString());
             }
 
@@ -144,6 +148,44 @@ public class GlideClient extends BaseClient implements TransactionsCommands, Gen
                     io.valkey.glide.core.commands.CommandType.CONFIG_SET, args))
                     .thenApply(result -> result.toString());
             }
+
+            @Override
+            public CompletableFuture<String> lolwut() {
+                return client.executeCommand(new io.valkey.glide.core.commands.Command(
+                    io.valkey.glide.core.commands.CommandType.LOLWUT))
+                    .thenApply(result -> result.toString());
+            }
+
+            @Override
+            public CompletableFuture<String> lolwut(int[] parameters) {
+                String[] args = new String[parameters.length];
+                for (int i = 0; i < parameters.length; i++) {
+                    args[i] = String.valueOf(parameters[i]);
+                }
+                return client.executeCommand(new io.valkey.glide.core.commands.Command(
+                    io.valkey.glide.core.commands.CommandType.LOLWUT, args))
+                    .thenApply(result -> result.toString());
+            }
+
+            @Override
+            public CompletableFuture<String> lolwut(int version) {
+                return client.executeCommand(new io.valkey.glide.core.commands.Command(
+                    io.valkey.glide.core.commands.CommandType.LOLWUT, "VERSION", String.valueOf(version)))
+                    .thenApply(result -> result.toString());
+            }
+
+            @Override
+            public CompletableFuture<String> lolwut(int version, int[] parameters) {
+                String[] args = new String[parameters.length + 2];
+                args[0] = "VERSION";
+                args[1] = String.valueOf(version);
+                for (int i = 0; i < parameters.length; i++) {
+                    args[i + 2] = String.valueOf(parameters[i]);
+                }
+                return client.executeCommand(new io.valkey.glide.core.commands.Command(
+                    io.valkey.glide.core.commands.CommandType.LOLWUT, args))
+                    .thenApply(result -> result.toString());
+            }
         });
     }
 
@@ -225,12 +267,121 @@ public class GlideClient extends BaseClient implements TransactionsCommands, Gen
     }
 
     /**
+     * Delete all the keys of the currently selected DB with flush mode.
+     *
+     * @param mode The flush mode to use
+     * @return A CompletableFuture containing "OK" if successful
+     */
+    public CompletableFuture<String> flushdb(glide.api.models.commands.FlushMode mode) {
+        return executeCommand(io.valkey.glide.core.commands.CommandType.FLUSHDB, mode.name())
+            .thenApply(result -> result.toString());
+    }
+
+    /**
      * Delete all the keys of all the existing databases.
      *
      * @return A CompletableFuture containing "OK" if successful
      */
     public CompletableFuture<String> flushall() {
         return executeCommand(io.valkey.glide.core.commands.CommandType.FLUSHALL)
+            .thenApply(result -> result.toString());
+    }
+
+    /**
+     * Delete all the keys of all the existing databases with flush mode.
+     *
+     * @param mode The flush mode to use
+     * @return A CompletableFuture containing "OK" if successful
+     */
+    public CompletableFuture<String> flushall(glide.api.models.commands.FlushMode mode) {
+        return executeCommand(io.valkey.glide.core.commands.CommandType.FLUSHALL, mode.name())
+            .thenApply(result -> result.toString());
+    }
+
+    /**
+     * Returns UNIX TIME of the last DB save timestamp.
+     *
+     * @return A CompletableFuture containing the UNIX TIME
+     */
+    public CompletableFuture<Long> lastsave() {
+        return executeCommand(io.valkey.glide.core.commands.CommandType.LASTSAVE)
+            .thenApply(result -> Long.parseLong(result.toString()));
+    }
+
+    /**
+     * Get the current server time.
+     *
+     * @return A CompletableFuture containing an array with seconds and microseconds since Unix epoch
+     */
+    public CompletableFuture<String[]> time() {
+        return executeCommand(io.valkey.glide.core.commands.CommandType.TIME)
+            .thenApply(result -> {
+                if (result instanceof Object[]) {
+                    Object[] objects = (Object[]) result;
+                    String[] time = new String[objects.length];
+                    for (int i = 0; i < objects.length; i++) {
+                        time[i] = objects[i].toString();
+                    }
+                    return time;
+                }
+                return new String[0];
+            });
+    }
+
+    /**
+     * Get configuration values for multiple parameters.
+     *
+     * @param parameters The configuration parameters to get
+     * @return A CompletableFuture containing the configuration values
+     */
+    public CompletableFuture<java.util.Map<String, String>> configGet(String[] parameters) {
+        return executeCommand(io.valkey.glide.core.commands.CommandType.CONFIG_GET, parameters)
+            .thenApply(result -> {
+                java.util.Map<String, String> config = new java.util.HashMap<>();
+                if (result instanceof Object[]) {
+                    Object[] array = (Object[]) result;
+                    for (int i = 0; i < array.length - 1; i += 2) {
+                        config.put(array[i].toString(), array[i + 1].toString());
+                    }
+                }
+                return config;
+            });
+    }
+
+    /**
+     * Set configuration parameters to the specified values.
+     *
+     * @param parameters A map consisting of configuration parameters and their respective values to set
+     * @return A CompletableFuture containing "OK" if all configurations have been successfully set
+     */
+    public CompletableFuture<String> configSet(java.util.Map<String, String> parameters) {
+        String[] args = new String[parameters.size() * 2];
+        int i = 0;
+        for (java.util.Map.Entry<String, String> entry : parameters.entrySet()) {
+            args[i++] = entry.getKey();
+            args[i++] = entry.getValue();
+        }
+        return executeCommand(io.valkey.glide.core.commands.CommandType.CONFIG_SET, args)
+            .thenApply(result -> result.toString());
+    }
+
+    /**
+     * Rewrites the configuration file with the current configuration.
+     *
+     * @return A CompletableFuture containing "OK" when the configuration was rewritten properly
+     */
+    public CompletableFuture<String> configRewrite() {
+        return executeCommand(io.valkey.glide.core.commands.CommandType.CONFIG_REWRITE)
+            .thenApply(result -> result.toString());
+    }
+
+    /**
+     * Resets the statistics reported by the server.
+     *
+     * @return A CompletableFuture containing "OK" to confirm that the statistics were successfully reset
+     */
+    public CompletableFuture<String> configResetStat() {
+        return executeCommand(io.valkey.glide.core.commands.CommandType.CONFIG_RESETSTAT)
             .thenApply(result -> result.toString());
     }
 
@@ -294,6 +445,35 @@ public class GlideClient extends BaseClient implements TransactionsCommands, Gen
             sectionStrings[i] = sections[i].name().toLowerCase();
         }
         return super.info(sectionStrings);
+    }
+
+    /**
+     * Display a piece of generative computer art along with the current Valkey version.
+     *
+     * @param version Version of computer art to generate
+     * @return A CompletableFuture containing the generative art output
+     */
+    public CompletableFuture<String> lolwut(int version) {
+        return executeCommand(io.valkey.glide.core.commands.CommandType.LOLWUT, "VERSION", String.valueOf(version))
+            .thenApply(result -> result.toString());
+    }
+
+    /**
+     * Display a piece of generative computer art along with the current Valkey version.
+     *
+     * @param version Version of computer art to generate
+     * @param parameters Additional parameters for output customization
+     * @return A CompletableFuture containing the generative art output
+     */
+    public CompletableFuture<String> lolwut(int version, int[] parameters) {
+        String[] args = new String[parameters.length + 2];
+        args[0] = "VERSION";
+        args[1] = String.valueOf(version);
+        for (int i = 0; i < parameters.length; i++) {
+            args[i + 2] = String.valueOf(parameters[i]);
+        }
+        return executeCommand(io.valkey.glide.core.commands.CommandType.LOLWUT, args)
+            .thenApply(result -> result.toString());
     }
 
     /**

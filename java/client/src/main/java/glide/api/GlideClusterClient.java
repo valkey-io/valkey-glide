@@ -34,7 +34,7 @@ import java.util.concurrent.CompletableFuture;
  * - Automatic cluster topology handling
  * - Interface segregation for cluster-specific APIs
  */
-public class GlideClusterClient extends BaseClient implements TransactionsClusterCommands, ClusterCommandExecutor, GenericClusterCommands, ServerManagementClusterCommands, AutoCloseable {
+public class GlideClusterClient extends BaseClient implements TransactionsClusterCommands, ClusterCommandExecutor, GenericClusterCommands, AutoCloseable {
 
     private GlideClusterClient(io.valkey.glide.core.client.GlideClient client) {
         super(client, createClusterServerManagement(client));
@@ -399,6 +399,9 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
         });
     }
 
+
+    // ServerManagementClusterCommands methods are implemented through composition pattern
+    // via the ClusterServerManagement instance passed to BaseClient constructor
 
     /**
      * Execute a cluster batch of commands.
@@ -1378,74 +1381,9 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
     }
 
 
-    /**
-     * Gets information and statistics about the server with routing.
-     *
-     * @see <a href="https://valkey.io/commands/info/">valkey.io</a> for details.
-     * @param route Specifies the routing configuration for the command
-     * @return A ClusterValue containing server information from specified nodes.
-     */
-    public CompletableFuture<ClusterValue<String>> info(Route route) {
-        // For now, ignore the route parameter and delegate to the base info
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return super.info().thenApply(ClusterValue::ofSingleValue);
-    }
-
-    /**
-     * Gets information and statistics about the server with specific sections.
-     * The command will be routed to all primary nodes.
-     *
-     * @see <a href="https://valkey.io/commands/info/">valkey.io</a> for details.
-     * @param sections A list of Section values specifying which sections to retrieve
-     * @return A ClusterValue containing server information from multiple nodes.
-     */
-    public CompletableFuture<ClusterValue<String>> info(Section[] sections) {
-        // Convert Section[] to String[] for BaseClient compatibility
-        String[] sectionNames = new String[sections.length];
-        for (int i = 0; i < sections.length; i++) {
-            sectionNames[i] = sections[i].name().toLowerCase();
-        }
-        return super.info(sectionNames).thenApply(ClusterValue::ofSingleValue);
-    }
-
-    /**
-     * Gets information and statistics about the server with specific sections and routing.
-     *
-     * @see <a href="https://valkey.io/commands/info/">valkey.io</a> for details.
-     * @param sections A list of Section values specifying which sections to retrieve
-     * @param route Specifies the routing configuration for the command
-     * @return A ClusterValue containing server information from specified nodes.
-     */
-    public CompletableFuture<ClusterValue<String>> info(Section[] sections, Route route) {
-        // Convert Section[] to String[] for BaseClient compatibility
-        String[] sectionNames = new String[sections.length];
-        for (int i = 0; i < sections.length; i++) {
-            sectionNames[i] = sections[i].name().toLowerCase();
-        }
-        // For now, ignore the route parameter and delegate to the base info with section names
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return super.info(sectionNames).thenApply(ClusterValue::ofSingleValue);
-    }
-
-    /**
-     * Gets information and statistics about the server with specific sections and routing (ClusterCommandExecutor interface).
-     * This method provides the exact signature expected by ClusterCommandExecutor interface.
-     *
-     * @see <a href="https://valkey.io/commands/info/">valkey.io</a> for details.
-     * @param sections A list of Section values specifying which sections to retrieve
-     * @param route Specifies the routing configuration for the command (Object type as per interface)
-     * @return A ClusterValue containing server information from specified nodes.
-     */
-    public CompletableFuture<ClusterValue<String>> info(InfoOptions.Section[] sections, Object route) {
-        // Convert InfoOptions.Section[] to String[] for BaseClient compatibility
-        String[] sectionNames = new String[sections.length];
-        for (int i = 0; i < sections.length; i++) {
-            sectionNames[i] = sections[i].name().toLowerCase();
-        }
-        // For now, ignore the route parameter and delegate to the base info with section names
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return super.info(sectionNames).thenApply(ClusterValue::ofSingleValue);
-    }
+    // Note: ServerManagementClusterCommands methods (info, configGet, etc.) are now
+    // implemented through the ClusterServerManagement composition layer passed to BaseClient.
+    // This avoids inheritance conflicts between different return types.
 
     // ========== Missing ServerManagementClusterCommands Methods ==========
 
@@ -1457,7 +1395,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return The total number of keys across the primary nodes.
      */
     public CompletableFuture<Long> dbsize() {
-        return super.dbsize();
+        return serverManagement.dbsize();
     }
 
     /**
@@ -1470,7 +1408,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
     public CompletableFuture<Long> dbsize(Route route) {
         // For now, ignore the route parameter and delegate to the base dbsize
         // In a full cluster implementation, the route would be used to target specific nodes
-        return super.dbsize();
+        return serverManagement.dbsize();
     }
 
     /**
@@ -1481,7 +1419,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return The current server time as a String array
      */
     public CompletableFuture<String[]> time() {
-        return super.time();
+        return serverManagement.time();
     }
 
     /**
@@ -1494,7 +1432,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
     public CompletableFuture<ClusterValue<String[]>> time(Route route) {
         // For now, ignore the route parameter and delegate to the base time
         // In a full cluster implementation, the route would be used to target specific nodes
-        return super.time().thenApply(ClusterValue::ofSingleValue);
+        return serverManagement.time().thenApply(ClusterValue::ofSingleValue);
     }
 
     /**
@@ -1505,7 +1443,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return UNIX TIME of the last DB save
      */
     public CompletableFuture<Long> lastsave() {
-        return super.lastsave();
+        return serverManagement.lastsave();
     }
 
     /**
@@ -1518,7 +1456,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
     public CompletableFuture<ClusterValue<Long>> lastsave(Route route) {
         // For now, ignore the route parameter and delegate to the base lastsave
         // In a full cluster implementation, the route would be used to target specific nodes
-        return super.lastsave().thenApply(ClusterValue::ofSingleValue);
+        return serverManagement.lastsave().thenApply(ClusterValue::ofSingleValue);
     }
 
     /**
@@ -1529,7 +1467,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return OK response
      */
     public CompletableFuture<String> flushall() {
-        return super.flushall();
+        return serverManagement.flushall();
     }
 
     /**
@@ -1541,7 +1479,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return OK response
      */
     public CompletableFuture<String> flushall(FlushMode mode) {
-        return super.flushall(mode);
+        return serverManagement.flushall(mode);
     }
 
     /**
@@ -1554,7 +1492,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
     public CompletableFuture<String> flushall(Route route) {
         // For now, ignore the route parameter and delegate to the base flushall
         // In a full cluster implementation, the route would be used to target specific nodes
-        return super.flushall();
+        return serverManagement.flushall();
     }
 
     /**
@@ -1568,7 +1506,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
     public CompletableFuture<String> flushall(FlushMode mode, Route route) {
         // For now, ignore the route parameter and delegate to the base flushall with mode
         // In a full cluster implementation, the route would be used to target specific nodes
-        return super.flushall(mode);
+        return serverManagement.flushall(mode);
     }
 
     /**
@@ -1579,7 +1517,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return OK response
      */
     public CompletableFuture<String> flushdb() {
-        return super.flushdb();
+        return serverManagement.flushdb();
     }
 
     /**
@@ -1591,7 +1529,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return OK response
      */
     public CompletableFuture<String> flushdb(FlushMode mode) {
-        return super.flushdb(mode);
+        return serverManagement.flushdb(mode);
     }
 
     /**
@@ -1604,7 +1542,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
     public CompletableFuture<String> flushdb(Route route) {
         // For now, ignore the route parameter and delegate to the base flushdb
         // In a full cluster implementation, the route would be used to target specific nodes
-        return super.flushdb();
+        return serverManagement.flushdb();
     }
 
     /**
@@ -1618,7 +1556,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
     public CompletableFuture<String> flushdb(FlushMode mode, Route route) {
         // For now, ignore the route parameter and delegate to the base flushdb with mode
         // In a full cluster implementation, the route would be used to target specific nodes
-        return super.flushdb(mode);
+        return serverManagement.flushdb(mode);
     }
 
     /**
@@ -1706,6 +1644,48 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
         // For now, ignore the route parameter and delegate to the base configSet
         // In a full cluster implementation, the route would be used to target specific nodes
         return super.configSet(parameters);
+    }
+
+    /**
+     * Returns server information for specific sections.
+     * Required by ClusterCommandExecutor interface.
+     *
+     * @see <a href="https://valkey.io/commands/info/">valkey.io</a> for details.
+     * @param sections Array of info sections to retrieve
+     * @return Server information wrapped in ClusterValue
+     */
+    @Override
+    public CompletableFuture<ClusterValue<String>> info(Section[] sections) {
+        // Convert sections to string array for delegation
+        String[] sectionStrings = new String[sections.length];
+        for (int i = 0; i < sections.length; i++) {
+            sectionStrings[i] = sections[i].name().toLowerCase();
+        }
+        
+        // Delegate to base info method and wrap result in ClusterValue
+        return super.info(sectionStrings).thenApply(ClusterValue::ofSingleValue);
+    }
+
+    /**
+     * Returns server information for specific sections with routing support.
+     * Required by ClusterCommandExecutor interface.
+     *
+     * @see <a href="https://valkey.io/commands/info/">valkey.io</a> for details.
+     * @param sections Array of info sections to retrieve
+     * @param route Specifies the routing configuration for the command
+     * @return Server information wrapped in ClusterValue
+     */
+    @Override
+    public CompletableFuture<ClusterValue<String>> info(Section[] sections, Object route) {
+        // Convert sections to string array for delegation
+        String[] sectionStrings = new String[sections.length];
+        for (int i = 0; i < sections.length; i++) {
+            sectionStrings[i] = sections[i].name().toLowerCase();
+        }
+        
+        // For now, ignore the route parameter and delegate to base info method
+        // In a full cluster implementation, the route would be used to target specific nodes
+        return super.info(sectionStrings).thenApply(ClusterValue::ofSingleValue);
     }
 
     /**

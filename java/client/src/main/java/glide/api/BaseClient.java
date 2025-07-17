@@ -2147,14 +2147,6 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
 
     // Utility Commands
 
-    /**
-     * Get the number of keys in the currently-selected database.
-     *
-     * @return A CompletableFuture containing the number of keys in the database
-     */
-    public CompletableFuture<Long> dbsize() {
-        return serverManagement.dbsize();
-    }
 
     /**
      * Return a random key from the currently-selected database.
@@ -2496,61 +2488,12 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
             .thenApply(result -> (String) result);
     }
 
-    /**
-     * Get the current server time.
-     *
-     * @return A CompletableFuture containing an array with seconds and microseconds since Unix epoch
-     */
-    public CompletableFuture<String[]> time() {
-        return serverManagement.time();
-    }
 
-    /**
-     * Get the Unix timestamp of the last successful save to disk.
-     *
-     * @return A CompletableFuture containing the timestamp of the last save
-     */
-    public CompletableFuture<Long> lastsave() {
-        return serverManagement.lastsave();
-    }
 
-    /**
-     * Remove all keys from the current database.
-     *
-     * @return A CompletableFuture containing \"OK\" if successful
-     */
-    public CompletableFuture<String> flushdb() {
-        return serverManagement.flushdb();
-    }
 
-    /**
-     * Delete all the keys of the currently selected DB with flush mode.
-     *
-     * @param flushMode The flush mode to use
-     * @return A CompletableFuture containing "OK" if successful
-     */
-    public CompletableFuture<String> flushdb(FlushMode flushMode) {
-        return serverManagement.flushdb(flushMode);
-    }
 
-    /**
-     * Remove all keys from all databases.
-     *
-     * @return A CompletableFuture containing \"OK\" if successful
-     */
-    public CompletableFuture<String> flushall() {
-        return serverManagement.flushall();
-    }
 
-    /**
-     * Delete all the keys of all the existing databases with flush mode.
-     *
-     * @param flushMode The flush mode to use
-     * @return A CompletableFuture containing "OK" if successful
-     */
-    public CompletableFuture<String> flushall(FlushMode flushMode) {
-        return serverManagement.flushall(flushMode);
-    }
+
 
     /**
      * Get the value of a configuration parameter.
@@ -2612,6 +2555,69 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     public CompletableFuture<String> configRewrite() {
         return serverManagement.configRewrite();
+    }
+
+    /**
+     * Reset server statistics.
+     * 
+     * @return A CompletableFuture containing "OK" if successful
+     */
+    public CompletableFuture<String> configResetStat() {
+        return serverManagement.configResetStat();
+    }
+
+    /**
+     * Display a piece of generative computer art and the Valkey version.
+     * 
+     * @return A CompletableFuture containing the art and version
+     */
+    public CompletableFuture<String> lolwut() {
+        return executeCommand(CommandType.LOLWUT)
+            .thenApply(result -> result.toString());
+    }
+
+    /**
+     * Display a piece of generative computer art and the Valkey version.
+     * 
+     * @param parameters Additional parameters for output customization
+     * @return A CompletableFuture containing the art and version
+     */
+    public CompletableFuture<String> lolwut(int[] parameters) {
+        String[] args = new String[parameters.length];
+        for (int i = 0; i < parameters.length; i++) {
+            args[i] = String.valueOf(parameters[i]);
+        }
+        return executeCommand(CommandType.LOLWUT, args)
+            .thenApply(result -> result.toString());
+    }
+
+    /**
+     * Display a piece of generative computer art and the Valkey version.
+     * 
+     * @param version Version of computer art to generate
+     * @return A CompletableFuture containing the art and version
+     */
+    public CompletableFuture<String> lolwut(int version) {
+        return executeCommand(CommandType.LOLWUT, "VERSION", String.valueOf(version))
+            .thenApply(result -> result.toString());
+    }
+
+    /**
+     * Display a piece of generative computer art and the Valkey version.
+     * 
+     * @param version Version of computer art to generate
+     * @param parameters Additional parameters for output customization
+     * @return A CompletableFuture containing the art and version
+     */
+    public CompletableFuture<String> lolwut(int version, int[] parameters) {
+        String[] args = new String[parameters.length + 2];
+        args[0] = "VERSION";
+        args[1] = String.valueOf(version);
+        for (int i = 0; i < parameters.length; i++) {
+            args[i + 2] = String.valueOf(parameters[i]);
+        }
+        return executeCommand(CommandType.LOLWUT, args)
+            .thenApply(result -> result.toString());
     }
 
     /**
