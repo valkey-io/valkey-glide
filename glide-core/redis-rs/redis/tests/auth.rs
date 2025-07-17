@@ -8,7 +8,8 @@ mod auth {
         cluster::ClusterClientBuilder,
         cluster_async::ClusterConnection,
         cluster_routing::{MultipleNodeRoutingInfo, ResponsePolicy, RoutingInfo},
-        cmd, ConnectionInfo, GlideConnectionOptions, RedisConnectionInfo, RedisResult, Value,
+        cmd, ConnectionInfo, GlideConnectionOptions, ProtocolVersion, RedisConnectionInfo,
+        RedisResult, Value,
     };
 
     const ALL_SUCCESS_ROUTE: RoutingInfo = RoutingInfo::MultiNode((
@@ -56,23 +57,24 @@ mod auth {
         }
     }
 
-    fn get_connection_info(cluster: &TestContext, password: Option<String>) -> ConnectionInfo {
-        let addr = cluster.server.connection_info().addr.clone();
+    fn get_connection_info(context: &TestContext, password: Option<String>) -> ConnectionInfo {
+        let addr = context.server.connection_info().addr.clone();
         ConnectionInfo {
             addr,
             redis: RedisConnectionInfo {
                 password,
+                protocol: context.protocol,
                 ..Default::default()
             },
         }
     }
 
-    fn get_builder(cluster: &TestClusterContext, password: Option<String>) -> ClusterClientBuilder {
-        let mut builder = ClusterClientBuilder::new(cluster.nodes.clone());
+    fn get_builder(context: &TestClusterContext, password: Option<String>) -> ClusterClientBuilder {
+        let mut builder = ClusterClientBuilder::new(context.nodes.clone());
         if let Some(password) = password {
             builder = builder.password(password);
         }
-        builder
+        builder.use_protocol(context.protocol)
     }
 
     async fn set_password(password: &str, conn: &mut Connection) -> RedisResult<()> {
@@ -220,7 +222,8 @@ mod auth {
     #[tokio::test]
     #[serial_test::serial]
     async fn test_replace_password_standalone() {
-        let standalone_context = TestContext::new();
+        let mut standalone_context = TestContext::new();
+        standalone_context.protocol = ProtocolVersion::RESP2;
 
         // Create a management connection to set the password
         let management_connection = match create_connection(

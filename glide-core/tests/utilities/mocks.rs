@@ -97,6 +97,20 @@ fn receive_and_respond_to_next_message(
         return true;
     }
 
+    if message.contains("HELLO") {
+        let mut buffer = Vec::new();
+        let response = Value::Map(vec![
+            (Value::BulkString(b"proto".to_vec()), Value::Int(3)),
+            (
+                Value::BulkString(b"role".to_vec()),
+                Value::BulkString(b"master".to_vec()),
+            ),
+        ]);
+        super::encode_value(&response, &mut buffer).unwrap();
+        socket.write_all(&buffer).unwrap();
+        return true;
+    }
+
     if let Some(response) = constant_responses.get(&message) {
         let mut buffer = Vec::new();
         super::encode_value(response, &mut buffer).unwrap();
