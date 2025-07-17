@@ -61,20 +61,16 @@ public class TestUtilities {
             ValkeyCluster valkeyCluster,
             Boolean lazyConnect) {
 
-        lazyConnect = Optional.ofNullable(lazyConnect).orElse(false);
-
-        ValkeyCluster cluster =
-                Optional.ofNullable(valkeyCluster)
-                        .orElseThrow(
-                                () ->
-                                        new IllegalArgumentException(
-                                                "ValkeyCluster instance is required for cluster mode"));
+        if (valkeyCluster == null) {
+            throw new IllegalArgumentException(
+                    "ValkeyCluster instance is required for create dedicated client");
+        }
 
         // For cluster mode, select k random seed nodes (k = min(3, total nodes))
         if (clusterMode) {
             List<NodeAddress> seedNodes = addresses;
             if (seedNodes == null) {
-                List<NodeAddress> allNodes = cluster.getNodesAddr();
+                List<NodeAddress> allNodes = valkeyCluster.getNodesAddr();
                 int k = Math.min(3, allNodes.size());
                 seedNodes =
                         new Random()
@@ -93,7 +89,8 @@ public class TestUtilities {
                                     .build())
                     .get();
         } else {
-            List<NodeAddress> nodeAddresses = addresses != null ? addresses : cluster.getNodesAddr();
+            List<NodeAddress> nodeAddresses =
+                    addresses != null ? addresses : valkeyCluster.getNodesAddr();
 
             return GlideClient.createClient(
                             GlideClientConfiguration.builder()
