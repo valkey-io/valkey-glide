@@ -12,20 +12,20 @@ internal partial class Request
         return ToValkeyValue(RequestType.HGet, args, true);
     }
 
-    public static Cmd<Object[], ValkeyValue[]> HashGetAsync(ValkeyKey key, ValkeyValue[] hashFields)
+    public static Cmd<object[], ValkeyValue[]> HashGetAsync(ValkeyKey key, ValkeyValue[] hashFields)
     {
         GlideString[] args = [key.ToGlideString(), .. hashFields.ToGlideStrings()];
         return new(RequestType.HMGet, args, false, response => [.. response.Select(item =>
             item == null ? ValkeyValue.Null : (ValkeyValue)(GlideString)item)]);
     }
 
-    public static Cmd<Dictionary<GlideString, Object>, HashEntry[]> HashGetAllAsync(ValkeyKey key)
+    public static Cmd<Dictionary<GlideString, object>, HashEntry[]> HashGetAllAsync(ValkeyKey key)
     {
         GlideString[] args = [key.ToGlideString()];
         return DictionaryToHashEntries(RequestType.HGetAll, args);
     }
 
-    public static Cmd<String, String> HashSetAsync(ValkeyKey key, HashEntry[] hashFields)
+    public static Cmd<string, string> HashSetAsync(ValkeyKey key, HashEntry[] hashFields)
     {
         List<GlideString> args = [key.ToGlideString()];
         foreach (HashEntry entry in hashFields)
@@ -96,7 +96,7 @@ internal partial class Request
         return ObjectArrayToValkeyValueArray(RequestType.HRandField, args);
     }
 
-    public static Cmd<Object[], HashEntry[]> HashRandomFieldsWithValuesAsync(ValkeyKey key, long count)
+    public static Cmd<object[], HashEntry[]> HashRandomFieldsWithValuesAsync(ValkeyKey key, long count)
     {
         GlideString[] args = [key.ToGlideString(), count.ToGlideString(), "WITHVALUES"];
         return ObjectArrayToHashEntries(RequestType.HRandField, args);
