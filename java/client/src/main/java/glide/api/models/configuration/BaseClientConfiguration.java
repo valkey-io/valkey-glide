@@ -86,20 +86,20 @@ public abstract class BaseClientConfiguration {
     private final BackoffStrategy reconnectStrategy;
 
     /**
-     * Enables lazy connection mode, where physical connections to the server(s)
-     * are deferred until the first command is sent. This can reduce startup latency and allow for
-     * client creation in disconnected environments.
+     * Enables lazy connection mode, where physical connections to the server(s) are deferred until
+     * the first command is sent. This can reduce startup latency and allow for client creation in
+     * disconnected environments.
      *
-     * <p>When set to {@code True}, the client will not attempt to connect to the specified nodes during
-     * initialization. Instead, connections will be established only when a command is actually
+     * <p>When set to {@code True}, the client will not attempt to connect to the specified nodes
+     * during initialization. Instead, connections will be established only when a command is actually
      * executed.
      *
      * <p>Note that the first command executed with lazy connections may experience additional latency
      * as it needs to establish the connection first. During this initial connection, the standard
      * request timeout does not apply yet - instead, the connection establishment is governed by
-     * {@code AdvancedBaseClientConfiguration.connectionTimeout}. The request timeout ({@code requestTimeout})
-     * only begins counting after the connection has been successfully established. This behavior can
-     * effectively increase the total time needed for the first command to complete.
+     * {@code AdvancedBaseClientConfiguration.connectionTimeout}. The request timeout ({@code
+     * requestTimeout}) only begins counting after the connection has been successfully established.
+     * This behavior can effectively increase the total time needed for the first command to complete.
      *
      * <p>This setting applies to both standalone and cluster modes. Note that if an operation is
      * attempted and connection fails (e.g., unreachable nodes), errors will surface at that point.
