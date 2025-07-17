@@ -5,6 +5,7 @@ import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.FlushMode;
+import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.ClusterBatch;
 import glide.api.models.ClusterTransaction;
 import glide.api.models.commands.batch.ClusterBatchOptions;
@@ -16,8 +17,10 @@ import glide.api.commands.ClusterCommandExecutor;
 import glide.api.commands.ServerManagementClusterCommands;
 import glide.api.commands.ClusterServerManagement;
 import glide.api.commands.GenericClusterCommands;
+import glide.api.commands.HyperLogLogBaseCommands;
 import glide.api.models.commands.scan.ScanOptions;
 import glide.api.models.commands.scan.ClusterScanCursor;
+import glide.api.models.commands.ScoreFilter;
 import io.valkey.glide.core.commands.CommandType;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -34,7 +37,7 @@ import java.util.concurrent.CompletableFuture;
  * - Automatic cluster topology handling
  * - Interface segregation for cluster-specific APIs
  */
-public class GlideClusterClient extends BaseClient implements TransactionsClusterCommands, ClusterCommandExecutor, GenericClusterCommands, AutoCloseable {
+public class GlideClusterClient extends BaseClient implements TransactionsClusterCommands, ClusterCommandExecutor, GenericClusterCommands, HyperLogLogBaseCommands, AutoCloseable {
 
     private GlideClusterClient(io.valkey.glide.core.client.GlideClient client) {
         super(client, createClusterServerManagement(client));
@@ -753,6 +756,16 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
 
 
     /**
+     * Flush all functions with flush mode (no routing).
+     *
+     * @param flushMode The flush mode to use
+     * @return A CompletableFuture containing the result
+     */
+    public CompletableFuture<String> functionFlush(FlushMode flushMode) {
+        return super.functionFlush(flushMode.name());
+    }
+
+    /**
      * Flush all functions with routing.
      *
      * @param route The routing configuration for the command
@@ -775,6 +788,139 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
         // For now, ignore the route parameter and delegate to the base functionFlush
         // In a full cluster implementation, the route would be used to target specific nodes
         return super.functionFlush(flushMode.name()).thenApply(ClusterValue::ofSingleValue);
+    }
+
+    // Function List methods - stub implementations for API compatibility
+    public CompletableFuture<Map<String, Object>[]> functionList(boolean withCode) {
+        // Use the existing BaseClient functionList method and adapt the result
+        return super.functionList(null).thenApply(result -> {
+            // Convert result to expected format - this is a stub implementation
+            if (result instanceof Map[]) {
+                return (Map<String, Object>[]) result;
+            }
+            return new Map[0];
+        });
+    }
+
+    public CompletableFuture<Map<GlideString, Object>[]> functionListBinary(boolean withCode) {
+        // Stub implementation - in real implementation would handle binary strings
+        return functionList(withCode).thenApply(result -> {
+            // Convert String keys to GlideString - this is a stub implementation
+            return new Map[0];
+        });
+    }
+
+    public CompletableFuture<Map<String, Object>[]> functionList(String libNamePattern, boolean withCode) {
+        // Use the existing BaseClient functionList method with library name
+        return super.functionList(libNamePattern).thenApply(result -> {
+            // Convert result to expected format - this is a stub implementation
+            if (result instanceof Map[]) {
+                return (Map<String, Object>[]) result;
+            }
+            return new Map[0];
+        });
+    }
+
+    public CompletableFuture<Map<GlideString, Object>[]> functionListBinary(GlideString libNamePattern, boolean withCode) {
+        // Stub implementation - in real implementation would handle binary strings
+        return functionList(libNamePattern.toString(), withCode).thenApply(result -> {
+            // Convert String keys to GlideString - this is a stub implementation
+            return new Map[0];
+        });
+    }
+
+    public CompletableFuture<ClusterValue<Map<String, Object>[]>> functionList(boolean withCode, Route route) {
+        // Delegate to non-route version and wrap in ClusterValue
+        return functionList(withCode).thenApply(ClusterValue::ofSingleValue);
+    }
+
+    public CompletableFuture<ClusterValue<Map<GlideString, Object>[]>> functionListBinary(boolean withCode, Route route) {
+        // Delegate to non-route version and wrap in ClusterValue
+        return functionListBinary(withCode).thenApply(ClusterValue::ofSingleValue);
+    }
+
+    public CompletableFuture<ClusterValue<Map<String, Object>[]>> functionList(String libNamePattern, boolean withCode, Route route) {
+        // Delegate to non-route version and wrap in ClusterValue
+        return functionList(libNamePattern, withCode).thenApply(ClusterValue::ofSingleValue);
+    }
+
+    public CompletableFuture<ClusterValue<Map<GlideString, Object>[]>> functionListBinary(GlideString libNamePattern, boolean withCode, Route route) {
+        // Delegate to non-route version and wrap in ClusterValue
+        return functionListBinary(libNamePattern, withCode).thenApply(ClusterValue::ofSingleValue);
+    }
+
+    // Function Kill methods - stub implementations for API compatibility
+    public CompletableFuture<String> functionKill() {
+        // Stub implementation using direct command execution
+        return executeCommand(CommandType.FUNCTION_KILL).thenApply(result -> result.toString());
+    }
+
+    public CompletableFuture<String> functionKill(Route route) {
+        // Delegate to non-route version for now
+        return functionKill();
+    }
+
+    // Function Stats methods - stub implementations for API compatibility  
+    public CompletableFuture<ClusterValue<Map<String, Map<String, Object>>>> functionStatsCluster() {
+        // Use the existing BaseClient functionStats method and adapt the result
+        return super.functionStats().thenApply(result -> {
+            // Convert result to expected format - this is a stub implementation
+            if (result instanceof Map) {
+                return ClusterValue.ofSingleValue((Map<String, Map<String, Object>>) result);
+            }
+            return ClusterValue.ofSingleValue(new java.util.HashMap<>());
+        });
+    }
+
+    // Override BaseClient.functionStats() to return ClusterValue format
+    @Override
+    public CompletableFuture<Object> functionStats() {
+        return super.functionStats().thenApply(result -> {
+            // Convert result to ClusterValue format for cluster client
+            if (result instanceof Map) {
+                return ClusterValue.ofSingleValue((Map<String, Map<String, Object>>) result);
+            }
+            return ClusterValue.ofSingleValue(new java.util.HashMap<>());
+        });
+    }
+
+    public CompletableFuture<ClusterValue<Map<GlideString, Map<GlideString, Object>>>> functionStatsBinary() {
+        // Stub implementation - in real implementation would handle binary strings
+        return functionStatsCluster().thenApply(result -> {
+            // Convert String keys to GlideString - this is a stub implementation
+            return ClusterValue.ofSingleValue(new java.util.HashMap<>());
+        });
+    }
+
+    public CompletableFuture<ClusterValue<Map<String, Map<String, Object>>>> functionStats(Route route) {
+        // Delegate to non-route version for now
+        return functionStatsCluster();
+    }
+
+    public CompletableFuture<ClusterValue<Map<GlideString, Map<GlideString, Object>>>> functionStatsBinary(Route route) {
+        // Delegate to non-route version for now
+        return functionStatsBinary();
+    }
+
+    // Function Restore methods - stub implementations for API compatibility
+    public CompletableFuture<String> functionRestore(byte[] payload) {
+        // Stub implementation using direct command execution
+        return executeCommand(CommandType.FUNCTION_RESTORE, new String(payload)).thenApply(result -> result.toString());
+    }
+
+    public CompletableFuture<String> functionRestore(byte[] payload, FunctionRestorePolicy policy) {
+        // Stub implementation using direct command execution with policy
+        return executeCommand(CommandType.FUNCTION_RESTORE, new String(payload), policy.toString()).thenApply(result -> result.toString());
+    }
+
+    public CompletableFuture<String> functionRestore(byte[] payload, Route route) {
+        // Delegate to non-route version for now
+        return functionRestore(payload);
+    }
+
+    public CompletableFuture<String> functionRestore(byte[] payload, FunctionRestorePolicy policy, Route route) {
+        // Delegate to non-route version for now
+        return functionRestore(payload, policy);
     }
 
     /**
@@ -915,18 +1061,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
         return super.functionList(libraryName).thenApply(ClusterValue::ofSingleValue);
     }
 
-    /**
-     * List functions with withCode flag and routing.
-     *
-     * @param withCode Whether to include function code in the response
-     * @param route The routing configuration for the command
-     * @return A CompletableFuture containing the list of functions wrapped in ClusterValue
-     */
-    public CompletableFuture<ClusterValue<Object>> functionList(boolean withCode, Route route) {
-        // For now, ignore the route parameter and delegate to the base functionList
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return super.functionList(withCode ? "WITHCODE" : null).thenApply(ClusterValue::ofSingleValue);
-    }
 
     /**
      * Call a Valkey function with GlideString arguments.
@@ -1686,6 +1820,188 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
         // For now, ignore the route parameter and delegate to base info method
         // In a full cluster implementation, the route would be used to target specific nodes
         return super.info(sectionStrings).thenApply(ClusterValue::ofSingleValue);
+    }
+
+    // HyperLogLog Commands Implementation
+    
+    @Override
+    public CompletableFuture<Boolean> pfadd(String key, String[] elements) {
+        List<String> args = new ArrayList<>();
+        args.add(key);
+        args.addAll(Arrays.asList(elements));
+        return executeCommand(CommandType.PFADD, args.toArray(new String[0]))
+            .thenApply(result -> result.equals(1) || result.equals(1L));
+    }
+    
+    @Override
+    public CompletableFuture<Boolean> pfadd(GlideString key, GlideString[] elements) {
+        List<String> args = new ArrayList<>();
+        args.add(key.toString());
+        for (GlideString element : elements) {
+            args.add(element.toString());
+        }
+        return executeCommand(CommandType.PFADD, args.toArray(new String[0]))
+            .thenApply(result -> result.equals(1) || result.equals(1L));
+    }
+    
+    @Override
+    public CompletableFuture<Long> pfcount(String[] keys) {
+        return executeCommand(CommandType.PFCOUNT, keys)
+            .thenApply(result -> (Long) result);
+    }
+    
+    @Override
+    public CompletableFuture<Long> pfcount(GlideString[] keys) {
+        String[] stringKeys = new String[keys.length];
+        for (int i = 0; i < keys.length; i++) {
+            stringKeys[i] = keys[i].toString();
+        }
+        return executeCommand(CommandType.PFCOUNT, stringKeys)
+            .thenApply(result -> (Long) result);
+    }
+    
+    @Override
+    public CompletableFuture<String> pfmerge(String destination, String[] sourceKeys) {
+        List<String> args = new ArrayList<>();
+        args.add(destination);
+        args.addAll(Arrays.asList(sourceKeys));
+        return executeCommand(CommandType.PFMERGE, args.toArray(new String[0]))
+            .thenApply(result -> result.toString());
+    }
+    
+    @Override
+    public CompletableFuture<String> pfmerge(GlideString destination, GlideString[] sourceKeys) {
+        List<String> args = new ArrayList<>();
+        args.add(destination.toString());
+        for (GlideString sourceKey : sourceKeys) {
+            args.add(sourceKey.toString());
+        }
+        return executeCommand(CommandType.PFMERGE, args.toArray(new String[0]))
+            .thenApply(result -> result.toString());
+    }
+    
+    // SortedSet Commands Implementation - Blocking operations
+    
+    public CompletableFuture<Object[]> bzpopmax(String[] keys, double timeout) {
+        List<String> args = new ArrayList<>(Arrays.asList(keys));
+        args.add(String.valueOf(timeout));
+        return executeCommand(CommandType.BZPOPMAX, args.toArray(new String[0]))
+            .thenApply(result -> (Object[]) result);
+    }
+    
+    public CompletableFuture<Object[]> bzpopmax(GlideString[] keys, double timeout) {
+        List<String> args = new ArrayList<>();
+        for (GlideString key : keys) {
+            args.add(key.toString());
+        }
+        args.add(String.valueOf(timeout));
+        return executeCommand(CommandType.BZPOPMAX, args.toArray(new String[0]))
+            .thenApply(result -> (Object[]) result);
+    }
+    
+    public CompletableFuture<Object[]> bzpopmin(String[] keys, double timeout) {
+        List<String> args = new ArrayList<>(Arrays.asList(keys));
+        args.add(String.valueOf(timeout));
+        return executeCommand(CommandType.BZPOPMIN, args.toArray(new String[0]))
+            .thenApply(result -> (Object[]) result);
+    }
+    
+    public CompletableFuture<Object[]> bzpopmin(GlideString[] keys, double timeout) {
+        List<String> args = new ArrayList<>();
+        for (GlideString key : keys) {
+            args.add(key.toString());
+        }
+        args.add(String.valueOf(timeout));
+        return executeCommand(CommandType.BZPOPMIN, args.toArray(new String[0]))
+            .thenApply(result -> (Object[]) result);
+    }
+    
+    public CompletableFuture<Map<String, Object>> zmpop(String[] keys, ScoreFilter modifier) {
+        List<String> args = new ArrayList<>(Arrays.asList(keys));
+        args.add(String.valueOf(keys.length));
+        args.add(modifier.toString());
+        return executeCommand(CommandType.ZMPOP, args.toArray(new String[0]))
+            .thenApply(result -> (Map<String, Object>) result);
+    }
+    
+    public CompletableFuture<Map<GlideString, Object>> zmpop(GlideString[] keys, ScoreFilter modifier) {
+        List<String> args = new ArrayList<>();
+        for (GlideString key : keys) {
+            args.add(key.toString());
+        }
+        args.add(String.valueOf(keys.length));
+        args.add(modifier.toString());
+        return executeCommand(CommandType.ZMPOP, args.toArray(new String[0]))
+            .thenApply(result -> (Map<GlideString, Object>) result);
+    }
+    
+    public CompletableFuture<Map<String, Object>> zmpop(String[] keys, ScoreFilter modifier, long count) {
+        List<String> args = new ArrayList<>(Arrays.asList(keys));
+        args.add(String.valueOf(keys.length));
+        args.add(modifier.toString());
+        args.add("COUNT"); // Using literal string instead of SortedSetBaseCommands.COUNT_VALKEY_API
+        args.add(String.valueOf(count));
+        return executeCommand(CommandType.ZMPOP, args.toArray(new String[0]))
+            .thenApply(result -> (Map<String, Object>) result);
+    }
+    
+    public CompletableFuture<Map<GlideString, Object>> zmpop(GlideString[] keys, ScoreFilter modifier, long count) {
+        List<String> args = new ArrayList<>();
+        for (GlideString key : keys) {
+            args.add(key.toString());
+        }
+        args.add(String.valueOf(keys.length));
+        args.add(modifier.toString());
+        args.add("COUNT"); // Using literal string instead of SortedSetBaseCommands.COUNT_VALKEY_API
+        args.add(String.valueOf(count));
+        return executeCommand(CommandType.ZMPOP, args.toArray(new String[0]))
+            .thenApply(result -> (Map<GlideString, Object>) result);
+    }
+    
+    public CompletableFuture<Map<String, Object>> bzmpop(String[] keys, ScoreFilter modifier, double timeout) {
+        List<String> args = new ArrayList<>(Arrays.asList(keys));
+        args.add(String.valueOf(keys.length));
+        args.add(modifier.toString());
+        args.add(String.valueOf(timeout));
+        return executeCommand(CommandType.BZMPOP, args.toArray(new String[0]))
+            .thenApply(result -> (Map<String, Object>) result);
+    }
+    
+    public CompletableFuture<Map<GlideString, Object>> bzmpop(GlideString[] keys, ScoreFilter modifier, double timeout) {
+        List<String> args = new ArrayList<>();
+        for (GlideString key : keys) {
+            args.add(key.toString());
+        }
+        args.add(String.valueOf(keys.length));
+        args.add(modifier.toString());
+        args.add(String.valueOf(timeout));
+        return executeCommand(CommandType.BZMPOP, args.toArray(new String[0]))
+            .thenApply(result -> (Map<GlideString, Object>) result);
+    }
+    
+    public CompletableFuture<Map<String, Object>> bzmpop(String[] keys, ScoreFilter modifier, double timeout, long count) {
+        List<String> args = new ArrayList<>(Arrays.asList(keys));
+        args.add(String.valueOf(keys.length));
+        args.add(modifier.toString());
+        args.add(String.valueOf(timeout));
+        args.add("COUNT"); // Using literal string instead of SortedSetBaseCommands.COUNT_VALKEY_API
+        args.add(String.valueOf(count));
+        return executeCommand(CommandType.BZMPOP, args.toArray(new String[0]))
+            .thenApply(result -> (Map<String, Object>) result);
+    }
+    
+    public CompletableFuture<Map<GlideString, Object>> bzmpop(GlideString[] keys, ScoreFilter modifier, double timeout, long count) {
+        List<String> args = new ArrayList<>();
+        for (GlideString key : keys) {
+            args.add(key.toString());
+        }
+        args.add(String.valueOf(keys.length));
+        args.add(modifier.toString());
+        args.add(String.valueOf(timeout));
+        args.add("COUNT"); // Using literal string instead of SortedSetBaseCommands.COUNT_VALKEY_API
+        args.add(String.valueOf(count));
+        return executeCommand(CommandType.BZMPOP, args.toArray(new String[0]))
+            .thenApply(result -> (Map<GlideString, Object>) result);
     }
 
     /**

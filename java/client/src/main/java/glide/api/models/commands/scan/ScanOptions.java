@@ -6,6 +6,9 @@ package glide.api.models.commands.scan;
  */
 public class ScanOptions {
     
+    /** The TYPE option string for SCAN command. */
+    public static final String TYPE_OPTION_STRING = "TYPE";
+    
     /**
      * Object type filter for SCAN command.
      */

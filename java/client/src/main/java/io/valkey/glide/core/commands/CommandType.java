@@ -114,6 +114,12 @@ public enum CommandType {
     BZMPOP("BZMPOP"),
     BZPOPMAX("BZPOPMAX"),
     BZPOPMIN("BZPOPMIN"),
+    ZMPOP("ZMPOP"),
+    
+    // HyperLogLog commands
+    PFADD("PFADD"),
+    PFCOUNT("PFCOUNT"),
+    PFMERGE("PFMERGE"),
     ZSCAN("ZSCAN"),
 
     // Connection commands
@@ -214,6 +220,9 @@ public enum CommandType {
     DUMP("DUMP"),
     RESTORE("RESTORE"),
 
+    // Stream commands
+    XGROUP_SETID("XGROUP SETID"),
+    
     // Misc commands
     LOLWUT("LOLWUT"),
 
