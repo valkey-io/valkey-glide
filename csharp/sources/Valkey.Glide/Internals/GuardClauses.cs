@@ -19,6 +19,7 @@ internal static class GuardClauses
             case When.Always:
             case When.NotExists:
                 break;
+            case When.Exists:
             default:
                 throw new ArgumentException(when + " is not valid in this context; the permitted values are: Always, NotExists");
         }
