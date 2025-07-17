@@ -72,4 +72,13 @@ public class GlideClient : BaseClient, IStringBaseCommands, IGenericCommands, IS
 
     public async Task<string> Info(InfoOptions.Section[] sections)
         => await Command(Request.Info(sections));
+
+    public async Task<ValkeyValue> EchoAsync(ValkeyValue message, CommandFlags flags = CommandFlags.None)
+        => await Command(Request.Echo(message, flags));
+
+    public async Task<bool> KeyMoveAsync(ValkeyKey key, int database, CommandFlags flags = CommandFlags.None)
+        => await Command(Request.KeyMoveAsync(key, database));
+
+    public async Task<bool> KeyCopyAsync(ValkeyKey sourceKey, ValkeyKey destinationKey, int destinationDatabase, bool replace = false, CommandFlags flags = CommandFlags.None)
+        => await Command(Request.KeyCopyAsync(sourceKey, destinationKey, destinationDatabase, replace));
 }
