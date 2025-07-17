@@ -70,7 +70,6 @@ public abstract partial class BaseClient : IDisposable, IAsyncDisposable
     /// <typeparam name="T">Type we return to the user.</typeparam>
     /// <param name="command"></param>
     /// <param name="route"></param>
-    /// <returns></returns>
     internal virtual async Task<T> Command<R, T>(Cmd<R, T> command, Route? route = null)
     {
         // 1. Create Cmd which wraps CmdInfo and manages all memory allocations

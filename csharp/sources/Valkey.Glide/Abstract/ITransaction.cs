@@ -26,20 +26,20 @@ public interface ITransaction : IBatch
     /// <summary>
     /// Execute the batch operation, sending all queued commands to the server.
     /// </summary>
+    /// <param name="flags">Command flags are not supported by GLIDE.</param>
     /// <returns>
     /// <see langword="true" /> if a transaction was applied or
     /// <see langword="false" /> if a transaction failed due to a <c>WATCH</c> command.
     /// </returns>
-    /// <param name="flags">Command flags are not supported by GLIDE.</param>
     bool Execute(CommandFlags flags = CommandFlags.None);
 
     /// <summary>
     /// Execute the batch operation, sending all queued commands to the server.
     /// </summary>
+    /// <param name="flags">Command flags are not supported by GLIDE.</param>
     /// <returns>
     /// <see langword="true" /> if a transaction was applied or
     /// <see langword="false" /> if a transaction failed due to a <c>WATCH</c> command.
     /// </returns>
-    /// <param name="flags">Command flags are not supported by GLIDE.</param>
     Task<bool> ExecuteAsync(CommandFlags flags = CommandFlags.None);
 }
