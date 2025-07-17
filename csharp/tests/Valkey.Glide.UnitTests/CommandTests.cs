@@ -271,37 +271,37 @@ public class CommandTests
             (gs)"member3"
         };
 
-        Assert.Multiple(
+        Assert.Multiple([
             () => {
-                var result = Request.SetMembersAsync("key").Converter(testHashSet);
+                ValkeyValue[] result = Request.SetMembersAsync("key").Converter(testHashSet);
                 Assert.Equal(3, result.Length);
-                foreach (var item in result) Assert.IsType<ValkeyValue>(item);
+                Assert.All(result, item => Assert.IsType<ValkeyValue>(item));
             },
 
             () => {
-                var result = Request.SetPopAsync("key", 2).Converter(testHashSet);
+                ValkeyValue[] result = Request.SetPopAsync("key", 2).Converter(testHashSet);
                 Assert.Equal(3, result.Length);
-                foreach (var item in result) Assert.IsType<ValkeyValue>(item);
+                Assert.All(result, item => Assert.IsType<ValkeyValue>(item));
             },
 
             () => {
-                var result = Request.SetUnionAsync(["key1", "key2"]).Converter(testHashSet);
+                ValkeyValue[] result = Request.SetUnionAsync(["key1", "key2"]).Converter(testHashSet);
                 Assert.Equal(3, result.Length);
-                foreach (var item in result) Assert.IsType<ValkeyValue>(item);
+                Assert.All(result, item => Assert.IsType<ValkeyValue>(item));
             },
 
             () => {
-                var result = Request.SetIntersectAsync(["key1", "key2"]).Converter(testHashSet);
+                ValkeyValue[] result = Request.SetIntersectAsync(["key1", "key2"]).Converter(testHashSet);
                 Assert.Equal(3, result.Length);
-                foreach (var item in result) Assert.IsType<ValkeyValue>(item);
+                Assert.All(result, item => Assert.IsType<ValkeyValue>(item));
             },
 
             () => {
-                var result = Request.SetDifferenceAsync(["key1", "key2"]).Converter(testHashSet);
+                ValkeyValue[] result = Request.SetDifferenceAsync(["key1", "key2"]).Converter(testHashSet);
                 Assert.Equal(3, result.Length);
-                foreach (var item in result) Assert.IsType<ValkeyValue>(item);
-            }
-        );
+                Assert.All(result, item => Assert.IsType<ValkeyValue>(item));
+            },
+        ]);
     }
 
     [Fact]
