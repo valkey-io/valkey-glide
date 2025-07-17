@@ -11,6 +11,7 @@ import glide.api.models.ClusterTransaction;
 import glide.api.models.commands.batch.ClusterBatchOptions;
 import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
+import glide.api.models.Script;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.api.commands.TransactionsClusterCommands;
 import glide.api.commands.ClusterCommandExecutor;
@@ -872,17 +873,10 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
         });
     }
 
-    // Override BaseClient.functionStats() to return ClusterValue format
-    @Override
-    public CompletableFuture<Object> functionStats() {
-        return super.functionStats().thenApply(result -> {
-            // Convert result to ClusterValue format for cluster client
-            if (result instanceof Map) {
-                return ClusterValue.ofSingleValue((Map<String, Map<String, Object>>) result);
-            }
-            return ClusterValue.ofSingleValue(new java.util.HashMap<>());
-        });
-    }
+    // Note: functionStats() conflict - BaseClient has functionStats() -> Object
+    // but cluster tests expect functionStats() -> ClusterValue
+    // This is a fundamental API design issue that needs to be resolved
+    // For now, tests will need to use functionStatsCluster() method instead
 
     public CompletableFuture<ClusterValue<Map<GlideString, Map<GlideString, Object>>>> functionStatsBinary() {
         // Stub implementation - in real implementation would handle binary strings
@@ -949,6 +943,44 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
         // For now, ignore the route parameter and delegate to the base functionLoad
         // In a full cluster implementation, the route would be used to target specific nodes
         return super.functionLoad(libraryCode.toString(), replace).thenApply(result -> ClusterValue.ofSingleValue(GlideString.of(result)));
+    }
+
+    /**
+     * Check if scripts exist with routing.
+     *
+     * @param sha1Hashes The SHA1 hashes of the scripts to check
+     * @param route The routing configuration for the command
+     * @return A CompletableFuture containing the result wrapped in ClusterValue
+     */
+    public CompletableFuture<ClusterValue<Boolean[]>> scriptExists(String[] sha1Hashes, Route route) {
+        // For now, ignore the route parameter and delegate to the base scriptExists
+        // In a full cluster implementation, the route would be used to target specific nodes
+        return super.scriptExists(sha1Hashes).thenApply(ClusterValue::ofSingleValue);
+    }
+
+    /**
+     * Kill a running script with routing.
+     *
+     * @param route The routing configuration for the command
+     * @return A CompletableFuture containing the result wrapped in ClusterValue
+     */
+    public CompletableFuture<ClusterValue<String>> scriptKill(Route route) {
+        // For now, ignore the route parameter and delegate to the base scriptKill
+        // In a full cluster implementation, the route would be used to target specific nodes
+        return super.scriptKill().thenApply(ClusterValue::ofSingleValue);
+    }
+
+    /**
+     * Invoke a script with routing.
+     *
+     * @param script The script to invoke
+     * @param route The routing configuration for the command
+     * @return A CompletableFuture containing the result wrapped in ClusterValue
+     */
+    public CompletableFuture<ClusterValue<Object>> invokeScript(Script script, Route route) {
+        // For now, ignore the route parameter and delegate to the base invokeScript
+        // In a full cluster implementation, the route would be used to target specific nodes
+        return super.invokeScript(script).thenApply(ClusterValue::ofSingleValue);
     }
 
     /**

@@ -139,8 +139,8 @@ public class ArrayTransformUtils {
                 .flatMap(
                         entry ->
                                 Stream.of(
-                                        GlideString.of(entry.getValue().getLongitude()),
-                                        GlideString.of(entry.getValue().getLatitude()),
+                                        GlideString.of(Double.toString(entry.getValue().getLongitude())),
+                                        GlideString.of(Double.toString(entry.getValue().getLatitude())),
                                         GlideString.of(entry.getKey())))
                 .toArray(GlideString[]::new);
     }

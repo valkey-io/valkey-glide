@@ -22,6 +22,10 @@ module glide.client {
     exports glide.api.models.exceptions;
     exports glide.api.logging;
     exports glide.utils;
+    
+    // Compatibility packages for protobuf and manager stubs
+    exports glide.protobuf;
+    exports glide.managers;
 
     requires java.base;
     requires java.logging;

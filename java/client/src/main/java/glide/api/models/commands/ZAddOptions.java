@@ -8,7 +8,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import lombok.Builder;
-import lombok.RequiredArgsConstructor;
 
 /**
  * Optional arguments to {@link SortedSetBaseCommands#zadd(String, Map, ZAddOptions, boolean)},
@@ -30,7 +29,6 @@ public final class ZAddOptions {
      */
     private final UpdateOptions updateOptions;
 
-    @RequiredArgsConstructor
     public enum ConditionalChange {
         /**
          * Only update elements that already exist. Don't add new elements. Equivalent to <code>XX
@@ -44,9 +42,16 @@ public final class ZAddOptions {
         ONLY_IF_DOES_NOT_EXIST("NX");
 
         private final String valkeyApi;
+        
+        ConditionalChange(String valkeyApi) {
+            this.valkeyApi = valkeyApi;
+        }
+        
+        public String getValkeyApi() {
+            return valkeyApi;
+        }
     }
 
-    @RequiredArgsConstructor
     public enum UpdateOptions {
         /**
          * Only update existing elements if the new score is less than the current score. Equivalent to
@@ -60,6 +65,14 @@ public final class ZAddOptions {
         SCORE_GREATER_THAN_CURRENT("GT");
 
         private final String valkeyApi;
+        
+        UpdateOptions(String valkeyApi) {
+            this.valkeyApi = valkeyApi;
+        }
+        
+        public String getValkeyApi() {
+            return valkeyApi;
+        }
     }
 
     /**

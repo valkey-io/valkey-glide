@@ -28,7 +28,6 @@ public class RequestRoutingConfiguration {
     /** A route that addresses multiple nodes. */
     public interface MultiNodeRoute extends Route {}
 
-    @RequiredArgsConstructor
     @Getter
     public enum SimpleSingleNodeRoute implements SingleNodeRoute {
         /**
@@ -40,9 +39,12 @@ public class RequestRoutingConfiguration {
         RANDOM(2);
 
         private final int ordinal;
+        
+        SimpleSingleNodeRoute(int ordinal) {
+            this.ordinal = ordinal;
+        }
     }
 
-    @RequiredArgsConstructor
     @Getter
     public enum SimpleMultiNodeRoute implements MultiNodeRoute {
         /**
@@ -54,6 +56,10 @@ public class RequestRoutingConfiguration {
         ALL_PRIMARIES(1);
 
         private final int ordinal;
+        
+        SimpleMultiNodeRoute(int ordinal) {
+            this.ordinal = ordinal;
+        }
     }
 
     /** Defines type of the node being addressed. */
