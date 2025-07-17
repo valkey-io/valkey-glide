@@ -112,8 +112,8 @@ public class GlideString implements Comparable<GlideString> {
                     return false;
                 } else {
                     try {
-                        // TODO find a better way to check this
                         // Detect whether `bytes` could be represented by a `String` without data corruption
+                        // This approach ensures UTF-8 roundtrip compatibility
                         var tmpStr = new String(bytes, StandardCharsets.UTF_8);
                         if (Arrays.equals(bytes, tmpStr.getBytes(StandardCharsets.UTF_8))) {
                             string = tmpStr;

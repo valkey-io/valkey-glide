@@ -194,6 +194,7 @@ public enum CommandType {
     TOUCH("TOUCH"),
     MOVE("MOVE"),
     RANDOMKEY("RANDOMKEY"),
+    SCAN("SCAN"),
 
     // Bit commands
     BITCOUNT("BITCOUNT"),

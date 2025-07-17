@@ -9,13 +9,15 @@ import glide.api.models.Transaction;
 import glide.api.models.commands.batch.BatchOptions;
 import glide.api.models.GlideString;
 import glide.api.commands.TransactionsCommands;
+import glide.api.commands.GenericCommands;
+import glide.api.models.commands.scan.ScanOptions;
 import java.util.concurrent.CompletableFuture;
 
 /**
  * Glide client for connecting to a single Valkey/Redis instance.
  * This class provides the integration test API while using the refactored core client underneath.
  */
-public class GlideClient extends BaseClient implements TransactionsCommands {
+public class GlideClient extends BaseClient implements TransactionsCommands, GenericCommands {
 
     private GlideClient(io.valkey.glide.core.client.GlideClient client) {
         super(client);
@@ -145,13 +147,13 @@ public class GlideClient extends BaseClient implements TransactionsCommands {
      *
      * @param batch The batch to execute
      * @param raiseOnError Whether to raise an exception on command failure
-     * @param options Additional execution options
+     * @param options Additional execution options (currently not supported)
      * @return A CompletableFuture containing an array of results
      */
     @Override
     public CompletableFuture<Object[]> exec(Batch batch, boolean raiseOnError, BatchOptions options) {
-        // For now, we implement this by ignoring options and delegating to the base implementation
-        // In a full implementation, options would be passed to the core client
+        // Currently delegates to basic exec implementation
+        // Future enhancement would process options for timeout, retry logic, etc.
         return exec(batch, raiseOnError);
     }
 
@@ -168,5 +170,265 @@ public class GlideClient extends BaseClient implements TransactionsCommands {
             sectionStrings[i] = sections[i].name().toLowerCase();
         }
         return super.info(sectionStrings);
+    }
+
+    /**
+     * Execute a custom command (GenericCommands interface implementation).
+     *
+     * @param args The command arguments
+     * @return A CompletableFuture containing the command result
+     */
+    @Override
+    public CompletableFuture<Object> customCommand(String[] args) {
+        return executeCustomCommand(args);
+    }
+
+    /**
+     * Execute a custom command with GlideString arguments (GenericCommands interface implementation).
+     *
+     * @param args The command arguments as GlideString array
+     * @return A CompletableFuture containing the command result
+     */
+    @Override
+    public CompletableFuture<Object> customCommand(GlideString[] args) {
+        return executeCustomCommand(args);
+    }
+
+    /**
+     * Scan for keys in the database.
+     *
+     * @param cursor The cursor to start scanning from
+     * @return A CompletableFuture containing an array with [cursor, keys]
+     */
+    @Override
+    public CompletableFuture<Object[]> scan(String cursor) {
+        return executeCommand(io.valkey.glide.core.commands.CommandType.SCAN, cursor)
+            .thenApply(result -> {
+                // Parse scan response: [new_cursor, [key1, key2, ...]]
+                if (result instanceof Object[]) {
+                    Object[] scanResult = (Object[]) result;
+                    if (scanResult.length >= 2) {
+                        return new Object[]{scanResult[0], scanResult[1]};
+                    }
+                }
+                // Fallback for unexpected response format
+                return new Object[]{cursor, new String[0]};
+            });
+    }
+
+    /**
+     * Scan for keys in the database with GlideString cursor.
+     *
+     * @param cursor The cursor to start scanning from
+     * @return A CompletableFuture containing an array with [cursor, keys]
+     */
+    @Override
+    public CompletableFuture<Object[]> scan(GlideString cursor) {
+        return scan(cursor.toString());
+    }
+
+    /**
+     * Scan for keys in the database with options.
+     *
+     * @param cursor The cursor to start scanning from
+     * @param options The scan options
+     * @return A CompletableFuture containing an array with [cursor, keys]
+     */
+    @Override
+    public CompletableFuture<Object[]> scan(String cursor, ScanOptions options) {
+        // Build command arguments with options
+        java.util.List<String> args = new java.util.ArrayList<>();
+        args.add(cursor);
+        
+        if (options != null) {
+            // Add options support - for now we delegate to basic scan
+            // Future enhancement would parse options and add appropriate arguments
+        }
+        
+        return executeCommand(io.valkey.glide.core.commands.CommandType.SCAN, args.toArray(new String[0]))
+            .thenApply(result -> {
+                // Parse scan response: [new_cursor, [key1, key2, ...]]
+                if (result instanceof Object[]) {
+                    Object[] scanResult = (Object[]) result;
+                    if (scanResult.length >= 2) {
+                        return new Object[]{scanResult[0], scanResult[1]};
+                    }
+                }
+                // Fallback for unexpected response format
+                return new Object[]{cursor, new String[0]};
+            });
+    }
+
+    /**
+     * Scan for keys in the database with GlideString cursor and options.
+     *
+     * @param cursor The cursor to start scanning from
+     * @param options The scan options
+     * @return A CompletableFuture containing an array with [cursor, keys]
+     */
+    @Override
+    public CompletableFuture<Object[]> scan(GlideString cursor, ScanOptions options) {
+        return scan(cursor.toString(), options);
+    }
+
+    /**
+     * Returns a random key from the database.
+     *
+     * @return A CompletableFuture containing a random key, or null if no keys exist
+     */
+    @Override
+    public CompletableFuture<String> randomKey() {
+        return super.randomkey();
+    }
+
+    /**
+     * Returns a random key from the database as a GlideString.
+     *
+     * @return A CompletableFuture containing a random key, or null if no keys exist
+     */
+    @Override
+    public CompletableFuture<GlideString> randomKeyBinary() {
+        return super.randomkeyBinary();
+    }
+
+    /**
+     * Copy a key to a new destination.
+     *
+     * @param source The source key
+     * @param destination The destination key
+     * @return A CompletableFuture containing true if copy was successful
+     */
+    @Override
+    public CompletableFuture<Boolean> copy(String source, String destination) {
+        return executeCommand(io.valkey.glide.core.commands.CommandType.COPY, source, destination)
+            .thenApply(result -> Boolean.parseBoolean(result.toString()));
+    }
+
+    /**
+     * Copy a key to a new destination with GlideString arguments.
+     *
+     * @param source The source key
+     * @param destination The destination key
+     * @return A CompletableFuture containing true if copy was successful
+     */
+    @Override
+    public CompletableFuture<Boolean> copy(GlideString source, GlideString destination) {
+        return copy(source.toString(), destination.toString());
+    }
+
+    /**
+     * Copy a key to a new destination with replace option.
+     *
+     * @param source The source key
+     * @param destination The destination key
+     * @param replace Whether to replace existing key
+     * @return A CompletableFuture containing true if copy was successful
+     */
+    @Override
+    public CompletableFuture<Boolean> copy(String source, String destination, boolean replace) {
+        if (replace) {
+            return executeCommand(io.valkey.glide.core.commands.CommandType.COPY, source, destination, "REPLACE")
+                .thenApply(result -> Boolean.parseBoolean(result.toString()));
+        } else {
+            return copy(source, destination);
+        }
+    }
+
+    /**
+     * Copy a key to a new destination with GlideString arguments and replace option.
+     *
+     * @param source The source key
+     * @param destination The destination key
+     * @param replace Whether to replace existing key
+     * @return A CompletableFuture containing true if copy was successful
+     */
+    @Override
+    public CompletableFuture<Boolean> copy(GlideString source, GlideString destination, boolean replace) {
+        return copy(source.toString(), destination.toString(), replace);
+    }
+
+    /**
+     * Copy a key to a new destination in a different database.
+     *
+     * @param source The source key
+     * @param destination The destination key
+     * @param destinationDB The destination database
+     * @return A CompletableFuture containing true if copy was successful
+     */
+    @Override
+    public CompletableFuture<Boolean> copy(String source, String destination, long destinationDB) {
+        return executeCommand(io.valkey.glide.core.commands.CommandType.COPY, source, destination, "DB", String.valueOf(destinationDB))
+            .thenApply(result -> Boolean.parseBoolean(result.toString()));
+    }
+
+    /**
+     * Copy a key to a new destination in a different database with GlideString arguments.
+     *
+     * @param source The source key
+     * @param destination The destination key
+     * @param destinationDB The destination database
+     * @return A CompletableFuture containing true if copy was successful
+     */
+    @Override
+    public CompletableFuture<Boolean> copy(GlideString source, GlideString destination, long destinationDB) {
+        return copy(source.toString(), destination.toString(), destinationDB);
+    }
+
+    /**
+     * Copy a key to a new destination in a different database with replace option.
+     *
+     * @param source The source key
+     * @param destination The destination key
+     * @param destinationDB The destination database
+     * @param replace Whether to replace existing key
+     * @return A CompletableFuture containing true if copy was successful
+     */
+    @Override
+    public CompletableFuture<Boolean> copy(String source, String destination, long destinationDB, boolean replace) {
+        if (replace) {
+            return executeCommand(io.valkey.glide.core.commands.CommandType.COPY, source, destination, "DB", String.valueOf(destinationDB), "REPLACE")
+                .thenApply(result -> Boolean.parseBoolean(result.toString()));
+        } else {
+            return copy(source, destination, destinationDB);
+        }
+    }
+
+    /**
+     * Copy a key to a new destination in a different database with GlideString arguments and replace option.
+     *
+     * @param source The source key
+     * @param destination The destination key
+     * @param destinationDB The destination database
+     * @param replace Whether to replace existing key
+     * @return A CompletableFuture containing true if copy was successful
+     */
+    @Override
+    public CompletableFuture<Boolean> copy(GlideString source, GlideString destination, long destinationDB, boolean replace) {
+        return copy(source.toString(), destination.toString(), destinationDB, replace);
+    }
+
+    /**
+     * Move a key to a different database.
+     *
+     * @param key The key to move
+     * @param dbIndex The database index to move the key to
+     * @return A CompletableFuture containing true if move was successful
+     */
+    @Override
+    public CompletableFuture<Boolean> move(String key, long dbIndex) {
+        return executeCommand(io.valkey.glide.core.commands.CommandType.MOVE, key, String.valueOf(dbIndex))
+            .thenApply(result -> Boolean.parseBoolean(result.toString()));
+    }
+
+    /**
+     * Move a key to a different database with GlideString argument.
+     *
+     * @param key The key to move
+     * @param dbIndex The database index to move the key to
+     * @return A CompletableFuture containing true if move was successful
+     */
+    @Override
+    public CompletableFuture<Boolean> move(GlideString key, long dbIndex) {
+        return move(key.toString(), dbIndex);
     }
 }

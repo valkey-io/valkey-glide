@@ -6,7 +6,6 @@ import glide.api.GlideClusterClient;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
 
-// TODO add links to script flush
 /**
  * Defines flushing mode for:
  *

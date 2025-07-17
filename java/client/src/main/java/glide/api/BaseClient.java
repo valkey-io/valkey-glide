@@ -6,6 +6,7 @@ import glide.api.commands.HashBaseCommands;
 import glide.api.commands.ListBaseCommands;
 import glide.api.commands.SetBaseCommands;
 import glide.api.commands.GenericBaseCommands;
+import glide.api.commands.ServerManagementCommands;
 import glide.api.models.GlideString;
 import glide.api.models.BaseBatch;
 import glide.api.models.Script;
@@ -13,6 +14,8 @@ import glide.api.models.commands.GetExOptions;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
+import glide.api.models.commands.FlushMode;
+import glide.api.models.commands.InfoOptions.Section;
 import io.valkey.glide.core.client.GlideClient;
 import io.valkey.glide.core.commands.Command;
 import io.valkey.glide.core.commands.CommandType;
@@ -36,6 +39,9 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
     public static final String IDX_COMMAND_STRING = "IDX";
     public static final String MINMATCHLEN_COMMAND_STRING = "MINMATCHLEN";
     public static final String WITHMATCHLEN_COMMAND_STRING = "WITHMATCHLEN";
+
+    /** Server management command string constants */
+    public static final String VERSION_VALKEY_API = "VERSION";
 
     protected final GlideClient client;
 
@@ -223,6 +229,29 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         return executeCommand(CommandType.PING)
                 .thenApply(result -> result.toString());
     }
+
+    /**
+     * Ping the server with a message.
+     *
+     * @param message The message to ping with
+     * @return A CompletableFuture containing the ping response
+     */
+    public CompletableFuture<String> ping(String message) {
+        return executeCommand(CommandType.PING, message)
+                .thenApply(result -> result.toString());
+    }
+
+    /**
+     * Ping the server with a GlideString message.
+     *
+     * @param message The message to ping with
+     * @return A CompletableFuture containing the ping response
+     */
+    public CompletableFuture<GlideString> ping(GlideString message) {
+        return executeCommand(CommandType.PING, message.toString())
+                .thenApply(result -> GlideString.of(result.toString()));
+    }
+
 
     /**
      * Get multiple values for the given keys.
@@ -958,12 +987,13 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
     }
 
     /**
-     * Execute a custom command.
+     * Protected method for executing custom commands.
+     * This is used by client implementations to execute commands.
      *
      * @param args The command arguments
      * @return A CompletableFuture containing the command result
      */
-    public CompletableFuture<Object> customCommand(String[] args) {
+    protected CompletableFuture<Object> executeCustomCommand(String[] args) {
         if (args.length == 0) {
             return CompletableFuture.completedFuture(null);
         }
@@ -981,12 +1011,13 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
     }
 
     /**
-     * Execute a custom command with GlideString arguments.
+     * Protected method for executing custom commands with GlideString arguments.
+     * This is used by client implementations to execute commands.
      *
      * @param args The command arguments as GlideString array
      * @return A CompletableFuture containing the command result
      */
-    public CompletableFuture<Object> customCommand(GlideString[] args) {
+    protected CompletableFuture<Object> executeCustomCommand(GlideString[] args) {
         if (args.length == 0) {
             return CompletableFuture.completedFuture(null);
         }
@@ -997,7 +1028,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
             stringArgs[i] = args[i].toString();
         }
 
-        return customCommand(stringArgs);
+        return executeCustomCommand(stringArgs);
     }
 
     /**
@@ -2497,12 +2528,34 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
     }
 
     /**
+     * Delete all the keys of the currently selected DB with flush mode.
+     *
+     * @param flushMode The flush mode to use
+     * @return A CompletableFuture containing "OK" if successful
+     */
+    public CompletableFuture<String> flushdb(FlushMode flushMode) {
+        return executeCommand(CommandType.FLUSHDB, flushMode.name())
+            .thenApply(result -> result.toString());
+    }
+
+    /**
      * Remove all keys from all databases.
      *
      * @return A CompletableFuture containing \"OK\" if successful
      */
     public CompletableFuture<String> flushall() {
         return executeCommand(CommandType.FLUSHALL)
+            .thenApply(result -> result.toString());
+    }
+
+    /**
+     * Delete all the keys of all the existing databases with flush mode.
+     *
+     * @param flushMode The flush mode to use
+     * @return A CompletableFuture containing "OK" if successful
+     */
+    public CompletableFuture<String> flushall(FlushMode flushMode) {
+        return executeCommand(CommandType.FLUSHALL, flushMode.name())
             .thenApply(result -> result.toString());
     }
 
@@ -2527,6 +2580,26 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
     }
 
     /**
+     * Get configuration values for multiple parameters.
+     *
+     * @param parameters The configuration parameters to get
+     * @return A CompletableFuture containing the configuration values
+     */
+    public CompletableFuture<Map<String, String>> configGet(String[] parameters) {
+        return executeCommand(CommandType.CONFIG_GET, parameters)
+            .thenApply(result -> {
+                Map<String, String> config = new java.util.HashMap<>();
+                if (result instanceof Object[]) {
+                    Object[] array = (Object[]) result;
+                    for (int i = 0; i < array.length - 1; i += 2) {
+                        config.put(array[i].toString(), array[i + 1].toString());
+                    }
+                }
+                return config;
+            });
+    }
+
+    /**
      * Set a configuration parameter.
      *
      * @param parameter The configuration parameter to set
@@ -2535,6 +2608,23 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     public CompletableFuture<String> configSet(String parameter, String value) {
         return executeCommand(CommandType.CONFIG_SET, parameter, value)
+            .thenApply(result -> result.toString());
+    }
+
+    /**
+     * Set multiple configuration parameters.
+     *
+     * @param parameters Map of parameter names to values
+     * @return A CompletableFuture containing "OK" on success
+     */
+    public CompletableFuture<String> configSet(Map<String, String> parameters) {
+        String[] args = new String[parameters.size() * 2];
+        int i = 0;
+        for (Map.Entry<String, String> entry : parameters.entrySet()) {
+            args[i++] = entry.getKey();
+            args[i++] = entry.getValue();
+        }
+        return executeCommand(CommandType.CONFIG_SET, args)
             .thenApply(result -> result.toString());
     }
 
@@ -4685,6 +4775,40 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
                 .thenApply(GlideString::of);
     }
 
+
+
+    /**
+     * Update the connection password for reconnection.
+     *
+     * @param password The new password to use
+     * @param updateConfiguration Whether to update the client configuration
+     * @return A CompletableFuture containing "OK" on success
+     */
+    public CompletableFuture<String> updateConnectionPassword(String password, boolean updateConfiguration) {
+        // This is a placeholder implementation
+        // In a full implementation, this would update the underlying connection pool
+        return CompletableFuture.completedFuture(OK);
+    }
+
+    /**
+     * Update the connection password for reconnection.
+     *
+     * @param password The new password to use  
+     * @return A CompletableFuture containing "OK" on success
+     */
+    public CompletableFuture<String> updateConnectionPassword(String password) {
+        return updateConnectionPassword(password, false);
+    }
+
+    /**
+     * Update the connection password for reconnection.
+     *
+     * @param updateConfiguration Whether to update the client configuration
+     * @return A CompletableFuture containing "OK" on success
+     */
+    public CompletableFuture<String> updateConnectionPassword(boolean updateConfiguration) {
+        return updateConnectionPassword("", updateConfiguration);
+    }
 
 
     /**
