@@ -4,7 +4,7 @@ module glide.integTest {
     opens glide.modules;
     opens glide.standalone;
 
-    requires glide.api;
+    requires glide.client;
     requires com.google.gson;
     requires static lombok;
     requires net.bytebuddy;

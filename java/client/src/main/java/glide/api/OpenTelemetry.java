@@ -342,11 +342,11 @@ public class OpenTelemetry {
     public static synchronized void init(OpenTelemetryConfig config) {
         if (openTelemetry == null) {
             internalInit(config);
-            Logger.log(Logger.Level.INFO, "GlideOpenTelemetry", "OpenTelemetry initialized");
+            Logger.log(Logger.LogLevel.INFO, "GlideOpenTelemetry", "OpenTelemetry initialized");
             return;
         }
 
-        Logger.log(Logger.Level.WARN, "GlideOpenTelemetry", "OpenTelemetry already initialized");
+        Logger.log(Logger.LogLevel.WARN, "GlideOpenTelemetry", "OpenTelemetry already initialized");
     }
 
     private static void internalInit(OpenTelemetryConfig config) {
@@ -356,7 +356,7 @@ public class OpenTelemetry {
         int tracesSamplePercentage = -1;
         if (config.getTraces() == null && config.getMetrics() == null) {
             Logger.log(
-                    Logger.Level.INFO, "GlideOpenTelemetry", "Error: Both traces and metrics are null");
+                    Logger.LogLevel.INFO, "GlideOpenTelemetry", "Error: Both traces and metrics are null");
             throw new ConfigurationError("At least one of traces or metrics must be provided");
         }
         if (config.getTraces() != null) {

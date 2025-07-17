@@ -80,3 +80,9 @@ MANIFEST.MF
 *.so
 **/build/
 .claude/**
+
+# Java JNI implementation temporary files
+java/excluded_tests_legacy/
+java/temp/
+java/CoreFunctionalityTest.java
+java/SimpleJniTest.java

@@ -7,6 +7,10 @@
 //! Each client instance is completely isolated with its own runtime and resources.
 
 use glide_core::client::{Client, ConnectionRequest, NodeAddress, TlsMode, AuthenticationInfo};
+use glide_core::{GlideOpenTelemetry, GlideOpenTelemetryConfigBuilder, GlideOpenTelemetrySignalsExporter, GlideSpan};
+
+// Import GlideSpanStatus from telemetrylib via glide_core re-export
+use telemetrylib::GlideSpanStatus;
 use redis::cluster_routing::RoutingInfo;
 use jni::objects::{JClass, JObject, JString, JObjectArray, JByteArray};
 use jni::sys::{jboolean, jint, jlong, jobject, jstring, JNI_TRUE};
@@ -1030,4 +1034,192 @@ pub extern "system" fn Java_glide_ffi_resolvers_ClusterScanCursorResolver_getFin
     };
 
     jni_result!(&mut env, result(), ptr::null_mut())
+}
+
+// =============================================================================
+// OpenTelemetry JNI Functions
+// =============================================================================
+
+/// Span registry for storing active spans
+static SPAN_REGISTRY: LazyLock<Mutex<HashMap<String, GlideSpan>>> = 
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+/// Initialize OpenTelemetry with configuration
+#[no_mangle]
+pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_initOpenTelemetry(
+    mut env: JNIEnv,
+    _class: JClass,
+    traces_endpoint: JString,
+    traces_sample_percentage: jint,
+    metrics_endpoint: JString,
+    flush_interval_ms: jlong,
+) {
+    let mut result = || -> JniResult<()> {
+        let mut config_builder = GlideOpenTelemetryConfigBuilder::default()
+            .with_flush_interval(Duration::from_millis(flush_interval_ms as u64));
+
+        // Handle traces configuration
+        if !traces_endpoint.is_null() {
+            let traces_endpoint_str: String = env.get_string(&traces_endpoint)?.into();
+            if !traces_endpoint_str.is_empty() {
+                let traces_exporter = traces_endpoint_str.parse::<GlideOpenTelemetrySignalsExporter>()
+                    .map_err(|e| crate::error::JniError::Configuration(format!("Invalid traces endpoint: {}", e)))?;
+                
+                let sample_percentage = if traces_sample_percentage >= 0 {
+                    Some(traces_sample_percentage as u32)
+                } else {
+                    None
+                };
+                
+                config_builder = config_builder.with_trace_exporter(traces_exporter, sample_percentage);
+            }
+        }
+
+        // Handle metrics configuration
+        if !metrics_endpoint.is_null() {
+            let metrics_endpoint_str: String = env.get_string(&metrics_endpoint)?.into();
+            if !metrics_endpoint_str.is_empty() {
+                let metrics_exporter = metrics_endpoint_str.parse::<GlideOpenTelemetrySignalsExporter>()
+                    .map_err(|e| crate::error::JniError::Configuration(format!("Invalid metrics endpoint: {}", e)))?;
+                
+                config_builder = config_builder.with_metrics_exporter(metrics_exporter);
+            }
+        }
+
+        let config = config_builder.build();
+        
+        // Initialize OpenTelemetry
+        GlideOpenTelemetry::initialise(config)
+            .map_err(|e| crate::error::JniError::Configuration(format!("Failed to initialize OpenTelemetry: {}", e)))?;
+
+        Ok(())
+    };
+
+    if let Err(e) = result() {
+        eprintln!("Error in initOpenTelemetry: {:?}", e);
+        // Throw Java exception
+        let _ = env.throw_new("glide/api/models/exceptions/ConfigurationError", format!("{:?}", e));
+    }
+}
+
+/// Check if OpenTelemetry is initialized
+#[no_mangle]
+pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_isInitialized(
+    _env: JNIEnv,
+    _class: JClass,
+) -> jboolean {
+    if GlideOpenTelemetry::is_initialized() {
+        JNI_TRUE
+    } else {
+        0
+    }
+}
+
+/// Create a new span and return its ID
+#[no_mangle]
+pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_createSpan(
+    mut env: JNIEnv,
+    _class: JClass,
+    span_name: JString,
+) -> jstring {
+    let mut result = || -> JniResult<jstring> {
+        let span_name_str: String = env.get_string(&span_name)?.into();
+        
+        // Create new span
+        let span = GlideOpenTelemetry::new_span(&span_name_str);
+        let span_id = span.id();
+        
+        // Store span in registry for later access
+        SPAN_REGISTRY.lock().unwrap().insert(span_id.clone(), span);
+        
+        // Return span ID as Java string
+        let java_string = env.new_string(&span_id)?;
+        Ok(java_string.into_raw())
+    };
+
+    jni_result!(&mut env, result(), ptr::null_mut())
+}
+
+/// End a span by its ID
+#[no_mangle]
+pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_endSpan(
+    mut env: JNIEnv,
+    _class: JClass,
+    span_id: JString,
+) {
+    let mut result = || -> JniResult<()> {
+        let span_id_str: String = env.get_string(&span_id)?.into();
+        
+        // Get and remove span from registry
+        if let Some(span) = SPAN_REGISTRY.lock().unwrap().remove(&span_id_str) {
+            span.end();
+        }
+        
+        Ok(())
+    };
+
+    if let Err(e) = result() {
+        eprintln!("Error in endSpan: {:?}", e);
+    }
+}
+
+/// Add event to a span
+#[no_mangle]
+pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_addEvent(
+    mut env: JNIEnv,
+    _class: JClass,
+    span_id: JString,
+    event_name: JString,
+) {
+    let mut result = || -> JniResult<()> {
+        let span_id_str: String = env.get_string(&span_id)?.into();
+        let event_name_str: String = env.get_string(&event_name)?.into();
+        
+        // Get span from registry and add event
+        if let Some(span) = SPAN_REGISTRY.lock().unwrap().get(&span_id_str) {
+            span.add_event(&event_name_str);
+        }
+        
+        Ok(())
+    };
+
+    if let Err(e) = result() {
+        eprintln!("Error in addEvent: {:?}", e);
+    }
+}
+
+/// Set span status
+#[no_mangle]
+pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_setSpanStatus(
+    mut env: JNIEnv,
+    _class: JClass,
+    span_id: JString,
+    is_error: jboolean,
+    error_message: JString,
+) {
+    let mut result = || -> JniResult<()> {
+        let span_id_str: String = env.get_string(&span_id)?.into();
+        
+        let status = if is_error != 0 {
+            let error_msg = if !error_message.is_null() {
+                env.get_string(&error_message)?.into()
+            } else {
+                "Error".to_string()
+            };
+            GlideSpanStatus::Error(error_msg)
+        } else {
+            GlideSpanStatus::Ok
+        };
+        
+        // Get span from registry and set status
+        if let Some(span) = SPAN_REGISTRY.lock().unwrap().get(&span_id_str) {
+            span.set_status(status);
+        }
+        
+        Ok(())
+    };
+
+    if let Err(e) = result() {
+        eprintln!("Error in setSpanStatus: {:?}", e);
+    }
 }

@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Test;
 
 public class LoggerTests {
 
-    private final Logger.Level DEFAULT_TEST_LOG_LEVEL = Logger.Level.WARN;
+    private final Logger.LogLevel DEFAULT_TEST_LOG_LEVEL = Logger.LogLevel.WARN;
 
     @Test
     public void init_logger() {

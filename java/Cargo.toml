@@ -18,6 +18,9 @@ redis = { path = "../glide-core/redis-rs/redis", features = ["tokio-comp"] }
 [dependencies.glide-core]
 path = "../glide-core"
 
+[dependencies.telemetrylib]
+path = "../glide-core/telemetry"
+
 [profile.release]
 opt-level = 3
 lto = "fat"

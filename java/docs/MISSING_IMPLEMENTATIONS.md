@@ -41,6 +41,23 @@ All previously missing implementations have been **successfully completed**. The
   - ✅ `getFinishedCursorHandleConstant()` - Scan completion detection
   - ✅ Integration with `glide_core::cluster_scan_container`
 
+### 4. OpenTelemetry Integration ✅ COMPLETE
+- **Complete Telemetry API**: ✅ Full OpenTelemetry integration restored
+  - ✅ `OpenTelemetry.java` - User-facing configuration and initialization API
+  - ✅ `OpenTelemetryResolver.java` - JNI bindings for native telemetry operations
+  - ✅ Complete configuration support (traces, metrics, endpoints, sampling)
+  - ✅ Span lifecycle management (create, event, status, end)
+- **Native Integration**: ✅ Full glide-core telemetry binding
+  - ✅ `initOpenTelemetry()` - Initialize telemetry with native backend
+  - ✅ `createSpan()`, `endSpan()` - Native span lifecycle management
+  - ✅ `addEvent()`, `setSpanStatus()` - Span annotation and status setting
+  - ✅ Integration with `glide_core::GlideOpenTelemetry` and `telemetrylib`
+- **Export Support**: ✅ Complete export functionality
+  - ✅ HTTP, gRPC, and file endpoint support
+  - ✅ Configurable flush intervals and sampling percentages
+  - ✅ Traces and metrics export capabilities
+  - ✅ Error handling and configuration validation
+
 ### 4. Core Architecture ✅ COMPLETE  
 - **Per-Client Architecture**: ✅ Each client instance is fully isolated
 - **Runtime Lifecycle**: ✅ Reference counting prevents premature shutdown

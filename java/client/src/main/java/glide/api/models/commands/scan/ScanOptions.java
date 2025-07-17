@@ -2,9 +2,21 @@
 package glide.api.models.commands.scan;
 
 /**
- * Stub implementation of ScanOptions to satisfy compilation requirements.
- * Full scan options will be implemented in a future version.
+ * Optional arguments for SCAN command.
  */
 public class ScanOptions {
-    // Stub implementation - methods will be added when needed
+    
+    /**
+     * Object type filter for SCAN command.
+     */
+    public enum ObjectType {
+        STRING,
+        LIST, 
+        SET,
+        ZSET,
+        HASH,
+        STREAM
+    }
+    
+    // Additional scan options to be implemented
 }
