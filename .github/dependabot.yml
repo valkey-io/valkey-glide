@@ -1,0 +1,125 @@
+# Dependabot configuration for automated dependency management
+#
+# Auto-approval timing constraints (implemented in dependabot-management.yml):
+# - Patch updates: Auto-approved after 1 hour (allowing CI completion)
+# - Minor updates: Auto-approved after 1 week (never for 0.x versions)
+# - Major updates: Never auto-approved (manual review required)
+#
+# Security policy:
+# - Major version updates always require manual review
+# - For 0.x versions: minor updates are never auto-approved (breaking changes)
+# - All PRs must pass CI checks before auto-approval
+#
+version: 2
+
+# Common configuration templates
+x-common-schedule: &common-schedule
+    interval: "weekly"
+    day: "monday"
+    time: "09:00"
+
+x-common-groups: &common-groups # Group patch updates to reduce noise
+    patch-updates:
+        update-types:
+            - "patch"
+    # Group minor updates
+    minor-updates:
+        update-types:
+            - "minor"
+
+x-base-config: &base-config
+    schedule: *common-schedule
+    open-pull-requests-limit: 10
+    groups: *common-groups
+
+updates:
+    # Enable version updates for npm (TypeScript/Node)
+    - package-ecosystem: "npm"
+      directory: "/"
+      <<: *base-config
+      labels:
+          - "dependencies"
+          - "npm"
+
+    # Enable version updates for npm (Node client)
+    - package-ecosystem: "npm"
+      directory: "/node"
+      <<: *base-config
+      labels:
+          - "dependencies"
+          - "npm"
+          - "node"
+
+    # Enable version updates for Gradle (Java)
+    - package-ecosystem: "gradle"
+      directory: "/java"
+      <<: *base-config
+      labels:
+          - "dependencies"
+          - "gradle"
+          - "java"
+
+    # Enable version updates for Cargo (Rust - glide-core)
+    - package-ecosystem: "cargo"
+      directory: "/glide-core"
+      <<: *base-config
+      labels:
+          - "dependencies"
+          - "cargo"
+          - "rust"
+
+    # Enable version updates for Cargo (Rust - Java wrapper)
+    - package-ecosystem: "cargo"
+      directory: "/java"
+      <<: *base-config
+      labels:
+          - "dependencies"
+          - "cargo"
+          - "rust"
+          - "java"
+
+    # Enable version updates for Cargo (Rust - Python wrapper)
+    - package-ecosystem: "cargo"
+      directory: "/python"
+      <<: *base-config
+      labels:
+          - "dependencies"
+          - "cargo"
+          - "rust"
+          - "python"
+
+    # Enable version updates for Go modules
+    - package-ecosystem: "gomod"
+      directory: "/go"
+      <<: *base-config
+      labels:
+          - "dependencies"
+          - "go"
+
+    # Enable version updates for pip (Python)
+    - package-ecosystem: "pip"
+      directory: "/python"
+      <<: *base-config
+      labels:
+          - "dependencies"
+          - "pip"
+          - "python"
+
+    # Enable version updates for NuGet (C#)
+    - package-ecosystem: "nuget"
+      directory: "/csharp"
+      <<: *base-config
+      labels:
+          - "dependencies"
+          - "nuget"
+          - "csharp"
+
+    # Enable version updates for GitHub Actions
+    - package-ecosystem: "github-actions"
+      directory: "/"
+      schedule: *common-schedule
+      open-pull-requests-limit: 5
+      groups: *common-groups
+      labels:
+          - "dependencies"
+          - "github-actions"
