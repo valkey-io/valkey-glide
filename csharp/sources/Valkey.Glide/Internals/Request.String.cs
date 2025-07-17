@@ -40,4 +40,7 @@ internal partial class Request
 
     public static Cmd<long, long> StringLength(GlideString key)
         => Simple<long>(RequestType.Strlen, [key]);
+
+    public static Cmd<long, long> StringAppend(ValkeyKey key, ValkeyValue value)
+        => Simple<long>(RequestType.Append, [key.ToGlideString(), value.ToGlideString()]);
 }

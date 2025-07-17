@@ -237,9 +237,122 @@ public class StringCommandTests(TestConfiguration config)
         string key = Guid.NewGuid().ToString();
         ValkeyValue newLength = await client.StringSetRangeAsync(key, 0, "Hello");
         Assert.Equal(5, (long)newLength);
-
         ValkeyValue value = await client.StringGetAsync(key);
         Assert.Equal("Hello", value.ToString());
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
+    public async Task StringAppendAsync_ExistingKey(BaseClient client)
+    {
+        string key = Guid.NewGuid().ToString();
+        string value1 = "Hello";
+        string value2 = " World";    // Set initial value
+        await client.StringSetAsync(key, value1);
+
+        // Append to existing key
+        long newLength = await client.StringAppendAsync(key, value2);
+        Assert.Equal(value1.Length + value2.Length, newLength);
+
+        // Verify the final value
+        ValkeyValue retrievedValue = await client.StringGetAsync(key);
+        Assert.Equal(value1 + value2, retrievedValue.ToString());
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
+    public async Task StringAppendAsync_NonExistentKey(BaseClient client)
+    {
+        string key = Guid.NewGuid().ToString();
+        string value = "Hello World";
+
+        // Append to non-existent key (should create it)
+        long newLength = await client.StringAppendAsync(key, value);
+        Assert.Equal(value.Length, newLength);
+
+        // Verify the value was created
+        ValkeyValue retrievedValue = await client.StringGetAsync(key);
+        Assert.Equal(value, retrievedValue.ToString());
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
+    public async Task StringAppendAsync_MultipleAppends(BaseClient client)
+    {
+        string key = Guid.NewGuid().ToString();
+        string value1 = "Hello";
+        string value2 = ";";
+        string value3 = "World";
+        string value4 = "!";
+
+        // First append
+        long length1 = await client.StringAppendAsync(key, value1);
+        Assert.Equal(value1.Length, length1);
+
+        // Second append
+        long length2 = await client.StringAppendAsync(key, value2);
+        Assert.Equal(value1.Length + value2.Length, length2);
+
+        // Third append
+        long length3 = await client.StringAppendAsync(key, value3);
+        Assert.Equal(value1.Length + value2.Length + value3.Length, length3);
+
+        // Fourth append
+        long length4 = await client.StringAppendAsync(key, value4);
+        Assert.Equal(value1.Length + value2.Length + value3.Length + value4.Length, length4);
+
+        // Verify the final value
+        ValkeyValue retrievedValue = await client.StringGetAsync(key);
+        Assert.Equal(value1 + value2 + value3 + value4, retrievedValue.ToString());
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
+    public async Task StringAppendAsync_EmptyValue(BaseClient client)
+    {
+        string key = Guid.NewGuid().ToString();
+        string initialValue = "Hello";
+        string emptyValue = "";    // Set initial value
+        await client.StringSetAsync(key, initialValue);
+
+        // Append empty value
+        long newLength = await client.StringAppendAsync(key, emptyValue);
+        Assert.Equal(initialValue.Length, newLength); // Length should remain the same
+
+        // Verify the value hasnt changed
+        ValkeyValue retrievedValue = await client.StringGetAsync(key);
+        Assert.Equal(initialValue, retrievedValue.ToString());
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
+    public async Task StringAppendAsync_UnicodeValues(BaseClient client)
+    {
+        string key = Guid.NewGuid().ToString();
+        string value1 = "שלום";
+        string value2 = " hello";
+        string value3 = "汉字";
+
+        // Get byte lengths
+        int byteLength1 = System.Text.Encoding.UTF8.GetByteCount(value1);
+        int byteLength2 = System.Text.Encoding.UTF8.GetByteCount(value2);
+        int byteLength3 = System.Text.Encoding.UTF8.GetByteCount(value3);
+
+        // First append
+        long length1 = await client.StringAppendAsync(key, value1);
+        Assert.Equal(byteLength1, length1);
+
+        // Second append
+        long length2 = await client.StringAppendAsync(key, value2);
+        Assert.Equal(byteLength1 + byteLength2, length2);
+
+        // Third append
+        long length3 = await client.StringAppendAsync(key, value3);
+        Assert.Equal(byteLength1 + byteLength2 + byteLength3, length3);
+
+        // Verify the final value
+        ValkeyValue retrievedValue = await client.StringGetAsync(key);
+        Assert.Equal(value1 + value2 + value3, retrievedValue.ToString());
     }
 
     // Utility methods for other tests

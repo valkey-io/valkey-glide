@@ -175,4 +175,29 @@ public interface IStringBaseCommands
     /// </example>
     /// </remarks>
     Task<long> StringLengthAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None);
+
+    /// <summary>
+    /// Appends a value to the string stored at key. If the key does not exist, it is created and set to an empty string.
+    /// </summary>
+    /// <seealso href="https://valkey.io/commands/append/">valkey.io</seealso>
+    /// <param name="key">The key of the string to append to.</param>
+    /// <param name="value">The value to append to the string.</param>
+    /// <param name="flags">The flags to use for this operation. Currently flags are ignored.</param>
+    /// <returns>
+    /// The length of the string after the append operation.<br/>
+    /// If key does not exist, it is treated as an empty string, and the command returns the length of the appended value.
+    /// </returns>
+    /// <remarks>
+    /// <example>
+    /// <code>
+    /// await client.StringSetAsync("key", "Hello");
+    /// long newLength = await client.StringAppendAsync("key", " World");
+    /// Console.WriteLine(newLength); // Output: 11
+    /// 
+    /// ValkeyValue value = await client.StringGetAsync("key");
+    /// Console.WriteLine(value.ToString()); // Output: "Hello World"
+    /// </code>
+    /// </example>
+    /// </remarks>
+    Task<long> StringAppendAsync(ValkeyKey key, ValkeyValue value, CommandFlags flags = CommandFlags.None);
 }

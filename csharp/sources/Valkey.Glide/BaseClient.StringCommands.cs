@@ -27,4 +27,7 @@ public abstract partial class BaseClient : IStringBaseCommands
 
     public async Task<long> StringLengthAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None)
         => await Command(Request.StringLength(key));
+
+    public async Task<long> StringAppendAsync(ValkeyKey key, ValkeyValue value, CommandFlags flags = CommandFlags.None)
+        => await Command(Request.StringAppend(key, value));
 }
