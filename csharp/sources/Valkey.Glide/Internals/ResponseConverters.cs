@@ -50,8 +50,6 @@ internal class ResponseConverters
     /// <exception cref="Exception">When <paramref name="value"/> has incorrect type or value.</exception>
     public static T HandleServerValue<R, T>(object? value, bool isNullable, Func<R, T> converter)
     {
-        Console.WriteLine($"Handling value: {value} ({value?.GetType().GetRealTypeName()})");
-
         if (value is null)
         {
             if (isNullable)
