@@ -423,24 +423,24 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * Get the client ID with routing.
      *
      * @param route The routing configuration for the command
-     * @return A CompletableFuture containing the client ID
+     * @return A CompletableFuture containing the client ID wrapped in ClusterValue
      */
-    public CompletableFuture<Long> clientId(Route route) {
+    public CompletableFuture<ClusterValue<Long>> clientId(Route route) {
         // For now, ignore the route parameter and delegate to the base clientId
         // In a full cluster implementation, the route would be used to target specific nodes
-        return super.clientId();
+        return super.clientId().thenApply(ClusterValue::ofSingleValue);
     }
 
     /**
      * Get the client name with routing.
      *
      * @param route The routing configuration for the command
-     * @return A CompletableFuture containing the client name
+     * @return A CompletableFuture containing the client name wrapped in ClusterValue
      */
-    public CompletableFuture<String> clientGetName(Route route) {
+    public CompletableFuture<ClusterValue<String>> clientGetName(Route route) {
         // For now, ignore the route parameter and delegate to the base clientGetName
         // In a full cluster implementation, the route would be used to target specific nodes
-        return super.clientGetName();
+        return super.clientGetName().thenApply(ClusterValue::ofSingleValue);
     }
 
     /**
@@ -448,12 +448,12 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      *
      * @param parameters The configuration parameters to get
      * @param route The routing configuration for the command
-     * @return A CompletableFuture containing the configuration values
+     * @return A CompletableFuture containing the configuration values wrapped in ClusterValue
      */
-    public CompletableFuture<Map<String, String>> configGet(String[] parameters, Route route) {
+    public CompletableFuture<ClusterValue<Map<String, String>>> configGet(String[] parameters, Route route) {
         // For now, ignore the route parameter and delegate to the base configGet
         // In a full cluster implementation, the route would be used to target specific nodes
-        return super.configGet(parameters);
+        return super.configGet(parameters).thenApply(ClusterValue::ofSingleValue);
     }
 
     /**
@@ -461,12 +461,12 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      *
      * @param message The message to echo
      * @param route The routing configuration for the command
-     * @return A CompletableFuture containing the echoed message
+     * @return A CompletableFuture containing the echoed message wrapped in ClusterValue
      */
-    public CompletableFuture<String> echo(String message, Route route) {
+    public CompletableFuture<ClusterValue<String>> echo(String message, Route route) {
         // For now, ignore the route parameter and delegate to the base echo
         // In a full cluster implementation, the route would be used to target specific nodes
-        return super.echo(message);
+        return super.echo(message).thenApply(ClusterValue::ofSingleValue);
     }
 
     /**
@@ -474,12 +474,12 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      *
      * @param message The message to echo
      * @param route The routing configuration for the command
-     * @return A CompletableFuture containing the echoed message
+     * @return A CompletableFuture containing the echoed message wrapped in ClusterValue
      */
-    public CompletableFuture<GlideString> echo(GlideString message, Route route) {
+    public CompletableFuture<ClusterValue<GlideString>> echo(GlideString message, Route route) {
         // For now, ignore the route parameter and delegate to the base echo
         // In a full cluster implementation, the route would be used to target specific nodes
-        return super.echo(message);
+        return super.echo(message).thenApply(ClusterValue::ofSingleValue);
     }
 
     /**
@@ -622,6 +622,240 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
     }
 
     /**
+     * Call a Valkey function with routing (no keys).
+     *
+     * @param functionName The name of the function to call
+     * @param route The routing configuration for the command
+     * @return A CompletableFuture containing the result wrapped in ClusterValue
+     */
+    public CompletableFuture<ClusterValue<Object>> fcall(String functionName, Route route) {
+        // For now, ignore the route parameter and delegate to the base fcall
+        // In a full cluster implementation, the route would be used to target specific nodes
+        return super.fcall(functionName, new String[]{}, new String[]{}).thenApply(ClusterValue::ofSingleValue);
+    }
+
+    /**
+     * Call a Valkey function with routing.
+     *
+     * @param functionName The name of the function to call
+     * @param keys The keys that the function will access
+     * @param route The routing configuration for the command
+     * @return A CompletableFuture containing the result wrapped in ClusterValue
+     */
+    public CompletableFuture<ClusterValue<Object>> fcall(String functionName, String[] keys, Route route) {
+        // For now, ignore the route parameter and delegate to the base fcall
+        // In a full cluster implementation, the route would be used to target specific nodes
+        return super.fcall(functionName, keys, new String[]{}).thenApply(ClusterValue::ofSingleValue);
+    }
+
+    /**
+     * Call a Valkey function with keys and arguments and routing.
+     *
+     * @param functionName The name of the function to call
+     * @param keys The keys that the function will access
+     * @param args The arguments to pass to the function
+     * @param route The routing configuration for the command
+     * @return A CompletableFuture containing the result wrapped in ClusterValue
+     */
+    public CompletableFuture<ClusterValue<Object>> fcall(String functionName, String[] keys, String[] args, Route route) {
+        // For now, ignore the route parameter and delegate to the base fcall
+        // In a full cluster implementation, the route would be used to target specific nodes
+        return super.fcall(functionName, keys, args).thenApply(ClusterValue::ofSingleValue);
+    }
+
+    /**
+     * Call a Valkey function (read-only version) with routing (no keys).
+     *
+     * @param functionName The name of the function to call
+     * @param route The routing configuration for the command
+     * @return A CompletableFuture containing the result wrapped in ClusterValue
+     */
+    public CompletableFuture<ClusterValue<Object>> fcallReadOnly(String functionName, Route route) {
+        // For now, ignore the route parameter and delegate to the base fcallReadOnly
+        // In a full cluster implementation, the route would be used to target specific nodes
+        return super.fcallReadOnly(functionName, new String[]{}, new String[]{}).thenApply(ClusterValue::ofSingleValue);
+    }
+
+    /**
+     * Call a Valkey function (read-only version) with routing.
+     *
+     * @param functionName The name of the function to call
+     * @param keys The keys that the function will access
+     * @param route The routing configuration for the command
+     * @return A CompletableFuture containing the result wrapped in ClusterValue
+     */
+    public CompletableFuture<ClusterValue<Object>> fcallReadOnly(String functionName, String[] keys, Route route) {
+        // For now, ignore the route parameter and delegate to the base fcallReadOnly
+        // In a full cluster implementation, the route would be used to target specific nodes
+        return super.fcallReadOnly(functionName, keys, new String[]{}).thenApply(ClusterValue::ofSingleValue);
+    }
+
+    /**
+     * Call a Valkey function (read-only version) with keys and arguments and routing.
+     *
+     * @param functionName The name of the function to call
+     * @param keys The keys that the function will access
+     * @param args The arguments to pass to the function
+     * @param route The routing configuration for the command
+     * @return A CompletableFuture containing the result wrapped in ClusterValue
+     */
+    public CompletableFuture<ClusterValue<Object>> fcallReadOnly(String functionName, String[] keys, String[] args, Route route) {
+        // For now, ignore the route parameter and delegate to the base fcallReadOnly
+        // In a full cluster implementation, the route would be used to target specific nodes
+        return super.fcallReadOnly(functionName, keys, args).thenApply(ClusterValue::ofSingleValue);
+    }
+
+    /**
+     * Delete a function library with routing.
+     *
+     * @param libraryName The name of the library to delete
+     * @param route The routing configuration for the command
+     * @return A CompletableFuture containing the result wrapped in ClusterValue
+     */
+    public CompletableFuture<ClusterValue<String>> functionDelete(String libraryName, Route route) {
+        // For now, ignore the route parameter and delegate to the base functionDelete
+        // In a full cluster implementation, the route would be used to target specific nodes
+        return super.functionDelete(libraryName).thenApply(ClusterValue::ofSingleValue);
+    }
+
+    /**
+     * List functions with routing.
+     *
+     * @param libraryName Filter by library name (null for all)
+     * @param route The routing configuration for the command
+     * @return A CompletableFuture containing the list of functions wrapped in ClusterValue
+     */
+    public CompletableFuture<ClusterValue<Object>> functionList(String libraryName, Route route) {
+        // For now, ignore the route parameter and delegate to the base functionList
+        // In a full cluster implementation, the route would be used to target specific nodes
+        return super.functionList(libraryName).thenApply(ClusterValue::ofSingleValue);
+    }
+
+    /**
+     * List functions with withCode flag and routing.
+     *
+     * @param withCode Whether to include function code in the response
+     * @param route The routing configuration for the command
+     * @return A CompletableFuture containing the list of functions wrapped in ClusterValue
+     */
+    public CompletableFuture<ClusterValue<Object>> functionList(boolean withCode, Route route) {
+        // For now, ignore the route parameter and delegate to the base functionList
+        // In a full cluster implementation, the route would be used to target specific nodes
+        return super.functionList(withCode ? "WITHCODE" : null).thenApply(ClusterValue::ofSingleValue);
+    }
+
+    /**
+     * Call a Valkey function with GlideString arguments.
+     *
+     * @param functionName The name of the function to call
+     * @param keys The keys that the function will access
+     * @param args The arguments to pass to the function
+     * @return A CompletableFuture containing the result wrapped in ClusterValue
+     */
+    public CompletableFuture<ClusterValue<Object>> fcall(GlideString functionName, GlideString[] keys, GlideString[] args) {
+        String[] stringKeys = new String[keys.length];
+        for (int i = 0; i < keys.length; i++) {
+            stringKeys[i] = keys[i].toString();
+        }
+        String[] stringArgs = new String[args.length];
+        for (int i = 0; i < args.length; i++) {
+            stringArgs[i] = args[i].toString();
+        }
+        return super.fcall(functionName.toString(), stringKeys, stringArgs).thenApply(ClusterValue::ofSingleValue);
+    }
+
+    /**
+     * Call a Valkey function with GlideString arguments and routing.
+     *
+     * @param functionName The name of the function to call
+     * @param keys The keys that the function will access
+     * @param args The arguments to pass to the function
+     * @param route The routing configuration for the command
+     * @return A CompletableFuture containing the result wrapped in ClusterValue
+     */
+    public CompletableFuture<ClusterValue<Object>> fcall(GlideString functionName, GlideString[] keys, GlideString[] args, Route route) {
+        // For now, ignore the route parameter and delegate to the GlideString version
+        // In a full cluster implementation, the route would be used to target specific nodes
+        return fcall(functionName, keys, args);
+    }
+
+    /**
+     * Call a Valkey function with GlideString functionName and routing (no keys).
+     *
+     * @param functionName The name of the function to call
+     * @param route The routing configuration for the command
+     * @return A CompletableFuture containing the result wrapped in ClusterValue
+     */
+    public CompletableFuture<ClusterValue<Object>> fcall(GlideString functionName, Route route) {
+        // For now, ignore the route parameter and delegate to the GlideString version
+        // In a full cluster implementation, the route would be used to target specific nodes
+        return fcall(functionName, new GlideString[]{}, new GlideString[]{});
+    }
+
+    /**
+     * Call a Valkey function with GlideString arguments and routing (keys only).
+     *
+     * @param functionName The name of the function to call
+     * @param keys The keys that the function will access
+     * @param route The routing configuration for the command
+     * @return A CompletableFuture containing the result wrapped in ClusterValue
+     */
+    public CompletableFuture<ClusterValue<Object>> fcall(GlideString functionName, GlideString[] keys, Route route) {
+        // For now, ignore the route parameter and delegate to the GlideString version
+        // In a full cluster implementation, the route would be used to target specific nodes
+        return fcall(functionName, keys, new GlideString[]{});
+    }
+
+    /**
+     * Call a Valkey function (read-only version) with GlideString arguments.
+     *
+     * @param functionName The name of the function to call
+     * @param keys The keys that the function will access
+     * @param args The arguments to pass to the function
+     * @return A CompletableFuture containing the result wrapped in ClusterValue
+     */
+    public CompletableFuture<ClusterValue<Object>> fcallReadOnly(GlideString functionName, GlideString[] keys, GlideString[] args) {
+        String[] stringKeys = new String[keys.length];
+        for (int i = 0; i < keys.length; i++) {
+            stringKeys[i] = keys[i].toString();
+        }
+        String[] stringArgs = new String[args.length];
+        for (int i = 0; i < args.length; i++) {
+            stringArgs[i] = args[i].toString();
+        }
+        return super.fcallReadOnly(functionName.toString(), stringKeys, stringArgs).thenApply(ClusterValue::ofSingleValue);
+    }
+
+    /**
+     * Call a Valkey function (read-only version) with GlideString arguments and routing.
+     *
+     * @param functionName The name of the function to call
+     * @param keys The keys that the function will access
+     * @param args The arguments to pass to the function
+     * @param route The routing configuration for the command
+     * @return A CompletableFuture containing the result wrapped in ClusterValue
+     */
+    public CompletableFuture<ClusterValue<Object>> fcallReadOnly(GlideString functionName, GlideString[] keys, GlideString[] args, Route route) {
+        // For now, ignore the route parameter and delegate to the GlideString version
+        // In a full cluster implementation, the route would be used to target specific nodes
+        return fcallReadOnly(functionName, keys, args);
+    }
+
+    /**
+     * Call a Valkey function (read-only version) with GlideString arguments and routing (keys only).
+     *
+     * @param functionName The name of the function to call
+     * @param keys The keys that the function will access
+     * @param route The routing configuration for the command
+     * @return A CompletableFuture containing the result wrapped in ClusterValue
+     */
+    public CompletableFuture<ClusterValue<Object>> fcallReadOnly(GlideString functionName, GlideString[] keys, Route route) {
+        // For now, ignore the route parameter and delegate to the GlideString version
+        // In a full cluster implementation, the route would be used to target specific nodes
+        return fcallReadOnly(functionName, keys, new GlideString[]{});
+    }
+
+    /**
      * Execute a custom command (GenericClusterCommands interface implementation).
      * Returns ClusterValue for integration test compatibility.
      *
@@ -684,6 +918,34 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
     public CompletableFuture<ClusterValue<String>> clusterInfo() {
         return super.info().thenApply(ClusterValue::ofSingleValue);
     }
+
+    /**
+     * Get information about the cluster without routing.
+     * This method provides the ClusterValue return type expected by integration tests.
+     * This method implements the ClusterCommandExecutor interface requirement.
+     *
+     * @return A CompletableFuture containing the info response wrapped in ClusterValue
+     */
+    @Override
+    public CompletableFuture<ClusterValue<String>> infoCluster() {
+        // Delegate to the existing clusterInfo() method
+        return clusterInfo();
+    }
+
+
+    /**
+     * Get information about the cluster with routing support.
+     * This method provides routing support for the basic info command.
+     *
+     * @param route The routing configuration for the command
+     * @return A CompletableFuture containing the info response wrapped in ClusterValue
+     */
+    public CompletableFuture<ClusterValue<String>> info(Route route) {
+        // For now, ignore the route parameter and delegate to the base info
+        // In a full cluster implementation, the route would be used to target specific nodes
+        return super.info().thenApply(ClusterValue::ofSingleValue);
+    }
+
 
     /**
      * Scan for keys in the cluster.

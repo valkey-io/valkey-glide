@@ -41,7 +41,7 @@
 
 ### ⚠️ **Remaining Work**
 - **API Alignment**: Method signatures must match test expectations
-- **Function API**: Missing fcall/fcallReadOnly overloads  
+- **Function API**: Missing fcall/fcallReadOnly overloads
 - **Batch Commands**: Missing ClusterBatch/Batch methods
 - **Routing Support**: Missing Route parameter overloads
 
@@ -55,7 +55,7 @@
 
 ### Error Categories
 1. **Function API Mismatches** (~500 errors)
-2. **Missing Routing Support** (~400 errors)  
+2. **Missing Routing Support** (~400 errors)
 3. **Missing ClusterBatch Methods** (~300 errors)
 4. **Return Type Mismatches** (~300 errors)
 5. **Method Signature Mismatches** (~222 errors)
@@ -98,7 +98,7 @@
 ### Current Metrics
 - **Client Compilation**: ✅ 0 errors
 - **Integration Test Compilation**: ❌ 1,722 errors
-- **Performance**: ✅ 1.8-2.9x improvements
+- **Performance**: ✅ 1.8-2.1x improvements
 - **Code Quality**: ✅ Production-ready
 
 ### Target Metrics

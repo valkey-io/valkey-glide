@@ -47,4 +47,17 @@ public interface ClusterCommandExecutor {
      * @return A CompletableFuture containing the info response wrapped in ClusterValue
      */
     CompletableFuture<ClusterValue<String>> info(InfoOptions.Section[] sections, Object route);
+
+    /**
+     * Get information about the cluster without any parameters.
+     * This method provides cluster-compatible return type for the basic info command.
+     * Note: This method conflicts with BaseClient.info() inheritance.
+     * Implementation should use clusterInfo() to provide this functionality.
+     *
+     * @return A CompletableFuture containing the info response wrapped in ClusterValue
+     */
+    default CompletableFuture<ClusterValue<String>> infoCluster() {
+        // Default implementation - should be overridden by implementing class
+        throw new UnsupportedOperationException("infoCluster() method must be implemented by cluster client");
+    }
 }

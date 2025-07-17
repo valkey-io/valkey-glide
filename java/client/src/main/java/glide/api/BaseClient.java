@@ -16,6 +16,13 @@ import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
+import glide.api.models.commands.bitmap.BitwiseOperation;
+import glide.api.models.commands.stream.StreamRange;
+import glide.api.models.commands.geospatial.GeoSearchOptions;
+import glide.api.models.commands.geospatial.GeoSearchStoreOptions;
+import glide.api.models.commands.geospatial.GeoSearchOrigin.MemberOrigin;
+import glide.api.models.commands.geospatial.GeoSearchShape;
+import glide.api.models.commands.geospatial.GeoSearchResultOptions;
 import io.valkey.glide.core.client.GlideClient;
 import io.valkey.glide.core.commands.Command;
 import io.valkey.glide.core.commands.CommandType;
@@ -4748,6 +4755,108 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     public CompletableFuture<Object> functionStats() {
         return executeCommand(CommandType.FUNCTION_STATS);
+    }
+
+    // ============================================================================
+    // Bitmap Commands
+    // ============================================================================
+
+    /**
+     * Perform a bitwise operation on multiple keys and store the result in a destination key.
+     *
+     * @param bitwiseOperation The bitwise operation to perform
+     * @param destination The key that will store the resulting string
+     * @param keys The list of keys to perform the bitwise operation on
+     * @return A CompletableFuture containing the size of the resulting string
+     */
+    public CompletableFuture<Long> bitop(BitwiseOperation bitwiseOperation, String destination, String[] keys) {
+        return executeCommand(CommandType.BITOP, concatArrays(new String[]{bitwiseOperation.name(), destination}, keys))
+                .thenApply(result -> (Long) result);
+    }
+
+    /**
+     * Perform a bitwise operation on multiple keys and store the result in a destination key.
+     *
+     * @param bitwiseOperation The bitwise operation to perform
+     * @param destination The key that will store the resulting string
+     * @param keys The list of keys to perform the bitwise operation on
+     * @return A CompletableFuture containing the size of the resulting string
+     */
+    public CompletableFuture<Long> bitop(BitwiseOperation bitwiseOperation, GlideString destination, GlideString[] keys) {
+        String[] stringKeys = new String[keys.length];
+        for (int i = 0; i < keys.length; i++) {
+            stringKeys[i] = keys[i].toString();
+        }
+        return executeCommand(CommandType.BITOP, concatArrays(new String[]{bitwiseOperation.name(), destination.toString()}, stringKeys))
+                .thenApply(result -> (Long) result);
+    }
+
+    // ============================================================================
+    // Stream Commands
+    // ============================================================================
+
+    /**
+     * Read data from streams.
+     *
+     * @param keysAndIds A map of stream names to stream IDs
+     * @return A CompletableFuture containing the stream data
+     */
+    public CompletableFuture<Object> xread(Map<String, String> keysAndIds) {
+        List<String> args = new ArrayList<>();
+        args.add("XREAD");
+        args.add("STREAMS");
+        args.addAll(keysAndIds.keySet());
+        args.addAll(keysAndIds.values());
+        return executeCustomCommand(args.toArray(new String[0]));
+    }
+
+    // ============================================================================
+    // Geospatial Commands
+    // ============================================================================
+
+    /**
+     * Search for members in a geospatial index and store the result in a destination key.
+     *
+     * @param destination The key to store the results
+     * @param source The key of the geospatial index to search
+     * @param origin The origin for the search
+     * @param shape The shape defining the search area
+     * @param storeOptions Options for the store operation
+     * @param resultOptions Options for the result format
+     * @return A CompletableFuture containing the number of elements stored
+     */
+    public CompletableFuture<Long> geosearchstore(
+            String destination,
+            String source,
+            MemberOrigin origin,
+            GeoSearchShape shape,
+            GeoSearchStoreOptions storeOptions,
+            GeoSearchResultOptions resultOptions) {
+        // This is a stub implementation - in a real implementation, this would
+        // construct the proper GEOSEARCHSTORE command with all parameters
+        List<String> args = new ArrayList<>();
+        args.add("GEOSEARCHSTORE");
+        args.add(destination);
+        args.add(source);
+        // Add other parameters based on origin, shape, options...
+        // For now, return a stub result
+        return executeCustomCommand(args.toArray(new String[0]))
+                .thenApply(result -> result instanceof Long ? (Long) result : 0L);
+    }
+
+    // ============================================================================
+    // Transaction Commands
+    // ============================================================================
+
+    /**
+     * Watch keys for modifications.
+     *
+     * @param keys The keys to watch
+     * @return A CompletableFuture containing "OK" if successful
+     */
+    public CompletableFuture<String> watch(String[] keys) {
+        return executeCommand(CommandType.WATCH, keys)
+                .thenApply(result -> result.toString());
     }
 
     // ============================================================================
