@@ -324,6 +324,27 @@ internal class BatchTestUtils
         return testData;
     }
 
+    public static List<TestInfo> CreateConnectionManagementTest(IBatch batch, bool isAtomic)
+    {
+        List<TestInfo> testData = [];
+
+        _ = batch.Ping();
+        testData.Add(new(TimeSpan.Zero, "Ping()", true));
+
+        ValkeyValue pingMessage = "Hello Valkey!";
+        _ = batch.Ping(pingMessage);
+        testData.Add(new(TimeSpan.Zero, "Ping(message)", true));
+
+        ValkeyValue echoMessage = "Echo test message";
+        _ = batch.Echo(echoMessage);
+        testData.Add(new(echoMessage, "Echo(message)"));
+
+        _ = batch.Echo("");
+        testData.Add(new(new ValkeyValue(""), "Echo(empty)"));
+
+        return testData;
+    }
+
     public static TheoryData<BatchTestData> GetTestClientWithAtomic =>
         [.. TestConfiguration.TestClients.SelectMany(r => new[] { true, false }.SelectMany(isAtomic =>
             new BatchTestData[] {
@@ -331,6 +352,7 @@ internal class BatchTestUtils
                 new("Set commands", r.Data, CreateSetTest, isAtomic),
                 new("Generic commands", r.Data, CreateGenericTest, isAtomic),
                 new("List commands", r.Data, CreateListTest, isAtomic),
+                new("Connection Management commands", r.Data, CreateConnectionManagementTest, isAtomic),
             }))];
 }
 
