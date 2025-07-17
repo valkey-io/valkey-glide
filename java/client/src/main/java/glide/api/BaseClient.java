@@ -4686,6 +4686,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
     }
 
 
+
     /**
      * Close the client connection.
      */

@@ -1,7 +1,6 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.logging;
 
-import java.util.logging.Level;
 
 /**
  * Simplified logging system for Valkey GLIDE Java client.
@@ -46,12 +45,12 @@ public class Logger {
             logFile = fileName;
             
             // Configure Java logger level
-            Level javaLevel = switch (level) {
-                case ERROR -> Level.SEVERE;
-                case WARN -> Level.WARNING;
-                case INFO -> Level.INFO;
-                case DEBUG -> Level.FINE;
-                case TRACE -> Level.FINEST;
+            java.util.logging.Level javaLevel = switch (level) {
+                case ERROR -> java.util.logging.Level.SEVERE;
+                case WARN -> java.util.logging.Level.WARNING;
+                case INFO -> java.util.logging.Level.INFO;
+                case DEBUG -> java.util.logging.Level.FINE;
+                case TRACE -> java.util.logging.Level.FINEST;
             };
             
             javaLogger.setLevel(javaLevel);
@@ -85,12 +84,12 @@ public class Logger {
             String formattedMessage = String.format("[%s] %s: %s", 
                 level.name(), identifier, message);
             
-            Level javaLevel = switch (level) {
-                case ERROR -> Level.SEVERE;
-                case WARN -> Level.WARNING;
-                case INFO -> Level.INFO;
-                case DEBUG -> Level.FINE;
-                case TRACE -> Level.FINEST;
+            java.util.logging.Level javaLevel = switch (level) {
+                case ERROR -> java.util.logging.Level.SEVERE;
+                case WARN -> java.util.logging.Level.WARNING;
+                case INFO -> java.util.logging.Level.INFO;
+                case DEBUG -> java.util.logging.Level.FINE;
+                case TRACE -> java.util.logging.Level.FINEST;
             };
             
             javaLogger.log(javaLevel, formattedMessage);
@@ -132,5 +131,36 @@ public class Logger {
      */
     public static String getLogFile() {
         return logFile;
+    }
+    
+    /**
+     * Convenience methods for backward compatibility.
+     */
+    public static int init(LogLevel level) {
+        return init(level, null);
+    }
+    
+    public static void setLoggerConfig(LogLevel level) {
+        currentLevel = level;
+        java.util.logging.Level javaLevel = switch (level) {
+            case ERROR -> java.util.logging.Level.SEVERE;
+            case WARN -> java.util.logging.Level.WARNING;
+            case INFO -> java.util.logging.Level.INFO;
+            case DEBUG -> java.util.logging.Level.FINE;
+            case TRACE -> java.util.logging.Level.FINEST;
+        };
+        javaLogger.setLevel(javaLevel);
+    }
+    
+    /**
+     * Level enum alias for backward compatibility.
+     */
+    public static class Level {
+        public static final LogLevel OFF = LogLevel.ERROR;
+        public static final LogLevel ERROR = LogLevel.ERROR;
+        public static final LogLevel WARN = LogLevel.WARN;
+        public static final LogLevel INFO = LogLevel.INFO;
+        public static final LogLevel DEBUG = LogLevel.DEBUG;
+        public static final LogLevel TRACE = LogLevel.TRACE;
     }
 }

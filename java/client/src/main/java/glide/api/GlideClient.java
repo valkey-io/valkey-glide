@@ -7,6 +7,7 @@ import glide.api.models.commands.InfoOptions;
 import glide.api.models.Batch;
 import glide.api.models.Transaction;
 import glide.api.models.commands.batch.BatchOptions;
+import glide.api.models.GlideString;
 import glide.api.commands.TransactionsCommands;
 import java.util.concurrent.CompletableFuture;
 
@@ -65,16 +66,6 @@ public class GlideClient extends BaseClient implements TransactionsCommands {
         return new io.valkey.glide.core.client.GlideClient.Config(addresses);
     }
 
-    /**
-     * Get information about the server.
-     *
-     * @param sections The sections to retrieve
-     * @return A CompletableFuture containing the info response
-     */
-    public CompletableFuture<String> info(InfoOptions.Section[] sections) {
-        return executeCommand(io.valkey.glide.core.commands.CommandType.INFO)
-            .thenApply(result -> result.toString());
-    }
 
     /**
      * Select the DB with the specified zero-based numeric index.
@@ -162,5 +153,20 @@ public class GlideClient extends BaseClient implements TransactionsCommands {
         // For now, we implement this by ignoring options and delegating to the base implementation
         // In a full implementation, options would be passed to the core client
         return exec(batch, raiseOnError);
+    }
+
+
+    /**
+     * Get server information.
+     *
+     * @param sections Array of info sections to retrieve
+     * @return A CompletableFuture containing the info response
+     */
+    public CompletableFuture<String> info(InfoOptions.Section[] sections) {
+        String[] sectionStrings = new String[sections.length];
+        for (int i = 0; i < sections.length; i++) {
+            sectionStrings[i] = sections[i].name().toLowerCase();
+        }
+        return super.info(sectionStrings);
     }
 }
