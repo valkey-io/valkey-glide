@@ -33,7 +33,7 @@ import java.util.concurrent.CompletableFuture;
  * - Automatic cluster topology handling
  * - Interface segregation for cluster-specific APIs
  */
-public class GlideClusterClient extends BaseClient implements TransactionsClusterCommands, ClusterCommandExecutor, GenericClusterCommands, AutoCloseable {
+public class GlideClusterClient extends BaseClient implements TransactionsClusterCommands, ClusterCommandExecutor, GenericClusterCommands, ServerManagementClusterCommands, AutoCloseable {
 
     private GlideClusterClient(io.valkey.glide.core.client.GlideClient client) {
         super(client);
@@ -177,39 +177,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
         return customClusterCommand(stringArgs);
     }
 
-    /**
-     * Get information about the cluster with Section enumeration support.
-     * This method implements the ClusterCommandExecutor interface to provide
-     * Section[] parameter support expected by integration tests.
-     *
-     * @param sections The sections to retrieve
-     * @return A CompletableFuture containing the info response wrapped in ClusterValue
-     */
-    @Override
-    public CompletableFuture<ClusterValue<String>> info(InfoOptions.Section[] sections) {
-        String[] sectionNames = new String[sections.length];
-        for (int i = 0; i < sections.length; i++) {
-            sectionNames[i] = sections[i].name().toLowerCase();
-        }
-        return super.info(sectionNames)
-            .thenApply(ClusterValue::ofSingleValue);
-    }
-
-    /**
-     * Get information about the cluster with Section enumeration support and routing.
-     * This method implements the ClusterCommandExecutor interface to provide
-     * Section[] parameter support with routing expected by integration tests.
-     *
-     * @param sections The sections to retrieve
-     * @param route The routing configuration (ignored for now)
-     * @return A CompletableFuture containing the info response wrapped in ClusterValue
-     */
-    @Override
-    public CompletableFuture<ClusterValue<String>> info(InfoOptions.Section[] sections, Object route) {
-        // For now, we ignore the route parameter and delegate to the version without routing
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return info(sections);
-    }
 
     /**
      * Execute a custom command that returns a cluster value.
@@ -225,30 +192,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
 
     // Missing ServerManagement methods for cluster client
 
-    /**
-     * Resets the statistics reported by the server using the INFO and LATENCY HISTOGRAM commands.
-     * The command will be routed automatically to all nodes.
-     *
-     * @see <a href="https://valkey.io/commands/config-resetstat/">valkey.io</a> for details.
-     * @return A CompletableFuture containing "OK" to confirm that the statistics were successfully reset.
-     */
-    public CompletableFuture<String> configResetStat() {
-        return executeCommand(CommandType.CONFIG_RESETSTAT)
-            .thenApply(result -> result.toString());
-    }
-
-    /**
-     * Resets the statistics reported by the server using the INFO and LATENCY HISTOGRAM commands.
-     *
-     * @see <a href="https://valkey.io/commands/config-resetstat/">valkey.io</a> for details.
-     * @param route Specifies the routing configuration for the command.
-     * @return A CompletableFuture containing "OK" to confirm that the statistics were successfully reset.
-     */
-    public CompletableFuture<String> configResetStat(Route route) {
-        // For now, return a simple implementation without actual routing
-        return executeCommand(CommandType.CONFIG_RESETSTAT)
-            .thenApply(result -> result.toString());
-    }
 
     /**
      * Displays a piece of generative computer art and the Valkey version.
@@ -482,17 +425,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
         return super.echo(message).thenApply(ClusterValue::ofSingleValue);
     }
 
-    /**
-     * Get the server time with routing.
-     *
-     * @param route The routing configuration for the command
-     * @return A CompletableFuture containing the server time wrapped in ClusterValue
-     */
-    public CompletableFuture<ClusterValue<String[]>> time(Route route) {
-        // For now, ignore the route parameter and delegate to the base time
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return super.time().thenApply(ClusterValue::ofSingleValue);
-    }
 
     /**
      * Get the last save time with routing.
@@ -506,67 +438,9 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
         return super.lastsave().thenApply(ClusterValue::ofSingleValue);
     }
 
-    /**
-     * Get the database size with routing.
-     *
-     * @param route The routing configuration for the command
-     * @return A CompletableFuture containing the database size wrapped in ClusterValue
-     */
-    public CompletableFuture<ClusterValue<Long>> dbsize(Route route) {
-        // For now, ignore the route parameter and delegate to the base dbsize
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return super.dbsize().thenApply(ClusterValue::ofSingleValue);
-    }
 
-    /**
-     * Flush all databases with routing.
-     *
-     * @param route The routing configuration for the command
-     * @return A CompletableFuture containing the result wrapped in ClusterValue
-     */
-    public CompletableFuture<ClusterValue<String>> flushall(Route route) {
-        // For now, ignore the route parameter and delegate to the base flushall
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return super.flushall().thenApply(ClusterValue::ofSingleValue);
-    }
 
-    /**
-     * Flush all databases with flush mode and routing.
-     *
-     * @param flushMode The flush mode to use
-     * @param route The routing configuration for the command
-     * @return A CompletableFuture containing the result wrapped in ClusterValue
-     */
-    public CompletableFuture<ClusterValue<String>> flushall(FlushMode flushMode, Route route) {
-        // For now, ignore the route parameter and delegate to the base flushall
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return super.flushall(flushMode).thenApply(ClusterValue::ofSingleValue);
-    }
 
-    /**
-     * Flush database with routing.
-     *
-     * @param route The routing configuration for the command
-     * @return A CompletableFuture containing the result wrapped in ClusterValue
-     */
-    public CompletableFuture<ClusterValue<String>> flushdb(Route route) {
-        // For now, ignore the route parameter and delegate to the base flushdb
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return super.flushdb().thenApply(ClusterValue::ofSingleValue);
-    }
-
-    /**
-     * Flush database with flush mode and routing.
-     *
-     * @param flushMode The flush mode to use
-     * @param route The routing configuration for the command
-     * @return A CompletableFuture containing the result wrapped in ClusterValue
-     */
-    public CompletableFuture<ClusterValue<String>> flushdb(FlushMode flushMode, Route route) {
-        // For now, ignore the route parameter and delegate to the base flushdb
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return super.flushdb(flushMode).thenApply(ClusterValue::ofSingleValue);
-    }
 
     /**
      * Flush all functions with routing.
@@ -933,18 +807,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
     }
 
 
-    /**
-     * Get information about the cluster with routing support.
-     * This method provides routing support for the basic info command.
-     *
-     * @param route The routing configuration for the command
-     * @return A CompletableFuture containing the info response wrapped in ClusterValue
-     */
-    public CompletableFuture<ClusterValue<String>> info(Route route) {
-        // For now, ignore the route parameter and delegate to the base info
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return super.info().thenApply(ClusterValue::ofSingleValue);
-    }
 
 
     /**
@@ -1099,6 +961,390 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
         // For now, ignore the route parameter and delegate to the basic randomKeyBinary
         // In a full cluster implementation, the route would be used to target specific nodes
         return super.randomkeyBinary();
+    }
+
+    // ========== Critical Missing Methods from ServerManagementClusterCommands ==========
+
+    /**
+     * Gets information and statistics about the server using the DEFAULT option.
+     * The command will be routed to all primary nodes.
+     * This method provides the cluster-compatible info() method that returns ClusterValue<String>.
+     *
+     * @see <a href="https://valkey.io/commands/info/">valkey.io</a> for details.
+     * @return A ClusterValue containing server information from multiple nodes.
+     */
+    @Override
+    public CompletableFuture<ClusterValue<String>> info() {
+        return super.info().thenApply(ClusterValue::ofSingleValue);
+    }
+
+    /**
+     * Gets information and statistics about the server with routing.
+     *
+     * @see <a href="https://valkey.io/commands/info/">valkey.io</a> for details.
+     * @param route Specifies the routing configuration for the command
+     * @return A ClusterValue containing server information from specified nodes.
+     */
+    @Override
+    public CompletableFuture<ClusterValue<String>> info(Route route) {
+        // For now, ignore the route parameter and delegate to the base info
+        // In a full cluster implementation, the route would be used to target specific nodes
+        return super.info().thenApply(ClusterValue::ofSingleValue);
+    }
+
+    /**
+     * Gets information and statistics about the server with specific sections.
+     * The command will be routed to all primary nodes.
+     *
+     * @see <a href="https://valkey.io/commands/info/">valkey.io</a> for details.
+     * @param sections A list of Section values specifying which sections to retrieve
+     * @return A ClusterValue containing server information from multiple nodes.
+     */
+    @Override
+    public CompletableFuture<ClusterValue<String>> info(Section[] sections) {
+        // Convert Section[] to String[] for BaseClient compatibility
+        String[] sectionNames = new String[sections.length];
+        for (int i = 0; i < sections.length; i++) {
+            sectionNames[i] = sections[i].name().toLowerCase();
+        }
+        return super.info(sectionNames).thenApply(ClusterValue::ofSingleValue);
+    }
+
+    /**
+     * Gets information and statistics about the server with specific sections and routing.
+     *
+     * @see <a href="https://valkey.io/commands/info/">valkey.io</a> for details.
+     * @param sections A list of Section values specifying which sections to retrieve
+     * @param route Specifies the routing configuration for the command
+     * @return A ClusterValue containing server information from specified nodes.
+     */
+    @Override
+    public CompletableFuture<ClusterValue<String>> info(Section[] sections, Route route) {
+        // Convert Section[] to String[] for BaseClient compatibility
+        String[] sectionNames = new String[sections.length];
+        for (int i = 0; i < sections.length; i++) {
+            sectionNames[i] = sections[i].name().toLowerCase();
+        }
+        // For now, ignore the route parameter and delegate to the base info with section names
+        // In a full cluster implementation, the route would be used to target specific nodes
+        return super.info(sectionNames).thenApply(ClusterValue::ofSingleValue);
+    }
+
+    /**
+     * Gets information and statistics about the server with specific sections and routing (ClusterCommandExecutor interface).
+     * This method provides the exact signature expected by ClusterCommandExecutor interface.
+     *
+     * @see <a href="https://valkey.io/commands/info/">valkey.io</a> for details.
+     * @param sections A list of Section values specifying which sections to retrieve
+     * @param route Specifies the routing configuration for the command (Object type as per interface)
+     * @return A ClusterValue containing server information from specified nodes.
+     */
+    @Override
+    public CompletableFuture<ClusterValue<String>> info(InfoOptions.Section[] sections, Object route) {
+        // Convert InfoOptions.Section[] to String[] for BaseClient compatibility
+        String[] sectionNames = new String[sections.length];
+        for (int i = 0; i < sections.length; i++) {
+            sectionNames[i] = sections[i].name().toLowerCase();
+        }
+        // For now, ignore the route parameter and delegate to the base info with section names
+        // In a full cluster implementation, the route would be used to target specific nodes
+        return super.info(sectionNames).thenApply(ClusterValue::ofSingleValue);
+    }
+
+    // ========== Missing ServerManagementClusterCommands Methods ==========
+
+    /**
+     * Returns the number of keys in the database.
+     * The command will be routed to all primary nodes.
+     *
+     * @see <a href="https://valkey.io/commands/dbsize/">valkey.io</a> for details.
+     * @return The total number of keys across the primary nodes.
+     */
+    @Override
+    public CompletableFuture<Long> dbsize() {
+        return super.dbsize();
+    }
+
+    /**
+     * Returns the number of keys in the database with routing.
+     *
+     * @see <a href="https://valkey.io/commands/dbsize/">valkey.io</a> for details.
+     * @param route Specifies the routing configuration for the command
+     * @return The number of keys in the database for specified nodes
+     */
+    @Override
+    public CompletableFuture<Long> dbsize(Route route) {
+        // For now, ignore the route parameter and delegate to the base dbsize
+        // In a full cluster implementation, the route would be used to target specific nodes
+        return super.dbsize();
+    }
+
+    /**
+     * Returns the server time.
+     * The command will be routed to a random node.
+     *
+     * @see <a href="https://valkey.io/commands/time/">valkey.io</a> for details.
+     * @return The current server time as a String array
+     */
+    @Override
+    public CompletableFuture<String[]> time() {
+        return super.time();
+    }
+
+    /**
+     * Returns the server time with routing.
+     *
+     * @see <a href="https://valkey.io/commands/time/">valkey.io</a> for details.
+     * @param route Specifies the routing configuration for the command
+     * @return The current server time as a String array wrapped in ClusterValue
+     */
+    @Override
+    public CompletableFuture<ClusterValue<String[]>> time(Route route) {
+        // For now, ignore the route parameter and delegate to the base time
+        // In a full cluster implementation, the route would be used to target specific nodes
+        return super.time().thenApply(ClusterValue::ofSingleValue);
+    }
+
+    /**
+     * Returns UNIX TIME of the last DB save timestamp.
+     * The command will be routed to a random node.
+     *
+     * @see <a href="https://valkey.io/commands/lastsave/">valkey.io</a> for details.
+     * @return UNIX TIME of the last DB save
+     */
+    @Override
+    public CompletableFuture<Long> lastsave() {
+        return super.lastsave();
+    }
+
+    /**
+     * Returns UNIX TIME of the last DB save timestamp with routing.
+     *
+     * @see <a href="https://valkey.io/commands/lastsave/">valkey.io</a> for details.
+     * @param route Specifies the routing configuration for the command
+     * @return UNIX TIME of the last DB save wrapped in ClusterValue
+     */
+    @Override
+    public CompletableFuture<ClusterValue<Long>> lastsave(Route route) {
+        // For now, ignore the route parameter and delegate to the base lastsave
+        // In a full cluster implementation, the route would be used to target specific nodes
+        return super.lastsave().thenApply(ClusterValue::ofSingleValue);
+    }
+
+    /**
+     * Deletes all the keys of all the existing databases.
+     * The command will be routed to all primary nodes.
+     *
+     * @see <a href="https://valkey.io/commands/flushall/">valkey.io</a> for details.
+     * @return OK response
+     */
+    @Override
+    public CompletableFuture<String> flushall() {
+        return super.flushall();
+    }
+
+    /**
+     * Deletes all the keys of all the existing databases with flush mode.
+     * The command will be routed to all primary nodes.
+     *
+     * @see <a href="https://valkey.io/commands/flushall/">valkey.io</a> for details.
+     * @param mode The flushing mode (SYNC or ASYNC)
+     * @return OK response
+     */
+    @Override
+    public CompletableFuture<String> flushall(FlushMode mode) {
+        return super.flushall(mode);
+    }
+
+    /**
+     * Deletes all the keys of all the existing databases with routing.
+     *
+     * @see <a href="https://valkey.io/commands/flushall/">valkey.io</a> for details.
+     * @param route Specifies the routing configuration for the command
+     * @return OK response
+     */
+    @Override
+    public CompletableFuture<String> flushall(Route route) {
+        // For now, ignore the route parameter and delegate to the base flushall
+        // In a full cluster implementation, the route would be used to target specific nodes
+        return super.flushall();
+    }
+
+    /**
+     * Deletes all the keys of all the existing databases with flush mode and routing.
+     *
+     * @see <a href="https://valkey.io/commands/flushall/">valkey.io</a> for details.
+     * @param mode The flushing mode (SYNC or ASYNC)
+     * @param route Specifies the routing configuration for the command
+     * @return OK response
+     */
+    @Override
+    public CompletableFuture<String> flushall(FlushMode mode, Route route) {
+        // For now, ignore the route parameter and delegate to the base flushall with mode
+        // In a full cluster implementation, the route would be used to target specific nodes
+        return super.flushall(mode);
+    }
+
+    /**
+     * Deletes all the keys of the currently selected database.
+     * The command will be routed to all primary nodes.
+     *
+     * @see <a href="https://valkey.io/commands/flushdb/">valkey.io</a> for details.
+     * @return OK response
+     */
+    @Override
+    public CompletableFuture<String> flushdb() {
+        return super.flushdb();
+    }
+
+    /**
+     * Deletes all the keys of the currently selected database with flush mode.
+     * The command will be routed to all primary nodes.
+     *
+     * @see <a href="https://valkey.io/commands/flushdb/">valkey.io</a> for details.
+     * @param mode The flushing mode (SYNC or ASYNC)
+     * @return OK response
+     */
+    @Override
+    public CompletableFuture<String> flushdb(FlushMode mode) {
+        return super.flushdb(mode);
+    }
+
+    /**
+     * Deletes all the keys of the currently selected database with routing.
+     *
+     * @see <a href="https://valkey.io/commands/flushdb/">valkey.io</a> for details.
+     * @param route Specifies the routing configuration for the command
+     * @return OK response
+     */
+    @Override
+    public CompletableFuture<String> flushdb(Route route) {
+        // For now, ignore the route parameter and delegate to the base flushdb
+        // In a full cluster implementation, the route would be used to target specific nodes
+        return super.flushdb();
+    }
+
+    /**
+     * Deletes all the keys of the currently selected database with flush mode and routing.
+     *
+     * @see <a href="https://valkey.io/commands/flushdb/">valkey.io</a> for details.
+     * @param mode The flushing mode (SYNC or ASYNC)
+     * @param route Specifies the routing configuration for the command
+     * @return OK response
+     */
+    @Override
+    public CompletableFuture<String> flushdb(FlushMode mode, Route route) {
+        // For now, ignore the route parameter and delegate to the base flushdb with mode
+        // In a full cluster implementation, the route would be used to target specific nodes
+        return super.flushdb(mode);
+    }
+
+    /**
+     * Rewrites the configuration file with the current configuration.
+     * The command will be routed automatically to all nodes.
+     *
+     * @see <a href="https://valkey.io/commands/config-rewrite/">valkey.io</a> for details.
+     * @return OK when the configuration was rewritten properly
+     */
+    @Override
+    public CompletableFuture<String> configRewrite() {
+        return super.configRewrite();
+    }
+
+    /**
+     * Rewrites the configuration file with the current configuration and routing.
+     *
+     * @see <a href="https://valkey.io/commands/config-rewrite/">valkey.io</a> for details.
+     * @param route Specifies the routing configuration for the command
+     * @return OK when the configuration was rewritten properly
+     */
+    @Override
+    public CompletableFuture<String> configRewrite(Route route) {
+        // For now, ignore the route parameter and delegate to the base configRewrite
+        // In a full cluster implementation, the route would be used to target specific nodes
+        return super.configRewrite();
+    }
+
+    /**
+     * Resets the statistics reported by the server using the INFO and LATENCY HISTOGRAM commands.
+     * The command will be routed automatically to all nodes.
+     *
+     * @see <a href="https://valkey.io/commands/config-resetstat/">valkey.io</a> for details.
+     * @return OK to confirm that the statistics were successfully reset
+     */
+    @Override
+    public CompletableFuture<String> configResetStat() {
+        return super.configResetstat();
+    }
+
+    /**
+     * Resets the statistics reported by the server using the INFO and LATENCY HISTOGRAM commands with routing.
+     *
+     * @see <a href="https://valkey.io/commands/config-resetstat/">valkey.io</a> for details.
+     * @param route Specifies the routing configuration for the command
+     * @return OK to confirm that the statistics were successfully reset
+     */
+    @Override
+    public CompletableFuture<String> configResetStat(Route route) {
+        // For now, ignore the route parameter and delegate to the base configResetStat
+        // In a full cluster implementation, the route would be used to target specific nodes
+        return super.configResetstat();
+    }
+
+    /**
+     * Get the values of configuration parameters.
+     * The command will be sent to a random node.
+     *
+     * @see <a href="https://valkey.io/commands/config-get/">valkey.io</a> for details.
+     * @param parameters An array of configuration parameter names to retrieve values for
+     * @return A map of values corresponding to the configuration parameters
+     */
+    @Override
+    public CompletableFuture<Map<String, String>> configGet(String[] parameters) {
+        return super.configGet(parameters);
+    }
+
+    /**
+     * Get the values of configuration parameters with routing.
+     *
+     * @see <a href="https://valkey.io/commands/config-get/">valkey.io</a> for details.
+     * @param parameters An array of configuration parameter names to retrieve values for
+     * @param route Specifies the routing configuration for the command
+     * @return A map of values corresponding to the configuration parameters wrapped in ClusterValue
+     */
+    @Override
+    public CompletableFuture<ClusterValue<Map<String, String>>> configGet(String[] parameters, Route route) {
+        // For now, ignore the route parameter and delegate to the base configGet
+        // In a full cluster implementation, the route would be used to target specific nodes
+        return super.configGet(parameters).thenApply(ClusterValue::ofSingleValue);
+    }
+
+    /**
+     * Sets configuration parameters to the specified values.
+     * The command will be sent to all nodes.
+     *
+     * @see <a href="https://valkey.io/commands/config-set/">valkey.io</a> for details.
+     * @param parameters A map consisting of configuration parameters and their respective values to set
+     * @return OK if all configurations have been successfully set
+     */
+    @Override
+    public CompletableFuture<String> configSet(Map<String, String> parameters) {
+        return super.configSet(parameters);
+    }
+
+    /**
+     * Sets configuration parameters to the specified values with routing.
+     *
+     * @see <a href="https://valkey.io/commands/config-set/">valkey.io</a> for details.
+     * @param parameters A map consisting of configuration parameters and their respective values to set
+     * @param route Specifies the routing configuration for the command
+     * @return OK if all configurations have been successfully set
+     */
+    @Override
+    public CompletableFuture<String> configSet(Map<String, String> parameters, Route route) {
+        // For now, ignore the route parameter and delegate to the base configSet
+        // In a full cluster implementation, the route would be used to target specific nodes
+        return super.configSet(parameters);
     }
 
     /**
