@@ -10,6 +10,8 @@ import glide.api.models.commands.batch.BatchOptions;
 import glide.api.models.GlideString;
 import glide.api.commands.TransactionsCommands;
 import glide.api.commands.GenericCommands;
+import glide.api.commands.ServerManagementCommands;
+import glide.api.commands.StandaloneServerManagement;
 import glide.api.models.commands.scan.ScanOptions;
 import java.util.concurrent.CompletableFuture;
 
@@ -17,10 +19,132 @@ import java.util.concurrent.CompletableFuture;
  * Glide client for connecting to a single Valkey/Redis instance.
  * This class provides the integration test API while using the refactored core client underneath.
  */
-public class GlideClient extends BaseClient implements TransactionsCommands, GenericCommands {
+public class GlideClient extends BaseClient implements TransactionsCommands, GenericCommands, ServerManagementCommands {
 
     private GlideClient(io.valkey.glide.core.client.GlideClient client) {
-        super(client);
+        super(client, createStandaloneServerManagement(client));
+    }
+
+    private static StandaloneServerManagement createStandaloneServerManagement(io.valkey.glide.core.client.GlideClient client) {
+        // Create a minimal wrapper that implements ServerManagementCommands
+        // This is a temporary implementation that will delegate to the BaseClient methods
+        return new StandaloneServerManagement(new ServerManagementCommands() {
+            @Override
+            public CompletableFuture<String> info() {
+                return client.executeCommand(new io.valkey.glide.core.commands.Command(
+                    io.valkey.glide.core.commands.CommandType.INFO))
+                    .thenApply(result -> result.toString());
+            }
+
+            @Override
+            public CompletableFuture<String> info(String[] sections) {
+                return client.executeCommand(new io.valkey.glide.core.commands.Command(
+                    io.valkey.glide.core.commands.CommandType.INFO, sections))
+                    .thenApply(result -> result.toString());
+            }
+
+            @Override
+            public CompletableFuture<String[]> time() {
+                return client.executeCommand(new io.valkey.glide.core.commands.Command(
+                    io.valkey.glide.core.commands.CommandType.TIME))
+                    .thenApply(result -> {
+                        if (result instanceof Object[]) {
+                            Object[] objects = (Object[]) result;
+                            String[] time = new String[objects.length];
+                            for (int i = 0; i < objects.length; i++) {
+                                time[i] = objects[i].toString();
+                            }
+                            return time;
+                        }
+                        return new String[0];
+                    });
+            }
+
+            @Override
+            public CompletableFuture<Long> lastsave() {
+                return client.executeCommand(new io.valkey.glide.core.commands.Command(
+                    io.valkey.glide.core.commands.CommandType.LASTSAVE))
+                    .thenApply(result -> Long.parseLong(result.toString()));
+            }
+
+            @Override
+            public CompletableFuture<Long> dbsize() {
+                return client.executeCommand(new io.valkey.glide.core.commands.Command(
+                    io.valkey.glide.core.commands.CommandType.DBSIZE))
+                    .thenApply(result -> Long.parseLong(result.toString()));
+            }
+
+            @Override
+            public CompletableFuture<String> flushall() {
+                return client.executeCommand(new io.valkey.glide.core.commands.Command(
+                    io.valkey.glide.core.commands.CommandType.FLUSHALL))
+                    .thenApply(result -> result.toString());
+            }
+
+            @Override
+            public CompletableFuture<String> flushall(glide.api.models.commands.FlushMode mode) {
+                return client.executeCommand(new io.valkey.glide.core.commands.Command(
+                    io.valkey.glide.core.commands.CommandType.FLUSHALL, mode.name()))
+                    .thenApply(result -> result.toString());
+            }
+
+            @Override
+            public CompletableFuture<String> flushdb() {
+                return client.executeCommand(new io.valkey.glide.core.commands.Command(
+                    io.valkey.glide.core.commands.CommandType.FLUSHDB))
+                    .thenApply(result -> result.toString());
+            }
+
+            @Override
+            public CompletableFuture<String> flushdb(glide.api.models.commands.FlushMode mode) {
+                return client.executeCommand(new io.valkey.glide.core.commands.Command(
+                    io.valkey.glide.core.commands.CommandType.FLUSHDB, mode.name()))
+                    .thenApply(result -> result.toString());
+            }
+
+            @Override
+            public CompletableFuture<String> configRewrite() {
+                return client.executeCommand(new io.valkey.glide.core.commands.Command(
+                    io.valkey.glide.core.commands.CommandType.CONFIG_REWRITE))
+                    .thenApply(result -> result.toString());
+            }
+
+            @Override
+            public CompletableFuture<String> configResetStat() {
+                return client.executeCommand(new io.valkey.glide.core.commands.Command(
+                    io.valkey.glide.core.commands.CommandType.CONFIG_RESETSTAT))
+                    .thenApply(result -> result.toString());
+            }
+
+            @Override
+            public CompletableFuture<java.util.Map<String, String>> configGet(String[] parameters) {
+                return client.executeCommand(new io.valkey.glide.core.commands.Command(
+                    io.valkey.glide.core.commands.CommandType.CONFIG_GET, parameters))
+                    .thenApply(result -> {
+                        java.util.Map<String, String> config = new java.util.HashMap<>();
+                        if (result instanceof Object[]) {
+                            Object[] array = (Object[]) result;
+                            for (int i = 0; i < array.length - 1; i += 2) {
+                                config.put(array[i].toString(), array[i + 1].toString());
+                            }
+                        }
+                        return config;
+                    });
+            }
+
+            @Override
+            public CompletableFuture<String> configSet(java.util.Map<String, String> parameters) {
+                String[] args = new String[parameters.size() * 2];
+                int i = 0;
+                for (java.util.Map.Entry<String, String> entry : parameters.entrySet()) {
+                    args[i++] = entry.getKey();
+                    args[i++] = entry.getValue();
+                }
+                return client.executeCommand(new io.valkey.glide.core.commands.Command(
+                    io.valkey.glide.core.commands.CommandType.CONFIG_SET, args))
+                    .thenApply(result -> result.toString());
+            }
+        });
     }
 
     /**

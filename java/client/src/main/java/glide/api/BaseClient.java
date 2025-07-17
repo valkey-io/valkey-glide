@@ -7,6 +7,7 @@ import glide.api.commands.ListBaseCommands;
 import glide.api.commands.SetBaseCommands;
 import glide.api.commands.GenericBaseCommands;
 import glide.api.commands.ServerManagementCommands;
+import glide.api.commands.ServerManagementCore;
 import glide.api.models.GlideString;
 import glide.api.models.BaseBatch;
 import glide.api.models.Script;
@@ -51,9 +52,11 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
     public static final String VERSION_VALKEY_API = "VERSION";
 
     protected final GlideClient client;
+    protected final ServerManagementCore serverManagement;
 
-    protected BaseClient(GlideClient client) {
+    protected BaseClient(GlideClient client, ServerManagementCore serverManagement) {
         this.client = client;
+        this.serverManagement = serverManagement;
     }
 
     /**
@@ -2150,8 +2153,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the number of keys in the database
      */
     public CompletableFuture<Long> dbsize() {
-        return executeCommand(CommandType.DBSIZE)
-            .thenApply(result -> Long.parseLong(result.toString()));
+        return serverManagement.dbsize();
     }
 
     /**
@@ -2479,8 +2481,8 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing server information as a string
      */
     public CompletableFuture<String> info() {
-        return executeCommand(CommandType.INFO)
-            .thenApply(result -> result.toString());
+        return serverManagement.getInfo()
+            .thenApply(result -> (String) result);
     }
 
     /**
@@ -2490,8 +2492,8 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing server information as a string
      */
     public CompletableFuture<String> info(String... sections) {
-        return executeCommand(CommandType.INFO, sections)
-            .thenApply(result -> result.toString());
+        return serverManagement.getInfo(sections)
+            .thenApply(result -> (String) result);
     }
 
     /**
@@ -2500,18 +2502,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing an array with seconds and microseconds since Unix epoch
      */
     public CompletableFuture<String[]> time() {
-        return executeCommand(CommandType.TIME)
-            .thenApply(result -> {
-                if (result instanceof Object[]) {
-                    Object[] objects = (Object[]) result;
-                    String[] time = new String[objects.length];
-                    for (int i = 0; i < objects.length; i++) {
-                        time[i] = objects[i].toString();
-                    }
-                    return time;
-                }
-                return new String[0];
-            });
+        return serverManagement.time();
     }
 
     /**
@@ -2520,8 +2511,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the timestamp of the last save
      */
     public CompletableFuture<Long> lastsave() {
-        return executeCommand(CommandType.LASTSAVE)
-            .thenApply(result -> Long.parseLong(result.toString()));
+        return serverManagement.lastsave();
     }
 
     /**
@@ -2530,8 +2520,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing \"OK\" if successful
      */
     public CompletableFuture<String> flushdb() {
-        return executeCommand(CommandType.FLUSHDB)
-            .thenApply(result -> result.toString());
+        return serverManagement.flushdb();
     }
 
     /**
@@ -2541,8 +2530,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing "OK" if successful
      */
     public CompletableFuture<String> flushdb(FlushMode flushMode) {
-        return executeCommand(CommandType.FLUSHDB, flushMode.name())
-            .thenApply(result -> result.toString());
+        return serverManagement.flushdb(flushMode);
     }
 
     /**
@@ -2551,8 +2539,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing \"OK\" if successful
      */
     public CompletableFuture<String> flushall() {
-        return executeCommand(CommandType.FLUSHALL)
-            .thenApply(result -> result.toString());
+        return serverManagement.flushall();
     }
 
     /**
@@ -2562,8 +2549,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing "OK" if successful
      */
     public CompletableFuture<String> flushall(FlushMode flushMode) {
-        return executeCommand(CommandType.FLUSHALL, flushMode.name())
-            .thenApply(result -> result.toString());
+        return serverManagement.flushall(flushMode);
     }
 
     /**
@@ -2573,17 +2559,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the configuration value
      */
     public CompletableFuture<Map<String, String>> configGet(String parameter) {
-        return executeCommand(CommandType.CONFIG_GET, parameter)
-            .thenApply(result -> {
-                Map<String, String> config = new java.util.HashMap<>();
-                if (result instanceof Object[]) {
-                    Object[] array = (Object[]) result;
-                    for (int i = 0; i < array.length - 1; i += 2) {
-                        config.put(array[i].toString(), array[i + 1].toString());
-                    }
-                }
-                return config;
-            });
+        return serverManagement.configGet(new String[]{parameter});
     }
 
     /**
@@ -2593,17 +2569,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the configuration values
      */
     public CompletableFuture<Map<String, String>> configGet(String[] parameters) {
-        return executeCommand(CommandType.CONFIG_GET, parameters)
-            .thenApply(result -> {
-                Map<String, String> config = new java.util.HashMap<>();
-                if (result instanceof Object[]) {
-                    Object[] array = (Object[]) result;
-                    for (int i = 0; i < array.length - 1; i += 2) {
-                        config.put(array[i].toString(), array[i + 1].toString());
-                    }
-                }
-                return config;
-            });
+        return serverManagement.configGet(parameters);
     }
 
     /**
@@ -2614,8 +2580,9 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing \"OK\" if successful
      */
     public CompletableFuture<String> configSet(String parameter, String value) {
-        return executeCommand(CommandType.CONFIG_SET, parameter, value)
-            .thenApply(result -> result.toString());
+        Map<String, String> parameters = new java.util.HashMap<>();
+        parameters.put(parameter, value);
+        return serverManagement.configSet(parameters);
     }
 
     /**
@@ -2625,14 +2592,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing "OK" on success
      */
     public CompletableFuture<String> configSet(Map<String, String> parameters) {
-        String[] args = new String[parameters.size() * 2];
-        int i = 0;
-        for (Map.Entry<String, String> entry : parameters.entrySet()) {
-            args[i++] = entry.getKey();
-            args[i++] = entry.getValue();
-        }
-        return executeCommand(CommandType.CONFIG_SET, args)
-            .thenApply(result -> result.toString());
+        return serverManagement.configSet(parameters);
     }
 
     /**
@@ -2651,8 +2611,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing \"OK\" if successful
      */
     public CompletableFuture<String> configRewrite() {
-        return executeCommand(CommandType.CONFIG_REWRITE)
-            .thenApply(result -> result.toString());
+        return serverManagement.configRewrite();
     }
 
     /**
