@@ -7,7 +7,7 @@ namespace Valkey.Glide.Commands;
 /// <br/>
 /// See more on <see href="https://valkey.io/commands/#list">valkey.io</see>.
 /// </summary>
-internal interface IListBaseCommands
+public interface IListCommands
 {
     /// <summary>
     /// Removes and returns the first elements of the list stored at <paramref name="key" />.

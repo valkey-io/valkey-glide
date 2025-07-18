@@ -20,9 +20,21 @@ internal class Database : GlideClient, IDatabase
             ? await Command(Request.Info(sections), Route.Random)
             : await base.Info(sections);
 
+    public IBatch CreateBatch(object? asyncState = null)
+    {
+        Utils.Requires<ArgumentException>(asyncState is null, "Async state is not supported by GLIDE");
+        return new ValkeyBatch(this);
+    }
+
+    public ITransaction CreateTransaction(object? asyncState = null)
+    {
+        Utils.Requires<ArgumentException>(asyncState is null, "Async state is not supported by GLIDE");
+        return new ValkeyTransaction(this);
+    }
+
     internal readonly bool IsCluster;
 
-    private Database(bool isCluster) { IsCluster = isCluster; }
+    protected Database(bool isCluster) { IsCluster = isCluster; }
 
     public static async Task<Database> Create(BaseClientConfiguration config)
         => await CreateClient(config, () => new Database(config is ClusterClientConfiguration));

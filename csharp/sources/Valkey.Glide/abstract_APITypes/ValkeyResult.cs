@@ -106,7 +106,7 @@ public abstract class ValkeyResult
     /// <returns>The content.</returns>
     public abstract string? ToString(out string? type);
 
-     /// <summary>
+    /// <summary>
     /// Indicate the type of result that was received from redis, in RESP2 terms.
     /// </summary>
     [Obsolete($"Please use either {nameof(Resp2Type)} (simplified) or {nameof(Resp3Type)} (full)")]
