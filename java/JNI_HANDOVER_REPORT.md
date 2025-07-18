@@ -102,6 +102,9 @@ java/
 ```
 
 ## Next Steps for Future Development
+**IMPORTANT**: We dont remove tests that are testing user facing APIs, we only remove tests that are testing internal implementation details. The user facing APIs must be tested in the same way as before. If some tests are failing due to implementation details, we need to fix the implementation, not remove the tests.
+
+**IMPORTANT**: This is a valkey client, not redis client. We support OSS versions of redis but when we document the API, we document it as Valkey API, or using neutral language, calling it server, not Redis. We do not mentioning Redis directly in our docs where it is not a necessity.
 
 ### Immediate Actions (Next Session)
 1. **Integration Test Fixes**: Complete remaining integration test compilation issues
