@@ -35,8 +35,8 @@ internal class DatabaseImpl : GlideClient, IDatabase
     internal static async Task<DatabaseImpl> Create(string host, ushort port, bool isCluster)
     {
         BaseClientConfiguration config = isCluster
-            ? new ClusterClientConfigurationBuilder().WithAddress(host, port).Build()
-            : new StandaloneClientConfigurationBuilder().WithAddress(host, port).Build();
+            ? new ClusterClientConfigurationBuilder().WithAddress(host, port).WithRequestTimeout(1000).Build()
+            : new StandaloneClientConfigurationBuilder().WithAddress(host, port).WithRequestTimeout(1000).Build();
         return await CreateClient(config, () => new DatabaseImpl(isCluster));
     }
 }
