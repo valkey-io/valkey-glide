@@ -521,41 +521,205 @@ public class GlideClient implements AutoCloseable {
      */
     private static native Object[] executeArrayCommand(long clientPtr, String command, String[] args);
 
-    // ==================== ROUTING-ENABLED NATIVE METHODS ====================
-    // These methods support command routing for cluster operations
+    // ==================== SIMPLIFIED ROUTING NATIVE METHODS ====================
+    // These methods accept Route objects directly - conversion happens in Rust
 
     /**
-     * Execute a command with routing support
+     * Execute a command with Route object support
      *
      * @param clientPtr Native client handle
      * @param command Command name
      * @param args Command arguments
-     * @param routingType Routing type (0=None, 1=AllNodes, 2=AllPrimaries, 3=Random, 4=SlotId, 5=SlotKey, 6=ByAddress)
-     * @param routingValue Routing value (slot ID, key, or address)
+     * @param route Java Route object (null for no routing)
      * @return Command result
      */
-    private static native Object executeCommandWithRouting(long clientPtr, String command, byte[][] args, int routingType, String routingValue);
+    private static native Object executeCommandWithRoute(long clientPtr, String command, byte[][] args, Object route);
 
     /**
-     * Execute a command with routing support expecting a String result
+     * Execute a command with Route object support expecting a String result
      *
      * @param clientPtr Native client handle
      * @param command Command name
      * @param args Command arguments
-     * @param routingType Routing type
-     * @param routingValue Routing value
+     * @param route Java Route object (null for no routing)
      * @return String result
      */
-    private static native String executeStringCommandWithRouting(long clientPtr, String command, String[] args, int routingType, String routingValue);
+    private static native String executeStringCommandWithRoute(long clientPtr, String command, String[] args, Object route);
+
+    /**
+     * Execute multiple commands as a batch for optimal performance
+     * This method implements bulk command execution to eliminate per-command round trips
+     *
+     * @param clientPtr Native client handle
+     * @param commands Array of Command objects to execute
+     * @param route Java Route object (null for no routing)
+     * @param isAtomic Whether to execute as atomic transaction (MULTI/EXEC) or non-atomic batch
+     * @return Array of command results
+     */
+    private static native Object[] executePipeline(long clientPtr, Object[] commands, Object route, boolean isAtomic);
+
+    /**
+     * Execute multiple commands as a batch with full ClusterBatchOptions support
+     * This method implements bulk command execution with timeout and retry strategies
+     *
+     * @param clientPtr Native client handle
+     * @param commands Array of Command objects to execute
+     * @param route Java Route object (null for no routing)
+     * @param isAtomic Whether to execute as atomic transaction (MULTI/EXEC) or non-atomic batch
+     * @param timeoutMs Timeout in milliseconds (0 for default)
+     * @param retryServerError Whether to retry on server errors like TRYAGAIN
+     * @param retryConnectionError Whether to retry on connection errors
+     * @return Array of command results
+     */
+    private static native Object[] executePipelineWithOptions(long clientPtr, Object[] commands, Object route, boolean isAtomic, int timeoutMs, boolean retryServerError, boolean retryConnectionError);
 
     // ==================== JAVA ROUTING METHODS ====================
     // These methods accept Java Route objects and convert them to native routing parameters
 
     /**
+     * Execute multiple commands efficiently as a batch with optional routing
+     * This method provides significant performance improvements over individual command execution
+     *
+     * @param commands Array of Command objects to execute
+     * @param route The routing configuration (Route object, null for no routing)
+     * @param isAtomic Whether to execute as atomic transaction (MULTI/EXEC) or non-atomic batch
+     * @return CompletableFuture with array of command results
+     */
+    public CompletableFuture<Object[]> executeBatchWithRoute(Command[] commands, Object route, boolean isAtomic) {
+        if (commands == null || commands.length == 0) {
+            throw new IllegalArgumentException("Commands array cannot be null or empty");
+        }
+
+        checkNotClosed();
+
+        try {
+            long handle = nativeClientHandle.get();
+            // Use the new optimized batch execution
+            Object[] results = executePipeline(handle, commands, route, isAtomic);
+            return CompletableFuture.completedFuture(results);
+        } catch (Exception e) {
+            CompletableFuture<Object[]> future = new CompletableFuture<>();
+            future.completeExceptionally(e);
+            return future;
+        }
+    }
+
+    /**
+     * Execute multiple commands efficiently as a non-atomic batch
+     * This method provides significant performance improvements for batch operations
+     *
+     * @param commands Array of Command objects to execute
+     * @return CompletableFuture with array of command results
+     */
+    public CompletableFuture<Object[]> executeBatch(Command[] commands) {
+        return executeBatchWithRoute(commands, null, false);
+    }
+
+    /**
+     * Execute multiple commands as an atomic transaction using MULTI/EXEC
+     *
+     * @param commands Array of Command objects to execute
+     * @return CompletableFuture with array of command results
+     */
+    public CompletableFuture<Object[]> executeTransaction(Command[] commands) {
+        return executeBatchWithRoute(commands, null, true);
+    }
+
+    /**
+     * Execute multiple commands efficiently as a batch with full ClusterBatchOptions support
+     * This method processes all ClusterBatchOptions features including routing, timeout, and retry strategies
+     *
+     * @param commands Array of Command objects to execute
+     * @param options ClusterBatchOptions containing routing, timeout, and retry configuration
+     * @param isAtomic Whether to execute as atomic transaction (MULTI/EXEC) or non-atomic batch
+     * @return CompletableFuture with array of command results
+     */
+    public CompletableFuture<Object[]> executeBatchWithClusterOptions(Command[] commands, Object options, boolean isAtomic) {
+        if (commands == null || commands.length == 0) {
+            throw new IllegalArgumentException("Commands array cannot be null or empty");
+        }
+
+        checkNotClosed();
+
+        try {
+            long handle = nativeClientHandle.get();
+            
+            // Extract options from ClusterBatchOptions object
+            Object route = null;
+            int timeoutMs = 0;
+            boolean retryServerError = false;
+            boolean retryConnectionError = false;
+            
+            if (options != null) {
+                try {
+                    // Use reflection to extract ClusterBatchOptions fields
+                    Class<?> optionsClass = options.getClass();
+                    
+                    // Extract timeout from BaseBatchOptions (parent class)
+                    try {
+                        java.lang.reflect.Method getTimeoutMethod = optionsClass.getMethod("getTimeout");
+                        Object timeoutObj = getTimeoutMethod.invoke(options);
+                        if (timeoutObj instanceof Integer) {
+                            timeoutMs = (Integer) timeoutObj;
+                        }
+                    } catch (Exception e) {
+                        // Timeout is optional, ignore if not found
+                    }
+                    
+                    // Extract route from ClusterBatchOptions
+                    try {
+                        java.lang.reflect.Method getRouteMethod = optionsClass.getMethod("getRoute");
+                        route = getRouteMethod.invoke(options);
+                    } catch (Exception e) {
+                        // Route is optional, ignore if not found
+                    }
+                    
+                    // Extract retry strategy from ClusterBatchOptions
+                    try {
+                        java.lang.reflect.Method getRetryStrategyMethod = optionsClass.getMethod("getRetryStrategy");
+                        Object retryStrategy = getRetryStrategyMethod.invoke(options);
+                        
+                        if (retryStrategy != null) {
+                            Class<?> retryStrategyClass = retryStrategy.getClass();
+                            
+                            try {
+                                java.lang.reflect.Method isRetryServerErrorMethod = retryStrategyClass.getMethod("isRetryServerError");
+                                retryServerError = (Boolean) isRetryServerErrorMethod.invoke(retryStrategy);
+                            } catch (Exception e) {
+                                // Default to false
+                            }
+                            
+                            try {
+                                java.lang.reflect.Method isRetryConnectionErrorMethod = retryStrategyClass.getMethod("isRetryConnectionError");
+                                retryConnectionError = (Boolean) isRetryConnectionErrorMethod.invoke(retryStrategy);
+                            } catch (Exception e) {
+                                // Default to false
+                            }
+                        }
+                    } catch (Exception e) {
+                        // Retry strategy is optional, ignore if not found
+                    }
+                    
+                } catch (Exception e) {
+                    throw new RuntimeException("Failed to process ClusterBatchOptions: " + e.getMessage(), e);
+                }
+            }
+            
+            // Use the optimized batch execution with full options support
+            Object[] results = executePipelineWithOptions(handle, commands, route, isAtomic, timeoutMs, retryServerError, retryConnectionError);
+            return CompletableFuture.completedFuture(results);
+        } catch (Exception e) {
+            CompletableFuture<Object[]> future = new CompletableFuture<>();
+            future.completeExceptionally(e);
+            return future;
+        }
+    }
+
+    /**
      * Execute a command with Java Route object support
      *
      * @param command The command to execute
-     * @param route The routing configuration
+     * @param route The routing configuration (Route object)
      * @return CompletableFuture with the command result
      */
     public CompletableFuture<Object> executeCommand(Command command, Object route) {
@@ -574,8 +738,8 @@ public class GlideClient implements AutoCloseable {
             }
 
             long handle = nativeClientHandle.get();
-            RouteInfo routeInfo = convertRoute(route);
-            Object result = executeCommandWithRouting(handle, command.getType().getCommandName(), byteArgs, routeInfo.type, routeInfo.value);
+            // Pass Route object directly to JNI - conversion happens in Rust
+            Object result = executeCommandWithRoute(handle, command.getType().getCommandName(), byteArgs, route);
             return CompletableFuture.completedFuture(result);
         } catch (Exception e) {
             CompletableFuture<Object> future = new CompletableFuture<>();
@@ -589,15 +753,15 @@ public class GlideClient implements AutoCloseable {
      *
      * @param command The command to execute
      * @param args Command arguments
-     * @param route The routing configuration
+     * @param route The routing configuration (Route object)
      * @return CompletableFuture with String result
      */
     public CompletableFuture<String> executeStringCommand(String command, String[] args, Object route) {
         checkNotClosed();
         try {
             long handle = nativeClientHandle.get();
-            RouteInfo routeInfo = convertRoute(route);
-            String result = executeStringCommandWithRouting(handle, command, args, routeInfo.type, routeInfo.value);
+            // Pass Route object directly to JNI - conversion happens in Rust
+            String result = executeStringCommandWithRoute(handle, command, args, route);
             return CompletableFuture.completedFuture(result);
         } catch (Exception e) {
             CompletableFuture<String> future = new CompletableFuture<>();
@@ -606,102 +770,8 @@ public class GlideClient implements AutoCloseable {
         }
     }
 
-    // ==================== ROUTE CONVERSION LOGIC ====================
-
-    /**
-     * Internal class to represent routing information
-     */
-    private static class RouteInfo {
-        final int type;
-        final String value;
-
-        RouteInfo(int type, String value) {
-            this.type = type;
-            this.value = value;
-        }
-    }
-
-    /**
-     * Convert Java Route object to native routing parameters
-     *
-     * @param route The Route object to convert
-     * @return RouteInfo with type and value
-     */
-    private RouteInfo convertRoute(Object route) {
-        if (route == null) {
-            return new RouteInfo(0, null); // No routing
-        }
-
-        // Use reflection to handle Route objects from glide.api.models.configuration.RequestRoutingConfiguration
-        String className = route.getClass().getSimpleName();
-        String packageName = route.getClass().getPackage().getName();
-
-        try {
-            if (packageName.contains("RequestRoutingConfiguration")) {
-                switch (className) {
-                    case "SimpleMultiNodeRoute":
-                        return convertSimpleMultiNodeRoute(route);
-                    case "SimpleSingleNodeRoute":
-                        return convertSimpleSingleNodeRoute(route);
-                    case "SlotIdRoute":
-                        return convertSlotIdRoute(route);
-                    case "SlotKeyRoute":
-                        return convertSlotKeyRoute(route);
-                    case "ByAddressRoute":
-                        return convertByAddressRoute(route);
-                    default:
-                        throw new IllegalArgumentException("Unknown route type: " + className);
-                }
-            }
-        } catch (Exception e) {
-            throw new IllegalArgumentException("Failed to convert route: " + e.getMessage(), e);
-        }
-
-        throw new IllegalArgumentException("Unsupported route type: " + className);
-    }
-
-    private RouteInfo convertSimpleMultiNodeRoute(Object route) throws Exception {
-        // Get the ordinal value using reflection
-        var ordinalMethod = route.getClass().getMethod("getOrdinal");
-        int ordinal = (Integer) ordinalMethod.invoke(route);
-        
-        switch (ordinal) {
-            case 0: return new RouteInfo(1, null); // ALL_NODES
-            case 1: return new RouteInfo(2, null); // ALL_PRIMARIES
-            default: throw new IllegalArgumentException("Unknown SimpleMultiNodeRoute ordinal: " + ordinal);
-        }
-    }
-
-    private RouteInfo convertSimpleSingleNodeRoute(Object route) throws Exception {
-        // Get the ordinal value using reflection
-        var ordinalMethod = route.getClass().getMethod("getOrdinal");
-        int ordinal = (Integer) ordinalMethod.invoke(route);
-        
-        switch (ordinal) {
-            case 2: return new RouteInfo(3, null); // RANDOM
-            default: throw new IllegalArgumentException("Unknown SimpleSingleNodeRoute ordinal: " + ordinal);
-        }
-    }
-
-    private RouteInfo convertSlotIdRoute(Object route) throws Exception {
-        var slotIdMethod = route.getClass().getMethod("getSlotId");
-        int slotId = (Integer) slotIdMethod.invoke(route);
-        return new RouteInfo(4, String.valueOf(slotId)); // SlotId
-    }
-
-    private RouteInfo convertSlotKeyRoute(Object route) throws Exception {
-        var slotKeyMethod = route.getClass().getMethod("getSlotKey");
-        String slotKey = (String) slotKeyMethod.invoke(route);
-        return new RouteInfo(5, slotKey); // SlotKey
-    }
-
-    private RouteInfo convertByAddressRoute(Object route) throws Exception {
-        var hostMethod = route.getClass().getMethod("getHost");
-        var portMethod = route.getClass().getMethod("getPort");
-        String host = (String) hostMethod.invoke(route);
-        int port = (Integer) portMethod.invoke(route);
-        return new RouteInfo(6, host + ":" + port); // ByAddress
-    }
+    // ==================== SIMPLIFIED ROUTING ====================
+    // Routing is now handled directly in Rust JNI layer without Java-side conversion
 
     /**
      * Update the connection password for reconnection.

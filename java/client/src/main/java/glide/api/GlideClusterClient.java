@@ -542,9 +542,24 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return A CompletableFuture containing an array of results
      */
     public CompletableFuture<Object[]> exec(ClusterBatch batch, boolean raiseOnError, ClusterBatchOptions options) {
-        // For now, we implement this by ignoring options and delegating to the base implementation
-        // In a full implementation, options would be passed to the core client
-        return exec(batch, raiseOnError);
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                List<Command> commands = batch.getCommands();
+                
+                if (batch.isAtomic()) {
+                    // Execute as atomic transaction using MULTI/EXEC with options
+                    return executeAtomicBatchWithOptions(commands, raiseOnError, options);
+                } else {
+                    // Execute as pipeline (non-atomic) with options
+                    return executeNonAtomicBatchWithOptions(commands, raiseOnError, options);
+                }
+            } catch (Exception e) {
+                if (raiseOnError) {
+                    throw new RuntimeException("Failed to execute cluster batch with options", e);
+                }
+                return new Object[0];
+            }
+        });
     }
 
     /**
@@ -682,9 +697,22 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return A CompletableFuture containing a ClusterValue with generative computer art.
      */
     public CompletableFuture<ClusterValue<String>> lolwut(Route route) {
-        // For now, return a simple implementation without actual routing
-        return executeCommand(CommandType.LOLWUT)
-            .thenApply(result -> ClusterValue.ofSingleValue(result.toString()));
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(
+            CommandType.LOLWUT), route)
+            .thenApply(result -> {
+                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
+                    return ClusterValue.ofSingleValue(result.toString());
+                } else {
+                    // For multi-node routes, expect a map result
+                    if (result instanceof Map) {
+                        Map<String, String> mapResult = new java.util.HashMap<>();
+                        ((Map<?, ?>) result).forEach((key, value) -> 
+                            mapResult.put(key.toString(), value.toString()));
+                        return ClusterValue.ofMultiValue(mapResult);
+                    }
+                    return ClusterValue.ofSingleValue(result.toString());
+                }
+            });
     }
 
     /**
@@ -699,9 +727,22 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
         String[] args = Arrays.stream(parameters)
             .mapToObj(String::valueOf)
             .toArray(String[]::new);
-        // For now, return a simple implementation without actual routing
-        return executeCommand(CommandType.LOLWUT, args)
-            .thenApply(result -> ClusterValue.ofSingleValue(result.toString()));
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(
+            CommandType.LOLWUT, args), route)
+            .thenApply(result -> {
+                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
+                    return ClusterValue.ofSingleValue(result.toString());
+                } else {
+                    // For multi-node routes, expect a map result
+                    if (result instanceof Map) {
+                        Map<String, String> mapResult = new java.util.HashMap<>();
+                        ((Map<?, ?>) result).forEach((key, value) -> 
+                            mapResult.put(key.toString(), value.toString()));
+                        return ClusterValue.ofMultiValue(mapResult);
+                    }
+                    return ClusterValue.ofSingleValue(result.toString());
+                }
+            });
     }
 
     /**
@@ -713,9 +754,22 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return A CompletableFuture containing a ClusterValue with generative computer art.
      */
     public CompletableFuture<ClusterValue<String>> lolwut(int version, Route route) {
-        // For now, return a simple implementation without actual routing
-        return executeCommand(CommandType.LOLWUT, VERSION_VALKEY_API, String.valueOf(version))
-            .thenApply(result -> ClusterValue.ofSingleValue(result.toString()));
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(
+            CommandType.LOLWUT, VERSION_VALKEY_API, String.valueOf(version)), route)
+            .thenApply(result -> {
+                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
+                    return ClusterValue.ofSingleValue(result.toString());
+                } else {
+                    // For multi-node routes, expect a map result
+                    if (result instanceof Map) {
+                        Map<String, String> mapResult = new java.util.HashMap<>();
+                        ((Map<?, ?>) result).forEach((key, value) -> 
+                            mapResult.put(key.toString(), value.toString()));
+                        return ClusterValue.ofMultiValue(mapResult);
+                    }
+                    return ClusterValue.ofSingleValue(result.toString());
+                }
+            });
     }
 
     /**
@@ -734,9 +788,22 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
         for (int param : parameters) {
             args.add(String.valueOf(param));
         }
-        // For now, return a simple implementation without actual routing
-        return executeCommand(CommandType.LOLWUT, args.toArray(new String[0]))
-            .thenApply(result -> ClusterValue.ofSingleValue(result.toString()));
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(
+            CommandType.LOLWUT, args.toArray(new String[0])), route)
+            .thenApply(result -> {
+                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
+                    return ClusterValue.ofSingleValue(result.toString());
+                } else {
+                    // For multi-node routes, expect a map result
+                    if (result instanceof Map) {
+                        Map<String, String> mapResult = new java.util.HashMap<>();
+                        ((Map<?, ?>) result).forEach((key, value) -> 
+                            mapResult.put(key.toString(), value.toString()));
+                        return ClusterValue.ofMultiValue(mapResult);
+                    }
+                    return ClusterValue.ofSingleValue(result.toString());
+                }
+            });
     }
 
 
@@ -792,9 +859,22 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return A CompletableFuture containing the client ID wrapped in ClusterValue
      */
     public CompletableFuture<ClusterValue<Long>> clientId(Route route) {
-        // For now, ignore the route parameter and delegate to the base clientId
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return super.clientId().thenApply(ClusterValue::ofSingleValue);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(
+            CommandType.CLIENT_ID), route)
+            .thenApply(result -> {
+                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
+                    return ClusterValue.ofSingleValue(Long.parseLong(result.toString()));
+                } else {
+                    // For multi-node routes, expect a map result
+                    if (result instanceof Map) {
+                        Map<String, Long> mapResult = new java.util.HashMap<>();
+                        ((Map<?, ?>) result).forEach((key, value) -> 
+                            mapResult.put(key.toString(), Long.parseLong(value.toString())));
+                        return ClusterValue.ofMultiValue(mapResult);
+                    }
+                    return ClusterValue.ofSingleValue(Long.parseLong(result.toString()));
+                }
+            });
     }
 
     /**
@@ -804,9 +884,22 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return A CompletableFuture containing the client name wrapped in ClusterValue
      */
     public CompletableFuture<ClusterValue<String>> clientGetName(Route route) {
-        // For now, ignore the route parameter and delegate to the base clientGetName
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return super.clientGetName().thenApply(ClusterValue::ofSingleValue);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(
+            CommandType.CLIENT_GETNAME), route)
+            .thenApply(result -> {
+                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
+                    return ClusterValue.ofSingleValue(result == null ? null : result.toString());
+                } else {
+                    // For multi-node routes, expect a map result
+                    if (result instanceof Map) {
+                        Map<String, String> mapResult = new java.util.HashMap<>();
+                        ((Map<?, ?>) result).forEach((key, value) -> 
+                            mapResult.put(key.toString(), value == null ? null : value.toString()));
+                        return ClusterValue.ofMultiValue(mapResult);
+                    }
+                    return ClusterValue.ofSingleValue(result == null ? null : result.toString());
+                }
+            });
     }
 
     /**
@@ -817,9 +910,45 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return A CompletableFuture containing the configuration values wrapped in ClusterValue
      */
     public CompletableFuture<ClusterValue<Map<String, String>>> configGet(String[] parameters, Route route) {
-        // For now, ignore the route parameter and delegate to the base configGet
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return super.configGet(parameters).thenApply(ClusterValue::ofSingleValue);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(
+            CommandType.CONFIG_GET, parameters), route)
+            .thenApply(result -> {
+                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
+                    Map<String, String> config = new java.util.HashMap<>();
+                    if (result instanceof Object[]) {
+                        Object[] array = (Object[]) result;
+                        for (int i = 0; i < array.length - 1; i += 2) {
+                            config.put(array[i].toString(), array[i + 1].toString());
+                        }
+                    }
+                    return ClusterValue.ofSingleValue(config);
+                } else {
+                    // For multi-node routes, expect a map result where each node maps to config
+                    if (result instanceof Map) {
+                        Map<String, Map<String, String>> mapResult = new java.util.HashMap<>();
+                        ((Map<?, ?>) result).forEach((key, value) -> {
+                            Map<String, String> nodeConfig = new java.util.HashMap<>();
+                            if (value instanceof Object[]) {
+                                Object[] array = (Object[]) value;
+                                for (int i = 0; i < array.length - 1; i += 2) {
+                                    nodeConfig.put(array[i].toString(), array[i + 1].toString());
+                                }
+                            }
+                            mapResult.put(key.toString(), nodeConfig);
+                        });
+                        return ClusterValue.ofMultiValue(mapResult);
+                    }
+                    // Fallback to single value
+                    Map<String, String> config = new java.util.HashMap<>();
+                    if (result instanceof Object[]) {
+                        Object[] array = (Object[]) result;
+                        for (int i = 0; i < array.length - 1; i += 2) {
+                            config.put(array[i].toString(), array[i + 1].toString());
+                        }
+                    }
+                    return ClusterValue.ofSingleValue(config);
+                }
+            });
     }
 
     /**
@@ -830,9 +959,22 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return A CompletableFuture containing the echoed message wrapped in ClusterValue
      */
     public CompletableFuture<ClusterValue<String>> echo(String message, Route route) {
-        // For now, ignore the route parameter and delegate to the base echo
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return super.echo(message).thenApply(ClusterValue::ofSingleValue);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(
+            CommandType.ECHO, message), route)
+            .thenApply(result -> {
+                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
+                    return ClusterValue.ofSingleValue(result.toString());
+                } else {
+                    // For multi-node routes, expect a map result
+                    if (result instanceof Map) {
+                        Map<String, String> mapResult = new java.util.HashMap<>();
+                        ((Map<?, ?>) result).forEach((key, value) -> 
+                            mapResult.put(key.toString(), value.toString()));
+                        return ClusterValue.ofMultiValue(mapResult);
+                    }
+                    return ClusterValue.ofSingleValue(result.toString());
+                }
+            });
     }
 
     /**
@@ -843,9 +985,22 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return A CompletableFuture containing the echoed message wrapped in ClusterValue
      */
     public CompletableFuture<ClusterValue<GlideString>> echo(GlideString message, Route route) {
-        // For now, ignore the route parameter and delegate to the base echo
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return super.echo(message).thenApply(ClusterValue::ofSingleValue);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(
+            CommandType.ECHO, message.toString()), route)
+            .thenApply(result -> {
+                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
+                    return ClusterValue.ofSingleValue(GlideString.of(result.toString()));
+                } else {
+                    // For multi-node routes, expect a map result
+                    if (result instanceof Map) {
+                        Map<String, GlideString> mapResult = new java.util.HashMap<>();
+                        ((Map<?, ?>) result).forEach((key, value) -> 
+                            mapResult.put(key.toString(), GlideString.of(value.toString())));
+                        return ClusterValue.ofMultiValue(mapResult);
+                    }
+                    return ClusterValue.ofSingleValue(GlideString.of(result.toString()));
+                }
+            });
     }
 
 
@@ -871,9 +1026,22 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return A CompletableFuture containing the result wrapped in ClusterValue
      */
     public CompletableFuture<ClusterValue<String>> functionFlush(Route route) {
-        // For now, ignore the route parameter and delegate to the base functionFlush
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return super.functionFlush(null).thenApply(ClusterValue::ofSingleValue);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(
+            CommandType.FUNCTION_FLUSH), route)
+            .thenApply(result -> {
+                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
+                    return ClusterValue.ofSingleValue(result.toString());
+                } else {
+                    // For multi-node routes, expect a map result
+                    if (result instanceof Map) {
+                        Map<String, String> mapResult = new java.util.HashMap<>();
+                        ((Map<?, ?>) result).forEach((key, value) -> 
+                            mapResult.put(key.toString(), value.toString()));
+                        return ClusterValue.ofMultiValue(mapResult);
+                    }
+                    return ClusterValue.ofSingleValue(result.toString());
+                }
+            });
     }
 
     /**
@@ -884,9 +1052,22 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return A CompletableFuture containing the result wrapped in ClusterValue
      */
     public CompletableFuture<ClusterValue<String>> functionFlush(FlushMode flushMode, Route route) {
-        // For now, ignore the route parameter and delegate to the base functionFlush
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return super.functionFlush(flushMode.name()).thenApply(ClusterValue::ofSingleValue);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(
+            CommandType.FUNCTION_FLUSH, flushMode.name()), route)
+            .thenApply(result -> {
+                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
+                    return ClusterValue.ofSingleValue(result.toString());
+                } else {
+                    // For multi-node routes, expect a map result
+                    if (result instanceof Map) {
+                        Map<String, String> mapResult = new java.util.HashMap<>();
+                        ((Map<?, ?>) result).forEach((key, value) -> 
+                            mapResult.put(key.toString(), value.toString()));
+                        return ClusterValue.ofMultiValue(mapResult);
+                    }
+                    return ClusterValue.ofSingleValue(result.toString());
+                }
+            });
     }
 
     // Function List methods - proper implementations using BaseClient
@@ -982,8 +1163,9 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
     }
 
     public CompletableFuture<String> functionKill(Route route) {
-        // Delegate to non-route version for now
-        return functionKill();
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(
+            CommandType.FUNCTION_KILL), route)
+            .thenApply(result -> result.toString());
     }
 
     // Function Stats methods - proper implementations using BaseClient
@@ -1012,13 +1194,35 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
     }
 
     public CompletableFuture<ClusterValue<Map<String, Map<String, Object>>>> functionStats(Route route) {
-        // Delegate to non-route version for now
-        return functionStatsCluster();
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(
+            CommandType.FUNCTION_STATS), route)
+            .thenApply(result -> {
+                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
+                    return ClusterValue.ofSingleValue((Map<String, Map<String, Object>>) result);
+                } else {
+                    // For multi-node routes, expect a map result
+                    if (result instanceof Map) {
+                        return ClusterValue.ofMultiValue((Map<String, Map<String, Map<String, Object>>>) result);
+                    }
+                    return ClusterValue.ofSingleValue((Map<String, Map<String, Object>>) result);
+                }
+            });
     }
 
     public CompletableFuture<ClusterValue<Map<GlideString, Map<GlideString, Object>>>> functionStatsBinary(Route route) {
-        // Delegate to non-route version for now
-        return functionStatsBinary();
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(
+            CommandType.FUNCTION_STATS), route)
+            .thenApply(result -> {
+                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
+                    return ClusterValue.ofSingleValue((Map<GlideString, Map<GlideString, Object>>) result);
+                } else {
+                    // For multi-node routes, expect a map result
+                    if (result instanceof Map) {
+                        return ClusterValue.ofMultiValue((Map<String, Map<GlideString, Map<GlideString, Object>>>) result);
+                    }
+                    return ClusterValue.ofSingleValue((Map<GlideString, Map<GlideString, Object>>) result);
+                }
+            });
     }
 
     // Function Restore methods - proper implementations using BaseClient
@@ -1033,13 +1237,15 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
     }
 
     public CompletableFuture<String> functionRestore(byte[] payload, Route route) {
-        // Delegate to non-route version for now
-        return functionRestore(payload);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(
+            CommandType.FUNCTION_RESTORE, payload), route)
+            .thenApply(result -> result.toString());
     }
 
     public CompletableFuture<String> functionRestore(byte[] payload, FunctionRestorePolicy policy, Route route) {
-        // Delegate to non-route version for now
-        return functionRestore(payload, policy);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(
+            CommandType.FUNCTION_RESTORE, payload, policy.getValkeyApi()), route)
+            .thenApply(result -> result.toString());
     }
 
     /**
@@ -1051,9 +1257,27 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return A CompletableFuture containing the result wrapped in ClusterValue
      */
     public CompletableFuture<ClusterValue<String>> functionLoad(String libraryCode, boolean replace, Route route) {
-        // For now, ignore the route parameter and delegate to the base functionLoad
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return super.functionLoad(libraryCode, replace).thenApply(ClusterValue::ofSingleValue);
+        List<String> args = new ArrayList<>();
+        if (replace) {
+            args.add("REPLACE");
+        }
+        args.add(libraryCode);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(
+            CommandType.FUNCTION_LOAD, args.toArray(new String[0])), route)
+            .thenApply(result -> {
+                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
+                    return ClusterValue.ofSingleValue(result.toString());
+                } else {
+                    // For multi-node routes, expect a map result
+                    if (result instanceof Map) {
+                        Map<String, String> mapResult = new java.util.HashMap<>();
+                        ((Map<?, ?>) result).forEach((key, value) -> 
+                            mapResult.put(key.toString(), value.toString()));
+                        return ClusterValue.ofMultiValue(mapResult);
+                    }
+                    return ClusterValue.ofSingleValue(result.toString());
+                }
+            });
     }
 
     /**
@@ -1065,9 +1289,27 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return A CompletableFuture containing the result wrapped in ClusterValue
      */
     public CompletableFuture<ClusterValue<GlideString>> functionLoad(GlideString libraryCode, boolean replace, Route route) {
-        // For now, ignore the route parameter and delegate to the base functionLoad
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return super.functionLoad(libraryCode.toString(), replace).thenApply(result -> ClusterValue.ofSingleValue(GlideString.of(result)));
+        List<String> args = new ArrayList<>();
+        if (replace) {
+            args.add("REPLACE");
+        }
+        args.add(libraryCode.toString());
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(
+            CommandType.FUNCTION_LOAD, args.toArray(new String[0])), route)
+            .thenApply(result -> {
+                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
+                    return ClusterValue.ofSingleValue(GlideString.of(result.toString()));
+                } else {
+                    // For multi-node routes, expect a map result
+                    if (result instanceof Map) {
+                        Map<String, GlideString> mapResult = new java.util.HashMap<>();
+                        ((Map<?, ?>) result).forEach((key, value) -> 
+                            mapResult.put(key.toString(), GlideString.of(value.toString())));
+                        return ClusterValue.ofMultiValue(mapResult);
+                    }
+                    return ClusterValue.ofSingleValue(GlideString.of(result.toString()));
+                }
+            });
     }
 
     /**
@@ -1078,9 +1320,45 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return A CompletableFuture containing the result wrapped in ClusterValue
      */
     public CompletableFuture<ClusterValue<Boolean[]>> scriptExists(String[] sha1Hashes, Route route) {
-        // For now, ignore the route parameter and delegate to the base scriptExists
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return super.scriptExists(sha1Hashes).thenApply(ClusterValue::ofSingleValue);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(
+            CommandType.SCRIPT_EXISTS, sha1Hashes), route)
+            .thenApply(result -> {
+                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
+                    Boolean[] booleanResult = new Boolean[sha1Hashes.length];
+                    if (result instanceof Object[]) {
+                        Object[] array = (Object[]) result;
+                        for (int i = 0; i < array.length && i < booleanResult.length; i++) {
+                            booleanResult[i] = "1".equals(array[i].toString());
+                        }
+                    }
+                    return ClusterValue.ofSingleValue(booleanResult);
+                } else {
+                    // For multi-node routes, expect a map result
+                    if (result instanceof Map) {
+                        Map<String, Boolean[]> mapResult = new java.util.HashMap<>();
+                        ((Map<?, ?>) result).forEach((key, value) -> {
+                            Boolean[] booleanResult = new Boolean[sha1Hashes.length];
+                            if (value instanceof Object[]) {
+                                Object[] array = (Object[]) value;
+                                for (int i = 0; i < array.length && i < booleanResult.length; i++) {
+                                    booleanResult[i] = "1".equals(array[i].toString());
+                                }
+                            }
+                            mapResult.put(key.toString(), booleanResult);
+                        });
+                        return ClusterValue.ofMultiValue(mapResult);
+                    }
+                    // Fallback to single value
+                    Boolean[] booleanResult = new Boolean[sha1Hashes.length];
+                    if (result instanceof Object[]) {
+                        Object[] array = (Object[]) result;
+                        for (int i = 0; i < array.length && i < booleanResult.length; i++) {
+                            booleanResult[i] = "1".equals(array[i].toString());
+                        }
+                    }
+                    return ClusterValue.ofSingleValue(booleanResult);
+                }
+            });
     }
 
     /**
@@ -1090,9 +1368,22 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return A CompletableFuture containing the result wrapped in ClusterValue
      */
     public CompletableFuture<ClusterValue<String>> scriptKill(Route route) {
-        // For now, ignore the route parameter and delegate to the base scriptKill
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return super.scriptKill().thenApply(ClusterValue::ofSingleValue);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(
+            CommandType.SCRIPT_KILL), route)
+            .thenApply(result -> {
+                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
+                    return ClusterValue.ofSingleValue(result.toString());
+                } else {
+                    // For multi-node routes, expect a map result
+                    if (result instanceof Map) {
+                        Map<String, String> mapResult = new java.util.HashMap<>();
+                        ((Map<?, ?>) result).forEach((key, value) -> 
+                            mapResult.put(key.toString(), value.toString()));
+                        return ClusterValue.ofMultiValue(mapResult);
+                    }
+                    return ClusterValue.ofSingleValue(result.toString());
+                }
+            });
     }
 
     /**
@@ -1103,9 +1394,30 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return A CompletableFuture containing the result wrapped in ClusterValue
      */
     public CompletableFuture<ClusterValue<Object>> invokeScript(Script script, Route route) {
-        // For now, ignore the route parameter and delegate to the base invokeScript
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return super.invokeScript(script).thenApply(ClusterValue::ofSingleValue);
+        String[] keys = script.getKeys();
+        String[] args = script.getArgs();
+        CommandType cmdType = script.getHash() != null ? CommandType.EVALSHA : CommandType.EVAL;
+        String scriptOrHash = script.getHash() != null ? script.getHash() : script.getCode();
+        
+        List<String> cmdArgs = new ArrayList<>();
+        cmdArgs.add(scriptOrHash);
+        cmdArgs.add(String.valueOf(keys.length));
+        cmdArgs.addAll(Arrays.asList(keys));
+        cmdArgs.addAll(Arrays.asList(args));
+        
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(
+            cmdType, cmdArgs.toArray(new String[0])), route)
+            .thenApply(result -> {
+                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
+                    return ClusterValue.ofSingleValue(result);
+                } else {
+                    // For multi-node routes, expect a map result
+                    if (result instanceof Map) {
+                        return ClusterValue.ofMultiValue((Map<String, Object>) result);
+                    }
+                    return ClusterValue.ofSingleValue(result);
+                }
+            });
     }
 
     /**
@@ -1116,9 +1428,19 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return A CompletableFuture containing the result wrapped in ClusterValue
      */
     public CompletableFuture<ClusterValue<Object>> fcall(String functionName, Route route) {
-        // For now, ignore the route parameter and delegate to the base fcall
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return super.fcall(functionName, new String[]{}, new String[]{}).thenApply(ClusterValue::ofSingleValue);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(
+            CommandType.FCALL, functionName, "0"), route)
+            .thenApply(result -> {
+                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
+                    return ClusterValue.ofSingleValue(result);
+                } else {
+                    // For multi-node routes, expect a map result
+                    if (result instanceof Map) {
+                        return ClusterValue.ofMultiValue((Map<String, Object>) result);
+                    }
+                    return ClusterValue.ofSingleValue(result);
+                }
+            });
     }
 
     /**
@@ -1130,9 +1452,23 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return A CompletableFuture containing the result wrapped in ClusterValue
      */
     public CompletableFuture<ClusterValue<Object>> fcall(String functionName, String[] keys, Route route) {
-        // For now, ignore the route parameter and delegate to the base fcall
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return super.fcall(functionName, keys, new String[]{}).thenApply(ClusterValue::ofSingleValue);
+        List<String> cmdArgs = new ArrayList<>();
+        cmdArgs.add(functionName);
+        cmdArgs.add(String.valueOf(keys.length));
+        cmdArgs.addAll(Arrays.asList(keys));
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(
+            CommandType.FCALL, cmdArgs.toArray(new String[0])), route)
+            .thenApply(result -> {
+                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
+                    return ClusterValue.ofSingleValue(result);
+                } else {
+                    // For multi-node routes, expect a map result
+                    if (result instanceof Map) {
+                        return ClusterValue.ofMultiValue((Map<String, Object>) result);
+                    }
+                    return ClusterValue.ofSingleValue(result);
+                }
+            });
     }
 
     /**
@@ -1145,9 +1481,24 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return A CompletableFuture containing the result wrapped in ClusterValue
      */
     public CompletableFuture<ClusterValue<Object>> fcall(String functionName, String[] keys, String[] args, Route route) {
-        // For now, ignore the route parameter and delegate to the base fcall
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return super.fcall(functionName, keys, args).thenApply(ClusterValue::ofSingleValue);
+        List<String> cmdArgs = new ArrayList<>();
+        cmdArgs.add(functionName);
+        cmdArgs.add(String.valueOf(keys.length));
+        cmdArgs.addAll(Arrays.asList(keys));
+        cmdArgs.addAll(Arrays.asList(args));
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(
+            CommandType.FCALL, cmdArgs.toArray(new String[0])), route)
+            .thenApply(result -> {
+                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
+                    return ClusterValue.ofSingleValue(result);
+                } else {
+                    // For multi-node routes, expect a map result
+                    if (result instanceof Map) {
+                        return ClusterValue.ofMultiValue((Map<String, Object>) result);
+                    }
+                    return ClusterValue.ofSingleValue(result);
+                }
+            });
     }
 
     /**
@@ -1158,9 +1509,19 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return A CompletableFuture containing the result wrapped in ClusterValue
      */
     public CompletableFuture<ClusterValue<Object>> fcallReadOnly(String functionName, Route route) {
-        // For now, ignore the route parameter and delegate to the base fcallReadOnly
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return super.fcallReadOnly(functionName, new String[]{}, new String[]{}).thenApply(ClusterValue::ofSingleValue);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(
+            CommandType.FCALL_RO, functionName, "0"), route)
+            .thenApply(result -> {
+                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
+                    return ClusterValue.ofSingleValue(result);
+                } else {
+                    // For multi-node routes, expect a map result
+                    if (result instanceof Map) {
+                        return ClusterValue.ofMultiValue((Map<String, Object>) result);
+                    }
+                    return ClusterValue.ofSingleValue(result);
+                }
+            });
     }
 
     /**
@@ -1172,9 +1533,23 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return A CompletableFuture containing the result wrapped in ClusterValue
      */
     public CompletableFuture<ClusterValue<Object>> fcallReadOnly(String functionName, String[] keys, Route route) {
-        // For now, ignore the route parameter and delegate to the base fcallReadOnly
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return super.fcallReadOnly(functionName, keys, new String[]{}).thenApply(ClusterValue::ofSingleValue);
+        List<String> cmdArgs = new ArrayList<>();
+        cmdArgs.add(functionName);
+        cmdArgs.add(String.valueOf(keys.length));
+        cmdArgs.addAll(Arrays.asList(keys));
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(
+            CommandType.FCALL_RO, cmdArgs.toArray(new String[0])), route)
+            .thenApply(result -> {
+                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
+                    return ClusterValue.ofSingleValue(result);
+                } else {
+                    // For multi-node routes, expect a map result
+                    if (result instanceof Map) {
+                        return ClusterValue.ofMultiValue((Map<String, Object>) result);
+                    }
+                    return ClusterValue.ofSingleValue(result);
+                }
+            });
     }
 
     /**
@@ -1187,9 +1562,24 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return A CompletableFuture containing the result wrapped in ClusterValue
      */
     public CompletableFuture<ClusterValue<Object>> fcallReadOnly(String functionName, String[] keys, String[] args, Route route) {
-        // For now, ignore the route parameter and delegate to the base fcallReadOnly
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return super.fcallReadOnly(functionName, keys, args).thenApply(ClusterValue::ofSingleValue);
+        List<String> cmdArgs = new ArrayList<>();
+        cmdArgs.add(functionName);
+        cmdArgs.add(String.valueOf(keys.length));
+        cmdArgs.addAll(Arrays.asList(keys));
+        cmdArgs.addAll(Arrays.asList(args));
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(
+            CommandType.FCALL_RO, cmdArgs.toArray(new String[0])), route)
+            .thenApply(result -> {
+                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
+                    return ClusterValue.ofSingleValue(result);
+                } else {
+                    // For multi-node routes, expect a map result
+                    if (result instanceof Map) {
+                        return ClusterValue.ofMultiValue((Map<String, Object>) result);
+                    }
+                    return ClusterValue.ofSingleValue(result);
+                }
+            });
     }
 
     /**
@@ -1200,9 +1590,22 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return A CompletableFuture containing the result wrapped in ClusterValue
      */
     public CompletableFuture<ClusterValue<String>> functionDelete(String libraryName, Route route) {
-        // For now, ignore the route parameter and delegate to the base functionDelete
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return super.functionDelete(libraryName).thenApply(ClusterValue::ofSingleValue);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(
+            CommandType.FUNCTION_DELETE, libraryName), route)
+            .thenApply(result -> {
+                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
+                    return ClusterValue.ofSingleValue(result.toString());
+                } else {
+                    // For multi-node routes, expect a map result
+                    if (result instanceof Map) {
+                        Map<String, String> mapResult = new java.util.HashMap<>();
+                        ((Map<?, ?>) result).forEach((key, value) -> 
+                            mapResult.put(key.toString(), value.toString()));
+                        return ClusterValue.ofMultiValue(mapResult);
+                    }
+                    return ClusterValue.ofSingleValue(result.toString());
+                }
+            });
     }
 
     /**
@@ -1213,9 +1616,19 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return A CompletableFuture containing the list of functions wrapped in ClusterValue
      */
     public CompletableFuture<ClusterValue<Object>> functionList(String libraryName, Route route) {
-        // For now, ignore the route parameter and delegate to the base functionList
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return super.functionList(libraryName).thenApply(ClusterValue::ofSingleValue);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(
+            CommandType.FUNCTION_LIST, "LIBRARYNAME", libraryName), route)
+            .thenApply(result -> {
+                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
+                    return ClusterValue.ofSingleValue(result);
+                } else {
+                    // For multi-node routes, expect a map result
+                    if (result instanceof Map) {
+                        return ClusterValue.ofMultiValue((Map<String, Object>) result);
+                    }
+                    return ClusterValue.ofSingleValue(result);
+                }
+            });
     }
 
 
@@ -1249,9 +1662,28 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return A CompletableFuture containing the result wrapped in ClusterValue
      */
     public CompletableFuture<ClusterValue<Object>> fcall(GlideString functionName, GlideString[] keys, GlideString[] args, Route route) {
-        // For now, ignore the route parameter and delegate to the GlideString version
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return fcall(functionName, keys, args);
+        List<String> cmdArgs = new ArrayList<>();
+        cmdArgs.add(functionName.toString());
+        cmdArgs.add(String.valueOf(keys.length));
+        for (GlideString key : keys) {
+            cmdArgs.add(key.toString());
+        }
+        for (GlideString arg : args) {
+            cmdArgs.add(arg.toString());
+        }
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(
+            CommandType.FCALL, cmdArgs.toArray(new String[0])), route)
+            .thenApply(result -> {
+                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
+                    return ClusterValue.ofSingleValue(result);
+                } else {
+                    // For multi-node routes, expect a map result
+                    if (result instanceof Map) {
+                        return ClusterValue.ofMultiValue((Map<String, Object>) result);
+                    }
+                    return ClusterValue.ofSingleValue(result);
+                }
+            });
     }
 
     /**
@@ -1262,9 +1694,19 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return A CompletableFuture containing the result wrapped in ClusterValue
      */
     public CompletableFuture<ClusterValue<Object>> fcall(GlideString functionName, Route route) {
-        // For now, ignore the route parameter and delegate to the GlideString version
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return fcall(functionName, new GlideString[]{}, new GlideString[]{});
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(
+            CommandType.FCALL, functionName.toString(), "0"), route)
+            .thenApply(result -> {
+                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
+                    return ClusterValue.ofSingleValue(result);
+                } else {
+                    // For multi-node routes, expect a map result
+                    if (result instanceof Map) {
+                        return ClusterValue.ofMultiValue((Map<String, Object>) result);
+                    }
+                    return ClusterValue.ofSingleValue(result);
+                }
+            });
     }
 
     /**
@@ -1276,9 +1718,25 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return A CompletableFuture containing the result wrapped in ClusterValue
      */
     public CompletableFuture<ClusterValue<Object>> fcall(GlideString functionName, GlideString[] keys, Route route) {
-        // For now, ignore the route parameter and delegate to the GlideString version
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return fcall(functionName, keys, new GlideString[]{});
+        List<String> cmdArgs = new ArrayList<>();
+        cmdArgs.add(functionName.toString());
+        cmdArgs.add(String.valueOf(keys.length));
+        for (GlideString key : keys) {
+            cmdArgs.add(key.toString());
+        }
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(
+            CommandType.FCALL, cmdArgs.toArray(new String[0])), route)
+            .thenApply(result -> {
+                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
+                    return ClusterValue.ofSingleValue(result);
+                } else {
+                    // For multi-node routes, expect a map result
+                    if (result instanceof Map) {
+                        return ClusterValue.ofMultiValue((Map<String, Object>) result);
+                    }
+                    return ClusterValue.ofSingleValue(result);
+                }
+            });
     }
 
     /**
@@ -1311,9 +1769,28 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return A CompletableFuture containing the result wrapped in ClusterValue
      */
     public CompletableFuture<ClusterValue<Object>> fcallReadOnly(GlideString functionName, GlideString[] keys, GlideString[] args, Route route) {
-        // For now, ignore the route parameter and delegate to the GlideString version
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return fcallReadOnly(functionName, keys, args);
+        List<String> cmdArgs = new ArrayList<>();
+        cmdArgs.add(functionName.toString());
+        cmdArgs.add(String.valueOf(keys.length));
+        for (GlideString key : keys) {
+            cmdArgs.add(key.toString());
+        }
+        for (GlideString arg : args) {
+            cmdArgs.add(arg.toString());
+        }
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(
+            CommandType.FCALL_RO, cmdArgs.toArray(new String[0])), route)
+            .thenApply(result -> {
+                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
+                    return ClusterValue.ofSingleValue(result);
+                } else {
+                    // For multi-node routes, expect a map result
+                    if (result instanceof Map) {
+                        return ClusterValue.ofMultiValue((Map<String, Object>) result);
+                    }
+                    return ClusterValue.ofSingleValue(result);
+                }
+            });
     }
 
     /**
@@ -1325,9 +1802,25 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return A CompletableFuture containing the result wrapped in ClusterValue
      */
     public CompletableFuture<ClusterValue<Object>> fcallReadOnly(GlideString functionName, GlideString[] keys, Route route) {
-        // For now, ignore the route parameter and delegate to the GlideString version
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return fcallReadOnly(functionName, keys, new GlideString[]{});
+        List<String> cmdArgs = new ArrayList<>();
+        cmdArgs.add(functionName.toString());
+        cmdArgs.add(String.valueOf(keys.length));
+        for (GlideString key : keys) {
+            cmdArgs.add(key.toString());
+        }
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(
+            CommandType.FCALL_RO, cmdArgs.toArray(new String[0])), route)
+            .thenApply(result -> {
+                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
+                    return ClusterValue.ofSingleValue(result);
+                } else {
+                    // For multi-node routes, expect a map result
+                    if (result instanceof Map) {
+                        return ClusterValue.ofMultiValue((Map<String, Object>) result);
+                    }
+                    return ClusterValue.ofSingleValue(result);
+                }
+            });
     }
 
     /**
@@ -1361,9 +1854,45 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return A CompletableFuture containing the result wrapped in ClusterValue
      */
     public CompletableFuture<ClusterValue<Object>> customCommand(String[] args, Route route) {
-        // For now, ignore the route parameter and delegate to the base executeCustomCommand
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return executeCustomCommand(args).thenApply(ClusterValue::ofSingleValue);
+        if (args.length == 0) {
+            throw new IllegalArgumentException("Custom command requires at least one argument");
+        }
+        CommandType commandType;
+        try {
+            commandType = CommandType.valueOf(args[0].toUpperCase());
+        } catch (IllegalArgumentException e) {
+            // For unknown commands, use a generic approach
+            String[] commandArgs = new String[args.length - 1];
+            System.arraycopy(args, 1, commandArgs, 0, args.length - 1);
+            return client.executeCommand(new io.valkey.glide.core.commands.Command(
+                CommandType.CUSTOM, args[0], commandArgs), route)
+                .thenApply(result -> {
+                    if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
+                        return ClusterValue.ofSingleValue(result);
+                    } else {
+                        // For multi-node routes, expect a map result
+                        if (result instanceof Map) {
+                            return ClusterValue.ofMultiValue((Map<String, Object>) result);
+                        }
+                        return ClusterValue.ofSingleValue(result);
+                    }
+                });
+        }
+        String[] commandArgs = new String[args.length - 1];
+        System.arraycopy(args, 1, commandArgs, 0, args.length - 1);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(
+            commandType, commandArgs), route)
+            .thenApply(result -> {
+                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
+                    return ClusterValue.ofSingleValue(result);
+                } else {
+                    // For multi-node routes, expect a map result
+                    if (result instanceof Map) {
+                        return ClusterValue.ofMultiValue((Map<String, Object>) result);
+                    }
+                    return ClusterValue.ofSingleValue(result);
+                }
+            });
     }
 
     /**
@@ -1375,9 +1904,14 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return A CompletableFuture containing the result wrapped in ClusterValue
      */
     public CompletableFuture<ClusterValue<Object>> customCommand(GlideString[] args, Route route) {
-        // For now, ignore the route parameter and delegate to the base executeCustomCommand
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return executeCustomCommand(args).thenApply(ClusterValue::ofSingleValue);
+        if (args.length == 0) {
+            throw new IllegalArgumentException("Custom command requires at least one argument");
+        }
+        String[] stringArgs = new String[args.length];
+        for (int i = 0; i < args.length; i++) {
+            stringArgs[i] = args[i].toString();
+        }
+        return customCommand(stringArgs, route);
     }
 
     /**
@@ -1581,9 +2115,9 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return A CompletableFuture containing a random key, or null if no keys exist
      */
     public CompletableFuture<String> randomKey(Route route) {
-        // For now, ignore the route parameter and delegate to the basic randomKey
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return super.randomkey();
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(
+            CommandType.RANDOMKEY), route)
+            .thenApply(result -> result == null ? null : result.toString());
     }
 
     /**
@@ -1593,9 +2127,9 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return A CompletableFuture containing a random key, or null if no keys exist
      */
     public CompletableFuture<GlideString> randomKeyBinary(Route route) {
-        // For now, ignore the route parameter and delegate to the basic randomKeyBinary
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return super.randomkeyBinary();
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(
+            CommandType.RANDOMKEY), route)
+            .thenApply(result -> result == null ? null : GlideString.of(result.toString()));
     }
 
     // ========== Critical Missing Methods from ServerManagementClusterCommands ==========
@@ -1744,9 +2278,14 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return The number of keys in the database for specified nodes
      */
     public CompletableFuture<Long> dbsize(Route route) {
-        // For now, ignore the route parameter and delegate to the base dbsize
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return serverManagement.dbsize();
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(
+            CommandType.DBSIZE), route)
+            .thenApply(result -> {
+                if (result instanceof Number) {
+                    return ((Number) result).longValue();
+                }
+                return Long.parseLong(result.toString());
+            });
     }
 
     /**
@@ -1768,9 +2307,48 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return The current server time as a String array wrapped in ClusterValue
      */
     public CompletableFuture<ClusterValue<String[]>> time(Route route) {
-        // For now, ignore the route parameter and delegate to the base time
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return serverManagement.time().thenApply(ClusterValue::ofSingleValue);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(
+            CommandType.TIME), route)
+            .thenApply(result -> {
+                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
+                    String[] time = new String[0];
+                    if (result instanceof Object[]) {
+                        Object[] objects = (Object[]) result;
+                        time = new String[objects.length];
+                        for (int i = 0; i < objects.length; i++) {
+                            time[i] = objects[i].toString();
+                        }
+                    }
+                    return ClusterValue.ofSingleValue(time);
+                } else {
+                    // For multi-node routes, expect a map result
+                    if (result instanceof Map) {
+                        Map<String, String[]> mapResult = new java.util.HashMap<>();
+                        ((Map<?, ?>) result).forEach((key, value) -> {
+                            String[] time = new String[0];
+                            if (value instanceof Object[]) {
+                                Object[] objects = (Object[]) value;
+                                time = new String[objects.length];
+                                for (int i = 0; i < objects.length; i++) {
+                                    time[i] = objects[i].toString();
+                                }
+                            }
+                            mapResult.put(key.toString(), time);
+                        });
+                        return ClusterValue.ofMultiValue(mapResult);
+                    }
+                    // Fallback to single value
+                    String[] time = new String[0];
+                    if (result instanceof Object[]) {
+                        Object[] objects = (Object[]) result;
+                        time = new String[objects.length];
+                        for (int i = 0; i < objects.length; i++) {
+                            time[i] = objects[i].toString();
+                        }
+                    }
+                    return ClusterValue.ofSingleValue(time);
+                }
+            });
     }
 
     /**
@@ -1792,9 +2370,22 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return UNIX TIME of the last DB save wrapped in ClusterValue
      */
     public CompletableFuture<ClusterValue<Long>> lastsave(Route route) {
-        // For now, ignore the route parameter and delegate to the base lastsave
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return serverManagement.lastsave().thenApply(ClusterValue::ofSingleValue);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(
+            CommandType.LASTSAVE), route)
+            .thenApply(result -> {
+                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
+                    return ClusterValue.ofSingleValue(Long.parseLong(result.toString()));
+                } else {
+                    // For multi-node routes, expect a map result
+                    if (result instanceof Map) {
+                        Map<String, Long> mapResult = new java.util.HashMap<>();
+                        ((Map<?, ?>) result).forEach((key, value) -> 
+                            mapResult.put(key.toString(), Long.parseLong(value.toString())));
+                        return ClusterValue.ofMultiValue(mapResult);
+                    }
+                    return ClusterValue.ofSingleValue(Long.parseLong(result.toString()));
+                }
+            });
     }
 
     /**
@@ -1828,9 +2419,9 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return OK response
      */
     public CompletableFuture<String> flushall(Route route) {
-        // For now, ignore the route parameter and delegate to the base flushall
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return serverManagement.flushall();
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(
+            CommandType.FLUSHALL), route)
+            .thenApply(result -> result.toString());
     }
 
     /**
@@ -1842,9 +2433,9 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return OK response
      */
     public CompletableFuture<String> flushall(FlushMode mode, Route route) {
-        // For now, ignore the route parameter and delegate to the base flushall with mode
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return serverManagement.flushall(mode);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(
+            CommandType.FLUSHALL, mode.name()), route)
+            .thenApply(result -> result.toString());
     }
 
     /**
@@ -1878,9 +2469,9 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return OK response
      */
     public CompletableFuture<String> flushdb(Route route) {
-        // For now, ignore the route parameter and delegate to the base flushdb
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return serverManagement.flushdb();
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(
+            CommandType.FLUSHDB), route)
+            .thenApply(result -> result.toString());
     }
 
     /**
@@ -1892,9 +2483,9 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return OK response
      */
     public CompletableFuture<String> flushdb(FlushMode mode, Route route) {
-        // For now, ignore the route parameter and delegate to the base flushdb with mode
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return serverManagement.flushdb(mode);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(
+            CommandType.FLUSHDB, mode.name()), route)
+            .thenApply(result -> result.toString());
     }
 
     /**
@@ -1916,9 +2507,9 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return OK when the configuration was rewritten properly
      */
     public CompletableFuture<String> configRewrite(Route route) {
-        // For now, ignore the route parameter and delegate to the base configRewrite
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return super.configRewrite();
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(
+            CommandType.CONFIG_REWRITE), route)
+            .thenApply(result -> result.toString());
     }
 
     /**
@@ -1940,9 +2531,9 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return OK to confirm that the statistics were successfully reset
      */
     public CompletableFuture<String> configResetStat(Route route) {
-        // For now, ignore the route parameter and delegate to the base configResetStat
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return super.configResetstat();
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(
+            CommandType.CONFIG_RESETSTAT), route)
+            .thenApply(result -> result.toString());
     }
 
     /**
@@ -1979,9 +2570,15 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return OK if all configurations have been successfully set
      */
     public CompletableFuture<String> configSet(Map<String, String> parameters, Route route) {
-        // For now, ignore the route parameter and delegate to the base configSet
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return super.configSet(parameters);
+        String[] args = new String[parameters.size() * 2];
+        int i = 0;
+        for (Map.Entry<String, String> entry : parameters.entrySet()) {
+            args[i++] = entry.getKey();
+            args[i++] = entry.getValue();
+        }
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(
+            CommandType.CONFIG_SET, args), route)
+            .thenApply(result -> result.toString());
     }
 
     /**
@@ -2021,9 +2618,22 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             sectionStrings[i] = sections[i].name().toLowerCase();
         }
         
-        // For now, ignore the route parameter and delegate to base info method
-        // In a full cluster implementation, the route would be used to target specific nodes
-        return super.info(sectionStrings).thenApply(ClusterValue::ofSingleValue);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(
+            CommandType.INFO, sectionStrings), route)
+            .thenApply(result -> {
+                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
+                    return ClusterValue.ofSingleValue(result.toString());
+                } else {
+                    // For multi-node routes, expect a map result
+                    if (result instanceof Map) {
+                        Map<String, String> mapResult = new java.util.HashMap<>();
+                        ((Map<?, ?>) result).forEach((key, value) -> 
+                            mapResult.put(key.toString(), value.toString()));
+                        return ClusterValue.ofMultiValue(mapResult);
+                    }
+                    return ClusterValue.ofSingleValue(result.toString());
+                }
+            });
     }
 
     // HyperLogLog Commands Implementation

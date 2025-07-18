@@ -1035,14 +1035,18 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the command result
      */
     private CompletableFuture<Object> executeRawCommand(String commandName, String[] args) {
-        // For now, use a simple approach - create a custom command object
-        // In a future update, we'll add proper raw command support to the JNI client
+        // Execute raw command using the JNI client
         return CompletableFuture.supplyAsync(() -> {
             try {
-                // Use the JNI client's executeRawCommand method if available
+                // Build full command array with command name and arguments
+                String[] fullCommand = new String[args.length + 1];
+                fullCommand[0] = commandName;
+                System.arraycopy(args, 0, fullCommand, 1, args.length);
+                
+                // Use the JNI client's executeRawCommand method
                 return client.executeRawCommand(commandName, args);
             } catch (Exception e) {
-                throw new RuntimeException("Failed to execute raw command: " + commandName + ". Raw command execution not yet implemented in JNI client.", e);
+                throw new RuntimeException("Failed to execute raw command: " + commandName, e);
             }
         });
     }
@@ -1098,38 +1102,29 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
 
     /**
      * Execute commands as an atomic transaction using MULTI/EXEC.
+     * Uses optimized pipeline execution for better performance.
      */
     private Object[] executeAtomicBatch(List<Command> commands, boolean raiseOnError) throws Exception {
-        // Start transaction
-        client.executeCommand(new Command(CommandType.MULTI)).get();
-        
+        return executeAtomicBatchWithOptions(commands, raiseOnError, null);
+    }
+    
+    /**
+     * Execute commands as an atomic transaction using MULTI/EXEC with options.
+     * Uses optimized pipeline execution for better performance.
+     */
+    private Object[] executeAtomicBatchWithOptions(List<Command> commands, boolean raiseOnError, Object options) throws Exception {
         try {
-            // Queue all commands (they return "QUEUED")
-            for (Command command : commands) {
-                client.executeCommand(command).get();
-            }
+            // Convert List<Command> to Command[]
+            Command[] commandArray = commands.toArray(new Command[0]);
             
-            // Execute the transaction
-            CompletableFuture<Object> execResult = client.executeCommand(new Command(CommandType.EXEC));
-            Object result = execResult.get();
+            // Use the optimized batch execution with atomic flag and options
+            CompletableFuture<Object[]> result = options != null 
+                ? client.executeBatchWithClusterOptions(commandArray, options, true)
+                : client.executeTransaction(commandArray);
+            Object[] results = result.get();
             
-            if (result instanceof Object[]) {
-                return (Object[]) result;
-            } else if (result == null) {
-                // Transaction was discarded (e.g., due to WATCH)
-                return null;
-            } else {
-                // Single result, wrap in array
-                return new Object[] { result };
-            }
+            return results != null ? results : new Object[0];
         } catch (Exception e) {
-            // If any error occurs, discard the transaction
-            try {
-                client.executeCommand(new Command(CommandType.DISCARD)).get();
-            } catch (Exception discardError) {
-                // Ignore discard errors
-            }
-            
             if (raiseOnError) {
                 throw new RuntimeException("Atomic batch execution failed", e);
             }
@@ -1139,26 +1134,34 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
 
     /**
      * Execute commands as a pipeline (non-atomic).
+     * Uses optimized bulk execution for significant performance improvement.
      */
     private Object[] executeNonAtomicBatch(List<Command> commands, boolean raiseOnError) throws Exception {
-        Object[] results = new Object[commands.size()];
-        
-        for (int i = 0; i < commands.size(); i++) {
-            Command command = commands.get(i);
-            try {
-                // Execute each command individually
-                CompletableFuture<Object> result = client.executeCommand(command);
-                results[i] = result.get(); // Wait for each command to complete
-            } catch (Exception e) {
-                if (raiseOnError) {
-                    throw new RuntimeException("Command failed: " + command.getType(), e);
-                }
-                // Store null as the result for failed commands
-                results[i] = null;
+        return executeNonAtomicBatchWithOptions(commands, raiseOnError, null);
+    }
+    
+    /**
+     * Execute commands as a pipeline (non-atomic) with options.
+     * Uses optimized bulk execution for significant performance improvement.
+     */
+    private Object[] executeNonAtomicBatchWithOptions(List<Command> commands, boolean raiseOnError, Object options) throws Exception {
+        try {
+            // Convert List<Command> to Command[]
+            Command[] commandArray = commands.toArray(new Command[0]);
+            
+            // Use the optimized batch execution (non-atomic) with options
+            CompletableFuture<Object[]> result = options != null 
+                ? client.executeBatchWithClusterOptions(commandArray, options, false)
+                : client.executeBatch(commandArray);
+            Object[] results = result.get();
+            
+            return results != null ? results : new Object[0];
+        } catch (Exception e) {
+            if (raiseOnError) {
+                throw new RuntimeException("Pipeline batch execution failed", e);
             }
+            return new Object[0];
         }
-        
-        return results;
     }
 
     /**
