@@ -242,6 +242,91 @@ public class StringCommandTests(TestConfiguration config)
         Assert.Equal("Hello", value.ToString());
     }
 
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
+    public async Task StringAppendAsync_ExistingKey(BaseClient client)
+    {
+        string key = Guid.NewGuid().ToString();
+        string initialValue = "Hello";
+        string appendValue = " World";
+
+        // Set initial value
+        await client.StringSetAsync(key, initialValue);
+
+        // Append to the key
+        long newLength = await client.StringAppendAsync(key, appendValue);
+
+        // Verify the new length is correct
+        Assert.Equal(initialValue.Length + appendValue.Length, newLength);
+
+        // Verify the value was appended correctly
+        ValkeyValue value = await client.StringGetAsync(key);
+        Assert.Equal(initialValue + appendValue, value.ToString());
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
+    public async Task StringAppendAsync_NonExistentKey(BaseClient client)
+    {
+        string key = Guid.NewGuid().ToString();
+        string appendValue = "Hello World";
+
+        // Append to a non-existent key (should create it)
+        long newLength = await client.StringAppendAsync(key, appendValue);
+
+        // Verify the new length is correct
+        Assert.Equal(appendValue.Length, newLength);
+
+        // Verify the key was created with the appended value
+        ValkeyValue value = await client.StringGetAsync(key);
+        Assert.Equal(appendValue, value.ToString());
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
+    public async Task StringAppendAsync_EmptyValue(BaseClient client)
+    {
+        string key = Guid.NewGuid().ToString();
+        string initialValue = "Hello";
+        string appendValue = "";
+
+        // Set initial value
+        await client.StringSetAsync(key, initialValue);
+
+        // Append empty string
+        long newLength = await client.StringAppendAsync(key, appendValue);
+
+        // Verify the length remains the same
+        Assert.Equal(initialValue.Length, newLength);
+
+        // Verify the value was not changed
+        ValkeyValue value = await client.StringGetAsync(key);
+        Assert.Equal(initialValue, value.ToString());
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
+    public async Task StringAppendAsync_UnicodeValues(BaseClient client)
+    {
+        string key = Guid.NewGuid().ToString();
+        string initialValue = "Hello";
+        string appendValue = " 世界";
+
+        // Set initial value
+        await client.StringSetAsync(key, initialValue);
+
+        // Append Unicode string
+        long newLength = await client.StringAppendAsync(key, appendValue);
+
+        // Verify the value was appended correctly
+        ValkeyValue value = await client.StringGetAsync(key);
+        Assert.Equal(initialValue + appendValue, value.ToString());
+
+        // The Redis server returns the length in bytes, not characters
+        // For Unicode characters, this will be different from the C# string length
+        // So we don't test the exact length here
+    }
+
     // Utility methods for other tests
     internal static async Task GetAndSetValuesAsync(BaseClient client, string key, string value)
     {
@@ -260,7 +345,7 @@ public class StringCommandTests(TestConfiguration config)
         await GetAndSetValuesAsync(client, key, value);
     }
 
-        [Theory(DisableDiscoveryEnumeration = true)]
+    [Theory(DisableDiscoveryEnumeration = true)]
     [MemberData(nameof(TestConfiguration.TestClients), MemberType = typeof(TestConfiguration))]
     public async Task StringDecrementAsync_ExistingKey(BaseClient client)
     {

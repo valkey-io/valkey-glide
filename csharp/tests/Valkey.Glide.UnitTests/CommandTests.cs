@@ -28,6 +28,7 @@ public class CommandTests
             () => Assert.Equal(["GETRANGE", "key", "0", "5"], Request.StringGetRange("key", 0, 5).GetArgs()),
             () => Assert.Equal(["SETRANGE", "key", "10", "value"], Request.StringSetRange("key", 10, "value").GetArgs()),
             () => Assert.Equal(["APPEND", "key", "value"], Request.StringAppend("key", "value").GetArgs()),
+            () => Assert.Equal(11L, Request.StringAppend("key", "value").Converter(11L)),
             () => Assert.Equal(["DECR", "key"], Request.StringDecr("key").GetArgs()),
             () => Assert.Equal(["DECRBY", "key", "5"], Request.StringDecrBy("key", 5).GetArgs()),
             () => Assert.Equal(["INCR", "key"], Request.StringIncr("key").GetArgs()),
