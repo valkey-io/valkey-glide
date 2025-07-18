@@ -68,6 +68,13 @@ public abstract class ValkeyResult
     public static ValkeyResult Create(ValkeyResult[] values, ResultType resultType)
         => values == null ? NullArray : values.Length == 0 ? EmptyArray(resultType) : new ArrayRedisResult(values, resultType);
 
+    internal static ValkeyResult Create(object? obj) => obj switch
+    {
+        IEnumerable<object?> arr => Create(arr.Select(Create).ToArray()),
+        IDictionary<GlideString, object?> dict => Create(dict.SelectMany(p => new ValkeyResult[] { Create(p.Key), Create(p.Value) }).ToArray()),
+        _ => Create(ValkeyValue.Unbox(obj)),
+    };
+
     /// <summary>
     /// An empty array result.
     /// </summary>
@@ -176,13 +183,13 @@ public abstract class ValkeyResult
     /// Interprets the result as a <see cref="ValkeyValue"/>.
     /// </summary>
     /// <param name="result">The result to convert to a <see cref="ValkeyValue"/>.</param>
-    public static explicit operator ValkeyValue(ValkeyResult? result) => result?.AsRedisValue() ?? ValkeyValue.Null;
+    public static explicit operator ValkeyValue(ValkeyResult? result) => result?.AsValkeyValue() ?? ValkeyValue.Null;
 
     /// <summary>
     /// Interprets the result as a <see cref="ValkeyKey"/>.
     /// </summary>
     /// <param name="result">The result to convert to a <see cref="ValkeyKey"/>.</param>
-    public static explicit operator ValkeyKey(ValkeyResult? result) => result?.AsRedisKey() ?? default;
+    public static explicit operator ValkeyKey(ValkeyResult? result) => result?.AsValkeyKey() ?? default;
 
     /// <summary>
     /// Interprets the result as a <see cref="T:Nullable{double}"/>.
@@ -260,19 +267,19 @@ public abstract class ValkeyResult
     /// Interprets the result as a <see cref="T:ValkeyValue[]"/>.
     /// </summary>
     /// <param name="result">The result to convert to a <see cref="T:ValkeyValue[]"/>.</param>
-    public static explicit operator ValkeyValue[]?(ValkeyResult? result) => result?.AsRedisValueArray();
+    public static explicit operator ValkeyValue[]?(ValkeyResult? result) => result?.AsValkeyValueArray();
 
     /// <summary>
     /// Interprets the result as a <see cref="T:ValkeyKey[]"/>.
     /// </summary>
     /// <param name="result">The result to convert to a <see cref="T:ValkeyKey[]"/>.</param>
-    public static explicit operator ValkeyKey[]?(ValkeyResult? result) => result?.AsRedisKeyArray();
+    public static explicit operator ValkeyKey[]?(ValkeyResult? result) => result?.AsValkeyKeyArray();
 
     /// <summary>
     /// Interprets the result as a <see cref="T:RedisResult[]"/>.
     /// </summary>
     /// <param name="result">The result to convert to a <see cref="T:RedisResult[]"/>.</param>
-    public static explicit operator ValkeyResult[]?(ValkeyResult? result) => result?.AsRedisResultArray();
+    public static explicit operator ValkeyResult[]?(ValkeyResult? result) => result?.AsValkeyResultArray();
 
     /// <summary>
     /// Interprets a multi-bulk result with successive key/name values as a dictionary keyed by name.
@@ -280,7 +287,7 @@ public abstract class ValkeyResult
     /// <param name="comparer">The key comparator to use, or <see cref="StringComparer.InvariantCultureIgnoreCase"/> by default.</param>
     public Dictionary<string, ValkeyResult> ToDictionary(IEqualityComparer<string>? comparer = null)
     {
-        var arr = AsRedisResultArray();
+        var arr = AsValkeyResultArray();
         if (arr is null)
         {
             return [];
@@ -316,11 +323,11 @@ public abstract class ValkeyResult
     internal abstract int? AsNullableInt32();
     internal abstract long? AsNullableInt64();
     internal abstract ulong? AsNullableUInt64();
-    internal abstract ValkeyKey AsRedisKey();
-    internal abstract ValkeyKey[]? AsRedisKeyArray();
-    internal abstract ValkeyResult[]? AsRedisResultArray();
-    internal abstract ValkeyValue AsRedisValue();
-    internal abstract ValkeyValue[]? AsRedisValueArray();
+    internal abstract ValkeyKey AsValkeyKey();
+    internal abstract ValkeyKey[]? AsValkeyKeyArray();
+    internal abstract ValkeyResult[]? AsValkeyResultArray();
+    internal abstract ValkeyValue AsValkeyValue();
+    internal abstract ValkeyValue[]? AsValkeyValueArray();
     internal abstract string? AsString();
     internal abstract string?[]? AsStringArray();
 
@@ -440,29 +447,29 @@ public abstract class ValkeyResult
             throw new InvalidCastException();
         }
 
-        internal override ValkeyKey AsRedisKey()
+        internal override ValkeyKey AsValkeyKey()
         {
-            if (IsSingleton) return _value![0].AsRedisKey();
+            if (IsSingleton) return _value![0].AsValkeyKey();
             throw new InvalidCastException();
         }
 
-        internal override ValkeyKey[]? AsRedisKeyArray()
+        internal override ValkeyKey[]? AsValkeyKeyArray()
             => IsNull ? null
             : IsEmpty ? Array.Empty<ValkeyKey>()
-            : Array.ConvertAll(_value!, x => x.AsRedisKey());
+            : Array.ConvertAll(_value!, x => x.AsValkeyKey());
 
-        internal override ValkeyResult[]? AsRedisResultArray() => _value;
+        internal override ValkeyResult[]? AsValkeyResultArray() => _value;
 
-        internal override ValkeyValue AsRedisValue()
+        internal override ValkeyValue AsValkeyValue()
         {
-            if (IsSingleton) return _value![0].AsRedisValue();
+            if (IsSingleton) return _value![0].AsValkeyValue();
             throw new InvalidCastException();
         }
 
-        internal override ValkeyValue[]? AsRedisValueArray()
+        internal override ValkeyValue[]? AsValkeyValueArray()
             => IsNull ? null
             : IsEmpty ? Array.Empty<ValkeyValue>()
-            : Array.ConvertAll(_value!, x => x.AsRedisValue());
+            : Array.ConvertAll(_value!, x => x.AsValkeyValue());
 
         internal override string? AsString()
         {
@@ -523,11 +530,11 @@ public abstract class ValkeyResult
         internal override int? AsNullableInt32() => (int?)_value;
         internal override long? AsNullableInt64() => (long?)_value;
         internal override ulong? AsNullableUInt64() => (ulong?)_value;
-        internal override ValkeyKey AsRedisKey() => (byte[]?)_value;
-        internal override ValkeyKey[] AsRedisKeyArray() => [AsRedisKey()];
-        internal override ValkeyResult[] AsRedisResultArray() => throw new InvalidCastException();
-        internal override ValkeyValue AsRedisValue() => _value;
-        internal override ValkeyValue[] AsRedisValueArray() => [AsRedisValue()];
+        internal override ValkeyKey AsValkeyKey() => (byte[]?)_value;
+        internal override ValkeyKey[] AsValkeyKeyArray() => [AsValkeyKey()];
+        internal override ValkeyResult[] AsValkeyResultArray() => throw new InvalidCastException();
+        internal override ValkeyValue AsValkeyValue() => _value;
+        internal override ValkeyValue[] AsValkeyValueArray() => [AsValkeyValue()];
         internal override string? AsString() => (string?)_value;
         internal override string?[]? AsStringArray() => [AsString()];
         TypeCode IConvertible.GetTypeCode() => TypeCode.Object;

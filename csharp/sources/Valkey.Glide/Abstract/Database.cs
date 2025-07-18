@@ -1,9 +1,5 @@
 ﻿// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-using System.Collections.Generic;
-using System.Net;
-
-using Valkey.Glide.Commands;
 using Valkey.Glide.Commands.Options;
 using Valkey.Glide.Internals;
 
@@ -51,7 +47,7 @@ internal class Database : GlideClient, IDatabase
     public async Task<ValkeyResult> ExecuteAsync(string command, ICollection<object>? args, CommandFlags flags = CommandFlags.None)
     {
         Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
-        object? res = await Command(Request.CustomCommand([command, .. args.Select(a => a.ToString())]));
-        return ValkeyResult.Create((ValkeyValue)res);
+        object? res = await Command(Request.CustomCommand([command, .. args?.Select(a => a.ToString()!) ?? []]));
+        return ValkeyResult.Create(res);
     }
 }

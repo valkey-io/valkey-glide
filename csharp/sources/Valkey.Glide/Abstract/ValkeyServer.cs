@@ -31,8 +31,8 @@ internal class ValkeyServer(Database conn, EndPoint endpoint) : IServer
     public async Task<ValkeyResult> ExecuteAsync(string command, ICollection<object> args, CommandFlags flags = CommandFlags.None)
     {
         Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
-        object? res = await _conn.Command(Request.CustomCommand([command, .. args.Select(a => a.ToString())]), new ByAddressRoute(EndPoint.ToString()!));
-        return ValkeyResult.Create((ValkeyValue)res);
+        object? res = await _conn.Command(Request.CustomCommand([command, .. args?.Select(a => a.ToString()!) ?? []]), new ByAddressRoute(EndPoint.ToString()!));
+        return ValkeyResult.Create(res);
     }
 
     public EndPoint EndPoint { get; } = endpoint;
