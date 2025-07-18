@@ -1397,7 +1397,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_initOpenTe
     traces_sample_percentage: jint,
     metrics_endpoint: JString,
     flush_interval_ms: jlong,
-) {
+) -> jint {
     let mut result = || -> JniResult<()> {
         let mut config_builder = GlideOpenTelemetryConfigBuilder::default()
             .with_flush_interval(Duration::from_millis(flush_interval_ms as u64));
@@ -1439,10 +1439,27 @@ pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_initOpenTe
         Ok(())
     };
 
-    if let Err(e) = result() {
-        eprintln!("Error in initOpenTelemetry: {:?}", e);
-        // Throw Java exception
-        let _ = env.throw_new("glide/api/models/exceptions/ConfigurationError", format!("{:?}", e));
+    match result() {
+        Ok(()) => 0, // Success
+        Err(e) => {
+            eprintln!("Error in initOpenTelemetry: {:?}", e);
+            // Return error codes as documented in the old UDS implementation:
+            // 1 - Missing configuration (both traces and metrics are null)
+            // 2 - Invalid traces endpoint
+            // 3 - Invalid metrics endpoint
+            // 4 - Runtime initialization failure
+            // 5 - OpenTelemetry initialization failure
+            match e {
+                crate::error::JniError::Configuration(msg) => {
+                    if msg.contains("traces endpoint") { 2 }
+                    else if msg.contains("metrics endpoint") { 3 }
+                    else if msg.contains("Both traces and metrics") { 1 }
+                    else { 5 }
+                }
+                crate::error::JniError::Runtime(_) => 4,
+                _ => 5,
+            }
+        }
     }
 }
 
@@ -1568,28 +1585,3 @@ pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_setSpanSta
     }
 }
 
-/// Set the sampling percentage for telemetry data
-#[no_mangle]
-pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_setSamplePercentage(
-    _env: JNIEnv,
-    _class: JClass,
-    _percentage: jint,
-) {
-    // Note: This is a placeholder implementation
-    // The actual sampling is configured during initialization
-    // This method is kept for API compatibility
-    eprintln!("setSamplePercentage called but not implemented - sampling is configured during initialization");
-}
-
-/// Get the current sampling percentage
-#[no_mangle]
-pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_getSamplePercentage(
-    _env: JNIEnv,
-    _class: JClass,
-) -> jint {
-    // Note: This is a placeholder implementation
-    // The actual sampling is configured during initialization
-    // This method is kept for API compatibility
-    eprintln!("getSamplePercentage called but not implemented - sampling is configured during initialization");
-    0
-}

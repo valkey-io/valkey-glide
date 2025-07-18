@@ -1,37 +1,53 @@
 package glide.ffi.resolvers;
 
 /**
- * JNI resolver for OpenTelemetry operations.
- * Provides native bindings for telemetry initialization and configuration.
+ * Resolver class for OpenTelemetry operations in Valkey GLIDE. This class provides native methods
+ * to interact with OpenTelemetry functionality implemented in the Rust core library.
  */
 public class OpenTelemetryResolver {
 
+    static {
+        // Load the native library (same as GlideClient)
+        try {
+            System.loadLibrary("glidejni");
+        } catch (UnsatisfiedLinkError e) {
+            System.err.println("Failed to load native library for OpenTelemetryResolver: " + e.getMessage());
+            throw e;
+        }
+    }
+
     /**
-     * Initialize OpenTelemetry with the provided configuration.
+     * Initializes OpenTelemetry with the provided configuration.
      *
-     * @param tracesEndpoint The endpoint for trace exports
-     * @param tracesSamplePercentage The sampling percentage for traces (0-100)
-     * @param metricsEndpoint The endpoint for metric exports
-     * @param flushIntervalMs The flush interval in milliseconds
+     * @param tracesEndpoint The endpoint for traces exporter (can be null if not used)
+     * @param tracesSamplePercentage The percentage of requests to sample (0 for default)
+     * @param metricsEndpoint The endpoint for metrics exporter (can be null if not used)
+     * @param flushIntervalMs The interval in milliseconds between consecutive exports (0 for default)
+     * @return 0 on success, error code otherwise: 1 - Missing configuration (both traces and metrics
+     *     are null) 2 - Invalid traces endpoint 3 - Invalid metrics endpoint 4 - Runtime
+     *     initialization failure 5 - OpenTelemetry initialization failure
      */
-    public static native void initOpenTelemetry(
+    public static native int initOpenTelemetry(
             String tracesEndpoint,
-            int tracesSamplePercentage, 
+            int tracesSamplePercentage,
             String metricsEndpoint,
-            long flushIntervalMs
-    );
+            long flushIntervalMs);
 
     /**
-     * Set the sampling percentage for telemetry data.
+     * Creates a new OpenTelemetry span with the given name that will not be automatically dropped by
+     * the Rust core. The caller is responsible for dropping this span using {@link
+     * #dropOtelSpan(long)}.
      *
-     * @param percentage The sampling percentage (0-100)
+     * @param spanName The name of the span to create
+     * @return A pointer to the created span, or 0 if creation failed
      */
-    public static native void setSamplePercentage(int percentage);
+    public static native long createLeakedOtelSpan(String spanName);
 
     /**
-     * Get the current sampling percentage.
+     * Drops an OpenTelemetry span that was created with {@link #createLeakedOtelSpan(String)},
+     * releasing its resources.
      *
-     * @return The current sampling percentage
+     * @param spanPtr The pointer to the span to drop
      */
-    public static native int getSamplePercentage();
+    public static native void dropOtelSpan(long spanPtr);
 }
