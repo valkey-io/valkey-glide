@@ -106,20 +106,20 @@ public class CommandTests
             () => Assert.Equal(["LPOP", "a", "3"], Request.ListLeftPopAsync("a", 3).GetArgs()),
             () => Assert.Equal(["LPUSH", "a", "one", "two"], Request.ListLeftPushAsync("a", ["one", "two"]).GetArgs()),
             // Hash Commands
-            () => Assert.Equal(new string[] {"HGET", "key", "field"}, Request.HashGetAsync("key", "field").GetArgs()),
-            () => Assert.Equal(new string[] {"HMGET", "key", "field1", "field2"}, Request.HashGetAsync("key", new ValkeyValue[] {"field1", "field2"}).GetArgs()),
-            () => Assert.Equal(new string[] {"HGETALL", "key"}, Request.HashGetAllAsync("key").GetArgs()),
-            () => Assert.Equal(new string[] {"HMSET", "key", "field1", "value1", "field2", "value2"}, Request.HashSetAsync("key", new HashEntry[] {new HashEntry("field1", "value1"), new HashEntry("field2", "value2")}).GetArgs()),
-            () => Assert.Equal(new string[] {"HMSET", "key", "field", "value"}, Request.HashSetAsync("key", new HashEntry[] { new HashEntry("field", "value") }).GetArgs()),
-            () => Assert.Equal(new string[] {"HDEL", "key", "field"}, Request.HashDeleteAsync("key", "field").GetArgs()),
-            () => Assert.Equal(new string[] {"HDEL", "key", "field1", "field2"}, Request.HashDeleteAsync("key", new ValkeyValue[] {"field1", "field2"}).GetArgs()),
-            () => Assert.Equal(new string[] {"HEXISTS", "key", "field"}, Request.HashExistsAsync("key", "field").GetArgs()),
-            () => Assert.Equal(new string[] {"HLEN", "key"}, Request.HashLengthAsync("key").GetArgs()),
-            () => Assert.Equal(new string[] {"HSTRLEN", "key", "field"}, Request.HashStringLengthAsync("key", "field").GetArgs()),
-            () => Assert.Equal(new string[] {"HVALS", "key"}, Request.HashValuesAsync("key").GetArgs()),
-            () => Assert.Equal(new string[] {"HRANDFIELD", "key"}, Request.HashRandomFieldAsync("key").GetArgs()),
-            () => Assert.Equal(new string[] {"HRANDFIELD", "key", "3"}, Request.HashRandomFieldsAsync("key", 3).GetArgs()),
-            () => Assert.Equal(new string[] {"HRANDFIELD", "key", "3", "WITHVALUES"}, Request.HashRandomFieldsWithValuesAsync("key", 3).GetArgs())
+            () => Assert.Equal(new string[] { "HGET", "key", "field" }, Request.HashGetAsync("key", "field").GetArgs()),
+            () => Assert.Equal(new string[] { "HMGET", "key", "field1", "field2" }, Request.HashGetAsync("key", new ValkeyValue[] { "field1", "field2" }).GetArgs()),
+            () => Assert.Equal(new string[] { "HGETALL", "key" }, Request.HashGetAllAsync("key").GetArgs()),
+            () => Assert.Equal(new string[] { "HMSET", "key", "field1", "value1", "field2", "value2" }, Request.HashSetAsync("key", new HashEntry[] { new HashEntry("field1", "value1"), new HashEntry("field2", "value2") }).GetArgs()),
+            () => Assert.Equal(new string[] { "HMSET", "key", "field", "value" }, Request.HashSetAsync("key", new HashEntry[] { new HashEntry("field", "value") }).GetArgs()),
+            () => Assert.Equal(new string[] { "HDEL", "key", "field" }, Request.HashDeleteAsync("key", "field").GetArgs()),
+            () => Assert.Equal(new string[] { "HDEL", "key", "field1", "field2" }, Request.HashDeleteAsync("key", new ValkeyValue[] { "field1", "field2" }).GetArgs()),
+            () => Assert.Equal(new string[] { "HEXISTS", "key", "field" }, Request.HashExistsAsync("key", "field").GetArgs()),
+            () => Assert.Equal(new string[] { "HLEN", "key" }, Request.HashLengthAsync("key").GetArgs()),
+            () => Assert.Equal(new string[] { "HSTRLEN", "key", "field" }, Request.HashStringLengthAsync("key", "field").GetArgs()),
+            () => Assert.Equal(new string[] { "HVALS", "key" }, Request.HashValuesAsync("key").GetArgs()),
+            () => Assert.Equal(new string[] { "HRANDFIELD", "key" }, Request.HashRandomFieldAsync("key").GetArgs()),
+            () => Assert.Equal(new string[] { "HRANDFIELD", "key", "3" }, Request.HashRandomFieldsAsync("key", 3).GetArgs()),
+            () => Assert.Equal(new string[] { "HRANDFIELD", "key", "3", "WITHVALUES" }, Request.HashRandomFieldsWithValuesAsync("key", 3).GetArgs())
         );
     }
 
@@ -217,12 +217,12 @@ public class CommandTests
             // Hash Commands
             () => Assert.Equal<GlideString>("value", Request.HashGetAsync("key", "field").Converter("value")),
             () => Assert.Equal(ValkeyValue.Null, Request.HashGetAsync("key", "field").Converter(null)),
-            () => Assert.Equal(1L, Request.HashSetAsync("key", new HashEntry[] { new HashEntry("field", "value") }).Converter(1L)),
+            () => Assert.Equal("OK", Request.HashSetAsync("key", new HashEntry[] { new HashEntry("field", "value") }).Converter("OK")),
             () => Assert.True(Request.HashDeleteAsync("key", "field").Converter(1L)),
             () => Assert.False(Request.HashDeleteAsync("key", "field").Converter(0L)),
             () => Assert.Equal(2L, Request.HashDeleteAsync("key", ["field1", "field2"]).Converter(2L)),
-            () => Assert.True(Request.HashExistsAsync("key", "field").Converter(1L)),
-            () => Assert.False(Request.HashExistsAsync("key", "field").Converter(0L)),
+            () => Assert.True(Request.HashExistsAsync("key", "field").Converter(true)),
+            () => Assert.False(Request.HashExistsAsync("key", "field").Converter(false)),
             () => Assert.Equal(5L, Request.HashLengthAsync("key").Converter(5L)),
             () => Assert.Equal(10L, Request.HashStringLengthAsync("key", "field").Converter(10L))
         );
@@ -315,23 +315,32 @@ public class CommandTests
         };
 
         // Test for HashGetAllAsync and HashRandomFieldsWithValuesAsync
-        Dictionary<GlideString, GlideString> testKvpList = new Dictionary<GlideString, GlideString> {
+        Dictionary<GlideString, object> testKvpList = new Dictionary<GlideString, object> {
             {"field1", "value1" },
             {"field2", "value2" },
             {"field3", "value3" },
         };
 
+        object[] testObjectNestedArray = new object[]
+         {
+            new object[] {"field1", "value1" },
+            new object[] {"field2", "value2" },
+            new object[] {"field3", "value3" },
+         };
+
         // Test for HashValuesAsync and HashRandomFieldsAsync
-        HashSet<object> testHashSet = new HashSet<object> {
-            (gs)"value1",
-            (gs)"value2",
-            (gs)"value3"
+        object[] testObjectArray = new object[]
+        {
+            "value1",
+            "value2",
+            "value3"
         };
 
         Assert.Multiple(
             // Test HashGetAsync with multiple fields
-            () => {
-                var result = Request.HashGetAsync("key", new ValkeyValue[] {"field1", "field2", "field3"}).Converter(testList.ToArray());
+            () =>
+            {
+                var result = Request.HashGetAsync("key", new ValkeyValue[] { "field1", "field2", "field3" }).Converter(testList.ToArray());
                 Assert.Equal(3, result.Length);
                 Assert.Equal("value1", result[0]);
                 Assert.Equal("value2", result[1]);
@@ -339,10 +348,12 @@ public class CommandTests
             },
 
             // Test HashGetAllAsync
-            () => {
+            () =>
+            {
                 var result = Request.HashGetAllAsync("key").Converter(testKvpList);
                 Assert.Equal(3, result.Length);
-                foreach (var entry in result) {
+                foreach (var entry in result)
+                {
                     Assert.IsType<HashEntry>(entry);
                     Assert.IsType<ValkeyValue>(entry.Name);
                     Assert.IsType<ValkeyValue>(entry.Value);
@@ -352,30 +363,35 @@ public class CommandTests
             },
 
             // Test HashValuesAsync
-            () => {
-                var result = Request.HashValuesAsync("key").Converter(testHashSet);
+            () =>
+            {
+                var result = Request.HashValuesAsync("key").Converter(testObjectArray);
                 Assert.Equal(3, result.Length);
                 foreach (var item in result) Assert.IsType<ValkeyValue>(item);
             },
 
             // Test HashRandomFieldAsync
-            () => {
+            () =>
+            {
                 var result = Request.HashRandomFieldAsync("key").Converter("field1");
                 Assert.Equal("field1", result);
             },
 
             // Test HashRandomFieldsAsync
-            () => {
-                var result = Request.HashRandomFieldsAsync("key", 3).Converter(testHashSet);
+            () =>
+            {
+                var result = Request.HashRandomFieldsAsync("key", 3).Converter(testObjectArray);
                 Assert.Equal(3, result.Length);
                 foreach (var item in result) Assert.IsType<ValkeyValue>(item);
             },
 
             // Test HashRandomFieldsWithValuesAsync
-            () => {
-                var result = Request.HashRandomFieldsWithValuesAsync("key", 3).Converter(testKvpList);
+            () =>
+            {
+                var result = Request.HashRandomFieldsWithValuesAsync("key", 3).Converter(testObjectNestedArray);
                 Assert.Equal(3, result.Length);
-                foreach (var entry in result) {
+                foreach (var entry in result)
+                {
                     Assert.IsType<HashEntry>(entry);
                     Assert.IsType<ValkeyValue>(entry.Name);
                     Assert.IsType<ValkeyValue>(entry.Value);
