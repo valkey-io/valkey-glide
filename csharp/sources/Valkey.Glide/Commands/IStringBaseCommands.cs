@@ -177,7 +177,7 @@ public interface IStringBaseCommands
     Task<long> StringLengthAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None);
 
     /// <summary>
-    /// Appends a value to the string stored at key. If the key does not exist, it is created and set to an empty string.
+    /// Appends a value to the string stored at key. If the key does not exist, it is created and set to an empty string before performing the operation.
     /// </summary>
     /// <seealso href="https://valkey.io/commands/append/">valkey.io</seealso>
     /// <param name="key">The key of the string to append to.</param>
