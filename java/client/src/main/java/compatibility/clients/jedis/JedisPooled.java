@@ -1,10 +1,12 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package compatibility.clients.jedis;
 
-import glide.api.models.configuration.GlideClientConfiguration;
+import java.net.URI;
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SSLSocketFactory;
+import org.apache.commons.pool2.PooledObjectFactory;
+import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
 
 /**
  * JedisPooled compatibility wrapper for Valkey GLIDE client. This class provides a Jedis-like
@@ -13,124 +15,403 @@ import javax.net.ssl.SSLSocketFactory;
  */
 public class JedisPooled extends UnifiedJedis {
 
-    /** Create a new JedisPooled with default localhost:6379 connection. */
     public JedisPooled() {
         this("localhost", 6379);
     }
 
     /**
-     * Create a new JedisPooled with specified host and port.
+     * WARNING: This constructor only accepts a uri string as {@code url}.
+     * To use a host string, {@link #JedisPooled(java.lang.String, int)} can be used.
      *
-     * @param host the Redis/Valkey server host
-     * @param port the Redis/Valkey server port
+     * @param url the connection URL
      */
-    public JedisPooled(String host, int port) {
-        this(host, port, DefaultJedisClientConfig.builder().build());
+    public JedisPooled(final String url) {
+        super(url);
     }
 
     /**
-     * Create a new JedisPooled with specified host, port and SSL configuration.
+     * WARNING: This constructor only accepts a uri string as {@code url}.
      *
-     * @param host the Redis/Valkey server host
-     * @param port the Redis/Valkey server port
-     * @param useSsl whether to use SSL/TLS
-     */
-    public JedisPooled(String host, int port, boolean useSsl) {
-        this(host, port, DefaultJedisClientConfig.builder().ssl(useSsl).build());
-    }
-
-    /**
-     * Create a new JedisPooled with full configuration.
-     *
-     * @param host the server host
-     * @param port the server port
-     * @param config the client configuration
-     */
-    public JedisPooled(String host, int port, JedisClientConfig config) {
-        super(createGlideConfig(host, port, config), config);
-    }
-
-    /**
-     * Create JedisPooled with SSL configuration.
-     *
-     * @param host the server host
-     * @param port the server port
-     * @param ssl whether to use SSL
+     * @param url the connection URL
      * @param sslSocketFactory SSL socket factory
      * @param sslParameters SSL parameters
      * @param hostnameVerifier hostname verifier
      */
-    public JedisPooled(
-            String host,
-            int port,
-            boolean ssl,
-            SSLSocketFactory sslSocketFactory,
-            SSLParameters sslParameters,
-            HostnameVerifier hostnameVerifier) {
-        this(
-                host,
-                port,
-                DefaultJedisClientConfig.builder()
-                        .ssl(ssl)
-                        .sslSocketFactory(sslSocketFactory)
-                        .sslParameters(sslParameters)
-                        .hostnameVerifier(hostnameVerifier)
-                        .build());
+    public JedisPooled(final String url, final SSLSocketFactory sslSocketFactory,
+        final SSLParameters sslParameters, final HostnameVerifier hostnameVerifier) {
+        this(URI.create(url), sslSocketFactory, sslParameters, hostnameVerifier);
+    }
+
+    public JedisPooled(final String host, final int port) {
+        this(new HostAndPort(host, port));
+    }
+
+    public JedisPooled(final HostAndPort hostAndPort) {
+        super(hostAndPort);
+    }
+
+    public JedisPooled(final String host, final int port, final boolean ssl) {
+        this(new HostAndPort(host, port), DefaultJedisClientConfig.builder().ssl(ssl).build());
+    }
+
+    public JedisPooled(final String host, final int port, final boolean ssl,
+        final SSLSocketFactory sslSocketFactory, final SSLParameters sslParameters,
+        final HostnameVerifier hostnameVerifier) {
+        this(new HostAndPort(host, port), DefaultJedisClientConfig.builder().ssl(ssl)
+            .sslSocketFactory(sslSocketFactory).sslParameters(sslParameters)
+            .hostnameVerifier(hostnameVerifier).build());
+    }
+
+    public JedisPooled(final String host, final int port, final String user, final String password) {
+        this(new HostAndPort(host, port), DefaultJedisClientConfig.builder().user(user).password(password).build());
+    }
+
+    public JedisPooled(final HostAndPort hostAndPort, final JedisClientConfig clientConfig) {
+        super(hostAndPort, clientConfig);
+    }
+
+    // Experimental constructors (cache support - simplified for compatibility)
+    public JedisPooled(final HostAndPort hostAndPort, final JedisClientConfig clientConfig, Object cacheConfig) {
+        this(hostAndPort, clientConfig); // Cache not supported in GLIDE compatibility layer
+    }
+
+    public JedisPooled(final HostAndPort hostAndPort, final JedisClientConfig clientConfig, Object clientSideCache) {
+        super(hostAndPort, clientConfig, clientSideCache);
+    }
+
+    // Pool-related constructors (simplified for GLIDE compatibility)
+    public JedisPooled(PooledObjectFactory<Object> factory) {
+        this(); // Use default connection since GLIDE handles pooling internally
+    }
+
+    public JedisPooled(final GenericObjectPoolConfig<Object> poolConfig) {
+        this(poolConfig, "localhost", 6379);
     }
 
     /**
-     * Create JedisPooled with timeout configuration.
+     * WARNING: This constructor only accepts a uri string as {@code url}.
      *
-     * @param host the server host
-     * @param port the server port
-     * @param timeout the timeout in milliseconds
+     * @param poolConfig pool configuration (ignored in GLIDE compatibility)
+     * @param url the connection URL
      */
-    public JedisPooled(String host, int port, int timeout) {
-        this(
-                host,
-                port,
-                DefaultJedisClientConfig.builder()
-                        .socketTimeoutMillis(timeout)
-                        .connectionTimeoutMillis(timeout)
-                        .build());
+    public JedisPooled(final GenericObjectPoolConfig<Object> poolConfig, final String url) {
+        this(poolConfig, URI.create(url));
     }
 
-    /**
-     * Create JedisPooled with authentication.
-     *
-     * @param host the server host
-     * @param port the server port
-     * @param user the username
-     * @param password the password
-     */
-    public JedisPooled(String host, int port, String user, String password) {
-        this(host, port, DefaultJedisClientConfig.builder().user(user).password(password).build());
+    public JedisPooled(final GenericObjectPoolConfig<Object> poolConfig, final String host,
+        final int port) {
+        this(poolConfig, host, port, 2000); // Default timeout
     }
 
-    /**
-     * Create JedisPooled with password authentication.
-     *
-     * @param host the server host
-     * @param port the server port
-     * @param password the password
-     */
-    public JedisPooled(String host, int port, String password) {
-        this(host, port, DefaultJedisClientConfig.builder().password(password).build());
+    public JedisPooled(final GenericObjectPoolConfig<Object> poolConfig, final String host,
+        final int port, final boolean ssl) {
+        this(poolConfig, host, port, 2000, ssl);
     }
 
-    /**
-     * Create GLIDE configuration from Jedis parameters.
-     *
-     * @param host the server host
-     * @param port the server port
-     * @param config the Jedis configuration
-     * @return GLIDE client configuration
-     */
-    private static GlideClientConfiguration createGlideConfig(String host, int port, JedisClientConfig config) {
-        // Validate configuration
-        ConfigurationMapper.validateConfiguration(config);
-        
-        // Map Jedis config to GLIDE config
-        return ConfigurationMapper.mapToGlideConfig(host, port, config);
+    public JedisPooled(final GenericObjectPoolConfig<Object> poolConfig, final String host,
+        final int port, final boolean ssl, final SSLSocketFactory sslSocketFactory,
+        final SSLParameters sslParameters, final HostnameVerifier hostnameVerifier) {
+        this(poolConfig, host, port, 2000, ssl, sslSocketFactory, sslParameters,
+            hostnameVerifier);
+    }
+
+    public JedisPooled(final GenericObjectPoolConfig<Object> poolConfig, final String host,
+        final int port, final String user, final String password) {
+        this(poolConfig, host, port, 2000, user, password, 0);
+    }
+
+    public JedisPooled(final GenericObjectPoolConfig<Object> poolConfig, final String host,
+        final int port, final int timeout) {
+        this(poolConfig, host, port, timeout, (String) null);
+    }
+
+    public JedisPooled(final GenericObjectPoolConfig<Object> poolConfig, final String host,
+        final int port, final int timeout, final boolean ssl) {
+        this(poolConfig, host, port, timeout, null, ssl);
+    }
+
+    public JedisPooled(final GenericObjectPoolConfig<Object> poolConfig, final String host,
+        final int port, final int timeout, final boolean ssl,
+        final SSLSocketFactory sslSocketFactory, final SSLParameters sslParameters,
+        final HostnameVerifier hostnameVerifier) {
+        this(poolConfig, host, port, timeout, null, ssl, sslSocketFactory, sslParameters,
+            hostnameVerifier);
+    }
+
+    public JedisPooled(final GenericObjectPoolConfig<Object> poolConfig, final String host, int port,
+        int timeout, final String password) {
+        this(poolConfig, host, port, timeout, password, 0);
+    }
+
+    public JedisPooled(final GenericObjectPoolConfig<Object> poolConfig, final String host, int port,
+        int timeout, final String password, final boolean ssl) {
+        this(poolConfig, host, port, timeout, password, 0, ssl);
+    }
+
+    public JedisPooled(final GenericObjectPoolConfig<Object> poolConfig, final String host, int port,
+        int timeout, final String password, final boolean ssl, final SSLSocketFactory sslSocketFactory,
+        final SSLParameters sslParameters, final HostnameVerifier hostnameVerifier) {
+        this(poolConfig, host, port, timeout, password, 0, ssl, sslSocketFactory,
+            sslParameters, hostnameVerifier);
+    }
+
+    public JedisPooled(final GenericObjectPoolConfig<Object> poolConfig, final String host, int port,
+        int timeout, final String user, final String password) {
+        this(poolConfig, host, port, timeout, user, password, 0);
+    }
+
+    public JedisPooled(final GenericObjectPoolConfig<Object> poolConfig, final String host, int port,
+        int timeout, final String user, final String password, final boolean ssl) {
+        this(poolConfig, host, port, timeout, user, password, 0, ssl);
+    }
+
+    public JedisPooled(final GenericObjectPoolConfig<Object> poolConfig, final String host, int port,
+        int timeout, final String password, final int database) {
+        this(poolConfig, host, port, timeout, password, database, null);
+    }
+
+    public JedisPooled(final GenericObjectPoolConfig<Object> poolConfig, final String host, int port,
+        int timeout, final String password, final int database, final boolean ssl) {
+        this(poolConfig, host, port, timeout, password, database, null, ssl);
+    }
+
+    public JedisPooled(final GenericObjectPoolConfig<Object> poolConfig, final String host, int port,
+        int timeout, final String password, final int database, final boolean ssl,
+        final SSLSocketFactory sslSocketFactory, final SSLParameters sslParameters,
+        final HostnameVerifier hostnameVerifier) {
+        this(poolConfig, host, port, timeout, password, database, null, ssl, sslSocketFactory,
+            sslParameters, hostnameVerifier);
+    }
+
+    public JedisPooled(final GenericObjectPoolConfig<Object> poolConfig, final String host, int port,
+        int timeout, final String user, final String password, final int database) {
+        this(poolConfig, host, port, timeout, user, password, database, null);
+    }
+
+    public JedisPooled(final GenericObjectPoolConfig<Object> poolConfig, final String host, int port,
+        int timeout, final String user, final String password, final int database, final boolean ssl) {
+        this(poolConfig, host, port, timeout, user, password, database, null, ssl);
+    }
+
+    public JedisPooled(final GenericObjectPoolConfig<Object> poolConfig, final String host, int port,
+        int timeout, final String password, final int database, final String clientName) {
+        this(poolConfig, host, port, timeout, timeout, password, database, clientName);
+    }
+
+    public JedisPooled(final GenericObjectPoolConfig<Object> poolConfig, final String host, int port,
+        int timeout, final String password, final int database, final String clientName,
+        final boolean ssl) {
+        this(poolConfig, host, port, timeout, timeout, password, database, clientName, ssl);
+    }
+
+    public JedisPooled(final GenericObjectPoolConfig<Object> poolConfig, final String host, int port,
+        int timeout, final String password, final int database, final String clientName,
+        final boolean ssl, final SSLSocketFactory sslSocketFactory,
+        final SSLParameters sslParameters, final HostnameVerifier hostnameVerifier) {
+        this(poolConfig, host, port, timeout, timeout, password, database, clientName, ssl,
+            sslSocketFactory, sslParameters, hostnameVerifier);
+    }
+
+    public JedisPooled(final GenericObjectPoolConfig<Object> poolConfig, final String host, int port,
+        int timeout, final String user, final String password, final int database,
+        final String clientName) {
+        this(poolConfig, host, port, timeout, timeout, user, password, database, clientName);
+    }
+
+    public JedisPooled(final GenericObjectPoolConfig<Object> poolConfig, final String host, int port,
+        int timeout, final String user, final String password, final int database,
+        final String clientName, final boolean ssl) {
+        this(poolConfig, host, port, timeout, timeout, user, password, database, clientName, ssl);
+    }
+
+    // Core constructor that all others delegate to
+    public JedisPooled(final GenericObjectPoolConfig<Object> poolConfig, final String host, int port,
+        final int connectionTimeout, final int soTimeout, final String password, final int database,
+        final String clientName) {
+        this(poolConfig, host, port, connectionTimeout, soTimeout, null, password, database, clientName);
+    }
+
+    public JedisPooled(final GenericObjectPoolConfig<Object> poolConfig, final String host, int port,
+        final int connectionTimeout, final int soTimeout, final String password, final int database,
+        final String clientName, final boolean ssl) {
+        this(poolConfig, host, port, connectionTimeout, soTimeout, password, database, clientName, ssl,
+            null, null, null);
+    }
+
+    public JedisPooled(final GenericObjectPoolConfig<Object> poolConfig, final String host, int port,
+        final int connectionTimeout, final int soTimeout, final String password, final int database,
+        final String clientName, final boolean ssl, final SSLSocketFactory sslSocketFactory,
+        final SSLParameters sslParameters, final HostnameVerifier hostnameVerifier) {
+        this(poolConfig, host, port, connectionTimeout, soTimeout, null, password, database, clientName,
+            ssl, sslSocketFactory, sslParameters, hostnameVerifier);
+    }
+
+    public JedisPooled(final GenericObjectPoolConfig<Object> poolConfig, final String host, int port,
+        final int connectionTimeout, final int soTimeout, final String user, final String password,
+        final int database, final String clientName) {
+        this(poolConfig, host, port, connectionTimeout, soTimeout, 0, user, password, database, clientName);
+    }
+
+    public JedisPooled(final GenericObjectPoolConfig<Object> poolConfig, final String host, int port,
+        final int connectionTimeout, final int soTimeout, final String user, final String password,
+        final int database, final String clientName, final boolean ssl) {
+        this(poolConfig, host, port, connectionTimeout, soTimeout, user, password, database, clientName,
+            ssl, null, null, null);
+    }
+
+    public JedisPooled(final GenericObjectPoolConfig<Object> poolConfig, final String host, int port,
+        final int connectionTimeout, final int soTimeout, final String user, final String password,
+        final int database, final String clientName, final boolean ssl,
+        final SSLSocketFactory sslSocketFactory, final SSLParameters sslParameters,
+        final HostnameVerifier hostnameVerifier) {
+        this(poolConfig, host, port, connectionTimeout, soTimeout, 0, user, password, database,
+            clientName, ssl, sslSocketFactory, sslParameters, hostnameVerifier);
+    }
+
+    public JedisPooled(final GenericObjectPoolConfig<Object> poolConfig, final String host, int port,
+        final int connectionTimeout, final int soTimeout, final int infiniteSoTimeout,
+        final String password, final int database, final String clientName, final boolean ssl,
+        final SSLSocketFactory sslSocketFactory, final SSLParameters sslParameters,
+        final HostnameVerifier hostnameVerifier) {
+        this(poolConfig, host, port, connectionTimeout, soTimeout, infiniteSoTimeout, null, password,
+            database, clientName, ssl, sslSocketFactory, sslParameters, hostnameVerifier);
+    }
+
+    // Ultimate constructor that all others delegate to
+    public JedisPooled(final GenericObjectPoolConfig<Object> poolConfig, final String host, int port,
+        final int connectionTimeout, final int soTimeout, final int infiniteSoTimeout, final String user,
+        final String password, final int database, final String clientName) {
+        this(new HostAndPort(host, port),
+            DefaultJedisClientConfig.builder().connectionTimeoutMillis(connectionTimeout).socketTimeoutMillis(soTimeout)
+                .blockingSocketTimeoutMillis(infiniteSoTimeout).user(user).password(password).database(database)
+                .clientName(clientName).build());
+        // poolConfig is ignored since GLIDE handles pooling internally
+    }
+
+    public JedisPooled(final GenericObjectPoolConfig<Object> poolConfig, final String host, int port,
+        final int connectionTimeout, final int soTimeout, final int infiniteSoTimeout, final String user,
+        final String password, final int database, final String clientName, final boolean ssl,
+        final SSLSocketFactory sslSocketFactory, final SSLParameters sslParameters,
+        final HostnameVerifier hostnameVerifier) {
+        this(new HostAndPort(host, port),
+            DefaultJedisClientConfig.builder().connectionTimeoutMillis(connectionTimeout).socketTimeoutMillis(soTimeout)
+                .blockingSocketTimeoutMillis(infiniteSoTimeout).user(user).password(password).database(database)
+                .clientName(clientName).ssl(ssl).sslSocketFactory(sslSocketFactory).sslParameters(sslParameters)
+                .hostnameVerifier(hostnameVerifier).build());
+        // poolConfig is ignored since GLIDE handles pooling internally
+    }
+
+    // URI-based constructors
+    public JedisPooled(final URI uri) {
+        super(uri);
+    }
+
+    public JedisPooled(final URI uri, final SSLSocketFactory sslSocketFactory,
+        final SSLParameters sslParameters, final HostnameVerifier hostnameVerifier) {
+        this(new GenericObjectPoolConfig<Object>(), uri, sslSocketFactory, sslParameters,
+            hostnameVerifier);
+    }
+
+    public JedisPooled(final URI uri, final int timeout) {
+        this(new GenericObjectPoolConfig<Object>(), uri, timeout);
+    }
+
+    public JedisPooled(final URI uri, final int timeout, final SSLSocketFactory sslSocketFactory,
+        final SSLParameters sslParameters, final HostnameVerifier hostnameVerifier) {
+        this(new GenericObjectPoolConfig<Object>(), uri, timeout, sslSocketFactory, sslParameters,
+            hostnameVerifier);
+    }
+
+    public JedisPooled(final GenericObjectPoolConfig<Object> poolConfig, final URI uri) {
+        this(poolConfig, uri, 2000);
+    }
+
+    public JedisPooled(final GenericObjectPoolConfig<Object> poolConfig, final URI uri,
+        final SSLSocketFactory sslSocketFactory, final SSLParameters sslParameters,
+        final HostnameVerifier hostnameVerifier) {
+        this(poolConfig, uri, 2000, sslSocketFactory, sslParameters,
+            hostnameVerifier);
+    }
+
+    public JedisPooled(final GenericObjectPoolConfig<Object> poolConfig, final URI uri,
+        final int timeout) {
+        this(poolConfig, uri, timeout, timeout);
+    }
+
+    public JedisPooled(final GenericObjectPoolConfig<Object> poolConfig, final URI uri,
+        final int timeout, final SSLSocketFactory sslSocketFactory,
+        final SSLParameters sslParameters, final HostnameVerifier hostnameVerifier) {
+        this(poolConfig, uri, timeout, timeout, sslSocketFactory, sslParameters, hostnameVerifier);
+    }
+
+    public JedisPooled(final GenericObjectPoolConfig<Object> poolConfig, final URI uri,
+        final int connectionTimeout, final int soTimeout) {
+        super(uri, DefaultJedisClientConfig.builder()
+            .connectionTimeoutMillis(connectionTimeout)
+            .socketTimeoutMillis(soTimeout)
+            .build());
+        // poolConfig is ignored since GLIDE handles pooling internally
+    }
+
+    public JedisPooled(final GenericObjectPoolConfig<Object> poolConfig, final URI uri,
+        final int connectionTimeout, final int soTimeout, final SSLSocketFactory sslSocketFactory,
+        final SSLParameters sslParameters, final HostnameVerifier hostnameVerifier) {
+        super(uri, DefaultJedisClientConfig.builder()
+            .connectionTimeoutMillis(connectionTimeout)
+            .socketTimeoutMillis(soTimeout)
+            .sslSocketFactory(sslSocketFactory)
+            .sslParameters(sslParameters)
+            .hostnameVerifier(hostnameVerifier)
+            .build());
+        // poolConfig is ignored since GLIDE handles pooling internally
+    }
+
+    // Additional constructors for compatibility
+    public JedisPooled(final HostAndPort hostAndPort, final GenericObjectPoolConfig<Object> poolConfig) {
+        this(hostAndPort, DefaultJedisClientConfig.builder().build());
+        // poolConfig is ignored since GLIDE handles pooling internally
+    }
+
+    public JedisPooled(final GenericObjectPoolConfig<Object> poolConfig, final HostAndPort hostAndPort,
+        final JedisClientConfig clientConfig) {
+        this(hostAndPort, clientConfig);
+        // poolConfig is ignored since GLIDE handles pooling internally
+    }
+
+    public JedisPooled(final HostAndPort hostAndPort, final JedisClientConfig clientConfig,
+        final GenericObjectPoolConfig<Object> poolConfig) {
+        this(hostAndPort, clientConfig);
+        // poolConfig is ignored since GLIDE handles pooling internally
+    }
+
+    public JedisPooled(final HostAndPort hostAndPort, final JedisClientConfig clientConfig, Object cacheConfig,
+        final GenericObjectPoolConfig<Object> poolConfig) {
+        this(hostAndPort, clientConfig, cacheConfig);
+        // poolConfig is ignored since GLIDE handles pooling internally
+    }
+
+    public JedisPooled(final HostAndPort hostAndPort, final JedisClientConfig clientConfig, Object clientSideCache,
+        final GenericObjectPoolConfig<Object> poolConfig) {
+        this(hostAndPort, clientConfig, clientSideCache);
+        // poolConfig is ignored since GLIDE handles pooling internally
+    }
+
+    // Factory-based constructors (simplified for GLIDE compatibility)
+    public JedisPooled(final GenericObjectPoolConfig<Object> poolConfig,
+        PooledObjectFactory<Object> factory) {
+        this(); // Use default connection since GLIDE handles pooling internally
+    }
+
+    public JedisPooled(GenericObjectPoolConfig<Object> poolConfig, PooledObjectFactory<Object> factory) {
+        this(); // Use default connection since GLIDE handles pooling internally
+    }
+
+    public JedisPooled(PooledObjectFactory<Object> factory, GenericObjectPoolConfig<Object> poolConfig) {
+        this(); // Use default connection since GLIDE handles pooling internally
+    }
+
+    // Provider-based constructor (simplified for GLIDE compatibility)
+    public JedisPooled(Object provider) {
+        this(); // Use default connection since GLIDE handles pooling internally
     }
 }

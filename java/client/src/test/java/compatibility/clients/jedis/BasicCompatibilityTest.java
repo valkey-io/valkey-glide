@@ -72,10 +72,7 @@ public class BasicCompatibilityTest {
 
     @Test
     public void testUnifiedJedisBasicOperations() {
-        JedisClientConfig config = DefaultJedisClientConfig.builder().build();
-        GlideClientConfiguration glideConfig = ConfigurationMapper.mapToGlideConfig(TEST_HOST, TEST_PORT, config);
-        
-        try (UnifiedJedis unifiedJedis = new UnifiedJedis(glideConfig, config)) {
+        try (UnifiedJedis unifiedJedis = new UnifiedJedis(TEST_HOST, TEST_PORT)) {
             // Test SET
             String setResult = unifiedJedis.set(TEST_KEY, TEST_VALUE);
             assertEquals("OK", setResult);
