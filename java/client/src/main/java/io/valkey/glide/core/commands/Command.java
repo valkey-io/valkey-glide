@@ -1,25 +1,37 @@
-/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package io.valkey.glide.core.commands;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 /**
- * Represents a Valkey command with its type and arguments.
- * This is a pure data structure without any command execution logic.
+ * Represents a Redis/Valkey command with its arguments.
+ * This class encapsulates a command type and its associated arguments.
  */
 public class Command {
     private final CommandType type;
-    private final String[] args;
+    private final List<String> arguments;
 
     /**
-     * Creates a new Command with the specified type and arguments.
+     * Create a new Command with the specified type and arguments.
      *
      * @param type The command type
-     * @param args The command arguments
+     * @param arguments The command arguments
      */
-    public Command(CommandType type, String... args) {
+    public Command(CommandType type, String... arguments) {
         this.type = type;
-        this.args = args != null ? args.clone() : new String[0];
+        this.arguments = new ArrayList<>(Arrays.asList(arguments));
+    }
+
+    /**
+     * Create a new Command with the specified type and arguments list.
+     *
+     * @param type The command type
+     * @param arguments The command arguments as a list
+     */
+    public Command(CommandType type, List<String> arguments) {
+        this.type = type;
+        this.arguments = new ArrayList<>(arguments);
     }
 
     /**
@@ -34,53 +46,77 @@ public class Command {
     /**
      * Get the command arguments.
      *
-     * @return A copy of the command arguments
+     * @return A list of command arguments
      */
-    public String[] getArgs() {
-        return args.clone();
+    public List<String> getArguments() {
+        return new ArrayList<>(arguments);
     }
 
     /**
-     * Get the command arguments as an array (for internal use).
+     * Get the command arguments as an array.
      *
-     * @return The command arguments array
+     * @return An array of command arguments
      */
     public String[] getArgumentsArray() {
-        return args.clone();
+        return arguments.toArray(new String[0]);
     }
 
     /**
-     * Get the command as a string array with command name first, then arguments.
+     * Add an argument to the command.
      *
-     * @return Command as string array
+     * @param argument The argument to add
+     * @return This Command instance for method chaining
      */
-    public String[] getCommand() {
-        String[] command = new String[args.length + 1];
-        command[0] = type.getCommandName();
-        System.arraycopy(args, 0, command, 1, args.length);
-        return command;
+    public Command addArgument(String argument) {
+        arguments.add(argument);
+        return this;
+    }
+
+    /**
+     * Add multiple arguments to the command.
+     *
+     * @param args The arguments to add
+     * @return This Command instance for method chaining
+     */
+    public Command addArguments(String... args) {
+        arguments.addAll(Arrays.asList(args));
+        return this;
+    }
+
+    /**
+     * Get the full command as a string array (command name + arguments).
+     *
+     * @return Array with command name as first element, followed by arguments
+     */
+    public String[] toArray() {
+        String[] result = new String[arguments.size() + 1];
+        result[0] = type.getCommandName();
+        for (int i = 0; i < arguments.size(); i++) {
+            result[i + 1] = arguments.get(i);
+        }
+        return result;
     }
 
     @Override
     public String toString() {
-        return "Command{" +
-                "type=" + type +
-                ", args=" + Arrays.toString(args) +
-                '}';
+        StringBuilder sb = new StringBuilder();
+        sb.append(type.getCommandName());
+        for (String arg : arguments) {
+            sb.append(" ").append(arg);
+        }
+        return sb.toString();
     }
 
     @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        Command command = (Command) o;
-        return type == command.type && Arrays.equals(args, command.args);
+    public boolean equals(Object obj) {
+        if (this == obj) return true;
+        if (obj == null || getClass() != obj.getClass()) return false;
+        Command command = (Command) obj;
+        return type == command.type && arguments.equals(command.arguments);
     }
 
     @Override
     public int hashCode() {
-        int result = type.hashCode();
-        result = 31 * result + Arrays.hashCode(args);
-        return result;
+        return type.hashCode() * 31 + arguments.hashCode();
     }
 }

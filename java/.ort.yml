@@ -1,0 +1,23 @@
+excludes:
+  paths:
+    - pattern: "java/benchmarks/**"
+      reason: "TEST_OF"
+      comment: >-
+        Licenses contained in this directory are used for benchmarks and do not apply to the OSS Review Toolkit.
+    - pattern: "java/integTest/**"
+      reason: "TEST_OF"
+      comment: >-
+        Licenses contained in this directory are used for testing and do not apply to the OSS Review Toolkit.
+  scopes:
+    - pattern: "test.*"
+      reason: "TEST_DEPENDENCY_OF"
+      comment: Packages for testing only. Not part of released artifacts.
+    - pattern: "(spotbugs.*|spotbugsSlf4j.*)"
+      reason: "TEST_DEPENDENCY_OF"
+      comment: Packages for static analysis only. Not part of released artifacts.
+    - pattern: "jacoco.*"
+      reason: "TEST_DEPENDENCY_OF"
+      comment: Packages for code coverage verification only. Not part of released artifacts.
+    - pattern: "compileClasspath.*"
+      reason: "TEST_DEPENDENCY_OF"
+      comment: Packages for Gradle only. Not part of released artifacts.
