@@ -4,5 +4,5 @@ using Valkey.Glide.Commands;
 
 namespace Valkey.Glide;
 
-public interface IDatabaseAsync : IStringBaseCommands, IGenericCommands, IServerManagementCommands
+public interface IDatabaseAsync : IConnectionManagementCommands, IGenericCommands, IGenericBaseCommands, IHashCommands, IListCommands, IServerManagementCommands, ISetCommands, ISortedSetCommands, IStringBaseCommands
 { }
