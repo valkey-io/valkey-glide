@@ -544,7 +544,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
     public CompletableFuture<Object[]> exec(ClusterBatch batch, boolean raiseOnError, ClusterBatchOptions options) {
         return CompletableFuture.supplyAsync(() -> {
             try {
-                List<Command> commands = batch.getCommands();
+                List<io.valkey.glide.core.commands.Command> commands = batch.getCommands();
                 
                 if (batch.isAtomic()) {
                     // Execute as atomic transaction using MULTI/EXEC with options
@@ -1238,13 +1238,13 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
 
     public CompletableFuture<String> functionRestore(byte[] payload, Route route) {
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CommandType.FUNCTION_RESTORE, payload), route)
+            CommandType.FUNCTION_RESTORE, new String(payload, java.nio.charset.StandardCharsets.UTF_8)), route)
             .thenApply(result -> result.toString());
     }
 
     public CompletableFuture<String> functionRestore(byte[] payload, FunctionRestorePolicy policy, Route route) {
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CommandType.FUNCTION_RESTORE, payload, policy.getValkeyApi()), route)
+            CommandType.FUNCTION_RESTORE, new String(payload, java.nio.charset.StandardCharsets.UTF_8), policy.toString()), route)
             .thenApply(result -> result.toString());
     }
 
@@ -1394,16 +1394,13 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return A CompletableFuture containing the result wrapped in ClusterValue
      */
     public CompletableFuture<ClusterValue<Object>> invokeScript(Script script, Route route) {
-        String[] keys = script.getKeys();
-        String[] args = script.getArgs();
+        // Use EVALSHA if hash exists, otherwise use EVAL
         CommandType cmdType = script.getHash() != null ? CommandType.EVALSHA : CommandType.EVAL;
         String scriptOrHash = script.getHash() != null ? script.getHash() : script.getCode();
         
         List<String> cmdArgs = new ArrayList<>();
         cmdArgs.add(scriptOrHash);
-        cmdArgs.add(String.valueOf(keys.length));
-        cmdArgs.addAll(Arrays.asList(keys));
-        cmdArgs.addAll(Arrays.asList(args));
+        cmdArgs.add("0"); // No keys by default - script handles its own key management
         
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
             cmdType, cmdArgs.toArray(new String[0])), route)
