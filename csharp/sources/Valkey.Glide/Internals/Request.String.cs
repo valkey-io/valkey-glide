@@ -56,9 +56,6 @@ internal partial class Request
     public static Cmd<long, long> StringIncrBy(ValkeyKey key, long increment)
         => Simple<long>(RequestType.IncrBy, [key.ToGlideString(), increment.ToGlideString()]);
 
-    public static Cmd<string, double> StringIncrByFloat(ValkeyKey key, double increment)
-    {
-        GlideString[] args = [key.ToGlideString(), increment.ToString(System.Globalization.CultureInfo.InvariantCulture).ToGlideString()];
-        return new(RequestType.IncrByFloat, args, false, response => double.Parse(response, System.Globalization.CultureInfo.InvariantCulture));
-    }
+    public static Cmd<double, double> StringIncrByFloat(ValkeyKey key, double increment)
+        => Simple<double>(RequestType.IncrByFloat, [key.ToGlideString(), increment.ToString(System.Globalization.CultureInfo.InvariantCulture).ToGlideString()]);
 }

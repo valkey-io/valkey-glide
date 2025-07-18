@@ -136,7 +136,7 @@ public class CommandTests
             () => Assert.Equal(5L, Request.StringDecrBy("key", 5).Converter(5L)),
             () => Assert.Equal(11L, Request.StringIncr("key").Converter(11L)),
             () => Assert.Equal(15L, Request.StringIncrBy("key", 5).Converter(15L)),
-            () => Assert.Equal(10.5, Request.StringIncrByFloat("key", 0.5).Converter("10.5")),
+            () => Assert.Equal(10.5, Request.StringIncrByFloat("key", 0.5).Converter(10.5)),
             () => Assert.True(Request.StringSetMultiple([
                 new KeyValuePair<ValkeyKey, ValkeyValue>("key1", "value1"),
                 new KeyValuePair<ValkeyKey, ValkeyValue>("key2", "value2")
