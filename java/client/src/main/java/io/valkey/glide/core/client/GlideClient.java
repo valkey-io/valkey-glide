@@ -479,6 +479,31 @@ public class GlideClient implements AutoCloseable {
     private static native long executeLongCommand(long clientPtr, String command, String[] args);
 
     /**
+     * Execute a raw command that's not in the CommandType enum.
+     * This is used for custom commands that aren't predefined.
+     *
+     * @param commandName The command name
+     * @param args The command arguments
+     * @return A CompletableFuture containing the command result
+     */
+    public CompletableFuture<Object> executeRawCommand(String commandName, String[] args) {
+        return CompletableFuture.supplyAsync(() -> {
+            long handle = nativeClientHandle.get();
+            if (handle == 0) {
+                throw new IllegalStateException("Client is closed");
+            }
+            
+            // Convert to byte arrays for JNI call
+            byte[][] byteArgs = new byte[args.length][];
+            for (int i = 0; i < args.length; i++) {
+                byteArgs[i] = args[i].getBytes();
+            }
+            
+            return executeCommand(handle, commandName, byteArgs);
+        });
+    }
+
+    /**
      * Execute a command expecting a Double result
      * Uses glide-core's ExpectedReturnType::Double for conversion
      */
@@ -677,4 +702,32 @@ public class GlideClient implements AutoCloseable {
         int port = (Integer) portMethod.invoke(route);
         return new RouteInfo(6, host + ":" + port); // ByAddress
     }
+
+    /**
+     * Update the connection password for reconnection.
+     *
+     * @param password The new password to use (null to remove password)
+     * @param immediateAuth Whether to authenticate immediately with the new password
+     * @return A CompletableFuture containing "OK" on success
+     */
+    public CompletableFuture<String> updateConnectionPassword(String password, boolean immediateAuth) {
+        return CompletableFuture.supplyAsync(() -> {
+            long handle = nativeClientHandle.get();
+            if (handle == 0) {
+                throw new IllegalStateException("Client is closed");
+            }
+            
+            return updateConnectionPasswordNative(handle, password, immediateAuth);
+        });
+    }
+
+    /**
+     * Native method to update connection password
+     *
+     * @param clientPtr Native client handle
+     * @param password The new password (null to remove password)
+     * @param immediateAuth Whether to authenticate immediately
+     * @return "OK" on success
+     */
+    private static native String updateConnectionPasswordNative(long clientPtr, String password, boolean immediateAuth);
 }

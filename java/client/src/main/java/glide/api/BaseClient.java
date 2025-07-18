@@ -16,11 +16,13 @@ import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.FlushMode;
+import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.bitmap.BitwiseOperation;
 import glide.api.models.commands.stream.StreamRange;
 import glide.api.models.commands.geospatial.GeoSearchOptions;
 import glide.api.models.commands.geospatial.GeoSearchStoreOptions;
+import glide.api.models.commands.geospatial.GeoSearchOrigin;
 import glide.api.models.commands.geospatial.GeoSearchOrigin.MemberOrigin;
 import glide.api.models.commands.geospatial.GeoSearchShape;
 import glide.api.models.commands.geospatial.GeoSearchResultOptions;
@@ -1015,9 +1017,34 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
             System.arraycopy(args, 1, commandArgs, 0, args.length - 1);
             return executeCommand(commandType, commandArgs);
         } catch (IllegalArgumentException e) {
-            // If command is not in enum, execute as raw command
-            return executeCommand(CommandType.GET, args); // Fallback - this needs proper handling
+            // If command is not in enum, execute as raw command using JNI directly
+            String commandName = args[0];
+            String[] commandArgs = new String[args.length - 1];
+            System.arraycopy(args, 1, commandArgs, 0, args.length - 1);
+            
+            return executeRawCommand(commandName, commandArgs);
         }
+    }
+
+    /**
+     * Execute a raw command that's not in the CommandType enum.
+     * This bypasses the enum check and directly calls the JNI layer.
+     *
+     * @param commandName The command name
+     * @param args The command arguments
+     * @return A CompletableFuture containing the command result
+     */
+    private CompletableFuture<Object> executeRawCommand(String commandName, String[] args) {
+        // For now, use a simple approach - create a custom command object
+        // In a future update, we'll add proper raw command support to the JNI client
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                // Use the JNI client's executeRawCommand method if available
+                return client.executeRawCommand(commandName, args);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to execute raw command: " + commandName + ". Raw command execution not yet implemented in JNI client.", e);
+            }
+        });
     }
 
     /**
@@ -4722,6 +4749,56 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         return executeCommand(CommandType.FUNCTION_STATS);
     }
 
+    /**
+     * Kill a running function.
+     *
+     * @return A CompletableFuture containing "OK" if successful
+     */
+    public CompletableFuture<String> functionKill() {
+        return executeCommand(CommandType.FUNCTION_KILL)
+            .thenApply(result -> result.toString());
+    }
+
+    /**
+     * Dump all loaded functions as a serialized payload.
+     *
+     * @return A CompletableFuture containing the serialized function payload
+     */
+    public CompletableFuture<byte[]> functionDump() {
+        return executeCommand(CommandType.FUNCTION_DUMP)
+            .thenApply(result -> {
+                if (result instanceof byte[]) {
+                    return (byte[]) result;
+                } else if (result instanceof String) {
+                    return ((String) result).getBytes();
+                }
+                return new byte[0];
+            });
+    }
+
+    /**
+     * Restore functions from a serialized payload.
+     *
+     * @param payload The serialized function payload
+     * @return A CompletableFuture containing "OK" if successful
+     */
+    public CompletableFuture<String> functionRestore(byte[] payload) {
+        return executeCommand(CommandType.FUNCTION_RESTORE, new String(payload))
+            .thenApply(result -> result.toString());
+    }
+
+    /**
+     * Restore functions from a serialized payload with a specific policy.
+     *
+     * @param payload The serialized function payload
+     * @param policy The restore policy (APPEND, FLUSH, REPLACE)
+     * @return A CompletableFuture containing "OK" if successful
+     */
+    public CompletableFuture<String> functionRestore(byte[] payload, FunctionRestorePolicy policy) {
+        return executeCommand(CommandType.FUNCTION_RESTORE, policy.toString(), new String(payload))
+            .thenApply(result -> result.toString());
+    }
+
     // ============================================================================
     // Bitmap Commands
     // ============================================================================
@@ -4793,20 +4870,33 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
     public CompletableFuture<Long> geosearchstore(
             String destination,
             String source,
-            MemberOrigin origin,
+            GeoSearchOrigin.SearchOrigin origin,
             GeoSearchShape shape,
             GeoSearchStoreOptions storeOptions,
             GeoSearchResultOptions resultOptions) {
-        // This is a stub implementation - in a real implementation, this would
-        // construct the proper GEOSEARCHSTORE command with all parameters
+        // Build the proper GEOSEARCHSTORE command with all parameters
         List<String> args = new ArrayList<>();
-        args.add("GEOSEARCHSTORE");
         args.add(destination);
         args.add(source);
-        // Add other parameters based on origin, shape, options...
-        // For now, return a stub result
-        return executeCustomCommand(args.toArray(new String[0]))
-                .thenApply(result -> result instanceof Long ? (Long) result : 0L);
+        
+        // Add origin arguments using toArgs() method
+        args.addAll(Arrays.asList(origin.toArgs()));
+        
+        // Add shape arguments using toArgs() method
+        args.addAll(Arrays.asList(shape.toArgs()));
+        
+        // Add store options using toArgs() method
+        if (storeOptions != null) {
+            args.addAll(Arrays.asList(storeOptions.toArgs()));
+        }
+        
+        // Add result options using toArgs() method
+        if (resultOptions != null) {
+            args.addAll(Arrays.asList(resultOptions.toArgs()));
+        }
+        
+        return executeCommand(CommandType.GEOSEARCHSTORE, args.toArray(new String[0]))
+                .thenApply(result -> result instanceof Long ? (Long) result : Long.parseLong(result.toString()));
     }
 
     // ============================================================================
@@ -4859,9 +4949,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing "OK" on success
      */
     public CompletableFuture<String> updateConnectionPassword(String password, boolean updateConfiguration) {
-        // This is a placeholder implementation
-        // In a full implementation, this would update the underlying connection pool
-        return CompletableFuture.completedFuture(OK);
+        return client.updateConnectionPassword(password, updateConfiguration);
     }
 
     /**

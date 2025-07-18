@@ -229,6 +229,7 @@ public enum CommandType {
     // Geospatial commands
     GEOADD("GEOADD"),
     GEOSEARCH("GEOSEARCH"),
+    GEOSEARCHSTORE("GEOSEARCHSTORE"),
     
     // Misc commands
     LOLWUT("LOLWUT"),
