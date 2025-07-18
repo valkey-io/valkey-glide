@@ -59,10 +59,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
-import glide.protobuf.ResponseOuterClass.ConstantResponse;
-import glide.protobuf.ResponseOuterClass.Response;
+// Removed protobuf imports - using JNI implementation
 import glide.api.GlideClusterClient;
 import io.valkey.glide.managers.CommandManager;
+import io.valkey.glide.core.commands.CommandType;
+import glide.managers.GlideExceptionCheckedFunction;
 
 public class GlideClusterClientTest {
 
@@ -168,7 +169,7 @@ public class GlideClusterClientTest {
     public void custom_command_returns_single_value_on_constant_response() {
         var commandManager =
                 new TestCommandManager(
-                        Response.newBuilder().setConstantResponse(ConstantResponse.OK).build());
+                        "OK");
 
         try (var client = new TestClient(commandManager, "OK")) {
             var value = client.customCommand(TEST_ARGS, ALL_NODES).get();
@@ -207,7 +208,7 @@ public class GlideClusterClientTest {
     public void custom_command_binary_returns_single_value_on_constant_response() {
         var commandManager =
                 new TestCommandManager(
-                        Response.newBuilder().setConstantResponse(ConstantResponse.OK).build());
+                        "OK");
 
         try (var client = new TestClient(commandManager, "OK")) {
             var value = client.customCommand(new GlideString[0], ALL_NODES).get();
@@ -226,7 +227,7 @@ public class GlideClusterClientTest {
 
         @Override
         protected <T> T handleValkeyResponse(
-                Class<T> classType, EnumSet<ResponseFlags> flags, Response response) {
+                Class<T> classType, Object response) {
             @SuppressWarnings("unchecked")
             T returnValue = (T) object;
             return returnValue;
@@ -238,18 +239,18 @@ public class GlideClusterClientTest {
 
     private static class TestCommandManager extends CommandManager {
 
-        private final Response response;
+        private final Object mockResponse;
 
-        public TestCommandManager(Response responseToReturn) {
+        public TestCommandManager(Object responseToReturn) {
             super(null);
-            response = responseToReturn != null ? responseToReturn : Response.newBuilder().build();
+            mockResponse = responseToReturn;
         }
 
         @Override
-        public <T> CompletableFuture<T> submitCommandToChannel(
-                CommandRequest.Builder command,
-                GlideExceptionCheckedFunction<Response, T> responseHandler) {
-            return CompletableFuture.supplyAsync(() -> responseHandler.apply(response));
+        public <T> CompletableFuture<T> submitNewCommand(
+                CommandType commandType, String[] arguments, 
+                GlideExceptionCheckedFunction<Object, T> responseHandler) {
+            return CompletableFuture.supplyAsync(() -> responseHandler.apply(mockResponse));
         }
     }
 

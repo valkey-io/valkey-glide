@@ -2,6 +2,7 @@ module glide.client {
     // Core JNI classes
     exports io.valkey.glide.core.client;
     exports io.valkey.glide.core.commands;
+    exports io.valkey.glide.managers;
     exports glide.managers;
     
     // Client API classes
@@ -23,7 +24,7 @@ module glide.client {
     exports glide.api.logging;
     exports glide.utils;
     
-    // Compatibility packages for manager stubs
+    // JNI functionality
     exports glide.ffi.resolvers;
 
     requires java.base;
