@@ -57,8 +57,21 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             @Override
             public CompletableFuture<ClusterValue<String>> info(Route route) {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    CommandType.INFO))
-                    .thenApply(result -> ClusterValue.ofSingleValue(result.toString()));
+                    CommandType.INFO), route)
+                    .thenApply(result -> {
+                        if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
+                            return ClusterValue.ofSingleValue(result.toString());
+                        } else {
+                            // For multi-node routes, expect a map result
+                            if (result instanceof Map) {
+                                Map<String, String> mapResult = new java.util.HashMap<>();
+                                ((Map<?, ?>) result).forEach((key, value) -> 
+                                    mapResult.put(key.toString(), value.toString()));
+                                return ClusterValue.ofMultiValue(mapResult);
+                            }
+                            return ClusterValue.ofSingleValue(result.toString());
+                        }
+                    });
             }
 
             @Override
@@ -79,8 +92,21 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
                     sectionNames[i] = sections[i].name().toLowerCase();
                 }
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    CommandType.INFO, sectionNames))
-                    .thenApply(result -> ClusterValue.ofSingleValue(result.toString()));
+                    CommandType.INFO, sectionNames), route)
+                    .thenApply(result -> {
+                        if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
+                            return ClusterValue.ofSingleValue(result.toString());
+                        } else {
+                            // For multi-node routes, expect a map result
+                            if (result instanceof Map) {
+                                Map<String, String> mapResult = new java.util.HashMap<>();
+                                ((Map<?, ?>) result).forEach((key, value) -> 
+                                    mapResult.put(key.toString(), value.toString()));
+                                return ClusterValue.ofMultiValue(mapResult);
+                            }
+                            return ClusterValue.ofSingleValue(result.toString());
+                        }
+                    });
             }
 
             @Override
@@ -93,7 +119,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             @Override
             public CompletableFuture<String> configRewrite(Route route) {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    CommandType.CONFIG_REWRITE))
+                    CommandType.CONFIG_REWRITE), route)
                     .thenApply(result -> result.toString());
             }
 
@@ -107,7 +133,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             @Override
             public CompletableFuture<String> configResetStat(Route route) {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    CommandType.CONFIG_RESETSTAT))
+                    CommandType.CONFIG_RESETSTAT), route)
                     .thenApply(result -> result.toString());
             }
 
@@ -130,16 +156,43 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             @Override
             public CompletableFuture<ClusterValue<Map<String, String>>> configGet(String[] parameters, Route route) {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    CommandType.CONFIG_GET, parameters))
+                    CommandType.CONFIG_GET, parameters), route)
                     .thenApply(result -> {
-                        Map<String, String> config = new java.util.HashMap<>();
-                        if (result instanceof Object[]) {
-                            Object[] array = (Object[]) result;
-                            for (int i = 0; i < array.length - 1; i += 2) {
-                                config.put(array[i].toString(), array[i + 1].toString());
+                        if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
+                            Map<String, String> config = new java.util.HashMap<>();
+                            if (result instanceof Object[]) {
+                                Object[] array = (Object[]) result;
+                                for (int i = 0; i < array.length - 1; i += 2) {
+                                    config.put(array[i].toString(), array[i + 1].toString());
+                                }
                             }
+                            return ClusterValue.ofSingleValue(config);
+                        } else {
+                            // For multi-node routes, expect a map of node -> config
+                            if (result instanceof Map) {
+                                Map<String, Map<String, String>> nodeConfigs = new java.util.HashMap<>();
+                                ((Map<?, ?>) result).forEach((nodeKey, nodeValue) -> {
+                                    Map<String, String> config = new java.util.HashMap<>();
+                                    if (nodeValue instanceof Object[]) {
+                                        Object[] array = (Object[]) nodeValue;
+                                        for (int i = 0; i < array.length - 1; i += 2) {
+                                            config.put(array[i].toString(), array[i + 1].toString());
+                                        }
+                                    }
+                                    nodeConfigs.put(nodeKey.toString(), config);
+                                });
+                                return ClusterValue.ofMultiValue(nodeConfigs);
+                            }
+                            // Fallback to single value
+                            Map<String, String> config = new java.util.HashMap<>();
+                            if (result instanceof Object[]) {
+                                Object[] array = (Object[]) result;
+                                for (int i = 0; i < array.length - 1; i += 2) {
+                                    config.put(array[i].toString(), array[i + 1].toString());
+                                }
+                            }
+                            return ClusterValue.ofSingleValue(config);
                         }
-                        return ClusterValue.ofSingleValue(config);
                     });
             }
 
@@ -165,7 +218,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
                     args[i++] = entry.getValue();
                 }
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    CommandType.CONFIG_SET, args))
+                    CommandType.CONFIG_SET, args), route)
                     .thenApply(result -> result.toString());
             }
 
@@ -189,17 +242,45 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             @Override
             public CompletableFuture<ClusterValue<String[]>> time(Route route) {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    CommandType.TIME))
+                    CommandType.TIME), route)
                     .thenApply(result -> {
-                        if (result instanceof Object[]) {
-                            Object[] objects = (Object[]) result;
-                            String[] time = new String[objects.length];
-                            for (int i = 0; i < objects.length; i++) {
-                                time[i] = objects[i].toString();
+                        if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
+                            if (result instanceof Object[]) {
+                                Object[] objects = (Object[]) result;
+                                String[] time = new String[objects.length];
+                                for (int i = 0; i < objects.length; i++) {
+                                    time[i] = objects[i].toString();
+                                }
+                                return ClusterValue.ofSingleValue(time);
                             }
-                            return ClusterValue.ofSingleValue(time);
+                            return ClusterValue.ofSingleValue(new String[0]);
+                        } else {
+                            // For multi-node routes, expect a map of node -> time
+                            if (result instanceof Map) {
+                                Map<String, String[]> nodeResults = new java.util.HashMap<>();
+                                ((Map<?, ?>) result).forEach((nodeKey, nodeValue) -> {
+                                    if (nodeValue instanceof Object[]) {
+                                        Object[] objects = (Object[]) nodeValue;
+                                        String[] time = new String[objects.length];
+                                        for (int i = 0; i < objects.length; i++) {
+                                            time[i] = objects[i].toString();
+                                        }
+                                        nodeResults.put(nodeKey.toString(), time);
+                                    }
+                                });
+                                return ClusterValue.ofMultiValue(nodeResults);
+                            }
+                            // Fallback to single value
+                            if (result instanceof Object[]) {
+                                Object[] objects = (Object[]) result;
+                                String[] time = new String[objects.length];
+                                for (int i = 0; i < objects.length; i++) {
+                                    time[i] = objects[i].toString();
+                                }
+                                return ClusterValue.ofSingleValue(time);
+                            }
+                            return ClusterValue.ofSingleValue(new String[0]);
                         }
-                        return ClusterValue.ofSingleValue(new String[0]);
                     });
             }
 
@@ -213,8 +294,21 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             @Override
             public CompletableFuture<ClusterValue<Long>> lastsave(Route route) {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    CommandType.LASTSAVE))
-                    .thenApply(result -> ClusterValue.ofSingleValue(Long.parseLong(result.toString())));
+                    CommandType.LASTSAVE), route)
+                    .thenApply(result -> {
+                        if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
+                            return ClusterValue.ofSingleValue(Long.parseLong(result.toString()));
+                        } else {
+                            // For multi-node routes, expect a map of node -> timestamp
+                            if (result instanceof Map) {
+                                Map<String, Long> nodeResults = new java.util.HashMap<>();
+                                ((Map<?, ?>) result).forEach((nodeKey, nodeValue) -> 
+                                    nodeResults.put(nodeKey.toString(), Long.parseLong(nodeValue.toString())));
+                                return ClusterValue.ofMultiValue(nodeResults);
+                            }
+                            return ClusterValue.ofSingleValue(Long.parseLong(result.toString()));
+                        }
+                    });
             }
 
             @Override
@@ -234,14 +328,14 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             @Override
             public CompletableFuture<String> flushall(Route route) {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    CommandType.FLUSHALL))
+                    CommandType.FLUSHALL), route)
                     .thenApply(result -> result.toString());
             }
 
             @Override
             public CompletableFuture<String> flushall(FlushMode mode, Route route) {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    CommandType.FLUSHALL, mode.name()))
+                    CommandType.FLUSHALL, mode.name()), route)
                     .thenApply(result -> result.toString());
             }
 
@@ -262,14 +356,14 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             @Override
             public CompletableFuture<String> flushdb(Route route) {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    CommandType.FLUSHDB))
+                    CommandType.FLUSHDB), route)
                     .thenApply(result -> result.toString());
             }
 
             @Override
             public CompletableFuture<String> flushdb(FlushMode mode, Route route) {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    CommandType.FLUSHDB, mode.name()))
+                    CommandType.FLUSHDB, mode.name()), route)
                     .thenApply(result -> result.toString());
             }
 

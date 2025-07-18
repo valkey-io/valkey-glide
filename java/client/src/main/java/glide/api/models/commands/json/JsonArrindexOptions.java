@@ -1,38 +1,54 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.commands.json;
 
-import lombok.experimental.SuperBuilder;
+import glide.api.commands.servermodules.Json;
+import java.util.ArrayList;
+import java.util.List;
 
-/**
- * Options for JSON ARRINDEX command.
- * This class provides configuration options for finding array indices in JSON documents.
- */
-@SuperBuilder
-public class JsonArrindexOptions {
-    
+/** Additional parameters for {@link Json#arrindex} command. */
+public final class JsonArrindexOptions {
+
+    /** The start index, inclusive. Default to <code>0</code>. */
+    private Long start;
+
+    /** The end index, exclusive. */
+    private Long end;
+
     /**
-     * The start index for the search.
+     * Search using a start index (is inclusive). Defaults to <code>0</code> if not provided. Indices
+     * that exceed the array bounds are automatically adjusted to the nearest valid position.
      */
-    private final int start;
-    
-    /**
-     * The end index for the search.
-     */
-    private final int end;
-    
-    /**
-     * Get the start index.
-     * @return The start index
-     */
-    public int getStart() {
-        return start;
+    public JsonArrindexOptions(Long start) {
+        this.start = start;
     }
-    
+
     /**
-     * Get the end index.
-     * @return The end index
+     * Search using a start index (is inclusive) and end index (is exclusive). If <code>start</code>
+     * is greater than <code>end</code>, the command returns <code>-1</code> to indicate that the
+     * value was not found. Indices that exceed the array bounds are automatically adjusted to the
+     * nearest valid position.
      */
-    public int getEnd() {
-        return end;
+    public JsonArrindexOptions(Long start, Long end) {
+        this.start = start;
+        this.end = end;
+    }
+
+    /**
+     * Converts JsonArrindexOptions into a String[].
+     *
+     * @return String[]
+     */
+    public String[] toArgs() {
+        List<String> args = new ArrayList<>();
+
+        if (start != null) {
+            args.add(start.toString());
+
+            if (end != null) {
+                args.add(end.toString());
+            }
+        }
+
+        return args.toArray(new String[0]);
     }
 }

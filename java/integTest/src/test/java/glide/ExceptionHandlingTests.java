@@ -2,7 +2,7 @@
 package glide;
 
 import static io.valkey.glide.core.commands.CommandType.CUSTOM_COMMAND;
-// import static glide.ffi.resolvers.SocketListenerResolver.getSocket; // JNI doesn't use sockets
+import static glide.ffi.resolvers.SocketListenerResolver.getSocket;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -14,8 +14,8 @@ import static glide.api.models.exceptions.RequestErrorType.ExecAbort;
 import static glide.api.models.exceptions.RequestErrorType.Timeout;
 import static glide.api.models.exceptions.RequestErrorType.Unspecified;
 
-// import command_request.CommandRequestOuterClass.CommandRequest; // JNI doesn't use protobuf
-// import connection_request.ConnectionRequestOuterClass; // JNI doesn't use protobuf
+import glide.protobuf.CommandRequest;
+import glide.protobuf.ConnectionRequestOuterClass;
 import glide.api.logging.Logger;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.exceptions.ClosingException;
@@ -24,15 +24,12 @@ import glide.api.models.exceptions.ExecAbortException;
 import glide.api.models.exceptions.GlideException;
 import glide.api.models.exceptions.RequestException;
 import glide.api.models.exceptions.TimeoutException;
-// Old architecture imports - not needed in JNI implementation
-// import glide.connectors.handlers.CallbackDispatcher;
-// import glide.connectors.handlers.ChannelHandler;
-// import glide.connectors.resources.Platform;
-// import glide.connectors.resources.ThreadPoolResourceAllocator;
-// import glide.managers.BaseResponseResolver;
+import glide.managers.CallbackDispatcher;
+import glide.managers.ChannelHandler;
+import glide.managers.ChannelFuture;
+import glide.connectors.resources.Platform;
+import glide.connectors.resources.ThreadPoolResourceAllocator;
 import io.valkey.glide.managers.CommandManager;
-// import glide.managers.ConnectionManager;
-// import io.netty.channel.ChannelFuture;
 import java.io.IOException;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;

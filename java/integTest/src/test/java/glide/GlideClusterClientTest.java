@@ -59,8 +59,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
-import response.ResponseOuterClass.ConstantResponse;
-import response.ResponseOuterClass.Response;
+import glide.protobuf.ResponseOuterClass.ConstantResponse;
+import glide.protobuf.ResponseOuterClass.Response;
+import glide.api.GlideClusterClient;
+import io.valkey.glide.managers.CommandManager;
 
 public class GlideClusterClientTest {
 

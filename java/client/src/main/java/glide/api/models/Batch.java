@@ -1237,4 +1237,882 @@ public class Batch extends BaseBatch<Batch> {
     public Batch zrank(GlideString key, GlideString member) {
         return addCommand(CommandType.ZRANK, key.toString(), member.toString());
     }
+
+    /**
+     * Execute a custom command with the given arguments.
+     *
+     * @param args The command arguments.
+     * @return This batch instance for method chaining.
+     */
+    public Batch customCommand(String... args) {
+        return addCommand(CommandType.CUSTOM_COMMAND, args);
+    }
+
+    /**
+     * Returns if the given keys exist in the database.
+     *
+     * @see <a href="https://valkey.io/commands/exists/">valkey.io</a> for details.
+     * @param keys The keys to check.
+     * @return This batch instance for method chaining.
+     */
+    public Batch exists(String... keys) {
+        return addCommand(CommandType.EXISTS, keys);
+    }
+
+    /**
+     * Returns if the given keys exist in the database.
+     *
+     * @see <a href="https://valkey.io/commands/exists/">valkey.io</a> for details.
+     * @param keys The keys to check.
+     * @return This batch instance for method chaining.
+     */
+    public Batch exists(GlideString... keys) {
+        String[] stringKeys = new String[keys.length];
+        for (int i = 0; i < keys.length; i++) {
+            stringKeys[i] = keys[i].toString();
+        }
+        return addCommand(CommandType.EXISTS, stringKeys);
+    }
+
+    /**
+     * Remove the existing timeout on a key.
+     *
+     * @see <a href="https://valkey.io/commands/persist/">valkey.io</a> for details.
+     * @param key The key to remove timeout from.
+     * @return This batch instance for method chaining.
+     */
+    public Batch persist(String key) {
+        return addCommand(CommandType.PERSIST, key);
+    }
+
+    /**
+     * Remove the existing timeout on a key.
+     *
+     * @see <a href="https://valkey.io/commands/persist/">valkey.io</a> for details.
+     * @param key The key to remove timeout from.
+     * @return This batch instance for method chaining.
+     */
+    public Batch persist(GlideString key) {
+        return addCommand(CommandType.PERSIST, key.toString());
+    }
+
+    /**
+     * Returns the string representation of the type of the value stored at key.
+     *
+     * @see <a href="https://valkey.io/commands/type/">valkey.io</a> for details.
+     * @param key The key to check the type of.
+     * @return This batch instance for method chaining.
+     */
+    public Batch type(String key) {
+        return addCommand(CommandType.TYPE, key);
+    }
+
+    /**
+     * Returns the string representation of the type of the value stored at key.
+     *
+     * @see <a href="https://valkey.io/commands/type/">valkey.io</a> for details.
+     * @param key The key to check the type of.
+     * @return This batch instance for method chaining.
+     */
+    public Batch type(GlideString key) {
+        return addCommand(CommandType.TYPE, key.toString());
+    }
+
+    /**
+     * Returns the internal encoding of the Redis object stored at key.
+     *
+     * @see <a href="https://valkey.io/commands/object-encoding/">valkey.io</a> for details.
+     * @param key The key to check the encoding of.
+     * @return This batch instance for method chaining.
+     */
+    public Batch objectEncoding(String key) {
+        return addCommand(CommandType.OBJECT_ENCODING, key);
+    }
+
+    /**
+     * Returns the internal encoding of the Redis object stored at key.
+     *
+     * @see <a href="https://valkey.io/commands/object-encoding/">valkey.io</a> for details.
+     * @param key The key to check the encoding of.
+     * @return This batch instance for method chaining.
+     */
+    public Batch objectEncoding(GlideString key) {
+        return addCommand(CommandType.OBJECT_ENCODING, key.toString());
+    }
+
+    /**
+     * Alters the last access time of the given keys.
+     *
+     * @see <a href="https://valkey.io/commands/touch/">valkey.io</a> for details.
+     * @param keys The keys to touch.
+     * @return This batch instance for method chaining.
+     */
+    public Batch touch(String... keys) {
+        return addCommand(CommandType.TOUCH, keys);
+    }
+
+    /**
+     * Alters the last access time of the given keys.
+     *
+     * @see <a href="https://valkey.io/commands/touch/">valkey.io</a> for details.
+     * @param keys The keys to touch.
+     * @return This batch instance for method chaining.
+     */
+    public Batch touch(GlideString... keys) {
+        String[] stringKeys = new String[keys.length];
+        for (int i = 0; i < keys.length; i++) {
+            stringKeys[i] = keys[i].toString();
+        }
+        return addCommand(CommandType.TOUCH, stringKeys);
+    }
+
+    /**
+     * Renames key to newkey.
+     *
+     * @see <a href="https://valkey.io/commands/rename/">valkey.io</a> for details.
+     * @param key The key to rename.
+     * @param newkey The new key name.
+     * @return This batch instance for method chaining.
+     */
+    public Batch rename(String key, String newkey) {
+        return addCommand(CommandType.RENAME, key, newkey);
+    }
+
+    /**
+     * Renames key to newkey.
+     *
+     * @see <a href="https://valkey.io/commands/rename/">valkey.io</a> for details.
+     * @param key The key to rename.
+     * @param newkey The new key name.
+     * @return This batch instance for method chaining.
+     */
+    public Batch rename(GlideString key, GlideString newkey) {
+        return addCommand(CommandType.RENAME, key.toString(), newkey.toString());
+    }
+
+    /**
+     * Renames key to newkey if newkey does not yet exist.
+     *
+     * @see <a href="https://valkey.io/commands/renamenx/">valkey.io</a> for details.
+     * @param key The key to rename.
+     * @param newkey The new key name.
+     * @return This batch instance for method chaining.
+     */
+    public Batch renamenx(String key, String newkey) {
+        return addCommand(CommandType.RENAMENX, key, newkey);
+    }
+
+    /**
+     * Renames key to newkey if newkey does not yet exist.
+     *
+     * @see <a href="https://valkey.io/commands/renamenx/">valkey.io</a> for details.
+     * @param key The key to rename.
+     * @param newkey The new key name.
+     * @return This batch instance for method chaining.
+     */
+    public Batch renamenx(GlideString key, GlideString newkey) {
+        return addCommand(CommandType.RENAMENX, key.toString(), newkey.toString());
+    }
+
+    /**
+     * Unlinks (deletes) the key(s) in a non-blocking way.
+     *
+     * @see <a href="https://valkey.io/commands/unlink/">valkey.io</a> for details.
+     * @param keys The keys to unlink.
+     * @return This batch instance for method chaining.
+     */
+    public Batch unlink(String... keys) {
+        return addCommand(CommandType.UNLINK, keys);
+    }
+
+    /**
+     * Unlinks (deletes) the key(s) in a non-blocking way.
+     *
+     * @see <a href="https://valkey.io/commands/unlink/">valkey.io</a> for details.
+     * @param keys The keys to unlink.
+     * @return This batch instance for method chaining.
+     */
+    public Batch unlink(GlideString... keys) {
+        String[] stringKeys = new String[keys.length];
+        for (int i = 0; i < keys.length; i++) {
+            stringKeys[i] = keys[i].toString();
+        }
+        return addCommand(CommandType.UNLINK, stringKeys);
+    }
+
+    /**
+     * Sorts the elements in the list, set or sorted set at key.
+     *
+     * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.
+     * @param key The key to sort.
+     * @return This batch instance for method chaining.
+     */
+    public Batch sort(String key) {
+        return addCommand(CommandType.SORT, key);
+    }
+
+    /**
+     * Sorts the elements in the list, set or sorted set at key.
+     *
+     * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.
+     * @param key The key to sort.
+     * @return This batch instance for method chaining.
+     */
+    public Batch sort(GlideString key) {
+        return addCommand(CommandType.SORT, key.toString());
+    }
+
+    /**
+     * Sorts the elements in the list, set or sorted set at key and stores the result in destination.
+     *
+     * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.
+     * @param key The key to sort.
+     * @param destination The key to store the result in.
+     * @return This batch instance for method chaining.
+     */
+    public Batch sortStore(String key, String destination) {
+        return addCommand(CommandType.SORT, key, "STORE", destination);
+    }
+
+    /**
+     * Sorts the elements in the list, set or sorted set at key and stores the result in destination.
+     *
+     * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.
+     * @param key The key to sort.
+     * @param destination The key to store the result in.
+     * @return This batch instance for method chaining.
+     */
+    public Batch sortStore(GlideString key, GlideString destination) {
+        return addCommand(CommandType.SORT, key.toString(), "STORE", destination.toString());
+    }
+
+    /**
+     * Sorts the elements in the list, set or sorted set at key (read-only).
+     *
+     * @see <a href="https://valkey.io/commands/sort_ro/">valkey.io</a> for details.
+     * @param key The key to sort.
+     * @return This batch instance for method chaining.
+     */
+    public Batch sortReadOnly(String key) {
+        return addCommand(CommandType.SORT_RO, key);
+    }
+
+    /**
+     * Sorts the elements in the list, set or sorted set at key (read-only).
+     *
+     * @see <a href="https://valkey.io/commands/sort_ro/">valkey.io</a> for details.
+     * @param key The key to sort.
+     * @return This batch instance for method chaining.
+     */
+    public Batch sortReadOnly(GlideString key) {
+        return addCommand(CommandType.SORT_RO, key.toString());
+    }
+
+    /**
+     * Flushes all the databases.
+     *
+     * @see <a href="https://valkey.io/commands/flushall/">valkey.io</a> for details.
+     * @return This batch instance for method chaining.
+     */
+    public Batch flushall() {
+        return addCommand(CommandType.FLUSHALL);
+    }
+
+    /**
+     * Flushes all the databases.
+     *
+     * @see <a href="https://valkey.io/commands/flushall/">valkey.io</a> for details.
+     * @param mode The flush mode (SYNC or ASYNC).
+     * @return This batch instance for method chaining.
+     */
+    public Batch flushall(glide.api.models.commands.FlushMode mode) {
+        return addCommand(CommandType.FLUSHALL, mode.toString());
+    }
+
+    /**
+     * Flushes the currently selected database.
+     *
+     * @see <a href="https://valkey.io/commands/flushdb/">valkey.io</a> for details.
+     * @return This batch instance for method chaining.
+     */
+    public Batch flushdb() {
+        return addCommand(CommandType.FLUSHDB);
+    }
+
+    /**
+     * Flushes the currently selected database.
+     *
+     * @see <a href="https://valkey.io/commands/flushdb/">valkey.io</a> for details.
+     * @param mode The flush mode (SYNC or ASYNC).
+     * @return This batch instance for method chaining.
+     */
+    public Batch flushdb(glide.api.models.commands.FlushMode mode) {
+        return addCommand(CommandType.FLUSHDB, mode.toString());
+    }
+
+    /**
+     * Returns the number of keys in the currently selected database.
+     *
+     * @see <a href="https://valkey.io/commands/dbsize/">valkey.io</a> for details.
+     * @return This batch instance for method chaining.
+     */
+    public Batch dbsize() {
+        return addCommand(CommandType.DBSIZE);
+    }
+
+    /**
+     * Returns a random key from the currently selected database.
+     *
+     * @see <a href="https://valkey.io/commands/randomkey/">valkey.io</a> for details.
+     * @return This batch instance for method chaining.
+     */
+    public Batch randomKey() {
+        return addCommand(CommandType.RANDOMKEY);
+    }
+
+    /**
+     * Sets configuration parameters to the given values.
+     *
+     * @see <a href="https://valkey.io/commands/config-set/">valkey.io</a> for details.
+     * @param parameters The configuration parameters to set.
+     * @return This batch instance for method chaining.
+     */
+    public Batch configSet(java.util.Map<String, String> parameters) {
+        String[] args = new String[parameters.size() * 2];
+        int index = 0;
+        for (java.util.Map.Entry<String, String> entry : parameters.entrySet()) {
+            args[index++] = entry.getKey();
+            args[index++] = entry.getValue();
+        }
+        return addCommand(CommandType.CONFIG_SET, args);
+    }
+
+    /**
+     * Gets the values of configuration parameters.
+     *
+     * @see <a href="https://valkey.io/commands/config-get/">valkey.io</a> for details.
+     * @param parameters The configuration parameters to get.
+     * @return This batch instance for method chaining.
+     */
+    public Batch configGet(String... parameters) {
+        return addCommand(CommandType.CONFIG_GET, parameters);
+    }
+
+    /**
+     * Resets the statistics reported by the INFO command.
+     *
+     * @see <a href="https://valkey.io/commands/config-resetstat/">valkey.io</a> for details.
+     * @return This batch instance for method chaining.
+     */
+    public Batch configResetStat() {
+        return addCommand(CommandType.CONFIG_RESETSTAT);
+    }
+
+    /**
+     * Displays computer art and the Redis version.
+     *
+     * @see <a href="https://valkey.io/commands/lolwut/">valkey.io</a> for details.
+     * @param version The version of the art to display.
+     * @return This batch instance for method chaining.
+     */
+    public Batch lolwut(int version) {
+        return addCommand(CommandType.LOLWUT, "VERSION", String.valueOf(version));
+    }
+
+    /**
+     * Get the value of a key after deleting it.
+     *
+     * @see <a href="https://valkey.io/commands/getdel/">valkey.io</a> for details.
+     * @param key The key to get and delete.
+     * @return This batch instance for method chaining.
+     */
+    public Batch getdel(String key) {
+        return addCommand(CommandType.GETDEL, key);
+    }
+
+    /**
+     * Get the value of a key after deleting it.
+     *
+     * @see <a href="https://valkey.io/commands/getdel/">valkey.io</a> for details.
+     * @param key The key to get and delete.
+     * @return This batch instance for method chaining.
+     */
+    public Batch getdel(GlideString key) {
+        return addCommand(CommandType.GETDEL, key.toString());
+    }
+
+    /**
+     * Atomically sets multiple key-value pairs.
+     *
+     * @see <a href="https://valkey.io/commands/mset/">valkey.io</a> for details.
+     * @param keyValuePairs The key-value pairs to set.
+     * @return This batch instance for method chaining.
+     */
+    public Batch mset(java.util.Map<String, String> keyValuePairs) {
+        String[] args = new String[keyValuePairs.size() * 2];
+        int index = 0;
+        for (java.util.Map.Entry<String, String> entry : keyValuePairs.entrySet()) {
+            args[index++] = entry.getKey();
+            args[index++] = entry.getValue();
+        }
+        return addCommand(CommandType.MSET, args);
+    }
+
+    /**
+     * Gets the values of multiple keys.
+     *
+     * @see <a href="https://valkey.io/commands/mget/">valkey.io</a> for details.
+     * @param keys The keys to get.
+     * @return This batch instance for method chaining.
+     */
+    public Batch mget(String... keys) {
+        return addCommand(CommandType.MGET, keys);
+    }
+
+    /**
+     * Sets multiple key-value pairs only if none of the keys exist.
+     *
+     * @see <a href="https://valkey.io/commands/msetnx/">valkey.io</a> for details.
+     * @param keyValuePairs The key-value pairs to set.
+     * @return This batch instance for method chaining.
+     */
+    public Batch msetnx(java.util.Map<String, String> keyValuePairs) {
+        String[] args = new String[keyValuePairs.size() * 2];
+        int index = 0;
+        for (java.util.Map.Entry<String, String> entry : keyValuePairs.entrySet()) {
+            args[index++] = entry.getKey();
+            args[index++] = entry.getValue();
+        }
+        return addCommand(CommandType.MSETNX, args);
+    }
+
+    /**
+     * Prepends one or more values to the beginning of a list.
+     *
+     * @see <a href="https://valkey.io/commands/lpush/">valkey.io</a> for details.
+     * @param key The key of the list.
+     * @param elements The elements to prepend.
+     * @return This batch instance for method chaining.
+     */
+    public Batch lpush(String key, String... elements) {
+        String[] args = new String[elements.length + 1];
+        args[0] = key;
+        System.arraycopy(elements, 0, args, 1, elements.length);
+        return addCommand(CommandType.LPUSH, args);
+    }
+
+    /**
+     * Prepends one or more values to the beginning of a list.
+     *
+     * @see <a href="https://valkey.io/commands/lpush/">valkey.io</a> for details.
+     * @param key The key of the list.
+     * @param elements The elements to prepend.
+     * @return This batch instance for method chaining.
+     */
+    public Batch lpush(GlideString key, GlideString... elements) {
+        String[] args = new String[elements.length + 1];
+        args[0] = key.toString();
+        for (int i = 0; i < elements.length; i++) {
+            args[i + 1] = elements[i].toString();
+        }
+        return addCommand(CommandType.LPUSH, args);
+    }
+
+    /**
+     * Sets the value of a key with options.
+     *
+     * @see <a href="https://valkey.io/commands/set/">valkey.io</a> for details.
+     * @param key The key to set.
+     * @param value The value to set.
+     * @param options The set options.
+     * @return This batch instance for method chaining.
+     */
+    public Batch set(String key, String value, glide.api.models.commands.SetOptions options) {
+        if (options == null) {
+            return set(key, value);
+        }
+        String[] args = new String[options.toArgs().length + 2];
+        args[0] = key;
+        args[1] = value;
+        System.arraycopy(options.toArgs(), 0, args, 2, options.toArgs().length);
+        return addCommand(CommandType.SET, args);
+    }
+
+    /**
+     * Sets the value of a key with options.
+     *
+     * @see <a href="https://valkey.io/commands/set/">valkey.io</a> for details.
+     * @param key The key to set.
+     * @param value The value to set.
+     * @param options The set options.
+     * @return This batch instance for method chaining.
+     */
+    public Batch set(GlideString key, GlideString value, glide.api.models.commands.SetOptions options) {
+        if (options == null) {
+            return set(key, value);
+        }
+        String[] args = new String[options.toArgs().length + 2];
+        args[0] = key.toString();
+        args[1] = value.toString();
+        System.arraycopy(options.toArgs(), 0, args, 2, options.toArgs().length);
+        return addCommand(CommandType.SET, args);
+    }
+
+    /**
+     * Get the value of a key with options.
+     *
+     * @see <a href="https://valkey.io/commands/getex/">valkey.io</a> for details.
+     * @param key The key to get.
+     * @param options The get options.
+     * @return This batch instance for method chaining.
+     */
+    public Batch getex(String key, glide.api.models.commands.GetExOptions options) {
+        if (options == null) {
+            return get(key);
+        }
+        String[] args = new String[options.toArgs().length + 1];
+        args[0] = key;
+        System.arraycopy(options.toArgs(), 0, args, 1, options.toArgs().length);
+        return addCommand(CommandType.GETEX, args);
+    }
+
+    /**
+     * Get the value of a key with options.
+     *
+     * @see <a href="https://valkey.io/commands/getex/">valkey.io</a> for details.
+     * @param key The key to get.
+     * @param options The get options.
+     * @return This batch instance for method chaining.
+     */
+    public Batch getex(GlideString key, glide.api.models.commands.GetExOptions options) {
+        if (options == null) {
+            return get(key);
+        }
+        String[] args = new String[options.toArgs().length + 1];
+        args[0] = key.toString();
+        System.arraycopy(options.toArgs(), 0, args, 1, options.toArgs().length);
+        return addCommand(CommandType.GETEX, args);
+    }
+
+    /**
+     * Get the value of a key with options.
+     *
+     * @see <a href="https://valkey.io/commands/getex/">valkey.io</a> for details.
+     * @param key The key to get.
+     * @return This batch instance for method chaining.
+     */
+    public Batch getex(String key) {
+        return addCommand(CommandType.GETEX, key);
+    }
+
+    /**
+     * Get the value of a key with options.
+     *
+     * @see <a href="https://valkey.io/commands/getex/">valkey.io</a> for details.
+     * @param key The key to get.
+     * @return This batch instance for method chaining.
+     */
+    public Batch getex(GlideString key) {
+        return addCommand(CommandType.GETEX, key.toString());
+    }
+
+    /**
+     * Set an expiration time on a key.
+     *
+     * @see <a href="https://valkey.io/commands/expire/">valkey.io</a> for details.
+     * @param key The key to set expiration on.
+     * @param seconds The expiration time in seconds.
+     * @param options The expire options.
+     * @return This batch instance for method chaining.
+     */
+    public Batch expire(String key, long seconds, glide.api.models.commands.ExpireOptions options) {
+        if (options == null) {
+            return expire(key, seconds);
+        }
+        String[] args = new String[options.toArgs().length + 2];
+        args[0] = key;
+        args[1] = String.valueOf(seconds);
+        System.arraycopy(options.toArgs(), 0, args, 2, options.toArgs().length);
+        return addCommand(CommandType.EXPIRE, args);
+    }
+
+    /**
+     * Set an expiration time on a key.
+     *
+     * @see <a href="https://valkey.io/commands/expire/">valkey.io</a> for details.
+     * @param key The key to set expiration on.
+     * @param seconds The expiration time in seconds.
+     * @param options The expire options.
+     * @return This batch instance for method chaining.
+     */
+    public Batch expire(GlideString key, long seconds, glide.api.models.commands.ExpireOptions options) {
+        if (options == null) {
+            return expire(key, seconds);
+        }
+        String[] args = new String[options.toArgs().length + 2];
+        args[0] = key.toString();
+        args[1] = String.valueOf(seconds);
+        System.arraycopy(options.toArgs(), 0, args, 2, options.toArgs().length);
+        return addCommand(CommandType.EXPIRE, args);
+    }
+
+    /**
+     * Set an expiration time on a key at a specific Unix timestamp.
+     *
+     * @see <a href="https://valkey.io/commands/expireat/">valkey.io</a> for details.
+     * @param key The key to set expiration on.
+     * @param timestamp The Unix timestamp when the key should expire.
+     * @return This batch instance for method chaining.
+     */
+    public Batch expireAt(String key, long timestamp) {
+        return addCommand(CommandType.EXPIREAT, key, String.valueOf(timestamp));
+    }
+
+    /**
+     * Set an expiration time on a key at a specific Unix timestamp.
+     *
+     * @see <a href="https://valkey.io/commands/expireat/">valkey.io</a> for details.
+     * @param key The key to set expiration on.
+     * @param timestamp The Unix timestamp when the key should expire.
+     * @return This batch instance for method chaining.
+     */
+    public Batch expireAt(GlideString key, long timestamp) {
+        return addCommand(CommandType.EXPIREAT, key.toString(), String.valueOf(timestamp));
+    }
+
+    /**
+     * Set an expiration time on a key at a specific Unix timestamp with options.
+     *
+     * @see <a href="https://valkey.io/commands/expireat/">valkey.io</a> for details.
+     * @param key The key to set expiration on.
+     * @param timestamp The Unix timestamp when the key should expire.
+     * @param options The expire options.
+     * @return This batch instance for method chaining.
+     */
+    public Batch expireAt(String key, long timestamp, glide.api.models.commands.ExpireOptions options) {
+        if (options == null) {
+            return expireAt(key, timestamp);
+        }
+        String[] args = new String[options.toArgs().length + 2];
+        args[0] = key;
+        args[1] = String.valueOf(timestamp);
+        System.arraycopy(options.toArgs(), 0, args, 2, options.toArgs().length);
+        return addCommand(CommandType.EXPIREAT, args);
+    }
+
+    /**
+     * Set an expiration time on a key at a specific Unix timestamp with options.
+     *
+     * @see <a href="https://valkey.io/commands/expireat/">valkey.io</a> for details.
+     * @param key The key to set expiration on.
+     * @param timestamp The Unix timestamp when the key should expire.
+     * @param options The expire options.
+     * @return This batch instance for method chaining.
+     */
+    public Batch expireAt(GlideString key, long timestamp, glide.api.models.commands.ExpireOptions options) {
+        if (options == null) {
+            return expireAt(key, timestamp);
+        }
+        String[] args = new String[options.toArgs().length + 2];
+        args[0] = key.toString();
+        args[1] = String.valueOf(timestamp);
+        System.arraycopy(options.toArgs(), 0, args, 2, options.toArgs().length);
+        return addCommand(CommandType.EXPIREAT, args);
+    }
+
+    /**
+     * Set an expiration time on a key in milliseconds.
+     *
+     * @see <a href="https://valkey.io/commands/pexpire/">valkey.io</a> for details.
+     * @param key The key to set expiration on.
+     * @param milliseconds The expiration time in milliseconds.
+     * @return This batch instance for method chaining.
+     */
+    public Batch pexpire(String key, long milliseconds) {
+        return addCommand(CommandType.PEXPIRE, key, String.valueOf(milliseconds));
+    }
+
+    /**
+     * Set an expiration time on a key in milliseconds.
+     *
+     * @see <a href="https://valkey.io/commands/pexpire/">valkey.io</a> for details.
+     * @param key The key to set expiration on.
+     * @param milliseconds The expiration time in milliseconds.
+     * @return This batch instance for method chaining.
+     */
+    public Batch pexpire(GlideString key, long milliseconds) {
+        return addCommand(CommandType.PEXPIRE, key.toString(), String.valueOf(milliseconds));
+    }
+
+    /**
+     * Set an expiration time on a key in milliseconds with options.
+     *
+     * @see <a href="https://valkey.io/commands/pexpire/">valkey.io</a> for details.
+     * @param key The key to set expiration on.
+     * @param milliseconds The expiration time in milliseconds.
+     * @param options The expire options.
+     * @return This batch instance for method chaining.
+     */
+    public Batch pexpire(String key, long milliseconds, glide.api.models.commands.ExpireOptions options) {
+        if (options == null) {
+            return pexpire(key, milliseconds);
+        }
+        String[] args = new String[options.toArgs().length + 2];
+        args[0] = key;
+        args[1] = String.valueOf(milliseconds);
+        System.arraycopy(options.toArgs(), 0, args, 2, options.toArgs().length);
+        return addCommand(CommandType.PEXPIRE, args);
+    }
+
+    /**
+     * Set an expiration time on a key in milliseconds with options.
+     *
+     * @see <a href="https://valkey.io/commands/pexpire/">valkey.io</a> for details.
+     * @param key The key to set expiration on.
+     * @param milliseconds The expiration time in milliseconds.
+     * @param options The expire options.
+     * @return This batch instance for method chaining.
+     */
+    public Batch pexpire(GlideString key, long milliseconds, glide.api.models.commands.ExpireOptions options) {
+        if (options == null) {
+            return pexpire(key, milliseconds);
+        }
+        String[] args = new String[options.toArgs().length + 2];
+        args[0] = key.toString();
+        args[1] = String.valueOf(milliseconds);
+        System.arraycopy(options.toArgs(), 0, args, 2, options.toArgs().length);
+        return addCommand(CommandType.PEXPIRE, args);
+    }
+
+    /**
+     * Set an expiration time on a key at a specific Unix timestamp in milliseconds.
+     *
+     * @see <a href="https://valkey.io/commands/pexpireat/">valkey.io</a> for details.
+     * @param key The key to set expiration on.
+     * @param timestamp The Unix timestamp in milliseconds when the key should expire.
+     * @return This batch instance for method chaining.
+     */
+    public Batch pexpireAt(String key, long timestamp) {
+        return addCommand(CommandType.PEXPIREAT, key, String.valueOf(timestamp));
+    }
+
+    /**
+     * Set an expiration time on a key at a specific Unix timestamp in milliseconds.
+     *
+     * @see <a href="https://valkey.io/commands/pexpireat/">valkey.io</a> for details.
+     * @param key The key to set expiration on.
+     * @param timestamp The Unix timestamp in milliseconds when the key should expire.
+     * @return This batch instance for method chaining.
+     */
+    public Batch pexpireAt(GlideString key, long timestamp) {
+        return addCommand(CommandType.PEXPIREAT, key.toString(), String.valueOf(timestamp));
+    }
+
+    /**
+     * Set an expiration time on a key at a specific Unix timestamp in milliseconds with options.
+     *
+     * @see <a href="https://valkey.io/commands/pexpireat/">valkey.io</a> for details.
+     * @param key The key to set expiration on.
+     * @param timestamp The Unix timestamp in milliseconds when the key should expire.
+     * @param options The expire options.
+     * @return This batch instance for method chaining.
+     */
+    public Batch pexpireAt(String key, long timestamp, glide.api.models.commands.ExpireOptions options) {
+        if (options == null) {
+            return pexpireAt(key, timestamp);
+        }
+        String[] args = new String[options.toArgs().length + 2];
+        args[0] = key;
+        args[1] = String.valueOf(timestamp);
+        System.arraycopy(options.toArgs(), 0, args, 2, options.toArgs().length);
+        return addCommand(CommandType.PEXPIREAT, args);
+    }
+
+    /**
+     * Set an expiration time on a key at a specific Unix timestamp in milliseconds with options.
+     *
+     * @see <a href="https://valkey.io/commands/pexpireat/">valkey.io</a> for details.
+     * @param key The key to set expiration on.
+     * @param timestamp The Unix timestamp in milliseconds when the key should expire.
+     * @param options The expire options.
+     * @return This batch instance for method chaining.
+     */
+    public Batch pexpireAt(GlideString key, long timestamp, glide.api.models.commands.ExpireOptions options) {
+        if (options == null) {
+            return pexpireAt(key, timestamp);
+        }
+        String[] args = new String[options.toArgs().length + 2];
+        args[0] = key.toString();
+        args[1] = String.valueOf(timestamp);
+        System.arraycopy(options.toArgs(), 0, args, 2, options.toArgs().length);
+        return addCommand(CommandType.PEXPIREAT, args);
+    }
+
+    /**
+     * Get the expiration time of a key in Unix timestamp format.
+     *
+     * @see <a href="https://valkey.io/commands/expiretime/">valkey.io</a> for details.
+     * @param key The key to get the expiration time of.
+     * @return This batch instance for method chaining.
+     */
+    public Batch expiretime(String key) {
+        return addCommand(CommandType.EXPIRETIME, key);
+    }
+
+    /**
+     * Get the expiration time of a key in Unix timestamp format.
+     *
+     * @see <a href="https://valkey.io/commands/expiretime/">valkey.io</a> for details.
+     * @param key The key to get the expiration time of.
+     * @return This batch instance for method chaining.
+     */
+    public Batch expiretime(GlideString key) {
+        return addCommand(CommandType.EXPIRETIME, key.toString());
+    }
+
+    /**
+     * Get the expiration time of a key in Unix timestamp format in milliseconds.
+     *
+     * @see <a href="https://valkey.io/commands/pexpiretime/">valkey.io</a> for details.
+     * @param key The key to get the expiration time of.
+     * @return This batch instance for method chaining.
+     */
+    public Batch pexpiretime(String key) {
+        return addCommand(CommandType.PEXPIRETIME, key);
+    }
+
+    /**
+     * Get the expiration time of a key in Unix timestamp format in milliseconds.
+     *
+     * @see <a href="https://valkey.io/commands/pexpiretime/">valkey.io</a> for details.
+     * @param key The key to get the expiration time of.
+     * @return This batch instance for method chaining.
+     */
+    public Batch pexpiretime(GlideString key) {
+        return addCommand(CommandType.PEXPIRETIME, key.toString());
+    }
+
+    /**
+     * Copies the value from a source key to a destination key.
+     *
+     * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
+     * @param source The source key.
+     * @param destination The destination key.
+     * @return This batch instance for method chaining.
+     */
+    public Batch copy(String source, String destination) {
+        return addCommand(CommandType.COPY, source, destination);
+    }
+
+    /**
+     * Copies the value from a source key to a destination key.
+     *
+     * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
+     * @param source The source key.
+     * @param destination The destination key.
+     * @return This batch instance for method chaining.
+     */
+    public Batch copy(GlideString source, GlideString destination) {
+        return addCommand(CommandType.COPY, source.toString(), destination.toString());
+    }
 }

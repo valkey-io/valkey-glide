@@ -495,4 +495,186 @@ public class GlideClient implements AutoCloseable {
      * Uses glide-core's array type conversion
      */
     private static native Object[] executeArrayCommand(long clientPtr, String command, String[] args);
+
+    // ==================== ROUTING-ENABLED NATIVE METHODS ====================
+    // These methods support command routing for cluster operations
+
+    /**
+     * Execute a command with routing support
+     *
+     * @param clientPtr Native client handle
+     * @param command Command name
+     * @param args Command arguments
+     * @param routingType Routing type (0=None, 1=AllNodes, 2=AllPrimaries, 3=Random, 4=SlotId, 5=SlotKey, 6=ByAddress)
+     * @param routingValue Routing value (slot ID, key, or address)
+     * @return Command result
+     */
+    private static native Object executeCommandWithRouting(long clientPtr, String command, byte[][] args, int routingType, String routingValue);
+
+    /**
+     * Execute a command with routing support expecting a String result
+     *
+     * @param clientPtr Native client handle
+     * @param command Command name
+     * @param args Command arguments
+     * @param routingType Routing type
+     * @param routingValue Routing value
+     * @return String result
+     */
+    private static native String executeStringCommandWithRouting(long clientPtr, String command, String[] args, int routingType, String routingValue);
+
+    // ==================== JAVA ROUTING METHODS ====================
+    // These methods accept Java Route objects and convert them to native routing parameters
+
+    /**
+     * Execute a command with Java Route object support
+     *
+     * @param command The command to execute
+     * @param route The routing configuration
+     * @return CompletableFuture with the command result
+     */
+    public CompletableFuture<Object> executeCommand(Command command, Object route) {
+        if (command == null) {
+            throw new IllegalArgumentException("Command cannot be null");
+        }
+
+        checkNotClosed();
+
+        try {
+            // Convert String[] to byte[][]
+            String[] args = command.getArgumentsArray();
+            byte[][] byteArgs = new byte[args.length][];
+            for (int i = 0; i < args.length; i++) {
+                byteArgs[i] = args[i].getBytes();
+            }
+
+            long handle = nativeClientHandle.get();
+            RouteInfo routeInfo = convertRoute(route);
+            Object result = executeCommandWithRouting(handle, command.getType().getCommandName(), byteArgs, routeInfo.type, routeInfo.value);
+            return CompletableFuture.completedFuture(result);
+        } catch (Exception e) {
+            CompletableFuture<Object> future = new CompletableFuture<>();
+            future.completeExceptionally(e);
+            return future;
+        }
+    }
+
+    /**
+     * Execute a command with Java Route object support expecting a String result
+     *
+     * @param command The command to execute
+     * @param args Command arguments
+     * @param route The routing configuration
+     * @return CompletableFuture with String result
+     */
+    public CompletableFuture<String> executeStringCommand(String command, String[] args, Object route) {
+        checkNotClosed();
+        try {
+            long handle = nativeClientHandle.get();
+            RouteInfo routeInfo = convertRoute(route);
+            String result = executeStringCommandWithRouting(handle, command, args, routeInfo.type, routeInfo.value);
+            return CompletableFuture.completedFuture(result);
+        } catch (Exception e) {
+            CompletableFuture<String> future = new CompletableFuture<>();
+            future.completeExceptionally(e);
+            return future;
+        }
+    }
+
+    // ==================== ROUTE CONVERSION LOGIC ====================
+
+    /**
+     * Internal class to represent routing information
+     */
+    private static class RouteInfo {
+        final int type;
+        final String value;
+
+        RouteInfo(int type, String value) {
+            this.type = type;
+            this.value = value;
+        }
+    }
+
+    /**
+     * Convert Java Route object to native routing parameters
+     *
+     * @param route The Route object to convert
+     * @return RouteInfo with type and value
+     */
+    private RouteInfo convertRoute(Object route) {
+        if (route == null) {
+            return new RouteInfo(0, null); // No routing
+        }
+
+        // Use reflection to handle Route objects from glide.api.models.configuration.RequestRoutingConfiguration
+        String className = route.getClass().getSimpleName();
+        String packageName = route.getClass().getPackage().getName();
+
+        try {
+            if (packageName.contains("RequestRoutingConfiguration")) {
+                switch (className) {
+                    case "SimpleMultiNodeRoute":
+                        return convertSimpleMultiNodeRoute(route);
+                    case "SimpleSingleNodeRoute":
+                        return convertSimpleSingleNodeRoute(route);
+                    case "SlotIdRoute":
+                        return convertSlotIdRoute(route);
+                    case "SlotKeyRoute":
+                        return convertSlotKeyRoute(route);
+                    case "ByAddressRoute":
+                        return convertByAddressRoute(route);
+                    default:
+                        throw new IllegalArgumentException("Unknown route type: " + className);
+                }
+            }
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Failed to convert route: " + e.getMessage(), e);
+        }
+
+        throw new IllegalArgumentException("Unsupported route type: " + className);
+    }
+
+    private RouteInfo convertSimpleMultiNodeRoute(Object route) throws Exception {
+        // Get the ordinal value using reflection
+        var ordinalMethod = route.getClass().getMethod("getOrdinal");
+        int ordinal = (Integer) ordinalMethod.invoke(route);
+        
+        switch (ordinal) {
+            case 0: return new RouteInfo(1, null); // ALL_NODES
+            case 1: return new RouteInfo(2, null); // ALL_PRIMARIES
+            default: throw new IllegalArgumentException("Unknown SimpleMultiNodeRoute ordinal: " + ordinal);
+        }
+    }
+
+    private RouteInfo convertSimpleSingleNodeRoute(Object route) throws Exception {
+        // Get the ordinal value using reflection
+        var ordinalMethod = route.getClass().getMethod("getOrdinal");
+        int ordinal = (Integer) ordinalMethod.invoke(route);
+        
+        switch (ordinal) {
+            case 2: return new RouteInfo(3, null); // RANDOM
+            default: throw new IllegalArgumentException("Unknown SimpleSingleNodeRoute ordinal: " + ordinal);
+        }
+    }
+
+    private RouteInfo convertSlotIdRoute(Object route) throws Exception {
+        var slotIdMethod = route.getClass().getMethod("getSlotId");
+        int slotId = (Integer) slotIdMethod.invoke(route);
+        return new RouteInfo(4, String.valueOf(slotId)); // SlotId
+    }
+
+    private RouteInfo convertSlotKeyRoute(Object route) throws Exception {
+        var slotKeyMethod = route.getClass().getMethod("getSlotKey");
+        String slotKey = (String) slotKeyMethod.invoke(route);
+        return new RouteInfo(5, slotKey); // SlotKey
+    }
+
+    private RouteInfo convertByAddressRoute(Object route) throws Exception {
+        var hostMethod = route.getClass().getMethod("getHost");
+        var portMethod = route.getClass().getMethod("getPort");
+        String host = (String) hostMethod.invoke(route);
+        int port = (Integer) portMethod.invoke(route);
+        return new RouteInfo(6, host + ":" + port); // ByAddress
+    }
 }

@@ -23,9 +23,9 @@ module glide.client {
     exports glide.api.logging;
     exports glide.utils;
     
-    // Compatibility packages for protobuf and manager stubs
-    exports glide.protobuf;
+    // Compatibility packages for manager stubs
     exports glide.managers;
+    exports glide.ffi.resolvers;
 
     requires java.base;
     requires java.logging;
