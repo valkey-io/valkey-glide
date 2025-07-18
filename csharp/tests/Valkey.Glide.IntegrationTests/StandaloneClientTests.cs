@@ -1,11 +1,15 @@
 ﻿// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+using Valkey.Glide.Pipeline;
+
 using static Valkey.Glide.Commands.Options.InfoOptions;
 
 namespace Valkey.Glide.IntegrationTests;
 
 public class StandaloneClientTests(TestConfiguration config)
 {
+    public static TheoryData<bool> GetAtomic => [true, false];
+
     public TestConfiguration Config { get; } = config;
 
     [Theory(DisableDiscoveryEnumeration = true)]
@@ -26,16 +30,18 @@ public class StandaloneClientTests(TestConfiguration config)
         string key2 = Guid.NewGuid().ToString();
         string key3 = Guid.NewGuid().ToString();
         string value = Guid.NewGuid().ToString();
-        Assert.Equal("OK", await client.Set(key1, value));
+        Assert.True(await client.StringSetAsync(key1, value));
 
         gs dump = (await client.CustomCommand(["DUMP", key1]) as gs)!;
 
         Assert.Equal("OK", await client.CustomCommand(["RESTORE", key2, "0", dump!]));
-        Assert.Equal(value, (await client.Get(key2))!);
+        ValkeyValue retrievedValue = await client.StringGetAsync(key2);
+        Assert.Equal(value, retrievedValue.ToString());
 
         // Set and get a binary value
-        Assert.Equal("OK", await client.Set(key3, dump!));
-        Assert.Equal(dump, await client.Get(key3));
+        Assert.True(await client.StringSetAsync(key3, dump!));
+        ValkeyValue binaryValue = await client.StringGetAsync(key3);
+        Assert.Equal(dump, (GlideString)binaryValue);
     }
 
     [Fact]
@@ -48,10 +54,10 @@ public class StandaloneClientTests(TestConfiguration config)
             .WithTls(false).Build());
 
         _ = GlideClient.CreateClient(TestConfiguration.DefaultClientConfig()
-            .WithConnectionTimeout(2000).Build());
+            .WithConnectionTimeout(TimeSpan.FromSeconds(2)).Build());
 
         _ = GlideClient.CreateClient(TestConfiguration.DefaultClientConfig()
-            .WithRequestTimeout(2000).Build());
+            .WithRequestTimeout(TimeSpan.FromSeconds(2)).Build());
 
         _ = GlideClient.CreateClient(TestConfiguration.DefaultClientConfig()
             .WithDataBaseId(4).Build());
@@ -122,5 +128,88 @@ public class StandaloneClientTests(TestConfiguration config)
             () => Assert.Contains("# Replication", info),
             () => Assert.DoesNotContain("# Latencystats", info),
         ]);
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestStandaloneClients), MemberType = typeof(TestConfiguration))]
+    public async Task TestPing_NoMessage(GlideClient client)
+    {
+        TimeSpan result = await client.PingAsync();
+        Assert.True(result >= TimeSpan.Zero);
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestStandaloneClients), MemberType = typeof(TestConfiguration))]
+    public async Task TestPing_WithMessage(GlideClient client)
+    {
+        ValkeyValue message = "Hello, Valkey!";
+        TimeSpan result = await client.PingAsync(message);
+        Assert.True(result >= TimeSpan.Zero);
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestStandaloneClients), MemberType = typeof(TestConfiguration))]
+    public async Task TestEcho_SimpleMessage(GlideClient client)
+    {
+        ValkeyValue message = "Hello, Valkey!";
+        ValkeyValue result = await client.EchoAsync(message);
+        Assert.Equal(message, result);
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestStandaloneClients), MemberType = typeof(TestConfiguration))]
+    public async Task TestEcho_BinaryData(GlideClient client)
+    {
+        byte[] binaryData = [0x00, 0x01, 0x02, 0xFF, 0xFE];
+        ValkeyValue result = await client.EchoAsync(binaryData);
+        Assert.Equal(binaryData, (byte[]?)result);
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestStandaloneClients), MemberType = typeof(TestConfiguration))]
+    public async Task KeyCopy_Move(GlideClient client)
+    {
+        string key = Guid.NewGuid().ToString();
+        string key2 = Guid.NewGuid().ToString();
+
+        await client.StringSetAsync(key, "val");
+        Assert.True(await client.KeyCopyAsync(key, key2, 1));
+        Assert.True(await client.KeyMoveAsync(key, 2));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task BatchKeyCopyAndKeyMove(bool isAtomic)
+    {
+        GlideClient client = TestConfiguration.DefaultStandaloneClient();
+        string sourceKey = Guid.NewGuid().ToString();
+        string destKey = Guid.NewGuid().ToString();
+        string moveKey = Guid.NewGuid().ToString();
+        string value = "test-value";
+
+        Pipeline.IBatch batch = new Batch(isAtomic);
+
+        // Set up keys
+        _ = batch.StringSet(sourceKey, value);
+        _ = batch.StringSet(moveKey, value);
+
+        IBatchStandalone batch2 = new Batch(isAtomic);
+
+        // Test KeyCopy with database parameter
+        _ = batch2.KeyCopy(sourceKey, destKey, 1, false);
+
+        // Test KeyMove
+        _ = batch2.KeyMove(moveKey, 2);
+
+        object?[] results = (await client.Exec((Batch)batch, false))!;
+        object?[] results2 = (await client.Exec((Batch)batch2, false))!;
+
+        Assert.Multiple(
+            () => Assert.True((bool)results[0]!), // Set sourceKey
+            () => Assert.True((bool)results[1]!), // Set moveKey
+            () => Assert.True((bool)results2[0]!), // KeyCopy result
+            () => Assert.True((bool)results2[1]!)  // KeyMove result
+        );
     }
 }

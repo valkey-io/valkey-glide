@@ -88,8 +88,8 @@ Looking for more? Check out the [Valkey Glide Wiki](https://github.com/valkey-io
 
 Valkey GLIDE has a growing ecosystem of integrations and extensions that enhance its functionality across different frameworks and use cases:
 
-- **[node-flexible-rate-limiter](https://www.npmjs.com/package/node-flexible-rate-limiter)** - A flexible rate limiting library for Node.js with Valkey GLIDE backend support
-- **[fastify-valkey-glide](https://www.npmjs.com/package/fastify-valkey-glide)** - Fastify plugin for Valkey GLIDE integration, enabling seamless caching and session management
+- **[node-flexible-rate-limiter](https://www.npmjs.com/package/rate-limiter-flexible)** - A flexible rate limiting library for Node.js with Valkey GLIDE backend support
+- **[fastify-valkey-glide](https://www.npmjs.com/package/@fastify/valkey-glide)** - Fastify plugin for Valkey GLIDE integration, enabling seamless caching and session management
 - **[aiocache](https://pypi.org/project/aiocache/)** - Python async caching framework with Valkey GLIDE backend support for high-performance distributed caching
 - **[aws-lambda-powertools-typescript](https://github.com/aws-powertools/powertools-lambda-typescript)** - AWS Lambda Powertools for TypeScript with Valkey GLIDE integration in the idempotency feature (more integrations planned)
 - **[aws-lambda-powertools-python](https://github.com/aws-powertools/powertools-lambda-python)** - AWS Lambda Powertools for Python with Valkey GLIDE support in the idempotency feature (more integrations planned)

@@ -1,5 +1,7 @@
 ﻿// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+using System.Text;
+
 using Valkey.Glide.Pipeline;
 
 using static Valkey.Glide.Commands.Options.InfoOptions;
@@ -84,9 +86,9 @@ public class ClusterClientTests(TestConfiguration config)
     [MemberData(nameof(Config.TestClusterClients), MemberType = typeof(TestConfiguration))]
     public async Task CustomCommandWithMultiNodeRoute(GlideClusterClient client)
     {
-        _ = await client.Set("abc", "abc");
-        _ = await client.Set("klm", "klm");
-        _ = await client.Set("xyz", "xyz");
+        _ = await client.StringSetAsync("abc", "abc");
+        _ = await client.StringSetAsync("klm", "klm");
+        _ = await client.StringSetAsync("xyz", "xyz");
 
         long res = (long)(await client.CustomCommand(["dbsize"], AllPrimaries)).SingleValue!;
         Assert.True(res >= 3);
@@ -173,6 +175,88 @@ public class ClusterClientTests(TestConfiguration config)
                 () => Assert.DoesNotContain("# Server", nodeInfo),
                 () => Assert.Contains("# Errorstats", nodeInfo),
             ]);
+        }
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClusterClients), MemberType = typeof(TestConfiguration))]
+    public async Task TestPing_NoMessage(GlideClusterClient client)
+    {
+        TimeSpan result = await client.PingAsync();
+        Assert.True(result >= TimeSpan.Zero);
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClusterClients), MemberType = typeof(TestConfiguration))]
+    public async Task TestPing_NoMessage_WithRoute(GlideClusterClient client)
+    {
+        TimeSpan result = await client.PingAsync(AllNodes);
+        Assert.True(result >= TimeSpan.Zero);
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClusterClients), MemberType = typeof(TestConfiguration))]
+    public async Task TestPing_WithMessage(GlideClusterClient client)
+    {
+        ValkeyValue message = "Hello, Valkey!";
+        TimeSpan result = await client.PingAsync(message);
+        Assert.True(result >= TimeSpan.Zero);
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClusterClients), MemberType = typeof(TestConfiguration))]
+    public async Task TestPing_WithMessage_WithRoute(GlideClusterClient client)
+    {
+        ValkeyValue message = "Hello, Valkey!";
+        TimeSpan result = await client.PingAsync(message, AllNodes);
+        Assert.True(result >= TimeSpan.Zero);
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClusterClients), MemberType = typeof(TestConfiguration))]
+    public async Task TestEcho_SimpleMessage(GlideClusterClient client)
+    {
+        ValkeyValue message = "Hello, Valkey!";
+        ValkeyValue result = await client.EchoAsync(message);
+        Assert.Equal(message, result);
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClusterClients), MemberType = typeof(TestConfiguration))]
+    public async Task TestEcho_SimpleMessage_WithRoute(GlideClusterClient client)
+    {
+        ValkeyValue message = "Hello, Valkey!";
+        ClusterValue<ValkeyValue> result = await client.EchoAsync(message, AllNodes);
+
+        Assert.True(result.HasMultiData);
+        foreach (ValkeyValue echo in result.MultiValue.Values)
+        {
+            Assert.Equal(message, echo);
+        }
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClusterClients), MemberType = typeof(TestConfiguration))]
+    public async Task TestEcho_BinaryData(GlideClusterClient client)
+    {
+        byte[] binaryData = [0x00, 0x01, 0x02, 0xFF, 0xFE];
+        ValkeyValue result = await client.EchoAsync(binaryData);
+        Assert.Equal(binaryData, (byte[]?)result);
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClusterClients), MemberType = typeof(TestConfiguration))]
+    public async Task TestEcho_BinaryData_WithRoute(GlideClusterClient client)
+    {
+        byte[] binaryData = [0x00, 0x01, 0x02, 0x03, 0x04];
+        ClusterValue<ValkeyValue> result = await client.EchoAsync(binaryData, AllNodes);
+
+        Assert.True(result.HasMultiData);
+        foreach (ValkeyValue ev in result.MultiValue.Values)
+        {
+            string echo = ev!.ToString();
+            byte[] bytes = Encoding.ASCII.GetBytes(echo);
+            Assert.Equivalent(binaryData, bytes);
         }
     }
 }

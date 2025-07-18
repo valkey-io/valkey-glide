@@ -14,7 +14,7 @@ using static Valkey.Glide.Pipeline.Options;
 
 namespace Valkey.Glide;
 
-public abstract partial class BaseClient : IDisposable
+public abstract partial class BaseClient : IDisposable, IAsyncDisposable
 {
     #region public methods
     public void Dispose()
@@ -31,6 +31,8 @@ public abstract partial class BaseClient : IDisposable
             _clientPointer = IntPtr.Zero;
         }
     }
+
+    public async ValueTask DisposeAsync() => await Task.Run(Dispose);
 
     public override string ToString() => $"{GetType().Name} {{ 0x{_clientPointer:X} {_clientInfo} }}";
 
@@ -68,8 +70,7 @@ public abstract partial class BaseClient : IDisposable
     /// <typeparam name="T">Type we return to the user.</typeparam>
     /// <param name="command"></param>
     /// <param name="route"></param>
-    /// <returns></returns>
-    virtual internal async Task<T> Command<R, T>(Cmd<R, T> command, Route? route = null)
+    internal virtual async Task<T> Command<R, T>(Cmd<R, T> command, Route? route = null)
     {
         // 1. Create Cmd which wraps CmdInfo and manages all memory allocations
         using Cmd cmd = command.ToFfi();
