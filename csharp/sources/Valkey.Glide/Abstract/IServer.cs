@@ -31,9 +31,6 @@ public interface IServer
     /// </summary>
     ServerType ServerType { get; }
 
-    /*
-    TODO Execute aka custom command
-
     /// <summary>
     /// Execute an arbitrary command against the server; this is primarily intended for
     /// executing modules, but may also be used to provide access to new features that lack
@@ -43,11 +40,25 @@ public interface IServer
     /// <param name="args">The arguments to pass for the command.</param>
     /// <returns>A dynamic representation of the command's result.</returns>
     /// <remarks>This API should be considered an advanced feature; inappropriate use can be harmful.</remarks>
-    RedisResult Execute(string command, params object[] args);
+    ValkeyResult Execute(string command, params object[] args);
 
     /// <inheritdoc cref="Execute(string, object[])"/>
-    Task<RedisResult> ExecuteAsync(string command, params object[] args);
-    */
+    Task<ValkeyResult> ExecuteAsync(string command, params object[] args);
+
+    /// <summary>
+    /// Execute an arbitrary command against the server; this is primarily intended for
+    /// executing modules, but may also be used to provide access to new features that lack
+    /// a direct API.
+    /// </summary>
+    /// <param name="command">The command to run.</param>
+    /// <param name="args">The arguments to pass for the command.</param>
+    /// <param name="flags">The flags to use for this operation.</param>
+    /// <returns>A dynamic representation of the command's result.</returns>
+    /// <remarks>This API should be considered an advanced feature; inappropriate use can be harmful.</remarks>
+    ValkeyResult Execute(string command, ICollection<object> args, CommandFlags flags = CommandFlags.None);
+
+    /// <inheritdoc cref="Execute(string, ICollection{object}, CommandFlags)"/>
+    Task<ValkeyResult> ExecuteAsync(string command, ICollection<object> args, CommandFlags flags = CommandFlags.None);
 
     /// <summary>
     /// The INFO command returns information and statistics about the server in a format that is simple to parse by computers and easy to read by humans.

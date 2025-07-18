@@ -60,7 +60,7 @@ public sealed class ConnectionMultiplexer : IConnectionMultiplexer, IDisposable,
             ? CreateClientConfigBuilder<ClusterClientConfigurationBuilder>(configuration).Build()
             : standaloneConfig;
 
-        return new(configuration, await DatabaseImpl.Create(config));
+        return new(configuration, await Database.Create(config));
     }
 
     public EndPoint[] GetEndPoints(bool configuredOnly)
@@ -152,9 +152,9 @@ public sealed class ConnectionMultiplexer : IConnectionMultiplexer, IDisposable,
     internal ConfigurationOptions RawConfig { private set; get; }
 
     private readonly object _lock = new();
-    private DatabaseImpl? _db;
+    private Database? _db;
 
-    private ConnectionMultiplexer(ConfigurationOptions configuration, DatabaseImpl db)
+    private ConnectionMultiplexer(ConfigurationOptions configuration, Database db)
     {
         RawConfig = configuration;
         _db = db;

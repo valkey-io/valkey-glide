@@ -9,17 +9,31 @@ using static Valkey.Glide.Route;
 
 namespace Valkey.Glide;
 
-internal class ValkeyServer(DatabaseImpl conn, EndPoint endpoint) : IServer
+internal class ValkeyServer(Database conn, EndPoint endpoint) : IServer
 {
-    private readonly DatabaseImpl _conn = conn;
-
-    // TODO use sync `Execute` instead of `CustomCommand`
+    private readonly Database _conn = conn;
 
     /// <summary>
     /// Run <c>HELLO</c> command.
     /// </summary>
     private Dictionary<GlideString, object> Hello()
         => (Dictionary<GlideString, object>)_conn.CustomCommand(["hello"]).GetAwaiter().GetResult()!;
+
+    public ValkeyResult Execute(string command, params object[] args)
+        => ExecuteAsync(command, args).GetAwaiter().GetResult();
+
+    public async Task<ValkeyResult> ExecuteAsync(string command, params object[] args)
+        => await ExecuteAsync(command, args.ToList());
+
+    public ValkeyResult Execute(string command, ICollection<object> args, CommandFlags flags = CommandFlags.None)
+        => ExecuteAsync(command, args, flags).GetAwaiter().GetResult();
+
+    public async Task<ValkeyResult> ExecuteAsync(string command, ICollection<object> args, CommandFlags flags = CommandFlags.None)
+    {
+        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
+        object? res = await _conn.Command(Request.CustomCommand([command, ..args.Select(a => a.ToString())]), new ByAddressRoute(EndPoint.ToString()!));
+        return ValkeyResult.Create((ValkeyValue)res);
+    }
 
     public EndPoint EndPoint { get; } = endpoint;
 
@@ -53,11 +67,20 @@ internal class ValkeyServer(DatabaseImpl conn, EndPoint endpoint) : IServer
         => InfoAsync(section, flags).GetAwaiter().GetResult();
 
     public async Task<TimeSpan> PingAsync(CommandFlags flags = CommandFlags.None)
-        => await _conn.Command(Request.Ping(flags), new ByAddressRoute(EndPoint.ToString()!));
+    {
+        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
+        return await _conn.Command(Request.Ping(), new ByAddressRoute(EndPoint.ToString()!));
+    }
 
     public async Task<TimeSpan> PingAsync(ValkeyValue message, CommandFlags flags = CommandFlags.None)
-        => await _conn.Command(Request.Ping(message, flags), new ByAddressRoute(EndPoint.ToString()!));
+    {
+        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
+        return await _conn.Command(Request.Ping(message), new ByAddressRoute(EndPoint.ToString()!));
+    }
 
     public async Task<ValkeyValue> EchoAsync(ValkeyValue message, CommandFlags flags = CommandFlags.None)
-        => await _conn.Command(Request.Echo(message, flags), new ByAddressRoute(EndPoint.ToString()!));
+    {
+        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
+        return await _conn.Command(Request.Echo(message), new ByAddressRoute(EndPoint.ToString()!));
+    }
 }

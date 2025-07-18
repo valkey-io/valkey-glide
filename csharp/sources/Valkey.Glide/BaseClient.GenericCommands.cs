@@ -6,6 +6,10 @@ using Valkey.Glide.Internals;
 
 namespace Valkey.Glide;
 
+// TODO
+//        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
+
+
 public abstract partial class BaseClient : IGenericBaseCommands
 {
     public async Task<bool> KeyDeleteAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None)
