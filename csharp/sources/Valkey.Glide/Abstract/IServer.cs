@@ -52,7 +52,7 @@ public interface IServer
     /// </summary>
     /// <param name="command">The command to run.</param>
     /// <param name="args">The arguments to pass for the command.</param>
-    /// <param name="flags">The flags to use for this operation.</param>
+    /// <param name="flags">Command flags are not supported by GLIDE.</param>
     /// <returns>A dynamic representation of the command's result.</returns>
     /// <remarks>This API should be considered an advanced feature; inappropriate use can be harmful.</remarks>
     ValkeyResult Execute(string command, ICollection<object> args, CommandFlags flags = CommandFlags.None);
