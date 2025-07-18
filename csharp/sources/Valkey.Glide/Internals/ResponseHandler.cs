@@ -72,7 +72,7 @@ internal class ResponseHandler
     {
         ValueType.Null => null,
         ValueType.Int => (long)value.Value,
-        ValueType.Float => (double)value.Value,
+        ValueType.Float => BitConverter.Int64BitsToDouble((long)value.Value),
         ValueType.Bool => value.Value != 0,
         ValueType.BulkString or ValueType.String => CreateString(value),
         ValueType.Array => CreateArray(value),
