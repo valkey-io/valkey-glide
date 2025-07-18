@@ -128,7 +128,6 @@ public class StandaloneClientTests(TestConfiguration config)
 
         string key2 = Guid.NewGuid().ToString();
         Assert.Equal(3L, db.Execute("sadd", [key2, "a", "b", "c"]).AsInt64());
-        Assert.Equal(new string?[] { "a", "b", "c" }, db.Execute("smembers", [key2]).AsStringArray()!);
         Assert.False(db.Execute("smembers", [key2]).AsStringArray()!.Except(["a", "b", "c"]).Any());
         Assert.Equal([true, true, false], db.Execute("smismember", [key2, "a", "b", "d"]).AsBooleanArray()!);
 
