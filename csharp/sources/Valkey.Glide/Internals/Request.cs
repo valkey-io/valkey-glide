@@ -61,15 +61,15 @@ internal partial class Request
     /// <param name="args">The command arguments</param>
     /// <returns>A command that converts a HashSet to a ValkeyValue array</returns>
     private static Cmd<object[], ValkeyValue[]> ObjectArrayToValkeyValueArray(RequestType request, GlideString[] args)
-        => new(request, args, false, set => [.. set.Cast<string>().Select(gs => gs)]);
+        => new(request, args, false, set => [.. set.Cast<GlideString>().Select(gs => gs)]);
 
     private static Cmd<object[], HashEntry[]> ObjectArrayToHashEntries(RequestType request, GlideString[] args, bool isNullable = false)
         => new(request, args, isNullable, objects => [.. objects.Select(he => {
             object[] arr = (object[])he;
-            return new HashEntry((string)arr[0], (string)arr[1]);
+            return new HashEntry((GlideString)arr[0], (GlideString)arr[1]);
         })]);
 
     private static Cmd<Dictionary<GlideString, object>, HashEntry[]> DictionaryToHashEntries(RequestType request, GlideString[] args, bool isNullable = false)
         => new(request, args, isNullable, dict => [.. dict.Select(he =>
-            new HashEntry(he.Key, (string)he.Value))]);
+            new HashEntry(he.Key, (GlideString)he.Value))]);
 }
