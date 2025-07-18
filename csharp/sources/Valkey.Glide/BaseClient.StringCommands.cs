@@ -36,4 +36,10 @@ public abstract partial class BaseClient : IStringBaseCommands
 
     public async Task<long> StringDecrByAsync(ValkeyKey key, long decrement, CommandFlags flags = CommandFlags.None)
         => await Command(Request.StringDecrBy(key, decrement));
+
+    public async Task<long> StringIncrAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None)
+        => await Command(Request.StringIncr(key));
+
+    public async Task<long> StringIncrByAsync(ValkeyKey key, long increment, CommandFlags flags = CommandFlags.None)
+        => await Command(Request.StringIncrBy(key, increment));
 }

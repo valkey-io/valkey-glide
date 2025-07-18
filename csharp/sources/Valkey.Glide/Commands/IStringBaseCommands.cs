@@ -241,4 +241,45 @@ public interface IStringBaseCommands
     /// </example>
     /// </remarks>
     Task<long> StringDecrByAsync(ValkeyKey key, long decrement, CommandFlags flags = CommandFlags.None);
+
+    /// <summary>
+    /// Increments the number stored at key by one. If the key does not exist, it is set to 0 before performing the operation.
+    /// An error is returned if the key contains a value of the wrong type or contains a string that is not representable as integer.
+    /// This operation is limited to 64 bit signed integers.
+    /// </summary>
+    /// <seealso href="https://valkey.io/commands/incr/">valkey.io</seealso>
+    /// <param name="key">The key of the string to increment.</param>
+    /// <param name="flags">The flags to use for this operation. Currently flags are ignored.</param>
+    /// <returns>The value of key after the increment.</returns>
+    /// <remarks>
+    /// <example>
+    /// <code>
+    /// await client.StringSetAsync("key", "10");
+    /// long newValue = await client.StringIncrAsync("key");
+    /// Console.WriteLine(newValue); // Output: 11
+    /// </code>
+    /// </example>
+    /// </remarks>
+    Task<long> StringIncrAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None);
+
+    /// <summary>
+    /// Increments the number stored at key by the specified increment. If the key does not exist, it is set to 0 before performing the operation.
+    /// An error is returned if the key contains a value of the wrong type or contains a string that is not representable as integer.
+    /// This operation is limited to 64 bit signed integers.
+    /// </summary>
+    /// <seealso href="https://valkey.io/commands/incrby/">valkey.io</seealso>
+    /// <param name="key">The key of the string to increment.</param>
+    /// <param name="increment">The amount to increment by.</param>
+    /// <param name="flags">The flags to use for this operation. Currently flags are ignored.</param>
+    /// <returns>The value of key after the increment.</returns>
+    /// <remarks>
+    /// <example>
+    /// <code>
+    /// await client.StringSetAsync("key", "10");
+    /// long newValue = await client.StringIncrByAsync("key", 5);
+    /// Console.WriteLine(newValue); // Output: 15
+    /// </code>
+    /// </example>
+    /// </remarks>
+    Task<long> StringIncrByAsync(ValkeyKey key, long increment, CommandFlags flags = CommandFlags.None);
 }

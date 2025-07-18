@@ -36,6 +36,12 @@ public abstract partial class BaseBatch<T> where T : BaseBatch<T>
     /// <inheritdoc cref="IBatchStringCommands.StringDecrBy(ValkeyKey, long)" />
     public T StringDecrByAsync(ValkeyKey key, long decrement) => AddCmd(Request.StringDecrBy(key, decrement));
 
+    /// <inheritdoc cref="IBatchStringCommands.StringIncr(ValkeyKey)" />
+    public T StringIncrAsync(ValkeyKey key) => AddCmd(Request.StringIncr(key));
+
+    /// <inheritdoc cref="IBatchStringCommands.StringIncrBy(ValkeyKey, long)" />
+    public T StringIncrByAsync(ValkeyKey key, long increment) => AddCmd(Request.StringIncrBy(key, increment));
+
     IBatch IBatchStringCommands.StringGet(ValkeyKey key) => StringGetAsync(key);
     IBatch IBatchStringCommands.StringGet(ValkeyKey[] keys) => StringGetAsync(keys);
     IBatch IBatchStringCommands.StringSet(ValkeyKey key, ValkeyValue value) => StringSetAsync(key, value);
@@ -46,4 +52,6 @@ public abstract partial class BaseBatch<T> where T : BaseBatch<T>
     IBatch IBatchStringCommands.StringAppend(ValkeyKey key, ValkeyValue value) => StringAppendAsync(key, value);
     IBatch IBatchStringCommands.StringDecr(ValkeyKey key) => StringDecrAsync(key);
     IBatch IBatchStringCommands.StringDecrBy(ValkeyKey key, long decrement) => StringDecrByAsync(key, decrement);
+    IBatch IBatchStringCommands.StringIncr(ValkeyKey key) => StringIncrAsync(key);
+    IBatch IBatchStringCommands.StringIncrBy(ValkeyKey key, long increment) => StringIncrByAsync(key, increment);
 }

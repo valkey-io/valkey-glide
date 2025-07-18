@@ -456,4 +456,88 @@ public class StringCommandTests(TestConfiguration config)
         ValkeyValue value = await client.StringGetAsync(key);
         Assert.Equal("15", value.ToString());
     }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
+    public async Task StringIncrAsync_ExistingKey(BaseClient client)
+    {
+        string key = Guid.NewGuid().ToString();
+
+        // Set initial value
+        await client.StringSetAsync(key, "10");
+
+        // Increment by 1
+        long result = await client.StringIncrAsync(key);
+        Assert.Equal(11, result);
+
+        // Verify the value was incremented
+        ValkeyValue value = await client.StringGetAsync(key);
+        Assert.Equal("11", value.ToString());
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
+    public async Task StringIncrAsync_NonExistentKey(BaseClient client)
+    {
+        string key = Guid.NewGuid().ToString();
+
+        // Increment non-existent key (should create it with value 1)
+        long result = await client.StringIncrAsync(key);
+        Assert.Equal(1, result);
+
+        // Verify the key was created with value 1
+        ValkeyValue value = await client.StringGetAsync(key);
+        Assert.Equal("1", value.ToString());
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
+    public async Task StringIncrByAsync_ExistingKey(BaseClient client)
+    {
+        string key = Guid.NewGuid().ToString();
+
+        // Set initial value
+        await client.StringSetAsync(key, "10");
+
+        // Increment by 5
+        long result = await client.StringIncrByAsync(key, 5);
+        Assert.Equal(15, result);
+
+        // Verify the value was incremented
+        ValkeyValue value = await client.StringGetAsync(key);
+        Assert.Equal("15", value.ToString());
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
+    public async Task StringIncrByAsync_NonExistentKey(BaseClient client)
+    {
+        string key = Guid.NewGuid().ToString();
+
+        // Increment non-existent key by 5 (should create it with value 5)
+        long result = await client.StringIncrByAsync(key, 5);
+        Assert.Equal(5, result);
+
+        // Verify the key was created with value 5
+        ValkeyValue value = await client.StringGetAsync(key);
+        Assert.Equal("5", value.ToString());
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
+    public async Task StringIncrByAsync_NegativeAmount(BaseClient client)
+    {
+        string key = Guid.NewGuid().ToString();
+
+        // Set initial value
+        await client.StringSetAsync(key, "10");
+
+        // Increment by -5 (effectively decrementing by 5)
+        long result = await client.StringIncrByAsync(key, -5);
+        Assert.Equal(5, result);
+
+        // Verify the value was decremented
+        ValkeyValue value = await client.StringGetAsync(key);
+        Assert.Equal("5", value.ToString());
+    }
 }
