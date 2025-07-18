@@ -214,12 +214,12 @@ public interface IStringBaseCommands
     /// <example>
     /// <code>
     /// await client.StringSetAsync("key", "10");
-    /// long newValue = await client.StringDecrAsync("key");
+    /// long newValue = await client.StringDecrementAsync("key");
     /// Console.WriteLine(newValue); // Output: 9
     /// </code>
     /// </example>
     /// </remarks>
-    Task<long> StringDecrAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None);
+    Task<long> StringDecrementAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None);
 
     /// <summary>
     /// Decrements the number stored at key by the specified decrement. If the key does not exist, it is set to 0 before performing the operation.
@@ -235,12 +235,12 @@ public interface IStringBaseCommands
     /// <example>
     /// <code>
     /// await client.StringSetAsync("key", "10");
-    /// long newValue = await client.StringDecrByAsync("key", 5);
+    /// long newValue = await client.StringDecrementAsync("key", 5);
     /// Console.WriteLine(newValue); // Output: 5
     /// </code>
     /// </example>
     /// </remarks>
-    Task<long> StringDecrByAsync(ValkeyKey key, long decrement, CommandFlags flags = CommandFlags.None);
+    Task<long> StringDecrementAsync(ValkeyKey key, long decrement, CommandFlags flags = CommandFlags.None);
 
     /// <summary>
     /// Increments the number stored at key by one. If the key does not exist, it is set to 0 before performing the operation.
@@ -255,12 +255,12 @@ public interface IStringBaseCommands
     /// <example>
     /// <code>
     /// await client.StringSetAsync("key", "10");
-    /// long newValue = await client.StringIncrAsync("key");
+    /// long newValue = await client.StringIncrementAsync("key");
     /// Console.WriteLine(newValue); // Output: 11
     /// </code>
     /// </example>
     /// </remarks>
-    Task<long> StringIncrAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None);
+    Task<long> StringIncrementAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None);
 
     /// <summary>
     /// Increments the number stored at key by the specified increment. If the key does not exist, it is set to 0 before performing the operation.
@@ -276,10 +276,32 @@ public interface IStringBaseCommands
     /// <example>
     /// <code>
     /// await client.StringSetAsync("key", "10");
-    /// long newValue = await client.StringIncrByAsync("key", 5);
+    /// long newValue = await client.StringIncrementAsync("key", 5);
     /// Console.WriteLine(newValue); // Output: 15
     /// </code>
     /// </example>
     /// </remarks>
-    Task<long> StringIncrByAsync(ValkeyKey key, long increment, CommandFlags flags = CommandFlags.None);
+    Task<long> StringIncrementAsync(ValkeyKey key, long increment, CommandFlags flags = CommandFlags.None);
+
+    /// <summary>
+    /// Increments the string representing a floating point number stored at key by the specified increment.
+    /// If the key does not exist, it is set to 0 before performing the operation.
+    /// An error is returned if the key contains a value of the wrong type or contains a string that is not representable as a floating point number.
+    /// The precision of the output is fixed at 17 digits after the decimal point regardless of the actual internal precision of the computation.
+    /// </summary>
+    /// <seealso href="https://valkey.io/commands/incrbyfloat/">valkey.io</seealso>
+    /// <param name="key">The key of the string to increment.</param>
+    /// <param name="increment">The amount to increment by.</param>
+    /// <param name="flags">The flags to use for this operation. Currently flags are ignored.</param>
+    /// <returns>The value of key after the increment as a double precision floating point number.</returns>
+    /// <remarks>
+    /// <example>
+    /// <code>
+    /// await client.StringSetAsync("key", "10.5");
+    /// double newValue = await client.StringIncrementAsync("key", 0.1);
+    /// Console.WriteLine(newValue); // Output: 10.6
+    /// </code>
+    /// </example>
+    /// </remarks>
+    Task<double> StringIncrementAsync(ValkeyKey key, double increment, CommandFlags flags = CommandFlags.None);
 }

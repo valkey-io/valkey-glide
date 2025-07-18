@@ -32,6 +32,7 @@ public class CommandTests
             () => Assert.Equal(["DECRBY", "key", "5"], Request.StringDecrBy("key", 5).GetArgs()),
             () => Assert.Equal(["INCR", "key"], Request.StringIncr("key").GetArgs()),
             () => Assert.Equal(["INCRBY", "key", "5"], Request.StringIncrBy("key", 5).GetArgs()),
+            () => Assert.Equal(["INCRBYFLOAT", "key", "0.5"], Request.StringIncrByFloat("key", 0.5).GetArgs()),
 
             () => Assert.Equal(["INFO"], Request.Info([]).GetArgs()),
             () => Assert.Equal(["INFO", "CLIENTS", "CPU"], Request.Info([InfoOptions.Section.CLIENTS, InfoOptions.Section.CPU]).GetArgs()),
@@ -135,6 +136,7 @@ public class CommandTests
             () => Assert.Equal(5L, Request.StringDecrBy("key", 5).Converter(5L)),
             () => Assert.Equal(11L, Request.StringIncr("key").Converter(11L)),
             () => Assert.Equal(15L, Request.StringIncrBy("key", 5).Converter(15L)),
+            () => Assert.Equal(10.5, Request.StringIncrByFloat("key", 0.5).Converter("10.5")),
             () => Assert.True(Request.StringSetMultiple([
                 new KeyValuePair<ValkeyKey, ValkeyValue>("key1", "value1"),
                 new KeyValuePair<ValkeyKey, ValkeyValue>("key2", "value2")
