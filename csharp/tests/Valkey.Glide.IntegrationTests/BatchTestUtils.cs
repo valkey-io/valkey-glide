@@ -1,12 +1,10 @@
 ﻿// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-using Valkey.Glide.Pipeline;
-
 namespace Valkey.Glide.IntegrationTests;
 
 internal class BatchTestUtils
 {
-    public static List<TestInfo> CreateStringTest(IBatch batch, bool isAtomic)
+    public static List<TestInfo> CreateStringTest(Pipeline.IBatch batch, bool isAtomic)
     {
         List<TestInfo> testData = [];
         string prefix = isAtomic ? "{stringKey}-" : "";
@@ -36,7 +34,7 @@ internal class BatchTestUtils
         return testData;
     }
 
-    public static List<TestInfo> CreateSetTest(IBatch batch, bool isAtomic)
+    public static List<TestInfo> CreateSetTest(Pipeline.IBatch batch, bool isAtomic)
     {
         List<TestInfo> testData = [];
         string prefix = "{setKey}-";
@@ -161,7 +159,7 @@ internal class BatchTestUtils
         return testData;
     }
 
-    public static List<TestInfo> CreateGenericTest(IBatch batch, bool isAtomic)
+    public static List<TestInfo> CreateGenericTest(Pipeline.IBatch batch, bool isAtomic)
     {
         List<TestInfo> testData = [];
         string prefix = "{genericKey}-";
@@ -245,7 +243,7 @@ internal class BatchTestUtils
         return testData;
     }
 
-    public static List<TestInfo> CreateSortedSetTest(IBatch batch, bool isAtomic)
+    public static List<TestInfo> CreateSortedSetTest(Pipeline.IBatch batch, bool isAtomic)
     {
         List<TestInfo> testData = [];
         string prefix = isAtomic ? "{sortedSetKey}-" : "";
@@ -257,11 +255,11 @@ internal class BatchTestUtils
         testData.Add(new(true, "SortedSetAdd(key1, member1, 10.5)"));
 
         // Test multiple members add
-        var entries = new SortedSetEntry[]
-        {
+        SortedSetEntry[] entries =
+        [
             new("member2", 8.2),
             new("member3", 15.0)
-        };
+        ];
         _ = batch.SortedSetAdd(key1, entries);
         testData.Add(new(2L, "SortedSetAdd(key1, [member2:8.2, member3:15.0])"));
 
@@ -280,7 +278,7 @@ internal class BatchTestUtils
         return testData;
     }
 
-    public static List<TestInfo> CreateListTest(IBatch batch, bool isAtomic)
+    public static List<TestInfo> CreateListTest(Pipeline.IBatch batch, bool isAtomic)
     {
         List<TestInfo> testData = [];
         string prefix = isAtomic ? "{listKey}-" : "";
@@ -324,7 +322,7 @@ internal class BatchTestUtils
         return testData;
     }
 
-    public static List<TestInfo> CreateConnectionManagementTest(IBatch batch, bool isAtomic)
+    public static List<TestInfo> CreateConnectionManagementTest(Pipeline.IBatch batch, bool isAtomic)
     {
         List<TestInfo> testData = [];
 
@@ -356,7 +354,7 @@ internal class BatchTestUtils
             }))];
 }
 
-internal delegate List<TestInfo> BatchTestDataProvider(IBatch batch, bool isAtomic);
+internal delegate List<TestInfo> BatchTestDataProvider(Pipeline.IBatch batch, bool isAtomic);
 
 internal record BatchTestData(string TestName, BaseClient Client, BatchTestDataProvider TestDataProvider, bool IsAtomic)
 {
