@@ -545,8 +545,7 @@ public class GlideClient extends BaseClient implements TransactionsCommands, Gen
         args.add(cursor);
         
         if (options != null) {
-            // Add options support - for now we delegate to basic scan
-            // Future enhancement would parse options and add appropriate arguments
+            args.addAll(java.util.Arrays.asList(options.toArgs()));
         }
         
         return executeCommand(io.valkey.glide.core.commands.CommandType.SCAN, args.toArray(new String[0]))

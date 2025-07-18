@@ -1413,7 +1413,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return A CompletableFuture containing an array with [cursor, keys]
      */
     public CompletableFuture<Object[]> scan(ClusterScanCursor cursor) {
-        return scan(cursor, new ScanOptions());
+        return scan(cursor, ScanOptions.builder().build());
     }
 
     /**
@@ -1424,7 +1424,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return A CompletableFuture containing an array with [cursor, keys]
      */
     public CompletableFuture<Object[]> scanBinary(ClusterScanCursor cursor) {
-        return scanBinary(cursor, new ScanOptions());
+        return scanBinary(cursor, ScanOptions.builder().build());
     }
 
     /**
@@ -1445,8 +1445,10 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             args.add("0");
         }
         
-        // Note: ScanOptions is currently incomplete - will be implemented later
-        // For now, we use basic scan without options
+        // Add ScanOptions arguments if provided
+        if (options != null) {
+            args.addAll(Arrays.asList(options.toArgs()));
+        }
         
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
             CommandType.SCAN, args.toArray(new String[0])))
@@ -1471,8 +1473,10 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             args.add("0");
         }
         
-        // Note: ScanOptions is currently incomplete - will be implemented later
-        // For now, we use basic scan without options
+        // Add ScanOptions arguments if provided
+        if (options != null) {
+            args.addAll(Arrays.asList(options.toArgs()));
+        }
         
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
             CommandType.SCAN, args.toArray(new String[0])))

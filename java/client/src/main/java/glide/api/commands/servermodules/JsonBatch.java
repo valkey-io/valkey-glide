@@ -9,6 +9,8 @@ import glide.api.models.Batch;
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.json.JsonArrindexOptions;
 import glide.api.models.commands.json.JsonGetOptions;
+import glide.api.models.GlideString;
+import java.util.Arrays;
 import lombok.NonNull;
 
 /**
@@ -75,8 +77,8 @@ public class JsonBatch {
         checkTypeOrThrow(key);
         checkTypeOrThrow(path);
         checkTypeOrThrow(value);
-        return batch.customCommand(
-                newArgsBuilder().add(JSON_SET).add(key).add(path).add(value).toArray());
+        GlideString[] args = newArgsBuilder().add(JSON_SET).add(key).add(path).add(value).toArray();
+        return batch.customCommand(Arrays.stream(args).map(GlideString::getString).toArray(String[]::new));
     }
 
     /**
@@ -102,14 +104,14 @@ public class JsonBatch {
         checkTypeOrThrow(key);
         checkTypeOrThrow(path);
         checkTypeOrThrow(value);
-        return batch.customCommand(
-                newArgsBuilder()
+        GlideString[] args = newArgsBuilder()
                         .add(JSON_SET)
                         .add(key)
                         .add(path)
                         .add(value)
                         .add(setCondition.getValkeyApi())
-                        .toArray());
+                        .toArray();
+        return batch.customCommand(Arrays.stream(args).map(GlideString::getString).toArray(String[]::new));
     }
 
     /**
@@ -123,7 +125,8 @@ public class JsonBatch {
     public static <ArgType, T extends BaseBatch<T>> BaseBatch<T> get(
             @NonNull BaseBatch<T> batch, @NonNull ArgType key) {
         checkTypeOrThrow(key);
-        return batch.customCommand(newArgsBuilder().add(JSON_GET).add(key).toArray());
+        GlideString[] args = newArgsBuilder().add(JSON_GET).add(key).toArray();
+        return batch.customCommand(Arrays.stream(args).map(GlideString::getString).toArray(String[]::new));
     }
 
     /**
@@ -156,7 +159,8 @@ public class JsonBatch {
             @NonNull BaseBatch<T> batch, @NonNull ArgType key, @NonNull ArgType[] paths) {
         checkTypeOrThrow(key);
         checkTypeOrThrow(paths);
-        return batch.customCommand(newArgsBuilder().add(JSON_GET).add(key).add(paths).toArray());
+        GlideString[] args = newArgsBuilder().add(JSON_GET).add(key).add(paths).toArray();
+        return batch.customCommand(Arrays.stream(args).map(GlideString::getString).toArray(String[]::new));
     }
 
     /**
@@ -172,8 +176,8 @@ public class JsonBatch {
     public static <ArgType, T extends BaseBatch<T>> BaseBatch<T> get(
             @NonNull BaseBatch<T> batch, @NonNull ArgType key, @NonNull JsonGetOptions options) {
         checkTypeOrThrow(key);
-        return batch.customCommand(
-                newArgsBuilder().add(JSON_GET).add(key).add(options.toArgs()).toArray());
+        GlideString[] args = newArgsBuilder().add(JSON_GET).add(key).add(options.toArgs()).toArray();
+        return batch.customCommand(Arrays.stream(args).map(GlideString::getString).toArray(String[]::new));
     }
 
     /**
@@ -190,7 +194,8 @@ public class JsonBatch {
             @NonNull BaseBatch<T> batch, @NonNull ArgType key, @NonNull ArgType path) {
         checkTypeOrThrow(key);
         checkTypeOrThrow(path);
-        return batch.customCommand(newArgsBuilder().add(JSON_DEL).add(key).add(path).toArray());
+        GlideString[] args = newArgsBuilder().add(JSON_DEL).add(key).add(path).toArray();
+        return batch.customCommand(Arrays.stream(args).map(GlideString::getString).toArray(String[]::new));
     }
 
     /**
@@ -215,6 +220,7 @@ public class JsonBatch {
             @NonNull BaseBatch<T> batch, @NonNull ArgType key, @NonNull ArgType path) {
         checkTypeOrThrow(key);
         checkTypeOrThrow(path);
-        return batch.customCommand(newArgsBuilder().add(JSON_TYPE).add(key).add(path).toArray());
+        GlideString[] args = newArgsBuilder().add(JSON_TYPE).add(key).add(path).toArray();
+        return batch.customCommand(Arrays.stream(args).map(GlideString::getString).toArray(String[]::new));
     }
 }
