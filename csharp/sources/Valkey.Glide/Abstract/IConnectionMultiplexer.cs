@@ -2,8 +2,6 @@
 
 using System.Net;
 
-using Valkey.Glide.Commands;
-
 namespace Valkey.Glide;
 
 /// <summary>

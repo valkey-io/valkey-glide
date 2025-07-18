@@ -188,7 +188,7 @@ public class StandaloneClientTests(TestConfiguration config)
         string moveKey = Guid.NewGuid().ToString();
         string value = "test-value";
 
-        IBatch batch = new Batch(isAtomic);
+        Pipeline.IBatch batch = new Batch(isAtomic);
 
         // Set up keys
         _ = batch.StringSet(sourceKey, value);
