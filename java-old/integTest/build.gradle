@@ -1,0 +1,207 @@
+plugins {
+    id 'java-library'
+    id "com.google.osdetector" version "1.7.3"
+}
+
+repositories {
+    mavenCentral()
+    mavenLocal()
+}
+
+dependencies {
+    // client
+    implementation group: 'io.valkey', name: 'valkey-glide', version: project.ext.defaultReleaseVersion, classifier: osdetector.classifier
+
+    implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.13.0'
+    implementation 'com.google.code.gson:gson:2.10.1'
+
+    // junit
+    testImplementation 'org.mockito:mockito-junit-jupiter:3.12.4'
+    testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter', version: '5.10.2'
+
+    // semver4j for semantic versioning
+    implementation group: 'org.semver4j', name: 'semver4j', version: '5.6.0'
+
+    //lombok
+    testCompileOnly 'org.projectlombok:lombok:1.18.32'
+    testAnnotationProcessor 'org.projectlombok:lombok:1.18.32'
+}
+
+def standaloneHosts = ''
+def clusterHosts = ''
+def azClusterHosts = ''
+
+ext {
+    extractAddressesFromClusterManagerOutput = { String output ->
+        for (def line : output.split("\n")) {
+            if (!line.startsWith("CLUSTER_NODES="))
+                continue
+
+            return line.split("=")[1]
+        }
+        return ''
+    }
+}
+
+tasks.register('stopAllAfterTests', Exec) {
+    workingDir "${project.rootDir}/../utils"
+    commandLine 'python3', 'cluster_manager.py', 'stop', '--prefix', 'cluster', '--keep-folder'
+}
+
+// We need to call for stop before and after the test, but gradle doesn't support executing a task
+// twice. So there are two identical tasks with different names.
+// We need to call for stop in case if previous test run was interrupted/crashed and didn't stop.
+tasks.register('stopAllBeforeTests', Exec) {
+    workingDir "${project.rootDir}/../utils"
+    commandLine 'python3', 'cluster_manager.py', 'stop', '--prefix', 'cluster'
+    ignoreExitValue true // ignore fail if servers are stopped before
+}
+
+// delete dirs if stop failed due to https://github.com/valkey-io/valkey-glide/issues/849
+tasks.register('clearDirs', Delete) {
+    delete "${project.rootDir}/../utils/clusters"
+}
+
+tasks.register('startCluster') {
+    doLast {
+        if (System.getProperty("cluster-endpoints") == null) {
+            new ByteArrayOutputStream().withStream { os ->
+                exec {
+                    workingDir "${project.rootDir}/../utils"
+                    def args = ['python3', 'cluster_manager.py', 'start', '--cluster-mode']
+                    if (System.getProperty("tls") == 'true') args.add(2, '--tls')
+                    commandLine args
+                    standardOutput = os
+                }
+                clusterHosts = extractAddressesFromClusterManagerOutput(os.toString())
+            }
+        } else {
+            clusterHosts = System.getProperty("cluster-endpoints")
+        }
+    }
+}
+
+tasks.register('startClusterForAz') {
+    doLast {
+        if (System.getProperty("cluster-endpoints") == null) {
+            new ByteArrayOutputStream().withStream { os ->
+                exec {
+                    workingDir "${project.rootDir}/../utils"
+                    def args = ['python3', 'cluster_manager.py', 'start', '--cluster-mode', '-r', '4']
+                    if (System.getProperty("tls") == 'true') args.add(2, '--tls')
+                    commandLine args
+                    standardOutput = os
+                }
+                azClusterHosts = extractAddressesFromClusterManagerOutput(os.toString())
+            }
+        } else {
+            azClusterHosts = System.getProperty("cluster-endpoints")
+        }
+    }
+}
+
+tasks.register('beforeTests') {}
+tasks.register('afterTests') {}
+tasks.register('startStandalone') {
+    doLast {
+        if (System.getProperty("standalone-endpoints") == null) {
+            new ByteArrayOutputStream().withStream { os ->
+                exec {
+                    workingDir "${project.rootDir}/../utils"
+                    def args = ['python3', 'cluster_manager.py', 'start', '-r', '0']
+                    if (System.getProperty("tls") == 'true') args.add(2, '--tls')
+                    commandLine args
+                    standardOutput = os
+                }
+                standaloneHosts = extractAddressesFromClusterManagerOutput(os.toString())
+            }
+        } else {
+            standaloneHosts = System.getProperty("standalone-endpoints")
+        }
+    }
+}
+
+beforeTests.dependsOn 'stopAllBeforeTests'
+stopAllBeforeTests.finalizedBy 'clearDirs'
+clearDirs.finalizedBy 'startStandalone'
+clearDirs.finalizedBy 'startCluster'
+clearDirs.finalizedBy 'startClusterForAz'
+afterTests.finalizedBy 'stopAllAfterTests'
+compileTestJava.dependsOn ':client:publishToMavenLocal'
+
+tasks.withType(Test) {
+    useJUnitPlatform()
+    if (!project.gradle.startParameter.taskNames.contains(':integTest:modulesTest')) {
+        dependsOn 'beforeTests'
+        finalizedBy 'afterTests'
+    }
+
+    doFirst {
+        systemProperty 'test.server.standalone', standaloneHosts
+        systemProperty 'test.server.cluster', clusterHosts
+        systemProperty 'test.server.azcluster', azClusterHosts
+        systemProperty 'test.server.tls', System.getProperty("tls")
+    }
+
+    testLogging {
+        exceptionFormat "full"
+        events "started", "skipped", "passed", "failed"
+        showStandardStreams true
+    }
+
+    minHeapSize = "2048m" // Initial heap size. Needed for max size tests.
+    maxHeapSize = "2048m" // Maximum heap size. Needed for max size tests.
+
+    afterTest { desc, result ->
+        logger.quiet "${desc.className}.${desc.name}: ${result.resultType} ${(result.getEndTime() - result.getStartTime())/1000}s"
+    }
+
+    finalizedBy jacocoTestReport, jacocoTestCoverageVerification
+}
+
+// JaCoCo section (code coverage by integration tests)
+jacocoTestReport {
+    sourceDirectories.setFrom(files("${project.rootDir}/client/src/main/java"))
+    classDirectories.setFrom(files("$buildDir/classes"))
+    executionData.setFrom(
+        files("$buildDir/jacoco/test.exec"),
+        files("$buildDir/jacoco/pubsubTest.exec")
+    )
+}
+jacocoTestCoverageVerification {
+    violationRules {
+        rule {
+            element = 'CLASS'
+            excludes = [
+                'glide.models.protobuf.*',
+                'glide.com.google.*', // shadowed protobuf
+                'glide.io.netty.*' // shadowed netty
+            ]
+        }
+    }
+}
+// End of JaCoCo section
+
+test {
+    filter {
+        excludeTestsMatching 'glide.PubSubTests'
+        excludeTestsMatching 'glide.modules.*'
+    }
+}
+
+tasks.register('pubsubTest', Test) {
+    filter {
+        includeTestsMatching 'glide.PubSubTests'
+    }
+    finalizedBy jacocoTestReport, jacocoTestCoverageVerification
+}
+
+tasks.register('modulesTest', Test) {
+    doFirst {
+        clusterHosts = System.getProperty("cluster-endpoints")
+    }
+
+    filter {
+        includeTestsMatching 'glide.modules.*'
+    }
+}
