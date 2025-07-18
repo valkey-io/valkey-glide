@@ -8,11 +8,7 @@
     "files.insertFinalNewline": true,
     "files.trimFinalNewlines": true,
     "rust-analyzer.linkedProjects": [
-        "glide-core/Cargo.toml",
-        "logger_core/Cargo.toml",
-        "glide-core/redis-rs/Cargo.toml",
-        "java/Cargo.toml",
-        "rust-jni/Cargo.toml"
+        "java/Cargo.toml"
     ],
     "yaml.schemas": {
         "https://json.schemastore.org/github-workflow.json": [

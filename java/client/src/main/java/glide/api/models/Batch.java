@@ -67,6 +67,16 @@ public class Batch extends BaseBatch<Batch> {
     }
 
     /**
+     * Returns this batch instance with the correct type.
+     *
+     * @return This batch instance
+     */
+    @Override
+    protected Batch getThis() {
+        return this;
+    }
+
+    /**
      * Sets the value of a key.
      *
      * @see <a href="https://valkey.io/commands/set/">valkey.io</a> for details.

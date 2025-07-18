@@ -65,6 +65,11 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
         super(false);
     }
 
+    @Override
+    protected ClusterBatch getThis() {
+        return this;
+    }
+
     /**
      * Sets the value of a key.
      *

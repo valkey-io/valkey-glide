@@ -221,7 +221,14 @@ public enum CommandType {
     RESTORE("RESTORE"),
 
     // Stream commands
+    XADD("XADD"),
+    XACK("XACK"),
+    XAUTOCLAIM("XAUTOCLAIM"),
     XGROUP_SETID("XGROUP SETID"),
+    
+    // Geospatial commands
+    GEOADD("GEOADD"),
+    GEOSEARCH("GEOSEARCH"),
     
     // Misc commands
     LOLWUT("LOLWUT"),

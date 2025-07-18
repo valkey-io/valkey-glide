@@ -11,9 +11,10 @@ use glide_core::{GlideOpenTelemetry, GlideOpenTelemetryConfigBuilder, GlideOpenT
 
 // Import GlideSpanStatus from telemetrylib via glide_core re-export
 use telemetrylib::GlideSpanStatus;
-use redis::cluster_routing::RoutingInfo;
+use redis::cluster_routing::{RoutingInfo, Route, SlotAddr};
+use redis::cluster_topology::get_slot;
 use jni::objects::{JClass, JObject, JString, JObjectArray, JByteArray};
-use jni::sys::{jboolean, jint, jlong, jobject, jstring, JNI_TRUE};
+use jni::sys::{jboolean, jdouble, jint, jlong, jobject, jstring, JNI_TRUE};
 use jni::JNIEnv;
 use redis::{cmd, Value};
 use std::collections::HashMap;
@@ -219,7 +220,7 @@ fn ensure_local_ref_cleanup(env: &mut JNIEnv) {
 /// Create a scoped local reference frame for complex operations
 fn with_local_frame<F, R>(env: &mut JNIEnv, capacity: i32, f: F) -> JniResult<R>
 where
-    F: FnOnce(&mut JNIEnv) -> JniResult<R>,
+    F: FnOnce(&mut JNIEnv<'_>) -> JniResult<R>,
 {
     env.push_local_frame(capacity)?;
     
@@ -560,6 +561,349 @@ pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_executeLongC
     };
 
     jni_result!(&mut env, result(), 0i64)
+}
+
+/// Execute a command expecting a Double result
+#[no_mangle]
+pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_executeDoubleCommand(
+    mut env: JNIEnv,
+    _class: JClass,
+    client_handle: jlong,
+    command: jstring,
+    args: jobject,
+) -> jdouble {
+    let mut result = || -> JniResult<jdouble> {
+        let handle = client_handle as u64;
+        let client = get_client(handle)?;
+        
+        let cmd_str: String = env.get_string(&unsafe { JString::from_raw(command) })?.into();
+        
+        // Only basic JNI safety checks
+        if cmd_str.contains('\0') {
+            return Err(jni_error!(InvalidInput, "Command contains null bytes"));
+        }
+
+        let args_array = unsafe { JObjectArray::from_raw(args) };
+        let arg_count = env.get_array_length(&args_array)?;
+        let mut cmd = cmd(&cmd_str);
+
+        for i in 0..arg_count {
+            let arg_obj = env.get_object_array_element(&args_array, i)?;
+            let arg_str: String = env.get_string(&JString::from(arg_obj))?.into();
+            cmd.arg(&arg_str);
+        }
+
+        let response = client.execute_command(cmd)?;
+
+        match response {
+            Value::BulkString(bytes) => {
+                let string_val = String::from_utf8_lossy(&bytes);
+                string_val.parse::<f64>()
+                    .map_err(|_| jni_error!(ConversionError, "Cannot convert to Double: {}", string_val))
+            }
+            Value::SimpleString(s) => {
+                s.parse::<f64>()
+                    .map_err(|_| jni_error!(ConversionError, "Cannot convert to Double: {}", s))
+            }
+            _ => Err(jni_error!(ConversionError, "Expected numeric response, got: {:?}", response))
+        }
+    };
+
+    jni_result!(&mut env, result(), 0.0f64)
+}
+
+/// Execute a command expecting a Boolean result
+#[no_mangle]
+pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_executeBooleanCommand(
+    mut env: JNIEnv,
+    _class: JClass,
+    client_handle: jlong,
+    command: jstring,
+    args: jobject,
+) -> jboolean {
+    let mut result = || -> JniResult<jboolean> {
+        let handle = client_handle as u64;
+        let client = get_client(handle)?;
+        
+        let cmd_str: String = env.get_string(&unsafe { JString::from_raw(command) })?.into();
+        
+        // Only basic JNI safety checks
+        if cmd_str.contains('\0') {
+            return Err(jni_error!(InvalidInput, "Command contains null bytes"));
+        }
+
+        let args_array = unsafe { JObjectArray::from_raw(args) };
+        let arg_count = env.get_array_length(&args_array)?;
+        let mut cmd = cmd(&cmd_str);
+
+        for i in 0..arg_count {
+            let arg_obj = env.get_object_array_element(&args_array, i)?;
+            let arg_str: String = env.get_string(&JString::from(arg_obj))?.into();
+            cmd.arg(&arg_str);
+        }
+
+        let response = client.execute_command(cmd)?;
+
+        match response {
+            Value::Int(i) => Ok(if i != 0 { JNI_TRUE } else { 0 }),
+            Value::BulkString(bytes) => {
+                let string_val = String::from_utf8_lossy(&bytes);
+                match string_val.as_ref() {
+                    "true" | "1" => Ok(JNI_TRUE),
+                    "false" | "0" => Ok(0),
+                    _ => string_val.parse::<i64>()
+                        .map(|i| if i != 0 { JNI_TRUE } else { 0 })
+                        .map_err(|_| jni_error!(ConversionError, "Cannot convert to Boolean: {}", string_val))
+                }
+            }
+            Value::SimpleString(s) => {
+                match s.as_ref() {
+                    "true" | "1" => Ok(JNI_TRUE),
+                    "false" | "0" => Ok(0),
+                    _ => s.parse::<i64>()
+                        .map(|i| if i != 0 { JNI_TRUE } else { 0 })
+                        .map_err(|_| jni_error!(ConversionError, "Cannot convert to Boolean: {}", s))
+                }
+            }
+            _ => Err(jni_error!(ConversionError, "Expected boolean response, got: {:?}", response))
+        }
+    };
+
+    jni_result!(&mut env, result(), 0)
+}
+
+/// Execute a command expecting an Object[] result
+#[no_mangle]
+pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_executeArrayCommand(
+    mut env: JNIEnv,
+    _class: JClass,
+    client_handle: jlong,
+    command: jstring,
+    args: jobject,
+) -> jobject {
+    let result = with_local_frame(&mut env, 100, |env| -> JniResult<jobject> {
+        let handle = client_handle as u64;
+        let client = get_client(handle)?;
+        
+        let cmd_str: String = env.get_string(&unsafe { JString::from_raw(command) })?.into();
+        
+        // Only basic JNI safety checks
+        if cmd_str.contains('\0') {
+            return Err(jni_error!(InvalidInput, "Command contains null bytes"));
+        }
+
+        let args_array = unsafe { JObjectArray::from_raw(args) };
+        let arg_count = env.get_array_length(&args_array)?;
+        let mut cmd = cmd(&cmd_str);
+
+        for i in 0..arg_count {
+            let arg_obj = env.get_object_array_element(&args_array, i)?;
+            let arg_str: String = env.get_string(&JString::from(arg_obj))?.into();
+            cmd.arg(&arg_str);
+        }
+
+        let response = client.execute_command(cmd)?;
+
+        match response {
+            Value::Array(arr) => {
+                let object_class = env.find_class("java/lang/Object")?;
+                let java_array = env.new_object_array(arr.len() as i32, object_class, JObject::null())?;
+
+                for (i, item) in arr.into_iter().enumerate() {
+                    let java_item = convert_value_to_java_object(env, item)?;
+                    let java_item_obj = unsafe { JObject::from_raw(java_item) };
+                    env.set_object_array_element(&java_array, i as i32, java_item_obj)?;
+                }
+
+                Ok(java_array.into_raw())
+            }
+            Value::Nil => Ok(ptr::null_mut()),
+            _ => Err(jni_error!(ConversionError, "Expected array response, got: {:?}", response))
+        }
+    });
+
+    ensure_local_ref_cleanup(&mut env);
+    jni_result!(&mut env, result, ptr::null_mut())
+}
+
+/// Execute a command with routing support
+#[no_mangle]
+pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_executeCommandWithRouting(
+    mut env: JNIEnv,
+    _class: JClass,
+    client_handle: jlong,
+    command: jstring,
+    args: jobject,
+    routing_type: jint,
+    routing_value: jstring,
+) -> jobject {
+    let result = with_local_frame(&mut env, 50, |env| -> JniResult<jobject> {
+        let handle = client_handle as u64;
+        let client = get_client(handle)?;
+        
+        let command_str: String = env.get_string(&unsafe { JString::from_raw(command) })?.into();
+        
+        // Only basic JNI safety checks
+        if command_str.contains('\0') {
+            return Err(jni_error!(InvalidInput, "Command contains null bytes"));
+        }
+
+        let args_array = unsafe { JObjectArray::from(JObject::from_raw(args)) };
+        let args_length = env.get_array_length(&args_array)?;
+        
+        let mut cmd = cmd(&command_str);
+
+        for i in 0..args_length {
+            let arg_obj = env.get_object_array_element(&args_array, i)?;
+            let byte_array = JByteArray::from(arg_obj);
+            let arg_bytes = env.convert_byte_array(&byte_array)?;
+            
+            cmd.arg(&arg_bytes);
+        }
+
+        // Convert routing parameters
+        let routing_info = match routing_type {
+            0 => None, // No routing
+            1 => Some(RoutingInfo::MultiNode((redis::cluster_routing::MultipleNodeRoutingInfo::AllNodes, None))),
+            2 => Some(RoutingInfo::MultiNode((redis::cluster_routing::MultipleNodeRoutingInfo::AllMasters, None))),
+            3 => Some(RoutingInfo::SingleNode(redis::cluster_routing::SingleNodeRoutingInfo::Random)),
+            4 => {
+                // SlotId routing - use route for slot
+                let slot_id_str: String = env.get_string(&unsafe { JString::from_raw(routing_value) })?.into();
+                let slot_id = slot_id_str.parse::<u16>()
+                    .map_err(|_| jni_error!(InvalidInput, "Invalid slot ID: {}", slot_id_str))?;
+                Some(RoutingInfo::SingleNode(redis::cluster_routing::SingleNodeRoutingInfo::SpecificNode(
+                    redis::cluster_routing::Route::new(slot_id, redis::cluster_routing::SlotAddr::Master)
+                )))
+            }
+            5 => {
+                // SlotKey routing - calculate slot from key
+                let slot_key: String = env.get_string(&unsafe { JString::from_raw(routing_value) })?.into();
+                let slot = get_slot(slot_key.as_bytes());
+                Some(RoutingInfo::SingleNode(redis::cluster_routing::SingleNodeRoutingInfo::SpecificNode(
+                    Route::new(slot, SlotAddr::Master)
+                )))
+            }
+            6 => {
+                // ByAddress routing
+                let address: String = env.get_string(&unsafe { JString::from_raw(routing_value) })?.into();
+                let parts: Vec<&str> = address.split(':').collect();
+                if parts.len() == 2 {
+                    let host = parts[0].to_string();
+                    let port = parts[1].parse::<u16>()
+                        .map_err(|_| jni_error!(InvalidInput, "Invalid port in address: {}", address))?;
+                    Some(RoutingInfo::SingleNode(redis::cluster_routing::SingleNodeRoutingInfo::ByAddress { host, port }))
+                } else {
+                    return Err(jni_error!(InvalidInput, "Invalid address format: {}", address));
+                }
+            }
+            _ => return Err(jni_error!(InvalidInput, "Invalid routing type: {}", routing_type)),
+        };
+
+        let response = client.execute_command_with_routing(cmd, routing_info)?;
+        convert_value_to_java_object(env, response)
+    });
+
+    ensure_local_ref_cleanup(&mut env);
+    jni_result!(&mut env, result, ptr::null_mut())
+}
+
+/// Execute a command with routing support expecting a String result
+#[no_mangle]
+pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_executeStringCommandWithRouting(
+    mut env: JNIEnv,
+    _class: JClass,
+    client_handle: jlong,
+    command: jstring,
+    args: jobject,
+    routing_type: jint,
+    routing_value: jstring,
+) -> jstring {
+    let mut result = || -> JniResult<jstring> {
+        let handle = client_handle as u64;
+        let client = get_client(handle)?;
+        
+        let cmd_str: String = env.get_string(&unsafe { JString::from_raw(command) })?.into();
+        
+        // Only basic JNI safety checks
+        if cmd_str.contains('\0') {
+            return Err(jni_error!(InvalidInput, "Command contains null bytes"));
+        }
+
+        let args_array = unsafe { JObjectArray::from_raw(args) };
+        let arg_count = env.get_array_length(&args_array)?;
+        let mut cmd = cmd(&cmd_str);
+
+        for i in 0..arg_count {
+            let arg_obj = env.get_object_array_element(&args_array, i)?;
+            let arg_str: String = env.get_string(&JString::from(arg_obj))?.into();
+            cmd.arg(&arg_str);
+        }
+
+        // Convert routing parameters
+        let routing_info = match routing_type {
+            0 => None, // No routing
+            1 => Some(RoutingInfo::MultiNode((redis::cluster_routing::MultipleNodeRoutingInfo::AllNodes, None))),
+            2 => Some(RoutingInfo::MultiNode((redis::cluster_routing::MultipleNodeRoutingInfo::AllMasters, None))),
+            3 => Some(RoutingInfo::SingleNode(redis::cluster_routing::SingleNodeRoutingInfo::Random)),
+            4 => {
+                // SlotId routing - use route for slot
+                let slot_id_str: String = env.get_string(&unsafe { JString::from_raw(routing_value) })?.into();
+                let slot_id = slot_id_str.parse::<u16>()
+                    .map_err(|_| jni_error!(InvalidInput, "Invalid slot ID: {}", slot_id_str))?;
+                Some(RoutingInfo::SingleNode(redis::cluster_routing::SingleNodeRoutingInfo::SpecificNode(
+                    redis::cluster_routing::Route::new(slot_id, redis::cluster_routing::SlotAddr::Master)
+                )))
+            }
+            5 => {
+                // SlotKey routing - calculate slot from key
+                let slot_key: String = env.get_string(&unsafe { JString::from_raw(routing_value) })?.into();
+                let slot = get_slot(slot_key.as_bytes());
+                Some(RoutingInfo::SingleNode(redis::cluster_routing::SingleNodeRoutingInfo::SpecificNode(
+                    Route::new(slot, SlotAddr::Master)
+                )))
+            }
+            6 => {
+                // ByAddress routing
+                let address: String = env.get_string(&unsafe { JString::from_raw(routing_value) })?.into();
+                let parts: Vec<&str> = address.split(':').collect();
+                if parts.len() == 2 {
+                    let host = parts[0].to_string();
+                    let port = parts[1].parse::<u16>()
+                        .map_err(|_| jni_error!(InvalidInput, "Invalid port in address: {}", address))?;
+                    Some(RoutingInfo::SingleNode(redis::cluster_routing::SingleNodeRoutingInfo::ByAddress { host, port }))
+                } else {
+                    return Err(jni_error!(InvalidInput, "Invalid address format: {}", address));
+                }
+            }
+            _ => return Err(jni_error!(InvalidInput, "Invalid routing type: {}", routing_type)),
+        };
+
+        let response = client.execute_command_with_routing(cmd, routing_info)?;
+
+        match response {
+            Value::Nil => Ok(ptr::null_mut()),
+            Value::SimpleString(s) => {
+                let java_string = env.new_string(&s)?;
+                Ok(java_string.into_raw())
+            }
+            Value::BulkString(bytes) => {
+                let string_val = String::from_utf8_lossy(&bytes);
+                let java_string = env.new_string(&string_val)?;
+                Ok(java_string.into_raw())
+            }
+            Value::Okay => {
+                let java_string = env.new_string("OK")?;
+                Ok(java_string.into_raw())
+            }
+            _ => {
+                let java_string = env.new_string(&format!("{:?}", response))?;
+                Ok(java_string.into_raw())
+            }
+        }
+    };
+
+    jni_result!(&mut env, result(), ptr::null_mut())
 }
 
 /// Get client statistics
@@ -1222,4 +1566,30 @@ pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_setSpanSta
     if let Err(e) = result() {
         eprintln!("Error in setSpanStatus: {:?}", e);
     }
+}
+
+/// Set the sampling percentage for telemetry data
+#[no_mangle]
+pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_setSamplePercentage(
+    _env: JNIEnv,
+    _class: JClass,
+    _percentage: jint,
+) {
+    // Note: This is a placeholder implementation
+    // The actual sampling is configured during initialization
+    // This method is kept for API compatibility
+    eprintln!("setSamplePercentage called but not implemented - sampling is configured during initialization");
+}
+
+/// Get the current sampling percentage
+#[no_mangle]
+pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_getSamplePercentage(
+    _env: JNIEnv,
+    _class: JClass,
+) -> jint {
+    // Note: This is a placeholder implementation
+    // The actual sampling is configured during initialization
+    // This method is kept for API compatibility
+    eprintln!("getSamplePercentage called but not implemented - sampling is configured during initialization");
+    0
 }
