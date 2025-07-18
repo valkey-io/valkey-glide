@@ -5,7 +5,7 @@ using Valkey.Glide.Pipeline;
 
 namespace Valkey.Glide;
 
-internal class ValkeyBatch(BaseClient client) : DatabaseImpl(false), IBatch
+internal class ValkeyBatch(BaseClient client) : Database(false), IBatch
 {
     private readonly List<ICmd> _commands = [];
     protected TaskCompletionSource<object?[]?> _tcs = new();

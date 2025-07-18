@@ -428,6 +428,7 @@ public readonly struct ValkeyValue : IEquatable<ValkeyValue>, IComparable<Valkey
         {
             case null: return Null;
             case string v: return v;
+            case GlideString gs: return gs.Bytes;
             case int v: return v;
             case uint v: return v;
             case double v: return v;

@@ -5,7 +5,7 @@ using Valkey.Glide.Internals;
 
 namespace Valkey.Glide;
 
-public abstract partial class BaseClient : IStringBaseCommands
+public abstract partial class BaseClient : IStringCommands
 {
     public async Task<bool> StringSetAsync(ValkeyKey key, ValkeyValue value, CommandFlags flags = CommandFlags.None)
         => await Command(Request.StringSet(key, value));

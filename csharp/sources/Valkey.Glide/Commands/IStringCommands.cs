@@ -7,7 +7,7 @@ namespace Valkey.Glide.Commands;
 /// <br/>
 /// See more on <see href="https://valkey.io/commands/?group=string">valkey.io</see>.
 /// </summary>
-public interface IStringBaseCommands
+public interface IStringCommands
 {
     /// <summary>
     /// Sets the value of a key to a string. If the key already holds a value, it is overwritten, regardless of its type.
