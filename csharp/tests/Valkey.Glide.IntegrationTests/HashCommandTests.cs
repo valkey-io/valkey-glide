@@ -213,8 +213,6 @@ public class HashCommandTests(TestConfiguration config, ITestOutputHelper output
     [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
     public async Task TestHashSetWithWhen(BaseClient client)
     {
-        using var console = new ConsoleOutputInterceptor(Output);
-
         string key = Guid.NewGuid().ToString();
 
         // Initial set should succeed

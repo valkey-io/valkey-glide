@@ -104,7 +104,7 @@ public class CommandTests
             // List Commands
             () => Assert.Equal(["LPOP", "a"], Request.ListLeftPopAsync("a").GetArgs()),
             () => Assert.Equal(["LPOP", "a", "3"], Request.ListLeftPopAsync("a", 3).GetArgs()),
-            () => Assert.Equal(["LPUSH", "a", "one", "two"], Request.ListLeftPushAsync("a", ["one", "two"]).GetArgs())
+            () => Assert.Equal(["LPUSH", "a", "one", "two"], Request.ListLeftPushAsync("a", ["one", "two"]).GetArgs()),
             // Hash Commands
             () => Assert.Equal(new string[] {"HGET", "key", "field"}, Request.HashGetAsync("key", "field").GetArgs()),
             () => Assert.Equal(new string[] {"HMGET", "key", "field1", "field2"}, Request.HashGetAsync("key", new ValkeyValue[] {"field1", "field2"}).GetArgs()),
@@ -212,7 +212,7 @@ public class CommandTests
 
             () => Assert.Equal("one", Request.ListLeftPopAsync("a").Converter("one")),
             () => Assert.Equal(["one", "two"], Request.ListLeftPopAsync("a", 2).Converter([(gs)"one", (gs)"two"])),
-            () => Assert.Equal(2L, Request.ListLeftPushAsync("a", ["one", "two"]).Converter(2L))
+            () => Assert.Equal(2L, Request.ListLeftPushAsync("a", ["one", "two"]).Converter(2L)),
 
             // Hash Commands
             () => Assert.Equal<GlideString>("value", Request.HashGetAsync("key", "field").Converter("value")),
