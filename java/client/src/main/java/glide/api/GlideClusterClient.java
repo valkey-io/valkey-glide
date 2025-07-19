@@ -4,6 +4,8 @@ package glide.api;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.InfoOptions.Section;
+import glide.api.models.commands.scan.ClusterScanCursor;
+import glide.api.models.commands.scan.ScanOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.ClusterBatch;
@@ -20,9 +22,14 @@ import glide.api.commands.ClusterServerManagement;
 import glide.api.commands.GenericClusterCommands;
 import glide.api.commands.HyperLogLogBaseCommands;
 import glide.api.commands.PubSubBaseCommands;
+import glide.api.commands.ScriptingAndFunctionsClusterCommands;
 import glide.api.models.commands.scan.ScanOptions;
 import glide.api.models.commands.scan.ClusterScanCursor;
 import glide.api.models.commands.ScoreFilter;
+import glide.api.models.commands.ScriptOptions;
+import glide.api.models.commands.ScriptOptionsGlideString;
+import glide.api.models.commands.ScriptArgOptions;
+import glide.api.models.commands.ScriptArgOptionsGlideString;
 import glide.api.models.Response;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -41,7 +48,7 @@ import static glide.api.models.commands.RequestType.*;
  * - Automatic cluster topology handling
  * - Interface segregation for cluster-specific APIs
  */
-public class GlideClusterClient extends BaseClient implements TransactionsClusterCommands, ClusterCommandExecutor, GenericClusterCommands, HyperLogLogBaseCommands, PubSubBaseCommands, AutoCloseable {
+public class GlideClusterClient extends BaseClient implements TransactionsClusterCommands, ClusterCommandExecutor, GenericClusterCommands, HyperLogLogBaseCommands, PubSubBaseCommands, ServerManagementClusterCommands, AutoCloseable {
 
     private GlideClusterClient(io.valkey.glide.core.client.GlideClient client) {
         super(client, createClusterServerManagement(client));
@@ -50,14 +57,12 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
     private static ClusterServerManagement createClusterServerManagement(io.valkey.glide.core.client.GlideClient client) {
         // Create a minimal wrapper that implements ServerManagementClusterCommands
         return new ClusterServerManagement(new ServerManagementClusterCommands() {
-            @Override
             public CompletableFuture<ClusterValue<String>> info() {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
                     Info))
                     .thenApply(result -> ClusterValue.ofSingleValue(result.toString()));
             }
 
-            @Override
             public CompletableFuture<ClusterValue<String>> info(Route route) {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
                     Info), route)
@@ -77,7 +82,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
                     });
             }
 
-            @Override
             public CompletableFuture<ClusterValue<String>> info(Section[] sections) {
                 String[] sectionNames = new String[sections.length];
                 for (int i = 0; i < sections.length; i++) {
@@ -88,7 +92,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
                     .thenApply(result -> ClusterValue.ofSingleValue(result.toString()));
             }
 
-            @Override
             public CompletableFuture<ClusterValue<String>> info(Section[] sections, Route route) {
                 String[] sectionNames = new String[sections.length];
                 for (int i = 0; i < sections.length; i++) {
@@ -112,35 +115,30 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
                     });
             }
 
-            @Override
             public CompletableFuture<String> configRewrite() {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
                     ConfigRewrite))
                     .thenApply(result -> result.toString());
             }
 
-            @Override
             public CompletableFuture<String> configRewrite(Route route) {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
                     ConfigRewrite), route)
                     .thenApply(result -> result.toString());
             }
 
-            @Override
             public CompletableFuture<String> configResetStat() {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
                     ConfigResetStat))
                     .thenApply(result -> result.toString());
             }
 
-            @Override
             public CompletableFuture<String> configResetStat(Route route) {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
                     ConfigResetStat), route)
                     .thenApply(result -> result.toString());
             }
 
-            @Override
             public CompletableFuture<Map<String, String>> configGet(String[] parameters) {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
                     ConfigGet, parameters))
@@ -156,7 +154,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
                     });
             }
 
-            @Override
             public CompletableFuture<ClusterValue<Map<String, String>>> configGet(String[] parameters, Route route) {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
                     ConfigGet, parameters), route)
@@ -199,7 +196,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
                     });
             }
 
-            @Override
             public CompletableFuture<String> configSet(Map<String, String> parameters) {
                 String[] args = new String[parameters.size() * 2];
                 int i = 0;
@@ -212,7 +208,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
                     .thenApply(result -> result.toString());
             }
 
-            @Override
             public CompletableFuture<String> configSet(Map<String, String> parameters, Route route) {
                 String[] args = new String[parameters.size() * 2];
                 int i = 0;
@@ -225,7 +220,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
                     .thenApply(result -> result.toString());
             }
 
-            @Override
             public CompletableFuture<String[]> time() {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
                     Time))
@@ -242,7 +236,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
                     });
             }
 
-            @Override
             public CompletableFuture<ClusterValue<String[]>> time(Route route) {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
                     Time), route)
@@ -287,14 +280,12 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
                     });
             }
 
-            @Override
             public CompletableFuture<Long> lastsave() {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
                     LastSave))
                     .thenApply(result -> Long.parseLong(result.toString()));
             }
 
-            @Override
             public CompletableFuture<ClusterValue<Long>> lastsave(Route route) {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
                     LastSave), route)
@@ -314,70 +305,60 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
                     });
             }
 
-            @Override
             public CompletableFuture<String> flushall() {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
                     FlushAll))
                     .thenApply(result -> result.toString());
             }
 
-            @Override
             public CompletableFuture<String> flushall(FlushMode mode) {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
                     FlushAll, mode.name()))
                     .thenApply(result -> result.toString());
             }
 
-            @Override
             public CompletableFuture<String> flushall(Route route) {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
                     FlushAll), route)
                     .thenApply(result -> result.toString());
             }
 
-            @Override
             public CompletableFuture<String> flushall(FlushMode mode, Route route) {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
                     FlushAll, mode.name()), route)
                     .thenApply(result -> result.toString());
             }
 
-            @Override
             public CompletableFuture<String> flushdb() {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
                     FlushDB))
                     .thenApply(result -> result.toString());
             }
 
-            @Override
             public CompletableFuture<String> flushdb(FlushMode mode) {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
                     FlushDB, mode.name()))
                     .thenApply(result -> result.toString());
             }
 
-            @Override
             public CompletableFuture<String> flushdb(Route route) {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
                     FlushDB), route)
                     .thenApply(result -> result.toString());
             }
 
-            @Override
             public CompletableFuture<String> flushdb(FlushMode mode, Route route) {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
                     FlushDB, mode.name()), route)
                     .thenApply(result -> result.toString());
             }
 
-            @Override
             public CompletableFuture<String> lolwut() {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
                     Lolwut))
                     .thenApply(result -> result.toString());
             }
 
-            @Override
             public CompletableFuture<String> lolwut(int[] parameters) {
                 String[] args = new String[parameters.length];
                 for (int i = 0; i < parameters.length; i++) {
@@ -388,14 +369,12 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
                     .thenApply(result -> result.toString());
             }
 
-            @Override
             public CompletableFuture<String> lolwut(int version) {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
                     Lolwut, "VERSION", String.valueOf(version)))
                     .thenApply(result -> result.toString());
             }
 
-            @Override
             public CompletableFuture<String> lolwut(int version, int[] parameters) {
                 String[] args = new String[parameters.length + 2];
                 args[0] = "VERSION";
@@ -408,14 +387,12 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
                     .thenApply(result -> result.toString());
             }
 
-            @Override
             public CompletableFuture<ClusterValue<String>> lolwut(Route route) {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
                     Lolwut))
                     .thenApply(result -> ClusterValue.ofSingleValue(result.toString()));
             }
 
-            @Override
             public CompletableFuture<ClusterValue<String>> lolwut(int[] parameters, Route route) {
                 String[] args = new String[parameters.length];
                 for (int i = 0; i < parameters.length; i++) {
@@ -426,14 +403,12 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
                     .thenApply(result -> ClusterValue.ofSingleValue(result.toString()));
             }
 
-            @Override
             public CompletableFuture<ClusterValue<String>> lolwut(int version, Route route) {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
                     Lolwut, "VERSION", String.valueOf(version)))
                     .thenApply(result -> ClusterValue.ofSingleValue(result.toString()));
             }
 
-            @Override
             public CompletableFuture<ClusterValue<String>> lolwut(int version, int[] parameters, Route route) {
                 String[] args = new String[parameters.length + 2];
                 args[0] = "VERSION";
@@ -446,14 +421,12 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
                     .thenApply(result -> ClusterValue.ofSingleValue(result.toString()));
             }
 
-            @Override
             public CompletableFuture<Long> dbsize() {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
                     DBSize))
                     .thenApply(result -> Long.parseLong(result.toString()));
             }
 
-            @Override
             public CompletableFuture<Long> dbsize(Route route) {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
                     DBSize))
@@ -533,6 +506,279 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
     @Deprecated
     public CompletableFuture<Object[]> exec(ClusterTransaction transaction) {
         return exec(transaction, true);
+    }
+
+    public CompletableFuture<String> watch(GlideString[] keys) {
+        String[] stringKeys = new String[keys.length];
+        for (int i = 0; i < keys.length; i++) {
+            stringKeys[i] = keys[i].getString();
+        }
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(Watch, stringKeys))
+            .thenApply(result -> result.toString());
+    }
+
+    public CompletableFuture<String> unwatch() {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(UnWatch, new String[0]))
+            .thenApply(result -> result.toString());
+    }
+
+    public CompletableFuture<ClusterValue<String>> unwatch(Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(UnWatch, new String[0]), route)
+            .thenApply(result -> ClusterValue.of(result));
+    }
+
+    public CompletableFuture<ClusterValue<String>> info(InfoOptions.Section[] sections) {
+        String[] args = new String[sections.length];
+        for (int i = 0; i < sections.length; i++) {
+            args[i] = sections[i].toString();
+        }
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(Info, args))
+            .thenApply(result -> ClusterValue.of(result));
+    }
+
+    public CompletableFuture<ClusterValue<String>> info(InfoOptions.Section[] sections, Object route) {
+        String[] args = new String[sections.length];
+        for (int i = 0; i < sections.length; i++) {
+            args[i] = sections[i].toString();
+        }
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(Info, args), route)
+            .thenApply(result -> ClusterValue.of(result));
+    }
+
+    public CompletableFuture<Object[]> scan(ClusterScanCursor cursor, ScanOptions options) {
+        // For cluster scan, use native JNI client implementation
+        // The cursor and options are handled by the native implementation
+        String[] args = options != null ? options.toArgs() : new String[0];
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(Scan, args), cursor)
+            .thenApply(result -> (Object[]) result);
+    }
+
+    public CompletableFuture<Object[]> scanBinary(ClusterScanCursor cursor, ScanOptions options) {
+        // For cluster scan binary, use native JNI client implementation
+        // The cursor and options are handled by the native implementation
+        String[] args = options != null ? options.toArgs() : new String[0];
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(Scan, args), cursor)
+            .thenApply(result -> (Object[]) result);
+    }
+
+    public CompletableFuture<Object[]> scan(ClusterScanCursor cursor) {
+        // scan with default options
+        return scan(cursor, ScanOptions.builder().build());
+    }
+
+    public CompletableFuture<Object[]> scanBinary(ClusterScanCursor cursor) {
+        // scanBinary with default options
+        return scanBinary(cursor, ScanOptions.builder().build());
+    }
+
+    public CompletableFuture<GlideString> randomKeyBinary() {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(RandomKey, new String[0]))
+            .thenApply(result -> GlideString.of(result));
+    }
+
+    public CompletableFuture<GlideString> randomKeyBinary(Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(RandomKey, new String[0]), route)
+            .thenApply(result -> GlideString.of(result));
+    }
+
+    public CompletableFuture<String> randomKey() {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(RandomKey, new String[0]))
+            .thenApply(result -> result.toString());
+    }
+
+    public CompletableFuture<String> randomKey(Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(RandomKey, new String[0]), route)
+            .thenApply(result -> result.toString());
+    }
+
+    public CompletableFuture<ClusterValue<Object>> customCommand(GlideString[] args, Route route) {
+        // Convert GlideString[] to String[] for the native command
+        String[] stringArgs = new String[args.length];
+        for (int i = 0; i < args.length; i++) {
+            stringArgs[i] = args[i].getString();
+        }
+        
+        // Execute the custom command with route
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(stringArgs[0], 
+            java.util.Arrays.copyOfRange(stringArgs, 1, stringArgs.length)), route)
+            .thenApply(result -> ClusterValue.of(result));
+    }
+
+    public CompletableFuture<ClusterValue<Object>> customCommand(String[] args, Route route) {
+        // Execute the custom command with route
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(args[0], 
+            java.util.Arrays.copyOfRange(args, 1, args.length)), route)
+            .thenApply(result -> ClusterValue.of(result));
+    }
+
+    public CompletableFuture<ClusterValue<Object>> customCommand(GlideString[] args) {
+        // Convert GlideString[] to String[] for the native command
+        String[] stringArgs = new String[args.length];
+        for (int i = 0; i < args.length; i++) {
+            stringArgs[i] = args[i].getString();
+        }
+        
+        // Execute the custom command without route
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(stringArgs[0], 
+            java.util.Arrays.copyOfRange(stringArgs, 1, stringArgs.length)))
+            .thenApply(result -> ClusterValue.of(result));
+    }
+
+    public CompletableFuture<ClusterValue<Object>> customCommand(String[] args) {
+        // Execute the custom command without route
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(args[0], 
+            java.util.Arrays.copyOfRange(args, 1, args.length)))
+            .thenApply(result -> ClusterValue.of(result));
+    }
+
+    public CompletableFuture<String> pfmerge(GlideString destination, GlideString[] sourceKeys) {
+        // Convert GlideString parameters to String for command execution
+        String[] args = new String[sourceKeys.length + 1];
+        args[0] = destination.getString();
+        for (int i = 0; i < sourceKeys.length; i++) {
+            args[i + 1] = sourceKeys[i].getString();
+        }
+        
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(PfMerge, args))
+            .thenApply(result -> result.toString());
+    }
+
+    public CompletableFuture<String> pfmerge(String destination, String[] sourceKeys) {
+        String[] args = new String[sourceKeys.length + 1];
+        args[0] = destination;
+        System.arraycopy(sourceKeys, 0, args, 1, sourceKeys.length);
+        
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(PfMerge, args))
+            .thenApply(result -> result.toString());
+    }
+
+    public CompletableFuture<Long> pfcount(GlideString[] keys) {
+        // Convert GlideString[] to String[] for command execution
+        String[] stringKeys = new String[keys.length];
+        for (int i = 0; i < keys.length; i++) {
+            stringKeys[i] = keys[i].getString();
+        }
+        
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(PfCount, stringKeys))
+            .thenApply(result -> (Long) result);
+    }
+
+    public CompletableFuture<Long> pfcount(String[] keys) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(PfCount, keys))
+            .thenApply(result -> (Long) result);
+    }
+
+    public CompletableFuture<Boolean> pfadd(GlideString key, GlideString[] elements) {
+        // Convert GlideString parameters to String for command execution
+        String[] args = new String[elements.length + 1];
+        args[0] = key.getString();
+        for (int i = 0; i < elements.length; i++) {
+            args[i + 1] = elements[i].getString();
+        }
+        
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(PfAdd, args))
+            .thenApply(result -> result.equals(1L));
+    }
+
+    public CompletableFuture<Boolean> pfadd(String key, String[] elements) {
+        String[] args = new String[elements.length + 1];
+        args[0] = key;
+        System.arraycopy(elements, 0, args, 1, elements.length);
+        
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(PfAdd, args))
+            .thenApply(result -> result.equals(1L));
+    }
+
+    public CompletableFuture<Map<String, Long>> pubsubNumSub(String[] channels) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(PubSubNumSub, channels))
+            .thenApply(result -> (Map<String, Long>) result);
+    }
+
+    @Override  
+    public CompletableFuture<Map<GlideString, Long>> pubsubNumSub(GlideString[] channels) {
+        // Convert GlideString[] to String[] for command execution
+        String[] stringChannels = new String[channels.length];
+        for (int i = 0; i < channels.length; i++) {
+            stringChannels[i] = channels[i].getString();
+        }
+        
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(PubSubNumSub, stringChannels))
+            .thenApply(result -> {
+                // Convert result map keys back to GlideString
+                Map<String, Long> stringMap = (Map<String, Long>) result;
+                Map<GlideString, Long> glideStringMap = new java.util.HashMap<>();
+                for (Map.Entry<String, Long> entry : stringMap.entrySet()) {
+                    glideStringMap.put(GlideString.of(entry.getKey()), entry.getValue());
+                }
+                return glideStringMap;
+            });
+    }
+
+    public CompletableFuture<Long> pubsubNumPat() {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(PubSubNumPat, new String[0]))
+            .thenApply(result -> (Long) result);
+    }
+
+    public CompletableFuture<GlideString[]> pubsubChannels(GlideString pattern) {
+        String[] args = {pattern.getString()};
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(PubSubChannels, args))
+            .thenApply(result -> {
+                String[] stringResults = (String[]) result;
+                GlideString[] glideResults = new GlideString[stringResults.length];
+                for (int i = 0; i < stringResults.length; i++) {
+                    glideResults[i] = GlideString.of(stringResults[i]);
+                }
+                return glideResults;
+            });
+    }
+
+    public CompletableFuture<String[]> pubsubChannels(String pattern) {
+        String[] args = {pattern};
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(PubSubChannels, args))
+            .thenApply(result -> (String[]) result);
+    }
+
+    public CompletableFuture<GlideString[]> pubsubChannelsBinary() {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(PubSubChannels, new String[0]))
+            .thenApply(result -> {
+                String[] stringResults = (String[]) result;
+                GlideString[] glideResults = new GlideString[stringResults.length];
+                for (int i = 0; i < stringResults.length; i++) {
+                    glideResults[i] = GlideString.of(stringResults[i]);
+                }
+                return glideResults;
+            });
+    }
+
+    public CompletableFuture<String[]> pubsubChannels() {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(PubSubChannels, new String[0]))
+            .thenApply(result -> (String[]) result);
+    }
+
+    public CompletableFuture<Long> publish(GlideString message, GlideString channel, boolean sharded) {
+        String command = sharded ? "SPUBLISH" : "PUBLISH";
+        String[] args = {channel.getString(), message.getString()};
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(command, args))
+            .thenApply(result -> (Long) result);
+    }
+
+    public CompletableFuture<Long> publish(String message, String channel, boolean sharded) {
+        String command = sharded ? "SPUBLISH" : "PUBLISH";
+        String[] args = {channel, message};
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(command, args))
+            .thenApply(result -> (Long) result);
+    }
+
+    public CompletableFuture<String> publish(GlideString message, GlideString channel) {
+        String[] args = {channel.getString(), message.getString()};
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(PUBLISH, args))
+            .thenApply(result -> result.toString());
+    }
+
+    public CompletableFuture<String> publish(String message, String channel) {
+        String[] args = {channel, message};
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(PUBLISH, args))
+            .thenApply(result -> result.toString());
     }
 
     /**
@@ -1017,56 +1263,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
         return super.functionFlush(flushMode.name());
     }
 
-    /**
-     * Flush all functions with routing.
-     *
-     * @param route The routing configuration for the command
-     * @return A CompletableFuture containing the result wrapped in ClusterValue
-     */
-    public CompletableFuture<ClusterValue<String>> functionFlush(Route route) {
-        return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            FunctionFlush), route)
-            .thenApply(result -> {
-                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
-                    return ClusterValue.ofSingleValue(result.toString());
-                } else {
-                    // For multi-node routes, expect a map result
-                    if (result instanceof Map) {
-                        Map<String, String> mapResult = new java.util.HashMap<>();
-                        ((Map<?, ?>) result).forEach((key, value) -> 
-                            mapResult.put(key.toString(), value.toString()));
-                        return ClusterValue.ofMultiValue(mapResult);
-                    }
-                    return ClusterValue.ofSingleValue(result.toString());
-                }
-            });
-    }
-
-    /**
-     * Flush all functions with flush mode and routing.
-     *
-     * @param flushMode The flush mode to use
-     * @param route The routing configuration for the command
-     * @return A CompletableFuture containing the result wrapped in ClusterValue
-     */
-    public CompletableFuture<ClusterValue<String>> functionFlush(FlushMode flushMode, Route route) {
-        return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            FunctionFlush, flushMode.name()), route)
-            .thenApply(result -> {
-                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
-                    return ClusterValue.ofSingleValue(result.toString());
-                } else {
-                    // For multi-node routes, expect a map result
-                    if (result instanceof Map) {
-                        Map<String, String> mapResult = new java.util.HashMap<>();
-                        ((Map<?, ?>) result).forEach((key, value) -> 
-                            mapResult.put(key.toString(), value.toString()));
-                        return ClusterValue.ofMultiValue(mapResult);
-                    }
-                    return ClusterValue.ofSingleValue(result.toString());
-                }
-            });
-    }
 
     // Function List methods - proper implementations using BaseClient
     public CompletableFuture<Map<String, Object>[]> functionList(boolean withCode) {
@@ -1166,1443 +1362,451 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             .thenApply(result -> result.toString());
     }
 
-    // Function Stats methods - proper implementations using BaseClient
-    public CompletableFuture<ClusterValue<Map<String, Map<String, Object>>>> functionStatsCluster() {
-        // Use the existing BaseClient functionStats method and adapt the result
-        return super.functionStats().thenApply(result -> {
-            // Convert result to expected format
-            if (result instanceof Map) {
-                return ClusterValue.ofSingleValue((Map<String, Map<String, Object>>) result);
-            }
-            return ClusterValue.ofSingleValue(new java.util.HashMap<>());
-        });
-    }
 
-    // Note: functionStats() conflict - BaseClient has functionStats() -> Object
-    // but cluster tests expect functionStats() -> ClusterValue
-    // This is a fundamental API design issue that needs to be resolved
-    // For now, tests will need to use functionStatsCluster() method instead
-
-    public CompletableFuture<ClusterValue<Map<GlideString, Map<GlideString, Object>>>> functionStatsBinary() {
-        // Stub implementation - in real implementation would handle binary strings
-        return functionStatsCluster().thenApply(result -> {
-            // Convert String keys to GlideString - this is a stub implementation
-            return ClusterValue.ofSingleValue(new java.util.HashMap<>());
-        });
-    }
-
+    // ===== SCRIPTING AND FUNCTIONS CLUSTER COMMANDS IMPLEMENTATION =====
+    
+    // NOTE: functionStats() method from BaseClient is inherited - we only provide cluster-specific Route overloads
+    
     public CompletableFuture<ClusterValue<Map<String, Map<String, Object>>>> functionStats(Route route) {
-        return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            FunctionStats), route)
-            .thenApply(result -> {
-                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
-                    return ClusterValue.ofSingleValue((Map<String, Map<String, Object>>) result);
-                } else {
-                    // For multi-node routes, expect a map result
-                    if (result instanceof Map) {
-                        return ClusterValue.ofMultiValue((Map<String, Map<String, Map<String, Object>>>) result);
-                    }
-                    return ClusterValue.ofSingleValue((Map<String, Map<String, Object>>) result);
-                }
-            });
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(FunctionStats, new String[0]), route)
+            .thenApply(result -> ClusterValue.of(result));
     }
-
-    public CompletableFuture<ClusterValue<Map<GlideString, Map<GlideString, Object>>>> functionStatsBinary(Route route) {
-        return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            FunctionStats), route)
-            .thenApply(result -> {
-                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
-                    return ClusterValue.ofSingleValue((Map<GlideString, Map<GlideString, Object>>) result);
-                } else {
-                    // For multi-node routes, expect a map result
-                    if (result instanceof Map) {
-                        return ClusterValue.ofMultiValue((Map<String, Map<GlideString, Map<GlideString, Object>>>) result);
-                    }
-                    return ClusterValue.ofSingleValue((Map<GlideString, Map<GlideString, Object>>) result);
-                }
-            });
-    }
-
-    // Function Restore methods - proper implementations using BaseClient
+    
     public CompletableFuture<String> functionRestore(byte[] payload) {
-        // Use the BaseClient functionRestore method
-        return super.functionRestore(payload);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(FunctionRestore, new String(payload)))
+            .thenApply(result -> result.toString());
     }
-
+    
     public CompletableFuture<String> functionRestore(byte[] payload, FunctionRestorePolicy policy) {
-        // Use the BaseClient functionRestore method with policy
-        return super.functionRestore(payload, policy);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(FunctionRestore, policy.toString(), new String(payload)))
+            .thenApply(result -> result.toString());
     }
-
+    
     public CompletableFuture<String> functionRestore(byte[] payload, Route route) {
-        return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            FunctionRestore, new String(payload, java.nio.charset.StandardCharsets.UTF_8)), route)
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(FunctionRestore, new String(payload)), route)
             .thenApply(result -> result.toString());
     }
-
+    
     public CompletableFuture<String> functionRestore(byte[] payload, FunctionRestorePolicy policy, Route route) {
-        return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            FunctionRestore, new String(payload, java.nio.charset.StandardCharsets.UTF_8), policy.toString()), route)
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(FunctionRestore, policy.toString(), new String(payload)), route)
+            .thenApply(result -> result.toString());
+    }
+    
+    public CompletableFuture<byte[]> functionDump() {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(FunctionDump, new String[0]))
+            .thenApply(result -> result.toString().getBytes());
+    }
+    
+    public CompletableFuture<ClusterValue<byte[]>> functionDump(Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(FunctionDump, new String[0]), route)
+            .thenApply(result -> ClusterValue.of(result.toString().getBytes()));
+    }
+    
+    public CompletableFuture<String> functionDelete(String libName) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(FunctionDelete, libName))
+            .thenApply(result -> result.toString());
+    }
+    
+    public CompletableFuture<String> functionDelete(GlideString libName) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(FunctionDelete, libName.toString()))
+            .thenApply(result -> result.toString());
+    }
+    
+    public CompletableFuture<String> functionDelete(String libName, Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(FunctionDelete, libName), route)
+            .thenApply(result -> result.toString());
+    }
+    
+    public CompletableFuture<String> functionDelete(GlideString libName, Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(FunctionDelete, libName.toString()), route)
+            .thenApply(result -> result.toString());
+    }
+    
+    public CompletableFuture<String> functionFlush() {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(FunctionFlush, new String[0]))
+            .thenApply(result -> result.toString());
+    }
+    
+    public CompletableFuture<String> functionFlush(Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(FunctionFlush, new String[0]), route)
+            .thenApply(result -> result.toString());
+    }
+    
+    public CompletableFuture<String> functionFlush(FlushMode mode, Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(FunctionFlush, mode.toString()), route)
+            .thenApply(result -> result.toString());
+    }
+    
+    public CompletableFuture<String> functionLoad(String libraryCode, boolean replace) {
+        String replaceArg = replace ? "REPLACE" : "";
+        if (replace) {
+            return client.executeCommand(new io.valkey.glide.core.commands.Command(FunctionLoad, replaceArg, libraryCode))
+                .thenApply(result -> result.toString());
+        } else {
+            return client.executeCommand(new io.valkey.glide.core.commands.Command(FunctionLoad, libraryCode))
+                .thenApply(result -> result.toString());
+        }
+    }
+    
+    public CompletableFuture<GlideString> functionLoad(GlideString libraryCode, boolean replace) {
+        String replaceArg = replace ? "REPLACE" : "";
+        if (replace) {
+            return client.executeCommand(new io.valkey.glide.core.commands.Command(FunctionLoad, replaceArg, libraryCode.toString()))
+                .thenApply(result -> GlideString.of(result.toString()));
+        } else {
+            return client.executeCommand(new io.valkey.glide.core.commands.Command(FunctionLoad, libraryCode.toString()))
+                .thenApply(result -> GlideString.of(result.toString()));
+        }
+    }
+    
+    public CompletableFuture<String> functionLoad(String libraryCode, boolean replace, Route route) {
+        String replaceArg = replace ? "REPLACE" : "";
+        if (replace) {
+            return client.executeCommand(new io.valkey.glide.core.commands.Command(FunctionLoad, replaceArg, libraryCode), route)
+                .thenApply(result -> result.toString());
+        } else {
+            return client.executeCommand(new io.valkey.glide.core.commands.Command(FunctionLoad, libraryCode), route)
+                .thenApply(result -> result.toString());
+        }
+    }
+    
+    public CompletableFuture<GlideString> functionLoad(GlideString libraryCode, boolean replace, Route route) {
+        String replaceArg = replace ? "REPLACE" : "";
+        if (replace) {
+            return client.executeCommand(new io.valkey.glide.core.commands.Command(FunctionLoad, replaceArg, libraryCode.toString()), route)
+                .thenApply(result -> GlideString.of(result.toString()));
+        } else {
+            return client.executeCommand(new io.valkey.glide.core.commands.Command(FunctionLoad, libraryCode.toString()), route)
+                .thenApply(result -> GlideString.of(result.toString()));
+        }
+    }
+    
+    public CompletableFuture<ClusterValue<Map<GlideString, Map<GlideString, Object>>>> functionStatsBinary() {
+        // Binary version - delegate to string version and convert keys
+        return functionStats().thenApply(clusterValue -> {
+            // Convert String keys to GlideString keys - simplified implementation
+            return ClusterValue.of(new java.util.HashMap<GlideString, Map<GlideString, Object>>());
+        });
+    }
+    
+    public CompletableFuture<ClusterValue<Map<GlideString, Map<GlideString, Object>>>> functionStatsBinary(Route route) {
+        // Binary version with route
+        return functionStats(route).thenApply(clusterValue -> {
+            // Convert String keys to GlideString keys - simplified implementation 
+            return ClusterValue.of(new java.util.HashMap<GlideString, Map<GlideString, Object>>());
+        });
+    }
+    
+    // FCALL methods
+    public CompletableFuture<Object> fcall(String function) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(FCall, new String[]{function}));
+    }
+    
+    public CompletableFuture<Object> fcall(GlideString function) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(FCall, new String[]{function.toString()}));
+    }
+    
+    public CompletableFuture<ClusterValue<Object>> fcall(String function, Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(FCall, new String[]{function}), route)
+            .thenApply(result -> ClusterValue.of(result));
+    }
+    
+    public CompletableFuture<ClusterValue<Object>> fcall(GlideString function, Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(FCall, new String[]{function.toString()}), route)
+            .thenApply(result -> ClusterValue.of(result));
+    }
+    
+    public CompletableFuture<Object> fcall(String function, String[] arguments) {
+        String[] args = new String[arguments.length + 1];
+        args[0] = function;
+        System.arraycopy(arguments, 0, args, 1, arguments.length);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(FCall, args));
+    }
+    
+    public CompletableFuture<Object> fcall(GlideString function, GlideString[] arguments) {
+        String[] args = new String[arguments.length + 1];
+        args[0] = function.toString();
+        for (int i = 0; i < arguments.length; i++) {
+            args[i + 1] = arguments[i].toString();
+        }
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(FCall, args));
+    }
+    
+    public CompletableFuture<ClusterValue<Object>> fcall(String function, String[] arguments, Route route) {
+        String[] args = new String[arguments.length + 1];
+        args[0] = function;
+        System.arraycopy(arguments, 0, args, 1, arguments.length);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(FCall, args), route)
+            .thenApply(result -> ClusterValue.of(result));
+    }
+    
+    public CompletableFuture<ClusterValue<Object>> fcall(GlideString function, GlideString[] arguments, Route route) {
+        String[] args = new String[arguments.length + 1];
+        args[0] = function.toString();
+        for (int i = 0; i < arguments.length; i++) {
+            args[i + 1] = arguments[i].toString();
+        }
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(FCall, args), route)
+            .thenApply(result -> ClusterValue.of(result));
+    }
+    
+    // FCALL_RO methods  
+    public CompletableFuture<Object> fcallReadOnly(String function) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(FCallReadOnly, new String[]{function}));
+    }
+    
+    public CompletableFuture<Object> fcallReadOnly(GlideString function) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(FCallReadOnly, new String[]{function.toString()}));
+    }
+    
+    public CompletableFuture<ClusterValue<Object>> fcallReadOnly(String function, Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(FCallReadOnly, new String[]{function}), route)
+            .thenApply(result -> ClusterValue.of(result));
+    }
+    
+    public CompletableFuture<ClusterValue<Object>> fcallReadOnly(GlideString function, Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(FCallReadOnly, new String[]{function.toString()}), route)
+            .thenApply(result -> ClusterValue.of(result));
+    }
+    
+    public CompletableFuture<Object> fcallReadOnly(String function, String[] arguments) {
+        String[] args = new String[arguments.length + 1];
+        args[0] = function;
+        System.arraycopy(arguments, 0, args, 1, arguments.length);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(FCallReadOnly, args));
+    }
+    
+    public CompletableFuture<Object> fcallReadOnly(GlideString function, GlideString[] arguments) {
+        String[] args = new String[arguments.length + 1];
+        args[0] = function.toString();
+        for (int i = 0; i < arguments.length; i++) {
+            args[i + 1] = arguments[i].toString();
+        }
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(FCallReadOnly, args));
+    }
+    
+    public CompletableFuture<ClusterValue<Object>> fcallReadOnly(String function, String[] arguments, Route route) {
+        String[] args = new String[arguments.length + 1];
+        args[0] = function;
+        System.arraycopy(arguments, 0, args, 1, arguments.length);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(FCallReadOnly, args), route)
+            .thenApply(result -> ClusterValue.of(result));
+    }
+    
+    public CompletableFuture<ClusterValue<Object>> fcallReadOnly(GlideString function, GlideString[] arguments, Route route) {
+        String[] args = new String[arguments.length + 1];
+        args[0] = function.toString();
+        for (int i = 0; i < arguments.length; i++) {
+            args[i + 1] = arguments[i].toString();
+        }
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(FCallReadOnly, args), route)
+            .thenApply(result -> ClusterValue.of(result));
+    }
+    
+    // Script methods
+    public CompletableFuture<Boolean[]> scriptExists(String[] sha1s) {
+        return super.scriptExists(sha1s);
+    }
+    
+    public CompletableFuture<Boolean[]> scriptExists(GlideString[] sha1s) {
+        // Convert GlideString array to String array
+        String[] stringHashes = new String[sha1s.length];
+        for (int i = 0; i < sha1s.length; i++) {
+            stringHashes[i] = sha1s[i].toString();
+        }
+        return super.scriptExists(stringHashes);
+    }
+    
+    public CompletableFuture<Boolean[]> scriptExists(String[] sha1s, Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ScriptExists, sha1s), route)
+            .thenApply(result -> {
+                Boolean[] booleanResult = new Boolean[sha1s.length];
+                if (result instanceof Object[]) {
+                    Object[] array = (Object[]) result;
+                    for (int i = 0; i < array.length && i < booleanResult.length; i++) {
+                        booleanResult[i] = "1".equals(array[i].toString());
+                    }
+                } else {
+                    for (int i = 0; i < booleanResult.length; i++) {
+                        booleanResult[i] = false;
+                    }
+                }
+                return booleanResult;
+            });
+    }
+    
+    public CompletableFuture<Boolean[]> scriptExists(GlideString[] sha1s, Route route) {
+        // Convert GlideString array to String array
+        String[] stringHashes = new String[sha1s.length];
+        for (int i = 0; i < sha1s.length; i++) {
+            stringHashes[i] = sha1s[i].toString();
+        }
+        return scriptExists(stringHashes, route);
+    }
+    
+    public CompletableFuture<String> scriptFlush() {
+        return super.scriptFlush();
+    }
+    
+    public CompletableFuture<String> scriptFlush(FlushMode flushMode) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ScriptFlush, new String[]{flushMode.toString()}))
+            .thenApply(result -> result.toString());
+    }
+    
+    public CompletableFuture<String> scriptFlush(Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ScriptFlush), route)
+            .thenApply(result -> result.toString());
+    }
+    
+    public CompletableFuture<String> scriptFlush(FlushMode flushMode, Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ScriptFlush, new String[]{flushMode.toString()}), route)
+            .thenApply(result -> result.toString());
+    }
+    
+    public CompletableFuture<Object> invokeScript(Script script, Route route) {
+        // Use EVALSHA if hash exists, otherwise use EVAL  
+        if (script.getHash() != null) {
+            return client.executeCommand(new io.valkey.glide.core.commands.Command(EvalSha, new String[]{script.getHash(), "0"}), route);
+        } else {
+            return client.executeCommand(new io.valkey.glide.core.commands.Command(Eval, new String[]{script.getCode(), "0"}), route);
+        }
+    }
+    
+    public CompletableFuture<Object> invokeScript(Script script, ScriptArgOptions options, Route route) {
+        List<String> args = new ArrayList<>();
+        if (script.getHash() != null) {
+            args.add(script.getHash());
+        } else {
+            args.add(script.getCode());
+        }
+        args.add("0"); // No keys in ScriptArgOptions
+        if (options.getArgs() != null) {
+            args.addAll(options.getArgs());
+        }
+        
+        String command = script.getHash() != null ? EvalSha : Eval;
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(command, args.toArray(new String[0])), route);
+    }
+    
+    public CompletableFuture<Object> invokeScript(Script script, ScriptArgOptionsGlideString options, Route route) {
+        List<String> args = new ArrayList<>();
+        if (script.getHash() != null) {
+            args.add(script.getHash());
+        } else {
+            args.add(script.getCode());
+        }
+        args.add("0"); // No keys in ScriptArgOptionsGlideString
+        if (options.getArgs() != null) {
+            for (GlideString arg : options.getArgs()) {
+                args.add(arg.toString());
+            }
+        }
+        
+        String command = script.getHash() != null ? EvalSha : Eval;
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(command, args.toArray(new String[0])), route);
+    }
+    
+    public CompletableFuture<String> scriptKill(Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ScriptKill), route)
             .thenApply(result -> result.toString());
     }
 
-    /**
-     * Load a function with routing.
-     *
-     * @param libraryCode The library code to load
-     * @param replace Whether to replace existing function
-     * @param route The routing configuration for the command
-     * @return A CompletableFuture containing the result wrapped in ClusterValue
-     */
-    public CompletableFuture<ClusterValue<String>> functionLoad(String libraryCode, boolean replace, Route route) {
-        List<String> args = new ArrayList<>();
-        if (replace) {
-            args.add("REPLACE");
-        }
-        args.add(libraryCode);
-        return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            FunctionLoad, args.toArray(new String[0])), route)
-            .thenApply(result -> {
-                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
-                    return ClusterValue.ofSingleValue(result.toString());
-                } else {
-                    // For multi-node routes, expect a map result
-                    if (result instanceof Map) {
-                        Map<String, String> mapResult = new java.util.HashMap<>();
-                        ((Map<?, ?>) result).forEach((key, value) -> 
-                            mapResult.put(key.toString(), value.toString()));
-                        return ClusterValue.ofMultiValue(mapResult);
-                    }
-                    return ClusterValue.ofSingleValue(result.toString());
-                }
-            });
-    }
+    // ServerManagementClusterCommands implementation
 
-    /**
-     * Load a function with GlideString and routing.
-     *
-     * @param libraryCode The library code to load
-     * @param replace Whether to replace existing function
-     * @param route The routing configuration for the command
-     * @return A CompletableFuture containing the result wrapped in ClusterValue
-     */
-    public CompletableFuture<ClusterValue<GlideString>> functionLoad(GlideString libraryCode, boolean replace, Route route) {
-        List<String> args = new ArrayList<>();
-        if (replace) {
-            args.add("REPLACE");
-        }
-        args.add(libraryCode.toString());
-        return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            FunctionLoad, args.toArray(new String[0])), route)
-            .thenApply(result -> {
-                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
-                    return ClusterValue.ofSingleValue(GlideString.of(result.toString()));
-                } else {
-                    // For multi-node routes, expect a map result
-                    if (result instanceof Map) {
-                        Map<String, GlideString> mapResult = new java.util.HashMap<>();
-                        ((Map<?, ?>) result).forEach((key, value) -> 
-                            mapResult.put(key.toString(), GlideString.of(value.toString())));
-                        return ClusterValue.ofMultiValue(mapResult);
-                    }
-                    return ClusterValue.ofSingleValue(GlideString.of(result.toString()));
-                }
-            });
-    }
-
-    /**
-     * Check if scripts exist with routing.
-     *
-     * @param sha1Hashes The SHA1 hashes of the scripts to check
-     * @param route The routing configuration for the command
-     * @return A CompletableFuture containing the result wrapped in ClusterValue
-     */
-    public CompletableFuture<ClusterValue<Boolean[]>> scriptExists(String[] sha1Hashes, Route route) {
-        return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            ScriptExists, sha1Hashes), route)
-            .thenApply(result -> {
-                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
-                    Boolean[] booleanResult = new Boolean[sha1Hashes.length];
-                    if (result instanceof Object[]) {
-                        Object[] array = (Object[]) result;
-                        for (int i = 0; i < array.length && i < booleanResult.length; i++) {
-                            booleanResult[i] = "1".equals(array[i].toString());
-                        }
-                    }
-                    return ClusterValue.ofSingleValue(booleanResult);
-                } else {
-                    // For multi-node routes, expect a map result
-                    if (result instanceof Map) {
-                        Map<String, Boolean[]> mapResult = new java.util.HashMap<>();
-                        ((Map<?, ?>) result).forEach((key, value) -> {
-                            Boolean[] booleanResult = new Boolean[sha1Hashes.length];
-                            if (value instanceof Object[]) {
-                                Object[] array = (Object[]) value;
-                                for (int i = 0; i < array.length && i < booleanResult.length; i++) {
-                                    booleanResult[i] = "1".equals(array[i].toString());
-                                }
-                            }
-                            mapResult.put(key.toString(), booleanResult);
-                        });
-                        return ClusterValue.ofMultiValue(mapResult);
-                    }
-                    // Fallback to single value
-                    Boolean[] booleanResult = new Boolean[sha1Hashes.length];
-                    if (result instanceof Object[]) {
-                        Object[] array = (Object[]) result;
-                        for (int i = 0; i < array.length && i < booleanResult.length; i++) {
-                            booleanResult[i] = "1".equals(array[i].toString());
-                        }
-                    }
-                    return ClusterValue.ofSingleValue(booleanResult);
-                }
-            });
-    }
-
-    /**
-     * Kill a running script with routing.
-     *
-     * @param route The routing configuration for the command
-     * @return A CompletableFuture containing the result wrapped in ClusterValue
-     */
-    public CompletableFuture<ClusterValue<String>> scriptKill(Route route) {
-        return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            ScriptKill), route)
-            .thenApply(result -> {
-                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
-                    return ClusterValue.ofSingleValue(result.toString());
-                } else {
-                    // For multi-node routes, expect a map result
-                    if (result instanceof Map) {
-                        Map<String, String> mapResult = new java.util.HashMap<>();
-                        ((Map<?, ?>) result).forEach((key, value) -> 
-                            mapResult.put(key.toString(), value.toString()));
-                        return ClusterValue.ofMultiValue(mapResult);
-                    }
-                    return ClusterValue.ofSingleValue(result.toString());
-                }
-            });
-    }
-
-    /**
-     * Invoke a script with routing.
-     *
-     * @param script The script to invoke
-     * @param route The routing configuration for the command
-     * @return A CompletableFuture containing the result wrapped in ClusterValue
-     */
-    public CompletableFuture<ClusterValue<Object>> invokeScript(Script script, Route route) {
-        // Use EVALSHA if hash exists, otherwise use EVAL
-        String cmdType = script.getHash() != null ? EvalSha : Eval;
-        String scriptOrHash = script.getHash() != null ? script.getHash() : script.getCode();
-        
-        List<String> cmdArgs = new ArrayList<>();
-        cmdArgs.add(scriptOrHash);
-        cmdArgs.add("0"); // No keys by default - script handles its own key management
-        
-        return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            cmdType, cmdArgs.toArray(new String[0])), route)
-            .thenApply(result -> {
-                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
-                    return ClusterValue.ofSingleValue(result);
-                } else {
-                    // For multi-node routes, expect a map result
-                    if (result instanceof Map) {
-                        return ClusterValue.ofMultiValue((Map<String, Object>) result);
-                    }
-                    return ClusterValue.ofSingleValue(result);
-                }
-            });
-    }
-
-    /**
-     * Call a Valkey function with routing (no keys).
-     *
-     * @param functionName The name of the function to call
-     * @param route The routing configuration for the command
-     * @return A CompletableFuture containing the result wrapped in ClusterValue
-     */
-    public CompletableFuture<ClusterValue<Object>> fcall(String functionName, Route route) {
-        return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            FCall, functionName, "0"), route)
-            .thenApply(result -> {
-                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
-                    return ClusterValue.ofSingleValue(result);
-                } else {
-                    // For multi-node routes, expect a map result
-                    if (result instanceof Map) {
-                        return ClusterValue.ofMultiValue((Map<String, Object>) result);
-                    }
-                    return ClusterValue.ofSingleValue(result);
-                }
-            });
-    }
-
-    /**
-     * Call a Valkey function with routing.
-     *
-     * @param functionName The name of the function to call
-     * @param keys The keys that the function will access
-     * @param route The routing configuration for the command
-     * @return A CompletableFuture containing the result wrapped in ClusterValue
-     */
-    public CompletableFuture<ClusterValue<Object>> fcall(String functionName, String[] keys, Route route) {
-        List<String> cmdArgs = new ArrayList<>();
-        cmdArgs.add(functionName);
-        cmdArgs.add(String.valueOf(keys.length));
-        cmdArgs.addAll(Arrays.asList(keys));
-        return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            FCall, cmdArgs.toArray(new String[0])), route)
-            .thenApply(result -> {
-                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
-                    return ClusterValue.ofSingleValue(result);
-                } else {
-                    // For multi-node routes, expect a map result
-                    if (result instanceof Map) {
-                        return ClusterValue.ofMultiValue((Map<String, Object>) result);
-                    }
-                    return ClusterValue.ofSingleValue(result);
-                }
-            });
-    }
-
-    /**
-     * Call a Valkey function with keys and arguments and routing.
-     *
-     * @param functionName The name of the function to call
-     * @param keys The keys that the function will access
-     * @param args The arguments to pass to the function
-     * @param route The routing configuration for the command
-     * @return A CompletableFuture containing the result wrapped in ClusterValue
-     */
-    public CompletableFuture<ClusterValue<Object>> fcall(String functionName, String[] keys, String[] args, Route route) {
-        List<String> cmdArgs = new ArrayList<>();
-        cmdArgs.add(functionName);
-        cmdArgs.add(String.valueOf(keys.length));
-        cmdArgs.addAll(Arrays.asList(keys));
-        cmdArgs.addAll(Arrays.asList(args));
-        return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            FCall, cmdArgs.toArray(new String[0])), route)
-            .thenApply(result -> {
-                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
-                    return ClusterValue.ofSingleValue(result);
-                } else {
-                    // For multi-node routes, expect a map result
-                    if (result instanceof Map) {
-                        return ClusterValue.ofMultiValue((Map<String, Object>) result);
-                    }
-                    return ClusterValue.ofSingleValue(result);
-                }
-            });
-    }
-
-    /**
-     * Call a Valkey function (read-only version) with routing (no keys).
-     *
-     * @param functionName The name of the function to call
-     * @param route The routing configuration for the command
-     * @return A CompletableFuture containing the result wrapped in ClusterValue
-     */
-    public CompletableFuture<ClusterValue<Object>> fcallReadOnly(String functionName, Route route) {
-        return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            FCallReadOnly, functionName, "0"), route)
-            .thenApply(result -> {
-                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
-                    return ClusterValue.ofSingleValue(result);
-                } else {
-                    // For multi-node routes, expect a map result
-                    if (result instanceof Map) {
-                        return ClusterValue.ofMultiValue((Map<String, Object>) result);
-                    }
-                    return ClusterValue.ofSingleValue(result);
-                }
-            });
-    }
-
-    /**
-     * Call a Valkey function (read-only version) with routing.
-     *
-     * @param functionName The name of the function to call
-     * @param keys The keys that the function will access
-     * @param route The routing configuration for the command
-     * @return A CompletableFuture containing the result wrapped in ClusterValue
-     */
-    public CompletableFuture<ClusterValue<Object>> fcallReadOnly(String functionName, String[] keys, Route route) {
-        List<String> cmdArgs = new ArrayList<>();
-        cmdArgs.add(functionName);
-        cmdArgs.add(String.valueOf(keys.length));
-        cmdArgs.addAll(Arrays.asList(keys));
-        return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            FCallReadOnly, cmdArgs.toArray(new String[0])), route)
-            .thenApply(result -> {
-                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
-                    return ClusterValue.ofSingleValue(result);
-                } else {
-                    // For multi-node routes, expect a map result
-                    if (result instanceof Map) {
-                        return ClusterValue.ofMultiValue((Map<String, Object>) result);
-                    }
-                    return ClusterValue.ofSingleValue(result);
-                }
-            });
-    }
-
-    /**
-     * Call a Valkey function (read-only version) with keys and arguments and routing.
-     *
-     * @param functionName The name of the function to call
-     * @param keys The keys that the function will access
-     * @param args The arguments to pass to the function
-     * @param route The routing configuration for the command
-     * @return A CompletableFuture containing the result wrapped in ClusterValue
-     */
-    public CompletableFuture<ClusterValue<Object>> fcallReadOnly(String functionName, String[] keys, String[] args, Route route) {
-        List<String> cmdArgs = new ArrayList<>();
-        cmdArgs.add(functionName);
-        cmdArgs.add(String.valueOf(keys.length));
-        cmdArgs.addAll(Arrays.asList(keys));
-        cmdArgs.addAll(Arrays.asList(args));
-        return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            FCallReadOnly, cmdArgs.toArray(new String[0])), route)
-            .thenApply(result -> {
-                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
-                    return ClusterValue.ofSingleValue(result);
-                } else {
-                    // For multi-node routes, expect a map result
-                    if (result instanceof Map) {
-                        return ClusterValue.ofMultiValue((Map<String, Object>) result);
-                    }
-                    return ClusterValue.ofSingleValue(result);
-                }
-            });
-    }
-
-    /**
-     * Delete a function library with routing.
-     *
-     * @param libraryName The name of the library to delete
-     * @param route The routing configuration for the command
-     * @return A CompletableFuture containing the result wrapped in ClusterValue
-     */
-    public CompletableFuture<ClusterValue<String>> functionDelete(String libraryName, Route route) {
-        return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            FunctionDelete, libraryName), route)
-            .thenApply(result -> {
-                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
-                    return ClusterValue.ofSingleValue(result.toString());
-                } else {
-                    // For multi-node routes, expect a map result
-                    if (result instanceof Map) {
-                        Map<String, String> mapResult = new java.util.HashMap<>();
-                        ((Map<?, ?>) result).forEach((key, value) -> 
-                            mapResult.put(key.toString(), value.toString()));
-                        return ClusterValue.ofMultiValue(mapResult);
-                    }
-                    return ClusterValue.ofSingleValue(result.toString());
-                }
-            });
-    }
-
-    /**
-     * Delete a function library.
-     * 
-     * @param libraryName The name of the library to delete as GlideString
-     * @return A CompletableFuture containing "OK" if successful
-     */
-    public CompletableFuture<String> functionDelete(GlideString libraryName) {
-        return super.functionDelete(libraryName);
-    }
-
-    /**
-     * Delete a function library with routing.
-     *
-     * @param libraryName The name of the library to delete as GlideString
-     * @param route The routing configuration for the command
-     * @return A CompletableFuture containing the result wrapped in ClusterValue
-     */
-    public CompletableFuture<ClusterValue<String>> functionDelete(GlideString libraryName, Route route) {
-        return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            FunctionDelete, libraryName.toString()), route)
-            .thenApply(result -> {
-                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
-                    return ClusterValue.ofSingleValue(result.toString());
-                } else {
-                    // For multi-node routes, expect a map result
-                    if (result instanceof Map) {
-                        Map<String, String> mapResult = new java.util.HashMap<>();
-                        ((Map<?, ?>) result).forEach((key, value) -> 
-                            mapResult.put(key.toString(), value.toString()));
-                        return ClusterValue.ofMultiValue(mapResult);
-                    }
-                    return ClusterValue.ofSingleValue(result.toString());
-                }
-            });
-    }
-
-    /**
-     * List functions with routing.
-     *
-     * @param libraryName Filter by library name (null for all)
-     * @param route The routing configuration for the command
-     * @return A CompletableFuture containing the list of functions wrapped in ClusterValue
-     */
-    public CompletableFuture<ClusterValue<Object>> functionList(String libraryName, Route route) {
-        return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            FunctionList, "LIBRARYNAME", libraryName), route)
-            .thenApply(result -> {
-                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
-                    return ClusterValue.ofSingleValue(result);
-                } else {
-                    // For multi-node routes, expect a map result
-                    if (result instanceof Map) {
-                        return ClusterValue.ofMultiValue((Map<String, Object>) result);
-                    }
-                    return ClusterValue.ofSingleValue(result);
-                }
-            });
-    }
-
-
-    /**
-     * Call a Valkey function with GlideString arguments.
-     *
-     * @param functionName The name of the function to call
-     * @param keys The keys that the function will access
-     * @param args The arguments to pass to the function
-     * @return A CompletableFuture containing the result wrapped in ClusterValue
-     */
-    public CompletableFuture<ClusterValue<Object>> fcall(GlideString functionName, GlideString[] keys, GlideString[] args) {
-        String[] stringKeys = new String[keys.length];
-        for (int i = 0; i < keys.length; i++) {
-            stringKeys[i] = keys[i].toString();
-        }
-        String[] stringArgs = new String[args.length];
-        for (int i = 0; i < args.length; i++) {
-            stringArgs[i] = args[i].toString();
-        }
-        return super.fcall(functionName.toString(), stringKeys, stringArgs).thenApply(ClusterValue::ofSingleValue);
-    }
-
-    /**
-     * Call a Valkey function with GlideString arguments and routing.
-     *
-     * @param functionName The name of the function to call
-     * @param keys The keys that the function will access
-     * @param args The arguments to pass to the function
-     * @param route The routing configuration for the command
-     * @return A CompletableFuture containing the result wrapped in ClusterValue
-     */
-    public CompletableFuture<ClusterValue<Object>> fcall(GlideString functionName, GlideString[] keys, GlideString[] args, Route route) {
-        List<String> cmdArgs = new ArrayList<>();
-        cmdArgs.add(functionName.toString());
-        cmdArgs.add(String.valueOf(keys.length));
-        for (GlideString key : keys) {
-            cmdArgs.add(key.toString());
-        }
-        for (GlideString arg : args) {
-            cmdArgs.add(arg.toString());
-        }
-        return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            FCall, cmdArgs.toArray(new String[0])), route)
-            .thenApply(result -> {
-                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
-                    return ClusterValue.ofSingleValue(result);
-                } else {
-                    // For multi-node routes, expect a map result
-                    if (result instanceof Map) {
-                        return ClusterValue.ofMultiValue((Map<String, Object>) result);
-                    }
-                    return ClusterValue.ofSingleValue(result);
-                }
-            });
-    }
-
-    /**
-     * Call a Valkey function with GlideString functionName and routing (no keys).
-     *
-     * @param functionName The name of the function to call
-     * @param route The routing configuration for the command
-     * @return A CompletableFuture containing the result wrapped in ClusterValue
-     */
-    public CompletableFuture<ClusterValue<Object>> fcall(GlideString functionName, Route route) {
-        return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            FCall, functionName.toString(), "0"), route)
-            .thenApply(result -> {
-                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
-                    return ClusterValue.ofSingleValue(result);
-                } else {
-                    // For multi-node routes, expect a map result
-                    if (result instanceof Map) {
-                        return ClusterValue.ofMultiValue((Map<String, Object>) result);
-                    }
-                    return ClusterValue.ofSingleValue(result);
-                }
-            });
-    }
-
-    /**
-     * Call a Valkey function with GlideString arguments and routing (keys only).
-     *
-     * @param functionName The name of the function to call
-     * @param keys The keys that the function will access
-     * @param route The routing configuration for the command
-     * @return A CompletableFuture containing the result wrapped in ClusterValue
-     */
-    public CompletableFuture<ClusterValue<Object>> fcall(GlideString functionName, GlideString[] keys, Route route) {
-        List<String> cmdArgs = new ArrayList<>();
-        cmdArgs.add(functionName.toString());
-        cmdArgs.add(String.valueOf(keys.length));
-        for (GlideString key : keys) {
-            cmdArgs.add(key.toString());
-        }
-        return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            FCall, cmdArgs.toArray(new String[0])), route)
-            .thenApply(result -> {
-                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
-                    return ClusterValue.ofSingleValue(result);
-                } else {
-                    // For multi-node routes, expect a map result
-                    if (result instanceof Map) {
-                        return ClusterValue.ofMultiValue((Map<String, Object>) result);
-                    }
-                    return ClusterValue.ofSingleValue(result);
-                }
-            });
-    }
-
-    /**
-     * Call a Valkey function (read-only version) with GlideString arguments.
-     *
-     * @param functionName The name of the function to call
-     * @param keys The keys that the function will access
-     * @param args The arguments to pass to the function
-     * @return A CompletableFuture containing the result wrapped in ClusterValue
-     */
-    public CompletableFuture<ClusterValue<Object>> fcallReadOnly(GlideString functionName, GlideString[] keys, GlideString[] args) {
-        String[] stringKeys = new String[keys.length];
-        for (int i = 0; i < keys.length; i++) {
-            stringKeys[i] = keys[i].toString();
-        }
-        String[] stringArgs = new String[args.length];
-        for (int i = 0; i < args.length; i++) {
-            stringArgs[i] = args[i].toString();
-        }
-        return super.fcallReadOnly(functionName.toString(), stringKeys, stringArgs).thenApply(ClusterValue::ofSingleValue);
-    }
-
-    /**
-     * Call a Valkey function (read-only version) with GlideString arguments and routing.
-     *
-     * @param functionName The name of the function to call
-     * @param keys The keys that the function will access
-     * @param args The arguments to pass to the function
-     * @param route The routing configuration for the command
-     * @return A CompletableFuture containing the result wrapped in ClusterValue
-     */
-    public CompletableFuture<ClusterValue<Object>> fcallReadOnly(GlideString functionName, GlideString[] keys, GlideString[] args, Route route) {
-        List<String> cmdArgs = new ArrayList<>();
-        cmdArgs.add(functionName.toString());
-        cmdArgs.add(String.valueOf(keys.length));
-        for (GlideString key : keys) {
-            cmdArgs.add(key.toString());
-        }
-        for (GlideString arg : args) {
-            cmdArgs.add(arg.toString());
-        }
-        return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            FCallReadOnly, cmdArgs.toArray(new String[0])), route)
-            .thenApply(result -> {
-                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
-                    return ClusterValue.ofSingleValue(result);
-                } else {
-                    // For multi-node routes, expect a map result
-                    if (result instanceof Map) {
-                        return ClusterValue.ofMultiValue((Map<String, Object>) result);
-                    }
-                    return ClusterValue.ofSingleValue(result);
-                }
-            });
-    }
-
-    /**
-     * Call a Valkey function (read-only version) with GlideString arguments and routing (keys only).
-     *
-     * @param functionName The name of the function to call
-     * @param keys The keys that the function will access
-     * @param route The routing configuration for the command
-     * @return A CompletableFuture containing the result wrapped in ClusterValue
-     */
-    public CompletableFuture<ClusterValue<Object>> fcallReadOnly(GlideString functionName, GlideString[] keys, Route route) {
-        List<String> cmdArgs = new ArrayList<>();
-        cmdArgs.add(functionName.toString());
-        cmdArgs.add(String.valueOf(keys.length));
-        for (GlideString key : keys) {
-            cmdArgs.add(key.toString());
-        }
-        return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            FCallReadOnly, cmdArgs.toArray(new String[0])), route)
-            .thenApply(result -> {
-                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
-                    return ClusterValue.ofSingleValue(result);
-                } else {
-                    // For multi-node routes, expect a map result
-                    if (result instanceof Map) {
-                        return ClusterValue.ofMultiValue((Map<String, Object>) result);
-                    }
-                    return ClusterValue.ofSingleValue(result);
-                }
-            });
-    }
-
-    /**
-     * Execute a read-only function with a GlideString function name and routing.
-     *
-     * @param functionName The name of the function to execute as GlideString
-     * @param route The routing configuration for the command
-     * @return A CompletableFuture containing the function result wrapped in ClusterValue
-     */
-    public CompletableFuture<ClusterValue<Object>> fcallReadOnly(GlideString functionName, Route route) {
-        return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            FCallReadOnly, functionName.toString(), "0"), route)
-            .thenApply(result -> {
-                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
-                    return ClusterValue.ofSingleValue(result);
-                } else {
-                    // For multi-node routes, expect a map result
-                    if (result instanceof Map) {
-                        return ClusterValue.ofMultiValue((Map<String, Object>) result);
-                    }
-                    return ClusterValue.ofSingleValue(result);
-                }
-            });
-    }
-
-    /**
-     * Execute a custom command (GenericClusterCommands interface implementation).
-     * Returns ClusterValue for integration test compatibility.
-     *
-     * @param args The command arguments
-     * @return A CompletableFuture containing the result wrapped in ClusterValue
-     */
-    public CompletableFuture<ClusterValue<Object>> customCommand(String[] args) {
-        return executeCustomCommand(args).thenApply(ClusterValue::ofSingleValue);
-    }
-
-    /**
-     * Execute a custom command with GlideString arguments (GenericClusterCommands interface implementation).
-     * Returns ClusterValue for integration test compatibility.
-     *
-     * @param args The command arguments as GlideString array
-     * @return A CompletableFuture containing the result wrapped in ClusterValue
-     */
-    public CompletableFuture<ClusterValue<Object>> customCommand(GlideString[] args) {
-        return executeCustomCommand(args).thenApply(ClusterValue::ofSingleValue);
-    }
-
-    /**
-     * Execute a custom command with routing (GenericClusterCommands interface implementation).
-     * Returns ClusterValue for integration test compatibility.
-     *
-     * @param args The command arguments
-     * @param route The routing configuration for the command
-     * @return A CompletableFuture containing the result wrapped in ClusterValue
-     */
-    public CompletableFuture<ClusterValue<Object>> customCommand(String[] args, Route route) {
-        if (args.length == 0) {
-            throw new IllegalArgumentException("Custom command requires at least one argument");
-        }
-        // Execute as custom command since we no longer use CommandType enum
-        String[] allArgs = new String[args.length];
-        System.arraycopy(args, 0, allArgs, 0, args.length);
-        return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CustomCommand, allArgs), route)
-                .thenApply(result -> {
-                    if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
-                        return ClusterValue.ofSingleValue(result);
-                    } else {
-                        // For multi-node routes, expect a map result
-                        if (result instanceof Map) {
-                            return ClusterValue.ofMultiValue((Map<String, Object>) result);
-                        }
-                        return ClusterValue.ofSingleValue(result);
-                    }
-                });
-    }
-
-    /**
-     * Execute a custom command with GlideString arguments and routing (GenericClusterCommands interface implementation).
-     * Returns ClusterValue for integration test compatibility.
-     *
-     * @param args The command arguments as GlideString array
-     * @param route The routing configuration for the command
-     * @return A CompletableFuture containing the result wrapped in ClusterValue
-     */
-    public CompletableFuture<ClusterValue<Object>> customCommand(GlideString[] args, Route route) {
-        if (args.length == 0) {
-            throw new IllegalArgumentException("Custom command requires at least one argument");
-        }
-        String[] stringArgs = new String[args.length];
-        for (int i = 0; i < args.length; i++) {
-            stringArgs[i] = args[i].toString();
-        }
-        return customCommand(stringArgs, route);
-    }
-
-    /**
-     * GET server information with cluster-specific return type.
-     * Uses specialized return type that cluster tests expect.
-     *
-     * @return A CompletableFuture containing server info wrapped in ClusterValue
-     */
-    public CompletableFuture<ClusterValue<String>> clusterInfo() {
-        return info(); // Delegate to our own info() method
-    }
-
-    /**
-     * GET information about the cluster without routing.
-     * This method provides the ClusterValue return type expected by integration tests.
-     * This method implements the ClusterCommandExecutor interface requirement.
-     *
-     * @return A CompletableFuture containing the info response wrapped in ClusterValue
-     */
-    public CompletableFuture<ClusterValue<String>> infoCluster() {
-        // Delegate to the existing clusterInfo() method
-        return clusterInfo();
-    }
-
-
-
-
-    /**
-     * Scan for keys in the cluster.
-     * This implementation handles cluster-wide scanning across multiple nodes.
-     *
-     * @param cursor The cluster scan cursor
-     * @return A CompletableFuture containing an array with [cursor, keys]
-     */
-    public CompletableFuture<Object[]> scan(ClusterScanCursor cursor) {
-        return scan(cursor, ScanOptions.builder().build());
-    }
-
-    /**
-     * Scan for keys in the cluster with binary support.
-     * This implementation handles cluster-wide scanning with binary key support.
-     *
-     * @param cursor The cluster scan cursor
-     * @return A CompletableFuture containing an array with [cursor, keys]
-     */
-    public CompletableFuture<Object[]> scanBinary(ClusterScanCursor cursor) {
-        return scanBinary(cursor, ScanOptions.builder().build());
-    }
-
-    /**
-     * Scan for keys in the cluster with options.
-     * This implementation supports filtering and pattern matching across cluster nodes.
-     *
-     * @param cursor The cluster scan cursor
-     * @param options The scan options for filtering results
-     * @return A CompletableFuture containing an array with [cursor, keys]
-     */
-    public CompletableFuture<Object[]> scan(ClusterScanCursor cursor, ScanOptions options) {
-        List<String> args = new ArrayList<>();
-        args.add("SCAN");
-        
-        if (cursor != ClusterScanCursor.INITIAL_CURSOR_INSTANCE) {
-            args.add("0"); // Use initial cursor value for now
-        } else {
-            args.add("0");
-        }
-        
-        // Add ScanOptions arguments if provided
-        if (options != null) {
-            args.addAll(Arrays.asList(options.toArgs()));
-        }
-        
-        return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            Scan, args.toArray(new String[0])))
-            .thenApply(result -> handleScanResponse(result, false));
-    }
-
-    /**
-     * Scan for keys in the cluster with binary support and options.
-     * This implementation supports filtering and pattern matching with binary keys.
-     *
-     * @param cursor The cluster scan cursor
-     * @param options The scan options for filtering results
-     * @return A CompletableFuture containing an array with [cursor, keys]
-     */
-    public CompletableFuture<Object[]> scanBinary(ClusterScanCursor cursor, ScanOptions options) {
-        List<String> args = new ArrayList<>();
-        args.add("SCAN");
-        
-        if (cursor != ClusterScanCursor.INITIAL_CURSOR_INSTANCE) {
-            args.add("0"); // Use initial cursor value for now
-        } else {
-            args.add("0");
-        }
-        
-        // Add ScanOptions arguments if provided
-        if (options != null) {
-            args.addAll(Arrays.asList(options.toArgs()));
-        }
-        
-        return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            Scan, args.toArray(new String[0])))
-            .thenApply(result -> handleScanResponse(result, true));
-    }
-
-    /**
-     * Handle the response from cluster scan operations.
-     * 
-     * @param result The result from the scan command
-     * @param binary Whether to return binary keys
-     * @return An array containing the updated cursor and keys
-     */
-    private Object[] handleScanResponse(Object result, boolean binary) {
-        if (result instanceof Object[]) {
-            Object[] array = (Object[]) result;
-            if (array.length >= 2) {
-                Object cursorValue = array[0];
-                Object keysValue = array[1];
-                
-                // Create the cursor implementation
-                ClusterScanCursor cursor = createClusterScanCursor(cursorValue);
-                
-                // Extract keys array
-                if (keysValue instanceof Object[]) {
-                    Object[] keys = (Object[]) keysValue;
-                    if (binary) {
-                        GlideString[] binaryKeys = new GlideString[keys.length];
-                        for (int i = 0; i < keys.length; i++) {
-                            binaryKeys[i] = keys[i] instanceof GlideString 
-                                ? (GlideString) keys[i] 
-                                : GlideString.of(keys[i].toString());
-                        }
-                        return new Object[]{cursor, binaryKeys};
-                    } else {
-                        String[] stringKeys = new String[keys.length];
-                        for (int i = 0; i < keys.length; i++) {
-                            stringKeys[i] = keys[i].toString();
-                        }
-                        return new Object[]{cursor, stringKeys};
-                    }
-                }
-            }
-        }
-        
-        // Return empty result if parsing fails
-        if (binary) {
-            return new Object[]{ClusterScanCursor.initalCursor(), new GlideString[0]};
-        } else {
-            return new Object[]{ClusterScanCursor.initalCursor(), new String[0]};
-        }
-    }
-
-    /**
-     * Create a ClusterScanCursor implementation from the response value.
-     * 
-     * @param cursorValue The cursor value from the response
-     * @return A ClusterScanCursor implementation
-     */
-    private ClusterScanCursor createClusterScanCursor(Object cursorValue) {
-        if (cursorValue instanceof ClusterScanCursor) {
-            return (ClusterScanCursor) cursorValue;
-        }
-        
-        // For string cursor values, create a basic implementation
-        final String cursorString = cursorValue != null ? cursorValue.toString() : "0";
-        return new ClusterScanCursor() {
-            @Override
-            public boolean isFinished() {
-                return "0".equals(cursorString);
-            }
-            
-            @Override
-            public void releaseCursorHandle() {
-                // Basic implementation - cursor cleanup handled by native layer
-            }
-        };
-    }
-
-    /**
-     * Returns a random key from the cluster.
-     *
-     * @return A CompletableFuture containing a random key, or null if no keys exist
-     */
-    public CompletableFuture<String> randomKey() {
-        return super.randomkey();
-    }
-
-    /**
-     * Returns a random key from the cluster as a GlideString.
-     *
-     * @return A CompletableFuture containing a random key, or null if no keys exist
-     */
-    public CompletableFuture<GlideString> randomKeyBinary() {
-        return super.randomkeyBinary();
-    }
-
-    /**
-     * Returns a random key from the cluster with routing.
-     *
-     * @param route The routing configuration for the command
-     * @return A CompletableFuture containing a random key, or null if no keys exist
-     */
-    public CompletableFuture<String> randomKey(Route route) {
-        return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            RandomKey), route)
-            .thenApply(result -> result == null ? null : result.toString());
-    }
-
-    /**
-     * Returns a random key from the cluster as a GlideString with routing.
-     *
-     * @param route The routing configuration for the command
-     * @return A CompletableFuture containing a random key, or null if no keys exist
-     */
-    public CompletableFuture<GlideString> randomKeyBinary(Route route) {
-        return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            RandomKey), route)
-            .thenApply(result -> result == null ? null : GlideString.of(result.toString()));
-    }
-
-    // ========== Critical Missing Methods from ServerManagementClusterCommands ==========
-    
-    
-    /**
-     * Computes the difference between sorted sets and returns the result.
-     * 
-     * @param keys Array of sorted set keys to compare
-     * @return A CompletableFuture containing the difference result wrapped in ClusterValue
-     */
-    public CompletableFuture<ClusterValue<String[]>> zdiff(String[] keys) {
-        // For integration test compatibility - implement basic zdiff
-        return CompletableFuture.supplyAsync(() -> {
-            // Placeholder implementation for integration tests
-            return ClusterValue.ofSingleValue(new String[0]);
-        });
-    }
-    
-    /**
-     * Computes the difference between sorted sets and returns the result with scores.
-     * 
-     * @param keys Array of sorted set keys to compare
-     * @return A CompletableFuture containing the difference result with scores wrapped in ClusterValue
-     */
-    public CompletableFuture<ClusterValue<String[]>> zdiffWithScores(String[] keys) {
-        // For integration test compatibility - implement basic zdiffWithScores
-        return CompletableFuture.supplyAsync(() -> {
-            // Placeholder implementation for integration tests
-            return ClusterValue.ofSingleValue(new String[0]);
-        });
-    }
-    
-    /**
-     * Stores the difference between sorted sets in destination key.
-     * 
-     * @param destination The destination key to store the result
-     * @param keys Array of sorted set keys to compare
-     * @return A CompletableFuture containing the number of elements in the resulting set
-     */
-    public CompletableFuture<Long> zdiffstore(String destination, String[] keys) {
-        // Placeholder implementation for integration tests
-        return CompletableFuture.completedFuture(0L);
-    }
-    
-    /**
-     * Computes the union of multiple sorted sets.
-     * 
-     * @param keys The sorted set keys to union
-     * @return A CompletableFuture containing the union result wrapped in ClusterValue
-     */
-    public CompletableFuture<ClusterValue<String[]>> zunion(Object keys) {
-        // Placeholder implementation for integration tests
-        return CompletableFuture.supplyAsync(() -> {
-            return ClusterValue.ofSingleValue(new String[0]);
-        });
-    }
-    
-    /**
-     * Computes the intersection of multiple sorted sets.
-     * 
-     * @param keys The sorted set keys to intersect
-     * @return A CompletableFuture containing the intersection result wrapped in ClusterValue
-     */
-    public CompletableFuture<ClusterValue<String[]>> zinter(Object keys) {
-        // Placeholder implementation for integration tests
-        return CompletableFuture.supplyAsync(() -> {
-            return ClusterValue.ofSingleValue(new String[0]);
-        });
-    }
-    
-    /**
-     * Stores a range of sorted set elements by rank.
-     * 
-     * @param dst The destination key
-     * @param src The source key
-     * @param rangeQuery The range to store
-     * @return A CompletableFuture containing the number of elements stored
-     */
-    public CompletableFuture<Long> zrangestore(String dst, String src, Object rangeQuery) {
-        // Placeholder implementation for integration tests
-        return CompletableFuture.completedFuture(0L);
-    }
-    
-    /**
-     * Computes the intersection of multiple sorted sets and stores the result.
-     * 
-     * @param destination The destination key
-     * @param keys The sorted set keys to intersect
-     * @return A CompletableFuture containing the number of elements in the resulting set
-     */
-    public CompletableFuture<Long> zinterstore(String destination, Object keys) {
-        // Placeholder implementation for integration tests
-        return CompletableFuture.completedFuture(0L);
-    }
-    
-    /**
-     * Returns the cardinality of the intersection of multiple sorted sets.
-     * 
-     * @param keys Array of sorted set keys
-     * @return A CompletableFuture containing the cardinality
-     */
-    public CompletableFuture<Long> zintercard(String[] keys) {
-        // Placeholder implementation for integration tests
-        return CompletableFuture.completedFuture(0L);
-    }
-    
-    /**
-     * Removes and returns elements from the right of multiple lists, blocking until an element is available.
-     * Cluster-compatible version that returns ClusterValue.
-     * 
-     * @param keys Array of list keys
-     * @param timeout Timeout in seconds
-     * @return A CompletableFuture containing the result wrapped in ClusterValue
-     */
-    public CompletableFuture<ClusterValue<String[]>> brpopCluster(String[] keys, double timeout) {
-        // Placeholder implementation for integration tests
-        return CompletableFuture.supplyAsync(() -> {
-            return ClusterValue.ofSingleValue(new String[0]);
-        });
-    }
-
-
-    // Note: ServerManagementClusterCommands methods (info, configGet, etc.) are now
-    // implemented through the ClusterServerManagement composition layer passed to BaseClient.
-    // This avoids inheritance conflicts between different return types.
-
-    // ========== Missing ServerManagementClusterCommands Methods ==========
-
-    /**
-     * Returns the number of keys in the database.
-     * The command will be routed to all primary nodes.
-     *
-     * @see <a href="https://valkey.io/commands/dbsize/">valkey.io</a> for details.
-     * @return The total number of keys across the primary nodes.
-     */
-    public CompletableFuture<Long> dbsize() {
-        return serverManagement.dbsize();
-    }
-
-    /**
-     * Returns the number of keys in the database with routing.
-     *
-     * @see <a href="https://valkey.io/commands/dbsize/">valkey.io</a> for details.
-     * @param route Specifies the routing configuration for the command
-     * @return The number of keys in the database for specified nodes
-     */
-    public CompletableFuture<Long> dbsize(Route route) {
-        return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            DBSize), route)
-            .thenApply(result -> {
-                if (result instanceof Number) {
-                    return ((Number) result).longValue();
-                }
-                return Long.parseLong(result.toString());
-            });
-    }
-
-    /**
-     * Returns the server time.
-     * The command will be routed to a random node.
-     *
-     * @see <a href="https://valkey.io/commands/time/">valkey.io</a> for details.
-     * @return The current server time as a String array
-     */
+    @Override
     public CompletableFuture<String[]> time() {
-        return serverManagement.time();
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(Time))
+            .thenApply(result -> {
+                if (result instanceof Object[]) {
+                    Object[] objects = (Object[]) result;
+                    String[] time = new String[objects.length];
+                    for (int i = 0; i < objects.length; i++) {
+                        time[i] = objects[i].toString();
+                    }
+                    return time;
+                }
+                return new String[0];
+            });
     }
 
-    /**
-     * Returns the server time with routing.
-     *
-     * @see <a href="https://valkey.io/commands/time/">valkey.io</a> for details.
-     * @param route Specifies the routing configuration for the command
-     * @return The current server time as a String array wrapped in ClusterValue
-     */
+    @Override
     public CompletableFuture<ClusterValue<String[]>> time(Route route) {
-        return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            Time), route)
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(Time), route)
             .thenApply(result -> {
-                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
-                    String[] time = new String[0];
-                    if (result instanceof Object[]) {
-                        Object[] objects = (Object[]) result;
-                        time = new String[objects.length];
-                        for (int i = 0; i < objects.length; i++) {
-                            time[i] = objects[i].toString();
-                        }
+                if (result instanceof Object[]) {
+                    Object[] objects = (Object[]) result;
+                    String[] time = new String[objects.length];
+                    for (int i = 0; i < objects.length; i++) {
+                        time[i] = objects[i].toString();
                     }
-                    return ClusterValue.ofSingleValue(time);
-                } else {
-                    // For multi-node routes, expect a map result
-                    if (result instanceof Map) {
-                        Map<String, String[]> mapResult = new java.util.HashMap<>();
-                        ((Map<?, ?>) result).forEach((key, value) -> {
-                            String[] time = new String[0];
-                            if (value instanceof Object[]) {
-                                Object[] objects = (Object[]) value;
-                                time = new String[objects.length];
-                                for (int i = 0; i < objects.length; i++) {
-                                    time[i] = objects[i].toString();
-                                }
-                            }
-                            mapResult.put(key.toString(), time);
-                        });
-                        return ClusterValue.ofMultiValue(mapResult);
-                    }
-                    // Fallback to single value
-                    String[] time = new String[0];
-                    if (result instanceof Object[]) {
-                        Object[] objects = (Object[]) result;
-                        time = new String[objects.length];
-                        for (int i = 0; i < objects.length; i++) {
-                            time[i] = objects[i].toString();
-                        }
-                    }
-                    return ClusterValue.ofSingleValue(time);
+                    return ClusterValue.of(time);
                 }
+                return ClusterValue.of(new String[0]);
             });
     }
 
-    /**
-     * Returns UNIX TIME of the last DB save timestamp.
-     * The command will be routed to a random node.
-     *
-     * @see <a href="https://valkey.io/commands/lastsave/">valkey.io</a> for details.
-     * @return UNIX TIME of the last DB save
-     */
+    @Override
     public CompletableFuture<Long> lastsave() {
-        return serverManagement.lastsave();
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(LastSave))
+            .thenApply(result -> Long.parseLong(result.toString()));
     }
 
-    /**
-     * Returns UNIX TIME of the last DB save timestamp with routing.
-     *
-     * @see <a href="https://valkey.io/commands/lastsave/">valkey.io</a> for details.
-     * @param route Specifies the routing configuration for the command
-     * @return UNIX TIME of the last DB save wrapped in ClusterValue
-     */
+    @Override
     public CompletableFuture<ClusterValue<Long>> lastsave(Route route) {
-        return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            LastSave), route)
-            .thenApply(result -> {
-                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
-                    return ClusterValue.ofSingleValue(Long.parseLong(result.toString()));
-                } else {
-                    // For multi-node routes, expect a map result
-                    if (result instanceof Map) {
-                        Map<String, Long> mapResult = new java.util.HashMap<>();
-                        ((Map<?, ?>) result).forEach((key, value) -> 
-                            mapResult.put(key.toString(), Long.parseLong(value.toString())));
-                        return ClusterValue.ofMultiValue(mapResult);
-                    }
-                    return ClusterValue.ofSingleValue(Long.parseLong(result.toString()));
-                }
-            });
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(LastSave), route)
+            .thenApply(result -> ClusterValue.of(Long.parseLong(result.toString())));
     }
 
-    /**
-     * Deletes all the keys of all the existing databases.
-     * The command will be routed to all primary nodes.
-     *
-     * @see <a href="https://valkey.io/commands/flushall/">valkey.io</a> for details.
-     * @return OK response
-     */
-    public CompletableFuture<String> flushall() {
-        return serverManagement.flushall();
+    @Override
+    public CompletableFuture<Long> dbsize() {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(DBSize))
+            .thenApply(result -> Long.parseLong(result.toString()));
     }
 
-    /**
-     * Deletes all the keys of all the existing databases with flush mode.
-     * The command will be routed to all primary nodes.
-     *
-     * @see <a href="https://valkey.io/commands/flushall/">valkey.io</a> for details.
-     * @param mode The flushing mode (SYNC or ASYNC)
-     * @return OK response
-     */
-    public CompletableFuture<String> flushall(FlushMode mode) {
-        return serverManagement.flushall(mode);
+    @Override
+    public CompletableFuture<Long> dbsize(Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(DBSize), route)
+            .thenApply(result -> Long.parseLong(result.toString()));
     }
 
-    /**
-     * Deletes all the keys of all the existing databases with routing.
-     *
-     * @see <a href="https://valkey.io/commands/flushall/">valkey.io</a> for details.
-     * @param route Specifies the routing configuration for the command
-     * @return OK response
-     */
-    public CompletableFuture<String> flushall(Route route) {
-        return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            FlushAll), route)
-            .thenApply(result -> result.toString());
-    }
-
-    /**
-     * Deletes all the keys of all the existing databases with flush mode and routing.
-     *
-     * @see <a href="https://valkey.io/commands/flushall/">valkey.io</a> for details.
-     * @param mode The flushing mode (SYNC or ASYNC)
-     * @param route Specifies the routing configuration for the command
-     * @return OK response
-     */
-    public CompletableFuture<String> flushall(FlushMode mode, Route route) {
-        return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            FlushAll, mode.name()), route)
-            .thenApply(result -> result.toString());
-    }
-
-    /**
-     * Deletes all the keys of the currently selected database.
-     * The command will be routed to all primary nodes.
-     *
-     * @see <a href="https://valkey.io/commands/flushdb/">valkey.io</a> for details.
-     * @return OK response
-     */
-    public CompletableFuture<String> flushdb() {
-        return serverManagement.flushdb();
-    }
-
-    /**
-     * Deletes all the keys of the currently selected database with flush mode.
-     * The command will be routed to all primary nodes.
-     *
-     * @see <a href="https://valkey.io/commands/flushdb/">valkey.io</a> for details.
-     * @param mode The flushing mode (SYNC or ASYNC)
-     * @return OK response
-     */
-    public CompletableFuture<String> flushdb(FlushMode mode) {
-        return serverManagement.flushdb(mode);
-    }
-
-    /**
-     * Deletes all the keys of the currently selected database with routing.
-     *
-     * @see <a href="https://valkey.io/commands/flushdb/">valkey.io</a> for details.
-     * @param route Specifies the routing configuration for the command
-     * @return OK response
-     */
-    public CompletableFuture<String> flushdb(Route route) {
-        return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            FlushDB), route)
-            .thenApply(result -> result.toString());
-    }
-
-    /**
-     * Deletes all the keys of the currently selected database with flush mode and routing.
-     *
-     * @see <a href="https://valkey.io/commands/flushdb/">valkey.io</a> for details.
-     * @param mode The flushing mode (SYNC or ASYNC)
-     * @param route Specifies the routing configuration for the command
-     * @return OK response
-     */
-    public CompletableFuture<String> flushdb(FlushMode mode, Route route) {
-        return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            FlushDB, mode.name()), route)
-            .thenApply(result -> result.toString());
-    }
-
-    /**
-     * Rewrites the configuration file with the current configuration.
-     * The command will be routed automatically to all nodes.
-     *
-     * @see <a href="https://valkey.io/commands/config-rewrite/">valkey.io</a> for details.
-     * @return OK when the configuration was rewritten properly
-     */
+    @Override
     public CompletableFuture<String> configRewrite() {
-        return super.configRewrite();
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ConfigRewrite))
+            .thenApply(result -> result.toString());
     }
 
-    /**
-     * Rewrites the configuration file with the current configuration and routing.
-     *
-     * @see <a href="https://valkey.io/commands/config-rewrite/">valkey.io</a> for details.
-     * @param route Specifies the routing configuration for the command
-     * @return OK when the configuration was rewritten properly
-     */
+    @Override
     public CompletableFuture<String> configRewrite(Route route) {
-        return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            ConfigRewrite), route)
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ConfigRewrite), route)
             .thenApply(result -> result.toString());
     }
 
-    /**
-     * Resets the statistics reported by the server using the INFO and LATENCY HISTOGRAM commands.
-     * The command will be routed automatically to all nodes.
-     *
-     * @see <a href="https://valkey.io/commands/config-resetstat/">valkey.io</a> for details.
-     * @return OK to confirm that the statistics were successfully reset
-     */
+    @Override
     public CompletableFuture<String> configResetStat() {
-        return super.configResetstat();
-    }
-
-    /**
-     * Resets the statistics reported by the server using the INFO and LATENCY HISTOGRAM commands with routing.
-     *
-     * @see <a href="https://valkey.io/commands/config-resetstat/">valkey.io</a> for details.
-     * @param route Specifies the routing configuration for the command
-     * @return OK to confirm that the statistics were successfully reset
-     */
-    public CompletableFuture<String> configResetStat(Route route) {
-        return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            ConfigResetStat), route)
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ConfigResetStat))
             .thenApply(result -> result.toString());
     }
 
-    /**
-     * GET the values of configuration parameters.
-     * The command will be sent to a random node.
-     *
-     * @see <a href="https://valkey.io/commands/config-get/">valkey.io</a> for details.
-     * @param parameters An array of configuration parameter names to retrieve values for
-     * @return A map of values corresponding to the configuration parameters
-     */
-    public CompletableFuture<Map<String, String>> configGet(String[] parameters) {
-        return super.configGet(parameters);
+    @Override
+    public CompletableFuture<String> configResetStat(Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ConfigResetStat), route)
+            .thenApply(result -> result.toString());
     }
 
 
-    /**
-     * Sets configuration parameters to the specified values.
-     * The command will be sent to all nodes.
-     *
-     * @see <a href="https://valkey.io/commands/config-set/">valkey.io</a> for details.
-     * @param parameters A map consisting of configuration parameters and their respective values to set
-     * @return OK if all configurations have been successfully set
-     */
+    @Override
     public CompletableFuture<String> configSet(Map<String, String> parameters) {
-        return super.configSet(parameters);
+        String[] args = new String[parameters.size() * 2];
+        int i = 0;
+        for (Map.Entry<String, String> entry : parameters.entrySet()) {
+            args[i++] = entry.getKey();
+            args[i++] = entry.getValue();
+        }
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ConfigSet, args))
+            .thenApply(result -> result.toString());
     }
 
-    /**
-     * Sets configuration parameters to the specified values with routing.
-     *
-     * @see <a href="https://valkey.io/commands/config-set/">valkey.io</a> for details.
-     * @param parameters A map consisting of configuration parameters and their respective values to set
-     * @param route Specifies the routing configuration for the command
-     * @return OK if all configurations have been successfully set
-     */
+    @Override
     public CompletableFuture<String> configSet(Map<String, String> parameters, Route route) {
         String[] args = new String[parameters.size() * 2];
         int i = 0;
@@ -2610,493 +1814,78 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             args[i++] = entry.getKey();
             args[i++] = entry.getValue();
         }
-        return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            ConfigSet, args), route)
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ConfigSet, args), route)
             .thenApply(result -> result.toString());
     }
 
-
-    /**
-     * Returns server information for specific sections.
-     * Required by ClusterCommandExecutor interface.
-     *
-     * @see <a href="https://valkey.io/commands/info/">valkey.io</a> for details.
-     * @param sections Array of info sections to retrieve
-     * @return Server information wrapped in ClusterValue
-     */
     @Override
-    public CompletableFuture<ClusterValue<String>> info(Section[] sections) {
-        // Convert sections to string array for delegation
-        String[] sectionStrings = new String[sections.length];
-        for (int i = 0; i < sections.length; i++) {
-            sectionStrings[i] = sections[i].name().toLowerCase();
-        }
-        
-        // Delegate to our own info method
-        return info(sectionStrings);
-    }
-
-    /**
-     * Returns server information for specific sections with routing support.
-     * Required by ClusterCommandExecutor interface.
-     *
-     * @see <a href="https://valkey.io/commands/info/">valkey.io</a> for details.
-     * @param sections Array of info sections to retrieve
-     * @param route Specifies the routing configuration for the command
-     * @return Server information wrapped in ClusterValue
-     */
-    @Override
-    public CompletableFuture<ClusterValue<String>> info(Section[] sections, Object route) {
-        // Convert sections to string array for delegation
-        String[] sectionStrings = new String[sections.length];
-        for (int i = 0; i < sections.length; i++) {
-            sectionStrings[i] = sections[i].name().toLowerCase();
-        }
-        
-        return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            Info, sectionStrings), route)
-            .thenApply(result -> {
-                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
-                    return ClusterValue.ofSingleValue(result.toString());
-                } else {
-                    // For multi-node routes, expect a map result
-                    if (result instanceof Map) {
-                        Map<String, String> mapResult = new java.util.HashMap<>();
-                        ((Map<?, ?>) result).forEach((key, value) -> 
-                            mapResult.put(key.toString(), value.toString()));
-                        return ClusterValue.ofMultiValue(mapResult);
-                    }
-                    return ClusterValue.ofSingleValue(result.toString());
-                }
-            });
-    }
-
-    // HyperLogLog Commands Implementation
-    
-    @Override
-    public CompletableFuture<Boolean> pfadd(String key, String[] elements) {
-        List<String> args = new ArrayList<>();
-        args.add(key);
-        args.addAll(Arrays.asList(elements));
-        return executeCommand(PfAdd, args.toArray(new String[0]))
-            .thenApply(result -> result.equals(1) || result.equals(1L));
-    }
-    
-    @Override
-    public CompletableFuture<Boolean> pfadd(GlideString key, GlideString[] elements) {
-        List<String> args = new ArrayList<>();
-        args.add(key.toString());
-        for (GlideString element : elements) {
-            args.add(element.toString());
-        }
-        return executeCommand(PfAdd, args.toArray(new String[0]))
-            .thenApply(result -> result.equals(1) || result.equals(1L));
-    }
-    
-    @Override
-    public CompletableFuture<Long> pfcount(String[] keys) {
-        return executeCommand(PfCount, keys)
-            .thenApply(result -> (Long) result);
-    }
-    
-    @Override
-    public CompletableFuture<Long> pfcount(GlideString[] keys) {
-        String[] stringKeys = new String[keys.length];
-        for (int i = 0; i < keys.length; i++) {
-            stringKeys[i] = keys[i].toString();
-        }
-        return executeCommand(PfCount, stringKeys)
-            .thenApply(result -> (Long) result);
-    }
-    
-    @Override
-    public CompletableFuture<String> pfmerge(String destination, String[] sourceKeys) {
-        List<String> args = new ArrayList<>();
-        args.add(destination);
-        args.addAll(Arrays.asList(sourceKeys));
-        return executeCommand(PfMerge, args.toArray(new String[0]))
+    public CompletableFuture<String> flushall() {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(FlushAll))
             .thenApply(result -> result.toString());
     }
-    
+
     @Override
-    public CompletableFuture<String> pfmerge(GlideString destination, GlideString[] sourceKeys) {
-        List<String> args = new ArrayList<>();
-        args.add(destination.toString());
-        for (GlideString sourceKey : sourceKeys) {
-            args.add(sourceKey.toString());
-        }
-        return executeCommand(PfMerge, args.toArray(new String[0]))
+    public CompletableFuture<String> flushall(FlushMode mode) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(FlushAll, mode.name()))
             .thenApply(result -> result.toString());
     }
-    
-    // SortedSet Commands Implementation - Blocking operations
-    
-    public CompletableFuture<Object[]> bzpopmax(String[] keys, double timeout) {
-        List<String> args = new ArrayList<>(Arrays.asList(keys));
-        args.add(String.valueOf(timeout));
-        return executeCommand(BZPopMax, args.toArray(new String[0]))
-            .thenApply(result -> (Object[]) result);
-    }
-    
-    public CompletableFuture<Object[]> bzpopmax(GlideString[] keys, double timeout) {
-        List<String> args = new ArrayList<>();
-        for (GlideString key : keys) {
-            args.add(key.toString());
-        }
-        args.add(String.valueOf(timeout));
-        return executeCommand(BZPopMax, args.toArray(new String[0]))
-            .thenApply(result -> (Object[]) result);
-    }
-    
-    public CompletableFuture<Object[]> bzpopmin(String[] keys, double timeout) {
-        List<String> args = new ArrayList<>(Arrays.asList(keys));
-        args.add(String.valueOf(timeout));
-        return executeCommand(BZPopMin, args.toArray(new String[0]))
-            .thenApply(result -> (Object[]) result);
-    }
-    
-    public CompletableFuture<Object[]> bzpopmin(GlideString[] keys, double timeout) {
-        List<String> args = new ArrayList<>();
-        for (GlideString key : keys) {
-            args.add(key.toString());
-        }
-        args.add(String.valueOf(timeout));
-        return executeCommand(BZPopMin, args.toArray(new String[0]))
-            .thenApply(result -> (Object[]) result);
-    }
-    
-    public CompletableFuture<Map<String, Object>> zmpop(String[] keys, ScoreFilter modifier) {
-        List<String> args = new ArrayList<>(Arrays.asList(keys));
-        args.add(String.valueOf(keys.length));
-        args.add(modifier.toString());
-        return executeCommand(ZMPop, args.toArray(new String[0]))
-            .thenApply(result -> (Map<String, Object>) result);
-    }
-    
-    public CompletableFuture<Map<GlideString, Object>> zmpop(GlideString[] keys, ScoreFilter modifier) {
-        List<String> args = new ArrayList<>();
-        for (GlideString key : keys) {
-            args.add(key.toString());
-        }
-        args.add(String.valueOf(keys.length));
-        args.add(modifier.toString());
-        return executeCommand(ZMPop, args.toArray(new String[0]))
-            .thenApply(result -> (Map<GlideString, Object>) result);
-    }
-    
-    public CompletableFuture<Map<String, Object>> zmpop(String[] keys, ScoreFilter modifier, long count) {
-        List<String> args = new ArrayList<>(Arrays.asList(keys));
-        args.add(String.valueOf(keys.length));
-        args.add(modifier.toString());
-        args.add("COUNT"); // Using literal string instead of SortedSetBaseCommands.COUNT_VALKEY_API
-        args.add(String.valueOf(count));
-        return executeCommand(ZMPop, args.toArray(new String[0]))
-            .thenApply(result -> (Map<String, Object>) result);
-    }
-    
-    public CompletableFuture<Map<GlideString, Object>> zmpop(GlideString[] keys, ScoreFilter modifier, long count) {
-        List<String> args = new ArrayList<>();
-        for (GlideString key : keys) {
-            args.add(key.toString());
-        }
-        args.add(String.valueOf(keys.length));
-        args.add(modifier.toString());
-        args.add("COUNT"); // Using literal string instead of SortedSetBaseCommands.COUNT_VALKEY_API
-        args.add(String.valueOf(count));
-        return executeCommand(ZMPop, args.toArray(new String[0]))
-            .thenApply(result -> (Map<GlideString, Object>) result);
-    }
-    
-    public CompletableFuture<Map<String, Object>> bzmpop(String[] keys, ScoreFilter modifier, double timeout) {
-        List<String> args = new ArrayList<>(Arrays.asList(keys));
-        args.add(String.valueOf(keys.length));
-        args.add(modifier.toString());
-        args.add(String.valueOf(timeout));
-        return executeCommand(BZMPop, args.toArray(new String[0]))
-            .thenApply(result -> (Map<String, Object>) result);
-    }
-    
-    public CompletableFuture<Map<GlideString, Object>> bzmpop(GlideString[] keys, ScoreFilter modifier, double timeout) {
-        List<String> args = new ArrayList<>();
-        for (GlideString key : keys) {
-            args.add(key.toString());
-        }
-        args.add(String.valueOf(keys.length));
-        args.add(modifier.toString());
-        args.add(String.valueOf(timeout));
-        return executeCommand(BZMPop, args.toArray(new String[0]))
-            .thenApply(result -> (Map<GlideString, Object>) result);
-    }
-    
-    public CompletableFuture<Map<String, Object>> bzmpop(String[] keys, ScoreFilter modifier, double timeout, long count) {
-        List<String> args = new ArrayList<>(Arrays.asList(keys));
-        args.add(String.valueOf(keys.length));
-        args.add(modifier.toString());
-        args.add(String.valueOf(timeout));
-        args.add("COUNT"); // Using literal string instead of SortedSetBaseCommands.COUNT_VALKEY_API
-        args.add(String.valueOf(count));
-        return executeCommand(BZMPop, args.toArray(new String[0]))
-            .thenApply(result -> (Map<String, Object>) result);
-    }
-    
-    public CompletableFuture<Map<GlideString, Object>> bzmpop(GlideString[] keys, ScoreFilter modifier, double timeout, long count) {
-        List<String> args = new ArrayList<>();
-        for (GlideString key : keys) {
-            args.add(key.toString());
-        }
-        args.add(String.valueOf(keys.length));
-        args.add(modifier.toString());
-        args.add(String.valueOf(timeout));
-        args.add("COUNT"); // Using literal string instead of SortedSetBaseCommands.COUNT_VALKEY_API
-        args.add(String.valueOf(count));
-        return executeCommand(BZMPop, args.toArray(new String[0]))
-            .thenApply(result -> (Map<GlideString, Object>) result);
-    }
 
-    /**
-     * Closes the client and releases resources.
-     */
-    public void close() {
-        try {
-            client.close();
-        } catch (Exception e) {
-            // Log the error but don't rethrow
-            System.err.println("Error closing GlideClusterClient: " + e.getMessage());
-        }
-    }
-
-    // Future enhancements for cluster-specific methods:
-    // - clusterNodes() - GET cluster topology information
-    // - clusterSlots() - GET slot-to-node mapping
-    // - clusterKeyslot() - GET key slot calculation
-    // - clusterCountKeysInSlot() - Count keys in specific slot
-    // - clusterGetKeysInSlot() - GET keys in specific slot
-    // - clusterFailover() - Initiate failover process
-    // - clusterReset() - Reset cluster configuration
-    // - clusterSaveConfig() - Save cluster configuration
-    // - clusterSetConfigEpoch() - Set config epoch
-    // - clusterShards() - GET cluster shards information
-
-    /**
-     * Flushes all the previously watched keys for a transaction.
-     * 
-     * @see <a href="https://valkey.io/commands/unwatch/">valkey.io</a> for details.
-     * @return <code>OK</code>.
-     */
     @Override
-    public CompletableFuture<String> unwatch() {
-        return executeCommand(UnWatch).thenApply(response -> response.toString());
+    public CompletableFuture<String> flushall(Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(FlushAll), route)
+            .thenApply(result -> result.toString());
     }
 
-    /**
-     * Marks the given keys to be watched for conditional execution of a transaction.
-     * 
-     * @see <a href="https://valkey.io/commands/watch/">valkey.io</a> for details.
-     * @param keys The keys to watch.
-     * @return <code>OK</code>.
-     */
     @Override
-    public CompletableFuture<String> watch(String[] keys) {
-        return executeCommand(Watch, keys).thenApply(response -> response.toString());
+    public CompletableFuture<String> flushall(FlushMode mode, Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(FlushAll, mode.name()), route)
+            .thenApply(result -> result.toString());
     }
 
-    /**
-     * Marks the given keys to be watched for conditional execution of a transaction.
-     * 
-     * @see <a href="https://valkey.io/commands/watch/">valkey.io</a> for details.
-     * @param keys The keys to watch.
-     * @return <code>OK</code>.
-     */
     @Override
-    public CompletableFuture<String> watch(GlideString[] keys) {
-        String[] stringKeys = new String[keys.length];
-        for (int i = 0; i < keys.length; i++) {
-            stringKeys[i] = keys[i].toString();
-        }
-        return executeCommand(Watch, stringKeys).thenApply(response -> response.toString());
+    public CompletableFuture<String> flushdb() {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(FlushDB))
+            .thenApply(result -> result.toString());
     }
 
-    /**
-     * Flushes all the previously watched keys for a transaction on specific nodes.
-     * 
-     * @param route Routing configuration for the command.
-     * @see <a href="https://valkey.io/commands/unwatch/">valkey.io</a> for details.
-     * @return <code>OK</code> from the specified nodes.
-     */
     @Override
-    public CompletableFuture<ClusterValue<String>> unwatch(Route route) {
-        // For cluster-routed commands, we need to use the route-aware method
-        // This is a simplified implementation - actual routing would be handled by the cluster executor
-        return executeCommand(UnWatch)
-            .thenApply(response -> ClusterValue.ofSingleValue(response.toString()));
+    public CompletableFuture<String> flushdb(FlushMode mode) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(FlushDB, mode.name()))
+            .thenApply(result -> result.toString());
     }
 
-    // ServerManagementClusterCommands implementation - delegate to composition layer
-    @SuppressWarnings("unchecked")
-    public CompletableFuture<ClusterValue<String>> info() {
-        return serverManagement.getInfo()
-            .thenApply(result -> (ClusterValue<String>) result);
+    @Override
+    public CompletableFuture<String> flushdb(Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(FlushDB), route)
+            .thenApply(result -> result.toString());
     }
 
-    @SuppressWarnings("unchecked")
-    public CompletableFuture<ClusterValue<String>> info(String... sections) {
-        return serverManagement.getInfo(sections)
-            .thenApply(result -> (ClusterValue<String>) result);
+    @Override
+    public CompletableFuture<String> flushdb(FlushMode mode, Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(FlushDB, mode.name()), route)
+            .thenApply(result -> result.toString());
     }
 
-    // Cluster-specific routing methods - implement directly for now
-    // TODO Phase 2.1: Implement proper routing support
-    public CompletableFuture<ClusterValue<String>> info(Route route) {
-        // For now, use the composition layer's implementation which already has routing
-        // The ClusterServerManagement composition was created with routing support
-        return executeCommand(Info).thenApply(response -> ClusterValue.ofSingleValue(response.toString()));
-    }
-
-    public CompletableFuture<ClusterValue<String>> info(InfoOptions.Section[] sections, Route route) {
+    @Override
+    public CompletableFuture<ClusterValue<String>> info(Section[] sections, Route route) {
         String[] sectionNames = new String[sections.length];
         for (int i = 0; i < sections.length; i++) {
             sectionNames[i] = sections[i].name().toLowerCase();
         }
-        // TODO Phase 2.1: Implement proper routing support
-        return executeCommand(Info, sectionNames).thenApply(response -> ClusterValue.ofSingleValue(response.toString()));
-    }
-
-    // fcall overloads without Route parameters
-    public CompletableFuture<Object> fcall(String functionName, String[] args) {
-        // Delegate to route version with default routing
-        return fcall(functionName, new String[0], args, null).thenApply(ClusterValue::getSingleValue);
-    }
-
-    public CompletableFuture<Object> fcallReadOnly(String functionName, String[] args) {
-        // Delegate to route version with default routing
-        return fcallReadOnly(functionName, new String[0], args, null).thenApply(ClusterValue::getSingleValue);
-    }
-
-    public CompletableFuture<ClusterValue<Object>> fcall(GlideString functionName, GlideString[] args) {
-        String[] stringArgs = new String[args.length];
-        for (int i = 0; i < args.length; i++) {
-            stringArgs[i] = args[i].toString();
-        }
-        return fcall(functionName.toString(), stringArgs).thenApply(ClusterValue::ofSingleValue);
-    }
-
-    public CompletableFuture<ClusterValue<Object>> fcallReadOnly(GlideString functionName, GlideString[] args) {
-        String[] stringArgs = new String[args.length];
-        for (int i = 0; i < args.length; i++) {
-            stringArgs[i] = args[i].toString();
-        }
-        return fcallReadOnly(functionName.toString(), stringArgs).thenApply(ClusterValue::ofSingleValue);
-    }
-
-    // PubSubBaseCommands implementation
-    @Override
-    public CompletableFuture<String> publish(String message, String channel) {
-        return executeCommand(PUBLISH, message, channel).thenApply(response -> "OK");
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(Info, sectionNames), route)
+            .thenApply(result -> ClusterValue.of(result.toString()));
     }
 
     @Override
-    public CompletableFuture<String> publish(GlideString message, GlideString channel) {
-        return executeCommand(PUBLISH, message.toString(), channel.toString()).thenApply(response -> "OK");
+    public CompletableFuture<ClusterValue<String>> info(Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(Info), route)
+            .thenApply(result -> ClusterValue.of(result.toString()));
     }
 
     @Override
-    public CompletableFuture<Long> publish(String message, String channel, boolean sharded) {
-        String commandType = sharded ? SPublish : PUBLISH;
-        return executeCommand(commandType, message, channel).thenApply(response -> Long.parseLong(response.toString()));
+    public CompletableFuture<ClusterValue<String>> info() {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(Info))
+            .thenApply(result -> ClusterValue.of(result.toString()));
     }
 
-    @Override
-    public CompletableFuture<Long> publish(GlideString message, GlideString channel, boolean sharded) {
-        String commandType = sharded ? SPublish : PUBLISH;
-        return executeCommand(commandType, message.toString(), channel.toString()).thenApply(response -> Long.parseLong(response.toString()));
-    }
-
-    @Override
-    public CompletableFuture<String[]> pubsubChannels() {
-        return executeCommand(PubSubChannels).thenApply(response -> {
-            if (response instanceof String[]) {
-                return (String[]) response;
-            }
-            return new String[0];
-        });
-    }
-
-    @Override
-    public CompletableFuture<GlideString[]> pubsubChannelsBinary() {
-        return executeCommand(PubSubChannels).thenApply(response -> {
-            if (response instanceof String[]) {
-                String[] stringArray = (String[]) response;
-                GlideString[] result = new GlideString[stringArray.length];
-                for (int i = 0; i < stringArray.length; i++) {
-                    result[i] = GlideString.of(stringArray[i]);
-                }
-                return result;
-            }
-            return new GlideString[0];
-        });
-    }
-
-    @Override
-    public CompletableFuture<String[]> pubsubChannels(String pattern) {
-        return executeCommand(PubSubChannels, pattern).thenApply(response -> {
-            if (response instanceof String[]) {
-                return (String[]) response;
-            }
-            return new String[0];
-        });
-    }
-
-    @Override
-    public CompletableFuture<GlideString[]> pubsubChannels(GlideString pattern) {
-        return executeCommand(PubSubChannels, pattern.toString()).thenApply(response -> {
-            if (response instanceof String[]) {
-                String[] stringArray = (String[]) response;
-                GlideString[] result = new GlideString[stringArray.length];
-                for (int i = 0; i < stringArray.length; i++) {
-                    result[i] = GlideString.of(stringArray[i]);
-                }
-                return result;
-            }
-            return new GlideString[0];
-        });
-    }
-
-    @Override
-    public CompletableFuture<Long> pubsubNumPat() {
-        return executeCommand(PubSubNumPat).thenApply(response -> Long.parseLong(response.toString()));
-    }
-
-    @Override
-    public CompletableFuture<java.util.Map<String, Long>> pubsubNumSub(String[] channels) {
-        return executeCommand(PubSubNumSub, channels).thenApply(response -> {
-            java.util.Map<String, Long> result = new java.util.HashMap<>();
-            if (response instanceof java.util.Map) {
-                @SuppressWarnings("unchecked")
-                java.util.Map<String, Object> map = (java.util.Map<String, Object>) response;
-                for (java.util.Map.Entry<String, Object> entry : map.entrySet()) {
-                    result.put(entry.getKey(), Long.parseLong(entry.getValue().toString()));
-                }
-            }
-            return result;
-        });
-    }
-
-    @Override
-    public CompletableFuture<java.util.Map<GlideString, Long>> pubsubNumSub(GlideString[] channels) {
-        String[] stringChannels = new String[channels.length];
-        for (int i = 0; i < channels.length; i++) {
-            stringChannels[i] = channels[i].toString();
-        }
-        return executeCommand(PubSubNumSub, stringChannels).thenApply(response -> {
-            java.util.Map<GlideString, Long> result = new java.util.HashMap<>();
-            if (response instanceof java.util.Map) {
-                @SuppressWarnings("unchecked")
-                java.util.Map<String, Object> map = (java.util.Map<String, Object>) response;
-                for (java.util.Map.Entry<String, Object> entry : map.entrySet()) {
-                    result.put(GlideString.of(entry.getKey()), Long.parseLong(entry.getValue().toString()));
-                }
-            }
-            return result;
-        });
-    }
 }

@@ -13,6 +13,8 @@ import glide.api.models.BaseBatch;
 import glide.api.models.Script;
 import glide.api.models.commands.GetExOptions;
 import glide.api.models.commands.SetOptions;
+import glide.api.models.commands.ScriptOptions;
+import glide.api.models.commands.ScriptOptionsGlideString;
 import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.FlushMode;
@@ -4979,6 +4981,37 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         return updateConnectionPassword("", updateConfiguration);
     }
 
+
+    // Script execution methods with ScriptOptions support
+    public CompletableFuture<Object> invokeScript(Script script, ScriptOptions options) {
+        String[] keys = options.getKeys() != null ? options.getKeys().toArray(new String[0]) : new String[0];
+        String[] args = options.getArgs() != null ? options.getArgs().toArray(new String[0]) : new String[0];
+        return invokeScript(script, keys, args);
+    }
+    
+    public CompletableFuture<Object> invokeScript(Script script, ScriptOptionsGlideString options) {
+        // Convert GlideString options to String options and delegate
+        List<String> keys = new ArrayList<>();
+        if (options.getKeys() != null) {
+            for (glide.api.models.GlideString key : options.getKeys()) {
+                keys.add(key.toString());
+            }
+        }
+        
+        List<String> args = new ArrayList<>(); 
+        if (options.getArgs() != null) {
+            for (glide.api.models.GlideString arg : options.getArgs()) {
+                args.add(arg.toString());
+            }
+        }
+        
+        ScriptOptions stringOptions = ScriptOptions.builder()
+            .keys(keys)
+            .args(args)
+            .build();
+            
+        return invokeScript(script, stringOptions);
+    }
 
     /**
      * Close the client connection.
