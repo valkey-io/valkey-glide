@@ -4690,6 +4690,34 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
     }
 
     /**
+     * Load a function library.
+     *
+     * @param libraryCode The source code of the library as GlideString
+     * @param replace Whether to replace existing library
+     * @return A CompletableFuture containing the library name as GlideString
+     */
+    public CompletableFuture<GlideString> functionLoad(GlideString libraryCode, boolean replace) {
+        List<String> args = new ArrayList<>();
+        if (replace) {
+            args.add("REPLACE");
+        }
+        args.add(libraryCode.toString());
+        return executeCommand(FunctionLoad, args.toArray(new String[0]))
+                .thenApply(result -> GlideString.of(result.toString()));
+    }
+
+    /**
+     * Delete a function library.
+     *
+     * @param libraryName The name of the library to delete as GlideString
+     * @return A CompletableFuture containing "OK" if successful
+     */
+    public CompletableFuture<String> functionDelete(GlideString libraryName) {
+        return executeCommand(FunctionDelete, libraryName.toString())
+                .thenApply(result -> result.toString());
+    }
+
+    /**
      * Flush all functions.
      *
      * @param mode The flush mode (ASYNC or SYNC), null for default

@@ -1604,6 +1604,42 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
     }
 
     /**
+     * Delete a function library.
+     * 
+     * @param libraryName The name of the library to delete as GlideString
+     * @return A CompletableFuture containing "OK" if successful
+     */
+    public CompletableFuture<String> functionDelete(GlideString libraryName) {
+        return super.functionDelete(libraryName);
+    }
+
+    /**
+     * Delete a function library with routing.
+     *
+     * @param libraryName The name of the library to delete as GlideString
+     * @param route The routing configuration for the command
+     * @return A CompletableFuture containing the result wrapped in ClusterValue
+     */
+    public CompletableFuture<ClusterValue<String>> functionDelete(GlideString libraryName, Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(
+            FunctionDelete, libraryName.toString()), route)
+            .thenApply(result -> {
+                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
+                    return ClusterValue.ofSingleValue(result.toString());
+                } else {
+                    // For multi-node routes, expect a map result
+                    if (result instanceof Map) {
+                        Map<String, String> mapResult = new java.util.HashMap<>();
+                        ((Map<?, ?>) result).forEach((key, value) -> 
+                            mapResult.put(key.toString(), value.toString()));
+                        return ClusterValue.ofMultiValue(mapResult);
+                    }
+                    return ClusterValue.ofSingleValue(result.toString());
+                }
+            });
+    }
+
+    /**
      * List functions with routing.
      *
      * @param libraryName Filter by library name (null for all)
@@ -1805,6 +1841,29 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
         }
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
             FCallReadOnly, cmdArgs.toArray(new String[0])), route)
+            .thenApply(result -> {
+                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
+                    return ClusterValue.ofSingleValue(result);
+                } else {
+                    // For multi-node routes, expect a map result
+                    if (result instanceof Map) {
+                        return ClusterValue.ofMultiValue((Map<String, Object>) result);
+                    }
+                    return ClusterValue.ofSingleValue(result);
+                }
+            });
+    }
+
+    /**
+     * Execute a read-only function with a GlideString function name and routing.
+     *
+     * @param functionName The name of the function to execute as GlideString
+     * @param route The routing configuration for the command
+     * @return A CompletableFuture containing the function result wrapped in ClusterValue
+     */
+    public CompletableFuture<ClusterValue<Object>> fcallReadOnly(GlideString functionName, Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(
+            FCallReadOnly, functionName.toString(), "0"), route)
             .thenApply(result -> {
                 if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
                     return ClusterValue.ofSingleValue(result);

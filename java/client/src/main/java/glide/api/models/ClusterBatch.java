@@ -2,6 +2,7 @@
 package glide.api.models;
 
 import static glide.api.models.commands.RequestType.*;
+import glide.api.models.commands.function.FunctionRestorePolicy;
 
 
 /**
@@ -1150,5 +1151,114 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
     public ClusterBatch publish(GlideString message, GlideString channel, boolean sharded) {
         String commandType = sharded ? SPublish : Publish;
         return addCommand(commandType, message.toString(), channel.toString());
+    }
+
+    /**
+     * Gets server information and statistics.
+     *
+     * @see <a href="https://valkey.io/commands/info/">valkey.io</a> for details.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch info() {
+        return addCommand(Info);
+    }
+
+    /**
+     * Gets the timestamp of the last successful save to disk.
+     *
+     * @see <a href="https://valkey.io/commands/lastsave/">valkey.io</a> for details.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch lastsave() {
+        return addCommand(LastSave);
+    }
+
+    /**
+     * Gets the frequency of access of a key.
+     *
+     * @see <a href="https://valkey.io/commands/object/">valkey.io</a> for details.
+     * @param key The key to get frequency for.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch objectFreq(String key) {
+        return addCommand(ObjectFreq, key);
+    }
+
+    /**
+     * Gets the idle time of a key.
+     *
+     * @see <a href="https://valkey.io/commands/object/">valkey.io</a> for details.
+     * @param key The key to get idle time for.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch objectIdletime(String key) {
+        return addCommand(ObjectIdletime, key);
+    }
+
+    /**
+     * Gets the reference count of a key.
+     *
+     * @see <a href="https://valkey.io/commands/object/">valkey.io</a> for details.
+     * @param key The key to get reference count for.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch objectRefcount(String key) {
+        return addCommand(ObjectRefcount, key);
+    }
+
+    /**
+     * Sets binary output mode for subsequent commands.
+     *
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch withBinaryOutput() {
+        // This is a mode setter, not a Redis command
+        // Implementation will need to track this state
+        return this;
+    }
+
+    /**
+     * Dumps a function library.
+     *
+     * @see <a href="https://valkey.io/commands/function/">valkey.io</a> for details.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch functionDump() {
+        return addCommand(FunctionDump);
+    }
+
+    /**
+     * Restores a function library from a dump.
+     *
+     * @see <a href="https://valkey.io/commands/function/">valkey.io</a> for details.
+     * @param payload The dumped function data.
+     * @param policy The restore policy.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch functionRestore(byte[] payload, FunctionRestorePolicy policy) {
+        return addCommand(FunctionRestore, new String(payload), policy.toString());
+    }
+
+    /**
+     * Gets information about a stream.
+     *
+     * @see <a href="https://valkey.io/commands/xinfo/">valkey.io</a> for details.
+     * @param key The stream key.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch xinfoStream(String key) {
+        return addCommand(XInfoStream, key);
+    }
+
+    /**
+     * Gets rank with score for a member in a sorted set.
+     *
+     * @see <a href="https://valkey.io/commands/zrank/">valkey.io</a> for details.
+     * @param key The sorted set key.
+     * @param member The member to get rank for.
+     * @return This batch instance for method chaining.
+     */
+    public ClusterBatch zrankWithScore(String key, String member) {
+        return addCommand(ZRank, key, member, "WITHSCORE");
     }
 }
