@@ -1859,10 +1859,10 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             commandType = CommandType.valueOf(args[0].toUpperCase());
         } catch (IllegalArgumentException e) {
             // For unknown commands, use a generic approach
-            String[] commandArgs = new String[args.length - 1];
-            System.arraycopy(args, 1, commandArgs, 0, args.length - 1);
+            String[] allArgs = new String[args.length];
+            System.arraycopy(args, 0, allArgs, 0, args.length);
             return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                CommandType.CUSTOM, args[0], commandArgs), route)
+                CommandType.CUSTOM_COMMAND, allArgs), route)
                 .thenApply(result -> {
                     if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
                         return ClusterValue.ofSingleValue(result);

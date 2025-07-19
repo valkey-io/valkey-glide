@@ -58,9 +58,9 @@ pub enum JniError {
     #[error("Operation timeout: {0}")]
     Timeout(String),
 
-    /// Redis/Valkey error
-    #[error("Redis error: {0}")]
-    Redis(#[from] redis::RedisError),
+    /// Valkey error
+    #[error("Valkey error: {0}")]
+    Valkey(#[from] redis::RedisError),
 
     /// Lock poisoned error
     #[error("Lock poisoned: {0}")]
@@ -106,7 +106,7 @@ pub fn throw_java_exception(env: &mut JNIEnv, error: &JniError) {
         JniError::Utf8(msg) => ("java/lang/IllegalArgumentException", format!("UTF-8 error: {}", msg)),
         JniError::UnexpectedResponse(msg) => ("java/lang/IllegalStateException", format!("Unexpected response: {}", msg)),
         JniError::Timeout(msg) => ("java/util/concurrent/TimeoutException", msg.clone()),
-        JniError::Redis(err) => ("java/lang/RuntimeException", format!("Redis error: {}", err)),
+        JniError::Valkey(err) => ("java/lang/RuntimeException", format!("Valkey error: {}", err)),
         JniError::ConversionError(msg) => ("java/lang/IllegalArgumentException", format!("Conversion error: {}", msg)),
         JniError::LockPoisoned(msg) => ("java/lang/IllegalStateException", format!("Lock poisoned: {}", msg)),
         JniError::InvalidHandle(msg) => ("java/lang/IllegalArgumentException", format!("Invalid handle: {}", msg)),

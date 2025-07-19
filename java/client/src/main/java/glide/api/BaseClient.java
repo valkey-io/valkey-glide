@@ -1112,7 +1112,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * Execute commands as an atomic transaction using MULTI/EXEC with options.
      * Uses optimized pipeline execution for better performance.
      */
-    private Object[] executeAtomicBatchWithOptions(List<Command> commands, boolean raiseOnError, Object options) throws Exception {
+    protected Object[] executeAtomicBatchWithOptions(List<Command> commands, boolean raiseOnError, Object options) throws Exception {
         try {
             // Convert List<Command> to Command[]
             Command[] commandArray = commands.toArray(new Command[0]);
@@ -1144,7 +1144,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * Execute commands as a pipeline (non-atomic) with options.
      * Uses optimized bulk execution for significant performance improvement.
      */
-    private Object[] executeNonAtomicBatchWithOptions(List<Command> commands, boolean raiseOnError, Object options) throws Exception {
+    protected Object[] executeNonAtomicBatchWithOptions(List<Command> commands, boolean raiseOnError, Object options) throws Exception {
         try {
             // Convert List<Command> to Command[]
             Command[] commandArray = commands.toArray(new Command[0]);

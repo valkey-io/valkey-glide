@@ -26,9 +26,9 @@ use std::time::Duration;
 use redis::cluster_routing::{MultipleNodeRoutingInfo, SingleNodeRoutingInfo};
 use jni::signature::{Primitive, ReturnType};
 
-use crate::error::JniResult;
+use crate::error::{JniResult, JniError};
 use crate::runtime::JniRuntime;
-use crate::async_bridge::{AsyncBridge, validate_timeout};
+use crate::async_bridge::AsyncBridge;
 
 /// Convert Java Route object to Rust RoutingInfo
 /// This eliminates the over-engineered routing conversion that duplicated logic
@@ -173,7 +173,7 @@ impl JniClient {
 
         // Convert result to Vec<Value>
         match result {
-            Value::Bulk(values) => Ok(values),
+            Value::Array(values) => Ok(values),
             single_value => Ok(vec![single_value]),
         }
     }
@@ -201,7 +201,7 @@ impl JniClient {
 
         // Convert result to Vec<Value>
         match result {
-            Value::Bulk(values) => Ok(values),
+            Value::Array(values) => Ok(values),
             single_value => Ok(vec![single_value]),
         }
     }
@@ -850,61 +850,9 @@ pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_executeArray
     jni_result!(&mut env, result, ptr::null_mut())
 }
 
-/// Execute a command with routing support (DEPRECATED - use executeCommandWithRoute)
-/// This method uses the old over-engineered routing logic and should not be used.
-/// Use executeCommandWithRoute instead which accepts Route objects directly.
-#[no_mangle]
-#[deprecated(note = "Use executeCommandWithRoute instead")]
-pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_executeCommandWithRouting(
-    mut env: JNIEnv,
-    _class: JClass,
-    _client_handle: jlong,
-    _command: jstring,
-    _args: jobject,
-    _routing_type: jint,
-    _routing_value: jstring,
-) -> jobject {
-    // Return error indicating this method is deprecated
-    let error = env.new_string("DEPRECATED: Use executeCommandWithRoute instead");
-    match error {
-        Ok(error_str) => {
-            let error_string: String = env.get_string(&error_str).unwrap().into();
-            env.throw_new("java/lang/UnsupportedOperationException", &error_string);
-        }
-        Err(_) => {
-            env.throw_new("java/lang/UnsupportedOperationException", "Deprecated method");
-        }
-    }
-    ptr::null_mut()
-}
+// Deprecated executeCommandWithRouting function removed
 
-/// Execute a command with routing support expecting a String result (DEPRECATED - use executeStringCommandWithRoute)
-/// This method uses the old over-engineered routing logic and should not be used.
-/// Use executeStringCommandWithRoute instead which accepts Route objects directly.
-#[no_mangle]
-#[deprecated(note = "Use executeStringCommandWithRoute instead")]
-pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_executeStringCommandWithRouting(
-    mut env: JNIEnv,
-    _class: JClass,
-    _client_handle: jlong,
-    _command: jstring,
-    _args: jobject,
-    _routing_type: jint,
-    _routing_value: jstring,
-) -> jstring {
-    // Return error indicating this method is deprecated
-    let error = env.new_string("DEPRECATED: Use executeStringCommandWithRoute instead");
-    match error {
-        Ok(error_str) => {
-            let error_string: String = env.get_string(&error_str).unwrap().into();
-            env.throw_new("java/lang/UnsupportedOperationException", &error_string);
-        }
-        Err(_) => {
-            env.throw_new("java/lang/UnsupportedOperationException", "Deprecated method");
-        }
-    }
-    ptr::null_mut()
-}
+// Deprecated executeStringCommandWithRouting function removed
 
 /// Get client statistics
 #[no_mangle]
@@ -1886,7 +1834,7 @@ pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_executePipel
     commands: jobject,
     routing_info: jobject,
     is_atomic: jboolean,
-    timeout_ms: jint,
+    _timeout_ms: jint,
     retry_server_error: jboolean,
     retry_connection_error: jboolean,
 ) -> jobject {
@@ -1948,17 +1896,10 @@ pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_executePipel
         let client_arc = Arc::new(client);
         let responses = if is_atomic_bool {
             // Atomic execution - use MULTI/EXEC transaction
-            execute_atomic_batch_with_options(client_arc, rust_commands, routing, timeout_ms)?
+            execute_atomic_transaction(&client_arc, &rust_commands, routing)?
         } else {
             // Non-atomic batch execution - send all commands at once for optimal performance
-            execute_batch_bulk_with_options(
-                client_arc,
-                rust_commands,
-                routing,
-                timeout_ms,
-                retry_server_error != 0,
-                retry_connection_error != 0
-            )?
+            execute_batch_attempt(&client_arc, &rust_commands, routing)?
         };
 
         // Convert responses to Java array
@@ -2003,32 +1944,19 @@ pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_executePipel
     )
 }
 
-/// Execute commands atomically using MULTI/EXEC transaction (original version)
-fn execute_atomic_batch(
-    client: Arc<JniClient>,
-    commands: Vec<redis::Cmd>,
+/// Execute commands atomically using MULTI/EXEC transaction
+fn execute_atomic_transaction(
+    client: &Arc<JniClient>,
+    commands: &[redis::Cmd],
     routing: Option<RoutingInfo>,
 ) -> JniResult<Vec<Value>> {
-    execute_atomic_batch_with_options(client, commands, routing, 0)
-}
-
-/// Execute commands atomically using MULTI/EXEC transaction with options
-fn execute_atomic_batch_with_options(
-    client: Arc<JniClient>,
-    commands: Vec<redis::Cmd>,
-    routing: Option<RoutingInfo>,
-    timeout_ms: jint,
-) -> JniResult<Vec<Value>> {
-    // Validate timeout - glide-core handles the actual timeout enforcement
-    let _timeout_duration = validate_timeout(timeout_ms)?;
-
     // Start transaction
     let multi_cmd = cmd("MULTI");
     client.execute_command_with_routing(multi_cmd, routing.clone())?;
 
     // Queue all commands (they return "QUEUED")
     for command in commands {
-        client.execute_command_with_routing(command, routing.clone())?;
+        client.execute_command_with_routing(command.clone(), routing.clone())?;
     }
 
     // Execute the transaction
@@ -2040,55 +1968,6 @@ fn execute_atomic_batch_with_options(
         Value::Nil => Ok(vec![]), // Transaction was discarded (e.g., due to WATCH)
         single_result => Ok(vec![single_result]), // Single result, wrap in array
     }
-}
-
-/// Execute commands as a non-atomic batch for optimal performance (original version)
-fn execute_batch_bulk(
-    client: Arc<JniClient>,
-    commands: Vec<redis::Cmd>,
-    routing: Option<RoutingInfo>,
-) -> JniResult<Vec<Value>> {
-    execute_batch_bulk_with_options(client, commands, routing, 0, false, false)
-}
-
-/// Execute commands as a non-atomic batch for optimal performance with options
-/// Uses glide-core's pipeline execution capabilities for true bulk command processing
-fn execute_batch_bulk_with_options(
-    client: Arc<JniClient>,
-    commands: Vec<redis::Cmd>,
-    routing: Option<RoutingInfo>,
-    timeout_ms: jint,
-    retry_server_error: bool,
-    retry_connection_error: bool,
-) -> JniResult<Vec<Value>> {
-    // Validate timeout - glide-core handles the actual timeout enforcement
-    let _timeout_duration = validate_timeout(timeout_ms)?;
-
-    // Execute batch using glide-core's pipeline capabilities
-    // This provides the same bulk execution performance as the UDS implementation
-    let max_retries = if retry_server_error || retry_connection_error { 3 } else { 1 };
-    
-    for attempt in 1..=max_retries {
-        match execute_batch_attempt(&client, &commands, routing.clone()) {
-            Ok(responses) => return Ok(responses),
-            Err(e) => {
-                // Determine if we should retry based on error type and retry flags
-                let should_retry = should_retry_error(&e, retry_server_error, retry_connection_error);
-                
-                if should_retry && attempt < max_retries {
-                    // Brief backoff before retry (exponential: 10ms, 20ms, 40ms)
-                    let backoff_ms = 10 * (1 << (attempt - 1));
-                    std::thread::sleep(std::time::Duration::from_millis(backoff_ms));
-                    continue;
-                }
-                
-                return Err(e);
-            }
-        }
-    }
-    
-    // This should never be reached due to the loop structure
-    Err(GlideError::Other("Max retries exceeded".to_string()))
 }
 
 /// Execute a single batch attempt using pipeline operations
@@ -2116,18 +1995,4 @@ fn execute_batch_attempt(
 }
 
 /// Determine if an error should trigger a retry based on error type and retry flags
-fn should_retry_error(
-    error: &GlideError,
-    retry_server_error: bool,
-    retry_connection_error: bool,
-) -> bool {
-    match error {
-        // Server errors that may be retryable (ASK, MOVED, TRYAGAIN)
-        GlideError::Other(msg) if retry_server_error => {
-            msg.contains("ASK") || msg.contains("MOVED") || msg.contains("TRYAGAIN")
-        }
-        // Connection errors that may be retryable
-        GlideError::ConnectionError(_) if retry_connection_error => true,
-        _ => false,
-    }
-}
+// Note: should_retry_error function removed as it's no longer used after simplification
