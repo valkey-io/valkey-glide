@@ -8484,6 +8484,14 @@ export class BaseClient {
     }
 
     /**
+     * Check if the client is closed
+     * @returns true if the client is closed, false otherwise
+     */
+    public get isClientClosed(): boolean {
+        return this.isClosed;
+    }
+
+    /**
      *  Terminate the client by closing all associated resources, including the socket and any active promises.
      *  All open promises will be closed with an exception.
      * @param errorMessage - If defined, this error message will be passed along with the exceptions when closing all open promises.

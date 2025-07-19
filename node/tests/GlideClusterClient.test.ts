@@ -102,8 +102,22 @@ describe("GlideClusterClient", () => {
     }, 120000);
 
     afterEach(async () => {
-        await flushAndCloseClient(true, cluster.getAddresses(), client);
-        await flushAndCloseClient(true, azCluster.getAddresses(), azClient);
+        try {
+            await flushAndCloseClient(true, cluster.getAddresses(), client);
+        } catch (error) {
+            // Log error but don't fail the test cleanup
+            console.warn("Error closing client:", error);
+        }
+
+        try {
+            await flushAndCloseClient(true, azCluster.getAddresses(), azClient);
+        } catch (error) {
+            // Log error but don't fail the test cleanup
+            console.warn("Error closing azClient:", error);
+        }
+
+        // Small delay to allow socket cleanup to complete
+        await new Promise((resolve) => setTimeout(resolve, 10));
     });
 
     afterAll(async () => {
