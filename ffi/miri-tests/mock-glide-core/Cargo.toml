@@ -1,0 +1,10 @@
+[package]
+name = "mock-glide-core"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+glide-core = { path = "../../../glide-core", features = ["proto"] }
+redis = { path = "../mock-redis", package = "mock-redis" }
+telemetrylib = { path = "../mock-telemetry", package = "mock-telemetry" }
+tokio = { version = "^1", features = ["rt", "macros", "rt-multi-thread", "time"] }
