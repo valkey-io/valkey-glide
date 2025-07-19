@@ -212,7 +212,8 @@ public class TestConfiguration : IDisposable
 #pragma warning disable xUnit1046 // Avoid using TheoryDataRow arguments that are not serializable
                 field = [
                     .. TestStandaloneConnections.Select(d => new TheoryDataRow<ConnectionMultiplexer, bool>(d.Data, false)),
-                    .. TestClusterConnections.Select(d => new TheoryDataRow<ConnectionMultiplexer, bool>(d.Data, true))];
+                    .. TestClusterConnections.Select(d => new TheoryDataRow<ConnectionMultiplexer, bool>(d.Data, true))
+                ];
 #pragma warning restore xUnit1046 // Avoid using TheoryDataRow arguments that are not serializable
             }
             return field;

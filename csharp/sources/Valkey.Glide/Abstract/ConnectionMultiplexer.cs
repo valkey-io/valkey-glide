@@ -68,10 +68,10 @@ public sealed class ConnectionMultiplexer : IConnectionMultiplexer, IDisposable,
             : [.. GetServers().Select(s => s.EndPoint)];
 
     public IServer GetServer(string host, int port, object? asyncState = null)
-        => GetServer(Utils.ParseEndPoint(host, port), asyncState);
+        => GetServer(Format.ParseEndPoint(host, port), asyncState);
 
     public IServer GetServer(string hostAndPort, object? asyncState = null)
-        => Utils.TryParseEndPoint(hostAndPort, out IPEndPoint? ep)
+        => Format.TryParseEndPoint(hostAndPort, out EndPoint? ep)
             ? GetServer(ep, asyncState)
             : throw new ArgumentException($"The specified host and port could not be parsed: {hostAndPort}", nameof(hostAndPort));
 
@@ -165,8 +165,7 @@ public sealed class ConnectionMultiplexer : IConnectionMultiplexer, IDisposable,
         T config = new();
         foreach (EndPoint ep in configuration.EndPoints)
         {
-            string[] parts = ep.ToString()!.Split(':');
-            config.Addresses += (parts[0], ushort.Parse(parts[1]));
+            config.Addresses += Utils.SplitEndpoint(ep);
         }
         config.UseTls = configuration.Ssl;
         _ = configuration.ConnectTimeout.HasValue ? config.ConnectionTimeout = TimeSpan.FromMilliseconds(configuration.ConnectTimeout.Value) : new();
