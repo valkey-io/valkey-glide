@@ -78,8 +78,8 @@ describe("GlideClient", () => {
     }, 20000);
 
     afterEach(async () => {
-        await flushAndCloseClient(false, cluster.getAddresses(), client);
-        await flushAndCloseClient(false, azCluster.getAddresses(), azClient);
+        await flushAndCloseClient(false, cluster?.getAddresses(), client);
+        await flushAndCloseClient(false, azCluster?.getAddresses(), azClient);
     });
 
     afterAll(async () => {

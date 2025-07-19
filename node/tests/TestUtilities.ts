@@ -509,18 +509,20 @@ export const getClientConfigurationOption = (
 
 export async function flushAndCloseClient(
     cluster_mode: boolean,
-    addresses: [string, number][],
+    addresses: [string, number][] | undefined,
     client?: BaseClient,
     tlsConfig?: TestTLSConfig,
 ) {
     try {
-        await testTeardown(
-            cluster_mode,
-            getClientConfigurationOption(addresses, ProtocolVersion.RESP3, {
-                ...tlsConfig,
-                requestTimeout: 2000,
-            }),
-        );
+        if (addresses) {
+            await testTeardown(
+                cluster_mode,
+                getClientConfigurationOption(addresses, ProtocolVersion.RESP3, {
+                    ...tlsConfig,
+                    requestTimeout: 2000,
+                }),
+            );
+        }
     } finally {
         // some tests don't initialize a client
         client?.close();

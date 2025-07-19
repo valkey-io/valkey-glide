@@ -44,7 +44,7 @@ describe("Scan GlideClusterClient", () => {
     }, 40000);
 
     afterEach(async () => {
-        await flushAndCloseClient(true, cluster.getAddresses(), client);
+        await flushAndCloseClient(true, cluster?.getAddresses(), client);
     });
 
     afterAll(async () => {
@@ -560,7 +560,7 @@ describe("Scan GlideClient", () => {
     }, 20000);
 
     afterEach(async () => {
-        await flushAndCloseClient(false, cluster.getAddresses(), client);
+        await flushAndCloseClient(false, cluster?.getAddresses(), client);
     });
 
     afterAll(async () => {
