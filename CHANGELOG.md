@@ -104,6 +104,7 @@
 * Go: Fix API to use errors idiomatically ([#4090](https://github.com/valkey-io/valkey-glide/pull/4090))
 * Go: XInfoStream example fix ([#4185](https://github.com/valkey-io/valkey-glide/pull/4185))
 * Node: Validate clientAZ when using AZ affinity strategies ([#4267](https://github.com/valkey-io/valkey-glide/pull/4267))
+* Core: Add support for OTLP environment variables ([#4334](https://github.com/valkey-io/valkey-glide/issues/4334))
 
 #### Breaking Changes
 
