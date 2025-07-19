@@ -26,7 +26,7 @@ use std::time::Duration;
 use redis::cluster_routing::{MultipleNodeRoutingInfo, SingleNodeRoutingInfo};
 use jni::signature::{Primitive, ReturnType};
 
-use crate::error::{JniResult, JniError};
+use crate::error::JniResult;
 use crate::runtime::JniRuntime;
 use crate::async_bridge::AsyncBridge;
 
@@ -1993,6 +1993,3 @@ fn execute_batch_attempt(
         }
     }
 }
-
-/// Determine if an error should trigger a retry based on error type and retry flags
-// Note: should_retry_error function removed as it's no longer used after simplification

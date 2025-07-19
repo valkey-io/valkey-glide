@@ -24,7 +24,7 @@ public interface SetBaseCommands {
      * @param key The <code>key</code> where members will be added to its set.
      * @param members A list of members to add to the set stored at <code>key</code>.
      * @return The number of members that were added to the set, excluding members already present.
-     * @remarks If <code>key</code> does not exist, a new set is created before adding <code>members
+     * If <code>key</code> does not exist, a new set is created before adding <code>members
      *     </code>.
      * @example
      *     <pre>{@code
@@ -42,7 +42,7 @@ public interface SetBaseCommands {
      * @param key The <code>key</code> where members will be added to its set.
      * @param members A list of members to add to the set stored at <code>key</code>.
      * @return The number of members that were added to the set, excluding members already present.
-     * @remarks If <code>key</code> does not exist, a new set is created before adding <code>members
+     * If <code>key</code> does not exist, a new set is created before adding <code>members
      *     </code>.
      * @example
      *     <pre>{@code
@@ -60,7 +60,7 @@ public interface SetBaseCommands {
      * @param key The <code>key</code> from which members will be removed.
      * @param members A list of members to remove from the set stored at <code>key</code>.
      * @return The number of members that were removed from the set, excluding non-existing members.
-     * @remarks If <code>key</code> does not exist, it is treated as an empty set and this command
+     * If <code>key</code> does not exist, it is treated as an empty set and this command
      *     returns <code>0</code>.
      * @example
      *     <pre>{@code
@@ -78,7 +78,7 @@ public interface SetBaseCommands {
      * @param key The <code>key</code> from which members will be removed.
      * @param members A list of members to remove from the set stored at <code>key</code>.
      * @return The number of members that were removed from the set, excluding non-existing members.
-     * @remarks If <code>key</code> does not exist, it is treated as an empty set and this command
+     * If <code>key</code> does not exist, it is treated as an empty set and this command
      *     returns <code>0</code>.
      * @example
      *     <pre>{@code
@@ -94,7 +94,7 @@ public interface SetBaseCommands {
      * @see <a href="https://valkey.io/commands/smembers/">valkey.io</a> for details.
      * @param key The key from which to retrieve the set members.
      * @return A <code>Set</code> of all members of the set.
-     * @remarks If <code>key</code> does not exist an empty set will be returned.
+     * If <code>key</code> does not exist an empty set will be returned.
      * @example
      *     <pre>{@code
      * Set<String> result = client.smembers("my_set").get();
@@ -109,7 +109,7 @@ public interface SetBaseCommands {
      * @see <a href="https://valkey.io/commands/smembers/">valkey.io</a> for details.
      * @param key The key from which to retrieve the set members.
      * @return A <code>Set</code> of all members of the set.
-     * @remarks If <code>key</code> does not exist an empty set will be returned.
+     * If <code>key</code> does not exist an empty set will be returned.
      * @example
      *     <pre>{@code
      * Set<String> result = client.smembers(gs("my_set")).get();
@@ -183,7 +183,7 @@ public interface SetBaseCommands {
      * </code>, removing it from the source set. Creates a new destination set if needed. The
      * operation is atomic.
      *
-     * @apiNote When in cluster mode, both <code>source</code> and <code>destination</code> must map
+     * When in cluster mode, both <code>source</code> and <code>destination</code> must map
      *     to the same hash slot.
      * @see <a href="https://valkey.io/commands/smove/">valkey.io</a> for details.
      * @param source The key of the set to remove the element from.
@@ -204,7 +204,7 @@ public interface SetBaseCommands {
      * </code>, removing it from the source set. Creates a new destination set if needed. The
      * operation is atomic.
      *
-     * @apiNote When in cluster mode, both <code>source</code> and <code>destination</code> must map
+     * When in cluster mode, both <code>source</code> and <code>destination</code> must map
      *     to the same hash slot.
      * @see <a href="https://valkey.io/commands/smove/">valkey.io</a> for details.
      * @param source The key of the set to remove the element from.
@@ -263,7 +263,7 @@ public interface SetBaseCommands {
     /**
      * Computes the difference between the first set and all the successive sets in <code>keys</code>.
      *
-     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     * When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @see <a href="https://valkey.io/commands/sdiff/">valkey.io</a> for details.
      * @param keys The keys of the sets to diff.
      * @return A <code>Set</code> of elements representing the difference between the sets.<br>
@@ -279,7 +279,7 @@ public interface SetBaseCommands {
     /**
      * Computes the difference between the first set and all the successive sets in <code>keys</code>.
      *
-     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     * When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @see <a href="https://valkey.io/commands/sdiff/">valkey.io</a> for details.
      * @param keys The keys of the sets to diff.
      * @return A <code>Set</code> of elements representing the difference between the sets.<br>
@@ -296,7 +296,7 @@ public interface SetBaseCommands {
      * Stores the difference between the first set and all the successive sets in <code>keys</code>
      * into a new set at <code>destination</code>.
      *
-     * @apiNote When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
+     * When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
      *     the same hash slot.
      * @see <a href="https://valkey.io/commands/sdiffstore/">valkey.io</a> for details.
      * @param destination The key of the destination set.
@@ -314,7 +314,7 @@ public interface SetBaseCommands {
      * Stores the difference between the first set and all the successive sets in <code>keys</code>
      * into a new set at <code>destination</code>.
      *
-     * @apiNote When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
+     * When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
      *     the same hash slot.
      * @see <a href="https://valkey.io/commands/sdiffstore/">valkey.io</a> for details.
      * @param destination The key of the destination set.
@@ -331,7 +331,7 @@ public interface SetBaseCommands {
     /**
      * Gets the intersection of all the given sets.
      *
-     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     * When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @see <a href="https://valkey.io/commands/sinter/">valkey.io</a> for details.
      * @param keys The keys of the sets.
      * @return A <code>Set</code> of members which are present in all given sets.<br>
@@ -350,7 +350,7 @@ public interface SetBaseCommands {
     /**
      * Gets the intersection of all the given sets.
      *
-     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     * When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @see <a href="https://valkey.io/commands/sinter/">valkey.io</a> for details.
      * @param keys The keys of the sets.
      * @return A <code>Set</code> of members which are present in all given sets.<br>
@@ -370,7 +370,7 @@ public interface SetBaseCommands {
      * Gets the cardinality of the intersection of all the given sets.
      *
      * @since Valkey 7.0 and above.
-     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     * When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @see <a href="https://valkey.io/commands/sintercard/">valkey.io</a> for details.
      * @param keys The keys of the sets.
      * @return The cardinality of the intersection result. If one or more sets do not exist, <code>0
@@ -390,7 +390,7 @@ public interface SetBaseCommands {
      * Gets the cardinality of the intersection of all the given sets.
      *
      * @since Valkey 7.0 and above.
-     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     * When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @see <a href="https://valkey.io/commands/sintercard/">valkey.io</a> for details.
      * @param keys The keys of the sets.
      * @return The cardinality of the intersection result. If one or more sets do not exist, <code>0
@@ -410,7 +410,7 @@ public interface SetBaseCommands {
      * Gets the cardinality of the intersection of all the given sets.
      *
      * @since Valkey 7.0 and above.
-     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     * When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @see <a href="https://valkey.io/commands/sintercard/">valkey.io</a> for details.
      * @param keys The keys of the sets.
      * @param limit The limit for the intersection cardinality value.
@@ -436,7 +436,7 @@ public interface SetBaseCommands {
      * Gets the cardinality of the intersection of all the given sets.
      *
      * @since Valkey 7.0 and above.
-     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     * When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @see <a href="https://valkey.io/commands/sintercard/">valkey.io</a> for details.
      * @param keys The keys of the sets.
      * @param limit The limit for the intersection cardinality value.
@@ -462,7 +462,7 @@ public interface SetBaseCommands {
      * Stores the members of the intersection of all given sets specified by <code>keys</code> into a
      * new set at <code>destination</code>.
      *
-     * @apiNote When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
+     * When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
      *     the same hash slot.
      * @see <a href="https://valkey.io/commands/sinterstore/">valkey.io</a> for details.
      * @param destination The key of the destination set.
@@ -480,7 +480,7 @@ public interface SetBaseCommands {
      * Stores the members of the intersection of all given sets specified by <code>keys</code> into a
      * new set at <code>destination</code>.
      *
-     * @apiNote When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
+     * When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
      *     the same hash slot.
      * @see <a href="https://valkey.io/commands/sinterstore/">valkey.io</a> for details.
      * @param destination The key of the destination set.
@@ -498,7 +498,7 @@ public interface SetBaseCommands {
      * Stores the members of the union of all given sets specified by <code>keys</code> into a new set
      * at <code>destination</code>.
      *
-     * @apiNote When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
+     * When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
      *     the same hash slot.
      * @see <a href="https://valkey.io/commands/sunionstore/">valkey.io</a> for details.
      * @param destination The key of the destination set.
@@ -516,7 +516,7 @@ public interface SetBaseCommands {
      * Stores the members of the union of all given sets specified by <code>keys</code> into a new set
      * at <code>destination</code>.
      *
-     * @apiNote When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
+     * When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
      *     the same hash slot.
      * @see <a href="https://valkey.io/commands/sunionstore/">valkey.io</a> for details.
      * @param destination The key of the destination set.
@@ -677,7 +677,7 @@ public interface SetBaseCommands {
     /**
      * Gets the union of all the given sets.
      *
-     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     * When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @see <a href="https://valkey.io/commands/sunion">valkey.io</a> for details.
      * @param keys The keys of the sets.
      * @return A set of members which are present in at least one of the given sets. If none of the
@@ -698,7 +698,7 @@ public interface SetBaseCommands {
     /**
      * Gets the union of all the given sets.
      *
-     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     * When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @see <a href="https://valkey.io/commands/sunion">valkey.io</a> for details.
      * @param keys The keys of the sets.
      * @return A set of members which are present in at least one of the given sets. If none of the

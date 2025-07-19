@@ -17,7 +17,7 @@ import io.valkey.glide.core.commands.CommandType;
  *
  * @see <a href="https://valkey.io/docs/topics/transactions/">Valkey Transactions (Atomic Batches)</a>
  * @see <a href="https://valkey.io/topics/pipelining">Valkey Pipelines (Non-Atomic Batches)</a>
- * @remarks Standalone Batches are executed on the primary node.
+ * Standalone Batches are executed on the primary node.
  * @example
  *     <pre>{@code
  * // Example of Atomic Batch (Transaction)

@@ -14,7 +14,7 @@ import lombok.*;
  * RestoreOptions)}.
  *
  * @see <a href="https://valkey.io/commands/restore/">valkey.io</a>
- * @apiNote <code>IDLETIME</code> and <code>FREQ</code> modifiers cannot be set at the same time.
+ * <code>IDLETIME</code> and <code>FREQ</code> modifiers cannot be set at the same time.
  */
 @Getter
 @Builder

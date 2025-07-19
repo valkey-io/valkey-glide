@@ -22,7 +22,7 @@ public interface GenericBaseCommands {
      * Removes the specified <code>keys</code> from the database. A key is ignored if it does not
      * exist.
      *
-     * @apiNote In cluster mode, if keys in <code>keys</code> map to different hash slots, the command
+     * In cluster mode, if keys in <code>keys</code> map to different hash slots, the command
      *     will be split across these slots and executed separately for each. This means the command
      *     is atomic only at the slot level. If one or more slot-specific requests fail, the entire
      *     call will return the first encountered error, even though some requests may have succeeded
@@ -43,7 +43,7 @@ public interface GenericBaseCommands {
      * Removes the specified <code>keys</code> from the database. A key is ignored if it does not
      * exist.
      *
-     * @apiNote In cluster mode, if keys in <code>keys</code> map to different hash slots, the command
+     * In cluster mode, if keys in <code>keys</code> map to different hash slots, the command
      *     will be split across these slots and executed separately for each. This means the command
      *     is atomic only at the slot level. If one or more slot-specific requests fail, the entire
      *     call will return the first encountered error, even though some requests may have succeeded
@@ -63,7 +63,7 @@ public interface GenericBaseCommands {
     /**
      * Returns the number of keys in <code>keys</code> that exist in the database.
      *
-     * @apiNote In cluster mode, if keys in <code>keys</code> map to different hash slots, the command
+     * In cluster mode, if keys in <code>keys</code> map to different hash slots, the command
      *     will be split across these slots and executed separately for each. This means the command
      *     is atomic only at the slot level. If one or more slot-specific requests fail, the entire
      *     call will return the first encountered error, even though some requests may have succeeded
@@ -84,7 +84,7 @@ public interface GenericBaseCommands {
     /**
      * Returns the number of keys in <code>keys</code> that exist in the database.
      *
-     * @apiNote In cluster mode, if keys in <code>keys</code> map to different hash slots, the command
+     * In cluster mode, if keys in <code>keys</code> map to different hash slots, the command
      *     will be split across these slots and executed separately for each. This means the command
      *     is atomic only at the slot level. If one or more slot-specific requests fail, the entire
      *     call will return the first encountered error, even though some requests may have succeeded
@@ -108,7 +108,7 @@ public interface GenericBaseCommands {
      * specified keys and ignores non-existent ones. However, this command does not block the server,
      * while <a href="https://valkey.io/commands/del/">DEL</a> does.
      *
-     * @apiNote In cluster mode, if keys in <code>keys</code> map to different hash slots, the command
+     * In cluster mode, if keys in <code>keys</code> map to different hash slots, the command
      *     will be split across these slots and executed separately for each. This means the command
      *     is atomic only at the slot level. If one or more slot-specific requests fail, the entire
      *     call will return the first encountered error, even though some requests may have succeeded
@@ -131,7 +131,7 @@ public interface GenericBaseCommands {
      * specified keys and ignores non-existent ones. However, this command does not block the server,
      * while <a href="https://valkey.io/commands/del/">DEL</a> does.
      *
-     * @apiNote In cluster mode, if keys in <code>keys</code> map to different hash slots, the command
+     * In cluster mode, if keys in <code>keys</code> map to different hash slots, the command
      *     will be split across these slots and executed separately for each. This means the command
      *     is atomic only at the slot level. If one or more slot-specific requests fail, the entire
      *     call will return the first encountered error, even though some requests may have succeeded
@@ -900,7 +900,7 @@ public interface GenericBaseCommands {
      * Renames <code>key</code> to <code>newKey</code>.<br>
      * If <code>newKey</code> already exists it is overwritten.
      *
-     * @apiNote When in cluster mode, both <code>key</code> and <code>newKey</code> must map to the
+     * When in cluster mode, both <code>key</code> and <code>newKey</code> must map to the
      *     same hash slot.
      * @see <a href="https://valkey.io/commands/rename/">valkey.io</a> for details.
      * @param key The key to rename.
@@ -920,7 +920,7 @@ public interface GenericBaseCommands {
      * Renames <code>key</code> to <code>newKey</code>.<br>
      * If <code>newKey</code> already exists it is overwritten.
      *
-     * @apiNote When in cluster mode, both <code>key</code> and <code>newKey</code> must map to the
+     * When in cluster mode, both <code>key</code> and <code>newKey</code> must map to the
      *     same hash slot.
      * @see <a href="https://valkey.io/commands/rename/">valkey.io</a> for details.
      * @param key The key to rename.
@@ -939,7 +939,7 @@ public interface GenericBaseCommands {
     /**
      * Renames <code>key</code> to <code>newKey</code> if <code>newKey</code> does not yet exist.
      *
-     * @apiNote When in cluster mode, both <code>key</code> and <code>newKey</code> must map to the
+     * When in cluster mode, both <code>key</code> and <code>newKey</code> must map to the
      *     same hash slot.
      * @see <a href="https://valkey.io/commands/renamenx/">valkey.io</a> for details.
      * @param key The key to rename.
@@ -957,7 +957,7 @@ public interface GenericBaseCommands {
     /**
      * Renames <code>key</code> to <code>newKey</code> if <code>newKey</code> does not yet exist.
      *
-     * @apiNote When in cluster mode, both <code>key</code> and <code>newKey</code> must map to the
+     * When in cluster mode, both <code>key</code> and <code>newKey</code> must map to the
      *     same hash slot.
      * @see <a href="https://valkey.io/commands/renamenx/">valkey.io</a> for details.
      * @param key The key to rename.
@@ -975,7 +975,7 @@ public interface GenericBaseCommands {
     /**
      * Updates the last access time of specified <code>keys</code>.
      *
-     * @apiNote In cluster mode, if keys in <code>keys</code> map to different hash slots, the command
+     * In cluster mode, if keys in <code>keys</code> map to different hash slots, the command
      *     will be split across these slots and executed separately for each. This means the command
      *     is atomic only at the slot level. If one or more slot-specific requests fail, the entire
      *     call will return the first encountered error, even though some requests may have succeeded
@@ -995,7 +995,7 @@ public interface GenericBaseCommands {
     /**
      * Updates the last access time of specified <code>keys</code>.
      *
-     * @apiNote In cluster mode, if keys in <code>keys</code> map to different hash slots, the command
+     * In cluster mode, if keys in <code>keys</code> map to different hash slots, the command
      *     will be split across these slots and executed separately for each. This means the command
      *     is atomic only at the slot level. If one or more slot-specific requests fail, the entire
      *     call will return the first encountered error, even though some requests may have succeeded
@@ -1016,7 +1016,7 @@ public interface GenericBaseCommands {
      * Copies the value stored at the <code>source</code> to the <code>destination</code> key if the
      * <code>destination</code> key does not yet exist.
      *
-     * @apiNote When in cluster mode, both <code>source</code> and <code>destination</code> must map
+     * When in cluster mode, both <code>source</code> and <code>destination</code> must map
      *     to the same hash slot.
      * @since Valkey 6.2.0 and above.
      * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
@@ -1038,7 +1038,7 @@ public interface GenericBaseCommands {
      * Copies the value stored at the <code>source</code> to the <code>destination</code> key if the
      * <code>destination</code> key does not yet exist.
      *
-     * @apiNote When in cluster mode, both <code>source</code> and <code>destination</code> must map
+     * When in cluster mode, both <code>source</code> and <code>destination</code> must map
      *     to the same hash slot.
      * @since Valkey 6.2.0 and above.
      * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
@@ -1061,7 +1061,7 @@ public interface GenericBaseCommands {
      * <code>replace</code> is true, removes the <code>destination</code> key first if it already
      * exists, otherwise performs no action.
      *
-     * @apiNote When in cluster mode, both <code>source</code> and <code>destination</code> must map
+     * When in cluster mode, both <code>source</code> and <code>destination</code> must map
      *     to the same hash slot.
      * @since Valkey 6.2.0 and above.
      * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
@@ -1085,7 +1085,7 @@ public interface GenericBaseCommands {
      * <code>replace</code> is true, removes the <code>destination</code> key first if it already
      * exists, otherwise performs no action.
      *
-     * @apiNote When in cluster mode, both <code>source</code> and <code>destination</code> must map
+     * When in cluster mode, both <code>source</code> and <code>destination</code> must map
      *     to the same hash slot.
      * @since Valkey 6.2.0 and above.
      * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
@@ -1145,7 +1145,7 @@ public interface GenericBaseCommands {
      * Create a <code>key</code> associated with a <code>value</code> that is obtained by
      * deserializing the provided serialized <code>value</code> (obtained via {@link #dump}).
      *
-     * @apiNote <code>IDLETIME</code> and <code>FREQ</code> modifiers cannot be set at the same time.
+     * <code>IDLETIME</code> and <code>FREQ</code> modifiers cannot be set at the same time.
      * @see <a href="https://valkey.io/commands/restore/">valkey.io</a> for details.
      * @param key The <code>key</code> to create.
      * @param ttl The expiry time (in milliseconds). If <code>0</code>, the <code>key</code> will
@@ -1207,7 +1207,7 @@ public interface GenericBaseCommands {
      * apply transformations on sorted elements.<br>
      * To store the result into a new key, see {@link #sortStore(String, String, SortOptions)}.
      *
-     * @apiNote When in cluster mode, both <code>key</code> and the patterns specified in {@link
+     * When in cluster mode, both <code>key</code> and the patterns specified in {@link
      *     SortOptions#byPattern} and {@link SortOptions#getPatterns} must hash to the same slot. The
      *     use of {@link SortOptions#byPattern} and {@link SortOptions#getPatterns} in cluster mode is
      *     supported since Valkey version 8.0.
@@ -1234,7 +1234,7 @@ public interface GenericBaseCommands {
      * To store the result into a new key, see {@link #sortStore(GlideString, GlideString,
      * SortOptions)}.
      *
-     * @apiNote When in cluster mode, both <code>key</code> and the patterns specified in {@link
+     * When in cluster mode, both <code>key</code> and the patterns specified in {@link
      *     SortOptionsBinary#byPattern} and {@link SortOptionsBinary#getPatterns} must hash to the
      *     same slot. The use of {@link SortOptionsBinary#byPattern} and {@link
      *     SortOptionsBinary#getPatterns} in cluster mode is supported since Valkey version 8.0.
@@ -1298,7 +1298,7 @@ public interface GenericBaseCommands {
      * and apply transformations on sorted elements.<br>
      * This command is routed depending on the client's {@link ReadFrom} strategy.
      *
-     * @apiNote When in cluster mode, both <code>key</code> and the patterns specified in {@link
+     * When in cluster mode, both <code>key</code> and the patterns specified in {@link
      *     SortOptions#byPattern} and {@link SortOptions#getPatterns} must hash to the same slot. The
      *     use of {@link SortOptions#byPattern} and {@link SortOptions#getPatterns} in cluster mode is
      *     supported since Valkey version 8.0.
@@ -1325,7 +1325,7 @@ public interface GenericBaseCommands {
      * and apply transformations on sorted elements.<br>
      * This command is routed depending on the client's {@link ReadFrom} strategy.
      *
-     * @apiNote When in cluster mode, both <code>key</code> and the patterns specified in {@link
+     * When in cluster mode, both <code>key</code> and the patterns specified in {@link
      *     SortOptionsBinary#byPattern} and {@link SortOptionsBinary#getPatterns} must hash to the
      *     same slot. The use of {@link SortOptionsBinary#byPattern} and {@link
      *     SortOptionsBinary#getPatterns} in cluster mode is supported since Valkey version 8.0.
@@ -1354,7 +1354,7 @@ public interface GenericBaseCommands {
      * To get the sort result without storing it into a key, see {@link #sort(String)} or {@link
      * #sortReadOnly(String)}.
      *
-     * @apiNote When in cluster mode, <code>key</code> and <code>destination</code> must map to the
+     * When in cluster mode, <code>key</code> and <code>destination</code> must map to the
      *     same hash slot.
      * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.
      * @param key The key of the list, set, or sorted set to be sorted.
@@ -1379,7 +1379,7 @@ public interface GenericBaseCommands {
      * To get the sort result without storing it into a key, see {@link #sort(GlideString)} or {@link
      * #sortReadOnly(GlideString)}.
      *
-     * @apiNote When in cluster mode, <code>key</code> and <code>destination</code> must map to the
+     * When in cluster mode, <code>key</code> and <code>destination</code> must map to the
      *     same hash slot.
      * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.
      * @param key The key of the list, set, or sorted set to be sorted.
@@ -1403,7 +1403,7 @@ public interface GenericBaseCommands {
      * key.<br>
      * To get the sort result without storing it into a key, see {@link #sort(String, SortOptions)}.
      *
-     * @apiNote In cluster mode:
+     * In cluster mode:
      *     <ul>
      *       <li><code>key</code>, <code>destination</code>, and the patterns specified in {@link
      *           SortOptions#byPattern} and {@link SortOptions#getPatterns} must hash to the same
@@ -1441,7 +1441,7 @@ public interface GenericBaseCommands {
      * To get the sort result without storing it into a key, see {@link #sort(GlideString,
      * SortOptions)}.
      *
-     * @apiNote In cluster mode:
+     * In cluster mode:
      *     <ul>
      *       <li><code>key</code>, <code>destination</code>, and the patterns specified in {@link
      *           SortOptionsBinary#byPattern} and {@link SortOptionsBinary#getPatterns} must hash to
@@ -1477,7 +1477,7 @@ public interface GenericBaseCommands {
      * and acknowledged by at least <code>numreplicas</code> of replicas. If <code>timeout</code> is
      * reached, the command returns even if the specified number of replicas were not yet reached.
      *
-     * @apiNote This command clashes with Java's built-in wait method. Ensure you are using the right
+     * This command clashes with Java's built-in wait method. Ensure you are using the right
      *     one.
      * @param numreplicas The number of replicas to reach.
      * @param timeout The timeout value specified in milliseconds. A value of <code>0</code> will

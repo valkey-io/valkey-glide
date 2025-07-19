@@ -9,7 +9,7 @@ import java.util.stream.Collectors;
  * Represents a returned value object from a the server with cluster-mode enabled. The response type
  * may depend on the submitted {@link Route}.
  *
- * @remarks ClusterValue stores values in a union-like object. It contains a single-value or
+ * ClusterValue stores values in a union-like object. It contains a single-value or
  *     multi-value response from the server. If the command's routing is to a single node use {@link
  *     #getSingleValue()} to return a response of type <code>T</code>. Otherwise, use {@link
  *     #getMultiValue()} to return a <code>Map</code> of <code>address: nodeResponse</code> where
