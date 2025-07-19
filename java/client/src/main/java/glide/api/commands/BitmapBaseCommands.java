@@ -538,7 +538,7 @@ public interface BitmapBaseCommands {
      *           OffsetMultiplier}.
      *       <li>{@link BitFieldIncrby} returns the new value in {@link Offset} or {@link
      *           OffsetMultiplier}.
-     *       <li>{@link BitFieldOverflow} determines the behaviour of <code>SET</code> and <code>
+     *       <li>{@link BitFieldOverflow} determines the behaviour of <code>Set</code> and <code>
      *           INCRBY</code> when an overflow occurs. <code>OVERFLOW</code> does not return a value
      *           and does not contribute a value to the array response.
      *     </ul>
@@ -578,7 +578,7 @@ public interface BitmapBaseCommands {
      *           OffsetMultiplier}.
      *       <li>{@link BitFieldIncrby} returns the new value in {@link Offset} or {@link
      *           OffsetMultiplier}.
-     *       <li>{@link BitFieldOverflow} determines the behaviour of <code>SET</code> and <code>
+     *       <li>{@link BitFieldOverflow} determines the behaviour of <code>Set</code> and <code>
      *           INCRBY</code> when an overflow occurs. <code>OVERFLOW</code> does not return a value
      *           and does not contribute a value to the array response.
      *     </ul>

@@ -168,7 +168,7 @@ public interface ServerManagementClusterCommands {
     CompletableFuture<String> configResetStat(Route route);
 
     /**
-     * Get the values of configuration parameters.<br>
+     * GET the values of configuration parameters.<br>
      * Starting from server version 7, command supports multiple parameters.<br>
      * The command will be sent to a random node.
      *
@@ -186,7 +186,7 @@ public interface ServerManagementClusterCommands {
     CompletableFuture<Map<String, String>> configGet(String[] parameters);
 
     /**
-     * Get the values of configuration parameters.<br>
+     * GET the values of configuration parameters.<br>
      * Starting from server version 7, command supports multiple parameters.
      *
      * @see <a href="https://valkey.io/commands/config-get/">valkey.io</a> for details.

@@ -4,7 +4,7 @@ package glide.api.models.commands.json;
 import lombok.experimental.SuperBuilder;
 
 /**
- * Options for JSON SET command.
+ * Options for JSON Set command.
  * This class provides configuration options for setting JSON values.
  */
 @SuperBuilder
@@ -26,7 +26,7 @@ public class JsonSetOptions {
     private final SetMode mode;
     
     /**
-     * Get the set mode.
+     * GET the set mode.
      * @return The set mode
      */
     public SetMode getMode() {

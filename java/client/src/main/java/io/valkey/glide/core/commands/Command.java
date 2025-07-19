@@ -35,7 +35,7 @@ public class Command {
     }
 
     /**
-     * Get the command type.
+     * GET the command type.
      *
      * @return The command type
      */
@@ -44,7 +44,7 @@ public class Command {
     }
 
     /**
-     * Get the command arguments.
+     * GET the command arguments.
      *
      * @return A list of command arguments
      */
@@ -53,7 +53,7 @@ public class Command {
     }
 
     /**
-     * Get the command arguments as an array.
+     * GET the command arguments as an array.
      *
      * @return An array of command arguments
      */
@@ -84,7 +84,7 @@ public class Command {
     }
 
     /**
-     * Get the full command as a string array (command name + arguments).
+     * GET the full command as a string array (command name + arguments).
      *
      * @return Array with command name as first element, followed by arguments
      */

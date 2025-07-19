@@ -120,14 +120,14 @@ public class Logger {
     }
     
     /**
-     * Get current log level.
+     * GET current log level.
      */
     public static LogLevel getLevel() {
         return currentLevel;
     }
     
     /**
-     * Get current log file.
+     * GET current log file.
      */
     public static String getLogFile() {
         return logFile;

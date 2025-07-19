@@ -18,11 +18,11 @@ public final class RequestType {
     // Key management commands
     public static final String Del = "DEL";
     public static final String Exists = "EXISTS";
-    public static final String Expire = "EXPIRE";
-    public static final String ExpireAt = "EXPIREAT";
+    public static final String EXPIRE = "EXPIRE";
+    public static final String EXPIREAT = "EXPIREAT";
     public static final String TTL = "TTL";
-    public static final String PExpire = "PEXPIRE";
-    public static final String PExpireAt = "PEXPIREAT";
+    public static final String PEXPIRE = "PEXPIRE";
+    public static final String PEXPIREAT = "PEXPIREAT";
     public static final String PTTL = "PTTL";
     public static final String ExpireTime = "EXPIRETIME";
     public static final String PExpireTime = "PEXPIRETIME";
@@ -34,11 +34,11 @@ public final class RequestType {
     public static final String Move = "MOVE";
     public static final String RandomKey = "RANDOMKEY";
     public static final String Scan = "SCAN";
-    public static final String Unlink = "UNLINK";
+    public static final String UNLINK = "UNLINK";
     
-    // String commands
-    public static final String Get = "GET";
-    public static final String Set = "SET";
+    // String commands  
+    public static final String GET = "GET";
+    public static final String SET = "SET";
     public static final String MGet = "MGET";
     public static final String MSet = "MSET";
     public static final String MSetNX = "MSETNX";
@@ -46,8 +46,8 @@ public final class RequestType {
     public static final String GetRange = "GETRANGE";
     public static final String SetRange = "SETRANGE";
     public static final String Strlen = "STRLEN";
-    public static final String GetDel = "GETDEL";
-    public static final String GetEx = "GETEX";
+    public static final String GETDEL = "GETDEL";
+    public static final String GETEX = "GETEX";
     public static final String Incr = "INCR";
     public static final String IncrBy = "INCRBY";
     public static final String IncrByFloat = "INCRBYFLOAT";
@@ -192,7 +192,7 @@ public final class RequestType {
     public static final String EvalSha = "EVALSHA";
     
     // PubSub commands
-    public static final String Publish = "PUBLISH";
+    public static final String PUBLISH = "PUBLISH";
     public static final String SPublish = "SPUBLISH";
     public static final String PubSubChannels = "PUBSUB CHANNELS";
     public static final String PubSubNumPat = "PUBSUB NUMPAT";

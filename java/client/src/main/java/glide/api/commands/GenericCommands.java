@@ -27,7 +27,7 @@ public interface GenericCommands {
      *     <pre>{@code
      * Object response = client.customCommand(new String[] {"ping", "GLIDE"}).get();
      * assert response.equals("GLIDE");
-     * // Get a list of all pub/sub clients:
+     * // GET a list of all pub/sub clients:
      * Object result = client.customCommand(new String[]{ "CLIENT", "LIST", "TYPE", "PUBSUB" }).get();
      * }</pre>
      */
@@ -46,7 +46,7 @@ public interface GenericCommands {
      *     <pre>{@code
      * Object response = client.customCommand(new GlideString[] {gs("ping"), gs("GLIDE")}).get();
      * assert response.equals(gs("GLIDE"));
-     * // Get a list of all pub/sub clients:
+     * // GET a list of all pub/sub clients:
      * Object result = client.customCommand(new GlideString[] { gs("CLIENT"), gs("LIST"), gs("TYPE"), gs("PUBSUB") }).get();
      * }</pre>
      */

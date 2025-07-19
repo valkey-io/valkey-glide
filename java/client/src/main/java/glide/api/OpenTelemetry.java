@@ -390,7 +390,7 @@ public class OpenTelemetry {
     }
 
     /**
-     * Get the sample percentage for traces
+     * GET the sample percentage for traces
      *
      * @return The sample percentage for traces only if OpenTelemetry is initialized and the traces
      *     config is set, otherwise null.

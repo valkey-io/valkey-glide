@@ -312,7 +312,7 @@ public class GlideClient extends BaseClient implements TransactionsCommands, Gen
     }
 
     /**
-     * Get the current server time.
+     * GET the current server time.
      *
      * @return A CompletableFuture containing an array with seconds and microseconds since Unix epoch
      */
@@ -332,7 +332,7 @@ public class GlideClient extends BaseClient implements TransactionsCommands, Gen
     }
 
     /**
-     * Get configuration values for multiple parameters.
+     * GET configuration values for multiple parameters.
      *
      * @param parameters The configuration parameters to get
      * @return A CompletableFuture containing the configuration values
@@ -437,7 +437,7 @@ public class GlideClient extends BaseClient implements TransactionsCommands, Gen
 
 
     /**
-     * Get server information.
+     * GET server information.
      *
      * @param sections Array of info sections to retrieve
      * @return A CompletableFuture containing the info response
@@ -780,23 +780,23 @@ public class GlideClient extends BaseClient implements TransactionsCommands, Gen
     // PubSubBaseCommands implementation
     @Override
     public CompletableFuture<String> publish(String message, String channel) {
-        return executeCommand(Publish, message, channel).thenApply(response -> "OK");
+        return executeCommand(PUBLISH, message, channel).thenApply(response -> "OK");
     }
 
     @Override
     public CompletableFuture<String> publish(GlideString message, GlideString channel) {
-        return executeCommand(Publish, message.toString(), channel.toString()).thenApply(response -> "OK");
+        return executeCommand(PUBLISH, message.toString(), channel.toString()).thenApply(response -> "OK");
     }
 
     @Override
     public CompletableFuture<Long> publish(String message, String channel, boolean sharded) {
-        String commandType = sharded ? SPublish : Publish;
+        String commandType = sharded ? SPublish : PUBLISH;
         return executeCommand(commandType, message, channel).thenApply(response -> Long.parseLong(response.toString()));
     }
 
     @Override
     public CompletableFuture<Long> publish(GlideString message, GlideString channel, boolean sharded) {
-        String commandType = sharded ? SPublish : Publish;
+        String commandType = sharded ? SPublish : PUBLISH;
         return executeCommand(commandType, message.toString(), channel.toString()).thenApply(response -> Long.parseLong(response.toString()));
     }
 

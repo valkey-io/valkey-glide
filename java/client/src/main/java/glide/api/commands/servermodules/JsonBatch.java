@@ -30,7 +30,7 @@ import lombok.NonNull;
 public class JsonBatch {
 
     private static final String JSON_PREFIX = "JSON.";
-    private static final String JSON_SET = JSON_PREFIX + "SET";
+    private static final String JSON_SET = JSON_PREFIX + "Set";
     private static final String JSON_GET = JSON_PREFIX + "GET";
     private static final String JSON_MGET = JSON_PREFIX + "MGET";
     private static final String JSON_NUMINCRBY = JSON_PREFIX + "NUMINCRBY";

@@ -30,7 +30,7 @@ public interface ServerManagementCommands {
     CompletableFuture<String> info();
 
     /**
-     * Get information and statistics about the server.<br>
+     * GET information and statistics about the server.<br>
      * Starting from server version 7, command supports multiple section arguments.
      *
      * @see <a href="https://valkey.io/commands/info/">valkey.io</a> for details.
@@ -75,7 +75,7 @@ public interface ServerManagementCommands {
     CompletableFuture<String> configResetStat();
 
     /**
-     * Get the values of configuration parameters.<br>
+     * GET the values of configuration parameters.<br>
      * Starting from server version 7, command supports multiple parameters.
      *
      * @see <a href="https://valkey.io/commands/config-get/">valkey.io</a> for details.

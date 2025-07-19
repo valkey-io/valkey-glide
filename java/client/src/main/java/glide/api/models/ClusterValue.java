@@ -26,7 +26,7 @@ public class ClusterValue<T> {
     private ClusterValue() {}
 
     /**
-     * Get per-node value.<br>
+     * GET per-node value.<br>
      * Asserts if {@link #hasMultiData()} is false.
      */
     public Map<String, T> getMultiValue() {
@@ -35,7 +35,7 @@ public class ClusterValue<T> {
     }
 
     /**
-     * Get the single value.<br>
+     * GET the single value.<br>
      * Asserts if {@link #hasSingleData()} is false.
      */
     public T getSingleValue() {

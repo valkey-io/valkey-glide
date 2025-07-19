@@ -63,7 +63,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     protected abstract T getThis();
 
     /**
-     * Get all commands in this batch.
+     * GET all commands in this batch.
      *
      * @return List of commands
      */
@@ -81,7 +81,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     }
 
     /**
-     * Get the number of commands in this batch.
+     * GET the number of commands in this batch.
      *
      * @return Number of commands
      */
@@ -110,7 +110,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T set(String key, String value) {
-        return addCommand(Set, key, value);
+        return addCommand(SET, key, value);
     }
 
     /**
@@ -123,7 +123,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T set(GlideString key, GlideString value) {
-        return addCommand(Set, key.toString(), value.toString());
+        return addCommand(SET, key.toString(), value.toString());
     }
 
     /**
@@ -135,7 +135,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T get(String key) {
-        return addCommand(Get, key);
+        return addCommand(GET, key);
     }
 
     /**
@@ -147,7 +147,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T get(GlideString key) {
-        return addCommand(Get, key.toString());
+        return addCommand(GET, key.toString());
     }
 
     /**
@@ -590,7 +590,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T unlink(String... keys) {
-        return addCommand(Unlink, keys);
+        return addCommand(UNLINK, keys);
     }
 
     /**
@@ -606,7 +606,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
         for (int i = 0; i < keys.length; i++) {
             stringKeys[i] = keys[i].toString();
         }
-        return addCommand(Unlink, stringKeys);
+        return addCommand(UNLINK, stringKeys);
     }
 
     /**
@@ -697,7 +697,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T expire(String key, long seconds) {
-        return addCommand(Expire, key, String.valueOf(seconds));
+        return addCommand(EXPIRE, key, String.valueOf(seconds));
     }
 
     /**
@@ -710,7 +710,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T expire(GlideString key, long seconds) {
-        return addCommand(Expire, key.toString(), String.valueOf(seconds));
+        return addCommand(EXPIRE, key.toString(), String.valueOf(seconds));
     }
 
     /**
@@ -723,7 +723,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T expireAt(String key, long timestamp) {
-        return addCommand(ExpireAt, key, String.valueOf(timestamp));
+        return addCommand(EXPIREAT, key, String.valueOf(timestamp));
     }
 
     /**
@@ -736,7 +736,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T expireAt(GlideString key, long timestamp) {
-        return addCommand(ExpireAt, key.toString(), String.valueOf(timestamp));
+        return addCommand(EXPIREAT, key.toString(), String.valueOf(timestamp));
     }
 
     /**
@@ -749,7 +749,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T pexpire(String key, long milliseconds) {
-        return addCommand(PExpire, key, String.valueOf(milliseconds));
+        return addCommand(PEXPIRE, key, String.valueOf(milliseconds));
     }
 
     /**
@@ -762,7 +762,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T pexpire(GlideString key, long milliseconds) {
-        return addCommand(PExpire, key.toString(), String.valueOf(milliseconds));
+        return addCommand(PEXPIRE, key.toString(), String.valueOf(milliseconds));
     }
 
     /**
@@ -775,7 +775,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T pexpireAt(String key, long timestamp) {
-        return addCommand(PExpireAt, key, String.valueOf(timestamp));
+        return addCommand(PEXPIREAT, key, String.valueOf(timestamp));
     }
 
     /**
@@ -788,11 +788,11 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T pexpireAt(GlideString key, long timestamp) {
-        return addCommand(PExpireAt, key.toString(), String.valueOf(timestamp));
+        return addCommand(PEXPIREAT, key.toString(), String.valueOf(timestamp));
     }
 
     /**
-     * Get the remaining time to live of a key that has a timeout.
+     * GET the remaining time to live of a key that has a timeout.
      *
      * @see <a href="https://valkey.io/commands/ttl/">valkey.io</a> for details.
      * @param key The key to check.
@@ -804,7 +804,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     }
 
     /**
-     * Get the remaining time to live of a key that has a timeout.
+     * GET the remaining time to live of a key that has a timeout.
      *
      * @see <a href="https://valkey.io/commands/ttl/">valkey.io</a> for details.
      * @param key The key to check.
@@ -951,7 +951,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T getex(String key) {
-        return addCommand(GetEx, key);
+        return addCommand(GETEX, key);
     }
 
     /**
@@ -964,7 +964,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T getex(String key, glide.api.models.commands.GetExOptions options) {
-        return addCommand(GetEx, key, options.toString());
+        return addCommand(GETEX, key, options.toString());
     }
 
     /**
@@ -1319,7 +1319,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T getdel(String key) {
-        return addCommand(GetDel, key);
+        return addCommand(GETDEL, key);
     }
 
     /**
@@ -1331,7 +1331,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T getdel(GlideString key) {
-        return addCommand(GetDel, key.toString());
+        return addCommand(GETDEL, key.toString());
     }
 
     /**
@@ -1395,7 +1395,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T expire(String key, int seconds, glide.api.models.commands.ExpireOptions options) {
-        return addCommand(Expire, key, String.valueOf(seconds), options.toString());
+        return addCommand(EXPIRE, key, String.valueOf(seconds), options.toString());
     }
 
     /**
@@ -1409,7 +1409,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T expire(GlideString key, int seconds, glide.api.models.commands.ExpireOptions options) {
-        return addCommand(Expire, key.toString(), String.valueOf(seconds), options.toString());
+        return addCommand(EXPIRE, key.toString(), String.valueOf(seconds), options.toString());
     }
 
     /**
@@ -1423,7 +1423,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T expireAt(String key, int timestamp, glide.api.models.commands.ExpireOptions options) {
-        return addCommand(ExpireAt, key, String.valueOf(timestamp), options.toString());
+        return addCommand(EXPIREAT, key, String.valueOf(timestamp), options.toString());
     }
 
     /**
@@ -1437,7 +1437,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T expireAt(GlideString key, int timestamp, glide.api.models.commands.ExpireOptions options) {
-        return addCommand(ExpireAt, key.toString(), String.valueOf(timestamp), options.toString());
+        return addCommand(EXPIREAT, key.toString(), String.valueOf(timestamp), options.toString());
     }
 
     /**
@@ -1451,7 +1451,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T set(String key, String value, glide.api.models.commands.SetOptions options) {
-        return addCommand(Set, key, value, options.toString());
+        return addCommand(SET, key, value, options.toString());
     }
 
     /**
@@ -1465,7 +1465,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T set(GlideString key, GlideString value, glide.api.models.commands.SetOptions options) {
-        return addCommand(Set, key.toString(), value.toString(), options.toString());
+        return addCommand(SET, key.toString(), value.toString(), options.toString());
     }
 
     /**
@@ -1531,7 +1531,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     }
 
     /**
-     * Get string length.
+     * GET string length.
      *
      * @see <a href="https://valkey.io/commands/strlen/">valkey.io</a> for details.
      * @param key The key
@@ -1543,7 +1543,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     }
 
     /**
-     * Get string length (GlideString variant).
+     * GET string length (GlideString variant).
      *
      * @see <a href="https://valkey.io/commands/strlen/">valkey.io</a> for details.
      * @param key The key
@@ -1617,7 +1617,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     }
 
     /**
-     * Get multiple keys.
+     * GET multiple keys.
      *
      * @see <a href="https://valkey.io/commands/mget/">valkey.io</a> for details.
      * @param keys The keys to get
@@ -1629,7 +1629,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     }
 
     /**
-     * Get multiple keys (GlideString variant).
+     * GET multiple keys (GlideString variant).
      *
      * @see <a href="https://valkey.io/commands/mget/">valkey.io</a> for details.
      * @param keys The keys to get
@@ -1793,7 +1793,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     }
 
     /**
-     * Get list element at index.
+     * GET list element at index.
      *
      * @see <a href="https://valkey.io/commands/lindex/">valkey.io</a> for details.
      * @param key The list key
@@ -1805,7 +1805,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     }
 
     /**
-     * Get list element at index (GlideString variant).
+     * GET list element at index (GlideString variant).
      *
      * @see <a href="https://valkey.io/commands/lindex/">valkey.io</a> for details.
      * @param key The list key
@@ -1841,7 +1841,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     }
 
     /**
-     * Get reverse rank of sorted set member.
+     * GET reverse rank of sorted set member.
      *
      * @see <a href="https://valkey.io/commands/zrevrank/">valkey.io</a> for details.
      * @param key The sorted set key
@@ -1853,7 +1853,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     }
 
     /**
-     * Get reverse rank of sorted set member (GlideString variant).
+     * GET reverse rank of sorted set member (GlideString variant).
      *
      * @see <a href="https://valkey.io/commands/zrevrank/">valkey.io</a> for details.
      * @param key The sorted set key
@@ -1865,7 +1865,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     }
 
     /**
-     * Get configuration parameters.
+     * GET configuration parameters.
      *
      * @see <a href="https://valkey.io/commands/config-get/">valkey.io</a> for details.
      * @param parameters The parameters to get
@@ -1908,7 +1908,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     }
 
     /**
-     * Publish message to channel.
+     * PUBLISH message to channel.
      *
      * @see <a href="https://valkey.io/commands/publish/">valkey.io</a> for details.
      * @param channel The channel
@@ -1916,11 +1916,11 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @return This batch instance for method chaining
      */
     public T publish(String channel, String message) {
-        return addCommand(Publish, channel, message);
+        return addCommand(PUBLISH, channel, message);
     }
 
     /**
-     * Publish message to channel (GlideString variant).
+     * PUBLISH message to channel (GlideString variant).
      *
      * @see <a href="https://valkey.io/commands/publish/">valkey.io</a> for details.
      * @param channel The channel
@@ -1928,7 +1928,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @return This batch instance for method chaining
      */
     public T publish(GlideString channel, GlideString message) {
-        return addCommand(Publish, channel.toString(), message.toString());
+        return addCommand(PUBLISH, channel.toString(), message.toString());
     }
 
     /**
@@ -1998,7 +1998,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     }
 
     /**
-     * Get a substring of the string value.
+     * GET a substring of the string value.
      *
      * @see <a href="https://valkey.io/commands/getrange/">valkey.io</a> for details.
      * @param key The key
@@ -2011,7 +2011,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     }
 
     /**
-     * Get a substring of the string value (GlideString variant).
+     * GET a substring of the string value (GlideString variant).
      *
      * @see <a href="https://valkey.io/commands/getrange/">valkey.io</a> for details.
      * @param key The key
@@ -2185,7 +2185,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     }
 
     /**
-     * Get multiple hash field values.
+     * GET multiple hash field values.
      *
      * @see <a href="https://valkey.io/commands/hmget/">valkey.io</a> for details.
      * @param key The hash key
@@ -2200,7 +2200,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     }
 
     /**
-     * Get multiple hash field values (GlideString variant).
+     * GET multiple hash field values (GlideString variant).
      *
      * @see <a href="https://valkey.io/commands/hmget/">valkey.io</a> for details.
      * @param key The hash key

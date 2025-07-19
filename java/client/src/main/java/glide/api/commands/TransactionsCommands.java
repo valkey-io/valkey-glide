@@ -67,7 +67,7 @@ public interface TransactionsCommands extends TransactionsBaseCommands {
      * // Example 1: Atomic Batch (Transaction)
      * Batch transaction = new Batch(true) // Atomic (Transactional)
      *     .set("key", "1")                 // Set a value for key
-     *     .get("key");                     // Get the value of the key
+     *     .get("key");                     // GET the value of the key
      * Object[] result = client.exec(transaction, true).get();
      * System.out.println("Transaction Batch Result: " + Arrays.toString(result));
      * // Expected Output: Transaction Batch Result: [OK, 1]

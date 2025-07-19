@@ -94,24 +94,24 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
     }
 
     /**
-     * Get the value of a key.
+     * GET the value of a key.
      *
      * @param key The key to get
      * @return A CompletableFuture containing the value or null if key doesn't exist
      */
     public CompletableFuture<String> get(String key) {
-        return executeCommand(Get, key)
+        return executeCommand(GET, key)
                 .thenApply(result -> result == null ? null : result.toString());
     }
 
     /**
-     * Get the value of a key (supports binary data).
+     * GET the value of a key (supports binary data).
      *
      * @param key The key to get (supports binary data)
      * @return A CompletableFuture containing the value or null if key doesn't exist
      */
     public CompletableFuture<GlideString> get(GlideString key) {
-        return executeCommand(Get, key.toString())
+        return executeCommand(GET, key.toString())
                 .thenApply(result -> result == null ? null : GlideString.of(result.toString()));
     }
 
@@ -123,7 +123,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing "OK" if successful
      */
     public CompletableFuture<String> set(String key, String value) {
-        return executeCommand(Set, key, value)
+        return executeCommand(SET, key, value)
                 .thenApply(result -> result.toString());
     }
 
@@ -135,7 +135,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing "OK" if successful
      */
     public CompletableFuture<String> set(GlideString key, GlideString value) {
-        return executeCommand(Set, key.toString(), value.toString())
+        return executeCommand(SET, key.toString(), value.toString())
                 .thenApply(result -> result.toString());
     }
 
@@ -150,7 +150,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         if (options != null) {
             args.addAll(Arrays.asList(options.toArgs()));
         }
-        return executeCommand(Set, args.toArray(new String[0]))
+        return executeCommand(SET, args.toArray(new String[0]))
                 .thenApply(result -> result == null ? null : result.toString());
     }
 
@@ -165,7 +165,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         if (options != null) {
             args.addAll(Arrays.asList(options.toArgs()));
         }
-        return executeCommand(Set, args.toArray(new String[0]))
+        return executeCommand(SET, args.toArray(new String[0]))
                 .thenApply(result -> result == null ? null : result.toString());
     }
 
@@ -174,7 +174,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<String> getdel(String key) {
-        return executeCommand(GetDel, key)
+        return executeCommand(GETDEL, key)
                 .thenApply(result -> result == null ? null : result.toString());
     }
 
@@ -183,7 +183,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<GlideString> getdel(GlideString key) {
-        return executeCommand(GetDel, key.toString())
+        return executeCommand(GETDEL, key.toString())
                 .thenApply(result -> result == null ? null : GlideString.of(result.toString()));
     }
 
@@ -192,7 +192,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<String> getex(String key) {
-        return executeCommand(GetEx, key)
+        return executeCommand(GETEX, key)
                 .thenApply(result -> result == null ? null : result.toString());
     }
 
@@ -201,7 +201,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<GlideString> getex(GlideString key) {
-        return executeCommand(GetEx, key.toString())
+        return executeCommand(GETEX, key.toString())
                 .thenApply(result -> result == null ? null : GlideString.of(result.toString()));
     }
 
@@ -215,7 +215,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         if (options != null) {
             args.addAll(Arrays.asList(options.toArgs()));
         }
-        return executeCommand(GetEx, args.toArray(new String[0]))
+        return executeCommand(GETEX, args.toArray(new String[0]))
                 .thenApply(result -> result == null ? null : result.toString());
     }
 
@@ -229,7 +229,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         if (options != null) {
             args.addAll(Arrays.asList(options.toArgs()));
         }
-        return executeCommand(GetEx, args.toArray(new String[0]))
+        return executeCommand(GETEX, args.toArray(new String[0]))
                 .thenApply(result -> result == null ? null : GlideString.of(result.toString()));
     }
 
@@ -267,7 +267,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
 
 
     /**
-     * Get multiple values for the given keys.
+     * GET multiple values for the given keys.
      *
      * @param keys The keys to get
      * @return A CompletableFuture containing an array of values
@@ -288,7 +288,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
     }
 
     /**
-     * Get multiple values for the given keys (supports binary data).
+     * GET multiple values for the given keys (supports binary data).
      *
      * @param keys The keys to get (supports binary data)
      * @return A CompletableFuture containing an array of values
@@ -624,7 +624,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
     }
 
     /**
-     * Get the value of a hash field.
+     * GET the value of a hash field.
      *
      * @param key   The key of the hash
      * @param field The field in the hash
@@ -636,7 +636,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
     }
 
     /**
-     * Get the value of a hash field (supports binary data).
+     * GET the value of a hash field (supports binary data).
      *
      * @param key   The key of the hash (supports binary data)
      * @param field The field in the hash (supports binary data)
@@ -648,7 +648,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
     }
 
     /**
-     * Get all the fields and values in a hash.
+     * GET all the fields and values in a hash.
      *
      * @param key The key of the hash
      * @return A CompletableFuture containing a map of field-value pairs
@@ -672,7 +672,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
     }
 
     /**
-     * Get all the fields and values in a hash (supports binary data).
+     * GET all the fields and values in a hash (supports binary data).
      *
      * @param key The key of the hash (supports binary data)
      * @return A CompletableFuture containing a map of field-value pairs
@@ -790,7 +790,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
     }
 
     /**
-     * Get the number of fields in a hash.
+     * GET the number of fields in a hash.
      *
      * @param key The key of the hash
      * @return A CompletableFuture containing the number of fields in the hash
@@ -801,7 +801,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
     }
 
     /**
-     * Get the number of fields in a hash (supports binary data).
+     * GET the number of fields in a hash (supports binary data).
      *
      * @param key The key of the hash (supports binary data)
      * @return A CompletableFuture containing the number of fields in the hash
@@ -812,7 +812,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
     }
 
     /**
-     * Get all field names in a hash.
+     * GET all field names in a hash.
      *
      * @param key The key of the hash
      * @return A CompletableFuture containing an array of field names
@@ -833,7 +833,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
     }
 
     /**
-     * Get all field names in a hash (supports binary data).
+     * GET all field names in a hash (supports binary data).
      *
      * @param key The key of the hash (supports binary data)
      * @return A CompletableFuture containing an array of field names
@@ -854,7 +854,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
     }
 
     /**
-     * Get all values in a hash.
+     * GET all values in a hash.
      *
      * @param key The key of the hash
      * @return A CompletableFuture containing an array of values
@@ -875,7 +875,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
     }
 
     /**
-     * Get all values in a hash (supports binary data).
+     * GET all values in a hash (supports binary data).
      *
      * @param key The key of the hash (supports binary data)
      * @return A CompletableFuture containing an array of values
@@ -896,7 +896,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
     }
 
     /**
-     * Get the values of all specified hash fields.
+     * GET the values of all specified hash fields.
      *
      * @param key The key of the hash
      * @param fields The fields to get
@@ -921,7 +921,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
     }
 
     /**
-     * Get the values of all specified hash fields (supports binary data).
+     * GET the values of all specified hash fields (supports binary data).
      *
      * @param key The key of the hash (supports binary data)
      * @param fields The fields to get (supports binary data)
@@ -1798,7 +1798,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing true if the timeout was set, false if key does not exist
      */
     public CompletableFuture<Boolean> expire(String key, long seconds) {
-        return executeCommand(Expire, key, String.valueOf(seconds))
+        return executeCommand(EXPIRE, key, String.valueOf(seconds))
             .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -1810,12 +1810,12 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing true if the timeout was set, false if key does not exist
      */
     public CompletableFuture<Boolean> expire(GlideString key, long seconds) {
-        return executeCommand(Expire, key.toString(), String.valueOf(seconds))
+        return executeCommand(EXPIRE, key.toString(), String.valueOf(seconds))
             .thenApply(result -> "1".equals(result.toString()));
     }
 
     /**
-     * Get the remaining time to live of a key that has a timeout.
+     * GET the remaining time to live of a key that has a timeout.
      *
      * @param key The key to check
      * @return A CompletableFuture containing the TTL in seconds, or -1 if key exists but has no timeout, or -2 if key does not exist
@@ -1826,7 +1826,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
     }
 
     /**
-     * Get the remaining time to live of a key that has a timeout (supports binary data).
+     * GET the remaining time to live of a key that has a timeout (supports binary data).
      *
      * @param key The key to check (supports binary data)
      * @return A CompletableFuture containing the TTL in seconds, or -1 if key exists but has no timeout, or -2 if key does not exist
@@ -1956,7 +1956,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
     }
 
     /**
-     * Get the number of members in a sorted set.
+     * GET the number of members in a sorted set.
      *
      * @param key The key of the sorted set
      * @return A CompletableFuture containing the cardinality (number of elements) of the sorted set
@@ -1967,7 +1967,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
     }
 
     /**
-     * Get the number of members in a sorted set (supports binary data).
+     * GET the number of members in a sorted set (supports binary data).
      *
      * @param key The key of the sorted set (supports binary data)
      * @return A CompletableFuture containing the cardinality (number of elements) of the sorted set
@@ -1978,7 +1978,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
     }
 
     /**
-     * Get the score associated with the given member in a sorted set.
+     * GET the score associated with the given member in a sorted set.
      *
      * @param key The key of the sorted set
      * @param member The member whose score to retrieve
@@ -1995,7 +1995,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
     }
 
     /**
-     * Get the score associated with the given member in a sorted set (supports binary data).
+     * GET the score associated with the given member in a sorted set (supports binary data).
      *
      * @param key The key of the sorted set (supports binary data)
      * @param member The member whose score to retrieve (supports binary data)
@@ -2012,7 +2012,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
     }
 
     /**
-     * Get the rank of the member in the sorted set, with scores ordered from low to high.
+     * GET the rank of the member in the sorted set, with scores ordered from low to high.
      *
      * @param key The key of the sorted set
      * @param member The member whose rank to determine
@@ -2029,7 +2029,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
     }
 
     /**
-     * Get the rank of the member in the sorted set, with scores ordered from low to high (supports binary data).
+     * GET the rank of the member in the sorted set, with scores ordered from low to high (supports binary data).
      *
      * @param key The key of the sorted set (supports binary data)
      * @param member The member whose rank to determine (supports binary data)
@@ -2502,7 +2502,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
 
 
     /**
-     * Get the value of a configuration parameter.
+     * GET the value of a configuration parameter.
      *
      * @param parameter The configuration parameter to get
      * @return A CompletableFuture containing the configuration value
@@ -2512,7 +2512,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
     }
 
     /**
-     * Get configuration values for multiple parameters.
+     * GET configuration values for multiple parameters.
      *
      * @param parameters The configuration parameters to get
      * @return A CompletableFuture containing the configuration values
@@ -2627,7 +2627,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
     }
 
     /**
-     * Get client statistics.
+     * GET client statistics.
      *
      * @return A map containing client statistics
      */
@@ -4070,7 +4070,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Long> unlink(String[] keys) {
-        return executeCommand(Unlink, keys)
+        return executeCommand(UNLINK, keys)
                 .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -4083,7 +4083,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         for (int i = 0; i < keys.length; i++) {
             stringKeys[i] = keys[i].toString();
         }
-        return executeCommand(Unlink, stringKeys)
+        return executeCommand(UNLINK, stringKeys)
                 .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -4098,7 +4098,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         if (expireOptions != null) {
             args.addAll(Arrays.asList(expireOptions.toArgs()));
         }
-        return executeCommand(Expire, args.toArray(new String[0]))
+        return executeCommand(EXPIRE, args.toArray(new String[0]))
                 .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -4113,7 +4113,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         if (expireOptions != null) {
             args.addAll(Arrays.asList(expireOptions.toArgs()));
         }
-        return executeCommand(Expire, args.toArray(new String[0]))
+        return executeCommand(EXPIRE, args.toArray(new String[0]))
                 .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -4122,7 +4122,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Boolean> expireAt(String key, long unixSeconds) {
-        return executeCommand(ExpireAt, key, String.valueOf(unixSeconds))
+        return executeCommand(EXPIREAT, key, String.valueOf(unixSeconds))
                 .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -4131,7 +4131,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Boolean> expireAt(GlideString key, long unixSeconds) {
-        return executeCommand(ExpireAt, key.toString(), String.valueOf(unixSeconds))
+        return executeCommand(EXPIREAT, key.toString(), String.valueOf(unixSeconds))
                 .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -4146,7 +4146,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         if (expireOptions != null) {
             args.addAll(Arrays.asList(expireOptions.toArgs()));
         }
-        return executeCommand(ExpireAt, args.toArray(new String[0]))
+        return executeCommand(EXPIREAT, args.toArray(new String[0]))
                 .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -4161,7 +4161,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         if (expireOptions != null) {
             args.addAll(Arrays.asList(expireOptions.toArgs()));
         }
-        return executeCommand(ExpireAt, args.toArray(new String[0]))
+        return executeCommand(EXPIREAT, args.toArray(new String[0]))
                 .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -4170,7 +4170,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Boolean> pexpire(String key, long milliseconds) {
-        return executeCommand(PExpire, key, String.valueOf(milliseconds))
+        return executeCommand(PEXPIRE, key, String.valueOf(milliseconds))
                 .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -4179,7 +4179,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Boolean> pexpire(GlideString key, long milliseconds) {
-        return executeCommand(PExpire, key.toString(), String.valueOf(milliseconds))
+        return executeCommand(PEXPIRE, key.toString(), String.valueOf(milliseconds))
                 .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -4194,7 +4194,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         if (expireOptions != null) {
             args.addAll(Arrays.asList(expireOptions.toArgs()));
         }
-        return executeCommand(PExpire, args.toArray(new String[0]))
+        return executeCommand(PEXPIRE, args.toArray(new String[0]))
                 .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -4209,7 +4209,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         if (expireOptions != null) {
             args.addAll(Arrays.asList(expireOptions.toArgs()));
         }
-        return executeCommand(PExpire, args.toArray(new String[0]))
+        return executeCommand(PEXPIRE, args.toArray(new String[0]))
                 .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -4218,7 +4218,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Boolean> pexpireAt(String key, long unixMilliseconds) {
-        return executeCommand(PExpireAt, key, String.valueOf(unixMilliseconds))
+        return executeCommand(PEXPIREAT, key, String.valueOf(unixMilliseconds))
                 .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -4227,7 +4227,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Boolean> pexpireAt(GlideString key, long unixMilliseconds) {
-        return executeCommand(PExpireAt, key.toString(), String.valueOf(unixMilliseconds))
+        return executeCommand(PEXPIREAT, key.toString(), String.valueOf(unixMilliseconds))
                 .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -4242,7 +4242,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         if (expireOptions != null) {
             args.addAll(Arrays.asList(expireOptions.toArgs()));
         }
-        return executeCommand(PExpireAt, args.toArray(new String[0]))
+        return executeCommand(PEXPIREAT, args.toArray(new String[0]))
                 .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -4257,7 +4257,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         if (expireOptions != null) {
             args.addAll(Arrays.asList(expireOptions.toArgs()));
         }
-        return executeCommand(PExpireAt, args.toArray(new String[0]))
+        return executeCommand(PEXPIREAT, args.toArray(new String[0]))
                 .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -4748,7 +4748,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
     }
 
     /**
-     * Get function statistics.
+     * GET function statistics.
      *
      * @return A CompletableFuture containing function statistics
      */

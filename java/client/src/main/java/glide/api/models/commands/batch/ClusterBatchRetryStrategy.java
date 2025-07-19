@@ -33,7 +33,7 @@ import lombok.Getter;
  *
  * <pre>
  * MGET key {key}:1
- * SET key "value"
+ * Set key "value"
  * </pre>
  *
  * <p>Expected response when keys are empty:
@@ -45,7 +45,7 @@ import lombok.Getter;
  *
  * However, if the slot is migrating, both commands may return an <code>ASK</code> error and be
  * redirected. Upon <code>ASK</code> redirection, a multi-key command may return a <code>TRYAGAIN
- * </code> error (triggering a retry), while the <code>SET</code> command succeeds immediately. This
+ * </code> error (triggering a retry), while the <code>Set</code> command succeeds immediately. This
  * can result in an unintended reordering of commands if the first command is retried after the slot
  * stabilizes:
  *

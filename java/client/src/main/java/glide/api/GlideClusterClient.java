@@ -851,7 +851,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
     // Missing client management methods with routing
 
     /**
-     * Get the client ID with routing.
+     * GET the client ID with routing.
      *
      * @param route The routing configuration for the command
      * @return A CompletableFuture containing the client ID wrapped in ClusterValue
@@ -876,7 +876,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
     }
 
     /**
-     * Get the client name with routing.
+     * GET the client name with routing.
      *
      * @param route The routing configuration for the command
      * @return A CompletableFuture containing the client name wrapped in ClusterValue
@@ -901,7 +901,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
     }
 
     /**
-     * Get configuration values with routing.
+     * GET configuration values with routing.
      *
      * @param parameters The configuration parameters to get
      * @param route The routing configuration for the command
@@ -1949,7 +1949,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
     }
 
     /**
-     * Get server information with cluster-specific return type.
+     * GET server information with cluster-specific return type.
      * Uses specialized return type that cluster tests expect.
      *
      * @return A CompletableFuture containing server info wrapped in ClusterValue
@@ -1959,7 +1959,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
     }
 
     /**
-     * Get information about the cluster without routing.
+     * GET information about the cluster without routing.
      * This method provides the ClusterValue return type expected by integration tests.
      * This method implements the ClusterCommandExecutor interface requirement.
      *
@@ -2571,7 +2571,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
     }
 
     /**
-     * Get the values of configuration parameters.
+     * GET the values of configuration parameters.
      * The command will be sent to a random node.
      *
      * @see <a href="https://valkey.io/commands/config-get/">valkey.io</a> for details.
@@ -2866,16 +2866,16 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
     }
 
     // Future enhancements for cluster-specific methods:
-    // - clusterNodes() - Get cluster topology information
-    // - clusterSlots() - Get slot-to-node mapping
-    // - clusterKeyslot() - Get key slot calculation
+    // - clusterNodes() - GET cluster topology information
+    // - clusterSlots() - GET slot-to-node mapping
+    // - clusterKeyslot() - GET key slot calculation
     // - clusterCountKeysInSlot() - Count keys in specific slot
-    // - clusterGetKeysInSlot() - Get keys in specific slot
+    // - clusterGetKeysInSlot() - GET keys in specific slot
     // - clusterFailover() - Initiate failover process
     // - clusterReset() - Reset cluster configuration
     // - clusterSaveConfig() - Save cluster configuration
     // - clusterSetConfigEpoch() - Set config epoch
-    // - clusterShards() - Get cluster shards information
+    // - clusterShards() - GET cluster shards information
 
     /**
      * Flushes all the previously watched keys for a transaction.
@@ -2991,23 +2991,23 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
     // PubSubBaseCommands implementation
     @Override
     public CompletableFuture<String> publish(String message, String channel) {
-        return executeCommand(Publish, message, channel).thenApply(response -> "OK");
+        return executeCommand(PUBLISH, message, channel).thenApply(response -> "OK");
     }
 
     @Override
     public CompletableFuture<String> publish(GlideString message, GlideString channel) {
-        return executeCommand(Publish, message.toString(), channel.toString()).thenApply(response -> "OK");
+        return executeCommand(PUBLISH, message.toString(), channel.toString()).thenApply(response -> "OK");
     }
 
     @Override
     public CompletableFuture<Long> publish(String message, String channel, boolean sharded) {
-        String commandType = sharded ? SPublish : Publish;
+        String commandType = sharded ? SPublish : PUBLISH;
         return executeCommand(commandType, message, channel).thenApply(response -> Long.parseLong(response.toString()));
     }
 
     @Override
     public CompletableFuture<Long> publish(GlideString message, GlideString channel, boolean sharded) {
-        String commandType = sharded ? SPublish : Publish;
+        String commandType = sharded ? SPublish : PUBLISH;
         return executeCommand(commandType, message.toString(), channel.toString()).thenApply(response -> Long.parseLong(response.toString()));
     }
 

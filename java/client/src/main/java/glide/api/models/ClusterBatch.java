@@ -82,7 +82,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
      * @return This batch instance for method chaining.
      */
     public ClusterBatch set(String key, String value) {
-        return addCommand(Set, key, value);
+        return addCommand(SET, key, value);
     }
 
     /**
@@ -94,7 +94,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
      * @return This batch instance for method chaining.
      */
     public ClusterBatch set(GlideString key, GlideString value) {
-        return addCommand(Set, key.toString(), value.toString());
+        return addCommand(SET, key.toString(), value.toString());
     }
 
     /**
@@ -105,7 +105,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
      * @return This batch instance for method chaining.
      */
     public ClusterBatch get(String key) {
-        return addCommand(Get, key);
+        return addCommand(GET, key);
     }
 
     /**
@@ -116,7 +116,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
      * @return This batch instance for method chaining.
      */
     public ClusterBatch get(GlideString key) {
-        return addCommand(Get, key.toString());
+        return addCommand(GET, key.toString());
     }
 
     /**
@@ -448,7 +448,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
     }
 
     /**
-     * Get the number of fields in a hash.
+     * GET the number of fields in a hash.
      *
      * @see <a href="https://valkey.io/commands/hlen/">valkey.io</a> for details.
      * @param key The key of the hash.
@@ -459,7 +459,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
     }
 
     /**
-     * Get the number of fields in a hash.
+     * GET the number of fields in a hash.
      *
      * @see <a href="https://valkey.io/commands/hlen/">valkey.io</a> for details.
      * @param key The key of the hash.
@@ -470,7 +470,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
     }
 
     /**
-     * Get all field names in a hash.
+     * GET all field names in a hash.
      *
      * @see <a href="https://valkey.io/commands/hkeys/">valkey.io</a> for details.
      * @param key The key of the hash.
@@ -481,7 +481,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
     }
 
     /**
-     * Get all field names in a hash.
+     * GET all field names in a hash.
      *
      * @see <a href="https://valkey.io/commands/hkeys/">valkey.io</a> for details.
      * @param key The key of the hash.
@@ -492,7 +492,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
     }
 
     /**
-     * Get all values in a hash.
+     * GET all values in a hash.
      *
      * @see <a href="https://valkey.io/commands/hvals/">valkey.io</a> for details.
      * @param key The key of the hash.
@@ -503,7 +503,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
     }
 
     /**
-     * Get all values in a hash.
+     * GET all values in a hash.
      *
      * @see <a href="https://valkey.io/commands/hvals/">valkey.io</a> for details.
      * @param key The key of the hash.
@@ -514,7 +514,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
     }
 
     /**
-     * Get the values of all specified hash fields.
+     * GET the values of all specified hash fields.
      *
      * @see <a href="https://valkey.io/commands/hmget/">valkey.io</a> for details.
      * @param key The key of the hash.
@@ -529,7 +529,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
     }
 
     /**
-     * Get the values of all specified hash fields.
+     * GET the values of all specified hash fields.
      *
      * @see <a href="https://valkey.io/commands/hmget/">valkey.io</a> for details.
      * @param key The key of the hash.
@@ -745,7 +745,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
     }
 
     /**
-     * Get all members of a set.
+     * GET all members of a set.
      *
      * @see <a href="https://valkey.io/commands/smembers/">valkey.io</a> for details.
      * @param key The key of the set.
@@ -756,7 +756,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
     }
 
     /**
-     * Get all members of a set.
+     * GET all members of a set.
      *
      * @see <a href="https://valkey.io/commands/smembers/">valkey.io</a> for details.
      * @param key The key of the set.
@@ -767,7 +767,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
     }
 
     /**
-     * Get the number of members in a set.
+     * GET the number of members in a set.
      *
      * @see <a href="https://valkey.io/commands/scard/">valkey.io</a> for details.
      * @param key The key of the set.
@@ -778,7 +778,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
     }
 
     /**
-     * Get the number of members in a set.
+     * GET the number of members in a set.
      *
      * @see <a href="https://valkey.io/commands/scard/">valkey.io</a> for details.
      * @param key The key of the set.
@@ -901,7 +901,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
      * @return This batch instance for method chaining.
      */
     public ClusterBatch expire(String key, long seconds) {
-        return addCommand(Expire, key, String.valueOf(seconds));
+        return addCommand(EXPIRE, key, String.valueOf(seconds));
     }
 
     /**
@@ -913,11 +913,11 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
      * @return This batch instance for method chaining.
      */
     public ClusterBatch expire(GlideString key, long seconds) {
-        return addCommand(Expire, key.toString(), String.valueOf(seconds));
+        return addCommand(EXPIRE, key.toString(), String.valueOf(seconds));
     }
 
     /**
-     * Get the remaining time to live of a key that has a timeout.
+     * GET the remaining time to live of a key that has a timeout.
      *
      * @see <a href="https://valkey.io/commands/ttl/">valkey.io</a> for details.
      * @param key The key to check.
@@ -928,7 +928,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
     }
 
     /**
-     * Get the remaining time to live of a key that has a timeout.
+     * GET the remaining time to live of a key that has a timeout.
      *
      * @see <a href="https://valkey.io/commands/ttl/">valkey.io</a> for details.
      * @param key The key to check.
@@ -1031,7 +1031,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
     }
 
     /**
-     * Get the number of members in a sorted set.
+     * GET the number of members in a sorted set.
      *
      * @see <a href="https://valkey.io/commands/zcard/">valkey.io</a> for details.
      * @param key The key of the sorted set.
@@ -1042,7 +1042,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
     }
 
     /**
-     * Get the number of members in a sorted set.
+     * GET the number of members in a sorted set.
      *
      * @see <a href="https://valkey.io/commands/zcard/">valkey.io</a> for details.
      * @param key The key of the sorted set.
@@ -1053,7 +1053,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
     }
 
     /**
-     * Get the score associated with the given member in a sorted set.
+     * GET the score associated with the given member in a sorted set.
      *
      * @see <a href="https://valkey.io/commands/zscore/">valkey.io</a> for details.
      * @param key The key of the sorted set.
@@ -1065,7 +1065,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
     }
 
     /**
-     * Get the score associated with the given member in a sorted set.
+     * GET the score associated with the given member in a sorted set.
      *
      * @see <a href="https://valkey.io/commands/zscore/">valkey.io</a> for details.
      * @param key The key of the sorted set.
@@ -1077,7 +1077,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
     }
 
     /**
-     * Get the rank of the member in the sorted set, with scores ordered from low to high.
+     * GET the rank of the member in the sorted set, with scores ordered from low to high.
      *
      * @see <a href="https://valkey.io/commands/zrank/">valkey.io</a> for details.
      * @param key The key of the sorted set.
@@ -1089,7 +1089,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
     }
 
     /**
-     * Get the rank of the member in the sorted set, with scores ordered from low to high.
+     * GET the rank of the member in the sorted set, with scores ordered from low to high.
      *
      * @see <a href="https://valkey.io/commands/zrank/">valkey.io</a> for details.
      * @param key The key of the sorted set.
@@ -1109,7 +1109,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
      * @return This batch instance for method chaining.
      */
     public ClusterBatch publish(String message, String channel) {
-        return addCommand(Publish, message, channel);
+        return addCommand(PUBLISH, message, channel);
     }
 
     /**
@@ -1121,7 +1121,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
      * @return This batch instance for method chaining.
      */
     public ClusterBatch publish(GlideString message, GlideString channel) {
-        return addCommand(Publish, message.toString(), channel.toString());
+        return addCommand(PUBLISH, message.toString(), channel.toString());
     }
 
     /**
@@ -1135,7 +1135,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
      * @return This batch instance for method chaining.
      */
     public ClusterBatch publish(String message, String channel, boolean sharded) {
-        String commandType = sharded ? SPublish : Publish;
+        String commandType = sharded ? SPublish : PUBLISH;
         return addCommand(commandType, message, channel);
     }
 
@@ -1150,7 +1150,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
      * @return This batch instance for method chaining.
      */
     public ClusterBatch publish(GlideString message, GlideString channel, boolean sharded) {
-        String commandType = sharded ? SPublish : Publish;
+        String commandType = sharded ? SPublish : PUBLISH;
         return addCommand(commandType, message.toString(), channel.toString());
     }
 

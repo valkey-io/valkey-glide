@@ -103,7 +103,7 @@ public interface GenericBaseCommands {
     CompletableFuture<Long> exists(GlideString[] keys);
 
     /**
-     * Unlink (delete) multiple <code>keys</code> from the database. A key is ignored if it does not
+     * UNLINK (delete) multiple <code>keys</code> from the database. A key is ignored if it does not
      * exist. This command, similar to <a href="https://valkey.io/commands/del/">DEL</a>, removes
      * specified keys and ignores non-existent ones. However, this command does not block the server,
      * while <a href="https://valkey.io/commands/del/">DEL</a> does.
@@ -126,7 +126,7 @@ public interface GenericBaseCommands {
     CompletableFuture<Long> unlink(String[] keys);
 
     /**
-     * Unlink (delete) multiple <code>keys</code> from the database. A key is ignored if it does not
+     * UNLINK (delete) multiple <code>keys</code> from the database. A key is ignored if it does not
      * exist. This command, similar to <a href="https://valkey.io/commands/del/">DEL</a>, removes
      * specified keys and ignores non-existent ones. However, this command does not block the server,
      * while <a href="https://valkey.io/commands/del/">DEL</a> does.

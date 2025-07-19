@@ -32,7 +32,7 @@ public interface ClusterCommandExecutor {
     CompletableFuture<ClusterValue<Object>> customClusterCommand(GlideString[] args);
 
     /**
-     * Get information about the cluster with Section enumeration support.
+     * GET information about the cluster with Section enumeration support.
      *
      * @param sections The sections to retrieve
      * @return A CompletableFuture containing the info response wrapped in ClusterValue
@@ -40,7 +40,7 @@ public interface ClusterCommandExecutor {
     CompletableFuture<ClusterValue<String>> info(InfoOptions.Section[] sections);
 
     /**
-     * Get information about the cluster with Section enumeration support and routing.
+     * GET information about the cluster with Section enumeration support and routing.
      *
      * @param sections The sections to retrieve
      * @param route The routing configuration
@@ -49,7 +49,7 @@ public interface ClusterCommandExecutor {
     CompletableFuture<ClusterValue<String>> info(InfoOptions.Section[] sections, Object route);
 
     /**
-     * Get information about the cluster without any parameters.
+     * GET information about the cluster without any parameters.
      * This method provides cluster-compatible return type for the basic info command.
      * Note: This method conflicts with BaseClient.info() inheritance.
      * Implementation should use clusterInfo() to provide this functionality.

@@ -21,8 +21,8 @@ public class BitFieldOptions {
     /** <code>GET</code> subcommand string to include in the <code>BITFIELD</code> command. */
     public static final String GET_COMMAND_STRING = "GET";
 
-    /** <code>SET</code> subcommand string to include in the <code>BITFIELD</code> command. */
-    public static final String SET_COMMAND_STRING = "SET";
+    /** <code>Set</code> subcommand string to include in the <code>BITFIELD</code> command. */
+    public static final String SET_COMMAND_STRING = "Set";
 
     /** <code>INCRBY</code> subcommand string to include in the <code>BITFIELD</code> command. */
     public static final String INCRBY_COMMAND_STRING = "INCRBY";
@@ -70,7 +70,7 @@ public class BitFieldOptions {
     }
 
     /**
-     * <code>SET</code> subcommand for setting the bits in the binary representation of the string
+     * <code>Set</code> subcommand for setting the bits in the binary representation of the string
      * stored in <code>key</code> based on {@link BitEncoding} and {@link Offset}.
      */
     @RequiredArgsConstructor
@@ -115,7 +115,7 @@ public class BitFieldOptions {
     }
 
     /**
-     * <code>OVERFLOW</code> subcommand that determines the result of the <code>SET</code> or <code>
+     * <code>OVERFLOW</code> subcommand that determines the result of the <code>Set</code> or <code>
      * INCRBY</code> commands when an under or overflow occurs.
      */
     @RequiredArgsConstructor

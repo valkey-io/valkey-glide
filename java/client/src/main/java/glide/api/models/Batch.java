@@ -88,7 +88,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch set(String key, String value) {
-        return addCommand(Set, key, value);
+        return addCommand(SET, key, value);
     }
 
     /**
@@ -100,7 +100,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch set(GlideString key, GlideString value) {
-        return addCommand(Set, key.toString(), value.toString());
+        return addCommand(SET, key.toString(), value.toString());
     }
 
     /**
@@ -111,7 +111,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch get(String key) {
-        return addCommand(Get, key);
+        return addCommand(GET, key);
     }
 
     /**
@@ -122,7 +122,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch get(GlideString key) {
-        return addCommand(Get, key.toString());
+        return addCommand(GET, key.toString());
     }
 
     /**
@@ -454,7 +454,7 @@ public class Batch extends BaseBatch<Batch> {
     }
 
     /**
-     * Get the number of fields in a hash.
+     * GET the number of fields in a hash.
      *
      * @see <a href="https://valkey.io/commands/hlen/">valkey.io</a> for details.
      * @param key The key of the hash.
@@ -465,7 +465,7 @@ public class Batch extends BaseBatch<Batch> {
     }
 
     /**
-     * Get the number of fields in a hash.
+     * GET the number of fields in a hash.
      *
      * @see <a href="https://valkey.io/commands/hlen/">valkey.io</a> for details.
      * @param key The key of the hash.
@@ -476,7 +476,7 @@ public class Batch extends BaseBatch<Batch> {
     }
 
     /**
-     * Get all field names in a hash.
+     * GET all field names in a hash.
      *
      * @see <a href="https://valkey.io/commands/hkeys/">valkey.io</a> for details.
      * @param key The key of the hash.
@@ -487,7 +487,7 @@ public class Batch extends BaseBatch<Batch> {
     }
 
     /**
-     * Get all field names in a hash.
+     * GET all field names in a hash.
      *
      * @see <a href="https://valkey.io/commands/hkeys/">valkey.io</a> for details.
      * @param key The key of the hash.
@@ -498,7 +498,7 @@ public class Batch extends BaseBatch<Batch> {
     }
 
     /**
-     * Get all values in a hash.
+     * GET all values in a hash.
      *
      * @see <a href="https://valkey.io/commands/hvals/">valkey.io</a> for details.
      * @param key The key of the hash.
@@ -509,7 +509,7 @@ public class Batch extends BaseBatch<Batch> {
     }
 
     /**
-     * Get all values in a hash.
+     * GET all values in a hash.
      *
      * @see <a href="https://valkey.io/commands/hvals/">valkey.io</a> for details.
      * @param key The key of the hash.
@@ -520,7 +520,7 @@ public class Batch extends BaseBatch<Batch> {
     }
 
     /**
-     * Get the values of all specified hash fields.
+     * GET the values of all specified hash fields.
      *
      * @see <a href="https://valkey.io/commands/hmget/">valkey.io</a> for details.
      * @param key The key of the hash.
@@ -535,7 +535,7 @@ public class Batch extends BaseBatch<Batch> {
     }
 
     /**
-     * Get the values of all specified hash fields.
+     * GET the values of all specified hash fields.
      *
      * @see <a href="https://valkey.io/commands/hmget/">valkey.io</a> for details.
      * @param key The key of the hash.
@@ -896,7 +896,7 @@ public class Batch extends BaseBatch<Batch> {
     }
 
     /**
-     * Get all members of a set.
+     * GET all members of a set.
      *
      * @see <a href="https://valkey.io/commands/smembers/">valkey.io</a> for details.
      * @param key The key of the set.
@@ -907,7 +907,7 @@ public class Batch extends BaseBatch<Batch> {
     }
 
     /**
-     * Get all members of a set.
+     * GET all members of a set.
      *
      * @see <a href="https://valkey.io/commands/smembers/">valkey.io</a> for details.
      * @param key The key of the set.
@@ -918,7 +918,7 @@ public class Batch extends BaseBatch<Batch> {
     }
 
     /**
-     * Get the number of members in a set.
+     * GET the number of members in a set.
      *
      * @see <a href="https://valkey.io/commands/scard/">valkey.io</a> for details.
      * @param key The key of the set.
@@ -929,7 +929,7 @@ public class Batch extends BaseBatch<Batch> {
     }
 
     /**
-     * Get the number of members in a set.
+     * GET the number of members in a set.
      *
      * @see <a href="https://valkey.io/commands/scard/">valkey.io</a> for details.
      * @param key The key of the set.
@@ -1052,7 +1052,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch expire(String key, long seconds) {
-        return addCommand(Expire, key, String.valueOf(seconds));
+        return addCommand(EXPIRE, key, String.valueOf(seconds));
     }
 
     /**
@@ -1064,11 +1064,11 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch expire(GlideString key, long seconds) {
-        return addCommand(Expire, key.toString(), String.valueOf(seconds));
+        return addCommand(EXPIRE, key.toString(), String.valueOf(seconds));
     }
 
     /**
-     * Get the remaining time to live of a key that has a timeout.
+     * GET the remaining time to live of a key that has a timeout.
      *
      * @see <a href="https://valkey.io/commands/ttl/">valkey.io</a> for details.
      * @param key The key to check.
@@ -1079,7 +1079,7 @@ public class Batch extends BaseBatch<Batch> {
     }
 
     /**
-     * Get the remaining time to live of a key that has a timeout.
+     * GET the remaining time to live of a key that has a timeout.
      *
      * @see <a href="https://valkey.io/commands/ttl/">valkey.io</a> for details.
      * @param key The key to check.
@@ -1182,7 +1182,7 @@ public class Batch extends BaseBatch<Batch> {
     }
 
     /**
-     * Get the number of members in a sorted set.
+     * GET the number of members in a sorted set.
      *
      * @see <a href="https://valkey.io/commands/zcard/">valkey.io</a> for details.
      * @param key The key of the sorted set.
@@ -1193,7 +1193,7 @@ public class Batch extends BaseBatch<Batch> {
     }
 
     /**
-     * Get the number of members in a sorted set.
+     * GET the number of members in a sorted set.
      *
      * @see <a href="https://valkey.io/commands/zcard/">valkey.io</a> for details.
      * @param key The key of the sorted set.
@@ -1204,7 +1204,7 @@ public class Batch extends BaseBatch<Batch> {
     }
 
     /**
-     * Get the score associated with the given member in a sorted set.
+     * GET the score associated with the given member in a sorted set.
      *
      * @see <a href="https://valkey.io/commands/zscore/">valkey.io</a> for details.
      * @param key The key of the sorted set.
@@ -1216,7 +1216,7 @@ public class Batch extends BaseBatch<Batch> {
     }
 
     /**
-     * Get the score associated with the given member in a sorted set.
+     * GET the score associated with the given member in a sorted set.
      *
      * @see <a href="https://valkey.io/commands/zscore/">valkey.io</a> for details.
      * @param key The key of the sorted set.
@@ -1228,7 +1228,7 @@ public class Batch extends BaseBatch<Batch> {
     }
 
     /**
-     * Get the rank of the member in the sorted set, with scores ordered from low to high.
+     * GET the rank of the member in the sorted set, with scores ordered from low to high.
      *
      * @see <a href="https://valkey.io/commands/zrank/">valkey.io</a> for details.
      * @param key The key of the sorted set.
@@ -1240,7 +1240,7 @@ public class Batch extends BaseBatch<Batch> {
     }
 
     /**
-     * Get the rank of the member in the sorted set, with scores ordered from low to high.
+     * GET the rank of the member in the sorted set, with scores ordered from low to high.
      *
      * @see <a href="https://valkey.io/commands/zrank/">valkey.io</a> for details.
      * @param key The key of the sorted set.
@@ -1435,7 +1435,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch unlink(String... keys) {
-        return addCommand(Unlink, keys);
+        return addCommand(UNLINK, keys);
     }
 
     /**
@@ -1450,7 +1450,7 @@ public class Batch extends BaseBatch<Batch> {
         for (int i = 0; i < keys.length; i++) {
             stringKeys[i] = keys[i].toString();
         }
-        return addCommand(Unlink, stringKeys);
+        return addCommand(UNLINK, stringKeys);
     }
 
     /**
@@ -1633,25 +1633,25 @@ public class Batch extends BaseBatch<Batch> {
     }
 
     /**
-     * Get the value of a key after deleting it.
+     * GET the value of a key after deleting it.
      *
      * @see <a href="https://valkey.io/commands/getdel/">valkey.io</a> for details.
      * @param key The key to get and delete.
      * @return This batch instance for method chaining.
      */
     public Batch getdel(String key) {
-        return addCommand(GetDel, key);
+        return addCommand(GETDEL, key);
     }
 
     /**
-     * Get the value of a key after deleting it.
+     * GET the value of a key after deleting it.
      *
      * @see <a href="https://valkey.io/commands/getdel/">valkey.io</a> for details.
      * @param key The key to get and delete.
      * @return This batch instance for method chaining.
      */
     public Batch getdel(GlideString key) {
-        return addCommand(GetDel, key.toString());
+        return addCommand(GETDEL, key.toString());
     }
 
     /**
@@ -1748,7 +1748,7 @@ public class Batch extends BaseBatch<Batch> {
         args[0] = key;
         args[1] = value;
         System.arraycopy(options.toArgs(), 0, args, 2, options.toArgs().length);
-        return addCommand(Set, args);
+        return addCommand(SET, args);
     }
 
     /**
@@ -1768,11 +1768,11 @@ public class Batch extends BaseBatch<Batch> {
         args[0] = key.toString();
         args[1] = value.toString();
         System.arraycopy(options.toArgs(), 0, args, 2, options.toArgs().length);
-        return addCommand(Set, args);
+        return addCommand(SET, args);
     }
 
     /**
-     * Get the value of a key with options.
+     * GET the value of a key with options.
      *
      * @see <a href="https://valkey.io/commands/getex/">valkey.io</a> for details.
      * @param key The key to get.
@@ -1786,11 +1786,11 @@ public class Batch extends BaseBatch<Batch> {
         String[] args = new String[options.toArgs().length + 1];
         args[0] = key;
         System.arraycopy(options.toArgs(), 0, args, 1, options.toArgs().length);
-        return addCommand(GetEx, args);
+        return addCommand(GETEX, args);
     }
 
     /**
-     * Get the value of a key with options.
+     * GET the value of a key with options.
      *
      * @see <a href="https://valkey.io/commands/getex/">valkey.io</a> for details.
      * @param key The key to get.
@@ -1804,29 +1804,29 @@ public class Batch extends BaseBatch<Batch> {
         String[] args = new String[options.toArgs().length + 1];
         args[0] = key.toString();
         System.arraycopy(options.toArgs(), 0, args, 1, options.toArgs().length);
-        return addCommand(GetEx, args);
+        return addCommand(GETEX, args);
     }
 
     /**
-     * Get the value of a key with options.
+     * GET the value of a key with options.
      *
      * @see <a href="https://valkey.io/commands/getex/">valkey.io</a> for details.
      * @param key The key to get.
      * @return This batch instance for method chaining.
      */
     public Batch getex(String key) {
-        return addCommand(GetEx, key);
+        return addCommand(GETEX, key);
     }
 
     /**
-     * Get the value of a key with options.
+     * GET the value of a key with options.
      *
      * @see <a href="https://valkey.io/commands/getex/">valkey.io</a> for details.
      * @param key The key to get.
      * @return This batch instance for method chaining.
      */
     public Batch getex(GlideString key) {
-        return addCommand(GetEx, key.toString());
+        return addCommand(GETEX, key.toString());
     }
 
     /**
@@ -1846,7 +1846,7 @@ public class Batch extends BaseBatch<Batch> {
         args[0] = key;
         args[1] = String.valueOf(seconds);
         System.arraycopy(options.toArgs(), 0, args, 2, options.toArgs().length);
-        return addCommand(Expire, args);
+        return addCommand(EXPIRE, args);
     }
 
     /**
@@ -1866,7 +1866,7 @@ public class Batch extends BaseBatch<Batch> {
         args[0] = key.toString();
         args[1] = String.valueOf(seconds);
         System.arraycopy(options.toArgs(), 0, args, 2, options.toArgs().length);
-        return addCommand(Expire, args);
+        return addCommand(EXPIRE, args);
     }
 
     /**
@@ -1878,7 +1878,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch expireAt(String key, long timestamp) {
-        return addCommand(ExpireAt, key, String.valueOf(timestamp));
+        return addCommand(EXPIREAT, key, String.valueOf(timestamp));
     }
 
     /**
@@ -1890,7 +1890,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch expireAt(GlideString key, long timestamp) {
-        return addCommand(ExpireAt, key.toString(), String.valueOf(timestamp));
+        return addCommand(EXPIREAT, key.toString(), String.valueOf(timestamp));
     }
 
     /**
@@ -1910,7 +1910,7 @@ public class Batch extends BaseBatch<Batch> {
         args[0] = key;
         args[1] = String.valueOf(timestamp);
         System.arraycopy(options.toArgs(), 0, args, 2, options.toArgs().length);
-        return addCommand(ExpireAt, args);
+        return addCommand(EXPIREAT, args);
     }
 
     /**
@@ -1930,7 +1930,7 @@ public class Batch extends BaseBatch<Batch> {
         args[0] = key.toString();
         args[1] = String.valueOf(timestamp);
         System.arraycopy(options.toArgs(), 0, args, 2, options.toArgs().length);
-        return addCommand(ExpireAt, args);
+        return addCommand(EXPIREAT, args);
     }
 
     /**
@@ -1942,7 +1942,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch pexpire(String key, long milliseconds) {
-        return addCommand(PExpire, key, String.valueOf(milliseconds));
+        return addCommand(PEXPIRE, key, String.valueOf(milliseconds));
     }
 
     /**
@@ -1954,7 +1954,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch pexpire(GlideString key, long milliseconds) {
-        return addCommand(PExpire, key.toString(), String.valueOf(milliseconds));
+        return addCommand(PEXPIRE, key.toString(), String.valueOf(milliseconds));
     }
 
     /**
@@ -1974,7 +1974,7 @@ public class Batch extends BaseBatch<Batch> {
         args[0] = key;
         args[1] = String.valueOf(milliseconds);
         System.arraycopy(options.toArgs(), 0, args, 2, options.toArgs().length);
-        return addCommand(PExpire, args);
+        return addCommand(PEXPIRE, args);
     }
 
     /**
@@ -1994,7 +1994,7 @@ public class Batch extends BaseBatch<Batch> {
         args[0] = key.toString();
         args[1] = String.valueOf(milliseconds);
         System.arraycopy(options.toArgs(), 0, args, 2, options.toArgs().length);
-        return addCommand(PExpire, args);
+        return addCommand(PEXPIRE, args);
     }
 
     /**
@@ -2006,7 +2006,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch pexpireAt(String key, long timestamp) {
-        return addCommand(PExpireAt, key, String.valueOf(timestamp));
+        return addCommand(PEXPIREAT, key, String.valueOf(timestamp));
     }
 
     /**
@@ -2018,7 +2018,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch pexpireAt(GlideString key, long timestamp) {
-        return addCommand(PExpireAt, key.toString(), String.valueOf(timestamp));
+        return addCommand(PEXPIREAT, key.toString(), String.valueOf(timestamp));
     }
 
     /**
@@ -2038,7 +2038,7 @@ public class Batch extends BaseBatch<Batch> {
         args[0] = key;
         args[1] = String.valueOf(timestamp);
         System.arraycopy(options.toArgs(), 0, args, 2, options.toArgs().length);
-        return addCommand(PExpireAt, args);
+        return addCommand(PEXPIREAT, args);
     }
 
     /**
@@ -2058,11 +2058,11 @@ public class Batch extends BaseBatch<Batch> {
         args[0] = key.toString();
         args[1] = String.valueOf(timestamp);
         System.arraycopy(options.toArgs(), 0, args, 2, options.toArgs().length);
-        return addCommand(PExpireAt, args);
+        return addCommand(PEXPIREAT, args);
     }
 
     /**
-     * Get the expiration time of a key in Unix timestamp format.
+     * GET the expiration time of a key in Unix timestamp format.
      *
      * @see <a href="https://valkey.io/commands/expiretime/">valkey.io</a> for details.
      * @param key The key to get the expiration time of.
@@ -2073,7 +2073,7 @@ public class Batch extends BaseBatch<Batch> {
     }
 
     /**
-     * Get the expiration time of a key in Unix timestamp format.
+     * GET the expiration time of a key in Unix timestamp format.
      *
      * @see <a href="https://valkey.io/commands/expiretime/">valkey.io</a> for details.
      * @param key The key to get the expiration time of.
@@ -2084,7 +2084,7 @@ public class Batch extends BaseBatch<Batch> {
     }
 
     /**
-     * Get the expiration time of a key in Unix timestamp format in milliseconds.
+     * GET the expiration time of a key in Unix timestamp format in milliseconds.
      *
      * @see <a href="https://valkey.io/commands/pexpiretime/">valkey.io</a> for details.
      * @param key The key to get the expiration time of.
@@ -2095,7 +2095,7 @@ public class Batch extends BaseBatch<Batch> {
     }
 
     /**
-     * Get the expiration time of a key in Unix timestamp format in milliseconds.
+     * GET the expiration time of a key in Unix timestamp format in milliseconds.
      *
      * @see <a href="https://valkey.io/commands/pexpiretime/">valkey.io</a> for details.
      * @param key The key to get the expiration time of.
@@ -2138,7 +2138,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch publish(String message, String channel) {
-        return addCommand(Publish, message, channel);
+        return addCommand(PUBLISH, message, channel);
     }
 
     /**
@@ -2150,7 +2150,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch publish(GlideString message, GlideString channel) {
-        return addCommand(Publish, message.toString(), channel.toString());
+        return addCommand(PUBLISH, message.toString(), channel.toString());
     }
 
     /**
@@ -2164,7 +2164,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch publish(String message, String channel, boolean sharded) {
-        String commandType = sharded ? SPublish : Publish;
+        String commandType = sharded ? SPublish : PUBLISH;
         return addCommand(commandType, message, channel);
     }
 
@@ -2179,7 +2179,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch publish(GlideString message, GlideString channel, boolean sharded) {
-        String commandType = sharded ? SPublish : Publish;
+        String commandType = sharded ? SPublish : PUBLISH;
         return addCommand(commandType, message.toString(), channel.toString());
     }
 }
