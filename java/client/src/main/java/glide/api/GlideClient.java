@@ -12,10 +12,11 @@ import glide.api.commands.TransactionsCommands;
 import glide.api.commands.GenericCommands;
 import glide.api.commands.ServerManagementCommands;
 import glide.api.commands.PubSubBaseCommands;
-import io.valkey.glide.core.commands.CommandType;
 import glide.api.commands.StandaloneServerManagement;
 import glide.api.models.commands.scan.ScanOptions;
 import java.util.concurrent.CompletableFuture;
+
+import static glide.api.models.commands.RequestType.*;
 
 /**
  * Glide client for connecting to a single Valkey/Redis instance.
@@ -34,7 +35,7 @@ public class GlideClient extends BaseClient implements TransactionsCommands, Gen
             @Override
             public CompletableFuture<String> info() {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    io.valkey.glide.core.commands.CommandType.INFO))
+                    Info))
                     .thenApply(result -> result.toString());
             }
 
@@ -45,14 +46,14 @@ public class GlideClient extends BaseClient implements TransactionsCommands, Gen
                     sectionNames[i] = sections[i].name().toLowerCase();
                 }
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    io.valkey.glide.core.commands.CommandType.INFO, sectionNames))
+                    Info, sectionNames))
                     .thenApply(result -> result.toString());
             }
 
             @Override
             public CompletableFuture<String[]> time() {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    io.valkey.glide.core.commands.CommandType.TIME))
+                    Time))
                     .thenApply(result -> {
                         if (result instanceof Object[]) {
                             Object[] objects = (Object[]) result;
@@ -69,63 +70,63 @@ public class GlideClient extends BaseClient implements TransactionsCommands, Gen
             @Override
             public CompletableFuture<Long> lastsave() {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    io.valkey.glide.core.commands.CommandType.LASTSAVE))
+                    LastSave))
                     .thenApply(result -> Long.parseLong(result.toString()));
             }
 
             @Override
             public CompletableFuture<Long> dbsize() {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    io.valkey.glide.core.commands.CommandType.DBSIZE))
+                    DBSize))
                     .thenApply(result -> Long.parseLong(result.toString()));
             }
 
             @Override
             public CompletableFuture<String> flushall() {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    io.valkey.glide.core.commands.CommandType.FLUSHALL))
+                    FlushAll))
                     .thenApply(result -> result.toString());
             }
 
             @Override
             public CompletableFuture<String> flushall(glide.api.models.commands.FlushMode mode) {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    io.valkey.glide.core.commands.CommandType.FLUSHALL, mode.name()))
+                    FlushAll, mode.name()))
                     .thenApply(result -> result.toString());
             }
 
             @Override
             public CompletableFuture<String> flushdb() {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    io.valkey.glide.core.commands.CommandType.FLUSHDB))
+                    FlushDB))
                     .thenApply(result -> result.toString());
             }
 
             @Override
             public CompletableFuture<String> flushdb(glide.api.models.commands.FlushMode mode) {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    io.valkey.glide.core.commands.CommandType.FLUSHDB, mode.name()))
+                    FlushDB, mode.name()))
                     .thenApply(result -> result.toString());
             }
 
             @Override
             public CompletableFuture<String> configRewrite() {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    io.valkey.glide.core.commands.CommandType.CONFIG_REWRITE))
+                    ConfigRewrite))
                     .thenApply(result -> result.toString());
             }
 
             @Override
             public CompletableFuture<String> configResetStat() {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    io.valkey.glide.core.commands.CommandType.CONFIG_RESETSTAT))
+                    ConfigResetStat))
                     .thenApply(result -> result.toString());
             }
 
             @Override
             public CompletableFuture<java.util.Map<String, String>> configGet(String[] parameters) {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    io.valkey.glide.core.commands.CommandType.CONFIG_GET, parameters))
+                    ConfigGet, parameters))
                     .thenApply(result -> {
                         java.util.Map<String, String> config = new java.util.HashMap<>();
                         if (result instanceof Object[]) {
@@ -147,14 +148,14 @@ public class GlideClient extends BaseClient implements TransactionsCommands, Gen
                     args[i++] = entry.getValue();
                 }
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    io.valkey.glide.core.commands.CommandType.CONFIG_SET, args))
+                    ConfigSet, args))
                     .thenApply(result -> result.toString());
             }
 
             @Override
             public CompletableFuture<String> lolwut() {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    io.valkey.glide.core.commands.CommandType.LOLWUT))
+                    Lolwut))
                     .thenApply(result -> result.toString());
             }
 
@@ -165,14 +166,14 @@ public class GlideClient extends BaseClient implements TransactionsCommands, Gen
                     args[i] = String.valueOf(parameters[i]);
                 }
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    io.valkey.glide.core.commands.CommandType.LOLWUT, args))
+                    Lolwut, args))
                     .thenApply(result -> result.toString());
             }
 
             @Override
             public CompletableFuture<String> lolwut(int version) {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    io.valkey.glide.core.commands.CommandType.LOLWUT, "VERSION", String.valueOf(version)))
+                    Lolwut, "VERSION", String.valueOf(version)))
                     .thenApply(result -> result.toString());
             }
 
@@ -185,7 +186,7 @@ public class GlideClient extends BaseClient implements TransactionsCommands, Gen
                     args[i + 2] = String.valueOf(parameters[i]);
                 }
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    io.valkey.glide.core.commands.CommandType.LOLWUT, args))
+                    Lolwut, args))
                     .thenApply(result -> result.toString());
             }
         });
@@ -244,7 +245,7 @@ public class GlideClient extends BaseClient implements TransactionsCommands, Gen
      * @return A CompletableFuture containing "OK" if successful
      */
     public CompletableFuture<String> select(int index) {
-        return executeCommand(io.valkey.glide.core.commands.CommandType.SELECT, String.valueOf(index))
+        return executeCommand(Select, String.valueOf(index))
             .thenApply(result -> result.toString());
     }
 
@@ -254,7 +255,7 @@ public class GlideClient extends BaseClient implements TransactionsCommands, Gen
      * @return A CompletableFuture containing the number of keys
      */
     public CompletableFuture<Long> dbsize() {
-        return executeCommand(io.valkey.glide.core.commands.CommandType.DBSIZE)
+        return executeCommand(DBSize)
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -264,7 +265,7 @@ public class GlideClient extends BaseClient implements TransactionsCommands, Gen
      * @return A CompletableFuture containing "OK" if successful
      */
     public CompletableFuture<String> flushdb() {
-        return executeCommand(io.valkey.glide.core.commands.CommandType.FLUSHDB)
+        return executeCommand(FlushDB)
             .thenApply(result -> result.toString());
     }
 
@@ -275,7 +276,7 @@ public class GlideClient extends BaseClient implements TransactionsCommands, Gen
      * @return A CompletableFuture containing "OK" if successful
      */
     public CompletableFuture<String> flushdb(glide.api.models.commands.FlushMode mode) {
-        return executeCommand(io.valkey.glide.core.commands.CommandType.FLUSHDB, mode.name())
+        return executeCommand(FlushDB, mode.name())
             .thenApply(result -> result.toString());
     }
 
@@ -285,7 +286,7 @@ public class GlideClient extends BaseClient implements TransactionsCommands, Gen
      * @return A CompletableFuture containing "OK" if successful
      */
     public CompletableFuture<String> flushall() {
-        return executeCommand(io.valkey.glide.core.commands.CommandType.FLUSHALL)
+        return executeCommand(FlushAll)
             .thenApply(result -> result.toString());
     }
 
@@ -296,7 +297,7 @@ public class GlideClient extends BaseClient implements TransactionsCommands, Gen
      * @return A CompletableFuture containing "OK" if successful
      */
     public CompletableFuture<String> flushall(glide.api.models.commands.FlushMode mode) {
-        return executeCommand(io.valkey.glide.core.commands.CommandType.FLUSHALL, mode.name())
+        return executeCommand(FlushAll, mode.name())
             .thenApply(result -> result.toString());
     }
 
@@ -306,7 +307,7 @@ public class GlideClient extends BaseClient implements TransactionsCommands, Gen
      * @return A CompletableFuture containing the UNIX TIME
      */
     public CompletableFuture<Long> lastsave() {
-        return executeCommand(io.valkey.glide.core.commands.CommandType.LASTSAVE)
+        return executeCommand(LastSave)
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -316,7 +317,7 @@ public class GlideClient extends BaseClient implements TransactionsCommands, Gen
      * @return A CompletableFuture containing an array with seconds and microseconds since Unix epoch
      */
     public CompletableFuture<String[]> time() {
-        return executeCommand(io.valkey.glide.core.commands.CommandType.TIME)
+        return executeCommand(Time)
             .thenApply(result -> {
                 if (result instanceof Object[]) {
                     Object[] objects = (Object[]) result;
@@ -337,7 +338,7 @@ public class GlideClient extends BaseClient implements TransactionsCommands, Gen
      * @return A CompletableFuture containing the configuration values
      */
     public CompletableFuture<java.util.Map<String, String>> configGet(String[] parameters) {
-        return executeCommand(io.valkey.glide.core.commands.CommandType.CONFIG_GET, parameters)
+        return executeCommand(ConfigGet, parameters)
             .thenApply(result -> {
                 java.util.Map<String, String> config = new java.util.HashMap<>();
                 if (result instanceof Object[]) {
@@ -363,7 +364,7 @@ public class GlideClient extends BaseClient implements TransactionsCommands, Gen
             args[i++] = entry.getKey();
             args[i++] = entry.getValue();
         }
-        return executeCommand(io.valkey.glide.core.commands.CommandType.CONFIG_SET, args)
+        return executeCommand(ConfigSet, args)
             .thenApply(result -> result.toString());
     }
 
@@ -373,7 +374,7 @@ public class GlideClient extends BaseClient implements TransactionsCommands, Gen
      * @return A CompletableFuture containing "OK" when the configuration was rewritten properly
      */
     public CompletableFuture<String> configRewrite() {
-        return executeCommand(io.valkey.glide.core.commands.CommandType.CONFIG_REWRITE)
+        return executeCommand(ConfigRewrite)
             .thenApply(result -> result.toString());
     }
 
@@ -383,7 +384,7 @@ public class GlideClient extends BaseClient implements TransactionsCommands, Gen
      * @return A CompletableFuture containing "OK" to confirm that the statistics were successfully reset
      */
     public CompletableFuture<String> configResetStat() {
-        return executeCommand(io.valkey.glide.core.commands.CommandType.CONFIG_RESETSTAT)
+        return executeCommand(ConfigResetStat)
             .thenApply(result -> result.toString());
     }
 
@@ -446,7 +447,7 @@ public class GlideClient extends BaseClient implements TransactionsCommands, Gen
         for (int i = 0; i < sections.length; i++) {
             sectionStrings[i] = sections[i].name().toLowerCase();
         }
-        return super.info(sectionStrings);
+        return info(sectionStrings);
     }
 
     /**
@@ -456,7 +457,7 @@ public class GlideClient extends BaseClient implements TransactionsCommands, Gen
      * @return A CompletableFuture containing the generative art output
      */
     public CompletableFuture<String> lolwut(int version) {
-        return executeCommand(io.valkey.glide.core.commands.CommandType.LOLWUT, "VERSION", String.valueOf(version))
+        return executeCommand(Lolwut, "VERSION", String.valueOf(version))
             .thenApply(result -> result.toString());
     }
 
@@ -474,7 +475,7 @@ public class GlideClient extends BaseClient implements TransactionsCommands, Gen
         for (int i = 0; i < parameters.length; i++) {
             args[i + 2] = String.valueOf(parameters[i]);
         }
-        return executeCommand(io.valkey.glide.core.commands.CommandType.LOLWUT, args)
+        return executeCommand(Lolwut, args)
             .thenApply(result -> result.toString());
     }
 
@@ -508,7 +509,7 @@ public class GlideClient extends BaseClient implements TransactionsCommands, Gen
      */
     @Override
     public CompletableFuture<Object[]> scan(String cursor) {
-        return executeCommand(io.valkey.glide.core.commands.CommandType.SCAN, cursor)
+        return executeCommand(Scan, cursor)
             .thenApply(result -> {
                 // Parse scan response: [new_cursor, [key1, key2, ...]]
                 if (result instanceof Object[]) {
@@ -550,7 +551,7 @@ public class GlideClient extends BaseClient implements TransactionsCommands, Gen
             args.addAll(java.util.Arrays.asList(options.toArgs()));
         }
         
-        return executeCommand(io.valkey.glide.core.commands.CommandType.SCAN, args.toArray(new String[0]))
+        return executeCommand(Scan, args.toArray(new String[0]))
             .thenApply(result -> {
                 // Parse scan response: [new_cursor, [key1, key2, ...]]
                 if (result instanceof Object[]) {
@@ -605,7 +606,7 @@ public class GlideClient extends BaseClient implements TransactionsCommands, Gen
      */
     @Override
     public CompletableFuture<Boolean> copy(String source, String destination) {
-        return executeCommand(io.valkey.glide.core.commands.CommandType.COPY, source, destination)
+        return executeCommand(Copy, source, destination)
             .thenApply(result -> Boolean.parseBoolean(result.toString()));
     }
 
@@ -632,7 +633,7 @@ public class GlideClient extends BaseClient implements TransactionsCommands, Gen
     @Override
     public CompletableFuture<Boolean> copy(String source, String destination, boolean replace) {
         if (replace) {
-            return executeCommand(io.valkey.glide.core.commands.CommandType.COPY, source, destination, "REPLACE")
+            return executeCommand(Copy, source, destination, "REPLACE")
                 .thenApply(result -> Boolean.parseBoolean(result.toString()));
         } else {
             return copy(source, destination);
@@ -662,7 +663,7 @@ public class GlideClient extends BaseClient implements TransactionsCommands, Gen
      */
     @Override
     public CompletableFuture<Boolean> copy(String source, String destination, long destinationDB) {
-        return executeCommand(io.valkey.glide.core.commands.CommandType.COPY, source, destination, "DB", String.valueOf(destinationDB))
+        return executeCommand(Copy, source, destination, "DB", String.valueOf(destinationDB))
             .thenApply(result -> Boolean.parseBoolean(result.toString()));
     }
 
@@ -691,7 +692,7 @@ public class GlideClient extends BaseClient implements TransactionsCommands, Gen
     @Override
     public CompletableFuture<Boolean> copy(String source, String destination, long destinationDB, boolean replace) {
         if (replace) {
-            return executeCommand(io.valkey.glide.core.commands.CommandType.COPY, source, destination, "DB", String.valueOf(destinationDB), "REPLACE")
+            return executeCommand(Copy, source, destination, "DB", String.valueOf(destinationDB), "REPLACE")
                 .thenApply(result -> Boolean.parseBoolean(result.toString()));
         } else {
             return copy(source, destination, destinationDB);
@@ -721,7 +722,7 @@ public class GlideClient extends BaseClient implements TransactionsCommands, Gen
      */
     @Override
     public CompletableFuture<Boolean> move(String key, long dbIndex) {
-        return executeCommand(io.valkey.glide.core.commands.CommandType.MOVE, key, String.valueOf(dbIndex))
+        return executeCommand(Move, key, String.valueOf(dbIndex))
             .thenApply(result -> Boolean.parseBoolean(result.toString()));
     }
 
@@ -745,7 +746,7 @@ public class GlideClient extends BaseClient implements TransactionsCommands, Gen
      */
     @Override
     public CompletableFuture<String> unwatch() {
-        return executeCommand(CommandType.UNWATCH).thenApply(response -> response.toString());
+        return executeCommand(UnWatch).thenApply(response -> response.toString());
     }
 
     /**
@@ -757,7 +758,7 @@ public class GlideClient extends BaseClient implements TransactionsCommands, Gen
      */
     @Override
     public CompletableFuture<String> watch(String[] keys) {
-        return executeCommand(CommandType.WATCH, keys).thenApply(response -> response.toString());
+        return executeCommand(Watch, keys).thenApply(response -> response.toString());
     }
 
     /**
@@ -773,35 +774,35 @@ public class GlideClient extends BaseClient implements TransactionsCommands, Gen
         for (int i = 0; i < keys.length; i++) {
             stringKeys[i] = keys[i].toString();
         }
-        return executeCommand(CommandType.WATCH, stringKeys).thenApply(response -> response.toString());
+        return executeCommand(Watch, stringKeys).thenApply(response -> response.toString());
     }
 
     // PubSubBaseCommands implementation
     @Override
     public CompletableFuture<String> publish(String message, String channel) {
-        return executeCommand(CommandType.PUBLISH, message, channel).thenApply(response -> "OK");
+        return executeCommand(Publish, message, channel).thenApply(response -> "OK");
     }
 
     @Override
     public CompletableFuture<String> publish(GlideString message, GlideString channel) {
-        return executeCommand(CommandType.PUBLISH, message.toString(), channel.toString()).thenApply(response -> "OK");
+        return executeCommand(Publish, message.toString(), channel.toString()).thenApply(response -> "OK");
     }
 
     @Override
     public CompletableFuture<Long> publish(String message, String channel, boolean sharded) {
-        CommandType commandType = sharded ? CommandType.SPUBLISH : CommandType.PUBLISH;
+        String commandType = sharded ? SPublish : Publish;
         return executeCommand(commandType, message, channel).thenApply(response -> Long.parseLong(response.toString()));
     }
 
     @Override
     public CompletableFuture<Long> publish(GlideString message, GlideString channel, boolean sharded) {
-        CommandType commandType = sharded ? CommandType.SPUBLISH : CommandType.PUBLISH;
+        String commandType = sharded ? SPublish : Publish;
         return executeCommand(commandType, message.toString(), channel.toString()).thenApply(response -> Long.parseLong(response.toString()));
     }
 
     @Override
     public CompletableFuture<String[]> pubsubChannels() {
-        return executeCommand(CommandType.PUBSUB_CHANNELS).thenApply(response -> {
+        return executeCommand(PubSubChannels).thenApply(response -> {
             if (response instanceof String[]) {
                 return (String[]) response;
             }
@@ -811,7 +812,7 @@ public class GlideClient extends BaseClient implements TransactionsCommands, Gen
 
     @Override
     public CompletableFuture<GlideString[]> pubsubChannelsBinary() {
-        return executeCommand(CommandType.PUBSUB_CHANNELS).thenApply(response -> {
+        return executeCommand(PubSubChannels).thenApply(response -> {
             if (response instanceof String[]) {
                 String[] stringArray = (String[]) response;
                 GlideString[] result = new GlideString[stringArray.length];
@@ -826,7 +827,7 @@ public class GlideClient extends BaseClient implements TransactionsCommands, Gen
 
     @Override
     public CompletableFuture<String[]> pubsubChannels(String pattern) {
-        return executeCommand(CommandType.PUBSUB_CHANNELS, pattern).thenApply(response -> {
+        return executeCommand(PubSubChannels, pattern).thenApply(response -> {
             if (response instanceof String[]) {
                 return (String[]) response;
             }
@@ -836,7 +837,7 @@ public class GlideClient extends BaseClient implements TransactionsCommands, Gen
 
     @Override
     public CompletableFuture<GlideString[]> pubsubChannels(GlideString pattern) {
-        return executeCommand(CommandType.PUBSUB_CHANNELS, pattern.toString()).thenApply(response -> {
+        return executeCommand(PubSubChannels, pattern.toString()).thenApply(response -> {
             if (response instanceof String[]) {
                 String[] stringArray = (String[]) response;
                 GlideString[] result = new GlideString[stringArray.length];
@@ -851,12 +852,12 @@ public class GlideClient extends BaseClient implements TransactionsCommands, Gen
 
     @Override
     public CompletableFuture<Long> pubsubNumPat() {
-        return executeCommand(CommandType.PUBSUB_NUMPAT).thenApply(response -> Long.parseLong(response.toString()));
+        return executeCommand(PubSubNumPat).thenApply(response -> Long.parseLong(response.toString()));
     }
 
     @Override
     public CompletableFuture<java.util.Map<String, Long>> pubsubNumSub(String[] channels) {
-        return executeCommand(CommandType.PUBSUB_NUMSUB, channels).thenApply(response -> {
+        return executeCommand(PubSubNumSub, channels).thenApply(response -> {
             java.util.Map<String, Long> result = new java.util.HashMap<>();
             if (response instanceof java.util.Map) {
                 @SuppressWarnings("unchecked")
@@ -875,7 +876,7 @@ public class GlideClient extends BaseClient implements TransactionsCommands, Gen
         for (int i = 0; i < channels.length; i++) {
             stringChannels[i] = channels[i].toString();
         }
-        return executeCommand(CommandType.PUBSUB_NUMSUB, stringChannels).thenApply(response -> {
+        return executeCommand(PubSubNumSub, stringChannels).thenApply(response -> {
             java.util.Map<GlideString, Long> result = new java.util.HashMap<>();
             if (response instanceof java.util.Map) {
                 @SuppressWarnings("unchecked")
@@ -886,5 +887,18 @@ public class GlideClient extends BaseClient implements TransactionsCommands, Gen
             }
             return result;
         });
+    }
+
+    // ServerManagementCommands implementation - delegate to composition layer for standalone mode
+    @SuppressWarnings("unchecked")
+    public CompletableFuture<String> info() {
+        return serverManagement.getInfo()
+            .thenApply(result -> (String) result);
+    }
+
+    @SuppressWarnings("unchecked")
+    public CompletableFuture<String> info(String... sections) {
+        return serverManagement.getInfo(sections)
+            .thenApply(result -> (String) result);
     }
 }

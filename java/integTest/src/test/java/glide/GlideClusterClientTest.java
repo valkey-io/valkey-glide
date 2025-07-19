@@ -6,6 +6,44 @@ import static glide.api.commands.ServerManagementCommands.VERSION_VALKEY_API;
 import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.FlushMode.ASYNC;
 import static glide.api.models.commands.FlushMode.SYNC;
+import static glide.api.models.commands.RequestType.ClientGetName;
+import static glide.api.models.commands.RequestType.ClientId;
+import static glide.api.models.commands.RequestType.ConfigGet;
+import static glide.api.models.commands.RequestType.ConfigResetStat;
+import static glide.api.models.commands.RequestType.ConfigRewrite;
+import static glide.api.models.commands.RequestType.ConfigSet;
+import static glide.api.models.commands.RequestType.CustomCommand;
+import static glide.api.models.commands.RequestType.DBSize;
+import static glide.api.models.commands.RequestType.Del;
+import static glide.api.models.commands.RequestType.Echo;
+import static glide.api.models.commands.RequestType.FCall;
+import static glide.api.models.commands.RequestType.FCallReadOnly;
+import static glide.api.models.commands.RequestType.FlushAll;
+import static glide.api.models.commands.RequestType.FlushDB;
+import static glide.api.models.commands.RequestType.FunctionDelete;
+import static glide.api.models.commands.RequestType.FunctionDump;
+import static glide.api.models.commands.RequestType.FunctionFlush;
+import static glide.api.models.commands.RequestType.FunctionKill;
+import static glide.api.models.commands.RequestType.FunctionList;
+import static glide.api.models.commands.RequestType.FunctionLoad;
+import static glide.api.models.commands.RequestType.FunctionRestore;
+import static glide.api.models.commands.RequestType.FunctionStats;
+import static glide.api.models.commands.RequestType.Info;
+import static glide.api.models.commands.RequestType.LastSave;
+import static glide.api.models.commands.RequestType.Lolwut;
+import static glide.api.models.commands.RequestType.Ping;
+import static glide.api.models.commands.RequestType.PubSubShardChannels;
+import static glide.api.models.commands.RequestType.PubSubShardNumSub;
+import static glide.api.models.commands.RequestType.RandomKey;
+import static glide.api.models.commands.RequestType.SPublish;
+import static glide.api.models.commands.RequestType.ScriptExists;
+import static glide.api.models.commands.RequestType.ScriptFlush;
+import static glide.api.models.commands.RequestType.ScriptKill;
+import static glide.api.models.commands.RequestType.Select;
+import static glide.api.models.commands.RequestType.Sort;
+import static glide.api.models.commands.RequestType.SortReadOnly;
+import static glide.api.models.commands.RequestType.Time;
+import static glide.api.models.commands.RequestType.UnWatch;
 import static glide.api.models.commands.SortBaseOptions.ALPHA_COMMAND_STRING;
 import static glide.api.models.commands.SortBaseOptions.LIMIT_COMMAND_STRING;
 import static glide.api.models.commands.SortBaseOptions.OrderBy.DESC;
@@ -61,8 +99,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
 // Removed protobuf imports - using JNI implementation
 import glide.api.GlideClusterClient;
-import io.valkey.glide.managers.CommandManager;
-import io.valkey.glide.core.commands.CommandType;
+import glide.managers.CommandManager;
 import glide.managers.GlideExceptionCheckedFunction;
 
 public class GlideClusterClientTest {
@@ -248,7 +285,7 @@ public class GlideClusterClientTest {
 
         @Override
         public <T> CompletableFuture<T> submitNewCommand(
-                CommandType commandType, String[] arguments, 
+                String requestType, String[] arguments, 
                 GlideExceptionCheckedFunction<Object, T> responseHandler) {
             return CompletableFuture.supplyAsync(() -> responseHandler.apply(mockResponse));
         }

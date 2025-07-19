@@ -28,7 +28,8 @@ import glide.api.models.commands.geospatial.GeoSearchShape;
 import glide.api.models.commands.geospatial.GeoSearchResultOptions;
 import io.valkey.glide.core.client.GlideClient;
 import io.valkey.glide.core.commands.Command;
-import io.valkey.glide.core.commands.CommandType;
+
+import static glide.api.models.commands.RequestType.*;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -87,7 +88,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @param args        The arguments for the command
      * @return A CompletableFuture containing the result
      */
-    protected CompletableFuture<Object> executeCommand(CommandType commandType, String... args) {
+    protected CompletableFuture<Object> executeCommand(String commandType, String... args) {
         Command command = new Command(commandType, args);
         return client.executeCommand(command);
     }
@@ -99,7 +100,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the value or null if key doesn't exist
      */
     public CompletableFuture<String> get(String key) {
-        return executeCommand(CommandType.GET, key)
+        return executeCommand(Get, key)
                 .thenApply(result -> result == null ? null : result.toString());
     }
 
@@ -110,7 +111,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the value or null if key doesn't exist
      */
     public CompletableFuture<GlideString> get(GlideString key) {
-        return executeCommand(CommandType.GET, key.toString())
+        return executeCommand(Get, key.toString())
                 .thenApply(result -> result == null ? null : GlideString.of(result.toString()));
     }
 
@@ -122,7 +123,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing "OK" if successful
      */
     public CompletableFuture<String> set(String key, String value) {
-        return executeCommand(CommandType.SET, key, value)
+        return executeCommand(Set, key, value)
                 .thenApply(result -> result.toString());
     }
 
@@ -134,7 +135,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing "OK" if successful
      */
     public CompletableFuture<String> set(GlideString key, GlideString value) {
-        return executeCommand(CommandType.SET, key.toString(), value.toString())
+        return executeCommand(Set, key.toString(), value.toString())
                 .thenApply(result -> result.toString());
     }
 
@@ -149,7 +150,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         if (options != null) {
             args.addAll(Arrays.asList(options.toArgs()));
         }
-        return executeCommand(CommandType.SET, args.toArray(new String[0]))
+        return executeCommand(Set, args.toArray(new String[0]))
                 .thenApply(result -> result == null ? null : result.toString());
     }
 
@@ -164,7 +165,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         if (options != null) {
             args.addAll(Arrays.asList(options.toArgs()));
         }
-        return executeCommand(CommandType.SET, args.toArray(new String[0]))
+        return executeCommand(Set, args.toArray(new String[0]))
                 .thenApply(result -> result == null ? null : result.toString());
     }
 
@@ -173,7 +174,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<String> getdel(String key) {
-        return executeCommand(CommandType.GETDEL, key)
+        return executeCommand(GetDel, key)
                 .thenApply(result -> result == null ? null : result.toString());
     }
 
@@ -182,7 +183,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<GlideString> getdel(GlideString key) {
-        return executeCommand(CommandType.GETDEL, key.toString())
+        return executeCommand(GetDel, key.toString())
                 .thenApply(result -> result == null ? null : GlideString.of(result.toString()));
     }
 
@@ -191,7 +192,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<String> getex(String key) {
-        return executeCommand(CommandType.GETEX, key)
+        return executeCommand(GetEx, key)
                 .thenApply(result -> result == null ? null : result.toString());
     }
 
@@ -200,7 +201,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<GlideString> getex(GlideString key) {
-        return executeCommand(CommandType.GETEX, key.toString())
+        return executeCommand(GetEx, key.toString())
                 .thenApply(result -> result == null ? null : GlideString.of(result.toString()));
     }
 
@@ -214,7 +215,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         if (options != null) {
             args.addAll(Arrays.asList(options.toArgs()));
         }
-        return executeCommand(CommandType.GETEX, args.toArray(new String[0]))
+        return executeCommand(GetEx, args.toArray(new String[0]))
                 .thenApply(result -> result == null ? null : result.toString());
     }
 
@@ -228,7 +229,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         if (options != null) {
             args.addAll(Arrays.asList(options.toArgs()));
         }
-        return executeCommand(CommandType.GETEX, args.toArray(new String[0]))
+        return executeCommand(GetEx, args.toArray(new String[0]))
                 .thenApply(result -> result == null ? null : GlideString.of(result.toString()));
     }
 
@@ -238,7 +239,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing "PONG"
      */
     public CompletableFuture<String> ping() {
-        return executeCommand(CommandType.PING)
+        return executeCommand(Ping)
                 .thenApply(result -> result.toString());
     }
 
@@ -249,7 +250,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the ping response
      */
     public CompletableFuture<String> ping(String message) {
-        return executeCommand(CommandType.PING, message)
+        return executeCommand(Ping, message)
                 .thenApply(result -> result.toString());
     }
 
@@ -260,7 +261,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the ping response
      */
     public CompletableFuture<GlideString> ping(GlideString message) {
-        return executeCommand(CommandType.PING, message.toString())
+        return executeCommand(Ping, message.toString())
                 .thenApply(result -> GlideString.of(result.toString()));
     }
 
@@ -272,7 +273,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing an array of values
      */
     public CompletableFuture<String[]> mget(String[] keys) {
-        return executeCommand(CommandType.MGET, keys)
+        return executeCommand(MGet, keys)
             .thenApply(result -> {
                 if (result instanceof Object[]) {
                     Object[] objects = (Object[]) result;
@@ -297,7 +298,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         for (int i = 0; i < keys.length; i++) {
             stringKeys[i] = keys[i].toString();
         }
-        return executeCommand(CommandType.MGET, stringKeys)
+        return executeCommand(MGet, stringKeys)
                 .thenApply(result -> {
                     if (result instanceof Object[]) {
                         Object[] objects = (Object[]) result;
@@ -324,7 +325,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
             args[i++] = entry.getKey();
             args[i++] = entry.getValue();
         }
-        return executeCommand(CommandType.MSET, args)
+        return executeCommand(MSet, args)
             .thenApply(result -> result.toString());
     }
 
@@ -341,7 +342,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
             args[i++] = entry.getKey().toString();
             args[i++] = entry.getValue().toString();
         }
-        return executeCommand(CommandType.MSET, args)
+        return executeCommand(MSet, args)
                 .thenApply(result -> result.toString());
     }
 
@@ -352,7 +353,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the number of keys that were removed
      */
     public CompletableFuture<Long> del(String... keys) {
-        return executeCommand(CommandType.DEL, keys)
+        return executeCommand(Del, keys)
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -367,7 +368,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         for (int i = 0; i < keys.length; i++) {
             stringKeys[i] = keys[i].toString();
         }
-        return executeCommand(CommandType.DEL, stringKeys)
+        return executeCommand(Del, stringKeys)
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -378,7 +379,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the number of keys that exist
      */
     public CompletableFuture<Long> exists(String... keys) {
-        return executeCommand(CommandType.EXISTS, keys)
+        return executeCommand(Exists, keys)
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -389,7 +390,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the value after increment
      */
     public CompletableFuture<Long> incr(String key) {
-        return executeCommand(CommandType.INCR, key)
+        return executeCommand(Incr, key)
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -400,7 +401,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the value after increment
      */
     public CompletableFuture<Long> incr(GlideString key) {
-        return executeCommand(CommandType.INCR, key.toString())
+        return executeCommand(Incr, key.toString())
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -412,7 +413,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the value after increment
      */
     public CompletableFuture<Long> incrBy(String key, long amount) {
-        return executeCommand(CommandType.INCRBY, key, String.valueOf(amount))
+        return executeCommand(IncrBy, key, String.valueOf(amount))
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -424,7 +425,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the value after increment
      */
     public CompletableFuture<Long> incrBy(GlideString key, long amount) {
-        return executeCommand(CommandType.INCRBY, key.toString(), String.valueOf(amount))
+        return executeCommand(IncrBy, key.toString(), String.valueOf(amount))
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -436,7 +437,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the value after increment
      */
     public CompletableFuture<Double> incrByFloat(String key, double amount) {
-        return executeCommand(CommandType.INCRBYFLOAT, key, String.valueOf(amount))
+        return executeCommand(IncrByFloat, key, String.valueOf(amount))
             .thenApply(result -> Double.parseDouble(result.toString()));
     }
 
@@ -448,7 +449,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the value after increment
      */
     public CompletableFuture<Double> incrByFloat(GlideString key, double amount) {
-        return executeCommand(CommandType.INCRBYFLOAT, key.toString(), String.valueOf(amount))
+        return executeCommand(IncrByFloat, key.toString(), String.valueOf(amount))
             .thenApply(result -> Double.parseDouble(result.toString()));
     }
 
@@ -459,7 +460,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the value after decrement
      */
     public CompletableFuture<Long> decr(String key) {
-        return executeCommand(CommandType.DECR, key)
+        return executeCommand(Decr, key)
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -470,7 +471,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the value after decrement
      */
     public CompletableFuture<Long> decr(GlideString key) {
-        return executeCommand(CommandType.DECR, key.toString())
+        return executeCommand(Decr, key.toString())
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -482,7 +483,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the value after decrement
      */
     public CompletableFuture<Long> decrBy(String key, long amount) {
-        return executeCommand(CommandType.DECRBY, key, String.valueOf(amount))
+        return executeCommand(DecrBy, key, String.valueOf(amount))
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -494,7 +495,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the value after decrement
      */
     public CompletableFuture<Long> decrBy(GlideString key, long amount) {
-        return executeCommand(CommandType.DECRBY, key.toString(), String.valueOf(amount))
+        return executeCommand(DecrBy, key.toString(), String.valueOf(amount))
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -505,7 +506,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the length of the string
      */
     public CompletableFuture<Long> strlen(String key) {
-        return executeCommand(CommandType.STRLEN, key)
+        return executeCommand(Strlen, key)
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -516,7 +517,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the length of the string
      */
     public CompletableFuture<Long> strlen(GlideString key) {
-        return executeCommand(CommandType.STRLEN, key.toString())
+        return executeCommand(Strlen, key.toString())
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -528,7 +529,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the length of the string after append
      */
     public CompletableFuture<Long> append(String key, String value) {
-        return executeCommand(CommandType.APPEND, key, value)
+        return executeCommand(Append, key, value)
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -540,7 +541,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the length of the string after append
      */
     public CompletableFuture<Long> append(GlideString key, GlideString value) {
-        return executeCommand(CommandType.APPEND, key.toString(), value.toString())
+        return executeCommand(Append, key.toString(), value.toString())
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -553,7 +554,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the substring
      */
     public CompletableFuture<String> getrange(String key, int start, int end) {
-        return executeCommand(CommandType.GETRANGE, key, String.valueOf(start), String.valueOf(end))
+        return executeCommand(GetRange, key, String.valueOf(start), String.valueOf(end))
             .thenApply(result -> result == null ? null : result.toString());
     }
 
@@ -566,7 +567,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the substring
      */
     public CompletableFuture<GlideString> getrange(GlideString key, int start, int end) {
-        return executeCommand(CommandType.GETRANGE, key.toString(), String.valueOf(start), String.valueOf(end))
+        return executeCommand(GetRange, key.toString(), String.valueOf(start), String.valueOf(end))
             .thenApply(result -> result == null ? null : GlideString.of(result.toString()));
     }
 
@@ -579,7 +580,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the length of the string after modification
      */
     public CompletableFuture<Long> setrange(String key, int offset, String value) {
-        return executeCommand(CommandType.SETRANGE, key, String.valueOf(offset), value)
+        return executeCommand(SetRange, key, String.valueOf(offset), value)
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -592,7 +593,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the length of the string after modification
      */
     public CompletableFuture<Long> setrange(GlideString key, int offset, GlideString value) {
-        return executeCommand(CommandType.SETRANGE, key.toString(), String.valueOf(offset), value.toString())
+        return executeCommand(SetRange, key.toString(), String.valueOf(offset), value.toString())
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -605,7 +606,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the number of fields that were added
      */
     public CompletableFuture<Long> hset(String key, String field, String value) {
-        return executeCommand(CommandType.HSET, key, field, value)
+        return executeCommand(HSet, key, field, value)
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -618,7 +619,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the number of fields that were added
      */
     public CompletableFuture<Long> hset(GlideString key, GlideString field, GlideString value) {
-        return executeCommand(CommandType.HSET, key.toString(), field.toString(), value.toString())
+        return executeCommand(HSet, key.toString(), field.toString(), value.toString())
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -630,7 +631,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the value or null if field doesn't exist
      */
     public CompletableFuture<String> hget(String key, String field) {
-        return executeCommand(CommandType.HGET, key, field)
+        return executeCommand(HGet, key, field)
             .thenApply(result -> result == null ? null : result.toString());
     }
 
@@ -642,7 +643,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the value or null if field doesn't exist
      */
     public CompletableFuture<GlideString> hget(GlideString key, GlideString field) {
-        return executeCommand(CommandType.HGET, key.toString(), field.toString())
+        return executeCommand(HGet, key.toString(), field.toString())
             .thenApply(result -> result == null ? null : GlideString.of(result.toString()));
     }
 
@@ -653,7 +654,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing a map of field-value pairs
      */
     public CompletableFuture<Map<String, String>> hgetall(String key) {
-        return executeCommand(CommandType.HGETALL, key)
+        return executeCommand(HGetAll, key)
             .thenApply(result -> {
                 Map<String, String> map = new java.util.HashMap<>();
                 if (result instanceof Object[]) {
@@ -677,7 +678,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing a map of field-value pairs
      */
     public CompletableFuture<Map<GlideString, GlideString>> hgetall(GlideString key) {
-        return executeCommand(CommandType.HGETALL, key.toString())
+        return executeCommand(HGetAll, key.toString())
             .thenApply(result -> {
                 Map<GlideString, GlideString> map = new java.util.HashMap<>();
                 if (result instanceof Object[]) {
@@ -709,7 +710,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
             args[i++] = entry.getKey();
             args[i++] = entry.getValue();
         }
-        return executeCommand(CommandType.HSET, args)
+        return executeCommand(HSet, args)
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -728,7 +729,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
             args[i++] = entry.getKey().toString();
             args[i++] = entry.getValue().toString();
         }
-        return executeCommand(CommandType.HSET, args)
+        return executeCommand(HSet, args)
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -743,7 +744,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         String[] args = new String[fields.length + 1];
         args[0] = key;
         System.arraycopy(fields, 0, args, 1, fields.length);
-        return executeCommand(CommandType.HDEL, args)
+        return executeCommand(HDel, args)
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -760,7 +761,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         for (int i = 0; i < fields.length; i++) {
             args[i + 1] = fields[i].toString();
         }
-        return executeCommand(CommandType.HDEL, args)
+        return executeCommand(HDel, args)
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -772,7 +773,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing true if the field exists, false otherwise
      */
     public CompletableFuture<Boolean> hexists(String key, String field) {
-        return executeCommand(CommandType.HEXISTS, key, field)
+        return executeCommand(HExists, key, field)
             .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -784,7 +785,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing true if the field exists, false otherwise
      */
     public CompletableFuture<Boolean> hexists(GlideString key, GlideString field) {
-        return executeCommand(CommandType.HEXISTS, key.toString(), field.toString())
+        return executeCommand(HExists, key.toString(), field.toString())
             .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -795,7 +796,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the number of fields in the hash
      */
     public CompletableFuture<Long> hlen(String key) {
-        return executeCommand(CommandType.HLEN, key)
+        return executeCommand(HLen, key)
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -806,7 +807,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the number of fields in the hash
      */
     public CompletableFuture<Long> hlen(GlideString key) {
-        return executeCommand(CommandType.HLEN, key.toString())
+        return executeCommand(HLen, key.toString())
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -817,7 +818,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing an array of field names
      */
     public CompletableFuture<String[]> hkeys(String key) {
-        return executeCommand(CommandType.HKEYS, key)
+        return executeCommand(HKeys, key)
             .thenApply(result -> {
                 if (result instanceof Object[]) {
                     Object[] objects = (Object[]) result;
@@ -838,7 +839,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing an array of field names
      */
     public CompletableFuture<GlideString[]> hkeys(GlideString key) {
-        return executeCommand(CommandType.HKEYS, key.toString())
+        return executeCommand(HKeys, key.toString())
             .thenApply(result -> {
                 if (result instanceof Object[]) {
                     Object[] objects = (Object[]) result;
@@ -859,7 +860,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing an array of values
      */
     public CompletableFuture<String[]> hvals(String key) {
-        return executeCommand(CommandType.HVALS, key)
+        return executeCommand(HVals, key)
             .thenApply(result -> {
                 if (result instanceof Object[]) {
                     Object[] objects = (Object[]) result;
@@ -880,7 +881,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing an array of values
      */
     public CompletableFuture<GlideString[]> hvals(GlideString key) {
-        return executeCommand(CommandType.HVALS, key.toString())
+        return executeCommand(HVals, key.toString())
             .thenApply(result -> {
                 if (result instanceof Object[]) {
                     Object[] objects = (Object[]) result;
@@ -905,7 +906,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         String[] args = new String[fields.length + 1];
         args[0] = key;
         System.arraycopy(fields, 0, args, 1, fields.length);
-        return executeCommand(CommandType.HMGET, args)
+        return executeCommand(HMGet, args)
             .thenApply(result -> {
                 if (result instanceof Object[]) {
                     Object[] objects = (Object[]) result;
@@ -932,7 +933,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         for (int i = 0; i < fields.length; i++) {
             args[i + 1] = fields[i].toString();
         }
-        return executeCommand(CommandType.HMGET, args)
+        return executeCommand(HMGet, args)
             .thenApply(result -> {
                 if (result instanceof Object[]) {
                     Object[] objects = (Object[]) result;
@@ -955,7 +956,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the value after increment
      */
     public CompletableFuture<Long> hincrBy(String key, String field, long amount) {
-        return executeCommand(CommandType.HINCRBY, key, field, String.valueOf(amount))
+        return executeCommand(HIncrBy, key, field, String.valueOf(amount))
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -968,7 +969,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the value after increment
      */
     public CompletableFuture<Long> hincrBy(GlideString key, GlideString field, long amount) {
-        return executeCommand(CommandType.HINCRBY, key.toString(), field.toString(), String.valueOf(amount))
+        return executeCommand(HIncrBy, key.toString(), field.toString(), String.valueOf(amount))
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -981,7 +982,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the value after increment
      */
     public CompletableFuture<Double> hincrByFloat(String key, String field, double amount) {
-        return executeCommand(CommandType.HINCRBYFLOAT, key, field, String.valueOf(amount))
+        return executeCommand(HIncrByFloat, key, field, String.valueOf(amount))
             .thenApply(result -> Double.parseDouble(result.toString()));
     }
 
@@ -994,7 +995,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the value after increment
      */
     public CompletableFuture<Double> hincrByFloat(GlideString key, GlideString field, double amount) {
-        return executeCommand(CommandType.HINCRBYFLOAT, key.toString(), field.toString(), String.valueOf(amount))
+        return executeCommand(HIncrByFloat, key.toString(), field.toString(), String.valueOf(amount))
             .thenApply(result -> Double.parseDouble(result.toString()));
     }
 
@@ -1010,20 +1011,12 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
             return CompletableFuture.completedFuture(null);
         }
 
-        // Try to map the command name to a CommandType
-        try {
-            CommandType commandType = CommandType.valueOf(args[0].toUpperCase());
-            String[] commandArgs = new String[args.length - 1];
-            System.arraycopy(args, 1, commandArgs, 0, args.length - 1);
-            return executeCommand(commandType, commandArgs);
-        } catch (IllegalArgumentException e) {
-            // If command is not in enum, execute as raw command using JNI directly
-            String commandName = args[0];
-            String[] commandArgs = new String[args.length - 1];
-            System.arraycopy(args, 1, commandArgs, 0, args.length - 1);
-            
-            return executeRawCommand(commandName, commandArgs);
-        }
+        // Execute as raw command using JNI directly since we no longer use CommandType enum
+        String commandName = args[0];
+        String[] commandArgs = new String[args.length - 1];
+        System.arraycopy(args, 1, commandArgs, 0, args.length - 1);
+        
+        return executeRawCommand(commandName, commandArgs);
     }
 
     /**
@@ -1190,7 +1183,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         System.arraycopy(keys, 0, args, 0, keys.length);
         args[keys.length] = String.valueOf(timeout);
 
-        return executeCommand(CommandType.BLPOP, args)
+        return executeCommand(BLPop, args)
                 .thenApply(result -> {
                     if (result instanceof Object[]) {
                         Object[] objects = (Object[]) result;
@@ -1217,7 +1210,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         args[0] = key;
         System.arraycopy(elements, 0, args, 1, elements.length);
 
-        return executeCommand(CommandType.LPUSH, args)
+        return executeCommand(LPush, args)
                 .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -1231,7 +1224,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         for (int i = 0; i < elements.length; i++) {
             args[i + 1] = elements[i].toString();
         }
-        return executeCommand(CommandType.LPUSH, args)
+        return executeCommand(LPush, args)
                 .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -1246,7 +1239,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         String[] args = new String[elements.length + 1];
         args[0] = key;
         System.arraycopy(elements, 0, args, 1, elements.length);
-        return executeCommand(CommandType.RPUSH, args)
+        return executeCommand(RPush, args)
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -1263,7 +1256,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         for (int i = 0; i < elements.length; i++) {
             args[i + 1] = elements[i].toString();
         }
-        return executeCommand(CommandType.RPUSH, args)
+        return executeCommand(RPush, args)
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -1274,7 +1267,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the first element or null if the list is empty
      */
     public CompletableFuture<String> lpop(String key) {
-        return executeCommand(CommandType.LPOP, key)
+        return executeCommand(LPop, key)
             .thenApply(result -> result == null ? null : result.toString());
     }
 
@@ -1285,7 +1278,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the first element or null if the list is empty
      */
     public CompletableFuture<GlideString> lpop(GlideString key) {
-        return executeCommand(CommandType.LPOP, key.toString())
+        return executeCommand(LPop, key.toString())
             .thenApply(result -> result == null ? null : GlideString.of(result.toString()));
     }
 
@@ -1296,7 +1289,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the last element or null if the list is empty
      */
     public CompletableFuture<String> rpop(String key) {
-        return executeCommand(CommandType.RPOP, key)
+        return executeCommand(RPop, key)
             .thenApply(result -> result == null ? null : result.toString());
     }
 
@@ -1307,7 +1300,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the last element or null if the list is empty
      */
     public CompletableFuture<GlideString> rpop(GlideString key) {
-        return executeCommand(CommandType.RPOP, key.toString())
+        return executeCommand(RPop, key.toString())
             .thenApply(result -> result == null ? null : GlideString.of(result.toString()));
     }
 
@@ -1320,7 +1313,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing an array of elements in the specified range
      */
     public CompletableFuture<String[]> lrange(String key, long start, long end) {
-        return executeCommand(CommandType.LRANGE, key, String.valueOf(start), String.valueOf(end))
+        return executeCommand(LRange, key, String.valueOf(start), String.valueOf(end))
             .thenApply(result -> {
                 if (result instanceof Object[]) {
                     Object[] objects = (Object[]) result;
@@ -1343,7 +1336,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing an array of elements in the specified range
      */
     public CompletableFuture<GlideString[]> lrange(GlideString key, long start, long end) {
-        return executeCommand(CommandType.LRANGE, key.toString(), String.valueOf(start), String.valueOf(end))
+        return executeCommand(LRange, key.toString(), String.valueOf(start), String.valueOf(end))
             .thenApply(result -> {
                 if (result instanceof Object[]) {
                     Object[] objects = (Object[]) result;
@@ -1364,7 +1357,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the length of the list
      */
     public CompletableFuture<Long> llen(String key) {
-        return executeCommand(CommandType.LLEN, key)
+        return executeCommand(LLen, key)
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -1375,7 +1368,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the length of the list
      */
     public CompletableFuture<Long> llen(GlideString key) {
-        return executeCommand(CommandType.LLEN, key.toString())
+        return executeCommand(LLen, key.toString())
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -1387,7 +1380,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the element at index or null if index is out of range
      */
     public CompletableFuture<String> lindex(String key, long index) {
-        return executeCommand(CommandType.LINDEX, key, String.valueOf(index))
+        return executeCommand(LIndex, key, String.valueOf(index))
             .thenApply(result -> result == null ? null : result.toString());
     }
 
@@ -1399,7 +1392,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the element at index or null if index is out of range
      */
     public CompletableFuture<GlideString> lindex(GlideString key, long index) {
-        return executeCommand(CommandType.LINDEX, key.toString(), String.valueOf(index))
+        return executeCommand(LIndex, key.toString(), String.valueOf(index))
             .thenApply(result -> result == null ? null : GlideString.of(result.toString()));
     }
 
@@ -1412,7 +1405,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing "OK" if successful
      */
     public CompletableFuture<String> lset(String key, long index, String element) {
-        return executeCommand(CommandType.LSET, key, String.valueOf(index), element)
+        return executeCommand(LSet, key, String.valueOf(index), element)
             .thenApply(result -> result.toString());
     }
 
@@ -1425,7 +1418,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing "OK" if successful
      */
     public CompletableFuture<String> lset(GlideString key, long index, GlideString element) {
-        return executeCommand(CommandType.LSET, key.toString(), String.valueOf(index), element.toString())
+        return executeCommand(LSet, key.toString(), String.valueOf(index), element.toString())
             .thenApply(result -> result.toString());
     }
 
@@ -1438,7 +1431,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing "OK" if successful
      */
     public CompletableFuture<String> ltrim(String key, long start, long end) {
-        return executeCommand(CommandType.LTRIM, key, String.valueOf(start), String.valueOf(end))
+        return executeCommand(LTrim, key, String.valueOf(start), String.valueOf(end))
             .thenApply(result -> result.toString());
     }
 
@@ -1451,7 +1444,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing "OK" if successful
      */
     public CompletableFuture<String> ltrim(GlideString key, long start, long end) {
-        return executeCommand(CommandType.LTRIM, key.toString(), String.valueOf(start), String.valueOf(end))
+        return executeCommand(LTrim, key.toString(), String.valueOf(start), String.valueOf(end))
             .thenApply(result -> result.toString());
     }
 
@@ -1464,7 +1457,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the number of removed elements
      */
     public CompletableFuture<Long> lrem(String key, long count, String element) {
-        return executeCommand(CommandType.LREM, key, String.valueOf(count), element)
+        return executeCommand(LRem, key, String.valueOf(count), element)
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -1477,7 +1470,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the number of removed elements
      */
     public CompletableFuture<Long> lrem(GlideString key, long count, GlideString element) {
-        return executeCommand(CommandType.LREM, key.toString(), String.valueOf(count), element.toString())
+        return executeCommand(LRem, key.toString(), String.valueOf(count), element.toString())
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -1493,7 +1486,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         String[] args = new String[members.length + 1];
         args[0] = key;
         System.arraycopy(members, 0, args, 1, members.length);
-        return executeCommand(CommandType.SADD, args)
+        return executeCommand(SAdd, args)
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -1511,7 +1504,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         for (int i = 0; i < members.length; i++) {
             args[i + 1] = members[i].toString();
         }
-        return executeCommand(CommandType.SADD, args)
+        return executeCommand(SAdd, args)
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -1527,7 +1520,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         String[] args = new String[members.length + 1];
         args[0] = key;
         System.arraycopy(members, 0, args, 1, members.length);
-        return executeCommand(CommandType.SREM, args)
+        return executeCommand(SRem, args)
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -1545,7 +1538,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         for (int i = 0; i < members.length; i++) {
             args[i + 1] = members[i].toString();
         }
-        return executeCommand(CommandType.SREM, args)
+        return executeCommand(SRem, args)
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -1557,7 +1550,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<java.util.Set<String>> smembers(String key) {
-        return executeCommand(CommandType.SMEMBERS, key)
+        return executeCommand(SMembers, key)
             .thenApply(result -> {
                 java.util.Set<String> set = new java.util.HashSet<>();
                 if (result instanceof Object[]) {
@@ -1580,7 +1573,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<java.util.Set<GlideString>> smembers(GlideString key) {
-        return executeCommand(CommandType.SMEMBERS, key.toString())
+        return executeCommand(SMembers, key.toString())
             .thenApply(result -> {
                 java.util.Set<GlideString> set = new java.util.HashSet<>();
                 if (result instanceof Object[]) {
@@ -1603,7 +1596,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Long> scard(String key) {
-        return executeCommand(CommandType.SCARD, key)
+        return executeCommand(SCard, key)
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -1615,7 +1608,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Long> scard(GlideString key) {
-        return executeCommand(CommandType.SCARD, key.toString())
+        return executeCommand(SCard, key.toString())
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -1628,7 +1621,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Boolean> sismember(String key, String member) {
-        return executeCommand(CommandType.SISMEMBER, key, member)
+        return executeCommand(SIsMember, key, member)
             .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -1641,7 +1634,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Boolean> sismember(GlideString key, GlideString member) {
-        return executeCommand(CommandType.SISMEMBER, key.toString(), member.toString())
+        return executeCommand(SIsMember, key.toString(), member.toString())
             .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -1653,7 +1646,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<java.util.Set<String>> sdiff(String[] keys) {
-        return executeCommand(CommandType.SDIFF, keys)
+        return executeCommand(SDiff, keys)
             .thenApply(result -> {
                 java.util.Set<String> set = new java.util.HashSet<>();
                 if (result instanceof Object[]) {
@@ -1680,7 +1673,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         for (int i = 0; i < keys.length; i++) {
             stringKeys[i] = keys[i].toString();
         }
-        return executeCommand(CommandType.SDIFF, stringKeys)
+        return executeCommand(SDiff, stringKeys)
             .thenApply(result -> {
                 java.util.Set<GlideString> set = new java.util.HashSet<>();
                 if (result instanceof Object[]) {
@@ -1703,7 +1696,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<java.util.Set<String>> sinter(String[] keys) {
-        return executeCommand(CommandType.SINTER, keys)
+        return executeCommand(SInter, keys)
             .thenApply(result -> {
                 java.util.Set<String> set = new java.util.HashSet<>();
                 if (result instanceof Object[]) {
@@ -1730,7 +1723,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         for (int i = 0; i < keys.length; i++) {
             stringKeys[i] = keys[i].toString();
         }
-        return executeCommand(CommandType.SINTER, stringKeys)
+        return executeCommand(SInter, stringKeys)
             .thenApply(result -> {
                 java.util.Set<GlideString> set = new java.util.HashSet<>();
                 if (result instanceof Object[]) {
@@ -1753,7 +1746,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<java.util.Set<String>> sunion(String[] keys) {
-        return executeCommand(CommandType.SUNION, keys)
+        return executeCommand(SUnion, keys)
             .thenApply(result -> {
                 java.util.Set<String> set = new java.util.HashSet<>();
                 if (result instanceof Object[]) {
@@ -1780,7 +1773,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         for (int i = 0; i < keys.length; i++) {
             stringKeys[i] = keys[i].toString();
         }
-        return executeCommand(CommandType.SUNION, stringKeys)
+        return executeCommand(SUnion, stringKeys)
             .thenApply(result -> {
                 java.util.Set<GlideString> set = new java.util.HashSet<>();
                 if (result instanceof Object[]) {
@@ -1805,7 +1798,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing true if the timeout was set, false if key does not exist
      */
     public CompletableFuture<Boolean> expire(String key, long seconds) {
-        return executeCommand(CommandType.EXPIRE, key, String.valueOf(seconds))
+        return executeCommand(Expire, key, String.valueOf(seconds))
             .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -1817,7 +1810,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing true if the timeout was set, false if key does not exist
      */
     public CompletableFuture<Boolean> expire(GlideString key, long seconds) {
-        return executeCommand(CommandType.EXPIRE, key.toString(), String.valueOf(seconds))
+        return executeCommand(Expire, key.toString(), String.valueOf(seconds))
             .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -1828,7 +1821,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the TTL in seconds, or -1 if key exists but has no timeout, or -2 if key does not exist
      */
     public CompletableFuture<Long> ttl(String key) {
-        return executeCommand(CommandType.TTL, key)
+        return executeCommand(TTL, key)
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -1839,7 +1832,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the TTL in seconds, or -1 if key exists but has no timeout, or -2 if key does not exist
      */
     public CompletableFuture<Long> ttl(GlideString key) {
-        return executeCommand(CommandType.TTL, key.toString())
+        return executeCommand(TTL, key.toString())
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -1861,7 +1854,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
             args[i++] = String.valueOf(entry.getValue());
             args[i++] = entry.getKey();
         }
-        return executeCommand(CommandType.ZADD, args)
+        return executeCommand(ZAdd, args)
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -1880,7 +1873,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
             args[i++] = String.valueOf(entry.getValue());
             args[i++] = entry.getKey().toString();
         }
-        return executeCommand(CommandType.ZADD, args)
+        return executeCommand(ZAdd, args)
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -1893,7 +1886,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the members in the specified range
      */
     public CompletableFuture<String[]> zrange(String key, long start, long end) {
-        return executeCommand(CommandType.ZRANGE, key, String.valueOf(start), String.valueOf(end))
+        return executeCommand(ZRange, key, String.valueOf(start), String.valueOf(end))
             .thenApply(result -> {
                 if (result instanceof Object[]) {
                     Object[] objects = (Object[]) result;
@@ -1916,7 +1909,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the members in the specified range
      */
     public CompletableFuture<GlideString[]> zrange(GlideString key, long start, long end) {
-        return executeCommand(CommandType.ZRANGE, key.toString(), String.valueOf(start), String.valueOf(end))
+        return executeCommand(ZRange, key.toString(), String.valueOf(start), String.valueOf(end))
             .thenApply(result -> {
                 if (result instanceof Object[]) {
                     Object[] objects = (Object[]) result;
@@ -1941,7 +1934,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         String[] args = new String[members.length + 1];
         args[0] = key;
         System.arraycopy(members, 0, args, 1, members.length);
-        return executeCommand(CommandType.ZREM, args)
+        return executeCommand(ZRem, args)
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -1958,7 +1951,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         for (int i = 0; i < members.length; i++) {
             args[i + 1] = members[i].toString();
         }
-        return executeCommand(CommandType.ZREM, args)
+        return executeCommand(ZRem, args)
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -1969,7 +1962,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the cardinality (number of elements) of the sorted set
      */
     public CompletableFuture<Long> zcard(String key) {
-        return executeCommand(CommandType.ZCARD, key)
+        return executeCommand(ZCard, key)
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -1980,7 +1973,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the cardinality (number of elements) of the sorted set
      */
     public CompletableFuture<Long> zcard(GlideString key) {
-        return executeCommand(CommandType.ZCARD, key.toString())
+        return executeCommand(ZCard, key.toString())
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -1992,7 +1985,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the score of the member (null if member does not exist)
      */
     public CompletableFuture<Double> zscore(String key, String member) {
-        return executeCommand(CommandType.ZSCORE, key, member)
+        return executeCommand(ZScore, key, member)
             .thenApply(result -> {
                 if (result == null) {
                     return null;
@@ -2009,7 +2002,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the score of the member (null if member does not exist)
      */
     public CompletableFuture<Double> zscore(GlideString key, GlideString member) {
-        return executeCommand(CommandType.ZSCORE, key.toString(), member.toString())
+        return executeCommand(ZScore, key.toString(), member.toString())
             .thenApply(result -> {
                 if (result == null) {
                     return null;
@@ -2026,7 +2019,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the rank of the member (null if member does not exist)
      */
     public CompletableFuture<Long> zrank(String key, String member) {
-        return executeCommand(CommandType.ZRANK, key, member)
+        return executeCommand(ZRank, key, member)
             .thenApply(result -> {
                 if (result == null) {
                     return null;
@@ -2043,7 +2036,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the rank of the member (null if member does not exist)
      */
     public CompletableFuture<Long> zrank(GlideString key, GlideString member) {
-        return executeCommand(CommandType.ZRANK, key.toString(), member.toString())
+        return executeCommand(ZRank, key.toString(), member.toString())
             .thenApply(result -> {
                 if (result == null) {
                     return null;
@@ -2068,7 +2061,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         allArgs[1] = String.valueOf(keys.length);
         System.arraycopy(keys, 0, allArgs, 2, keys.length);
         System.arraycopy(args, 0, allArgs, 2 + keys.length, args.length);
-        return executeCommand(CommandType.EVAL, allArgs);
+        return executeCommand(Eval, allArgs);
     }
 
     /**
@@ -2085,7 +2078,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         allArgs[1] = String.valueOf(keys.length);
         System.arraycopy(keys, 0, allArgs, 2, keys.length);
         System.arraycopy(args, 0, allArgs, 2 + keys.length, args.length);
-        return executeCommand(CommandType.EVALSHA, allArgs);
+        return executeCommand(EvalSha, allArgs);
     }
 
     /**
@@ -2130,7 +2123,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the SHA1 hash of the loaded script
      */
     public CompletableFuture<String> scriptLoad(String script) {
-        return executeCommand(CommandType.SCRIPT_LOAD, script)
+        return executeCommand(ScriptLoad, script)
             .thenApply(result -> result.toString());
     }
 
@@ -2141,7 +2134,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing an array of booleans indicating existence
      */
     public CompletableFuture<Boolean[]> scriptExists(String... sha1Hashes) {
-        return executeCommand(CommandType.SCRIPT_EXISTS, sha1Hashes)
+        return executeCommand(ScriptExists, sha1Hashes)
             .thenApply(result -> {
                 if (result instanceof Object[]) {
                     Object[] objects = (Object[]) result;
@@ -2161,7 +2154,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing \"OK\" if successful
      */
     public CompletableFuture<String> scriptFlush() {
-        return executeCommand(CommandType.SCRIPT_FLUSH)
+        return executeCommand(ScriptFlush)
             .thenApply(result -> result.toString());
     }
 
@@ -2171,7 +2164,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing \"OK\" if successful
      */
     public CompletableFuture<String> scriptKill() {
-        return executeCommand(CommandType.SCRIPT_KILL)
+        return executeCommand(ScriptKill)
             .thenApply(result -> result.toString());
     }
 
@@ -2184,7 +2177,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing a random key, or null if the database is empty
      */
     public CompletableFuture<String> randomkey() {
-        return executeCommand(CommandType.RANDOMKEY)
+        return executeCommand(RandomKey)
             .thenApply(result -> result == null ? null : result.toString());
     }
 
@@ -2194,7 +2187,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing a random key, or null if the database is empty
      */
     public CompletableFuture<GlideString> randomkeyBinary() {
-        return executeCommand(CommandType.RANDOMKEY)
+        return executeCommand(RandomKey)
             .thenApply(result -> result == null ? null : GlideString.of(result.toString()));
     }
 
@@ -2205,7 +2198,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the type of the key
      */
     public CompletableFuture<String> type(String key) {
-        return executeCommand(CommandType.TYPE, key)
+        return executeCommand(Type, key)
             .thenApply(result -> result.toString());
     }
 
@@ -2216,7 +2209,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the type of the key
      */
     public CompletableFuture<String> type(GlideString key) {
-        return executeCommand(CommandType.TYPE, key.toString())
+        return executeCommand(Type, key.toString())
             .thenApply(result -> result.toString());
     }
 
@@ -2228,7 +2221,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing \"OK\" if successful
      */
     public CompletableFuture<String> rename(String key, String newkey) {
-        return executeCommand(CommandType.RENAME, key, newkey)
+        return executeCommand(Rename, key, newkey)
             .thenApply(result -> result.toString());
     }
 
@@ -2240,7 +2233,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing \"OK\" if successful
      */
     public CompletableFuture<String> rename(GlideString key, GlideString newkey) {
-        return executeCommand(CommandType.RENAME, key.toString(), newkey.toString())
+        return executeCommand(Rename, key.toString(), newkey.toString())
             .thenApply(result -> result.toString());
     }
 
@@ -2252,7 +2245,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing true if key was renamed, false if newkey already exists
      */
     public CompletableFuture<Boolean> renamenx(String key, String newkey) {
-        return executeCommand(CommandType.RENAMENX, key, newkey)
+        return executeCommand(RenameNX, key, newkey)
             .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -2264,7 +2257,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing true if key was renamed, false if newkey already exists
      */
     public CompletableFuture<Boolean> renamenx(GlideString key, GlideString newkey) {
-        return executeCommand(CommandType.RENAMENX, key.toString(), newkey.toString())
+        return executeCommand(RenameNX, key.toString(), newkey.toString())
             .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -2276,7 +2269,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing true if key was copied, false if source doesn't exist
      */
     public CompletableFuture<Boolean> copy(String source, String destination) {
-        return executeCommand(CommandType.COPY, source, destination)
+        return executeCommand(Copy, source, destination)
             .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -2288,7 +2281,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing true if key was copied, false if source doesn't exist
      */
     public CompletableFuture<Boolean> copy(GlideString source, GlideString destination) {
-        return executeCommand(CommandType.COPY, source.toString(), destination.toString())
+        return executeCommand(Copy, source.toString(), destination.toString())
             .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -2299,7 +2292,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the serialized value, or null if key doesn't exist
      */
     public CompletableFuture<byte[]> dump(String key) {
-        return executeCommand(CommandType.DUMP, key)
+        return executeCommand(Dump, key)
             .thenApply(result -> {
                 if (result == null) {
                     return null;
@@ -2315,7 +2308,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the serialized value, or null if key doesn't exist
      */
     public CompletableFuture<byte[]> dump(GlideString key) {
-        return executeCommand(CommandType.DUMP, key.toString())
+        return executeCommand(Dump, key.toString())
             .thenApply(result -> {
                 if (result == null) {
                     return null;
@@ -2333,7 +2326,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing \"OK\" if successful
      */
     public CompletableFuture<String> restore(String key, long ttl, byte[] serializedValue) {
-        return executeCommand(CommandType.RESTORE, key, String.valueOf(ttl), new String(serializedValue))
+        return executeCommand(Restore, key, String.valueOf(ttl), new String(serializedValue))
             .thenApply(result -> result.toString());
     }
 
@@ -2346,7 +2339,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing \"OK\" if successful
      */
     public CompletableFuture<String> restore(GlideString key, long ttl, byte[] serializedValue) {
-        return executeCommand(CommandType.RESTORE, key.toString(), String.valueOf(ttl), new String(serializedValue))
+        return executeCommand(Restore, key.toString(), String.valueOf(ttl), new String(serializedValue))
             .thenApply(result -> result.toString());
     }
 
@@ -2358,7 +2351,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the connection ID
      */
     public CompletableFuture<Long> clientId() {
-        return executeCommand(CommandType.CLIENT_ID)
+        return executeCommand(ClientId)
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -2368,7 +2361,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the connection name, or null if no name is set
      */
     public CompletableFuture<String> clientGetName() {
-        return executeCommand(CommandType.CLIENT_GETNAME)
+        return executeCommand(ClientGetName)
             .thenApply(result -> result == null ? null : result.toString());
     }
 
@@ -2379,7 +2372,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the echoed message
      */
     public CompletableFuture<String> echo(String message) {
-        return executeCommand(CommandType.ECHO, message)
+        return executeCommand(Echo, message)
             .thenApply(result -> result.toString());
     }
 
@@ -2390,7 +2383,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the echoed message
      */
     public CompletableFuture<GlideString> echo(GlideString message) {
-        return executeCommand(CommandType.ECHO, message.toString())
+        return executeCommand(Echo, message.toString())
             .thenApply(result -> GlideString.of(result.toString()));
     }
 
@@ -2401,7 +2394,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing \"OK\" if successful
      */
     public CompletableFuture<String> select(long index) {
-        return executeCommand(CommandType.SELECT, String.valueOf(index))
+        return executeCommand(Select, String.valueOf(index))
             .thenApply(result -> result.toString());
     }
 
@@ -2414,7 +2407,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the encoding, or null if key doesn't exist
      */
     public CompletableFuture<String> objectEncoding(String key) {
-        return executeCommand(CommandType.OBJECT_ENCODING, key)
+        return executeCommand(ObjectEncoding, key)
             .thenApply(result -> result == null ? null : result.toString());
     }
 
@@ -2425,7 +2418,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the encoding, or null if key doesn't exist
      */
     public CompletableFuture<String> objectEncoding(GlideString key) {
-        return executeCommand(CommandType.OBJECT_ENCODING, key.toString())
+        return executeCommand(ObjectEncoding, key.toString())
             .thenApply(result -> result == null ? null : result.toString());
     }
 
@@ -2436,7 +2429,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the frequency, or null if key doesn't exist
      */
     public CompletableFuture<Long> objectFreq(String key) {
-        return executeCommand(CommandType.OBJECT_FREQ, key)
+        return executeCommand(ObjectFreq, key)
             .thenApply(result -> result == null ? null : Long.parseLong(result.toString()));
     }
 
@@ -2447,7 +2440,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the frequency, or null if key doesn't exist
      */
     public CompletableFuture<Long> objectFreq(GlideString key) {
-        return executeCommand(CommandType.OBJECT_FREQ, key.toString())
+        return executeCommand(ObjectFreq, key.toString())
             .thenApply(result -> result == null ? null : Long.parseLong(result.toString()));
     }
 
@@ -2458,7 +2451,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the idle time in seconds, or null if key doesn't exist
      */
     public CompletableFuture<Long> objectIdletime(String key) {
-        return executeCommand(CommandType.OBJECT_IDLETIME, key)
+        return executeCommand(ObjectIdleTime, key)
             .thenApply(result -> result == null ? null : Long.parseLong(result.toString()));
     }
 
@@ -2469,7 +2462,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the idle time in seconds, or null if key doesn't exist
      */
     public CompletableFuture<Long> objectIdletime(GlideString key) {
-        return executeCommand(CommandType.OBJECT_IDLETIME, key.toString())
+        return executeCommand(ObjectIdleTime, key.toString())
             .thenApply(result -> result == null ? null : Long.parseLong(result.toString()));
     }
 
@@ -2480,7 +2473,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the reference count, or null if key doesn't exist
      */
     public CompletableFuture<Long> objectRefcount(String key) {
-        return executeCommand(CommandType.OBJECT_REFCOUNT, key)
+        return executeCommand(ObjectRefCount, key)
             .thenApply(result -> result == null ? null : Long.parseLong(result.toString()));
     }
 
@@ -2491,32 +2484,15 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the reference count, or null if key doesn't exist
      */
     public CompletableFuture<Long> objectRefcount(GlideString key) {
-        return executeCommand(CommandType.OBJECT_REFCOUNT, key.toString())
+        return executeCommand(ObjectRefCount, key.toString())
             .thenApply(result -> result == null ? null : Long.parseLong(result.toString()));
     }
 
     // Server Management Commands
 
-    /**
-     * Get information and statistics about the server.
-     *
-     * @return A CompletableFuture containing server information as a string
-     */
-    public CompletableFuture<String> info() {
-        return serverManagement.getInfo()
-            .thenApply(result -> (String) result);
-    }
-
-    /**
-     * Get information and statistics about specific sections of the server.
-     *
-     * @param sections The sections to get information about
-     * @return A CompletableFuture containing server information as a string
-     */
-    public CompletableFuture<String> info(String... sections) {
-        return serverManagement.getInfo(sections)
-            .thenApply(result -> (String) result);
-    }
+    // info() methods removed from BaseClient to avoid return type conflicts
+    // Each client type (GlideClient, GlideClusterClient) implements its own info() methods
+    // with appropriate return types (String vs ClusterValue<String>)
 
 
 
@@ -2574,7 +2550,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing \"OK\" if successful
      */
     public CompletableFuture<String> configResetstat() {
-        return executeCommand(CommandType.CONFIG_RESETSTAT)
+        return executeCommand(ConfigResetStat)
             .thenApply(result -> result.toString());
     }
 
@@ -2602,7 +2578,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the art and version
      */
     public CompletableFuture<String> lolwut() {
-        return executeCommand(CommandType.LOLWUT)
+        return executeCommand(Lolwut)
             .thenApply(result -> result.toString());
     }
 
@@ -2617,7 +2593,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         for (int i = 0; i < parameters.length; i++) {
             args[i] = String.valueOf(parameters[i]);
         }
-        return executeCommand(CommandType.LOLWUT, args)
+        return executeCommand(Lolwut, args)
             .thenApply(result -> result.toString());
     }
 
@@ -2628,7 +2604,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the art and version
      */
     public CompletableFuture<String> lolwut(int version) {
-        return executeCommand(CommandType.LOLWUT, "VERSION", String.valueOf(version))
+        return executeCommand(Lolwut, "VERSION", String.valueOf(version))
             .thenApply(result -> result.toString());
     }
 
@@ -2646,7 +2622,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         for (int i = 0; i < parameters.length; i++) {
             args[i + 2] = String.valueOf(parameters[i]);
         }
-        return executeCommand(CommandType.LOLWUT, args)
+        return executeCommand(Lolwut, args)
             .thenApply(result -> result.toString());
     }
 
@@ -2680,7 +2656,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Boolean> hsetnx(String key, String field, String value) {
-        return executeCommand(CommandType.HSETNX, key, field, value)
+        return executeCommand(HSetNX, key, field, value)
                 .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -2689,7 +2665,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Boolean> hsetnx(GlideString key, GlideString field, GlideString value) {
-        return executeCommand(CommandType.HSETNX, key.toString(), field.toString(), value.toString())
+        return executeCommand(HSetNX, key.toString(), field.toString(), value.toString())
                 .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -2699,7 +2675,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Long> hstrlen(String key, String field) {
-        return executeCommand(CommandType.HSTRLEN, key, field)
+        return executeCommand(HStrlen, key, field)
                 .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -2708,7 +2684,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Long> hstrlen(GlideString key, GlideString field) {
-        return executeCommand(CommandType.HSTRLEN, key.toString(), field.toString())
+        return executeCommand(HStrlen, key.toString(), field.toString())
                 .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -2717,7 +2693,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<String> hrandfield(String key) {
-        return executeCommand(CommandType.HRANDFIELD, key)
+        return executeCommand(HRandField, key)
                 .thenApply(result -> result == null ? null : result.toString());
     }
 
@@ -2726,7 +2702,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<GlideString> hrandfield(GlideString key) {
-        return executeCommand(CommandType.HRANDFIELD, key.toString())
+        return executeCommand(HRandField, key.toString())
                 .thenApply(result -> result == null ? null : GlideString.of(result.toString()));
     }
 
@@ -2735,7 +2711,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<String[]> hrandfieldWithCount(String key, long count) {
-        return executeCommand(CommandType.HRANDFIELD, key, String.valueOf(count))
+        return executeCommand(HRandField, key, String.valueOf(count))
                 .thenApply(result -> {
                     if (result instanceof Object[]) {
                         Object[] objects = (Object[]) result;
@@ -2754,7 +2730,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<GlideString[]> hrandfieldWithCount(GlideString key, long count) {
-        return executeCommand(CommandType.HRANDFIELD, key.toString(), String.valueOf(count))
+        return executeCommand(HRandField, key.toString(), String.valueOf(count))
                 .thenApply(result -> {
                     if (result instanceof Object[]) {
                         Object[] objects = (Object[]) result;
@@ -2773,7 +2749,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<String[][]> hrandfieldWithCountWithValues(String key, long count) {
-        return executeCommand(CommandType.HRANDFIELD, key, String.valueOf(count), WITH_VALUES_VALKEY_API)
+        return executeCommand(HRandField, key, String.valueOf(count), WITH_VALUES_VALKEY_API)
                 .thenApply(result -> {
                     if (result instanceof Object[]) {
                         Object[] objects = (Object[]) result;
@@ -2793,7 +2769,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<GlideString[][]> hrandfieldWithCountWithValues(GlideString key, long count) {
-        return executeCommand(CommandType.HRANDFIELD, key.toString(), String.valueOf(count), WITH_VALUES_VALKEY_API)
+        return executeCommand(HRandField, key.toString(), String.valueOf(count), WITH_VALUES_VALKEY_API)
                 .thenApply(result -> {
                     if (result instanceof Object[]) {
                         Object[] objects = (Object[]) result;
@@ -2813,7 +2789,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Object[]> hscan(String key, String cursor) {
-        return executeCommand(CommandType.HSCAN, key, cursor)
+        return executeCommand(HScan, key, cursor)
                 .thenApply(result -> (Object[]) result);
     }
 
@@ -2822,7 +2798,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Object[]> hscan(GlideString key, GlideString cursor) {
-        return executeCommand(CommandType.HSCAN, key.toString(), cursor.toString())
+        return executeCommand(HScan, key.toString(), cursor.toString())
                 .thenApply(result -> (Object[]) result);
     }
 
@@ -2837,7 +2813,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         if (hScanOptions != null) {
             args.addAll(Arrays.asList(hScanOptions.toArgs()));
         }
-        return executeCommand(CommandType.HSCAN, args.toArray(new String[0]))
+        return executeCommand(HScan, args.toArray(new String[0]))
                 .thenApply(result -> (Object[]) result);
     }
 
@@ -2852,7 +2828,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         if (hScanOptions != null) {
             args.addAll(Arrays.asList(hScanOptions.toArgs()));
         }
-        return executeCommand(CommandType.HSCAN, args.toArray(new String[0]))
+        return executeCommand(HScan, args.toArray(new String[0]))
                 .thenApply(result -> (Object[]) result);
     }
 
@@ -2864,7 +2840,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
     @Override
     public CompletableFuture<Long> linsert(String key, glide.api.models.commands.LInsertOptions.InsertPosition position, String pivot, String element) {
         String pos = position == glide.api.models.commands.LInsertOptions.InsertPosition.BEFORE ? "BEFORE" : "AFTER";
-        return executeCommand(CommandType.LINSERT, key, pos, pivot, element)
+        return executeCommand(LInsert, key, pos, pivot, element)
                 .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -2874,7 +2850,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
     @Override
     public CompletableFuture<Long> linsert(GlideString key, glide.api.models.commands.LInsertOptions.InsertPosition position, GlideString pivot, GlideString element) {
         String pos = position == glide.api.models.commands.LInsertOptions.InsertPosition.BEFORE ? "BEFORE" : "AFTER";
-        return executeCommand(CommandType.LINSERT, key.toString(), pos, pivot.toString(), element.toString())
+        return executeCommand(LInsert, key.toString(), pos, pivot.toString(), element.toString())
                 .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -2886,7 +2862,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         String[] args = new String[elements.length + 1];
         args[0] = key;
         System.arraycopy(elements, 0, args, 1, elements.length);
-        return executeCommand(CommandType.LPUSHX, args)
+        return executeCommand(LPushX, args)
                 .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -2900,7 +2876,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         for (int i = 0; i < elements.length; i++) {
             args[i + 1] = elements[i].toString();
         }
-        return executeCommand(CommandType.LPUSHX, args)
+        return executeCommand(LPushX, args)
                 .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -2912,7 +2888,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         String[] args = new String[elements.length + 1];
         args[0] = key;
         System.arraycopy(elements, 0, args, 1, elements.length);
-        return executeCommand(CommandType.RPUSHX, args)
+        return executeCommand(RPushX, args)
                 .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -2926,7 +2902,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         for (int i = 0; i < elements.length; i++) {
             args[i + 1] = elements[i].toString();
         }
-        return executeCommand(CommandType.RPUSHX, args)
+        return executeCommand(RPushX, args)
                 .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -2937,7 +2913,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
     public CompletableFuture<String> lmove(String source, String destination, glide.api.models.commands.ListDirection wherefrom, glide.api.models.commands.ListDirection whereto) {
         String from = wherefrom == glide.api.models.commands.ListDirection.LEFT ? "LEFT" : "RIGHT";
         String to = whereto == glide.api.models.commands.ListDirection.LEFT ? "LEFT" : "RIGHT";
-        return executeCommand(CommandType.LMOVE, source, destination, from, to)
+        return executeCommand(LMove, source, destination, from, to)
                 .thenApply(result -> result == null ? null : result.toString());
     }
 
@@ -2948,7 +2924,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
     public CompletableFuture<GlideString> lmove(GlideString source, GlideString destination, glide.api.models.commands.ListDirection wherefrom, glide.api.models.commands.ListDirection whereto) {
         String from = wherefrom == glide.api.models.commands.ListDirection.LEFT ? "LEFT" : "RIGHT";
         String to = whereto == glide.api.models.commands.ListDirection.LEFT ? "LEFT" : "RIGHT";
-        return executeCommand(CommandType.LMOVE, source.toString(), destination.toString(), from, to)
+        return executeCommand(LMove, source.toString(), destination.toString(), from, to)
                 .thenApply(result -> result == null ? null : GlideString.of(result.toString()));
     }
 
@@ -2959,7 +2935,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
     public CompletableFuture<String> blmove(String source, String destination, glide.api.models.commands.ListDirection wherefrom, glide.api.models.commands.ListDirection whereto, double timeout) {
         String from = wherefrom == glide.api.models.commands.ListDirection.LEFT ? "LEFT" : "RIGHT";
         String to = whereto == glide.api.models.commands.ListDirection.LEFT ? "LEFT" : "RIGHT";
-        return executeCommand(CommandType.BLMOVE, source, destination, from, to, String.valueOf(timeout))
+        return executeCommand(BLMove, source, destination, from, to, String.valueOf(timeout))
                 .thenApply(result -> result == null ? null : result.toString());
     }
 
@@ -2970,7 +2946,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
     public CompletableFuture<GlideString> blmove(GlideString source, GlideString destination, glide.api.models.commands.ListDirection wherefrom, glide.api.models.commands.ListDirection whereto, double timeout) {
         String from = wherefrom == glide.api.models.commands.ListDirection.LEFT ? "LEFT" : "RIGHT";
         String to = whereto == glide.api.models.commands.ListDirection.LEFT ? "LEFT" : "RIGHT";
-        return executeCommand(CommandType.BLMOVE, source.toString(), destination.toString(), from, to, String.valueOf(timeout))
+        return executeCommand(BLMove, source.toString(), destination.toString(), from, to, String.valueOf(timeout))
                 .thenApply(result -> result == null ? null : GlideString.of(result.toString()));
     }
 
@@ -2982,7 +2958,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         String[] args = new String[keys.length + 1];
         System.arraycopy(keys, 0, args, 0, keys.length);
         args[keys.length] = String.valueOf(timeout);
-        return executeCommand(CommandType.BRPOP, args)
+        return executeCommand(BRPop, args)
                 .thenApply(result -> {
                     if (result instanceof Object[]) {
                         Object[] objects = (Object[]) result;
@@ -3006,7 +2982,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
             args[i] = keys[i].toString();
         }
         args[keys.length] = String.valueOf(timeout);
-        return executeCommand(CommandType.BRPOP, args)
+        return executeCommand(BRPop, args)
                 .thenApply(result -> {
                     if (result instanceof Object[]) {
                         Object[] objects = (Object[]) result;
@@ -3030,7 +3006,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
             args[i] = keys[i].toString();
         }
         args[keys.length] = String.valueOf(timeout);
-        return executeCommand(CommandType.BLPOP, args)
+        return executeCommand(BLPop, args)
                 .thenApply(result -> {
                     if (result instanceof Object[]) {
                         Object[] objects = (Object[]) result;
@@ -3055,7 +3031,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
             args[i++] = entry.getKey();
             args[i++] = entry.getValue();
         }
-        return executeCommand(CommandType.MSETNX, args)
+        return executeCommand(MSetNX, args)
                 .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -3070,7 +3046,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
             args[i++] = entry.getKey().toString();
             args[i++] = entry.getValue().toString();
         }
-        return executeCommand(CommandType.MSETNX, args)
+        return executeCommand(MSetNX, args)
                 .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -3079,7 +3055,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<String> lcs(String key1, String key2) {
-        return executeCommand(CommandType.LCS, key1, key2)
+        return executeCommand(LCS, key1, key2)
                 .thenApply(result -> result == null ? "" : result.toString());
     }
 
@@ -3088,7 +3064,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<GlideString> lcs(GlideString key1, GlideString key2) {
-        return executeCommand(CommandType.LCS, key1.toString(), key2.toString())
+        return executeCommand(LCS, key1.toString(), key2.toString())
                 .thenApply(result -> result == null ? GlideString.of("") : GlideString.of(result.toString()));
     }
 
@@ -3097,7 +3073,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Long> lcsLen(String key1, String key2) {
-        return executeCommand(CommandType.LCS, key1, key2, LEN_VALKEY_API)
+        return executeCommand(LCS, key1, key2, LEN_VALKEY_API)
                 .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -3106,7 +3082,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Long> lcsLen(GlideString key1, GlideString key2) {
-        return executeCommand(CommandType.LCS, key1.toString(), key2.toString(), LEN_VALKEY_API)
+        return executeCommand(LCS, key1.toString(), key2.toString(), LEN_VALKEY_API)
                 .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -3115,7 +3091,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Map<String, Object>> lcsIdx(String key1, String key2) {
-        return executeCommand(CommandType.LCS, key1, key2, IDX_COMMAND_STRING)
+        return executeCommand(LCS, key1, key2, IDX_COMMAND_STRING)
                 .thenApply(result -> (Map<String, Object>) result);
     }
 
@@ -3124,7 +3100,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Map<String, Object>> lcsIdx(GlideString key1, GlideString key2) {
-        return executeCommand(CommandType.LCS, key1.toString(), key2.toString(), IDX_COMMAND_STRING)
+        return executeCommand(LCS, key1.toString(), key2.toString(), IDX_COMMAND_STRING)
                 .thenApply(result -> (Map<String, Object>) result);
     }
 
@@ -3133,7 +3109,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Map<String, Object>> lcsIdx(String key1, String key2, long minMatchLen) {
-        return executeCommand(CommandType.LCS, key1, key2, IDX_COMMAND_STRING, MINMATCHLEN_COMMAND_STRING, String.valueOf(minMatchLen))
+        return executeCommand(LCS, key1, key2, IDX_COMMAND_STRING, MINMATCHLEN_COMMAND_STRING, String.valueOf(minMatchLen))
                 .thenApply(result -> (Map<String, Object>) result);
     }
 
@@ -3142,7 +3118,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Map<String, Object>> lcsIdx(GlideString key1, GlideString key2, long minMatchLen) {
-        return executeCommand(CommandType.LCS, key1.toString(), key2.toString(), IDX_COMMAND_STRING, MINMATCHLEN_COMMAND_STRING, String.valueOf(minMatchLen))
+        return executeCommand(LCS, key1.toString(), key2.toString(), IDX_COMMAND_STRING, MINMATCHLEN_COMMAND_STRING, String.valueOf(minMatchLen))
                 .thenApply(result -> (Map<String, Object>) result);
     }
 
@@ -3151,7 +3127,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Map<String, Object>> lcsIdxWithMatchLen(String key1, String key2) {
-        return executeCommand(CommandType.LCS, key1, key2, IDX_COMMAND_STRING, WITHMATCHLEN_COMMAND_STRING)
+        return executeCommand(LCS, key1, key2, IDX_COMMAND_STRING, WITHMATCHLEN_COMMAND_STRING)
                 .thenApply(result -> (Map<String, Object>) result);
     }
 
@@ -3160,7 +3136,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Map<String, Object>> lcsIdxWithMatchLen(GlideString key1, GlideString key2) {
-        return executeCommand(CommandType.LCS, key1.toString(), key2.toString(), IDX_COMMAND_STRING, WITHMATCHLEN_COMMAND_STRING)
+        return executeCommand(LCS, key1.toString(), key2.toString(), IDX_COMMAND_STRING, WITHMATCHLEN_COMMAND_STRING)
                 .thenApply(result -> (Map<String, Object>) result);
     }
 
@@ -3169,7 +3145,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Map<String, Object>> lcsIdxWithMatchLen(String key1, String key2, long minMatchLen) {
-        return executeCommand(CommandType.LCS, key1, key2, IDX_COMMAND_STRING, WITHMATCHLEN_COMMAND_STRING, MINMATCHLEN_COMMAND_STRING, String.valueOf(minMatchLen))
+        return executeCommand(LCS, key1, key2, IDX_COMMAND_STRING, WITHMATCHLEN_COMMAND_STRING, MINMATCHLEN_COMMAND_STRING, String.valueOf(minMatchLen))
                 .thenApply(result -> (Map<String, Object>) result);
     }
 
@@ -3178,7 +3154,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Map<String, Object>> lcsIdxWithMatchLen(GlideString key1, GlideString key2, long minMatchLen) {
-        return executeCommand(CommandType.LCS, key1.toString(), key2.toString(), IDX_COMMAND_STRING, WITHMATCHLEN_COMMAND_STRING, MINMATCHLEN_COMMAND_STRING, String.valueOf(minMatchLen))
+        return executeCommand(LCS, key1.toString(), key2.toString(), IDX_COMMAND_STRING, WITHMATCHLEN_COMMAND_STRING, MINMATCHLEN_COMMAND_STRING, String.valueOf(minMatchLen))
                 .thenApply(result -> (Map<String, Object>) result);
     }
 
@@ -3189,7 +3165,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Long> lpos(String key, String element) {
-        return executeCommand(CommandType.LPOS, key, element)
+        return executeCommand(LPos, key, element)
                 .thenApply(result -> result == null ? null : Long.parseLong(result.toString()));
     }
 
@@ -3198,7 +3174,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Long> lpos(GlideString key, GlideString element) {
-        return executeCommand(CommandType.LPOS, key.toString(), element.toString())
+        return executeCommand(LPos, key.toString(), element.toString())
                 .thenApply(result -> result == null ? null : Long.parseLong(result.toString()));
     }
 
@@ -3213,7 +3189,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         if (options != null) {
             args.addAll(Arrays.asList(options.toArgs()));
         }
-        return executeCommand(CommandType.LPOS, args.toArray(new String[0]))
+        return executeCommand(LPos, args.toArray(new String[0]))
                 .thenApply(result -> result == null ? null : Long.parseLong(result.toString()));
     }
 
@@ -3228,7 +3204,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         if (options != null) {
             args.addAll(Arrays.asList(options.toArgs()));
         }
-        return executeCommand(CommandType.LPOS, args.toArray(new String[0]))
+        return executeCommand(LPos, args.toArray(new String[0]))
                 .thenApply(result -> result == null ? null : Long.parseLong(result.toString()));
     }
 
@@ -3237,7 +3213,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Long[]> lposCount(String key, String element, long count) {
-        return executeCommand(CommandType.LPOS, key, element, LPosOptions.COUNT_VALKEY_API, String.valueOf(count))
+        return executeCommand(LPos, key, element, LPosOptions.COUNT_VALKEY_API, String.valueOf(count))
                 .thenApply(result -> {
                     if (result instanceof Object[]) {
                         Object[] objects = (Object[]) result;
@@ -3256,7 +3232,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Long[]> lposCount(GlideString key, GlideString element, long count) {
-        return executeCommand(CommandType.LPOS, key.toString(), element.toString(), LPosOptions.COUNT_VALKEY_API, String.valueOf(count))
+        return executeCommand(LPos, key.toString(), element.toString(), LPosOptions.COUNT_VALKEY_API, String.valueOf(count))
                 .thenApply(result -> {
                     if (result instanceof Object[]) {
                         Object[] objects = (Object[]) result;
@@ -3283,7 +3259,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         }
         args.add(LPosOptions.COUNT_VALKEY_API);
         args.add(String.valueOf(count));
-        return executeCommand(CommandType.LPOS, args.toArray(new String[0]))
+        return executeCommand(LPos, args.toArray(new String[0]))
                 .thenApply(result -> {
                     if (result instanceof Object[]) {
                         Object[] objects = (Object[]) result;
@@ -3310,7 +3286,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         }
         args.add(LPosOptions.COUNT_VALKEY_API);
         args.add(String.valueOf(count));
-        return executeCommand(CommandType.LPOS, args.toArray(new String[0]))
+        return executeCommand(LPos, args.toArray(new String[0]))
                 .thenApply(result -> {
                     if (result instanceof Object[]) {
                         Object[] objects = (Object[]) result;
@@ -3329,7 +3305,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<String[]> lpopCount(String key, long count) {
-        return executeCommand(CommandType.LPOP, key, String.valueOf(count))
+        return executeCommand(LPop, key, String.valueOf(count))
                 .thenApply(result -> {
                     if (result instanceof Object[]) {
                         Object[] objects = (Object[]) result;
@@ -3348,7 +3324,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<GlideString[]> lpopCount(GlideString key, long count) {
-        return executeCommand(CommandType.LPOP, key.toString(), String.valueOf(count))
+        return executeCommand(LPop, key.toString(), String.valueOf(count))
                 .thenApply(result -> {
                     if (result instanceof Object[]) {
                         Object[] objects = (Object[]) result;
@@ -3367,7 +3343,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<String[]> rpopCount(String key, long count) {
-        return executeCommand(CommandType.RPOP, key, String.valueOf(count))
+        return executeCommand(RPop, key, String.valueOf(count))
                 .thenApply(result -> {
                     if (result instanceof Object[]) {
                         Object[] objects = (Object[]) result;
@@ -3386,7 +3362,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<GlideString[]> rpopCount(GlideString key, long count) {
-        return executeCommand(CommandType.RPOP, key.toString(), String.valueOf(count))
+        return executeCommand(RPop, key.toString(), String.valueOf(count))
                 .thenApply(result -> {
                     if (result instanceof Object[]) {
                         Object[] objects = (Object[]) result;
@@ -3409,7 +3385,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         args[0] = String.valueOf(keys.length);
         System.arraycopy(keys, 0, args, 1, keys.length);
         args[keys.length + 1] = direction == ListDirection.LEFT ? "LEFT" : "RIGHT";
-        return executeCommand(CommandType.LMPOP, args)
+        return executeCommand(LMPop, args)
                 .thenApply(result -> {
                     if (result instanceof Object[]) {
                         Object[] objects = (Object[]) result;
@@ -3442,7 +3418,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
             args[i + 1] = keys[i].toString();
         }
         args[keys.length + 1] = direction == ListDirection.LEFT ? "LEFT" : "RIGHT";
-        return executeCommand(CommandType.LMPOP, args)
+        return executeCommand(LMPop, args)
                 .thenApply(result -> {
                     if (result instanceof Object[]) {
                         Object[] objects = (Object[]) result;
@@ -3475,7 +3451,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         args[keys.length + 1] = direction == ListDirection.LEFT ? "LEFT" : "RIGHT";
         args[keys.length + 2] = LPosOptions.COUNT_VALKEY_API;
         args[keys.length + 3] = String.valueOf(count);
-        return executeCommand(CommandType.LMPOP, args)
+        return executeCommand(LMPop, args)
                 .thenApply(result -> {
                     if (result instanceof Object[]) {
                         Object[] objects = (Object[]) result;
@@ -3510,7 +3486,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         args[keys.length + 1] = direction == ListDirection.LEFT ? "LEFT" : "RIGHT";
         args[keys.length + 2] = LPosOptions.COUNT_VALKEY_API;
         args[keys.length + 3] = String.valueOf(count);
-        return executeCommand(CommandType.LMPOP, args)
+        return executeCommand(LMPop, args)
                 .thenApply(result -> {
                     if (result instanceof Object[]) {
                         Object[] objects = (Object[]) result;
@@ -3542,7 +3518,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         args[1] = String.valueOf(keys.length);
         System.arraycopy(keys, 0, args, 2, keys.length);
         args[keys.length + 2] = direction == ListDirection.LEFT ? "LEFT" : "RIGHT";
-        return executeCommand(CommandType.BLMPOP, args)
+        return executeCommand(BLMPop, args)
                 .thenApply(result -> {
                     if (result instanceof Object[]) {
                         Object[] objects = (Object[]) result;
@@ -3576,7 +3552,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
             args[i + 2] = keys[i].toString();
         }
         args[keys.length + 2] = direction == ListDirection.LEFT ? "LEFT" : "RIGHT";
-        return executeCommand(CommandType.BLMPOP, args)
+        return executeCommand(BLMPop, args)
                 .thenApply(result -> {
                     if (result instanceof Object[]) {
                         Object[] objects = (Object[]) result;
@@ -3610,7 +3586,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         args[keys.length + 2] = direction == ListDirection.LEFT ? "LEFT" : "RIGHT";
         args[keys.length + 3] = LPosOptions.COUNT_VALKEY_API;
         args[keys.length + 4] = String.valueOf(count);
-        return executeCommand(CommandType.BLMPOP, args)
+        return executeCommand(BLMPop, args)
                 .thenApply(result -> {
                     if (result instanceof Object[]) {
                         Object[] objects = (Object[]) result;
@@ -3646,7 +3622,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         args[keys.length + 2] = direction == ListDirection.LEFT ? "LEFT" : "RIGHT";
         args[keys.length + 3] = LPosOptions.COUNT_VALKEY_API;
         args[keys.length + 4] = String.valueOf(count);
-        return executeCommand(CommandType.BLMPOP, args)
+        return executeCommand(BLMPop, args)
                 .thenApply(result -> {
                     if (result instanceof Object[]) {
                         Object[] objects = (Object[]) result;
@@ -3678,7 +3654,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         String[] args = new String[members.length + 1];
         args[0] = key;
         System.arraycopy(members, 0, args, 1, members.length);
-        return executeCommand(CommandType.SMISMEMBER, args)
+        return executeCommand(SMIsMember, args)
                 .thenApply(result -> {
                     if (result instanceof Object[]) {
                         Object[] objects = (Object[]) result;
@@ -3702,7 +3678,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         for (int i = 0; i < members.length; i++) {
             args[i + 1] = members[i].toString();
         }
-        return executeCommand(CommandType.SMISMEMBER, args)
+        return executeCommand(SMIsMember, args)
                 .thenApply(result -> {
                     if (result instanceof Object[]) {
                         Object[] objects = (Object[]) result;
@@ -3721,7 +3697,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Boolean> smove(String source, String destination, String member) {
-        return executeCommand(CommandType.SMOVE, source, destination, member)
+        return executeCommand(SMove, source, destination, member)
                 .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -3730,7 +3706,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Boolean> smove(GlideString source, GlideString destination, GlideString member) {
-        return executeCommand(CommandType.SMOVE, source.toString(), destination.toString(), member.toString())
+        return executeCommand(SMove, source.toString(), destination.toString(), member.toString())
                 .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -3742,7 +3718,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         String[] args = new String[keys.length + 1];
         args[0] = destination;
         System.arraycopy(keys, 0, args, 1, keys.length);
-        return executeCommand(CommandType.SDIFFSTORE, args)
+        return executeCommand(SDiffStore, args)
                 .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -3756,7 +3732,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         for (int i = 0; i < keys.length; i++) {
             args[i + 1] = keys[i].toString();
         }
-        return executeCommand(CommandType.SDIFFSTORE, args)
+        return executeCommand(SDiffStore, args)
                 .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -3768,7 +3744,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         String[] args = new String[keys.length + 1];
         args[0] = String.valueOf(keys.length);
         System.arraycopy(keys, 0, args, 1, keys.length);
-        return executeCommand(CommandType.SINTERCARD, args)
+        return executeCommand(SInterCard, args)
                 .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -3782,7 +3758,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         for (int i = 0; i < keys.length; i++) {
             args[i + 1] = keys[i].toString();
         }
-        return executeCommand(CommandType.SINTERCARD, args)
+        return executeCommand(SInterCard, args)
                 .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -3796,7 +3772,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         System.arraycopy(keys, 0, args, 1, keys.length);
         args[keys.length + 1] = "LIMIT";
         args[keys.length + 2] = String.valueOf(limit);
-        return executeCommand(CommandType.SINTERCARD, args)
+        return executeCommand(SInterCard, args)
                 .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -3812,7 +3788,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         }
         args[keys.length + 1] = "LIMIT";
         args[keys.length + 2] = String.valueOf(limit);
-        return executeCommand(CommandType.SINTERCARD, args)
+        return executeCommand(SInterCard, args)
                 .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -3824,7 +3800,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         String[] args = new String[keys.length + 1];
         args[0] = destination;
         System.arraycopy(keys, 0, args, 1, keys.length);
-        return executeCommand(CommandType.SINTERSTORE, args)
+        return executeCommand(SInterStore, args)
                 .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -3838,7 +3814,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         for (int i = 0; i < keys.length; i++) {
             args[i + 1] = keys[i].toString();
         }
-        return executeCommand(CommandType.SINTERSTORE, args)
+        return executeCommand(SInterStore, args)
                 .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -3850,7 +3826,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         String[] args = new String[keys.length + 1];
         args[0] = destination;
         System.arraycopy(keys, 0, args, 1, keys.length);
-        return executeCommand(CommandType.SUNIONSTORE, args)
+        return executeCommand(SUnionStore, args)
                 .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -3864,7 +3840,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         for (int i = 0; i < keys.length; i++) {
             args[i + 1] = keys[i].toString();
         }
-        return executeCommand(CommandType.SUNIONSTORE, args)
+        return executeCommand(SUnionStore, args)
                 .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -3873,7 +3849,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<String> srandmember(String key) {
-        return executeCommand(CommandType.SRANDMEMBER, key)
+        return executeCommand(SRandMember, key)
                 .thenApply(result -> result == null ? null : result.toString());
     }
 
@@ -3882,7 +3858,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<GlideString> srandmember(GlideString key) {
-        return executeCommand(CommandType.SRANDMEMBER, key.toString())
+        return executeCommand(SRandMember, key.toString())
                 .thenApply(result -> result == null ? null : GlideString.of(result.toString()));
     }
 
@@ -3891,7 +3867,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<String[]> srandmember(String key, long count) {
-        return executeCommand(CommandType.SRANDMEMBER, key, String.valueOf(count))
+        return executeCommand(SRandMember, key, String.valueOf(count))
                 .thenApply(result -> {
                     if (result instanceof Object[]) {
                         Object[] objects = (Object[]) result;
@@ -3910,7 +3886,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<GlideString[]> srandmember(GlideString key, long count) {
-        return executeCommand(CommandType.SRANDMEMBER, key.toString(), String.valueOf(count))
+        return executeCommand(SRandMember, key.toString(), String.valueOf(count))
                 .thenApply(result -> {
                     if (result instanceof Object[]) {
                         Object[] objects = (Object[]) result;
@@ -3929,7 +3905,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<String> spop(String key) {
-        return executeCommand(CommandType.SPOP, key)
+        return executeCommand(SPop, key)
                 .thenApply(result -> result == null ? null : result.toString());
     }
 
@@ -3938,7 +3914,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<GlideString> spop(GlideString key) {
-        return executeCommand(CommandType.SPOP, key.toString())
+        return executeCommand(SPop, key.toString())
                 .thenApply(result -> result == null ? null : GlideString.of(result.toString()));
     }
 
@@ -3947,7 +3923,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<java.util.Set<String>> spopCount(String key, long count) {
-        return executeCommand(CommandType.SPOP, key, String.valueOf(count))
+        return executeCommand(SPop, key, String.valueOf(count))
                 .thenApply(result -> {
                     java.util.Set<String> set = new java.util.HashSet<>();
                     if (result instanceof Object[]) {
@@ -3967,7 +3943,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<java.util.Set<GlideString>> spopCount(GlideString key, long count) {
-        return executeCommand(CommandType.SPOP, key.toString(), String.valueOf(count))
+        return executeCommand(SPop, key.toString(), String.valueOf(count))
                 .thenApply(result -> {
                     java.util.Set<GlideString> set = new java.util.HashSet<>();
                     if (result instanceof Object[]) {
@@ -3987,7 +3963,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Object[]> sscan(String key, String cursor) {
-        return executeCommand(CommandType.SSCAN, key, cursor)
+        return executeCommand(SScan, key, cursor)
                 .thenApply(result -> (Object[]) result);
     }
 
@@ -3996,7 +3972,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Object[]> sscan(GlideString key, GlideString cursor) {
-        return executeCommand(CommandType.SSCAN, key.toString(), cursor.toString())
+        return executeCommand(SScan, key.toString(), cursor.toString())
                 .thenApply(result -> (Object[]) result);
     }
 
@@ -4011,7 +3987,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         if (sScanOptions != null) {
             args.addAll(Arrays.asList(sScanOptions.toArgs()));
         }
-        return executeCommand(CommandType.SSCAN, args.toArray(new String[0]))
+        return executeCommand(SScan, args.toArray(new String[0]))
                 .thenApply(result -> (Object[]) result);
     }
 
@@ -4026,7 +4002,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         if (sScanOptions != null) {
             args.addAll(Arrays.asList(sScanOptions.toArgs()));
         }
-        return executeCommand(CommandType.SSCAN, args.toArray(new String[0]))
+        return executeCommand(SScan, args.toArray(new String[0]))
                 .thenApply(result -> (Object[]) result);
     }
 
@@ -4034,7 +4010,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * Iterates elements of Sorted Set types.
      */
     public CompletableFuture<Object[]> zscan(String key, String cursor) {
-        return executeCommand(CommandType.ZSCAN, key, cursor)
+        return executeCommand(ZScan, key, cursor)
                 .thenApply(result -> (Object[]) result);
     }
 
@@ -4042,7 +4018,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * Iterates elements of Sorted Set types (binary version).
      */
     public CompletableFuture<Object[]> zscan(GlideString key, GlideString cursor) {
-        return executeCommand(CommandType.ZSCAN, key.toString(), cursor.toString())
+        return executeCommand(ZScan, key.toString(), cursor.toString())
                 .thenApply(result -> (Object[]) result);
     }
 
@@ -4056,7 +4032,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         if (zScanOptions != null) {
             args.addAll(Arrays.asList(zScanOptions.toArgs()));
         }
-        return executeCommand(CommandType.ZSCAN, args.toArray(new String[0]))
+        return executeCommand(ZScan, args.toArray(new String[0]))
                 .thenApply(result -> (Object[]) result);
     }
 
@@ -4070,7 +4046,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         if (zScanOptions != null) {
             args.addAll(Arrays.asList(zScanOptions.toArgs()));
         }
-        return executeCommand(CommandType.ZSCAN, args.toArray(new String[0]))
+        return executeCommand(ZScan, args.toArray(new String[0]))
                 .thenApply(result -> (Object[]) result);
     }
 
@@ -4085,7 +4061,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         for (int i = 0; i < keys.length; i++) {
             stringKeys[i] = keys[i].toString();
         }
-        return executeCommand(CommandType.EXISTS, stringKeys)
+        return executeCommand(Exists, stringKeys)
                 .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -4094,7 +4070,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Long> unlink(String[] keys) {
-        return executeCommand(CommandType.UNLINK, keys)
+        return executeCommand(Unlink, keys)
                 .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -4107,7 +4083,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         for (int i = 0; i < keys.length; i++) {
             stringKeys[i] = keys[i].toString();
         }
-        return executeCommand(CommandType.UNLINK, stringKeys)
+        return executeCommand(Unlink, stringKeys)
                 .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -4122,7 +4098,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         if (expireOptions != null) {
             args.addAll(Arrays.asList(expireOptions.toArgs()));
         }
-        return executeCommand(CommandType.EXPIRE, args.toArray(new String[0]))
+        return executeCommand(Expire, args.toArray(new String[0]))
                 .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -4137,7 +4113,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         if (expireOptions != null) {
             args.addAll(Arrays.asList(expireOptions.toArgs()));
         }
-        return executeCommand(CommandType.EXPIRE, args.toArray(new String[0]))
+        return executeCommand(Expire, args.toArray(new String[0]))
                 .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -4146,7 +4122,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Boolean> expireAt(String key, long unixSeconds) {
-        return executeCommand(CommandType.EXPIREAT, key, String.valueOf(unixSeconds))
+        return executeCommand(ExpireAt, key, String.valueOf(unixSeconds))
                 .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -4155,7 +4131,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Boolean> expireAt(GlideString key, long unixSeconds) {
-        return executeCommand(CommandType.EXPIREAT, key.toString(), String.valueOf(unixSeconds))
+        return executeCommand(ExpireAt, key.toString(), String.valueOf(unixSeconds))
                 .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -4170,7 +4146,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         if (expireOptions != null) {
             args.addAll(Arrays.asList(expireOptions.toArgs()));
         }
-        return executeCommand(CommandType.EXPIREAT, args.toArray(new String[0]))
+        return executeCommand(ExpireAt, args.toArray(new String[0]))
                 .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -4185,7 +4161,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         if (expireOptions != null) {
             args.addAll(Arrays.asList(expireOptions.toArgs()));
         }
-        return executeCommand(CommandType.EXPIREAT, args.toArray(new String[0]))
+        return executeCommand(ExpireAt, args.toArray(new String[0]))
                 .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -4194,7 +4170,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Boolean> pexpire(String key, long milliseconds) {
-        return executeCommand(CommandType.PEXPIRE, key, String.valueOf(milliseconds))
+        return executeCommand(PExpire, key, String.valueOf(milliseconds))
                 .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -4203,7 +4179,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Boolean> pexpire(GlideString key, long milliseconds) {
-        return executeCommand(CommandType.PEXPIRE, key.toString(), String.valueOf(milliseconds))
+        return executeCommand(PExpire, key.toString(), String.valueOf(milliseconds))
                 .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -4218,7 +4194,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         if (expireOptions != null) {
             args.addAll(Arrays.asList(expireOptions.toArgs()));
         }
-        return executeCommand(CommandType.PEXPIRE, args.toArray(new String[0]))
+        return executeCommand(PExpire, args.toArray(new String[0]))
                 .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -4233,7 +4209,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         if (expireOptions != null) {
             args.addAll(Arrays.asList(expireOptions.toArgs()));
         }
-        return executeCommand(CommandType.PEXPIRE, args.toArray(new String[0]))
+        return executeCommand(PExpire, args.toArray(new String[0]))
                 .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -4242,7 +4218,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Boolean> pexpireAt(String key, long unixMilliseconds) {
-        return executeCommand(CommandType.PEXPIREAT, key, String.valueOf(unixMilliseconds))
+        return executeCommand(PExpireAt, key, String.valueOf(unixMilliseconds))
                 .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -4251,7 +4227,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Boolean> pexpireAt(GlideString key, long unixMilliseconds) {
-        return executeCommand(CommandType.PEXPIREAT, key.toString(), String.valueOf(unixMilliseconds))
+        return executeCommand(PExpireAt, key.toString(), String.valueOf(unixMilliseconds))
                 .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -4266,7 +4242,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         if (expireOptions != null) {
             args.addAll(Arrays.asList(expireOptions.toArgs()));
         }
-        return executeCommand(CommandType.PEXPIREAT, args.toArray(new String[0]))
+        return executeCommand(PExpireAt, args.toArray(new String[0]))
                 .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -4281,7 +4257,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         if (expireOptions != null) {
             args.addAll(Arrays.asList(expireOptions.toArgs()));
         }
-        return executeCommand(CommandType.PEXPIREAT, args.toArray(new String[0]))
+        return executeCommand(PExpireAt, args.toArray(new String[0]))
                 .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -4290,7 +4266,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Long> expiretime(String key) {
-        return executeCommand(CommandType.EXPIRETIME, key)
+        return executeCommand(ExpireTime, key)
                 .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -4299,7 +4275,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Long> expiretime(GlideString key) {
-        return executeCommand(CommandType.EXPIRETIME, key.toString())
+        return executeCommand(ExpireTime, key.toString())
                 .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -4308,7 +4284,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Long> pexpiretime(String key) {
-        return executeCommand(CommandType.PEXPIRETIME, key)
+        return executeCommand(PExpireTime, key)
                 .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -4317,7 +4293,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Long> pexpiretime(GlideString key) {
-        return executeCommand(CommandType.PEXPIRETIME, key.toString())
+        return executeCommand(PExpireTime, key.toString())
                 .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -4326,7 +4302,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Long> pttl(String key) {
-        return executeCommand(CommandType.PTTL, key)
+        return executeCommand(PTTL, key)
                 .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -4335,7 +4311,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Long> pttl(GlideString key) {
-        return executeCommand(CommandType.PTTL, key.toString())
+        return executeCommand(PTTL, key.toString())
                 .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -4344,7 +4320,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Boolean> persist(String key) {
-        return executeCommand(CommandType.PERSIST, key)
+        return executeCommand(Persist, key)
                 .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -4353,7 +4329,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Boolean> persist(GlideString key) {
-        return executeCommand(CommandType.PERSIST, key.toString())
+        return executeCommand(Persist, key.toString())
                 .thenApply(result -> "1".equals(result.toString()));
     }
 
@@ -4362,7 +4338,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Long> touch(String[] keys) {
-        return executeCommand(CommandType.TOUCH, keys)
+        return executeCommand(Touch, keys)
                 .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -4375,7 +4351,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         for (int i = 0; i < keys.length; i++) {
             stringKeys[i] = keys[i].toString();
         }
-        return executeCommand(CommandType.TOUCH, stringKeys)
+        return executeCommand(Touch, stringKeys)
                 .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -4385,10 +4361,10 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
     @Override
     public CompletableFuture<Boolean> copy(String source, String destination, boolean replace) {
         if (replace) {
-            return executeCommand(CommandType.COPY, source, destination, "REPLACE")
+            return executeCommand(Copy, source, destination, "REPLACE")
                     .thenApply(result -> "1".equals(result.toString()));
         } else {
-            return executeCommand(CommandType.COPY, source, destination)
+            return executeCommand(Copy, source, destination)
                     .thenApply(result -> "1".equals(result.toString()));
         }
     }
@@ -4399,10 +4375,10 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
     @Override
     public CompletableFuture<Boolean> copy(GlideString source, GlideString destination, boolean replace) {
         if (replace) {
-            return executeCommand(CommandType.COPY, source.toString(), destination.toString(), "REPLACE")
+            return executeCommand(Copy, source.toString(), destination.toString(), "REPLACE")
                     .thenApply(result -> "1".equals(result.toString()));
         } else {
-            return executeCommand(CommandType.COPY, source.toString(), destination.toString())
+            return executeCommand(Copy, source.toString(), destination.toString())
                     .thenApply(result -> "1".equals(result.toString()));
         }
     }
@@ -4422,7 +4398,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
                 args.add(arg.toString());
             }
         }
-        return executeCommand(CommandType.RESTORE, args.toArray(new String[0]))
+        return executeCommand(Restore, args.toArray(new String[0]))
                 .thenApply(result -> result.toString());
     }
 
@@ -4431,7 +4407,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<String[]> sort(String key) {
-        return executeCommand(CommandType.SORT, key)
+        return executeCommand(Sort, key)
                 .thenApply(result -> {
                     if (result instanceof Object[]) {
                         Object[] objects = (Object[]) result;
@@ -4450,7 +4426,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<GlideString[]> sort(GlideString key) {
-        return executeCommand(CommandType.SORT, key.toString())
+        return executeCommand(Sort, key.toString())
                 .thenApply(result -> {
                     if (result instanceof Object[]) {
                         Object[] objects = (Object[]) result;
@@ -4474,7 +4450,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         if (sortOptions != null) {
             args.addAll(Arrays.asList(sortOptions.toArgs()));
         }
-        return executeCommand(CommandType.SORT, args.toArray(new String[0]))
+        return executeCommand(Sort, args.toArray(new String[0]))
                 .thenApply(result -> {
                     if (result instanceof Object[]) {
                         Object[] objects = (Object[]) result;
@@ -4498,7 +4474,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         if (sortOptions != null) {
             args.addAll(Arrays.asList(sortOptions.toArgs()));
         }
-        return executeCommand(CommandType.SORT, args.toArray(new String[0]))
+        return executeCommand(Sort, args.toArray(new String[0]))
                 .thenApply(result -> {
                     if (result instanceof Object[]) {
                         Object[] objects = (Object[]) result;
@@ -4517,7 +4493,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<String[]> sortReadOnly(String key) {
-        return executeCommand(CommandType.SORT_RO, key)
+        return executeCommand(SortReadOnly, key)
                 .thenApply(result -> {
                     if (result instanceof Object[]) {
                         Object[] objects = (Object[]) result;
@@ -4536,7 +4512,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<GlideString[]> sortReadOnly(GlideString key) {
-        return executeCommand(CommandType.SORT_RO, key.toString())
+        return executeCommand(SortReadOnly, key.toString())
                 .thenApply(result -> {
                     if (result instanceof Object[]) {
                         Object[] objects = (Object[]) result;
@@ -4560,7 +4536,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         if (sortOptions != null) {
             args.addAll(Arrays.asList(sortOptions.toArgs()));
         }
-        return executeCommand(CommandType.SORT_RO, args.toArray(new String[0]))
+        return executeCommand(SortReadOnly, args.toArray(new String[0]))
                 .thenApply(result -> {
                     if (result instanceof Object[]) {
                         Object[] objects = (Object[]) result;
@@ -4584,7 +4560,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         if (sortOptions != null) {
             args.addAll(Arrays.asList(sortOptions.toArgs()));
         }
-        return executeCommand(CommandType.SORT_RO, args.toArray(new String[0]))
+        return executeCommand(SortReadOnly, args.toArray(new String[0]))
                 .thenApply(result -> {
                     if (result instanceof Object[]) {
                         Object[] objects = (Object[]) result;
@@ -4603,7 +4579,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Long> sortStore(String key, String destination) {
-        return executeCommand(CommandType.SORT, key, "STORE", destination)
+        return executeCommand(Sort, key, "STORE", destination)
                 .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -4612,7 +4588,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Long> sortStore(GlideString key, GlideString destination) {
-        return executeCommand(CommandType.SORT, key.toString(), "STORE", destination.toString())
+        return executeCommand(Sort, key.toString(), "STORE", destination.toString())
                 .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -4628,7 +4604,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         }
         args.add("STORE");
         args.add(destination);
-        return executeCommand(CommandType.SORT, args.toArray(new String[0]))
+        return executeCommand(Sort, args.toArray(new String[0]))
                 .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -4644,7 +4620,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         }
         args.add("STORE");
         args.add(destination.toString());
-        return executeCommand(CommandType.SORT, args.toArray(new String[0]))
+        return executeCommand(Sort, args.toArray(new String[0]))
                 .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -4653,7 +4629,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      */
     @Override
     public CompletableFuture<Long> wait(long numreplicas, long timeout) {
-        return executeCommand(CommandType.WAIT, String.valueOf(numreplicas), String.valueOf(timeout))
+        return executeCommand(Wait, String.valueOf(numreplicas), String.valueOf(timeout))
                 .thenApply(result -> Long.parseLong(result.toString()));
     }
 
@@ -4670,7 +4646,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the result of the function call
      */
     public CompletableFuture<Object> fcall(String functionName, String[] keys, String[] args) {
-        return executeCommand(CommandType.FCALL, concatArrays(new String[]{functionName, String.valueOf(keys.length)}, keys, args));
+        return executeCommand(FCall, concatArrays(new String[]{functionName, String.valueOf(keys.length)}, keys, args));
     }
 
     /**
@@ -4682,7 +4658,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the result of the function call
      */
     public CompletableFuture<Object> fcallReadOnly(String functionName, String[] keys, String[] args) {
-        return executeCommand(CommandType.FCALL_RO, concatArrays(new String[]{functionName, String.valueOf(keys.length)}, keys, args));
+        return executeCommand(FCallReadOnly, concatArrays(new String[]{functionName, String.valueOf(keys.length)}, keys, args));
     }
 
     /**
@@ -4698,7 +4674,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
             args.add("REPLACE");
         }
         args.add(libraryCode);
-        return executeCommand(CommandType.FUNCTION_LOAD, args.toArray(new String[0]))
+        return executeCommand(FunctionLoad, args.toArray(new String[0]))
                 .thenApply(result -> result.toString());
     }
 
@@ -4709,7 +4685,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing "OK" if successful
      */
     public CompletableFuture<String> functionDelete(String libraryName) {
-        return executeCommand(CommandType.FUNCTION_DELETE, libraryName)
+        return executeCommand(FunctionDelete, libraryName)
                 .thenApply(result -> result.toString());
     }
 
@@ -4724,7 +4700,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         if (mode != null) {
             args.add(mode);
         }
-        return executeCommand(CommandType.FUNCTION_FLUSH, args.toArray(new String[0]))
+        return executeCommand(FunctionFlush, args.toArray(new String[0]))
                 .thenApply(result -> result.toString());
     }
 
@@ -4740,7 +4716,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
             args.add("LIBRARYNAME");
             args.add(libraryName);
         }
-        return executeCommand(CommandType.FUNCTION_LIST, args.toArray(new String[0]));
+        return executeCommand(FunctionList, args.toArray(new String[0]));
     }
 
     /**
@@ -4749,7 +4725,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing function statistics
      */
     public CompletableFuture<Object> functionStats() {
-        return executeCommand(CommandType.FUNCTION_STATS);
+        return executeCommand(FunctionStats);
     }
 
     /**
@@ -4758,7 +4734,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing "OK" if successful
      */
     public CompletableFuture<String> functionKill() {
-        return executeCommand(CommandType.FUNCTION_KILL)
+        return executeCommand(FunctionKill)
             .thenApply(result -> result.toString());
     }
 
@@ -4768,7 +4744,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the serialized function payload
      */
     public CompletableFuture<byte[]> functionDump() {
-        return executeCommand(CommandType.FUNCTION_DUMP)
+        return executeCommand(FunctionDump)
             .thenApply(result -> {
                 if (result instanceof byte[]) {
                     return (byte[]) result;
@@ -4786,7 +4762,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing "OK" if successful
      */
     public CompletableFuture<String> functionRestore(byte[] payload) {
-        return executeCommand(CommandType.FUNCTION_RESTORE, new String(payload))
+        return executeCommand(FunctionRestore, new String(payload))
             .thenApply(result -> result.toString());
     }
 
@@ -4798,7 +4774,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing "OK" if successful
      */
     public CompletableFuture<String> functionRestore(byte[] payload, FunctionRestorePolicy policy) {
-        return executeCommand(CommandType.FUNCTION_RESTORE, policy.toString(), new String(payload))
+        return executeCommand(FunctionRestore, policy.toString(), new String(payload))
             .thenApply(result -> result.toString());
     }
 
@@ -4815,7 +4791,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the size of the resulting string
      */
     public CompletableFuture<Long> bitop(BitwiseOperation bitwiseOperation, String destination, String[] keys) {
-        return executeCommand(CommandType.BITOP, concatArrays(new String[]{bitwiseOperation.name(), destination}, keys))
+        return executeCommand(BitOp, concatArrays(new String[]{bitwiseOperation.name(), destination}, keys))
                 .thenApply(result -> (Long) result);
     }
 
@@ -4832,7 +4808,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         for (int i = 0; i < keys.length; i++) {
             stringKeys[i] = keys[i].toString();
         }
-        return executeCommand(CommandType.BITOP, concatArrays(new String[]{bitwiseOperation.name(), destination.toString()}, stringKeys))
+        return executeCommand(BitOp, concatArrays(new String[]{bitwiseOperation.name(), destination.toString()}, stringKeys))
                 .thenApply(result -> (Long) result);
     }
 
@@ -4898,7 +4874,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
             args.addAll(Arrays.asList(resultOptions.toArgs()));
         }
         
-        return executeCommand(CommandType.GEOSEARCHSTORE, args.toArray(new String[0]))
+        return executeCommand(GeoSearchStore, args.toArray(new String[0]))
                 .thenApply(result -> result instanceof Long ? (Long) result : Long.parseLong(result.toString()));
     }
 
@@ -4913,7 +4889,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing "OK" if successful
      */
     public CompletableFuture<String> watch(String[] keys) {
-        return executeCommand(CommandType.WATCH, keys)
+        return executeCommand(Watch, keys)
                 .thenApply(result -> result.toString());
     }
 
@@ -4928,7 +4904,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the script source code
      */
     public CompletableFuture<String> scriptShow(String sha1Hash) {
-        return client.executeStringCommand(CommandType.SCRIPT_SHOW.toString(), new String[]{sha1Hash});
+        return client.executeStringCommand(ScriptShow, new String[]{sha1Hash});
     }
 
     /**
@@ -4938,7 +4914,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @return A CompletableFuture containing the script source code as GlideString
      */
     public CompletableFuture<GlideString> scriptShow(GlideString sha1Hash) {
-        return client.executeStringCommand(CommandType.SCRIPT_SHOW.toString(), new String[]{sha1Hash.toString()})
+        return client.executeStringCommand(ScriptShow, new String[]{sha1Hash.toString()})
                 .thenApply(GlideString::of);
     }
 

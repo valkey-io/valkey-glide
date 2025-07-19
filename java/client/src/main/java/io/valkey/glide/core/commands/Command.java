@@ -9,7 +9,7 @@ import java.util.List;
  * This class encapsulates a command type and its associated arguments.
  */
 public class Command {
-    private final CommandType type;
+    private final String type;
     private final List<String> arguments;
 
     /**
@@ -18,7 +18,7 @@ public class Command {
      * @param type The command type
      * @param arguments The command arguments
      */
-    public Command(CommandType type, String... arguments) {
+    public Command(String type, String... arguments) {
         this.type = type;
         this.arguments = new ArrayList<>(Arrays.asList(arguments));
     }
@@ -29,7 +29,7 @@ public class Command {
      * @param type The command type
      * @param arguments The command arguments as a list
      */
-    public Command(CommandType type, List<String> arguments) {
+    public Command(String type, List<String> arguments) {
         this.type = type;
         this.arguments = new ArrayList<>(arguments);
     }
@@ -39,7 +39,7 @@ public class Command {
      *
      * @return The command type
      */
-    public CommandType getType() {
+    public String getType() {
         return type;
     }
 
@@ -90,7 +90,7 @@ public class Command {
      */
     public String[] toArray() {
         String[] result = new String[arguments.size() + 1];
-        result[0] = type.getCommandName();
+        result[0] = type;
         for (int i = 0; i < arguments.size(); i++) {
             result[i + 1] = arguments.get(i);
         }
@@ -100,7 +100,7 @@ public class Command {
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
-        sb.append(type.getCommandName());
+        sb.append(type);
         for (String arg : arguments) {
             sb.append(" ").append(arg);
         }
@@ -112,7 +112,7 @@ public class Command {
         if (this == obj) return true;
         if (obj == null || getClass() != obj.getClass()) return false;
         Command command = (Command) obj;
-        return type == command.type && arguments.equals(command.arguments);
+        return type.equals(command.type) && arguments.equals(command.arguments);
     }
 
     @Override

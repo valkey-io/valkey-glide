@@ -2,7 +2,7 @@
 package glide.api.models;
 
 import glide.api.GlideClient;
-import io.valkey.glide.core.commands.CommandType;
+import static glide.api.models.commands.RequestType.*;
 
 /**
  * Batch implementation for standalone {@link GlideClient}. Batches allow the execution of a group
@@ -88,7 +88,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch set(String key, String value) {
-        return addCommand(CommandType.SET, key, value);
+        return addCommand(Set, key, value);
     }
 
     /**
@@ -100,7 +100,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch set(GlideString key, GlideString value) {
-        return addCommand(CommandType.SET, key.toString(), value.toString());
+        return addCommand(Set, key.toString(), value.toString());
     }
 
     /**
@@ -111,7 +111,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch get(String key) {
-        return addCommand(CommandType.GET, key);
+        return addCommand(Get, key);
     }
 
     /**
@@ -122,7 +122,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch get(GlideString key) {
-        return addCommand(CommandType.GET, key.toString());
+        return addCommand(Get, key.toString());
     }
 
     /**
@@ -133,7 +133,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch del(String... keys) {
-        return addCommand(CommandType.DEL, keys);
+        return addCommand(Del, keys);
     }
 
     /**
@@ -148,7 +148,7 @@ public class Batch extends BaseBatch<Batch> {
         for (int i = 0; i < keys.length; i++) {
             stringKeys[i] = keys[i].toString();
         }
-        return addCommand(CommandType.DEL, stringKeys);
+        return addCommand(Del, stringKeys);
     }
 
     /**
@@ -158,7 +158,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch ping() {
-        return addCommand(CommandType.PING);
+        return addCommand(Ping);
     }
 
     /**
@@ -169,7 +169,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch ping(String message) {
-        return addCommand(CommandType.PING, message);
+        return addCommand(Ping, message);
     }
 
     /**
@@ -180,7 +180,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch ping(GlideString message) {
-        return addCommand(CommandType.PING, message.toString());
+        return addCommand(Ping, message.toString());
     }
 
     /**
@@ -191,7 +191,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch incr(String key) {
-        return addCommand(CommandType.INCR, key);
+        return addCommand(Incr, key);
     }
 
     /**
@@ -202,7 +202,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch incr(GlideString key) {
-        return addCommand(CommandType.INCR, key.toString());
+        return addCommand(Incr, key.toString());
     }
 
     /**
@@ -214,7 +214,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch incrBy(String key, long amount) {
-        return addCommand(CommandType.INCRBY, key, String.valueOf(amount));
+        return addCommand(IncrBy, key, String.valueOf(amount));
     }
 
     /**
@@ -226,7 +226,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch incrBy(GlideString key, long amount) {
-        return addCommand(CommandType.INCRBY, key.toString(), String.valueOf(amount));
+        return addCommand(IncrBy, key.toString(), String.valueOf(amount));
     }
 
     /**
@@ -238,7 +238,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch incrByFloat(String key, double amount) {
-        return addCommand(CommandType.INCRBYFLOAT, key, String.valueOf(amount));
+        return addCommand(IncrByFloat, key, String.valueOf(amount));
     }
 
     /**
@@ -250,7 +250,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch incrByFloat(GlideString key, double amount) {
-        return addCommand(CommandType.INCRBYFLOAT, key.toString(), String.valueOf(amount));
+        return addCommand(IncrByFloat, key.toString(), String.valueOf(amount));
     }
 
     /**
@@ -261,7 +261,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch decr(String key) {
-        return addCommand(CommandType.DECR, key);
+        return addCommand(Decr, key);
     }
 
     /**
@@ -272,7 +272,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch decr(GlideString key) {
-        return addCommand(CommandType.DECR, key.toString());
+        return addCommand(Decr, key.toString());
     }
 
     /**
@@ -284,7 +284,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch decrBy(String key, long amount) {
-        return addCommand(CommandType.DECRBY, key, String.valueOf(amount));
+        return addCommand(DecrBy, key, String.valueOf(amount));
     }
 
     /**
@@ -296,7 +296,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch decrBy(GlideString key, long amount) {
-        return addCommand(CommandType.DECRBY, key.toString(), String.valueOf(amount));
+        return addCommand(DecrBy, key.toString(), String.valueOf(amount));
     }
 
     /**
@@ -307,7 +307,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch strlen(String key) {
-        return addCommand(CommandType.STRLEN, key);
+        return addCommand(Strlen, key);
     }
 
     /**
@@ -318,7 +318,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch strlen(GlideString key) {
-        return addCommand(CommandType.STRLEN, key.toString());
+        return addCommand(Strlen, key.toString());
     }
 
     /**
@@ -330,7 +330,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch append(String key, String value) {
-        return addCommand(CommandType.APPEND, key, value);
+        return addCommand(Append, key, value);
     }
 
     /**
@@ -342,7 +342,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch append(GlideString key, GlideString value) {
-        return addCommand(CommandType.APPEND, key.toString(), value.toString());
+        return addCommand(Append, key.toString(), value.toString());
     }
 
     /**
@@ -355,7 +355,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch getrange(String key, int start, int end) {
-        return addCommand(CommandType.GETRANGE, key, String.valueOf(start), String.valueOf(end));
+        return addCommand(GetRange, key, String.valueOf(start), String.valueOf(end));
     }
 
     /**
@@ -368,7 +368,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch getrange(GlideString key, int start, int end) {
-        return addCommand(CommandType.GETRANGE, key.toString(), String.valueOf(start), String.valueOf(end));
+        return addCommand(GetRange, key.toString(), String.valueOf(start), String.valueOf(end));
     }
 
     /**
@@ -381,7 +381,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch setrange(String key, int offset, String value) {
-        return addCommand(CommandType.SETRANGE, key, String.valueOf(offset), value);
+        return addCommand(SetRange, key, String.valueOf(offset), value);
     }
 
     /**
@@ -394,7 +394,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch setrange(GlideString key, int offset, GlideString value) {
-        return addCommand(CommandType.SETRANGE, key.toString(), String.valueOf(offset), value.toString());
+        return addCommand(SetRange, key.toString(), String.valueOf(offset), value.toString());
     }
 
     /**
@@ -409,7 +409,7 @@ public class Batch extends BaseBatch<Batch> {
         String[] args = new String[fields.length + 1];
         args[0] = key;
         System.arraycopy(fields, 0, args, 1, fields.length);
-        return addCommand(CommandType.HDEL, args);
+        return addCommand(HDel, args);
     }
 
     /**
@@ -426,7 +426,7 @@ public class Batch extends BaseBatch<Batch> {
         for (int i = 0; i < fields.length; i++) {
             args[i + 1] = fields[i].toString();
         }
-        return addCommand(CommandType.HDEL, args);
+        return addCommand(HDel, args);
     }
 
     /**
@@ -438,7 +438,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch hexists(String key, String field) {
-        return addCommand(CommandType.HEXISTS, key, field);
+        return addCommand(HExists, key, field);
     }
 
     /**
@@ -450,7 +450,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch hexists(GlideString key, GlideString field) {
-        return addCommand(CommandType.HEXISTS, key.toString(), field.toString());
+        return addCommand(HExists, key.toString(), field.toString());
     }
 
     /**
@@ -461,7 +461,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch hlen(String key) {
-        return addCommand(CommandType.HLEN, key);
+        return addCommand(HLen, key);
     }
 
     /**
@@ -472,7 +472,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch hlen(GlideString key) {
-        return addCommand(CommandType.HLEN, key.toString());
+        return addCommand(HLen, key.toString());
     }
 
     /**
@@ -483,7 +483,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch hkeys(String key) {
-        return addCommand(CommandType.HKEYS, key);
+        return addCommand(HKeys, key);
     }
 
     /**
@@ -494,7 +494,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch hkeys(GlideString key) {
-        return addCommand(CommandType.HKEYS, key.toString());
+        return addCommand(HKeys, key.toString());
     }
 
     /**
@@ -505,7 +505,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch hvals(String key) {
-        return addCommand(CommandType.HVALS, key);
+        return addCommand(HVals, key);
     }
 
     /**
@@ -516,7 +516,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch hvals(GlideString key) {
-        return addCommand(CommandType.HVALS, key.toString());
+        return addCommand(HVals, key.toString());
     }
 
     /**
@@ -531,7 +531,7 @@ public class Batch extends BaseBatch<Batch> {
         String[] args = new String[fields.length + 1];
         args[0] = key;
         System.arraycopy(fields, 0, args, 1, fields.length);
-        return addCommand(CommandType.HMGET, args);
+        return addCommand(HMGet, args);
     }
 
     /**
@@ -548,7 +548,7 @@ public class Batch extends BaseBatch<Batch> {
         for (int i = 0; i < fields.length; i++) {
             args[i + 1] = fields[i].toString();
         }
-        return addCommand(CommandType.HMGET, args);
+        return addCommand(HMGet, args);
     }
 
     /**
@@ -561,7 +561,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch hincrBy(String key, String field, long amount) {
-        return addCommand(CommandType.HINCRBY, key, field, String.valueOf(amount));
+        return addCommand(HIncrBy, key, field, String.valueOf(amount));
     }
 
     /**
@@ -574,7 +574,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch hincrBy(GlideString key, GlideString field, long amount) {
-        return addCommand(CommandType.HINCRBY, key.toString(), field.toString(), String.valueOf(amount));
+        return addCommand(HIncrBy, key.toString(), field.toString(), String.valueOf(amount));
     }
 
     /**
@@ -587,7 +587,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch hincrByFloat(String key, String field, double amount) {
-        return addCommand(CommandType.HINCRBYFLOAT, key, field, String.valueOf(amount));
+        return addCommand(HIncrByFloat, key, field, String.valueOf(amount));
     }
 
     /**
@@ -600,7 +600,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch hincrByFloat(GlideString key, GlideString field, double amount) {
-        return addCommand(CommandType.HINCRBYFLOAT, key.toString(), field.toString(), String.valueOf(amount));
+        return addCommand(HIncrByFloat, key.toString(), field.toString(), String.valueOf(amount));
     }
 
     /**
@@ -615,7 +615,7 @@ public class Batch extends BaseBatch<Batch> {
         String[] args = new String[elements.length + 1];
         args[0] = key;
         System.arraycopy(elements, 0, args, 1, elements.length);
-        return addCommand(CommandType.RPUSH, args);
+        return addCommand(RPush, args);
     }
 
     /**
@@ -632,7 +632,7 @@ public class Batch extends BaseBatch<Batch> {
         for (int i = 0; i < elements.length; i++) {
             args[i + 1] = elements[i].toString();
         }
-        return addCommand(CommandType.RPUSH, args);
+        return addCommand(RPush, args);
     }
 
     /**
@@ -643,7 +643,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch lpop(String key) {
-        return addCommand(CommandType.LPOP, key);
+        return addCommand(LPop, key);
     }
 
     /**
@@ -654,7 +654,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch lpop(GlideString key) {
-        return addCommand(CommandType.LPOP, key.toString());
+        return addCommand(LPop, key.toString());
     }
 
     /**
@@ -665,7 +665,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch rpop(String key) {
-        return addCommand(CommandType.RPOP, key);
+        return addCommand(RPop, key);
     }
 
     /**
@@ -676,7 +676,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch rpop(GlideString key) {
-        return addCommand(CommandType.RPOP, key.toString());
+        return addCommand(RPop, key.toString());
     }
 
     /**
@@ -689,7 +689,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch lrange(String key, long start, long end) {
-        return addCommand(CommandType.LRANGE, key, String.valueOf(start), String.valueOf(end));
+        return addCommand(LRange, key, String.valueOf(start), String.valueOf(end));
     }
 
     /**
@@ -702,7 +702,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch lrange(GlideString key, long start, long end) {
-        return addCommand(CommandType.LRANGE, key.toString(), String.valueOf(start), String.valueOf(end));
+        return addCommand(LRange, key.toString(), String.valueOf(start), String.valueOf(end));
     }
 
     /**
@@ -713,7 +713,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch llen(String key) {
-        return addCommand(CommandType.LLEN, key);
+        return addCommand(LLen, key);
     }
 
     /**
@@ -724,7 +724,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch llen(GlideString key) {
-        return addCommand(CommandType.LLEN, key.toString());
+        return addCommand(LLen, key.toString());
     }
 
     /**
@@ -736,7 +736,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch lindex(String key, long index) {
-        return addCommand(CommandType.LINDEX, key, String.valueOf(index));
+        return addCommand(LIndex, key, String.valueOf(index));
     }
 
     /**
@@ -748,7 +748,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch lindex(GlideString key, long index) {
-        return addCommand(CommandType.LINDEX, key.toString(), String.valueOf(index));
+        return addCommand(LIndex, key.toString(), String.valueOf(index));
     }
 
     /**
@@ -761,7 +761,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch lset(String key, long index, String element) {
-        return addCommand(CommandType.LSET, key, String.valueOf(index), element);
+        return addCommand(LSet, key, String.valueOf(index), element);
     }
 
     /**
@@ -774,7 +774,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch lset(GlideString key, long index, GlideString element) {
-        return addCommand(CommandType.LSET, key.toString(), String.valueOf(index), element.toString());
+        return addCommand(LSet, key.toString(), String.valueOf(index), element.toString());
     }
 
     /**
@@ -787,7 +787,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch ltrim(String key, long start, long end) {
-        return addCommand(CommandType.LTRIM, key, String.valueOf(start), String.valueOf(end));
+        return addCommand(LTrim, key, String.valueOf(start), String.valueOf(end));
     }
 
     /**
@@ -800,7 +800,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch ltrim(GlideString key, long start, long end) {
-        return addCommand(CommandType.LTRIM, key.toString(), String.valueOf(start), String.valueOf(end));
+        return addCommand(LTrim, key.toString(), String.valueOf(start), String.valueOf(end));
     }
 
     /**
@@ -813,7 +813,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch lrem(String key, long count, String element) {
-        return addCommand(CommandType.LREM, key, String.valueOf(count), element);
+        return addCommand(LRem, key, String.valueOf(count), element);
     }
 
     /**
@@ -826,7 +826,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch lrem(GlideString key, long count, GlideString element) {
-        return addCommand(CommandType.LREM, key.toString(), String.valueOf(count), element.toString());
+        return addCommand(LRem, key.toString(), String.valueOf(count), element.toString());
     }
 
     // Set Commands
@@ -843,7 +843,7 @@ public class Batch extends BaseBatch<Batch> {
         String[] args = new String[members.length + 1];
         args[0] = key;
         System.arraycopy(members, 0, args, 1, members.length);
-        return addCommand(CommandType.SADD, args);
+        return addCommand(SAdd, args);
     }
 
     /**
@@ -860,7 +860,7 @@ public class Batch extends BaseBatch<Batch> {
         for (int i = 0; i < members.length; i++) {
             args[i + 1] = members[i].toString();
         }
-        return addCommand(CommandType.SADD, args);
+        return addCommand(SAdd, args);
     }
 
     /**
@@ -875,7 +875,7 @@ public class Batch extends BaseBatch<Batch> {
         String[] args = new String[members.length + 1];
         args[0] = key;
         System.arraycopy(members, 0, args, 1, members.length);
-        return addCommand(CommandType.SREM, args);
+        return addCommand(SRem, args);
     }
 
     /**
@@ -892,7 +892,7 @@ public class Batch extends BaseBatch<Batch> {
         for (int i = 0; i < members.length; i++) {
             args[i + 1] = members[i].toString();
         }
-        return addCommand(CommandType.SREM, args);
+        return addCommand(SRem, args);
     }
 
     /**
@@ -903,7 +903,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch smembers(String key) {
-        return addCommand(CommandType.SMEMBERS, key);
+        return addCommand(SMembers, key);
     }
 
     /**
@@ -914,7 +914,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch smembers(GlideString key) {
-        return addCommand(CommandType.SMEMBERS, key.toString());
+        return addCommand(SMembers, key.toString());
     }
 
     /**
@@ -925,7 +925,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch scard(String key) {
-        return addCommand(CommandType.SCARD, key);
+        return addCommand(SCard, key);
     }
 
     /**
@@ -936,7 +936,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch scard(GlideString key) {
-        return addCommand(CommandType.SCARD, key.toString());
+        return addCommand(SCard, key.toString());
     }
 
     /**
@@ -948,7 +948,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch sismember(String key, String member) {
-        return addCommand(CommandType.SISMEMBER, key, member);
+        return addCommand(SIsMember, key, member);
     }
 
     /**
@@ -960,7 +960,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch sismember(GlideString key, GlideString member) {
-        return addCommand(CommandType.SISMEMBER, key.toString(), member.toString());
+        return addCommand(SIsMember, key.toString(), member.toString());
     }
 
     /**
@@ -971,7 +971,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch sdiff(String... keys) {
-        return addCommand(CommandType.SDIFF, keys);
+        return addCommand(SDiff, keys);
     }
 
     /**
@@ -986,7 +986,7 @@ public class Batch extends BaseBatch<Batch> {
         for (int i = 0; i < keys.length; i++) {
             stringKeys[i] = keys[i].toString();
         }
-        return addCommand(CommandType.SDIFF, stringKeys);
+        return addCommand(SDiff, stringKeys);
     }
 
     /**
@@ -997,7 +997,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch sinter(String... keys) {
-        return addCommand(CommandType.SINTER, keys);
+        return addCommand(SInter, keys);
     }
 
     /**
@@ -1012,7 +1012,7 @@ public class Batch extends BaseBatch<Batch> {
         for (int i = 0; i < keys.length; i++) {
             stringKeys[i] = keys[i].toString();
         }
-        return addCommand(CommandType.SINTER, stringKeys);
+        return addCommand(SInter, stringKeys);
     }
 
     /**
@@ -1023,7 +1023,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch sunion(String... keys) {
-        return addCommand(CommandType.SUNION, keys);
+        return addCommand(SUnion, keys);
     }
 
     /**
@@ -1038,7 +1038,7 @@ public class Batch extends BaseBatch<Batch> {
         for (int i = 0; i < keys.length; i++) {
             stringKeys[i] = keys[i].toString();
         }
-        return addCommand(CommandType.SUNION, stringKeys);
+        return addCommand(SUnion, stringKeys);
     }
 
     // Key Management Commands
@@ -1052,7 +1052,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch expire(String key, long seconds) {
-        return addCommand(CommandType.EXPIRE, key, String.valueOf(seconds));
+        return addCommand(Expire, key, String.valueOf(seconds));
     }
 
     /**
@@ -1064,7 +1064,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch expire(GlideString key, long seconds) {
-        return addCommand(CommandType.EXPIRE, key.toString(), String.valueOf(seconds));
+        return addCommand(Expire, key.toString(), String.valueOf(seconds));
     }
 
     /**
@@ -1075,7 +1075,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch ttl(String key) {
-        return addCommand(CommandType.TTL, key);
+        return addCommand(TTL, key);
     }
 
     /**
@@ -1086,7 +1086,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch ttl(GlideString key) {
-        return addCommand(CommandType.TTL, key.toString());
+        return addCommand(TTL, key.toString());
     }
 
     // Sorted Set Commands
@@ -1103,7 +1103,7 @@ public class Batch extends BaseBatch<Batch> {
         String[] args = new String[scoreMembers.length + 1];
         args[0] = key;
         System.arraycopy(scoreMembers, 0, args, 1, scoreMembers.length);
-        return addCommand(CommandType.ZADD, args);
+        return addCommand(ZAdd, args);
     }
 
     /**
@@ -1120,7 +1120,7 @@ public class Batch extends BaseBatch<Batch> {
         for (int i = 0; i < scoreMembers.length; i++) {
             args[i + 1] = scoreMembers[i].toString();
         }
-        return addCommand(CommandType.ZADD, args);
+        return addCommand(ZAdd, args);
     }
 
     /**
@@ -1133,7 +1133,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch zrange(String key, long start, long end) {
-        return addCommand(CommandType.ZRANGE, key, String.valueOf(start), String.valueOf(end));
+        return addCommand(ZRange, key, String.valueOf(start), String.valueOf(end));
     }
 
     /**
@@ -1146,7 +1146,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch zrange(GlideString key, long start, long end) {
-        return addCommand(CommandType.ZRANGE, key.toString(), String.valueOf(start), String.valueOf(end));
+        return addCommand(ZRange, key.toString(), String.valueOf(start), String.valueOf(end));
     }
 
     /**
@@ -1161,7 +1161,7 @@ public class Batch extends BaseBatch<Batch> {
         String[] args = new String[members.length + 1];
         args[0] = key;
         System.arraycopy(members, 0, args, 1, members.length);
-        return addCommand(CommandType.ZREM, args);
+        return addCommand(ZRem, args);
     }
 
     /**
@@ -1178,7 +1178,7 @@ public class Batch extends BaseBatch<Batch> {
         for (int i = 0; i < members.length; i++) {
             args[i + 1] = members[i].toString();
         }
-        return addCommand(CommandType.ZREM, args);
+        return addCommand(ZRem, args);
     }
 
     /**
@@ -1189,7 +1189,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch zcard(String key) {
-        return addCommand(CommandType.ZCARD, key);
+        return addCommand(ZCard, key);
     }
 
     /**
@@ -1200,7 +1200,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch zcard(GlideString key) {
-        return addCommand(CommandType.ZCARD, key.toString());
+        return addCommand(ZCard, key.toString());
     }
 
     /**
@@ -1212,7 +1212,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch zscore(String key, String member) {
-        return addCommand(CommandType.ZSCORE, key, member);
+        return addCommand(ZScore, key, member);
     }
 
     /**
@@ -1224,7 +1224,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch zscore(GlideString key, GlideString member) {
-        return addCommand(CommandType.ZSCORE, key.toString(), member.toString());
+        return addCommand(ZScore, key.toString(), member.toString());
     }
 
     /**
@@ -1236,7 +1236,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch zrank(String key, String member) {
-        return addCommand(CommandType.ZRANK, key, member);
+        return addCommand(ZRank, key, member);
     }
 
     /**
@@ -1248,7 +1248,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch zrank(GlideString key, GlideString member) {
-        return addCommand(CommandType.ZRANK, key.toString(), member.toString());
+        return addCommand(ZRank, key.toString(), member.toString());
     }
 
     /**
@@ -1258,7 +1258,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch customCommand(String... args) {
-        return addCommand(CommandType.CUSTOM_COMMAND, args);
+        return addCommand(CustomCommand, args);
     }
 
     /**
@@ -1269,7 +1269,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch exists(String... keys) {
-        return addCommand(CommandType.EXISTS, keys);
+        return addCommand(Exists, keys);
     }
 
     /**
@@ -1284,7 +1284,7 @@ public class Batch extends BaseBatch<Batch> {
         for (int i = 0; i < keys.length; i++) {
             stringKeys[i] = keys[i].toString();
         }
-        return addCommand(CommandType.EXISTS, stringKeys);
+        return addCommand(Exists, stringKeys);
     }
 
     /**
@@ -1295,7 +1295,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch persist(String key) {
-        return addCommand(CommandType.PERSIST, key);
+        return addCommand(Persist, key);
     }
 
     /**
@@ -1306,7 +1306,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch persist(GlideString key) {
-        return addCommand(CommandType.PERSIST, key.toString());
+        return addCommand(Persist, key.toString());
     }
 
     /**
@@ -1317,7 +1317,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch type(String key) {
-        return addCommand(CommandType.TYPE, key);
+        return addCommand(Type, key);
     }
 
     /**
@@ -1328,7 +1328,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch type(GlideString key) {
-        return addCommand(CommandType.TYPE, key.toString());
+        return addCommand(Type, key.toString());
     }
 
     /**
@@ -1339,7 +1339,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch objectEncoding(String key) {
-        return addCommand(CommandType.OBJECT_ENCODING, key);
+        return addCommand(ObjectEncoding, key);
     }
 
     /**
@@ -1350,7 +1350,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch objectEncoding(GlideString key) {
-        return addCommand(CommandType.OBJECT_ENCODING, key.toString());
+        return addCommand(ObjectEncoding, key.toString());
     }
 
     /**
@@ -1361,7 +1361,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch touch(String... keys) {
-        return addCommand(CommandType.TOUCH, keys);
+        return addCommand(Touch, keys);
     }
 
     /**
@@ -1376,7 +1376,7 @@ public class Batch extends BaseBatch<Batch> {
         for (int i = 0; i < keys.length; i++) {
             stringKeys[i] = keys[i].toString();
         }
-        return addCommand(CommandType.TOUCH, stringKeys);
+        return addCommand(Touch, stringKeys);
     }
 
     /**
@@ -1388,7 +1388,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch rename(String key, String newkey) {
-        return addCommand(CommandType.RENAME, key, newkey);
+        return addCommand(Rename, key, newkey);
     }
 
     /**
@@ -1400,7 +1400,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch rename(GlideString key, GlideString newkey) {
-        return addCommand(CommandType.RENAME, key.toString(), newkey.toString());
+        return addCommand(Rename, key.toString(), newkey.toString());
     }
 
     /**
@@ -1412,7 +1412,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch renamenx(String key, String newkey) {
-        return addCommand(CommandType.RENAMENX, key, newkey);
+        return addCommand(RenameNX, key, newkey);
     }
 
     /**
@@ -1424,7 +1424,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch renamenx(GlideString key, GlideString newkey) {
-        return addCommand(CommandType.RENAMENX, key.toString(), newkey.toString());
+        return addCommand(RenameNX, key.toString(), newkey.toString());
     }
 
     /**
@@ -1435,7 +1435,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch unlink(String... keys) {
-        return addCommand(CommandType.UNLINK, keys);
+        return addCommand(Unlink, keys);
     }
 
     /**
@@ -1450,7 +1450,7 @@ public class Batch extends BaseBatch<Batch> {
         for (int i = 0; i < keys.length; i++) {
             stringKeys[i] = keys[i].toString();
         }
-        return addCommand(CommandType.UNLINK, stringKeys);
+        return addCommand(Unlink, stringKeys);
     }
 
     /**
@@ -1461,7 +1461,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch sort(String key) {
-        return addCommand(CommandType.SORT, key);
+        return addCommand(Sort, key);
     }
 
     /**
@@ -1472,7 +1472,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch sort(GlideString key) {
-        return addCommand(CommandType.SORT, key.toString());
+        return addCommand(Sort, key.toString());
     }
 
     /**
@@ -1484,7 +1484,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch sortStore(String key, String destination) {
-        return addCommand(CommandType.SORT, key, "STORE", destination);
+        return addCommand(Sort, key, "STORE", destination);
     }
 
     /**
@@ -1496,7 +1496,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch sortStore(GlideString key, GlideString destination) {
-        return addCommand(CommandType.SORT, key.toString(), "STORE", destination.toString());
+        return addCommand(Sort, key.toString(), "STORE", destination.toString());
     }
 
     /**
@@ -1507,7 +1507,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch sortReadOnly(String key) {
-        return addCommand(CommandType.SORT_RO, key);
+        return addCommand(SortReadOnly, key);
     }
 
     /**
@@ -1518,7 +1518,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch sortReadOnly(GlideString key) {
-        return addCommand(CommandType.SORT_RO, key.toString());
+        return addCommand(SortReadOnly, key.toString());
     }
 
     /**
@@ -1528,7 +1528,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch flushall() {
-        return addCommand(CommandType.FLUSHALL);
+        return addCommand(FlushAll);
     }
 
     /**
@@ -1539,7 +1539,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch flushall(glide.api.models.commands.FlushMode mode) {
-        return addCommand(CommandType.FLUSHALL, mode.toString());
+        return addCommand(FlushAll, mode.toString());
     }
 
     /**
@@ -1549,7 +1549,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch flushdb() {
-        return addCommand(CommandType.FLUSHDB);
+        return addCommand(FlushDB);
     }
 
     /**
@@ -1560,7 +1560,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch flushdb(glide.api.models.commands.FlushMode mode) {
-        return addCommand(CommandType.FLUSHDB, mode.toString());
+        return addCommand(FlushDB, mode.toString());
     }
 
     /**
@@ -1570,7 +1570,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch dbsize() {
-        return addCommand(CommandType.DBSIZE);
+        return addCommand(DBSize);
     }
 
     /**
@@ -1580,7 +1580,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch randomKey() {
-        return addCommand(CommandType.RANDOMKEY);
+        return addCommand(RandomKey);
     }
 
     /**
@@ -1597,7 +1597,7 @@ public class Batch extends BaseBatch<Batch> {
             args[index++] = entry.getKey();
             args[index++] = entry.getValue();
         }
-        return addCommand(CommandType.CONFIG_SET, args);
+        return addCommand(ConfigSet, args);
     }
 
     /**
@@ -1608,7 +1608,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch configGet(String... parameters) {
-        return addCommand(CommandType.CONFIG_GET, parameters);
+        return addCommand(ConfigGet, parameters);
     }
 
     /**
@@ -1618,7 +1618,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch configResetStat() {
-        return addCommand(CommandType.CONFIG_RESETSTAT);
+        return addCommand(ConfigResetStat);
     }
 
     /**
@@ -1629,7 +1629,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch lolwut(int version) {
-        return addCommand(CommandType.LOLWUT, "VERSION", String.valueOf(version));
+        return addCommand(Lolwut, "VERSION", String.valueOf(version));
     }
 
     /**
@@ -1640,7 +1640,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch getdel(String key) {
-        return addCommand(CommandType.GETDEL, key);
+        return addCommand(GetDel, key);
     }
 
     /**
@@ -1651,7 +1651,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch getdel(GlideString key) {
-        return addCommand(CommandType.GETDEL, key.toString());
+        return addCommand(GetDel, key.toString());
     }
 
     /**
@@ -1668,7 +1668,7 @@ public class Batch extends BaseBatch<Batch> {
             args[index++] = entry.getKey();
             args[index++] = entry.getValue();
         }
-        return addCommand(CommandType.MSET, args);
+        return addCommand(MSet, args);
     }
 
     /**
@@ -1679,7 +1679,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch mget(String... keys) {
-        return addCommand(CommandType.MGET, keys);
+        return addCommand(MGet, keys);
     }
 
     /**
@@ -1696,7 +1696,7 @@ public class Batch extends BaseBatch<Batch> {
             args[index++] = entry.getKey();
             args[index++] = entry.getValue();
         }
-        return addCommand(CommandType.MSETNX, args);
+        return addCommand(MSetNX, args);
     }
 
     /**
@@ -1711,7 +1711,7 @@ public class Batch extends BaseBatch<Batch> {
         String[] args = new String[elements.length + 1];
         args[0] = key;
         System.arraycopy(elements, 0, args, 1, elements.length);
-        return addCommand(CommandType.LPUSH, args);
+        return addCommand(LPush, args);
     }
 
     /**
@@ -1728,7 +1728,7 @@ public class Batch extends BaseBatch<Batch> {
         for (int i = 0; i < elements.length; i++) {
             args[i + 1] = elements[i].toString();
         }
-        return addCommand(CommandType.LPUSH, args);
+        return addCommand(LPush, args);
     }
 
     /**
@@ -1748,7 +1748,7 @@ public class Batch extends BaseBatch<Batch> {
         args[0] = key;
         args[1] = value;
         System.arraycopy(options.toArgs(), 0, args, 2, options.toArgs().length);
-        return addCommand(CommandType.SET, args);
+        return addCommand(Set, args);
     }
 
     /**
@@ -1768,7 +1768,7 @@ public class Batch extends BaseBatch<Batch> {
         args[0] = key.toString();
         args[1] = value.toString();
         System.arraycopy(options.toArgs(), 0, args, 2, options.toArgs().length);
-        return addCommand(CommandType.SET, args);
+        return addCommand(Set, args);
     }
 
     /**
@@ -1786,7 +1786,7 @@ public class Batch extends BaseBatch<Batch> {
         String[] args = new String[options.toArgs().length + 1];
         args[0] = key;
         System.arraycopy(options.toArgs(), 0, args, 1, options.toArgs().length);
-        return addCommand(CommandType.GETEX, args);
+        return addCommand(GetEx, args);
     }
 
     /**
@@ -1804,7 +1804,7 @@ public class Batch extends BaseBatch<Batch> {
         String[] args = new String[options.toArgs().length + 1];
         args[0] = key.toString();
         System.arraycopy(options.toArgs(), 0, args, 1, options.toArgs().length);
-        return addCommand(CommandType.GETEX, args);
+        return addCommand(GetEx, args);
     }
 
     /**
@@ -1815,7 +1815,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch getex(String key) {
-        return addCommand(CommandType.GETEX, key);
+        return addCommand(GetEx, key);
     }
 
     /**
@@ -1826,7 +1826,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch getex(GlideString key) {
-        return addCommand(CommandType.GETEX, key.toString());
+        return addCommand(GetEx, key.toString());
     }
 
     /**
@@ -1846,7 +1846,7 @@ public class Batch extends BaseBatch<Batch> {
         args[0] = key;
         args[1] = String.valueOf(seconds);
         System.arraycopy(options.toArgs(), 0, args, 2, options.toArgs().length);
-        return addCommand(CommandType.EXPIRE, args);
+        return addCommand(Expire, args);
     }
 
     /**
@@ -1866,7 +1866,7 @@ public class Batch extends BaseBatch<Batch> {
         args[0] = key.toString();
         args[1] = String.valueOf(seconds);
         System.arraycopy(options.toArgs(), 0, args, 2, options.toArgs().length);
-        return addCommand(CommandType.EXPIRE, args);
+        return addCommand(Expire, args);
     }
 
     /**
@@ -1878,7 +1878,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch expireAt(String key, long timestamp) {
-        return addCommand(CommandType.EXPIREAT, key, String.valueOf(timestamp));
+        return addCommand(ExpireAt, key, String.valueOf(timestamp));
     }
 
     /**
@@ -1890,7 +1890,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch expireAt(GlideString key, long timestamp) {
-        return addCommand(CommandType.EXPIREAT, key.toString(), String.valueOf(timestamp));
+        return addCommand(ExpireAt, key.toString(), String.valueOf(timestamp));
     }
 
     /**
@@ -1910,7 +1910,7 @@ public class Batch extends BaseBatch<Batch> {
         args[0] = key;
         args[1] = String.valueOf(timestamp);
         System.arraycopy(options.toArgs(), 0, args, 2, options.toArgs().length);
-        return addCommand(CommandType.EXPIREAT, args);
+        return addCommand(ExpireAt, args);
     }
 
     /**
@@ -1930,7 +1930,7 @@ public class Batch extends BaseBatch<Batch> {
         args[0] = key.toString();
         args[1] = String.valueOf(timestamp);
         System.arraycopy(options.toArgs(), 0, args, 2, options.toArgs().length);
-        return addCommand(CommandType.EXPIREAT, args);
+        return addCommand(ExpireAt, args);
     }
 
     /**
@@ -1942,7 +1942,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch pexpire(String key, long milliseconds) {
-        return addCommand(CommandType.PEXPIRE, key, String.valueOf(milliseconds));
+        return addCommand(PExpire, key, String.valueOf(milliseconds));
     }
 
     /**
@@ -1954,7 +1954,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch pexpire(GlideString key, long milliseconds) {
-        return addCommand(CommandType.PEXPIRE, key.toString(), String.valueOf(milliseconds));
+        return addCommand(PExpire, key.toString(), String.valueOf(milliseconds));
     }
 
     /**
@@ -1974,7 +1974,7 @@ public class Batch extends BaseBatch<Batch> {
         args[0] = key;
         args[1] = String.valueOf(milliseconds);
         System.arraycopy(options.toArgs(), 0, args, 2, options.toArgs().length);
-        return addCommand(CommandType.PEXPIRE, args);
+        return addCommand(PExpire, args);
     }
 
     /**
@@ -1994,7 +1994,7 @@ public class Batch extends BaseBatch<Batch> {
         args[0] = key.toString();
         args[1] = String.valueOf(milliseconds);
         System.arraycopy(options.toArgs(), 0, args, 2, options.toArgs().length);
-        return addCommand(CommandType.PEXPIRE, args);
+        return addCommand(PExpire, args);
     }
 
     /**
@@ -2006,7 +2006,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch pexpireAt(String key, long timestamp) {
-        return addCommand(CommandType.PEXPIREAT, key, String.valueOf(timestamp));
+        return addCommand(PExpireAt, key, String.valueOf(timestamp));
     }
 
     /**
@@ -2018,7 +2018,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch pexpireAt(GlideString key, long timestamp) {
-        return addCommand(CommandType.PEXPIREAT, key.toString(), String.valueOf(timestamp));
+        return addCommand(PExpireAt, key.toString(), String.valueOf(timestamp));
     }
 
     /**
@@ -2038,7 +2038,7 @@ public class Batch extends BaseBatch<Batch> {
         args[0] = key;
         args[1] = String.valueOf(timestamp);
         System.arraycopy(options.toArgs(), 0, args, 2, options.toArgs().length);
-        return addCommand(CommandType.PEXPIREAT, args);
+        return addCommand(PExpireAt, args);
     }
 
     /**
@@ -2058,7 +2058,7 @@ public class Batch extends BaseBatch<Batch> {
         args[0] = key.toString();
         args[1] = String.valueOf(timestamp);
         System.arraycopy(options.toArgs(), 0, args, 2, options.toArgs().length);
-        return addCommand(CommandType.PEXPIREAT, args);
+        return addCommand(PExpireAt, args);
     }
 
     /**
@@ -2069,7 +2069,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch expiretime(String key) {
-        return addCommand(CommandType.EXPIRETIME, key);
+        return addCommand(ExpireTime, key);
     }
 
     /**
@@ -2080,7 +2080,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch expiretime(GlideString key) {
-        return addCommand(CommandType.EXPIRETIME, key.toString());
+        return addCommand(ExpireTime, key.toString());
     }
 
     /**
@@ -2091,7 +2091,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch pexpiretime(String key) {
-        return addCommand(CommandType.PEXPIRETIME, key);
+        return addCommand(PExpireTime, key);
     }
 
     /**
@@ -2102,7 +2102,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch pexpiretime(GlideString key) {
-        return addCommand(CommandType.PEXPIRETIME, key.toString());
+        return addCommand(PExpireTime, key.toString());
     }
 
     /**
@@ -2114,7 +2114,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch copy(String source, String destination) {
-        return addCommand(CommandType.COPY, source, destination);
+        return addCommand(Copy, source, destination);
     }
 
     /**
@@ -2126,7 +2126,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch copy(GlideString source, GlideString destination) {
-        return addCommand(CommandType.COPY, source.toString(), destination.toString());
+        return addCommand(Copy, source.toString(), destination.toString());
     }
 
     /**
@@ -2138,7 +2138,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch publish(String message, String channel) {
-        return addCommand(CommandType.PUBLISH, message, channel);
+        return addCommand(Publish, message, channel);
     }
 
     /**
@@ -2150,7 +2150,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch publish(GlideString message, GlideString channel) {
-        return addCommand(CommandType.PUBLISH, message.toString(), channel.toString());
+        return addCommand(Publish, message.toString(), channel.toString());
     }
 
     /**
@@ -2164,7 +2164,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch publish(String message, String channel, boolean sharded) {
-        CommandType commandType = sharded ? CommandType.SPUBLISH : CommandType.PUBLISH;
+        String commandType = sharded ? SPublish : Publish;
         return addCommand(commandType, message, channel);
     }
 
@@ -2179,7 +2179,7 @@ public class Batch extends BaseBatch<Batch> {
      * @return This batch instance for method chaining.
      */
     public Batch publish(GlideString message, GlideString channel, boolean sharded) {
-        CommandType commandType = sharded ? CommandType.SPUBLISH : CommandType.PUBLISH;
+        String commandType = sharded ? SPublish : Publish;
         return addCommand(commandType, message.toString(), channel.toString());
     }
 }

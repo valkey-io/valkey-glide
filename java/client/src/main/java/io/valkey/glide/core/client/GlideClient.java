@@ -1,7 +1,6 @@
 package io.valkey.glide.core.client;
 
 import io.valkey.glide.core.commands.Command;
-import io.valkey.glide.core.commands.CommandType;
 import java.lang.ref.Cleaner;
 import java.util.Arrays;
 import java.util.List;
@@ -177,7 +176,7 @@ public class GlideClient implements AutoCloseable {
             }
 
             long handle = nativeClientHandle.get();
-            Object result = executeCommand(handle, command.getType().getCommandName(), byteArgs);
+            Object result = executeCommand(handle, command.getType(), byteArgs);
             return CompletableFuture.completedFuture(result);
         } catch (Exception e) {
             CompletableFuture<Object> future = new CompletableFuture<>();
@@ -739,7 +738,7 @@ public class GlideClient implements AutoCloseable {
 
             long handle = nativeClientHandle.get();
             // Pass Route object directly to JNI - conversion happens in Rust
-            Object result = executeCommandWithRoute(handle, command.getType().getCommandName(), byteArgs, route);
+            Object result = executeCommandWithRoute(handle, command.getType(), byteArgs, route);
             return CompletableFuture.completedFuture(result);
         } catch (Exception e) {
             CompletableFuture<Object> future = new CompletableFuture<>();

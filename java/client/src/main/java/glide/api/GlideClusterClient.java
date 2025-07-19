@@ -24,12 +24,13 @@ import glide.api.models.commands.scan.ScanOptions;
 import glide.api.models.commands.scan.ClusterScanCursor;
 import glide.api.models.commands.ScoreFilter;
 import glide.api.models.Response;
-import io.valkey.glide.core.commands.CommandType;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+
+import static glide.api.models.commands.RequestType.*;
 
 /**
  * Glide cluster client for connecting to a Valkey/Redis cluster.
@@ -52,14 +53,14 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             @Override
             public CompletableFuture<ClusterValue<String>> info() {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    CommandType.INFO))
+                    Info))
                     .thenApply(result -> ClusterValue.ofSingleValue(result.toString()));
             }
 
             @Override
             public CompletableFuture<ClusterValue<String>> info(Route route) {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    CommandType.INFO), route)
+                    Info), route)
                     .thenApply(result -> {
                         if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
                             return ClusterValue.ofSingleValue(result.toString());
@@ -83,7 +84,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
                     sectionNames[i] = sections[i].name().toLowerCase();
                 }
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    CommandType.INFO, sectionNames))
+                    Info, sectionNames))
                     .thenApply(result -> ClusterValue.ofSingleValue(result.toString()));
             }
 
@@ -94,7 +95,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
                     sectionNames[i] = sections[i].name().toLowerCase();
                 }
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    CommandType.INFO, sectionNames), route)
+                    Info, sectionNames), route)
                     .thenApply(result -> {
                         if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
                             return ClusterValue.ofSingleValue(result.toString());
@@ -114,35 +115,35 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             @Override
             public CompletableFuture<String> configRewrite() {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    CommandType.CONFIG_REWRITE))
+                    ConfigRewrite))
                     .thenApply(result -> result.toString());
             }
 
             @Override
             public CompletableFuture<String> configRewrite(Route route) {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    CommandType.CONFIG_REWRITE), route)
+                    ConfigRewrite), route)
                     .thenApply(result -> result.toString());
             }
 
             @Override
             public CompletableFuture<String> configResetStat() {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    CommandType.CONFIG_RESETSTAT))
+                    ConfigResetStat))
                     .thenApply(result -> result.toString());
             }
 
             @Override
             public CompletableFuture<String> configResetStat(Route route) {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    CommandType.CONFIG_RESETSTAT), route)
+                    ConfigResetStat), route)
                     .thenApply(result -> result.toString());
             }
 
             @Override
             public CompletableFuture<Map<String, String>> configGet(String[] parameters) {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    CommandType.CONFIG_GET, parameters))
+                    ConfigGet, parameters))
                     .thenApply(result -> {
                         Map<String, String> config = new java.util.HashMap<>();
                         if (result instanceof Object[]) {
@@ -158,7 +159,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             @Override
             public CompletableFuture<ClusterValue<Map<String, String>>> configGet(String[] parameters, Route route) {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    CommandType.CONFIG_GET, parameters), route)
+                    ConfigGet, parameters), route)
                     .thenApply(result -> {
                         if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
                             Map<String, String> config = new java.util.HashMap<>();
@@ -207,7 +208,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
                     args[i++] = entry.getValue();
                 }
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    CommandType.CONFIG_SET, args))
+                    ConfigSet, args))
                     .thenApply(result -> result.toString());
             }
 
@@ -220,14 +221,14 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
                     args[i++] = entry.getValue();
                 }
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    CommandType.CONFIG_SET, args), route)
+                    ConfigSet, args), route)
                     .thenApply(result -> result.toString());
             }
 
             @Override
             public CompletableFuture<String[]> time() {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    CommandType.TIME))
+                    Time))
                     .thenApply(result -> {
                         if (result instanceof Object[]) {
                             Object[] objects = (Object[]) result;
@@ -244,7 +245,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             @Override
             public CompletableFuture<ClusterValue<String[]>> time(Route route) {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    CommandType.TIME), route)
+                    Time), route)
                     .thenApply(result -> {
                         if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
                             if (result instanceof Object[]) {
@@ -289,14 +290,14 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             @Override
             public CompletableFuture<Long> lastsave() {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    CommandType.LASTSAVE))
+                    LastSave))
                     .thenApply(result -> Long.parseLong(result.toString()));
             }
 
             @Override
             public CompletableFuture<ClusterValue<Long>> lastsave(Route route) {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    CommandType.LASTSAVE), route)
+                    LastSave), route)
                     .thenApply(result -> {
                         if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
                             return ClusterValue.ofSingleValue(Long.parseLong(result.toString()));
@@ -316,63 +317,63 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             @Override
             public CompletableFuture<String> flushall() {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    CommandType.FLUSHALL))
+                    FlushAll))
                     .thenApply(result -> result.toString());
             }
 
             @Override
             public CompletableFuture<String> flushall(FlushMode mode) {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    CommandType.FLUSHALL, mode.name()))
+                    FlushAll, mode.name()))
                     .thenApply(result -> result.toString());
             }
 
             @Override
             public CompletableFuture<String> flushall(Route route) {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    CommandType.FLUSHALL), route)
+                    FlushAll), route)
                     .thenApply(result -> result.toString());
             }
 
             @Override
             public CompletableFuture<String> flushall(FlushMode mode, Route route) {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    CommandType.FLUSHALL, mode.name()), route)
+                    FlushAll, mode.name()), route)
                     .thenApply(result -> result.toString());
             }
 
             @Override
             public CompletableFuture<String> flushdb() {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    CommandType.FLUSHDB))
+                    FlushDB))
                     .thenApply(result -> result.toString());
             }
 
             @Override
             public CompletableFuture<String> flushdb(FlushMode mode) {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    CommandType.FLUSHDB, mode.name()))
+                    FlushDB, mode.name()))
                     .thenApply(result -> result.toString());
             }
 
             @Override
             public CompletableFuture<String> flushdb(Route route) {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    CommandType.FLUSHDB), route)
+                    FlushDB), route)
                     .thenApply(result -> result.toString());
             }
 
             @Override
             public CompletableFuture<String> flushdb(FlushMode mode, Route route) {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    CommandType.FLUSHDB, mode.name()), route)
+                    FlushDB, mode.name()), route)
                     .thenApply(result -> result.toString());
             }
 
             @Override
             public CompletableFuture<String> lolwut() {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    CommandType.LOLWUT))
+                    Lolwut))
                     .thenApply(result -> result.toString());
             }
 
@@ -383,14 +384,14 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
                     args[i] = String.valueOf(parameters[i]);
                 }
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    CommandType.LOLWUT, args))
+                    Lolwut, args))
                     .thenApply(result -> result.toString());
             }
 
             @Override
             public CompletableFuture<String> lolwut(int version) {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    CommandType.LOLWUT, "VERSION", String.valueOf(version)))
+                    Lolwut, "VERSION", String.valueOf(version)))
                     .thenApply(result -> result.toString());
             }
 
@@ -403,14 +404,14 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
                     args[i + 2] = String.valueOf(parameters[i]);
                 }
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    CommandType.LOLWUT, args))
+                    Lolwut, args))
                     .thenApply(result -> result.toString());
             }
 
             @Override
             public CompletableFuture<ClusterValue<String>> lolwut(Route route) {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    CommandType.LOLWUT))
+                    Lolwut))
                     .thenApply(result -> ClusterValue.ofSingleValue(result.toString()));
             }
 
@@ -421,14 +422,14 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
                     args[i] = String.valueOf(parameters[i]);
                 }
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    CommandType.LOLWUT, args))
+                    Lolwut, args))
                     .thenApply(result -> ClusterValue.ofSingleValue(result.toString()));
             }
 
             @Override
             public CompletableFuture<ClusterValue<String>> lolwut(int version, Route route) {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    CommandType.LOLWUT, "VERSION", String.valueOf(version)))
+                    Lolwut, "VERSION", String.valueOf(version)))
                     .thenApply(result -> ClusterValue.ofSingleValue(result.toString()));
             }
 
@@ -441,21 +442,21 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
                     args[i + 2] = String.valueOf(parameters[i]);
                 }
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    CommandType.LOLWUT, args))
+                    Lolwut, args))
                     .thenApply(result -> ClusterValue.ofSingleValue(result.toString()));
             }
 
             @Override
             public CompletableFuture<Long> dbsize() {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    CommandType.DBSIZE))
+                    DBSize))
                     .thenApply(result -> Long.parseLong(result.toString()));
             }
 
             @Override
             public CompletableFuture<Long> dbsize(Route route) {
                 return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                    CommandType.DBSIZE))
+                    DBSize))
                     .thenApply(result -> Long.parseLong(result.toString()));
             }
         });
@@ -577,18 +578,14 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             return CompletableFuture.completedFuture(ClusterValue.ofSingleValue(null));
         }
 
-        // Try to map the command name to a CommandType
-        try {
-            CommandType commandType = CommandType.valueOf(args[0].toUpperCase());
-            String[] commandArgs = new String[args.length - 1];
-            System.arraycopy(args, 1, commandArgs, 0, args.length - 1);
-            return executeCommand(commandType, commandArgs)
-                .thenApply(ClusterValue::ofSingleValue);
-        } catch (IllegalArgumentException e) {
-            // If command is not in enum, execute as raw command using executeCustomCommand
-            return executeCustomCommand(args)
-                .thenApply(ClusterValue::ofSingleValue);
-        }
+        // Execute as raw command since we no longer use CommandType enum
+        String commandName = args[0];
+        String[] commandArgs = new String[args.length - 1];
+        System.arraycopy(args, 1, commandArgs, 0, args.length - 1);
+        
+        // Execute using executeCustomCommand for cluster operations
+        return executeCustomCommand(args)
+            .thenApply(ClusterValue::ofSingleValue);
     }
 
     /**
@@ -637,7 +634,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return A CompletableFuture containing a piece of generative computer art along with the current Valkey version.
      */
     public CompletableFuture<String> lolwut() {
-        return executeCommand(CommandType.LOLWUT)
+        return executeCommand(Lolwut)
             .thenApply(result -> result.toString());
     }
 
@@ -653,7 +650,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
         String[] args = Arrays.stream(parameters)
             .mapToObj(String::valueOf)
             .toArray(String[]::new);
-        return executeCommand(CommandType.LOLWUT, args)
+        return executeCommand(Lolwut, args)
             .thenApply(result -> result.toString());
     }
 
@@ -666,7 +663,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return A CompletableFuture containing a piece of generative computer art along with the current Valkey version.
      */
     public CompletableFuture<String> lolwut(int version) {
-        return executeCommand(CommandType.LOLWUT, VERSION_VALKEY_API, String.valueOf(version))
+        return executeCommand(Lolwut, VERSION_VALKEY_API, String.valueOf(version))
             .thenApply(result -> result.toString());
     }
 
@@ -686,7 +683,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
         for (int param : parameters) {
             args.add(String.valueOf(param));
         }
-        return executeCommand(CommandType.LOLWUT, args.toArray(new String[0]))
+        return executeCommand(Lolwut, args.toArray(new String[0]))
             .thenApply(result -> result.toString());
     }
 
@@ -699,7 +696,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      */
     public CompletableFuture<ClusterValue<String>> lolwut(Route route) {
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CommandType.LOLWUT), route)
+            Lolwut), route)
             .thenApply(result -> {
                 if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
                     return ClusterValue.ofSingleValue(result.toString());
@@ -729,7 +726,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             .mapToObj(String::valueOf)
             .toArray(String[]::new);
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CommandType.LOLWUT, args), route)
+            Lolwut, args), route)
             .thenApply(result -> {
                 if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
                     return ClusterValue.ofSingleValue(result.toString());
@@ -756,7 +753,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      */
     public CompletableFuture<ClusterValue<String>> lolwut(int version, Route route) {
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CommandType.LOLWUT, VERSION_VALKEY_API, String.valueOf(version)), route)
+            Lolwut, VERSION_VALKEY_API, String.valueOf(version)), route)
             .thenApply(result -> {
                 if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
                     return ClusterValue.ofSingleValue(result.toString());
@@ -790,7 +787,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             args.add(String.valueOf(param));
         }
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CommandType.LOLWUT, args.toArray(new String[0])), route)
+            Lolwut, args.toArray(new String[0])), route)
             .thenApply(result -> {
                 if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
                     return ClusterValue.ofSingleValue(result.toString());
@@ -820,7 +817,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
     public CompletableFuture<String> ping(String message, Route route) {
         // Use the route parameter to target specific nodes
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CommandType.PING, message), route)
+            Ping, message), route)
             .thenApply(result -> result.toString());
     }
 
@@ -834,7 +831,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
     public CompletableFuture<GlideString> ping(GlideString message, Route route) {
         // Use the route parameter to target specific nodes
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CommandType.PING, message.toString()), route)
+            Ping, message.toString()), route)
             .thenApply(result -> GlideString.of(result.toString()));
     }
 
@@ -847,7 +844,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
     public CompletableFuture<String> ping(Route route) {
         // Use the route parameter to target specific nodes
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CommandType.PING), route)
+            Ping), route)
             .thenApply(result -> result.toString());
     }
 
@@ -861,7 +858,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      */
     public CompletableFuture<ClusterValue<Long>> clientId(Route route) {
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CommandType.CLIENT_ID), route)
+            ClientId), route)
             .thenApply(result -> {
                 if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
                     return ClusterValue.ofSingleValue(Long.parseLong(result.toString()));
@@ -886,7 +883,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      */
     public CompletableFuture<ClusterValue<String>> clientGetName(Route route) {
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CommandType.CLIENT_GETNAME), route)
+            ClientGetName), route)
             .thenApply(result -> {
                 if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
                     return ClusterValue.ofSingleValue(result == null ? null : result.toString());
@@ -912,7 +909,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      */
     public CompletableFuture<ClusterValue<Map<String, String>>> configGet(String[] parameters, Route route) {
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CommandType.CONFIG_GET, parameters), route)
+            ConfigGet, parameters), route)
             .thenApply(result -> {
                 if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
                     Map<String, String> config = new java.util.HashMap<>();
@@ -961,7 +958,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      */
     public CompletableFuture<ClusterValue<String>> echo(String message, Route route) {
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CommandType.ECHO, message), route)
+            Echo, message), route)
             .thenApply(result -> {
                 if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
                     return ClusterValue.ofSingleValue(result.toString());
@@ -987,7 +984,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      */
     public CompletableFuture<ClusterValue<GlideString>> echo(GlideString message, Route route) {
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CommandType.ECHO, message.toString()), route)
+            Echo, message.toString()), route)
             .thenApply(result -> {
                 if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
                     return ClusterValue.ofSingleValue(GlideString.of(result.toString()));
@@ -1028,7 +1025,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      */
     public CompletableFuture<ClusterValue<String>> functionFlush(Route route) {
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CommandType.FUNCTION_FLUSH), route)
+            FunctionFlush), route)
             .thenApply(result -> {
                 if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
                     return ClusterValue.ofSingleValue(result.toString());
@@ -1054,7 +1051,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      */
     public CompletableFuture<ClusterValue<String>> functionFlush(FlushMode flushMode, Route route) {
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CommandType.FUNCTION_FLUSH, flushMode.name()), route)
+            FunctionFlush, flushMode.name()), route)
             .thenApply(result -> {
                 if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
                     return ClusterValue.ofSingleValue(result.toString());
@@ -1165,7 +1162,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
 
     public CompletableFuture<String> functionKill(Route route) {
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CommandType.FUNCTION_KILL), route)
+            FunctionKill), route)
             .thenApply(result -> result.toString());
     }
 
@@ -1196,7 +1193,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
 
     public CompletableFuture<ClusterValue<Map<String, Map<String, Object>>>> functionStats(Route route) {
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CommandType.FUNCTION_STATS), route)
+            FunctionStats), route)
             .thenApply(result -> {
                 if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
                     return ClusterValue.ofSingleValue((Map<String, Map<String, Object>>) result);
@@ -1212,7 +1209,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
 
     public CompletableFuture<ClusterValue<Map<GlideString, Map<GlideString, Object>>>> functionStatsBinary(Route route) {
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CommandType.FUNCTION_STATS), route)
+            FunctionStats), route)
             .thenApply(result -> {
                 if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
                     return ClusterValue.ofSingleValue((Map<GlideString, Map<GlideString, Object>>) result);
@@ -1239,13 +1236,13 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
 
     public CompletableFuture<String> functionRestore(byte[] payload, Route route) {
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CommandType.FUNCTION_RESTORE, new String(payload, java.nio.charset.StandardCharsets.UTF_8)), route)
+            FunctionRestore, new String(payload, java.nio.charset.StandardCharsets.UTF_8)), route)
             .thenApply(result -> result.toString());
     }
 
     public CompletableFuture<String> functionRestore(byte[] payload, FunctionRestorePolicy policy, Route route) {
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CommandType.FUNCTION_RESTORE, new String(payload, java.nio.charset.StandardCharsets.UTF_8), policy.toString()), route)
+            FunctionRestore, new String(payload, java.nio.charset.StandardCharsets.UTF_8), policy.toString()), route)
             .thenApply(result -> result.toString());
     }
 
@@ -1264,7 +1261,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
         }
         args.add(libraryCode);
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CommandType.FUNCTION_LOAD, args.toArray(new String[0])), route)
+            FunctionLoad, args.toArray(new String[0])), route)
             .thenApply(result -> {
                 if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
                     return ClusterValue.ofSingleValue(result.toString());
@@ -1296,7 +1293,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
         }
         args.add(libraryCode.toString());
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CommandType.FUNCTION_LOAD, args.toArray(new String[0])), route)
+            FunctionLoad, args.toArray(new String[0])), route)
             .thenApply(result -> {
                 if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
                     return ClusterValue.ofSingleValue(GlideString.of(result.toString()));
@@ -1322,7 +1319,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      */
     public CompletableFuture<ClusterValue<Boolean[]>> scriptExists(String[] sha1Hashes, Route route) {
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CommandType.SCRIPT_EXISTS, sha1Hashes), route)
+            ScriptExists, sha1Hashes), route)
             .thenApply(result -> {
                 if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
                     Boolean[] booleanResult = new Boolean[sha1Hashes.length];
@@ -1370,7 +1367,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      */
     public CompletableFuture<ClusterValue<String>> scriptKill(Route route) {
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CommandType.SCRIPT_KILL), route)
+            ScriptKill), route)
             .thenApply(result -> {
                 if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
                     return ClusterValue.ofSingleValue(result.toString());
@@ -1396,7 +1393,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      */
     public CompletableFuture<ClusterValue<Object>> invokeScript(Script script, Route route) {
         // Use EVALSHA if hash exists, otherwise use EVAL
-        CommandType cmdType = script.getHash() != null ? CommandType.EVALSHA : CommandType.EVAL;
+        String cmdType = script.getHash() != null ? EvalSha : Eval;
         String scriptOrHash = script.getHash() != null ? script.getHash() : script.getCode();
         
         List<String> cmdArgs = new ArrayList<>();
@@ -1427,7 +1424,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      */
     public CompletableFuture<ClusterValue<Object>> fcall(String functionName, Route route) {
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CommandType.FCALL, functionName, "0"), route)
+            FCall, functionName, "0"), route)
             .thenApply(result -> {
                 if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
                     return ClusterValue.ofSingleValue(result);
@@ -1455,7 +1452,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
         cmdArgs.add(String.valueOf(keys.length));
         cmdArgs.addAll(Arrays.asList(keys));
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CommandType.FCALL, cmdArgs.toArray(new String[0])), route)
+            FCall, cmdArgs.toArray(new String[0])), route)
             .thenApply(result -> {
                 if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
                     return ClusterValue.ofSingleValue(result);
@@ -1485,7 +1482,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
         cmdArgs.addAll(Arrays.asList(keys));
         cmdArgs.addAll(Arrays.asList(args));
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CommandType.FCALL, cmdArgs.toArray(new String[0])), route)
+            FCall, cmdArgs.toArray(new String[0])), route)
             .thenApply(result -> {
                 if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
                     return ClusterValue.ofSingleValue(result);
@@ -1508,7 +1505,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      */
     public CompletableFuture<ClusterValue<Object>> fcallReadOnly(String functionName, Route route) {
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CommandType.FCALL_RO, functionName, "0"), route)
+            FCallReadOnly, functionName, "0"), route)
             .thenApply(result -> {
                 if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
                     return ClusterValue.ofSingleValue(result);
@@ -1536,7 +1533,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
         cmdArgs.add(String.valueOf(keys.length));
         cmdArgs.addAll(Arrays.asList(keys));
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CommandType.FCALL_RO, cmdArgs.toArray(new String[0])), route)
+            FCallReadOnly, cmdArgs.toArray(new String[0])), route)
             .thenApply(result -> {
                 if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
                     return ClusterValue.ofSingleValue(result);
@@ -1566,7 +1563,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
         cmdArgs.addAll(Arrays.asList(keys));
         cmdArgs.addAll(Arrays.asList(args));
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CommandType.FCALL_RO, cmdArgs.toArray(new String[0])), route)
+            FCallReadOnly, cmdArgs.toArray(new String[0])), route)
             .thenApply(result -> {
                 if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
                     return ClusterValue.ofSingleValue(result);
@@ -1589,7 +1586,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      */
     public CompletableFuture<ClusterValue<String>> functionDelete(String libraryName, Route route) {
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CommandType.FUNCTION_DELETE, libraryName), route)
+            FunctionDelete, libraryName), route)
             .thenApply(result -> {
                 if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
                     return ClusterValue.ofSingleValue(result.toString());
@@ -1615,7 +1612,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      */
     public CompletableFuture<ClusterValue<Object>> functionList(String libraryName, Route route) {
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CommandType.FUNCTION_LIST, "LIBRARYNAME", libraryName), route)
+            FunctionList, "LIBRARYNAME", libraryName), route)
             .thenApply(result -> {
                 if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
                     return ClusterValue.ofSingleValue(result);
@@ -1670,7 +1667,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             cmdArgs.add(arg.toString());
         }
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CommandType.FCALL, cmdArgs.toArray(new String[0])), route)
+            FCall, cmdArgs.toArray(new String[0])), route)
             .thenApply(result -> {
                 if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
                     return ClusterValue.ofSingleValue(result);
@@ -1693,7 +1690,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      */
     public CompletableFuture<ClusterValue<Object>> fcall(GlideString functionName, Route route) {
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CommandType.FCALL, functionName.toString(), "0"), route)
+            FCall, functionName.toString(), "0"), route)
             .thenApply(result -> {
                 if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
                     return ClusterValue.ofSingleValue(result);
@@ -1723,7 +1720,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             cmdArgs.add(key.toString());
         }
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CommandType.FCALL, cmdArgs.toArray(new String[0])), route)
+            FCall, cmdArgs.toArray(new String[0])), route)
             .thenApply(result -> {
                 if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
                     return ClusterValue.ofSingleValue(result);
@@ -1777,7 +1774,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             cmdArgs.add(arg.toString());
         }
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CommandType.FCALL_RO, cmdArgs.toArray(new String[0])), route)
+            FCallReadOnly, cmdArgs.toArray(new String[0])), route)
             .thenApply(result -> {
                 if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
                     return ClusterValue.ofSingleValue(result);
@@ -1807,7 +1804,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             cmdArgs.add(key.toString());
         }
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CommandType.FCALL_RO, cmdArgs.toArray(new String[0])), route)
+            FCallReadOnly, cmdArgs.toArray(new String[0])), route)
             .thenApply(result -> {
                 if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
                     return ClusterValue.ofSingleValue(result);
@@ -1855,15 +1852,11 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
         if (args.length == 0) {
             throw new IllegalArgumentException("Custom command requires at least one argument");
         }
-        CommandType commandType;
-        try {
-            commandType = CommandType.valueOf(args[0].toUpperCase());
-        } catch (IllegalArgumentException e) {
-            // For unknown commands, use a generic approach
-            String[] allArgs = new String[args.length];
-            System.arraycopy(args, 0, allArgs, 0, args.length);
-            return client.executeCommand(new io.valkey.glide.core.commands.Command(
-                CommandType.CUSTOM_COMMAND, allArgs), route)
+        // Execute as custom command since we no longer use CommandType enum
+        String[] allArgs = new String[args.length];
+        System.arraycopy(args, 0, allArgs, 0, args.length);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(
+            CustomCommand, allArgs), route)
                 .thenApply(result -> {
                     if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
                         return ClusterValue.ofSingleValue(result);
@@ -1875,22 +1868,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
                         return ClusterValue.ofSingleValue(result);
                     }
                 });
-        }
-        String[] commandArgs = new String[args.length - 1];
-        System.arraycopy(args, 1, commandArgs, 0, args.length - 1);
-        return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            commandType, commandArgs), route)
-            .thenApply(result -> {
-                if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
-                    return ClusterValue.ofSingleValue(result);
-                } else {
-                    // For multi-node routes, expect a map result
-                    if (result instanceof Map) {
-                        return ClusterValue.ofMultiValue((Map<String, Object>) result);
-                    }
-                    return ClusterValue.ofSingleValue(result);
-                }
-            });
     }
 
     /**
@@ -1919,7 +1896,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      * @return A CompletableFuture containing server info wrapped in ClusterValue
      */
     public CompletableFuture<ClusterValue<String>> clusterInfo() {
-        return super.info().thenApply(ClusterValue::ofSingleValue);
+        return info(); // Delegate to our own info() method
     }
 
     /**
@@ -1983,7 +1960,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
         }
         
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CommandType.SCAN, args.toArray(new String[0])))
+            Scan, args.toArray(new String[0])))
             .thenApply(result -> handleScanResponse(result, false));
     }
 
@@ -2011,7 +1988,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
         }
         
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CommandType.SCAN, args.toArray(new String[0])))
+            Scan, args.toArray(new String[0])))
             .thenApply(result -> handleScanResponse(result, true));
     }
 
@@ -2114,7 +2091,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      */
     public CompletableFuture<String> randomKey(Route route) {
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CommandType.RANDOMKEY), route)
+            RandomKey), route)
             .thenApply(result -> result == null ? null : result.toString());
     }
 
@@ -2126,7 +2103,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      */
     public CompletableFuture<GlideString> randomKeyBinary(Route route) {
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CommandType.RANDOMKEY), route)
+            RandomKey), route)
             .thenApply(result -> result == null ? null : GlideString.of(result.toString()));
     }
 
@@ -2277,7 +2254,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      */
     public CompletableFuture<Long> dbsize(Route route) {
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CommandType.DBSIZE), route)
+            DBSize), route)
             .thenApply(result -> {
                 if (result instanceof Number) {
                     return ((Number) result).longValue();
@@ -2306,7 +2283,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      */
     public CompletableFuture<ClusterValue<String[]>> time(Route route) {
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CommandType.TIME), route)
+            Time), route)
             .thenApply(result -> {
                 if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
                     String[] time = new String[0];
@@ -2369,7 +2346,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      */
     public CompletableFuture<ClusterValue<Long>> lastsave(Route route) {
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CommandType.LASTSAVE), route)
+            LastSave), route)
             .thenApply(result -> {
                 if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
                     return ClusterValue.ofSingleValue(Long.parseLong(result.toString()));
@@ -2418,7 +2395,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      */
     public CompletableFuture<String> flushall(Route route) {
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CommandType.FLUSHALL), route)
+            FlushAll), route)
             .thenApply(result -> result.toString());
     }
 
@@ -2432,7 +2409,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      */
     public CompletableFuture<String> flushall(FlushMode mode, Route route) {
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CommandType.FLUSHALL, mode.name()), route)
+            FlushAll, mode.name()), route)
             .thenApply(result -> result.toString());
     }
 
@@ -2468,7 +2445,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      */
     public CompletableFuture<String> flushdb(Route route) {
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CommandType.FLUSHDB), route)
+            FlushDB), route)
             .thenApply(result -> result.toString());
     }
 
@@ -2482,7 +2459,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      */
     public CompletableFuture<String> flushdb(FlushMode mode, Route route) {
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CommandType.FLUSHDB, mode.name()), route)
+            FlushDB, mode.name()), route)
             .thenApply(result -> result.toString());
     }
 
@@ -2506,7 +2483,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      */
     public CompletableFuture<String> configRewrite(Route route) {
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CommandType.CONFIG_REWRITE), route)
+            ConfigRewrite), route)
             .thenApply(result -> result.toString());
     }
 
@@ -2530,7 +2507,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      */
     public CompletableFuture<String> configResetStat(Route route) {
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CommandType.CONFIG_RESETSTAT), route)
+            ConfigResetStat), route)
             .thenApply(result -> result.toString());
     }
 
@@ -2575,7 +2552,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             args[i++] = entry.getValue();
         }
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CommandType.CONFIG_SET, args), route)
+            ConfigSet, args), route)
             .thenApply(result -> result.toString());
     }
 
@@ -2596,8 +2573,8 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             sectionStrings[i] = sections[i].name().toLowerCase();
         }
         
-        // Delegate to base info method and wrap result in ClusterValue
-        return super.info(sectionStrings).thenApply(ClusterValue::ofSingleValue);
+        // Delegate to our own info method
+        return info(sectionStrings);
     }
 
     /**
@@ -2618,7 +2595,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
         }
         
         return client.executeCommand(new io.valkey.glide.core.commands.Command(
-            CommandType.INFO, sectionStrings), route)
+            Info, sectionStrings), route)
             .thenApply(result -> {
                 if (route instanceof glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute) {
                     return ClusterValue.ofSingleValue(result.toString());
@@ -2642,7 +2619,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
         List<String> args = new ArrayList<>();
         args.add(key);
         args.addAll(Arrays.asList(elements));
-        return executeCommand(CommandType.PFADD, args.toArray(new String[0]))
+        return executeCommand(PfAdd, args.toArray(new String[0]))
             .thenApply(result -> result.equals(1) || result.equals(1L));
     }
     
@@ -2653,13 +2630,13 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
         for (GlideString element : elements) {
             args.add(element.toString());
         }
-        return executeCommand(CommandType.PFADD, args.toArray(new String[0]))
+        return executeCommand(PfAdd, args.toArray(new String[0]))
             .thenApply(result -> result.equals(1) || result.equals(1L));
     }
     
     @Override
     public CompletableFuture<Long> pfcount(String[] keys) {
-        return executeCommand(CommandType.PFCOUNT, keys)
+        return executeCommand(PfCount, keys)
             .thenApply(result -> (Long) result);
     }
     
@@ -2669,7 +2646,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
         for (int i = 0; i < keys.length; i++) {
             stringKeys[i] = keys[i].toString();
         }
-        return executeCommand(CommandType.PFCOUNT, stringKeys)
+        return executeCommand(PfCount, stringKeys)
             .thenApply(result -> (Long) result);
     }
     
@@ -2678,7 +2655,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
         List<String> args = new ArrayList<>();
         args.add(destination);
         args.addAll(Arrays.asList(sourceKeys));
-        return executeCommand(CommandType.PFMERGE, args.toArray(new String[0]))
+        return executeCommand(PfMerge, args.toArray(new String[0]))
             .thenApply(result -> result.toString());
     }
     
@@ -2689,7 +2666,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
         for (GlideString sourceKey : sourceKeys) {
             args.add(sourceKey.toString());
         }
-        return executeCommand(CommandType.PFMERGE, args.toArray(new String[0]))
+        return executeCommand(PfMerge, args.toArray(new String[0]))
             .thenApply(result -> result.toString());
     }
     
@@ -2698,7 +2675,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
     public CompletableFuture<Object[]> bzpopmax(String[] keys, double timeout) {
         List<String> args = new ArrayList<>(Arrays.asList(keys));
         args.add(String.valueOf(timeout));
-        return executeCommand(CommandType.BZPOPMAX, args.toArray(new String[0]))
+        return executeCommand(BZPopMax, args.toArray(new String[0]))
             .thenApply(result -> (Object[]) result);
     }
     
@@ -2708,14 +2685,14 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             args.add(key.toString());
         }
         args.add(String.valueOf(timeout));
-        return executeCommand(CommandType.BZPOPMAX, args.toArray(new String[0]))
+        return executeCommand(BZPopMax, args.toArray(new String[0]))
             .thenApply(result -> (Object[]) result);
     }
     
     public CompletableFuture<Object[]> bzpopmin(String[] keys, double timeout) {
         List<String> args = new ArrayList<>(Arrays.asList(keys));
         args.add(String.valueOf(timeout));
-        return executeCommand(CommandType.BZPOPMIN, args.toArray(new String[0]))
+        return executeCommand(BZPopMin, args.toArray(new String[0]))
             .thenApply(result -> (Object[]) result);
     }
     
@@ -2725,7 +2702,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             args.add(key.toString());
         }
         args.add(String.valueOf(timeout));
-        return executeCommand(CommandType.BZPOPMIN, args.toArray(new String[0]))
+        return executeCommand(BZPopMin, args.toArray(new String[0]))
             .thenApply(result -> (Object[]) result);
     }
     
@@ -2733,7 +2710,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
         List<String> args = new ArrayList<>(Arrays.asList(keys));
         args.add(String.valueOf(keys.length));
         args.add(modifier.toString());
-        return executeCommand(CommandType.ZMPOP, args.toArray(new String[0]))
+        return executeCommand(ZMPop, args.toArray(new String[0]))
             .thenApply(result -> (Map<String, Object>) result);
     }
     
@@ -2744,7 +2721,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
         }
         args.add(String.valueOf(keys.length));
         args.add(modifier.toString());
-        return executeCommand(CommandType.ZMPOP, args.toArray(new String[0]))
+        return executeCommand(ZMPop, args.toArray(new String[0]))
             .thenApply(result -> (Map<GlideString, Object>) result);
     }
     
@@ -2754,7 +2731,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
         args.add(modifier.toString());
         args.add("COUNT"); // Using literal string instead of SortedSetBaseCommands.COUNT_VALKEY_API
         args.add(String.valueOf(count));
-        return executeCommand(CommandType.ZMPOP, args.toArray(new String[0]))
+        return executeCommand(ZMPop, args.toArray(new String[0]))
             .thenApply(result -> (Map<String, Object>) result);
     }
     
@@ -2767,7 +2744,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
         args.add(modifier.toString());
         args.add("COUNT"); // Using literal string instead of SortedSetBaseCommands.COUNT_VALKEY_API
         args.add(String.valueOf(count));
-        return executeCommand(CommandType.ZMPOP, args.toArray(new String[0]))
+        return executeCommand(ZMPop, args.toArray(new String[0]))
             .thenApply(result -> (Map<GlideString, Object>) result);
     }
     
@@ -2776,7 +2753,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
         args.add(String.valueOf(keys.length));
         args.add(modifier.toString());
         args.add(String.valueOf(timeout));
-        return executeCommand(CommandType.BZMPOP, args.toArray(new String[0]))
+        return executeCommand(BZMPop, args.toArray(new String[0]))
             .thenApply(result -> (Map<String, Object>) result);
     }
     
@@ -2788,7 +2765,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
         args.add(String.valueOf(keys.length));
         args.add(modifier.toString());
         args.add(String.valueOf(timeout));
-        return executeCommand(CommandType.BZMPOP, args.toArray(new String[0]))
+        return executeCommand(BZMPop, args.toArray(new String[0]))
             .thenApply(result -> (Map<GlideString, Object>) result);
     }
     
@@ -2799,7 +2776,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
         args.add(String.valueOf(timeout));
         args.add("COUNT"); // Using literal string instead of SortedSetBaseCommands.COUNT_VALKEY_API
         args.add(String.valueOf(count));
-        return executeCommand(CommandType.BZMPOP, args.toArray(new String[0]))
+        return executeCommand(BZMPop, args.toArray(new String[0]))
             .thenApply(result -> (Map<String, Object>) result);
     }
     
@@ -2813,7 +2790,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
         args.add(String.valueOf(timeout));
         args.add("COUNT"); // Using literal string instead of SortedSetBaseCommands.COUNT_VALKEY_API
         args.add(String.valueOf(count));
-        return executeCommand(CommandType.BZMPOP, args.toArray(new String[0]))
+        return executeCommand(BZMPop, args.toArray(new String[0]))
             .thenApply(result -> (Map<GlideString, Object>) result);
     }
 
@@ -2849,7 +2826,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      */
     @Override
     public CompletableFuture<String> unwatch() {
-        return executeCommand(CommandType.UNWATCH).thenApply(response -> response.toString());
+        return executeCommand(UnWatch).thenApply(response -> response.toString());
     }
 
     /**
@@ -2861,7 +2838,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
      */
     @Override
     public CompletableFuture<String> watch(String[] keys) {
-        return executeCommand(CommandType.WATCH, keys).thenApply(response -> response.toString());
+        return executeCommand(Watch, keys).thenApply(response -> response.toString());
     }
 
     /**
@@ -2877,7 +2854,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
         for (int i = 0; i < keys.length; i++) {
             stringKeys[i] = keys[i].toString();
         }
-        return executeCommand(CommandType.WATCH, stringKeys).thenApply(response -> response.toString());
+        return executeCommand(Watch, stringKeys).thenApply(response -> response.toString());
     }
 
     /**
@@ -2891,36 +2868,93 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
     public CompletableFuture<ClusterValue<String>> unwatch(Route route) {
         // For cluster-routed commands, we need to use the route-aware method
         // This is a simplified implementation - actual routing would be handled by the cluster executor
-        return executeCommand(CommandType.UNWATCH)
+        return executeCommand(UnWatch)
             .thenApply(response -> ClusterValue.ofSingleValue(response.toString()));
+    }
+
+    // ServerManagementClusterCommands implementation - delegate to composition layer
+    @SuppressWarnings("unchecked")
+    public CompletableFuture<ClusterValue<String>> info() {
+        return serverManagement.getInfo()
+            .thenApply(result -> (ClusterValue<String>) result);
+    }
+
+    @SuppressWarnings("unchecked")
+    public CompletableFuture<ClusterValue<String>> info(String... sections) {
+        return serverManagement.getInfo(sections)
+            .thenApply(result -> (ClusterValue<String>) result);
+    }
+
+    // Cluster-specific routing methods - implement directly for now
+    // TODO Phase 2.1: Implement proper routing support
+    public CompletableFuture<ClusterValue<String>> info(Route route) {
+        // For now, use the composition layer's implementation which already has routing
+        // The ClusterServerManagement composition was created with routing support
+        return executeCommand(Info).thenApply(response -> ClusterValue.ofSingleValue(response.toString()));
+    }
+
+    public CompletableFuture<ClusterValue<String>> info(InfoOptions.Section[] sections, Route route) {
+        String[] sectionNames = new String[sections.length];
+        for (int i = 0; i < sections.length; i++) {
+            sectionNames[i] = sections[i].name().toLowerCase();
+        }
+        // TODO Phase 2.1: Implement proper routing support
+        return executeCommand(Info, sectionNames).thenApply(response -> ClusterValue.ofSingleValue(response.toString()));
+    }
+
+    // fcall overloads without Route parameters
+    public CompletableFuture<Object> fcall(String functionName, String[] args) {
+        // Delegate to route version with default routing
+        return fcall(functionName, new String[0], args, null).thenApply(ClusterValue::getSingleValue);
+    }
+
+    public CompletableFuture<Object> fcallReadOnly(String functionName, String[] args) {
+        // Delegate to route version with default routing
+        return fcallReadOnly(functionName, new String[0], args, null).thenApply(ClusterValue::getSingleValue);
+    }
+
+    public CompletableFuture<ClusterValue<Object>> fcall(GlideString functionName, GlideString[] args) {
+        String[] stringArgs = new String[args.length];
+        for (int i = 0; i < args.length; i++) {
+            stringArgs[i] = args[i].toString();
+        }
+        return fcall(functionName.toString(), stringArgs).thenApply(ClusterValue::ofSingleValue);
+    }
+
+    public CompletableFuture<ClusterValue<Object>> fcallReadOnly(GlideString functionName, GlideString[] args) {
+        String[] stringArgs = new String[args.length];
+        for (int i = 0; i < args.length; i++) {
+            stringArgs[i] = args[i].toString();
+        }
+        return fcallReadOnly(functionName.toString(), stringArgs).thenApply(ClusterValue::ofSingleValue);
     }
 
     // PubSubBaseCommands implementation
     @Override
     public CompletableFuture<String> publish(String message, String channel) {
-        return executeCommand(CommandType.PUBLISH, message, channel).thenApply(response -> "OK");
+        return executeCommand(Publish, message, channel).thenApply(response -> "OK");
     }
 
     @Override
     public CompletableFuture<String> publish(GlideString message, GlideString channel) {
-        return executeCommand(CommandType.PUBLISH, message.toString(), channel.toString()).thenApply(response -> "OK");
+        return executeCommand(Publish, message.toString(), channel.toString()).thenApply(response -> "OK");
     }
 
     @Override
     public CompletableFuture<Long> publish(String message, String channel, boolean sharded) {
-        CommandType commandType = sharded ? CommandType.SPUBLISH : CommandType.PUBLISH;
+        String commandType = sharded ? SPublish : Publish;
         return executeCommand(commandType, message, channel).thenApply(response -> Long.parseLong(response.toString()));
     }
 
     @Override
     public CompletableFuture<Long> publish(GlideString message, GlideString channel, boolean sharded) {
-        CommandType commandType = sharded ? CommandType.SPUBLISH : CommandType.PUBLISH;
+        String commandType = sharded ? SPublish : Publish;
         return executeCommand(commandType, message.toString(), channel.toString()).thenApply(response -> Long.parseLong(response.toString()));
     }
 
     @Override
     public CompletableFuture<String[]> pubsubChannels() {
-        return executeCommand(CommandType.PUBSUB_CHANNELS).thenApply(response -> {
+        return executeCommand(PubSubChannels).thenApply(response -> {
             if (response instanceof String[]) {
                 return (String[]) response;
             }
@@ -2930,7 +2964,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
 
     @Override
     public CompletableFuture<GlideString[]> pubsubChannelsBinary() {
-        return executeCommand(CommandType.PUBSUB_CHANNELS).thenApply(response -> {
+        return executeCommand(PubSubChannels).thenApply(response -> {
             if (response instanceof String[]) {
                 String[] stringArray = (String[]) response;
                 GlideString[] result = new GlideString[stringArray.length];
@@ -2945,7 +2979,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
 
     @Override
     public CompletableFuture<String[]> pubsubChannels(String pattern) {
-        return executeCommand(CommandType.PUBSUB_CHANNELS, pattern).thenApply(response -> {
+        return executeCommand(PubSubChannels, pattern).thenApply(response -> {
             if (response instanceof String[]) {
                 return (String[]) response;
             }
@@ -2955,7 +2989,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
 
     @Override
     public CompletableFuture<GlideString[]> pubsubChannels(GlideString pattern) {
-        return executeCommand(CommandType.PUBSUB_CHANNELS, pattern.toString()).thenApply(response -> {
+        return executeCommand(PubSubChannels, pattern.toString()).thenApply(response -> {
             if (response instanceof String[]) {
                 String[] stringArray = (String[]) response;
                 GlideString[] result = new GlideString[stringArray.length];
@@ -2970,12 +3004,12 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
 
     @Override
     public CompletableFuture<Long> pubsubNumPat() {
-        return executeCommand(CommandType.PUBSUB_NUMPAT).thenApply(response -> Long.parseLong(response.toString()));
+        return executeCommand(PubSubNumPat).thenApply(response -> Long.parseLong(response.toString()));
     }
 
     @Override
     public CompletableFuture<java.util.Map<String, Long>> pubsubNumSub(String[] channels) {
-        return executeCommand(CommandType.PUBSUB_NUMSUB, channels).thenApply(response -> {
+        return executeCommand(PubSubNumSub, channels).thenApply(response -> {
             java.util.Map<String, Long> result = new java.util.HashMap<>();
             if (response instanceof java.util.Map) {
                 @SuppressWarnings("unchecked")
@@ -2994,7 +3028,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
         for (int i = 0; i < channels.length; i++) {
             stringChannels[i] = channels[i].toString();
         }
-        return executeCommand(CommandType.PUBSUB_NUMSUB, stringChannels).thenApply(response -> {
+        return executeCommand(PubSubNumSub, stringChannels).thenApply(response -> {
             java.util.Map<GlideString, Long> result = new java.util.HashMap<>();
             if (response instanceof java.util.Map) {
                 @SuppressWarnings("unchecked")

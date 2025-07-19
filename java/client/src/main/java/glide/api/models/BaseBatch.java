@@ -2,10 +2,10 @@
 package glide.api.models;
 
 import io.valkey.glide.core.commands.Command;
-import io.valkey.glide.core.commands.CommandType;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import static glide.api.models.commands.RequestType.*;
 
 /**
  * Base class for all batch operations.
@@ -47,7 +47,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param args The command arguments
      * @return This batch instance for method chaining
      */
-    public T addCommand(CommandType commandType, String... args) {
+    public T addCommand(String commandType, String... args) {
         commands.add(new Command(commandType, args));
         return getThis();
     }
@@ -108,7 +108,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T set(String key, String value) {
-        return addCommand(CommandType.SET, key, value);
+        return addCommand(Set, key, value);
     }
 
     /**
@@ -121,7 +121,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T set(GlideString key, GlideString value) {
-        return addCommand(CommandType.SET, key.toString(), value.toString());
+        return addCommand(Set, key.toString(), value.toString());
     }
 
     /**
@@ -133,7 +133,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T get(String key) {
-        return addCommand(CommandType.GET, key);
+        return addCommand(Get, key);
     }
 
     /**
@@ -145,7 +145,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T get(GlideString key) {
-        return addCommand(CommandType.GET, key.toString());
+        return addCommand(Get, key.toString());
     }
 
     /**
@@ -156,7 +156,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T ping() {
-        return addCommand(CommandType.PING);
+        return addCommand(Ping);
     }
 
     /**
@@ -168,7 +168,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T ping(String message) {
-        return addCommand(CommandType.PING, message);
+        return addCommand(Ping, message);
     }
 
     /**
@@ -180,7 +180,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T ping(GlideString message) {
-        return addCommand(CommandType.PING, message.toString());
+        return addCommand(Ping, message.toString());
     }
 
     /**
@@ -191,7 +191,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T flushall() {
-        return addCommand(CommandType.FLUSHALL);
+        return addCommand(FlushAll);
     }
 
     /**
@@ -203,7 +203,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T flushall(glide.api.models.commands.FlushMode mode) {
-        return addCommand(CommandType.FLUSHALL, mode.toString());
+        return addCommand(FlushAll, mode.toString());
     }
 
     /**
@@ -219,7 +219,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
         String[] args = new String[elements.length + 1];
         args[0] = key;
         System.arraycopy(elements, 0, args, 1, elements.length);
-        return addCommand(CommandType.LPUSH, args);
+        return addCommand(LPush, args);
     }
 
     /**
@@ -237,7 +237,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
         for (int i = 0; i < elements.length; i++) {
             args[i + 1] = elements[i].toString();
         }
-        return addCommand(CommandType.LPUSH, args);
+        return addCommand(LPush, args);
     }
 
     /**
@@ -253,7 +253,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
         String[] args = new String[members.length + 1];
         args[0] = key;
         System.arraycopy(members, 0, args, 1, members.length);
-        return addCommand(CommandType.SADD, args);
+        return addCommand(SAdd, args);
     }
 
     /**
@@ -271,7 +271,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
         for (int i = 0; i < members.length; i++) {
             args[i + 1] = members[i].toString();
         }
-        return addCommand(CommandType.SADD, args);
+        return addCommand(SAdd, args);
     }
 
     /**
@@ -291,7 +291,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
             args[index++] = entry.getKey();
             args[index++] = entry.getValue();
         }
-        return addCommand(CommandType.HSET, args);
+        return addCommand(HSet, args);
     }
 
     /**
@@ -311,7 +311,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
             args[index++] = entry.getKey().toString();
             args[index++] = entry.getValue().toString();
         }
-        return addCommand(CommandType.HSET, args);
+        return addCommand(HSet, args);
     }
 
     /**
@@ -331,7 +331,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
             args[index++] = entry.getValue().toString();
             args[index++] = entry.getKey();
         }
-        return addCommand(CommandType.ZADD, args);
+        return addCommand(ZAdd, args);
     }
 
     /**
@@ -351,7 +351,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
             args[index++] = entry.getValue().toString();
             args[index++] = entry.getKey().toString();
         }
-        return addCommand(CommandType.ZADD, args);
+        return addCommand(ZAdd, args);
     }
 
     /**
@@ -367,7 +367,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
         String[] args = new String[elements.length + 1];
         args[0] = key;
         System.arraycopy(elements, 0, args, 1, elements.length);
-        return addCommand(CommandType.PFADD, args);
+        return addCommand(PfAdd, args);
     }
 
     /**
@@ -385,7 +385,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
         for (int i = 0; i < elements.length; i++) {
             args[i + 1] = elements[i].toString();
         }
-        return addCommand(CommandType.PFADD, args);
+        return addCommand(PfAdd, args);
     }
 
     /**
@@ -396,7 +396,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T customCommand(String... args) {
-        return addCommand(CommandType.CUSTOM_COMMAND, args);
+        return addCommand(CustomCommand, args);
     }
 
     /**
@@ -408,7 +408,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T exists(String... keys) {
-        return addCommand(CommandType.EXISTS, keys);
+        return addCommand(Exists, keys);
     }
 
     /**
@@ -424,7 +424,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
         for (int i = 0; i < keys.length; i++) {
             stringKeys[i] = keys[i].toString();
         }
-        return addCommand(CommandType.EXISTS, stringKeys);
+        return addCommand(Exists, stringKeys);
     }
 
     /**
@@ -436,7 +436,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T persist(String key) {
-        return addCommand(CommandType.PERSIST, key);
+        return addCommand(Persist, key);
     }
 
     /**
@@ -448,7 +448,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T persist(GlideString key) {
-        return addCommand(CommandType.PERSIST, key.toString());
+        return addCommand(Persist, key.toString());
     }
 
     /**
@@ -460,7 +460,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T type(String key) {
-        return addCommand(CommandType.TYPE, key);
+        return addCommand(Type, key);
     }
 
     /**
@@ -472,7 +472,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T type(GlideString key) {
-        return addCommand(CommandType.TYPE, key.toString());
+        return addCommand(Type, key.toString());
     }
 
     /**
@@ -484,7 +484,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T objectEncoding(String key) {
-        return addCommand(CommandType.OBJECT_ENCODING, key);
+        return addCommand(ObjectEncoding, key);
     }
 
     /**
@@ -496,7 +496,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T objectEncoding(GlideString key) {
-        return addCommand(CommandType.OBJECT_ENCODING, key.toString());
+        return addCommand(ObjectEncoding, key.toString());
     }
 
     /**
@@ -508,7 +508,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T touch(String... keys) {
-        return addCommand(CommandType.TOUCH, keys);
+        return addCommand(Touch, keys);
     }
 
     /**
@@ -524,7 +524,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
         for (int i = 0; i < keys.length; i++) {
             stringKeys[i] = keys[i].toString();
         }
-        return addCommand(CommandType.TOUCH, stringKeys);
+        return addCommand(Touch, stringKeys);
     }
 
     /**
@@ -537,7 +537,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T rename(String key, String newkey) {
-        return addCommand(CommandType.RENAME, key, newkey);
+        return addCommand(Rename, key, newkey);
     }
 
     /**
@@ -550,7 +550,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T rename(GlideString key, GlideString newkey) {
-        return addCommand(CommandType.RENAME, key.toString(), newkey.toString());
+        return addCommand(Rename, key.toString(), newkey.toString());
     }
 
     /**
@@ -563,7 +563,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T renamenx(String key, String newkey) {
-        return addCommand(CommandType.RENAMENX, key, newkey);
+        return addCommand(RenameNX, key, newkey);
     }
 
     /**
@@ -576,7 +576,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T renamenx(GlideString key, GlideString newkey) {
-        return addCommand(CommandType.RENAMENX, key.toString(), newkey.toString());
+        return addCommand(RenameNX, key.toString(), newkey.toString());
     }
 
     /**
@@ -588,7 +588,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T unlink(String... keys) {
-        return addCommand(CommandType.UNLINK, keys);
+        return addCommand(Unlink, keys);
     }
 
     /**
@@ -604,7 +604,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
         for (int i = 0; i < keys.length; i++) {
             stringKeys[i] = keys[i].toString();
         }
-        return addCommand(CommandType.UNLINK, stringKeys);
+        return addCommand(Unlink, stringKeys);
     }
 
     /**
@@ -616,7 +616,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T del(String... keys) {
-        return addCommand(CommandType.DEL, keys);
+        return addCommand(Del, keys);
     }
 
     /**
@@ -632,7 +632,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
         for (int i = 0; i < keys.length; i++) {
             stringKeys[i] = keys[i].toString();
         }
-        return addCommand(CommandType.DEL, stringKeys);
+        return addCommand(Del, stringKeys);
     }
 
     /**
@@ -644,7 +644,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T sort(String key) {
-        return addCommand(CommandType.SORT, key);
+        return addCommand(Sort, key);
     }
 
     /**
@@ -656,7 +656,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T sort(GlideString key) {
-        return addCommand(CommandType.SORT, key.toString());
+        return addCommand(Sort, key.toString());
     }
 
     /**
@@ -669,7 +669,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T sortStore(String key, String destination) {
-        return addCommand(CommandType.SORT, key, "STORE", destination);
+        return addCommand(Sort, key, "STORE", destination);
     }
 
     /**
@@ -682,7 +682,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T sortStore(GlideString key, GlideString destination) {
-        return addCommand(CommandType.SORT, key.toString(), "STORE", destination.toString());
+        return addCommand(Sort, key.toString(), "STORE", destination.toString());
     }
 
     /**
@@ -695,7 +695,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T expire(String key, long seconds) {
-        return addCommand(CommandType.EXPIRE, key, String.valueOf(seconds));
+        return addCommand(Expire, key, String.valueOf(seconds));
     }
 
     /**
@@ -708,7 +708,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T expire(GlideString key, long seconds) {
-        return addCommand(CommandType.EXPIRE, key.toString(), String.valueOf(seconds));
+        return addCommand(Expire, key.toString(), String.valueOf(seconds));
     }
 
     /**
@@ -721,7 +721,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T expireAt(String key, long timestamp) {
-        return addCommand(CommandType.EXPIREAT, key, String.valueOf(timestamp));
+        return addCommand(ExpireAt, key, String.valueOf(timestamp));
     }
 
     /**
@@ -734,7 +734,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T expireAt(GlideString key, long timestamp) {
-        return addCommand(CommandType.EXPIREAT, key.toString(), String.valueOf(timestamp));
+        return addCommand(ExpireAt, key.toString(), String.valueOf(timestamp));
     }
 
     /**
@@ -747,7 +747,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T pexpire(String key, long milliseconds) {
-        return addCommand(CommandType.PEXPIRE, key, String.valueOf(milliseconds));
+        return addCommand(PExpire, key, String.valueOf(milliseconds));
     }
 
     /**
@@ -760,7 +760,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T pexpire(GlideString key, long milliseconds) {
-        return addCommand(CommandType.PEXPIRE, key.toString(), String.valueOf(milliseconds));
+        return addCommand(PExpire, key.toString(), String.valueOf(milliseconds));
     }
 
     /**
@@ -773,7 +773,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T pexpireAt(String key, long timestamp) {
-        return addCommand(CommandType.PEXPIREAT, key, String.valueOf(timestamp));
+        return addCommand(PExpireAt, key, String.valueOf(timestamp));
     }
 
     /**
@@ -786,7 +786,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T pexpireAt(GlideString key, long timestamp) {
-        return addCommand(CommandType.PEXPIREAT, key.toString(), String.valueOf(timestamp));
+        return addCommand(PExpireAt, key.toString(), String.valueOf(timestamp));
     }
 
     /**
@@ -798,7 +798,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T ttl(String key) {
-        return addCommand(CommandType.TTL, key);
+        return addCommand(TTL, key);
     }
 
     /**
@@ -810,7 +810,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T ttl(GlideString key) {
-        return addCommand(CommandType.TTL, key.toString());
+        return addCommand(TTL, key.toString());
     }
 
     /**
@@ -824,7 +824,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T lrange(String key, long start, long end) {
-        return addCommand(CommandType.LRANGE, key, String.valueOf(start), String.valueOf(end));
+        return addCommand(LRange, key, String.valueOf(start), String.valueOf(end));
     }
 
     /**
@@ -838,7 +838,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T lrange(GlideString key, long start, long end) {
-        return addCommand(CommandType.LRANGE, key.toString(), String.valueOf(start), String.valueOf(end));
+        return addCommand(LRange, key.toString(), String.valueOf(start), String.valueOf(end));
     }
 
     /**
@@ -853,9 +853,9 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     
     public T copy(String source, String destination, boolean replace) {
         if (replace) {
-            return addCommand(CommandType.COPY, source, destination, "REPLACE");
+            return addCommand(Copy, source, destination, "REPLACE");
         } else {
-            return addCommand(CommandType.COPY, source, destination);
+            return addCommand(Copy, source, destination);
         }
     }
 
@@ -871,9 +871,9 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     
     public T copy(GlideString source, GlideString destination, boolean replace) {
         if (replace) {
-            return addCommand(CommandType.COPY, source.toString(), destination.toString(), "REPLACE");
+            return addCommand(Copy, source.toString(), destination.toString(), "REPLACE");
         } else {
-            return addCommand(CommandType.COPY, source.toString(), destination.toString());
+            return addCommand(Copy, source.toString(), destination.toString());
         }
     }
 
@@ -889,7 +889,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T functionFlush(glide.api.models.commands.FlushMode mode) {
-        return addCommand(CommandType.FUNCTION_FLUSH, mode.toString());
+        return addCommand(FunctionFlush, mode.toString());
     }
 
     /**
@@ -900,7 +900,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T functionFlush() {
-        return addCommand(CommandType.FUNCTION_FLUSH);
+        return addCommand(FunctionFlush);
     }
 
     /**
@@ -911,7 +911,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T randomKey() {
-        return addCommand(CommandType.RANDOMKEY);
+        return addCommand(RandomKey);
     }
 
     /**
@@ -924,7 +924,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T lcs(String key1, String key2) {
-        return addCommand(CommandType.LCS, key1, key2);
+        return addCommand(LCS, key1, key2);
     }
 
     /**
@@ -937,7 +937,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T lcs(GlideString key1, GlideString key2) {
-        return addCommand(CommandType.LCS, key1.toString(), key2.toString());
+        return addCommand(LCS, key1.toString(), key2.toString());
     }
 
     /**
@@ -949,7 +949,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T getex(String key) {
-        return addCommand(CommandType.GETEX, key);
+        return addCommand(GetEx, key);
     }
 
     /**
@@ -962,7 +962,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T getex(String key, glide.api.models.commands.GetExOptions options) {
-        return addCommand(CommandType.GETEX, key, options.toString());
+        return addCommand(GetEx, key, options.toString());
     }
 
     /**
@@ -975,7 +975,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T hget(String key, String field) {
-        return addCommand(CommandType.HGET, key, field);
+        return addCommand(HGet, key, field);
     }
 
     /**
@@ -988,7 +988,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T hget(GlideString key, GlideString field) {
-        return addCommand(CommandType.HGET, key.toString(), field.toString());
+        return addCommand(HGet, key.toString(), field.toString());
     }
 
     /**
@@ -1000,7 +1000,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T llen(String key) {
-        return addCommand(CommandType.LLEN, key);
+        return addCommand(LLen, key);
     }
 
     /**
@@ -1012,7 +1012,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T llen(GlideString key) {
-        return addCommand(CommandType.LLEN, key.toString());
+        return addCommand(LLen, key.toString());
     }
 
     /**
@@ -1024,7 +1024,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T echo(String message) {
-        return addCommand(CommandType.ECHO, message);
+        return addCommand(Echo, message);
     }
 
     /**
@@ -1036,7 +1036,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T echo(GlideString message) {
-        return addCommand(CommandType.ECHO, message.toString());
+        return addCommand(Echo, message.toString());
     }
 
     /**
@@ -1048,7 +1048,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T scard(String key) {
-        return addCommand(CommandType.SCARD, key);
+        return addCommand(SCard, key);
     }
 
     /**
@@ -1060,7 +1060,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T scard(GlideString key) {
-        return addCommand(CommandType.SCARD, key.toString());
+        return addCommand(SCard, key.toString());
     }
 
     /**
@@ -1076,7 +1076,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
         String[] args = new String[members.length + 1];
         args[0] = key;
         System.arraycopy(members, 0, args, 1, members.length);
-        return addCommand(CommandType.SREM, args);
+        return addCommand(SRem, args);
     }
 
     /**
@@ -1094,7 +1094,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
         for (int i = 0; i < members.length; i++) {
             args[i + 1] = members[i].toString();
         }
-        return addCommand(CommandType.SREM, args);
+        return addCommand(SRem, args);
     }
 
     /**
@@ -1107,7 +1107,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T zrank(String key, String member) {
-        return addCommand(CommandType.ZRANK, key, member);
+        return addCommand(ZRank, key, member);
     }
 
     /**
@@ -1120,7 +1120,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T zrank(GlideString key, GlideString member) {
-        return addCommand(CommandType.ZRANK, key.toString(), member.toString());
+        return addCommand(ZRank, key.toString(), member.toString());
     }
 
     /**
@@ -1132,7 +1132,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T bitcount(String key) {
-        return addCommand(CommandType.BITCOUNT, key);
+        return addCommand(BitCount, key);
     }
 
     /**
@@ -1144,7 +1144,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T bitcount(GlideString key) {
-        return addCommand(CommandType.BITCOUNT, key.toString());
+        return addCommand(BitCount, key.toString());
     }
 
     /**
@@ -1159,7 +1159,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T bitcount(String key, int start, int end, glide.api.models.commands.bitmap.BitmapIndexType indexType) {
-        return addCommand(CommandType.BITCOUNT, key, String.valueOf(start), String.valueOf(end), indexType.toString());
+        return addCommand(BitCount, key, String.valueOf(start), String.valueOf(end), indexType.toString());
     }
 
     /**
@@ -1171,7 +1171,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T sintercard(String... keys) {
-        return addCommand(CommandType.SINTERCARD, keys);
+        return addCommand(SInterCard, keys);
     }
 
     /**
@@ -1187,7 +1187,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
         for (int i = 0; i < keys.length; i++) {
             stringKeys[i] = keys[i].toString();
         }
-        return addCommand(CommandType.SINTERCARD, stringKeys);
+        return addCommand(SInterCard, stringKeys);
     }
 
     /**
@@ -1199,7 +1199,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T pfcount(String... keys) {
-        return addCommand(CommandType.PFCOUNT, keys);
+        return addCommand(PfCount, keys);
     }
 
     /**
@@ -1215,7 +1215,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
         for (int i = 0; i < keys.length; i++) {
             stringKeys[i] = keys[i].toString();
         }
-        return addCommand(CommandType.PFCOUNT, stringKeys);
+        return addCommand(PfCount, stringKeys);
     }
 
     /**
@@ -1233,7 +1233,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
             args[index++] = entry.getKey();
             args[index++] = entry.getValue();
         }
-        return addCommand(CommandType.CONFIG_SET, args);
+        return addCommand(ConfigSet, args);
     }
 
     /**
@@ -1255,7 +1255,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
             args[index++] = entry.getKey();
             args[index++] = entry.getValue();
         }
-        return addCommand(CommandType.XADD, args);
+        return addCommand(XAdd, args);
     }
 
     /**
@@ -1273,7 +1273,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
         args[0] = key;
         args[1] = groupName;
         System.arraycopy(ids, 0, args, 2, ids.length);
-        return addCommand(CommandType.XACK, args);
+        return addCommand(XAck, args);
     }
 
     /**
@@ -1289,7 +1289,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T xautoclaim(String key, String groupName, String consumerName, long minIdleTime, String start) {
-        return addCommand(CommandType.XAUTOCLAIM, key, groupName, consumerName, String.valueOf(minIdleTime), start);
+        return addCommand(XAutoClaim, key, groupName, consumerName, String.valueOf(minIdleTime), start);
     }
 
     /**
@@ -1305,7 +1305,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
         String[] args = new String[keys.length + 1];
         System.arraycopy(keys, 0, args, 0, keys.length);
         args[keys.length] = String.valueOf(timeout);
-        return addCommand(CommandType.BZPOPMIN, args);
+        return addCommand(BZPopMin, args);
     }
 
     /**
@@ -1317,7 +1317,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T getdel(String key) {
-        return addCommand(CommandType.GETDEL, key);
+        return addCommand(GetDel, key);
     }
 
     /**
@@ -1329,7 +1329,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T getdel(GlideString key) {
-        return addCommand(CommandType.GETDEL, key.toString());
+        return addCommand(GetDel, key.toString());
     }
 
     /**
@@ -1342,7 +1342,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T lcsLen(String key1, String key2) {
-        return addCommand(CommandType.LCS, key1, key2, "LEN");
+        return addCommand(LCS, key1, key2, "LEN");
     }
 
     /**
@@ -1355,7 +1355,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T lcsLen(GlideString key1, GlideString key2) {
-        return addCommand(CommandType.LCS, key1.toString(), key2.toString(), "LEN");
+        return addCommand(LCS, key1.toString(), key2.toString(), "LEN");
     }
 
     /**
@@ -1367,7 +1367,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T hlen(String key) {
-        return addCommand(CommandType.HLEN, key);
+        return addCommand(HLen, key);
     }
 
     /**
@@ -1379,7 +1379,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T hlen(GlideString key) {
-        return addCommand(CommandType.HLEN, key.toString());
+        return addCommand(HLen, key.toString());
     }
 
     /**
@@ -1393,7 +1393,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T expire(String key, int seconds, glide.api.models.commands.ExpireOptions options) {
-        return addCommand(CommandType.EXPIRE, key, String.valueOf(seconds), options.toString());
+        return addCommand(Expire, key, String.valueOf(seconds), options.toString());
     }
 
     /**
@@ -1407,7 +1407,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T expire(GlideString key, int seconds, glide.api.models.commands.ExpireOptions options) {
-        return addCommand(CommandType.EXPIRE, key.toString(), String.valueOf(seconds), options.toString());
+        return addCommand(Expire, key.toString(), String.valueOf(seconds), options.toString());
     }
 
     /**
@@ -1421,7 +1421,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T expireAt(String key, int timestamp, glide.api.models.commands.ExpireOptions options) {
-        return addCommand(CommandType.EXPIREAT, key, String.valueOf(timestamp), options.toString());
+        return addCommand(ExpireAt, key, String.valueOf(timestamp), options.toString());
     }
 
     /**
@@ -1435,7 +1435,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T expireAt(GlideString key, int timestamp, glide.api.models.commands.ExpireOptions options) {
-        return addCommand(CommandType.EXPIREAT, key.toString(), String.valueOf(timestamp), options.toString());
+        return addCommand(ExpireAt, key.toString(), String.valueOf(timestamp), options.toString());
     }
 
     /**
@@ -1449,7 +1449,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T set(String key, String value, glide.api.models.commands.SetOptions options) {
-        return addCommand(CommandType.SET, key, value, options.toString());
+        return addCommand(Set, key, value, options.toString());
     }
 
     /**
@@ -1463,7 +1463,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T set(GlideString key, GlideString value, glide.api.models.commands.SetOptions options) {
-        return addCommand(CommandType.SET, key.toString(), value.toString(), options.toString());
+        return addCommand(Set, key.toString(), value.toString(), options.toString());
     }
 
     /**
@@ -1476,7 +1476,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T lcsIdx(String key1, String key2) {
-        return addCommand(CommandType.LCS, key1, key2, "IDX");
+        return addCommand(LCS, key1, key2, "IDX");
     }
 
     /**
@@ -1489,7 +1489,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T lcsIdx(GlideString key1, GlideString key2) {
-        return addCommand(CommandType.LCS, key1.toString(), key2.toString(), "IDX");
+        return addCommand(LCS, key1.toString(), key2.toString(), "IDX");
     }
 
     /**
@@ -1507,7 +1507,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
         commandArgs[0] = function;
         System.arraycopy(keys, 0, commandArgs, 1, keys.length);
         System.arraycopy(args, 0, commandArgs, 1 + keys.length, args.length);
-        return addCommand(CommandType.FCALL, commandArgs);
+        return addCommand(FCall, commandArgs);
     }
 
     /**
@@ -1525,7 +1525,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
         commandArgs[0] = function;
         System.arraycopy(keys, 0, commandArgs, 1, keys.length);
         System.arraycopy(args, 0, commandArgs, 1 + keys.length, args.length);
-        return addCommand(CommandType.FCALL_RO, commandArgs);
+        return addCommand(FCallReadOnly, commandArgs);
     }
 
     /**
@@ -1537,7 +1537,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T strlen(String key) {
-        return addCommand(CommandType.STRLEN, key);
+        return addCommand(Strlen, key);
     }
 
     /**
@@ -1549,7 +1549,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T strlen(GlideString key) {
-        return addCommand(CommandType.STRLEN, key.toString());
+        return addCommand(Strlen, key.toString());
     }
 
     /**
@@ -1562,7 +1562,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T append(String key, String value) {
-        return addCommand(CommandType.APPEND, key, value);
+        return addCommand(Append, key, value);
     }
 
     /**
@@ -1575,7 +1575,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T append(GlideString key, GlideString value) {
-        return addCommand(CommandType.APPEND, key.toString(), value.toString());
+        return addCommand(Append, key.toString(), value.toString());
     }
 
     /**
@@ -1593,7 +1593,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
             args[i++] = entry.getKey();
             args[i++] = entry.getValue();
         }
-        return addCommand(CommandType.MSET, args);
+        return addCommand(MSet, args);
     }
 
     /**
@@ -1611,7 +1611,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
             args[i++] = entry.getKey().toString();
             args[i++] = entry.getValue().toString();
         }
-        return addCommand(CommandType.MSET, args);
+        return addCommand(MSet, args);
     }
 
     /**
@@ -1623,7 +1623,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T mget(String[] keys) {
-        return addCommand(CommandType.MGET, keys);
+        return addCommand(MGet, keys);
     }
 
     /**
@@ -1639,7 +1639,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
         for (int i = 0; i < keys.length; i++) {
             stringKeys[i] = keys[i].toString();
         }
-        return addCommand(CommandType.MGET, stringKeys);
+        return addCommand(MGet, stringKeys);
     }
 
     /**
@@ -1651,7 +1651,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T incr(String key) {
-        return addCommand(CommandType.INCR, key);
+        return addCommand(Incr, key);
     }
 
     /**
@@ -1663,7 +1663,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T incr(GlideString key) {
-        return addCommand(CommandType.INCR, key.toString());
+        return addCommand(Incr, key.toString());
     }
 
     /**
@@ -1676,7 +1676,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T incrBy(String key, long amount) {
-        return addCommand(CommandType.INCRBY, key, String.valueOf(amount));
+        return addCommand(IncrBy, key, String.valueOf(amount));
     }
 
     /**
@@ -1689,7 +1689,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T incrBy(GlideString key, long amount) {
-        return addCommand(CommandType.INCRBY, key.toString(), String.valueOf(amount));
+        return addCommand(IncrBy, key.toString(), String.valueOf(amount));
     }
 
     /**
@@ -1701,7 +1701,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T decr(String key) {
-        return addCommand(CommandType.DECR, key);
+        return addCommand(Decr, key);
     }
 
     /**
@@ -1713,7 +1713,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T decr(GlideString key) {
-        return addCommand(CommandType.DECR, key.toString());
+        return addCommand(Decr, key.toString());
     }
 
     /**
@@ -1726,7 +1726,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T decrBy(String key, long amount) {
-        return addCommand(CommandType.DECRBY, key, String.valueOf(amount));
+        return addCommand(DecrBy, key, String.valueOf(amount));
     }
 
     /**
@@ -1739,6 +1739,6 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     
     public T decrBy(GlideString key, long amount) {
-        return addCommand(CommandType.DECRBY, key.toString(), String.valueOf(amount));
+        return addCommand(DecrBy, key.toString(), String.valueOf(amount));
     }
 }
