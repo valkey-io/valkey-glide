@@ -6371,8 +6371,15 @@ func (suite *GlideTestSuite) TestZScan() {
 
 		// Test NoScores option for Redis 8.0.0+
 		if suite.serverVersion >= "8.0.0" {
+			// Use a fresh key for NoScores test to avoid interference from previous entries
+			noScoresKey := uuid.New().String()
+			// Add only "member" entries to ensure all returned fields start with "member"
+			res, err := client.ZAdd(context.Background(), noScoresKey, numberMap)
+			assert.NoError(suite.T(), err)
+			assert.Equal(suite.T(), int64(50000), res)
+
 			opts = options.NewZScanOptions().SetNoScores(true)
-			result, err = client.ZScanWithOptions(context.Background(), key1, initialCursor, *opts)
+			result, err = client.ZScanWithOptions(context.Background(), noScoresKey, initialCursor, *opts)
 			assert.NoError(suite.T(), err)
 			cursor, err := strconv.ParseInt(result.Cursor.String(), 10, 64)
 			assert.NoError(suite.T(), err)
