@@ -3,6 +3,7 @@ package glide.api.models;
 
 import static glide.api.models.commands.RequestType.*;
 import glide.api.models.commands.function.FunctionRestorePolicy;
+import glide.api.models.GlideString;
 
 
 /**
@@ -1192,7 +1193,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
      * @return This batch instance for method chaining.
      */
     public ClusterBatch objectIdletime(String key) {
-        return addCommand(ObjectIdletime, key);
+        return addCommand(ObjectIdleTime, key);
     }
 
     /**
@@ -1203,7 +1204,7 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
      * @return This batch instance for method chaining.
      */
     public ClusterBatch objectRefcount(String key) {
-        return addCommand(ObjectRefcount, key);
+        return addCommand(ObjectRefCount, key);
     }
 
     /**
@@ -1240,17 +1241,6 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
     }
 
     /**
-     * Gets information about a stream.
-     *
-     * @see <a href="https://valkey.io/commands/xinfo/">valkey.io</a> for details.
-     * @param key The stream key.
-     * @return This batch instance for method chaining.
-     */
-    public ClusterBatch xinfoStream(String key) {
-        return addCommand(XInfoStream, key);
-    }
-
-    /**
      * Gets rank with score for a member in a sorted set.
      *
      * @see <a href="https://valkey.io/commands/zrank/">valkey.io</a> for details.
@@ -1260,5 +1250,83 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
      */
     public ClusterBatch zrankWithScore(String key, String member) {
         return addCommand(ZRank, key, member, "WITHSCORE");
+    }
+
+    /**
+     * Invoke a function.
+     *
+     * @see <a href="https://valkey.io/commands/fcall/">valkey.io</a> for details.
+     * @param functionName The function name
+     * @param keys Function keys
+     * @param args Function arguments
+     * @return This batch instance for method chaining
+     */
+    public ClusterBatch fcall(String functionName, String[] keys, String[] args) {
+        String[] allArgs = new String[keys.length + args.length + 2];
+        allArgs[0] = functionName;
+        allArgs[1] = String.valueOf(keys.length);
+        System.arraycopy(keys, 0, allArgs, 2, keys.length);
+        System.arraycopy(args, 0, allArgs, 2 + keys.length, args.length);
+        return addCommand(FCall, allArgs);
+    }
+
+    /**
+     * Invoke a function (GlideString variant).
+     *
+     * @see <a href="https://valkey.io/commands/fcall/">valkey.io</a> for details.
+     * @param functionName The function name
+     * @param keys Function keys
+     * @param args Function arguments
+     * @return This batch instance for method chaining
+     */
+    public ClusterBatch fcall(GlideString functionName, GlideString[] keys, GlideString[] args) {
+        String[] stringKeys = new String[keys.length];
+        for (int i = 0; i < keys.length; i++) {
+            stringKeys[i] = keys[i].toString();
+        }
+        String[] stringArgs = new String[args.length];
+        for (int i = 0; i < args.length; i++) {
+            stringArgs[i] = args[i].toString();
+        }
+        return fcall(functionName.toString(), stringKeys, stringArgs);
+    }
+
+    /**
+     * Invoke a function with read-only access.
+     *
+     * @see <a href="https://valkey.io/commands/fcall_ro/">valkey.io</a> for details.
+     * @param functionName The function name
+     * @param keys Function keys
+     * @param args Function arguments
+     * @return This batch instance for method chaining
+     */
+    public ClusterBatch fcallReadOnly(String functionName, String[] keys, String[] args) {
+        String[] allArgs = new String[keys.length + args.length + 2];
+        allArgs[0] = functionName;
+        allArgs[1] = String.valueOf(keys.length);
+        System.arraycopy(keys, 0, allArgs, 2, keys.length);
+        System.arraycopy(args, 0, allArgs, 2 + keys.length, args.length);
+        return addCommand(FCallReadOnly, allArgs);
+    }
+
+    /**
+     * Invoke a function with read-only access (GlideString variant).
+     *
+     * @see <a href="https://valkey.io/commands/fcall_ro/">valkey.io</a> for details.
+     * @param functionName The function name
+     * @param keys Function keys
+     * @param args Function arguments
+     * @return This batch instance for method chaining
+     */
+    public ClusterBatch fcallReadOnly(GlideString functionName, GlideString[] keys, GlideString[] args) {
+        String[] stringKeys = new String[keys.length];
+        for (int i = 0; i < keys.length; i++) {
+            stringKeys[i] = keys[i].toString();
+        }
+        String[] stringArgs = new String[args.length];
+        for (int i = 0; i < args.length; i++) {
+            stringArgs[i] = args[i].toString();
+        }
+        return fcallReadOnly(functionName.toString(), stringKeys, stringArgs);
     }
 }

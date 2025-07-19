@@ -6,6 +6,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import static glide.api.models.commands.RequestType.*;
+import glide.api.models.commands.scan.HScanOptions;
+import glide.api.models.commands.ListDirection;
 
 /**
  * Base class for all batch operations.
@@ -1740,5 +1742,600 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     
     public T decrBy(GlideString key, long amount) {
         return addCommand(DecrBy, key.toString(), String.valueOf(amount));
+    }
+
+    /**
+     * Increment float value by amount.
+     *
+     * @see <a href="https://valkey.io/commands/incrbyfloat/">valkey.io</a> for details.
+     * @param key The key
+     * @param amount The amount to increment
+     * @return This batch instance for method chaining
+     */
+    public T incrByFloat(String key, double amount) {
+        return addCommand(IncrByFloat, key, String.valueOf(amount));
+    }
+
+    /**
+     * Increment float value by amount (GlideString variant).
+     *
+     * @see <a href="https://valkey.io/commands/incrbyfloat/">valkey.io</a> for details.
+     * @param key The key
+     * @param amount The amount to increment
+     * @return This batch instance for method chaining
+     */
+    public T incrByFloat(GlideString key, double amount) {
+        return addCommand(IncrByFloat, key.toString(), String.valueOf(amount));
+    }
+
+    /**
+     * Check if hash field exists.
+     *
+     * @see <a href="https://valkey.io/commands/hexists/">valkey.io</a> for details.
+     * @param key The hash key
+     * @param field The field to check
+     * @return This batch instance for method chaining
+     */
+    public T hexists(String key, String field) {
+        return addCommand(HExists, key, field);
+    }
+
+    /**
+     * Check if hash field exists (GlideString variant).
+     *
+     * @see <a href="https://valkey.io/commands/hexists/">valkey.io</a> for details.
+     * @param key The hash key
+     * @param field The field to check
+     * @return This batch instance for method chaining
+     */
+    public T hexists(GlideString key, GlideString field) {
+        return addCommand(HExists, key.toString(), field.toString());
+    }
+
+    /**
+     * Get list element at index.
+     *
+     * @see <a href="https://valkey.io/commands/lindex/">valkey.io</a> for details.
+     * @param key The list key
+     * @param index The index
+     * @return This batch instance for method chaining
+     */
+    public T lindex(String key, int index) {
+        return addCommand(LIndex, key, String.valueOf(index));
+    }
+
+    /**
+     * Get list element at index (GlideString variant).
+     *
+     * @see <a href="https://valkey.io/commands/lindex/">valkey.io</a> for details.
+     * @param key The list key
+     * @param index The index
+     * @return This batch instance for method chaining
+     */
+    public T lindex(GlideString key, int index) {
+        return addCommand(LIndex, key.toString(), String.valueOf(index));
+    }
+
+    /**
+     * Scan set members.
+     *
+     * @see <a href="https://valkey.io/commands/sscan/">valkey.io</a> for details.
+     * @param key The set key
+     * @param cursor The cursor
+     * @return This batch instance for method chaining
+     */
+    public T sscan(String key, String cursor) {
+        return addCommand(SScan, key, cursor);
+    }
+
+    /**
+     * Scan set members (GlideString variant).
+     *
+     * @see <a href="https://valkey.io/commands/sscan/">valkey.io</a> for details.
+     * @param key The set key
+     * @param cursor The cursor
+     * @return This batch instance for method chaining
+     */
+    public T sscan(GlideString key, GlideString cursor) {
+        return addCommand(SScan, key.toString(), cursor.toString());
+    }
+
+    /**
+     * Get reverse rank of sorted set member.
+     *
+     * @see <a href="https://valkey.io/commands/zrevrank/">valkey.io</a> for details.
+     * @param key The sorted set key
+     * @param member The member
+     * @return This batch instance for method chaining
+     */
+    public T zrevrank(String key, String member) {
+        return addCommand(ZRevRank, key, member);
+    }
+
+    /**
+     * Get reverse rank of sorted set member (GlideString variant).
+     *
+     * @see <a href="https://valkey.io/commands/zrevrank/">valkey.io</a> for details.
+     * @param key The sorted set key
+     * @param member The member
+     * @return This batch instance for method chaining
+     */
+    public T zrevrank(GlideString key, GlideString member) {
+        return addCommand(ZRevRank, key.toString(), member.toString());
+    }
+
+    /**
+     * Get configuration parameters.
+     *
+     * @see <a href="https://valkey.io/commands/config-get/">valkey.io</a> for details.
+     * @param parameters The parameters to get
+     * @return This batch instance for method chaining
+     */
+    public T configGet(String[] parameters) {
+        return addCommand(ConfigGet, parameters);
+    }
+
+    /**
+     * Merge multiple HyperLogLog values.
+     *
+     * @see <a href="https://valkey.io/commands/pfmerge/">valkey.io</a> for details.
+     * @param destkey The destination key
+     * @param sourcekeys The source keys
+     * @return This batch instance for method chaining
+     */
+    public T pfmerge(String destkey, String[] sourcekeys) {
+        String[] args = new String[sourcekeys.length + 1];
+        args[0] = destkey;
+        System.arraycopy(sourcekeys, 0, args, 1, sourcekeys.length);
+        return addCommand(PfMerge, args);
+    }
+
+    /**
+     * Merge multiple HyperLogLog values (GlideString variant).
+     *
+     * @see <a href="https://valkey.io/commands/pfmerge/">valkey.io</a> for details.
+     * @param destkey The destination key
+     * @param sourcekeys The source keys
+     * @return This batch instance for method chaining
+     */
+    public T pfmerge(GlideString destkey, GlideString[] sourcekeys) {
+        String[] args = new String[sourcekeys.length + 1];
+        args[0] = destkey.toString();
+        for (int i = 0; i < sourcekeys.length; i++) {
+            args[i + 1] = sourcekeys[i].toString();
+        }
+        return addCommand(PfMerge, args);
+    }
+
+    /**
+     * Publish message to channel.
+     *
+     * @see <a href="https://valkey.io/commands/publish/">valkey.io</a> for details.
+     * @param channel The channel
+     * @param message The message
+     * @return This batch instance for method chaining
+     */
+    public T publish(String channel, String message) {
+        return addCommand(Publish, channel, message);
+    }
+
+    /**
+     * Publish message to channel (GlideString variant).
+     *
+     * @see <a href="https://valkey.io/commands/publish/">valkey.io</a> for details.
+     * @param channel The channel
+     * @param message The message
+     * @return This batch instance for method chaining
+     */
+    public T publish(GlideString channel, GlideString message) {
+        return addCommand(Publish, channel.toString(), message.toString());
+    }
+
+    /**
+     * Set the string value of a key at a given offset.
+     *
+     * @see <a href="https://valkey.io/commands/setrange/">valkey.io</a> for details.
+     * @param key The key
+     * @param offset The offset
+     * @param value The value to set
+     * @return This batch instance for method chaining
+     */
+    public T setrange(String key, int offset, String value) {
+        return addCommand(SetRange, key, String.valueOf(offset), value);
+    }
+
+    /**
+     * Set the string value of a key at a given offset (GlideString variant).
+     *
+     * @see <a href="https://valkey.io/commands/setrange/">valkey.io</a> for details.
+     * @param key The key
+     * @param offset The offset
+     * @param value The value to set
+     * @return This batch instance for method chaining
+     */
+    public T setrange(GlideString key, int offset, GlideString value) {
+        return addCommand(SetRange, key.toString(), String.valueOf(offset), value.toString());
+    }
+
+    /**
+     * Add a stream entry.
+     *
+     * @see <a href="https://valkey.io/commands/xadd/">valkey.io</a> for details.
+     * @param key The stream key
+     * @param values The field-value pairs
+     * @return This batch instance for method chaining
+     */
+    public T xadd(String key, java.util.Map<String, String> values) {
+        String[] args = new String[values.size() * 2 + 2];
+        args[0] = key;
+        args[1] = "*"; // Auto-generate ID
+        int i = 2;
+        for (java.util.Map.Entry<String, String> entry : values.entrySet()) {
+            args[i++] = entry.getKey();
+            args[i++] = entry.getValue();
+        }
+        return addCommand(XAdd, args);
+    }
+
+    /**
+     * Add a stream entry (GlideString variant).
+     *
+     * @see <a href="https://valkey.io/commands/xadd/">valkey.io</a> for details.
+     * @param key The stream key
+     * @param values The field-value pairs
+     * @return This batch instance for method chaining
+     */
+    public T xadd(GlideString key, java.util.Map<GlideString, GlideString> values) {
+        String[] args = new String[values.size() * 2 + 2];
+        args[0] = key.toString();
+        args[1] = "*"; // Auto-generate ID
+        int i = 2;
+        for (java.util.Map.Entry<GlideString, GlideString> entry : values.entrySet()) {
+            args[i++] = entry.getKey().toString();
+            args[i++] = entry.getValue().toString();
+        }
+        return addCommand(XAdd, args);
+    }
+
+    /**
+     * Get a substring of the string value.
+     *
+     * @see <a href="https://valkey.io/commands/getrange/">valkey.io</a> for details.
+     * @param key The key
+     * @param start Start index
+     * @param end End index
+     * @return This batch instance for method chaining
+     */
+    public T getrange(String key, int start, int end) {
+        return addCommand(GetRange, key, String.valueOf(start), String.valueOf(end));
+    }
+
+    /**
+     * Get a substring of the string value (GlideString variant).
+     *
+     * @see <a href="https://valkey.io/commands/getrange/">valkey.io</a> for details.
+     * @param key The key
+     * @param start Start index
+     * @param end End index
+     * @return This batch instance for method chaining
+     */
+    public T getrange(GlideString key, int start, int end) {
+        return addCommand(GetRange, key.toString(), String.valueOf(start), String.valueOf(end));
+    }
+
+    /**
+     * Set hash field only if it does not exist.
+     *
+     * @see <a href="https://valkey.io/commands/hsetnx/">valkey.io</a> for details.
+     * @param key The hash key
+     * @param field The field
+     * @param value The value
+     * @return This batch instance for method chaining
+     */
+    public T hsetnx(String key, String field, String value) {
+        return addCommand(HSetNX, key, field, value);
+    }
+
+    /**
+     * Set hash field only if it does not exist (GlideString variant).
+     *
+     * @see <a href="https://valkey.io/commands/hsetnx/">valkey.io</a> for details.
+     * @param key The hash key
+     * @param field The field
+     * @param value The value
+     * @return This batch instance for method chaining
+     */
+    public T hsetnx(GlideString key, GlideString field, GlideString value) {
+        return addCommand(HSetNX, key.toString(), field.toString(), value.toString());
+    }
+
+    /**
+     * Remove elements from a list.
+     *
+     * @see <a href="https://valkey.io/commands/lrem/">valkey.io</a> for details.
+     * @param key The list key
+     * @param count The count
+     * @param element The element to remove
+     * @return This batch instance for method chaining
+     */
+    public T lrem(String key, int count, String element) {
+        return addCommand(LRem, key, String.valueOf(count), element);
+    }
+
+    /**
+     * Remove elements from a list (GlideString variant).
+     *
+     * @see <a href="https://valkey.io/commands/lrem/">valkey.io</a> for details.
+     * @param key The list key
+     * @param count The count
+     * @param element The element to remove
+     * @return This batch instance for method chaining
+     */
+    public T lrem(GlideString key, int count, GlideString element) {
+        return addCommand(LRem, key.toString(), String.valueOf(count), element.toString());
+    }
+
+    /**
+     * Scan hash fields and values.
+     *
+     * @see <a href="https://valkey.io/commands/hscan/">valkey.io</a> for details.
+     * @param key The hash key
+     * @param cursor The cursor
+     * @param options The scan options
+     * @return This batch instance for method chaining
+     */
+    public T hscan(String key, String cursor, HScanOptions options) {
+        java.util.List<String> args = new java.util.ArrayList<>();
+        args.add(key);
+        args.add(cursor);
+        if (options != null) {
+            args.addAll(java.util.Arrays.asList(options.toArgs()));
+        }
+        return addCommand(HScan, args.toArray(new String[0]));
+    }
+
+    /**
+     * Scan hash fields and values (GlideString variant).
+     *
+     * @see <a href="https://valkey.io/commands/hscan/">valkey.io</a> for details.
+     * @param key The hash key
+     * @param cursor The cursor
+     * @param options The scan options
+     * @return This batch instance for method chaining
+     */
+    public T hscan(GlideString key, GlideString cursor, HScanOptions options) {
+        return hscan(key.toString(), cursor.toString(), options);
+    }
+
+    /**
+     * Pop elements from multiple lists.
+     *
+     * @see <a href="https://valkey.io/commands/lmpop/">valkey.io</a> for details.
+     * @param keys The list keys
+     * @param direction The direction
+     * @return This batch instance for method chaining
+     */
+    public T lmpop(String[] keys, ListDirection direction) {
+        String[] args = new String[keys.length + 2];
+        args[0] = String.valueOf(keys.length);
+        System.arraycopy(keys, 0, args, 1, keys.length);
+        args[args.length - 1] = direction.toString();
+        return addCommand(LMPop, args);
+    }
+
+    /**
+     * Pop elements from multiple lists (GlideString variant).
+     *
+     * @see <a href="https://valkey.io/commands/lmpop/">valkey.io</a> for details.
+     * @param keys The list keys
+     * @param direction The direction
+     * @return This batch instance for method chaining
+     */
+    public T lmpop(GlideString[] keys, ListDirection direction) {
+        String[] stringKeys = new String[keys.length];
+        for (int i = 0; i < keys.length; i++) {
+            stringKeys[i] = keys[i].toString();
+        }
+        return lmpop(stringKeys, direction);
+    }
+
+    /**
+     * Move element from one list to another.
+     *
+     * @see <a href="https://valkey.io/commands/lmove/">valkey.io</a> for details.
+     * @param source The source list
+     * @param destination The destination list
+     * @param from The direction to pop from source
+     * @param to The direction to push to destination
+     * @return This batch instance for method chaining
+     */
+    public T lmove(String source, String destination, ListDirection from, ListDirection to) {
+        return addCommand(LMove, source, destination, from.toString(), to.toString());
+    }
+
+    /**
+     * Move element from one list to another (GlideString variant).
+     *
+     * @see <a href="https://valkey.io/commands/lmove/">valkey.io</a> for details.
+     * @param source The source list
+     * @param destination The destination list
+     * @param from The direction to pop from source
+     * @param to The direction to push to destination
+     * @return This batch instance for method chaining
+     */
+    public T lmove(GlideString source, GlideString destination, ListDirection from, ListDirection to) {
+        return lmove(source.toString(), destination.toString(), from, to);
+    }
+
+    /**
+     * Set multiple keys only if none exist.
+     *
+     * @see <a href="https://valkey.io/commands/msetnx/">valkey.io</a> for details.
+     * @param keyValueMap The key-value pairs
+     * @return This batch instance for method chaining
+     */
+    public T msetnx(java.util.Map<String, String> keyValueMap) {
+        String[] args = new String[keyValueMap.size() * 2];
+        int i = 0;
+        for (java.util.Map.Entry<String, String> entry : keyValueMap.entrySet()) {
+            args[i++] = entry.getKey();
+            args[i++] = entry.getValue();
+        }
+        return addCommand(MSetNX, args);
+    }
+
+    /**
+     * Get multiple hash field values.
+     *
+     * @see <a href="https://valkey.io/commands/hmget/">valkey.io</a> for details.
+     * @param key The hash key
+     * @param fields The fields
+     * @return This batch instance for method chaining
+     */
+    public T hmget(String key, String[] fields) {
+        String[] args = new String[fields.length + 1];
+        args[0] = key;
+        System.arraycopy(fields, 0, args, 1, fields.length);
+        return addCommand(HMGet, args);
+    }
+
+    /**
+     * Get multiple hash field values (GlideString variant).
+     *
+     * @see <a href="https://valkey.io/commands/hmget/">valkey.io</a> for details.
+     * @param key The hash key
+     * @param fields The fields
+     * @return This batch instance for method chaining
+     */
+    public T hmget(GlideString key, GlideString[] fields) {
+        String[] stringFields = new String[fields.length];
+        for (int i = 0; i < fields.length; i++) {
+            stringFields[i] = fields[i].toString();
+        }
+        return hmget(key.toString(), stringFields);
+    }
+
+    /**
+     * Trim a list to a range.
+     *
+     * @see <a href="https://valkey.io/commands/ltrim/">valkey.io</a> for details.
+     * @param key The list key
+     * @param start Start index
+     * @param stop Stop index
+     * @return This batch instance for method chaining
+     */
+    public T ltrim(String key, int start, int stop) {
+        return addCommand(LTrim, key, String.valueOf(start), String.valueOf(stop));
+    }
+
+    /**
+     * Trim a list to a range (GlideString variant).
+     *
+     * @see <a href="https://valkey.io/commands/ltrim/">valkey.io</a> for details.
+     * @param key The list key
+     * @param start Start index
+     * @param stop Stop index
+     * @return This batch instance for method chaining
+     */
+    public T ltrim(GlideString key, int start, int stop) {
+        return ltrim(key.toString(), start, stop);
+    }
+
+    /**
+     * Reset server statistics.
+     *
+     * @see <a href="https://valkey.io/commands/config-resetstat/">valkey.io</a> for details.
+     * @return This batch instance for method chaining
+     */
+    public T configResetStat() {
+        return addCommand(ConfigResetStat);
+    }
+
+    /**
+     * Blocking move element between lists.
+     *
+     * @see <a href="https://valkey.io/commands/blmove/">valkey.io</a> for details.
+     * @param source The source list
+     * @param destination The destination list
+     * @param from Direction to pop from source
+     * @param to Direction to push to destination
+     * @param timeout Timeout in seconds
+     * @return This batch instance for method chaining
+     */
+    public T blmove(String source, String destination, ListDirection from, ListDirection to, double timeout) {
+        return addCommand(BLMove, source, destination, from.toString(), to.toString(), String.valueOf(timeout));
+    }
+
+    /**
+     * Blocking move element between lists (GlideString variant).
+     *
+     * @see <a href="https://valkey.io/commands/blmove/">valkey.io</a> for details.
+     * @param source The source list
+     * @param destination The destination list
+     * @param from Direction to pop from source
+     * @param to Direction to push to destination
+     * @param timeout Timeout in seconds
+     * @return This batch instance for method chaining
+     */
+    public T blmove(GlideString source, GlideString destination, ListDirection from, ListDirection to, double timeout) {
+        return blmove(source.toString(), destination.toString(), from, to, timeout);
+    }
+
+    /**
+     * Add to sorted set with increment.
+     *
+     * @see <a href="https://valkey.io/commands/zadd/">valkey.io</a> for details.
+     * @param key The sorted set key
+     * @param member The member
+     * @param increment The increment value
+     * @return This batch instance for method chaining
+     */
+    public T zaddIncr(String key, String member, int increment) {
+        return addCommand(ZAdd, key, "INCR", String.valueOf(increment), member);
+    }
+
+    /**
+     * Add to sorted set with increment (GlideString variant).
+     *
+     * @see <a href="https://valkey.io/commands/zadd/">valkey.io</a> for details.
+     * @param key The sorted set key
+     * @param member The member
+     * @param increment The increment value
+     * @return This batch instance for method chaining
+     */
+    public T zaddIncr(GlideString key, GlideString member, int increment) {
+        return zaddIncr(key.toString(), member.toString(), increment);
+    }
+
+    /**
+     * Store difference of sorted sets.
+     *
+     * @see <a href="https://valkey.io/commands/zdiffstore/">valkey.io</a> for details.
+     * @param destination The destination key
+     * @param keys The sorted set keys
+     * @return This batch instance for method chaining
+     */
+    public T zdiffstore(String destination, String[] keys) {
+        String[] args = new String[keys.length + 2];
+        args[0] = destination;
+        args[1] = String.valueOf(keys.length);
+        System.arraycopy(keys, 0, args, 2, keys.length);
+        return addCommand(ZDiffStore, args);
+    }
+
+    /**
+     * Store difference of sorted sets (GlideString variant).
+     *
+     * @see <a href="https://valkey.io/commands/zdiffstore/">valkey.io</a> for details.
+     * @param destination The destination key
+     * @param keys The sorted set keys
+     * @return This batch instance for method chaining
+     */
+    public T zdiffstore(GlideString destination, GlideString[] keys) {
+        String[] stringKeys = new String[keys.length];
+        for (int i = 0; i < keys.length; i++) {
+            stringKeys[i] = keys[i].toString();
+        }
+        return zdiffstore(destination.toString(), stringKeys);
     }
 }
