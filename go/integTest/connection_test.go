@@ -14,6 +14,94 @@ import (
 	"github.com/valkey-io/valkey-glide/go/v2/internal/interfaces"
 )
 
+// createValkeyCluster creates a new ValkeyCluster with default settings
+func createValkeyCluster(clusterMode bool) (*ValkeyCluster, error) {
+	shardCount := 1
+	if clusterMode {
+		shardCount = 3
+	}
+	return NewValkeyCluster(false, WithClusterMode(clusterMode), WithShardCount(shardCount), WithReplicaCount(1))
+}
+
+// getClientListOutputCount parses CLIENT LIST output and returns the number of clients
+func getClientListOutputCount(output interface{}) int {
+	if output == nil {
+		return 0
+	}
+
+	var text string
+	switch v := output.(type) {
+	case []byte:
+		text = string(v)
+	case string:
+		text = v
+	default:
+		return 0
+	}
+
+	if text = strings.TrimSpace(text); text == "" {
+		return 0
+	}
+
+	return len(strings.Split(text, "\n"))
+}
+
+// getClientCount returns the number of connected clients
+func getClientCount(ctx context.Context, client interfaces.BaseClientCommands) (int, error) {
+	if clusterClient, ok := client.(interfaces.GlideClusterClientCommands); ok {
+		// For cluster client, execute CLIENT LIST on all nodes
+		result, err := clusterClient.CustomCommandWithRoute(ctx, []string{"CLIENT", "LIST"}, config.AllNodes)
+		if err != nil {
+			return 0, err
+		}
+
+		// Result will be a map with node addresses as keys and CLIENT LIST output as values
+		totalCount := 0
+		for _, nodeOutput := range result.MultiValue() {
+			totalCount += getClientListOutputCount(nodeOutput)
+		}
+		return totalCount, nil
+	}
+
+	// For standalone client, execute CLIENT LIST directly
+	glideClient := client.(interfaces.GlideClientCommands)
+	result, err := glideClient.CustomCommand(ctx, []string{"CLIENT", "LIST"})
+	if err != nil {
+		return 0, err
+	}
+	return getClientListOutputCount(result), nil
+}
+
+// getExpectedNewConnections returns the expected number of new connections when a lazy client is initialized
+func getExpectedNewConnections(ctx context.Context, client interfaces.BaseClientCommands) (int, error) {
+	if clusterClient, ok := client.(interfaces.GlideClusterClientCommands); ok {
+		// For cluster, get node count and multiply by 2 (2 connections per node)
+		result, err := clusterClient.CustomCommand(ctx, []string{"CLUSTER", "NODES"})
+		if err != nil {
+			return 0, err
+		}
+
+		var nodesInfo string
+		switch v := result.SingleValue().(type) {
+		case []byte:
+			nodesInfo = string(v)
+		case string:
+			nodesInfo = v
+		default:
+			nodesInfo = ""
+		}
+
+		if nodesInfo = strings.TrimSpace(nodesInfo); nodesInfo == "" {
+			return 0, nil
+		}
+
+		return len(strings.Split(nodesInfo, "\n")) * 2, nil
+	}
+
+	// For standalone, always expect 1 new connection
+	return 1, nil
+}
+
 func (suite *GlideTestSuite) TestStandaloneConnect() {
 	config := config.NewClientConfiguration().
 		WithAddress(&suite.standaloneHosts[0])
@@ -154,5 +242,74 @@ func (suite *GlideTestSuite) TestConnectionTimeout() {
 		if client != nil {
 			client.Close()
 		}
+	})
+}
+
+func (suite *GlideTestSuite) TestLazyConnectionEstablishesOnFirstCommand() {
+	// Run test for both standalone and cluster modes
+	suite.runWithTimeoutClients(func(client interfaces.BaseClientCommands) {
+		ctx := context.Background()
+		_, isCluster := client.(interfaces.GlideClusterClientCommands)
+
+		// Create a monitoring client (eagerly connected)
+		valkeyCluster, err := createValkeyCluster(isCluster)
+		suite.NoError(err)
+		defer valkeyCluster.Close()
+		monitoringClient, err := createClient(isCluster, nil, 3*time.Second, 3*time.Second, valkeyCluster, false)
+		suite.NoError(err)
+		defer monitoringClient.Close()
+
+		// Get initial client count
+		clientsBeforeLazyInit, err := getClientCount(ctx, monitoringClient)
+		suite.NoError(err)
+
+		// Create the "lazy" client
+		lazyClient, err := createClient(isCluster, nil, 3*time.Second, 3*time.Second, valkeyCluster, true)
+		suite.NoError(err)
+		defer lazyClient.Close()
+
+		// Check count (should not change)
+		clientsAfterLazyInit, err := getClientCount(ctx, monitoringClient)
+		suite.NoError(err)
+		suite.Equal(clientsBeforeLazyInit, clientsAfterLazyInit,
+			"Lazy client should not connect before the first command")
+
+		// Send the first command using the lazy client
+		var result interface{}
+		if isCluster {
+			clusterClient := lazyClient.(interfaces.GlideClusterClientCommands)
+			result, err = clusterClient.Ping(ctx)
+		} else {
+			glideClient := lazyClient.(interfaces.GlideClientCommands)
+			result, err = glideClient.Ping(ctx)
+		}
+		suite.NoError(err)
+
+		// Assert PING success for both modes
+		if isCluster {
+			// For cluster mode, result can be either "PONG" or a map of "PONG"s
+			switch v := result.(type) {
+			case string:
+				suite.Equal("PONG", v)
+			case map[string]interface{}:
+				for _, val := range v {
+					suite.Equal("PONG", val)
+				}
+			default:
+				suite.Fail("Unexpected PING response type")
+			}
+		} else {
+			suite.Equal("PONG", result)
+		}
+
+		// Check client count after the first command
+		clientsAfterFirstCommand, err := getClientCount(ctx, monitoringClient)
+		suite.NoError(err)
+
+		expectedNewConnections, err := getExpectedNewConnections(ctx, monitoringClient)
+		suite.NoError(err)
+
+		suite.Equal(clientsBeforeLazyInit+expectedNewConnections, clientsAfterFirstCommand,
+			"Lazy client should establish expected number of new connections after the first command")
 	})
 }
