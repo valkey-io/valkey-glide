@@ -1,23 +1,26 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
+import glide.api.GlideClient;
 import io.valkey.glide.core.commands.CommandType;
 
 /**
- * Batch implementation for standalone GlideClient. Batches allow the execution of a group
+ * Batch implementation for standalone {@link GlideClient}. Batches allow the execution of a group
  * of commands in a single step.
  *
- * <p>Batch Response: An array of command responses is returned by the client exec API,
- * in the order they were given. Each element in the array represents a command given to the Batch.
- * The response for each command depends on the executed Valkey command.
+ * <p>Batch Response: An <code>array</code> of command responses is returned by the client {@link
+ * GlideClient#exec} API, in the order they were given. Each element in the array represents a
+ * command given to the {@link Batch}. The response for each command depends on the executed Valkey
+ * command. Specific response types are documented alongside each method.
  *
  * <p><strong>isAtomic:</strong> Determines whether the batch is atomic or non-atomic. If {@code
  * true}, the batch will be executed as an atomic transaction. If {@code false}, the batch will be
  * executed as a non-atomic pipeline.
  *
- * @see <a href="https://valkey.io/docs/topics/transactions/">Valkey Transactions (Atomic Batches)</a>
+ * @see <a href="https://valkey.io/docs/topics/transactions/">Valkey Transactions (Atomic
+ *     Batches)</a>
  * @see <a href="https://valkey.io/topics/pipelining">Valkey Pipelines (Non-Atomic Batches)</a>
- * Standalone Batches are executed on the primary node.
+ * @apiNote Standalone Batches are executed on the primary node.
  * @example
  *     <pre>{@code
  * // Example of Atomic Batch (Transaction)

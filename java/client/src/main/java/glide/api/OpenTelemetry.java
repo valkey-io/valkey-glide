@@ -419,7 +419,7 @@ public class OpenTelemetry {
      *
      * @param percentage The sample percentage 0-100
      * @throws ConfigurationError if OpenTelemetry is not initialized or traces config is not set
-     * @remarks This method can be called at runtime to change the sampling percentage without
+     * @apiNote This method can be called at runtime to change the sampling percentage without
      *     reinitializing OpenTelemetry.
      */
     public static void setSamplePercentage(int percentage) {

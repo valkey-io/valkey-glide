@@ -22,7 +22,7 @@ public interface TransactionsClusterCommands {
      * @param transaction A {@link ClusterTransaction} object containing a list of commands to be
      *     executed.
      * @return A list of results corresponding to the execution of each command in the transaction.
-     * @remarks
+     * @apiNote
      *     <ul>
      *       <li>If a command returns a value, it will be included in the list.
      *       <li>If a command doesn't return a value, the list entry will be empty.

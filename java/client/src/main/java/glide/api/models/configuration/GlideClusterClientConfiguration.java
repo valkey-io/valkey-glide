@@ -9,7 +9,7 @@ import lombok.experimental.SuperBuilder;
 /**
  * Represents the configuration settings for a Cluster mode client {@link GlideClusterClient}.
  *
- * Currently, the reconnection strategy in cluster mode is not configurable, and
+ * @apiNote Currently, the reconnection strategy in cluster mode is not configurable, and
  *     exponential backoff with fixed values is used.
  * @example
  *     <pre>{@code

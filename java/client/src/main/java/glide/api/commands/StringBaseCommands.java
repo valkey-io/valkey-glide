@@ -256,7 +256,7 @@ public interface StringBaseCommands {
     /**
      * Retrieves the values of multiple <code>keys</code>.
      *
-     * In cluster mode, if keys in <code>keys</code> map to different hash slots, the command
+     * @apiNote In cluster mode, if keys in <code>keys</code> map to different hash slots, the command
      *     will be split across these slots and executed separately for each. This means the command
      *     is atomic only at the slot level. If one or more slot-specific requests fail, the entire
      *     call will return the first encountered error, even though some requests may have succeeded
@@ -278,7 +278,7 @@ public interface StringBaseCommands {
     /**
      * Retrieves the values of multiple <code>keys</code>.
      *
-     * In cluster mode, if keys in <code>keys</code> map to different hash slots, the command
+     * @apiNote In cluster mode, if keys in <code>keys</code> map to different hash slots, the command
      *     will be split across these slots and executed separately for each. This means the command
      *     is atomic only at the slot level. If one or more slot-specific requests fail, the entire
      *     call will return the first encountered error, even though some requests may have succeeded
@@ -300,7 +300,7 @@ public interface StringBaseCommands {
     /**
      * Sets multiple keys to multiple values in a single operation.
      *
-     * In cluster mode, if keys in <code>keyValueMap</code> map to different hash slots, the
+     * @apiNote In cluster mode, if keys in <code>keyValueMap</code> map to different hash slots, the
      *     command will be split across these slots and executed separately for each. This means the
      *     command is atomic only at the slot level. If one or more slot-specific requests fail, the
      *     entire call will return the first encountered error, even though some requests may have
@@ -320,7 +320,7 @@ public interface StringBaseCommands {
     /**
      * Sets multiple keys to multiple values in a single operation.
      *
-     * In cluster mode, if keys in <code>keyValueMap</code> map to different hash slots, the
+     * @apiNote In cluster mode, if keys in <code>keyValueMap</code> map to different hash slots, the
      *     command will be split across these slots and executed separately for each. This means the
      *     command is atomic only at the slot level. If one or more slot-specific requests fail, the
      *     entire call will return the first encountered error, even though some requests may have
@@ -341,7 +341,7 @@ public interface StringBaseCommands {
      * Sets multiple keys to values if the key does not exist. The operation is atomic, and if one or
      * more keys already exist, the entire operation fails.
      *
-     * When in cluster mode, all keys in <code>keyValueMap</code> must map to the same hash
+     * @apiNote When in cluster mode, all keys in <code>keyValueMap</code> must map to the same hash
      *     slot.
      * @see <a href="https://valkey.io/commands/msetnx/">valkey.io</a> for details.
      * @param keyValueMap A key-value map consisting of keys and their respective values to set.
@@ -358,7 +358,7 @@ public interface StringBaseCommands {
      * Sets multiple keys to values if the key does not exist. The operation is atomic, and if one or
      * more keys already exist, the entire operation fails.
      *
-     * When in cluster mode, all keys in <code>keyValueMap</code> must map to the same hash
+     * @apiNote When in cluster mode, all keys in <code>keyValueMap</code> must map to the same hash
      *     slot.
      * @see <a href="https://valkey.io/commands/msetnx/">valkey.io</a> for details.
      * @param keyValueMap A key-value map consisting of keys and their respective values to set.
@@ -703,7 +703,7 @@ public interface StringBaseCommands {
      * </code> and <code>key2</code>.
      *
      * @since Valkey 7.0 and above.
-     * When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
+     * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
      *     hash slot.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
      * @param key1 The key that stores the first string.
@@ -725,7 +725,7 @@ public interface StringBaseCommands {
      * </code> and <code>key2</code>.
      *
      * @since Valkey 7.0 and above.
-     * When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
+     * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
      *     hash slot.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
      * @param key1 The key that stores the first string.
@@ -747,7 +747,7 @@ public interface StringBaseCommands {
      * <code>key1</code> and <code>key2</code>.
      *
      * @since Valkey 7.0 and above.
-     * When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
+     * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
      *     hash slot.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
      * @param key1 The key that stores the first string.
@@ -767,7 +767,7 @@ public interface StringBaseCommands {
      * <code>key1</code> and <code>key2</code>.
      *
      * @since Valkey 7.0 and above.
-     * When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
+     * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
      *     hash slot.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
      * @param key1 The key that stores the first string.
@@ -787,7 +787,7 @@ public interface StringBaseCommands {
      * stored at <code>key1</code> and <code>key2</code>.
      *
      * @since Valkey 7.0 and above.
-     * When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
+     * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
      *     hash slot.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
      * @param key1 The key that stores the first string.
@@ -830,7 +830,7 @@ public interface StringBaseCommands {
      * stored at <code>key1</code> and <code>key2</code>.
      *
      * @since Valkey 7.0 and above.
-     * When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
+     * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
      *     hash slot.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
      * @param key1 The key that stores the first string.
@@ -873,7 +873,7 @@ public interface StringBaseCommands {
      * stored at <code>key1</code> and <code>key2</code>.
      *
      * @since Valkey 7.0 and above.
-     * When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
+     * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
      *     hash slot.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
      * @param key1 The key that stores the first string.
@@ -918,7 +918,7 @@ public interface StringBaseCommands {
      * stored at <code>key1</code> and <code>key2</code>.
      *
      * @since Valkey 7.0 and above.
-     * When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
+     * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
      *     hash slot.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
      * @param key1 The key that stores the first string.
@@ -964,7 +964,7 @@ public interface StringBaseCommands {
      * <code>key1</code> and <code>key2</code>.
      *
      * @since Valkey 7.0 and above.
-     * When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
+     * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
      *     hash slot.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
      * @param key1 The key that stores the first string.
@@ -1009,7 +1009,7 @@ public interface StringBaseCommands {
      * <code>key1</code> and <code>key2</code>.
      *
      * @since Valkey 7.0 and above.
-     * When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
+     * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
      *     hash slot.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
      * @param key1 The key that stores the first string.
@@ -1054,7 +1054,7 @@ public interface StringBaseCommands {
      * <code>key1</code> and <code>key2</code>.
      *
      * @since Valkey 7.0 and above.
-     * When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
+     * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
      *     hash slot.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
      * @param key1 The key that stores the first string.
@@ -1102,7 +1102,7 @@ public interface StringBaseCommands {
      * <code>key1</code> and <code>key2</code>.
      *
      * @since Valkey 7.0 and above.
-     * When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
+     * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
      *     hash slot.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
      * @param key1 The key that stores the first string.

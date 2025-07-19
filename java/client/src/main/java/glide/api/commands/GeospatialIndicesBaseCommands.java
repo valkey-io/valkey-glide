@@ -747,7 +747,7 @@ public interface GeospatialIndicesBaseCommands {
      * GeoSearchShape)}.
      *
      * @since Valkey 6.2.0 and above.
-     * When in cluster mode, <code>source</code> and <code>destination</code> must map to the
+     * @apiNote When in cluster mode, <code>source</code> and <code>destination</code> must map to the
      *     same hash slot.
      * @see <a href="https://valkey.io/commands/geosearch">valkey.io</a> for more details.
      * @param destination The key of the destination sorted set.
@@ -791,7 +791,7 @@ public interface GeospatialIndicesBaseCommands {
      * GeoSearchShape)}.
      *
      * @since Valkey 6.2.0 and above.
-     * When in cluster mode, <code>source</code> and <code>destination</code> must map to the
+     * @apiNote When in cluster mode, <code>source</code> and <code>destination</code> must map to the
      *     same hash slot.
      * @see <a href="https://valkey.io/commands/geosearch">valkey.io</a> for more details.
      * @param destination The key of the destination sorted set.
@@ -838,7 +838,7 @@ public interface GeospatialIndicesBaseCommands {
      * GeoSearchShape, GeoSearchResultOptions)}.
      *
      * @since Valkey 6.2.0 and above.
-     * When in cluster mode, <code>source</code> and <code>destination</code> must map to the
+     * @apiNote When in cluster mode, <code>source</code> and <code>destination</code> must map to the
      *     same hash slot.
      * @see <a href="https://valkey.io/commands/geosearch">valkey.io</a> for more details.
      * @param destination The key of the destination sorted set.
@@ -889,7 +889,7 @@ public interface GeospatialIndicesBaseCommands {
      * GeoSearchShape, GeoSearchResultOptions)}.
      *
      * @since Valkey 6.2.0 and above.
-     * When in cluster mode, <code>source</code> and <code>destination</code> must map to the
+     * @apiNote When in cluster mode, <code>source</code> and <code>destination</code> must map to the
      *     same hash slot.
      * @see <a href="https://valkey.io/commands/geosearch">valkey.io</a> for more details.
      * @param destination The key of the destination sorted set.
@@ -940,7 +940,7 @@ public interface GeospatialIndicesBaseCommands {
      * GeoSearchShape, GeoSearchOptions)}.
      *
      * @since Valkey 6.2.0 and above.
-     * When in cluster mode, <code>source</code> and <code>destination</code> must map to the
+     * @apiNote When in cluster mode, <code>source</code> and <code>destination</code> must map to the
      *     same hash slot.
      * @see <a href="https://valkey.io/commands/geosearch">valkey.io</a> for more details.
      * @param destination The key of the destination sorted set.
@@ -990,7 +990,7 @@ public interface GeospatialIndicesBaseCommands {
      * GeoSearchShape, GeoSearchOptions)}.
      *
      * @since Valkey 6.2.0 and above.
-     * When in cluster mode, <code>source</code> and <code>destination</code> must map to the
+     * @apiNote When in cluster mode, <code>source</code> and <code>destination</code> must map to the
      *     same hash slot.
      * @see <a href="https://valkey.io/commands/geosearch">valkey.io</a> for more details.
      * @param destination The key of the destination sorted set.
@@ -1040,7 +1040,7 @@ public interface GeospatialIndicesBaseCommands {
      * GeoSearchShape, GeoSearchOptions, GeoSearchResultOptions)}.
      *
      * @since Valkey 6.2.0 and above.
-     * When in cluster mode, <code>source</code> and <code>destination</code> must map to the
+     * @apiNote When in cluster mode, <code>source</code> and <code>destination</code> must map to the
      *     same hash slot.
      * @see <a href="https://valkey.io/commands/geosearch">valkey.io</a> for more details.
      * @param destination The key of the destination sorted set.
@@ -1094,7 +1094,7 @@ public interface GeospatialIndicesBaseCommands {
      * GeoSearchShape, GeoSearchOptions, GeoSearchResultOptions)}.
      *
      * @since Valkey 6.2.0 and above.
-     * When in cluster mode, <code>source</code> and <code>destination</code> must map to the
+     * @apiNote When in cluster mode, <code>source</code> and <code>destination</code> must map to the
      *     same hash slot.
      * @see <a href="https://valkey.io/commands/geosearch">valkey.io</a> for more details.
      * @param destination The key of the destination sorted set.

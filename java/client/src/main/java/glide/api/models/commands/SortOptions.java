@@ -12,7 +12,7 @@ import lombok.experimental.SuperBuilder;
  * GenericBaseCommands#sortReadOnly(String, SortOptions)}, and {@link
  * GenericBaseCommands#sortStore(String, String, SortOptions)}
  *
- * In cluster mode, {@link #byPattern} and {@link #getPatterns} must map to the same hash
+ * @apiNote In cluster mode, {@link #byPattern} and {@link #getPatterns} must map to the same hash
  *     slot as the key, and this is supported only since Valkey version 8.0.
  * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> and <a
  *     href="https://valkey.io/commands/sort/">valkey.io</a>
