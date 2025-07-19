@@ -5,7 +5,7 @@ namespace Valkey.Glide.Commands;
 /// <summary>
 /// Supports commands for connection management that are common to both standalone and cluster clients.
 /// </summary>
-internal interface IConnectionManagementCommands
+public interface IConnectionManagementCommands
 {
     /// <summary>
     /// Ping the server and measure the round-trip time.<br />

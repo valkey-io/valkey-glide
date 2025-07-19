@@ -7,7 +7,7 @@ namespace Valkey.Glide.Commands;
 /// <br/>
 /// See more on <see href="https://valkey.io/commands/#list">valkey.io</see>.
 /// </summary>
-internal interface IListBaseCommands
+public interface IListBaseCommands
 {
     /// <summary>
     /// Removes and returns the first elements of the list stored at <paramref name="key" />.
@@ -28,7 +28,7 @@ internal interface IListBaseCommands
     Task<ValkeyValue> ListLeftPopAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None);
 
     /// <summary>
-    /// Removes and returns up to <paramref name="count" /> elements of the list 
+    /// Removes and returns up to <paramref name="count" /> elements of the list
     /// stored at <paramref name="key" />, depending on the list's length.
     /// </summary>
     /// <seealso href="https://valkey.io/commands/lpop"/>

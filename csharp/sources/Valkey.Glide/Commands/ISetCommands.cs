@@ -7,7 +7,7 @@ namespace Valkey.Glide.Commands;
 /// <br/>
 /// See more on <see href="https://valkey.io/commands/?group=set#set">valkey.io</see>.
 /// </summary>
-internal interface ISetCommands
+public interface ISetCommands
 {
     /// <summary>
     /// SAdd adds specified members to the set stored at key.
