@@ -69,4 +69,23 @@ public interface TransactionsBaseCommands {
      * }</pre>
      */
     CompletableFuture<String> watch(GlideString[] keys);
+
+    /**
+     * Flushes all the previously watched keys for a transaction. Executing a transaction will
+     * automatically flush all previously watched keys.
+     *
+     * @apiNote In cluster mode, this command will be routed to all primary nodes.
+     * @see <a href="https://valkey.io/commands/unwatch/">valkey.io</a> for details.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * assert client.watch(new String[] {"sampleKey"}).get().equals("OK");
+     * assert client.unwatch().get().equals("OK"); // Flushes all watched keys
+     * transaction.set("sampleKey", "foobar");
+     * assert client.set("sampleKey", "hello world").get().equals("OK");
+     * Object[] result = client.exec(transaction, false).get();
+     * assert result != null; // Executes successfully since keys are no longer watched
+     * }</pre>
+     */
+    CompletableFuture<String> unwatch();
 }

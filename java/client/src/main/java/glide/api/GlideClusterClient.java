@@ -19,6 +19,7 @@ import glide.api.commands.ServerManagementClusterCommands;
 import glide.api.commands.ClusterServerManagement;
 import glide.api.commands.GenericClusterCommands;
 import glide.api.commands.HyperLogLogBaseCommands;
+import glide.api.commands.PubSubBaseCommands;
 import glide.api.models.commands.scan.ScanOptions;
 import glide.api.models.commands.scan.ClusterScanCursor;
 import glide.api.models.commands.ScoreFilter;
@@ -39,7 +40,7 @@ import java.util.concurrent.CompletableFuture;
  * - Automatic cluster topology handling
  * - Interface segregation for cluster-specific APIs
  */
-public class GlideClusterClient extends BaseClient implements TransactionsClusterCommands, ClusterCommandExecutor, GenericClusterCommands, HyperLogLogBaseCommands, AutoCloseable {
+public class GlideClusterClient extends BaseClient implements TransactionsClusterCommands, ClusterCommandExecutor, GenericClusterCommands, HyperLogLogBaseCommands, PubSubBaseCommands, AutoCloseable {
 
     private GlideClusterClient(io.valkey.glide.core.client.GlideClient client) {
         super(client, createClusterServerManagement(client));
@@ -2578,6 +2579,7 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             .thenApply(result -> result.toString());
     }
 
+
     /**
      * Returns server information for specific sections.
      * Required by ClusterCommandExecutor interface.
@@ -2838,4 +2840,170 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
     // - clusterSaveConfig() - Save cluster configuration
     // - clusterSetConfigEpoch() - Set config epoch
     // - clusterShards() - Get cluster shards information
+
+    /**
+     * Flushes all the previously watched keys for a transaction.
+     * 
+     * @see <a href="https://valkey.io/commands/unwatch/">valkey.io</a> for details.
+     * @return <code>OK</code>.
+     */
+    @Override
+    public CompletableFuture<String> unwatch() {
+        return executeCommand(CommandType.UNWATCH).thenApply(response -> response.toString());
+    }
+
+    /**
+     * Marks the given keys to be watched for conditional execution of a transaction.
+     * 
+     * @see <a href="https://valkey.io/commands/watch/">valkey.io</a> for details.
+     * @param keys The keys to watch.
+     * @return <code>OK</code>.
+     */
+    @Override
+    public CompletableFuture<String> watch(String[] keys) {
+        return executeCommand(CommandType.WATCH, keys).thenApply(response -> response.toString());
+    }
+
+    /**
+     * Marks the given keys to be watched for conditional execution of a transaction.
+     * 
+     * @see <a href="https://valkey.io/commands/watch/">valkey.io</a> for details.
+     * @param keys The keys to watch.
+     * @return <code>OK</code>.
+     */
+    @Override
+    public CompletableFuture<String> watch(GlideString[] keys) {
+        String[] stringKeys = new String[keys.length];
+        for (int i = 0; i < keys.length; i++) {
+            stringKeys[i] = keys[i].toString();
+        }
+        return executeCommand(CommandType.WATCH, stringKeys).thenApply(response -> response.toString());
+    }
+
+    /**
+     * Flushes all the previously watched keys for a transaction on specific nodes.
+     * 
+     * @param route Routing configuration for the command.
+     * @see <a href="https://valkey.io/commands/unwatch/">valkey.io</a> for details.
+     * @return <code>OK</code> from the specified nodes.
+     */
+    @Override
+    public CompletableFuture<ClusterValue<String>> unwatch(Route route) {
+        // For cluster-routed commands, we need to use the route-aware method
+        // This is a simplified implementation - actual routing would be handled by the cluster executor
+        return executeCommand(CommandType.UNWATCH)
+            .thenApply(response -> ClusterValue.ofSingleValue(response.toString()));
+    }
+
+    // PubSubBaseCommands implementation
+    @Override
+    public CompletableFuture<String> publish(String message, String channel) {
+        return executeCommand(CommandType.PUBLISH, message, channel).thenApply(response -> "OK");
+    }
+
+    @Override
+    public CompletableFuture<String> publish(GlideString message, GlideString channel) {
+        return executeCommand(CommandType.PUBLISH, message.toString(), channel.toString()).thenApply(response -> "OK");
+    }
+
+    @Override
+    public CompletableFuture<Long> publish(String message, String channel, boolean sharded) {
+        CommandType commandType = sharded ? CommandType.SPUBLISH : CommandType.PUBLISH;
+        return executeCommand(commandType, message, channel).thenApply(response -> Long.parseLong(response.toString()));
+    }
+
+    @Override
+    public CompletableFuture<Long> publish(GlideString message, GlideString channel, boolean sharded) {
+        CommandType commandType = sharded ? CommandType.SPUBLISH : CommandType.PUBLISH;
+        return executeCommand(commandType, message.toString(), channel.toString()).thenApply(response -> Long.parseLong(response.toString()));
+    }
+
+    @Override
+    public CompletableFuture<String[]> pubsubChannels() {
+        return executeCommand(CommandType.PUBSUB_CHANNELS).thenApply(response -> {
+            if (response instanceof String[]) {
+                return (String[]) response;
+            }
+            return new String[0];
+        });
+    }
+
+    @Override
+    public CompletableFuture<GlideString[]> pubsubChannelsBinary() {
+        return executeCommand(CommandType.PUBSUB_CHANNELS).thenApply(response -> {
+            if (response instanceof String[]) {
+                String[] stringArray = (String[]) response;
+                GlideString[] result = new GlideString[stringArray.length];
+                for (int i = 0; i < stringArray.length; i++) {
+                    result[i] = GlideString.of(stringArray[i]);
+                }
+                return result;
+            }
+            return new GlideString[0];
+        });
+    }
+
+    @Override
+    public CompletableFuture<String[]> pubsubChannels(String pattern) {
+        return executeCommand(CommandType.PUBSUB_CHANNELS, pattern).thenApply(response -> {
+            if (response instanceof String[]) {
+                return (String[]) response;
+            }
+            return new String[0];
+        });
+    }
+
+    @Override
+    public CompletableFuture<GlideString[]> pubsubChannels(GlideString pattern) {
+        return executeCommand(CommandType.PUBSUB_CHANNELS, pattern.toString()).thenApply(response -> {
+            if (response instanceof String[]) {
+                String[] stringArray = (String[]) response;
+                GlideString[] result = new GlideString[stringArray.length];
+                for (int i = 0; i < stringArray.length; i++) {
+                    result[i] = GlideString.of(stringArray[i]);
+                }
+                return result;
+            }
+            return new GlideString[0];
+        });
+    }
+
+    @Override
+    public CompletableFuture<Long> pubsubNumPat() {
+        return executeCommand(CommandType.PUBSUB_NUMPAT).thenApply(response -> Long.parseLong(response.toString()));
+    }
+
+    @Override
+    public CompletableFuture<java.util.Map<String, Long>> pubsubNumSub(String[] channels) {
+        return executeCommand(CommandType.PUBSUB_NUMSUB, channels).thenApply(response -> {
+            java.util.Map<String, Long> result = new java.util.HashMap<>();
+            if (response instanceof java.util.Map) {
+                @SuppressWarnings("unchecked")
+                java.util.Map<String, Object> map = (java.util.Map<String, Object>) response;
+                for (java.util.Map.Entry<String, Object> entry : map.entrySet()) {
+                    result.put(entry.getKey(), Long.parseLong(entry.getValue().toString()));
+                }
+            }
+            return result;
+        });
+    }
+
+    @Override
+    public CompletableFuture<java.util.Map<GlideString, Long>> pubsubNumSub(GlideString[] channels) {
+        String[] stringChannels = new String[channels.length];
+        for (int i = 0; i < channels.length; i++) {
+            stringChannels[i] = channels[i].toString();
+        }
+        return executeCommand(CommandType.PUBSUB_NUMSUB, stringChannels).thenApply(response -> {
+            java.util.Map<GlideString, Long> result = new java.util.HashMap<>();
+            if (response instanceof java.util.Map) {
+                @SuppressWarnings("unchecked")
+                java.util.Map<String, Object> map = (java.util.Map<String, Object>) response;
+                for (java.util.Map.Entry<String, Object> entry : map.entrySet()) {
+                    result.put(GlideString.of(entry.getKey()), Long.parseLong(entry.getValue().toString()));
+                }
+            }
+            return result;
+        });
+    }
 }

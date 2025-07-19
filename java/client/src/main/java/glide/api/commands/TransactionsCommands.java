@@ -11,7 +11,7 @@ import java.util.concurrent.CompletableFuture;
  *
  * @see <a href="https://valkey.io/commands/?group=transactions">Transactions Commands</a>
  */
-public interface TransactionsCommands {
+public interface TransactionsCommands extends TransactionsBaseCommands {
 
     /**
      * @deprecated Use {@link #exec(Batch, boolean)} instead. This method is being replaced by a more

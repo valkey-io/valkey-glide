@@ -2128,4 +2128,58 @@ public class Batch extends BaseBatch<Batch> {
     public Batch copy(GlideString source, GlideString destination) {
         return addCommand(CommandType.COPY, source.toString(), destination.toString());
     }
+
+    /**
+     * Publishes message on pubsub channel.
+     *
+     * @see <a href="https://valkey.io/commands/publish/">valkey.io</a> for details.
+     * @param message The message to publish.
+     * @param channel The channel to publish the message on.
+     * @return This batch instance for method chaining.
+     */
+    public Batch publish(String message, String channel) {
+        return addCommand(CommandType.PUBLISH, message, channel);
+    }
+
+    /**
+     * Publishes message on pubsub channel.
+     *
+     * @see <a href="https://valkey.io/commands/publish/">valkey.io</a> for details.
+     * @param message The message to publish.
+     * @param channel The channel to publish the message on.
+     * @return This batch instance for method chaining.
+     */
+    public Batch publish(GlideString message, GlideString channel) {
+        return addCommand(CommandType.PUBLISH, message.toString(), channel.toString());
+    }
+
+    /**
+     * Publishes message on pubsub channel, with an option to use sharded publish.
+     *
+     * @see <a href="https://valkey.io/commands/publish/">valkey.io</a> for standard publish.
+     * @see <a href="https://valkey.io/commands/spublish/">valkey.io</a> for sharded publish.
+     * @param message The message to publish.
+     * @param channel The channel to publish the message on.
+     * @param sharded If true, uses SPUBLISH (sharded publish), otherwise uses PUBLISH.
+     * @return This batch instance for method chaining.
+     */
+    public Batch publish(String message, String channel, boolean sharded) {
+        CommandType commandType = sharded ? CommandType.SPUBLISH : CommandType.PUBLISH;
+        return addCommand(commandType, message, channel);
+    }
+
+    /**
+     * Publishes message on pubsub channel, with an option to use sharded publish.
+     *
+     * @see <a href="https://valkey.io/commands/publish/">valkey.io</a> for standard publish.
+     * @see <a href="https://valkey.io/commands/spublish/">valkey.io</a> for sharded publish.
+     * @param message The message to publish.
+     * @param channel The channel to publish the message on.
+     * @param sharded If true, uses SPUBLISH (sharded publish), otherwise uses PUBLISH.
+     * @return This batch instance for method chaining.
+     */
+    public Batch publish(GlideString message, GlideString channel, boolean sharded) {
+        CommandType commandType = sharded ? CommandType.SPUBLISH : CommandType.PUBLISH;
+        return addCommand(commandType, message.toString(), channel.toString());
+    }
 }

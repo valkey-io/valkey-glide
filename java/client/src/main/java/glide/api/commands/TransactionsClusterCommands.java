@@ -11,7 +11,7 @@ import java.util.concurrent.CompletableFuture;
  *
  * @see <a href="https://valkey.io/commands/?group=transactions">Transactions Commands</a>
  */
-public interface TransactionsClusterCommands {
+public interface TransactionsClusterCommands extends TransactionsBaseCommands {
 
     /**
      * @deprecated Use {@link #exec(ClusterBatch, boolean)} instead. This method is being replaced by
@@ -138,4 +138,19 @@ public interface TransactionsClusterCommands {
      */
     CompletableFuture<Object[]> exec(
             ClusterBatch batch, boolean raiseOnError, ClusterBatchOptions options);
+
+    /**
+     * Flushes all the previously watched keys for a transaction on specific nodes. Executing a 
+     * transaction will automatically flush all previously watched keys.
+     *
+     * @param route Routing configuration for the command. The command will be routed to the specified nodes.
+     * @see <a href="https://valkey.io/commands/unwatch/">valkey.io</a> for details.
+     * @return <code>OK</code> from the specified nodes.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<String> result = clusterClient.unwatch(ALL_PRIMARIES).get();
+     * result.getMultiValue().values().forEach(value -> assert value.equals("OK"));
+     * }</pre>
+     */
+    CompletableFuture<glide.api.models.ClusterValue<String>> unwatch(glide.api.models.configuration.RequestRoutingConfiguration.Route route);
 }

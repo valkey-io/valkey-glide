@@ -43,6 +43,40 @@ public interface PubSubBaseCommands {
     CompletableFuture<String> publish(GlideString message, GlideString channel);
 
     /**
+     * Publishes message on pubsub channel, with an option to use sharded publish.
+     *
+     * @see <a href="https://valkey.io/commands/publish/">valkey.io</a> for standard publish.
+     * @see <a href="https://valkey.io/commands/spublish/">valkey.io</a> for sharded publish.
+     * @param message The message to publish.
+     * @param channel The channel to publish the message on.
+     * @param sharded If true, uses SPUBLISH (sharded publish), otherwise uses PUBLISH.
+     * @return Number of subscribers that received the message.
+     * @example
+     *     <pre>{@code
+     * Long response = client.publish("The cat said 'meow'!", "announcements", false).get();
+     * assert response >= 0L;
+     * }</pre>
+     */
+    CompletableFuture<Long> publish(String message, String channel, boolean sharded);
+
+    /**
+     * Publishes message on pubsub channel, with an option to use sharded publish.
+     *
+     * @see <a href="https://valkey.io/commands/publish/">valkey.io</a> for standard publish.
+     * @see <a href="https://valkey.io/commands/spublish/">valkey.io</a> for sharded publish.
+     * @param message The message to publish.
+     * @param channel The channel to publish the message on.
+     * @param sharded If true, uses SPUBLISH (sharded publish), otherwise uses PUBLISH.
+     * @return Number of subscribers that received the message.
+     * @example
+     *     <pre>{@code
+     * Long response = client.publish(gs("The cat said 'meow'!"), gs("announcements"), true).get();
+     * assert response >= 0L;
+     * }</pre>
+     */
+    CompletableFuture<Long> publish(GlideString message, GlideString channel, boolean sharded);
+
+    /**
      * Lists the currently active channels.
      *
      * @apiNote When in cluster mode, the command is routed to all nodes, and aggregates the response
