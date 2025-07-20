@@ -931,13 +931,13 @@ pub(crate) fn client_set_info_pipeline() -> Pipeline {
         .cmd("CLIENT")
         .arg("SETINFO")
         .arg("LIB-NAME")
-        .arg(std::env!("GLIDE_NAME"))
+        .arg(std::env::var("GLIDE_NAME").unwrap_or_else(|_| "redis-rs".to_string()))
         .ignore();
     pipeline
         .cmd("CLIENT")
         .arg("SETINFO")
         .arg("LIB-VER")
-        .arg(std::env!("GLIDE_VERSION"))
+        .arg(std::env::var("GLIDE_VERSION").unwrap_or_else(|_| "unknown".to_string()))
         .ignore();
     pipeline
 }

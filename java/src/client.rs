@@ -70,14 +70,22 @@ impl JniClient {
         })
     }
 
-    /// Execute a Valkey command using glide-core directly
+    /// Execute a Valkey command using glide-core's complete pipeline
     ///
-    /// This is the core method - everything else is just parameter conversion.
-    /// No callbacks, no complex async bridges, just direct delegation to glide-core.
+    /// This leverages glide-core's:
+    /// - Automatic value conversion based on command type (expected_type_for_cmd)
+    /// - Timeout handling (including special logic for blocking commands)
+    /// - Cluster routing and error handling
+    /// 
+    /// No duplication - glide-core handles ALL Valkey protocol complexity.
     pub fn execute_command(&mut self, cmd: Cmd) -> JniResult<Value> {
         logger_core::log_debug("jni-client", format!("Executing command: {cmd:?}"));
 
-        // Use glide-core's send_command directly - that's it!
+        // Let glide-core handle everything automatically:
+        // - expected_type_for_cmd() determines return type conversion
+        // - get_request_timeout() handles blocking command timeouts  
+        // - convert_to_expected_type() performs automatic value conversion
+        // - Cluster routing, retry logic, connection management, etc.
         let result = self
             .runtime
             .block_on(async { self.core_client.send_command(&cmd, None).await });
@@ -85,7 +93,7 @@ impl JniClient {
         match result {
             Ok(value) => {
                 logger_core::log_debug("jni-client", "Command executed successfully");
-                Ok(value)
+                Ok(value) // Value is already properly converted by glide-core!
             }
             Err(e) => {
                 logger_core::log_debug("jni-client", format!("Command failed: {e}"));
@@ -94,9 +102,10 @@ impl JniClient {
         }
     }
 
-    /// Execute a Valkey command with routing using glide-core directly
+    /// Execute a Valkey command with routing using glide-core's complete pipeline
     ///
-    /// For cluster operations that need specific routing.
+    /// Identical to execute_command() but allows explicit routing.
+    /// glide-core handles all complexity automatically.
     pub fn execute_command_with_routing(
         &mut self,
         cmd: Cmd,
@@ -107,7 +116,7 @@ impl JniClient {
             format!("Executing command with routing: {cmd:?}, routing: {routing:?}"),
         );
 
-        // Use glide-core's send_command with routing - that's it!
+        // glide-core handles routing, value conversion, timeouts, everything
         let result = self
             .runtime
             .block_on(async { self.core_client.send_command(&cmd, routing).await });
@@ -118,7 +127,7 @@ impl JniClient {
                     "jni-client",
                     "Command with routing executed successfully",
                 );
-                Ok(value)
+                Ok(value) // Already properly converted by glide-core
             }
             Err(e) => {
                 logger_core::log_debug(
@@ -192,7 +201,8 @@ impl Clone for JniClient {
 
 /// Helper function to create a Valkey command
 ///
-/// Simple utility that doesn't duplicate glide-core logic.
+/// Ultra-simple utility for command building. All the complexity
+/// (value conversion, timeouts, routing) is handled by glide-core.
 pub fn create_valkey_command(command: &str, args: &[String]) -> Cmd {
     let mut cmd = redis::cmd(command);
     for arg in args {
@@ -490,6 +500,10 @@ pub unsafe extern "system" fn Java_io_valkey_glide_core_client_GlideClient_creat
 
     jni_result!(&mut env, result(), 0)
 }
+
+// executeStringCommand removed - redundant!
+// glide-core's automatic value conversion via executeCommand handles all cases.
+// Java side can convert Value objects to strings as needed.
 
 /// Close a client - ESSENTIAL INFRASTRUCTURE
 #[no_mangle]
