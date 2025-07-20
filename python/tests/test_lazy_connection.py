@@ -231,6 +231,8 @@ class TestLazyConnection:
         finally:
             if lazy_glide_client:
                 await lazy_glide_client.close()
+            if monitoring_client:
+                await monitoring_client.close()
 
     @pytest.mark.parametrize("cluster_mode", [False, True])
     async def test_lazy_connection_with_non_existent_host(
