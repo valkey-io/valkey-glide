@@ -18,6 +18,7 @@ logger_core = { path = "../logger_core" }
 
 [dependencies.glide-core]
 path = "../glide-core"
+features = ["standalone_heartbeat"]
 
 [dependencies.telemetrylib]
 path = "../glide-core/telemetry"

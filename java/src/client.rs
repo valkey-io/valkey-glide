@@ -70,6 +70,22 @@ impl JniClient {
         })
     }
 
+    /// Create a new JniClient with an existing runtime
+    ///
+    /// This ensures the same runtime used for connection is used for commands,
+    /// preventing connection drops due to runtime lifecycle issues.
+    pub fn with_runtime(core_client: Client, runtime: Arc<Runtime>) -> JniResult<Self> {
+        logger_core::log_debug(
+            "jni-client",
+            "Created JniClient with shared runtime for connection consistency",
+        );
+
+        Ok(Self {
+            core_client,
+            runtime,
+        })
+    }
+
     /// Execute a Valkey command using glide-core's complete pipeline
     ///
     /// This leverages glide-core's:
@@ -466,19 +482,21 @@ pub unsafe extern "system" fn Java_io_valkey_glide_core_client_GlideClient_creat
             ..Default::default()
         };
 
-        // Create the actual client using a separate runtime for connection
-        let connection_runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|e| jni_error!(Runtime, "Failed to create connection runtime: {e}"))?;
+        // Create runtime first, then use it for both connection and future operations
+        let runtime = Arc::new(
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .map_err(|e| jni_error!(Runtime, "Failed to create runtime: {e}"))?
+        );
 
-        let core_client = connection_runtime.block_on(async {
+        let core_client = runtime.block_on(async {
             Client::new(connection_config, None)
                 .await
                 .map_err(|e| jni_error!(Connection, "Failed to connect to Valkey: {e}"))
         })?;
 
-        let jni_client = JniClient::new(core_client)?;
+        let jni_client = JniClient::with_runtime(core_client, runtime)?;
         let handle = CLIENT_COUNTER.fetch_add(1, Ordering::SeqCst);
 
         // Register in the client registry
@@ -536,19 +554,19 @@ pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_closeClient(
     jni_result!(&mut env, result(), ())
 }
 
-/// Execute any command with arguments - SIMPLIFIED VERSION
+/// Execute any command with arguments - using byte arrays for Java compatibility
 ///
 /// # Safety
-/// This function is called from Java via JNI with valid jstring and jobject parameters.
+/// This function is called from Java via JNI with valid parameters.
 /// The command parameter is a valid jstring containing the command name.
-/// The args parameter is either null or a valid jobject array of strings.
+/// The args parameter is either null or a valid jobject array of byte arrays.
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_valkey_glide_core_client_GlideClient_executeCommand(
     mut env: JNIEnv,
     _class: JClass,
     client_handle: jlong,
     command: jstring,
-    args: jobject,
+    args: jobject, // byte[][]
 ) -> jobject {
     let mut result = || -> JniResult<jobject> {
         // 1. Validate and convert parameters with comprehensive bounds checking
@@ -559,11 +577,11 @@ pub unsafe extern "system" fn Java_io_valkey_glide_core_client_GlideClient_execu
         let cmd_str: String = env.get_string(&jstr_cmd)?.into();
         JniSafetyValidator::validate_string_content(&cmd_str)?;
 
-        // Convert Java string array to Vec<String> with optimized processing
+        // Convert Java byte array array to Vec<String> with optimized processing
         let args_vec = if args.is_null() {
             Vec::new()
         } else {
-            let args = java_string_array_to_vec(&mut env, args)?;
+            let args = java_byte_array_array_to_vec(&mut env, args)?;
             // Validate command argument count for library safety
             JniSafetyValidator::validate_command_args_count(args.len())?;
             args
@@ -590,9 +608,9 @@ pub unsafe extern "system" fn Java_io_valkey_glide_core_client_GlideClient_execu
     jni_result!(&mut env, result(), ptr::null_mut())
 }
 
-/// Helper: Convert Java string array to Vec<String> with optimized performance and bounds checking
-fn java_string_array_to_vec(env: &mut JNIEnv, array: jobject) -> JniResult<Vec<String>> {
-    use jni::objects::{JObject, JObjectArray};
+/// Helper: Convert Java byte array array to Vec<String> with optimized performance and bounds checking
+fn java_byte_array_array_to_vec(env: &mut JNIEnv, array: jobject) -> JniResult<Vec<String>> {
+    use jni::objects::{JObject, JObjectArray, JByteArray};
 
     let jarray = unsafe { JObject::from_raw(array) };
     let jobj_array = JObjectArray::from(jarray);
@@ -611,8 +629,11 @@ fn java_string_array_to_vec(env: &mut JNIEnv, array: jobject) -> JniResult<Vec<S
 
         let element = env.get_object_array_element(&jobj_array, i)?;
         if !element.is_null() {
-            let jstr = unsafe { JString::from_raw(element.as_raw()) };
-            let rust_string: String = env.get_string(&jstr)?.into();
+            let byte_array = JByteArray::from(element);
+            let bytes = env.convert_byte_array(byte_array)?;
+            
+            // Convert bytes to string using UTF-8
+            let rust_string = String::from_utf8_lossy(&bytes).into_owned();
 
             // Validate string content for library safety
             JniSafetyValidator::validate_string_content(&rust_string)?;
@@ -622,6 +643,9 @@ fn java_string_array_to_vec(env: &mut JNIEnv, array: jobject) -> JniResult<Vec<S
 
     Ok(result)
 }
+
+// Removed java_string_array_to_vec - no longer needed
+// All command execution now uses byte[][] for consistency
 
 /// Helper: Convert Valkey Value to Java object
 ///
