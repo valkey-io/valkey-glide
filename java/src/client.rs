@@ -13,7 +13,7 @@ use glide_core::client::Client;
 use redis::cluster_routing::RoutingInfo;
 use redis::{Cmd, Value};
 
-use jni::objects::{JClass, JObject, JObjectArray, JString};
+use jni::objects::{JClass, JObject, JString};
 use jni::sys::{jlong, jobject, jstring};
 use jni::JNIEnv;
 use std::collections::HashMap;
@@ -439,7 +439,7 @@ pub unsafe extern "system" fn Java_io_valkey_glide_core_client_GlideClient_execu
         let cmd_str: String = env.get_string(&jstr_cmd)?.into();
         JniSafetyValidator::validate_string_content(&cmd_str)?;
 
-        // Convert Java string array to Vec<String> with bounds checking
+        // Convert Java string array to Vec<String> with optimized processing
         let args_vec = if args.is_null() {
             Vec::new()
         } else {
@@ -470,8 +470,10 @@ pub unsafe extern "system" fn Java_io_valkey_glide_core_client_GlideClient_execu
     jni_result!(&mut env, result(), ptr::null_mut())
 }
 
-/// Helper: Convert Java string array to Vec<String> with comprehensive bounds checking
+/// Helper: Convert Java string array to Vec<String> with optimized performance and bounds checking
 fn java_string_array_to_vec(env: &mut JNIEnv, array: jobject) -> JniResult<Vec<String>> {
+    use jni::objects::{JObject, JObjectArray};
+
     let jarray = unsafe { JObject::from_raw(array) };
     let jobj_array = JObjectArray::from(jarray);
     let length = env.get_array_length(&jobj_array)?;
@@ -480,6 +482,7 @@ fn java_string_array_to_vec(env: &mut JNIEnv, array: jobject) -> JniResult<Vec<S
     JniSafetyValidator::validate_array_length(length)?;
     JniSafetyValidator::validate_array_creation(length, std::mem::size_of::<String>())?;
 
+    // Pre-allocate with exact capacity for better performance
     let mut result = Vec::with_capacity(length as usize);
 
     for i in 0..length {
@@ -523,12 +526,13 @@ fn convert_value_to_java_object(env: &mut JNIEnv, value: Value) -> JniResult<job
             // Validate buffer size for library safety
             JniSafetyValidator::validate_buffer_size(bytes.len())?;
 
-            // Convert bytes to Java String with proper UTF-8 handling
-            match String::from_utf8(bytes.clone()) {
+            // Zero-copy UTF-8 validation and conversion for better performance
+            match std::str::from_utf8(&bytes) {
                 Ok(s) => {
                     // Validate string content comprehensively
-                    JniSafetyValidator::validate_string_content(&s)?;
-                    let java_string = create_jni_string(env, &s)?;
+                    JniSafetyValidator::validate_string_content(s)?;
+                    // Create JNI string for conversion
+                    let java_string = create_jni_string(env, s)?;
                     Ok(java_string.as_raw())
                 }
                 Err(_) => {
@@ -564,6 +568,7 @@ fn convert_value_to_java_object(env: &mut JNIEnv, value: Value) -> JniResult<job
         Value::SimpleString(status) => {
             // Validate string content for library safety
             JniSafetyValidator::validate_string_content(&status)?;
+            // Create JNI string for status conversion
             let java_string = create_jni_string(env, &status)?;
             Ok(java_string.as_raw())
         }
@@ -573,6 +578,7 @@ fn convert_value_to_java_object(env: &mut JNIEnv, value: Value) -> JniResult<job
             let string_repr = format!("{value:?}");
             // Validate string representation for library safety
             JniSafetyValidator::validate_string_content(&string_repr)?;
+            // Use regular string creation for debug representations (unlikely to be frequent)
             let java_string = create_jni_string(env, &string_repr)?;
             Ok(java_string.as_raw())
         }
