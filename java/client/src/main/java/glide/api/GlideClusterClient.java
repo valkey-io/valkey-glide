@@ -36,9 +36,13 @@ import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.WeightAggregateOptions.KeyArrayBinary;
 import glide.api.models.commands.WeightAggregateOptions.KeysOrWeightedKeys;
 import glide.api.models.commands.WeightAggregateOptions.KeysOrWeightedKeysBinary;
+import glide.api.models.commands.ZAddOptions;
 import glide.api.models.commands.RangeOptions.RangeQuery;
 import glide.api.models.commands.RangeOptions.LexRange;
+import glide.api.models.commands.RangeOptions.ScoreRange;
+import glide.api.models.commands.RangeOptions.ScoredRangeQuery;
 import glide.api.models.Response;
+import glide.utils.ArrayTransformUtils;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -1737,7 +1741,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             });
     }
 
-    @Override
     public CompletableFuture<ClusterValue<String[]>> time(Route route) {
         return client.executeCommand(new io.valkey.glide.core.commands.Command(Time), route)
             .thenApply(result -> {
@@ -1759,7 +1762,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
-    @Override
     public CompletableFuture<ClusterValue<Long>> lastsave(Route route) {
         return client.executeCommand(new io.valkey.glide.core.commands.Command(LastSave), route)
             .thenApply(result -> ClusterValue.of(Long.parseLong(result.toString())));
@@ -1771,7 +1773,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             .thenApply(result -> Long.parseLong(result.toString()));
     }
 
-    @Override
     public CompletableFuture<Long> dbsize(Route route) {
         return client.executeCommand(new io.valkey.glide.core.commands.Command(DBSize), route)
             .thenApply(result -> Long.parseLong(result.toString()));
@@ -1783,7 +1784,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             .thenApply(result -> result.toString());
     }
 
-    @Override
     public CompletableFuture<String> configRewrite(Route route) {
         return client.executeCommand(new io.valkey.glide.core.commands.Command(ConfigRewrite), route)
             .thenApply(result -> result.toString());
@@ -1795,7 +1795,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             .thenApply(result -> result.toString());
     }
 
-    @Override
     public CompletableFuture<String> configResetStat(Route route) {
         return client.executeCommand(new io.valkey.glide.core.commands.Command(ConfigResetStat), route)
             .thenApply(result -> result.toString());
@@ -1814,7 +1813,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             .thenApply(result -> result.toString());
     }
 
-    @Override
     public CompletableFuture<String> configSet(Map<String, String> parameters, Route route) {
         String[] args = new String[parameters.size() * 2];
         int i = 0;
@@ -1838,13 +1836,11 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             .thenApply(result -> result.toString());
     }
 
-    @Override
     public CompletableFuture<String> flushall(Route route) {
         return client.executeCommand(new io.valkey.glide.core.commands.Command(FlushAll), route)
             .thenApply(result -> result.toString());
     }
 
-    @Override
     public CompletableFuture<String> flushall(FlushMode mode, Route route) {
         return client.executeCommand(new io.valkey.glide.core.commands.Command(FlushAll, mode.name()), route)
             .thenApply(result -> result.toString());
@@ -1862,19 +1858,16 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             .thenApply(result -> result.toString());
     }
 
-    @Override
     public CompletableFuture<String> flushdb(Route route) {
         return client.executeCommand(new io.valkey.glide.core.commands.Command(FlushDB), route)
             .thenApply(result -> result.toString());
     }
 
-    @Override
     public CompletableFuture<String> flushdb(FlushMode mode, Route route) {
         return client.executeCommand(new io.valkey.glide.core.commands.Command(FlushDB, mode.name()), route)
             .thenApply(result -> result.toString());
     }
 
-    @Override
     public CompletableFuture<ClusterValue<String>> info(Section[] sections, Route route) {
         String[] sectionNames = new String[sections.length];
         for (int i = 0; i < sections.length; i++) {
@@ -1884,7 +1877,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             .thenApply(result -> ClusterValue.of(result.toString()));
     }
 
-    @Override
     public CompletableFuture<ClusterValue<String>> info(Route route) {
         return client.executeCommand(new io.valkey.glide.core.commands.Command(Info), route)
             .thenApply(result -> ClusterValue.of(result.toString()));
@@ -1903,7 +1895,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             .thenApply(result -> (String[]) result);
     }
 
-    @Override
     public CompletableFuture<GlideString[]> zdiff(GlideString[] keys) {
         String[] stringKeys = Arrays.stream(keys).map(GlideString::toString).toArray(String[]::new);
         return client.executeCommand(new io.valkey.glide.core.commands.Command(ZDiff, stringKeys))
@@ -1921,7 +1912,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             .thenApply(result -> (Map<String, Double>) result);
     }
 
-    @Override
     public CompletableFuture<Map<GlideString, Double>> zdiffWithScores(GlideString[] keys) {
         String[] stringKeys = Arrays.stream(keys).map(GlideString::toString).toArray(String[]::new);
         String[] args = Arrays.copyOf(stringKeys, stringKeys.length + 1);
@@ -1946,7 +1936,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             .thenApply(result -> (Long) result);
     }
 
-    @Override
     public CompletableFuture<Long> zdiffstore(GlideString destination, GlideString[] keys) {
         String[] args = new String[keys.length + 1];
         args[0] = destination.toString();
@@ -1960,65 +1949,94 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
     // ZUNION family methods - basic implementations for compilation
     @Override
     public CompletableFuture<String[]> zunion(KeyArray keys) {
-        // TODO: Implement properly after fixing KeyArray.toArgs() signature
-        throw new UnsupportedOperationException("zunion(KeyArray) not yet implemented");
+        String[] args = keys.toArgs();
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZUnion, args))
+            .thenApply(result -> (String[]) result);
     }
 
-    @Override
     public CompletableFuture<GlideString[]> zunion(KeyArrayBinary keys) {
-        // TODO: Implement properly after fixing KeyArrayBinary.toArgs() signature  
-        throw new UnsupportedOperationException("zunion(KeyArrayBinary) not yet implemented");
+        GlideString[] args = keys.toArgs();
+        String[] stringArgs = new String[args.length];
+        for (int i = 0; i < args.length; i++) {
+            stringArgs[i] = args[i].toString();
+        }
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZUnion, stringArgs))
+            .thenApply(result -> ArrayTransformUtils.toGlideStringArray((String[]) result));
     }
 
     @Override
     public CompletableFuture<Map<String, Double>> zunionWithScores(KeysOrWeightedKeys keysOrWeightedKeys, Aggregate aggregate) {
-        // TODO: Implement properly
-        throw new UnsupportedOperationException("zunionWithScores(KeysOrWeightedKeys, Aggregate) not yet implemented");
+        String[] keysArgs = keysOrWeightedKeys.toArgs();
+        String[] aggregateArgs = aggregate.toArgs();
+        String[] args = ArrayTransformUtils.concatenateArrays(keysArgs, aggregateArgs, new String[]{"WITHSCORES"});
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZUnion, args))
+            .thenApply(result -> (Map<String, Double>) result);
     }
 
     @Override
     public CompletableFuture<Map<GlideString, Double>> zunionWithScores(KeysOrWeightedKeysBinary keysOrWeightedKeys, Aggregate aggregate) {
-        // TODO: Implement properly
-        throw new UnsupportedOperationException("zunionWithScores(KeysOrWeightedKeysBinary, Aggregate) not yet implemented");
+        GlideString[] rawKeysArgs = keysOrWeightedKeys.toArgs();
+        String[] keysArgs = new String[rawKeysArgs.length];
+        for (int i = 0; i < rawKeysArgs.length; i++) {
+            keysArgs[i] = rawKeysArgs[i].toString();
+        }
+        String[] aggregateArgs = aggregate.toArgs();
+        String[] args = ArrayTransformUtils.concatenateArrays(keysArgs, aggregateArgs, new String[]{"WITHSCORES"});
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZUnion, args))
+            .thenApply(result -> (Map<GlideString, Double>) result);
     }
 
     @Override
     public CompletableFuture<Map<String, Double>> zunionWithScores(KeysOrWeightedKeys keysOrWeightedKeys) {
-        // TODO: Implement properly
-        throw new UnsupportedOperationException("zunionWithScores(KeysOrWeightedKeys) not yet implemented");
+        String[] keysArgs = keysOrWeightedKeys.toArgs();
+        String[] args = ArrayTransformUtils.concatenateArrays(keysArgs, new String[]{"WITHSCORES"});
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZUnion, args))
+            .thenApply(result -> (Map<String, Double>) result);
     }
 
     @Override
     public CompletableFuture<Map<GlideString, Double>> zunionWithScores(KeysOrWeightedKeysBinary keysOrWeightedKeys) {
-        // TODO: Implement properly
-        throw new UnsupportedOperationException("zunionWithScores(KeysOrWeightedKeysBinary) not yet implemented");
+        GlideString[] rawKeysArgs = keysOrWeightedKeys.toArgs();
+        String[] keysArgs = new String[rawKeysArgs.length];
+        for (int i = 0; i < rawKeysArgs.length; i++) {
+            keysArgs[i] = rawKeysArgs[i].toString();
+        }
+        String[] args = ArrayTransformUtils.concatenateArrays(keysArgs, new String[]{"WITHSCORES"});
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZUnion, args))
+            .thenApply(result -> (Map<GlideString, Double>) result);
     }
 
     @Override
     public CompletableFuture<Long> zunionstore(String destination, KeysOrWeightedKeys keysOrWeightedKeys, Aggregate aggregate) {
-        // TODO: Implement properly
-        throw new UnsupportedOperationException("zunionstore(String, KeysOrWeightedKeys, Aggregate) not yet implemented");
+        String[] keysArgs = keysOrWeightedKeys.toArgs();
+        String[] aggregateArgs = aggregate.toArgs();
+        String[] args = ArrayTransformUtils.concatenateArrays(new String[]{destination}, keysArgs, aggregateArgs);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZUnionStore, args))
+            .thenApply(result -> (Long) result);
     }
 
-    @Override
     public CompletableFuture<Long> zunionstore(GlideString destination, KeysOrWeightedKeys keysOrWeightedKeys, Aggregate aggregate) {
-        // TODO: Implement properly
-        throw new UnsupportedOperationException("zunionstore(GlideString, KeysOrWeightedKeys, Aggregate) not yet implemented");
+        String[] keysArgs = keysOrWeightedKeys.toArgs();
+        String[] aggregateArgs = aggregate.toArgs();
+        String[] args = ArrayTransformUtils.concatenateArrays(new String[]{destination.toString()}, keysArgs, aggregateArgs);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZUnionStore, args))
+            .thenApply(result -> (Long) result);
     }
 
-    @Override
     public CompletableFuture<Long> zunionstore(String destination, KeysOrWeightedKeys keysOrWeightedKeys) {
-        // TODO: Implement properly  
-        throw new UnsupportedOperationException("zunionstore(String, KeysOrWeightedKeys) not yet implemented");
+        String[] keysArgs = keysOrWeightedKeys.toArgs();
+        String[] args = ArrayTransformUtils.concatenateArrays(new String[]{destination}, keysArgs);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZUnionStore, args))
+            .thenApply(result -> (Long) result);
     }
 
-    @Override
     public CompletableFuture<Long> zunionstore(GlideString destination, KeysOrWeightedKeys keysOrWeightedKeys) {
-        // TODO: Implement properly
-        throw new UnsupportedOperationException("zunionstore(GlideString, KeysOrWeightedKeys) not yet implemented");
+        String[] keysArgs = keysOrWeightedKeys.toArgs();
+        String[] args = ArrayTransformUtils.concatenateArrays(new String[]{destination.toString()}, keysArgs);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZUnionStore, args))
+            .thenApply(result -> (Long) result);
     }
 
-    @Override
     public CompletableFuture<Long> zunionstore(GlideString destination, KeysOrWeightedKeysBinary keysOrWeightedKeys) {
         GlideString[] rawArgs = keysOrWeightedKeys.toArgs();
         String[] args = new String[rawArgs.length];
@@ -2032,7 +2050,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             .thenApply(result -> (Long) result);
     }
 
-    @Override
     public CompletableFuture<ClusterValue<Long>> zunionstore(GlideString destination, KeysOrWeightedKeysBinary keysOrWeightedKeys, Route route) {
         GlideString[] rawArgs = keysOrWeightedKeys.toArgs();
         String[] args = new String[rawArgs.length];
@@ -2062,7 +2079,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             .thenApply(result -> (Long) result);
     }
 
-    @Override
     public CompletableFuture<ClusterValue<Long>> zunionstore(GlideString destination, KeysOrWeightedKeysBinary keysOrWeightedKeys, Aggregate aggregate, Route route) {
         GlideString[] rawArgs = keysOrWeightedKeys.toArgs();
         String[] args = new String[rawArgs.length];
@@ -2081,65 +2097,95 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
     // ZINTER family methods - basic implementations for compilation
     @Override
     public CompletableFuture<String[]> zinter(KeyArray keys) {
-        // TODO: Implement properly after fixing KeyArray.toArgs() signature
-        throw new UnsupportedOperationException("zinter(KeyArray) not yet implemented");
+        String[] args = keys.toArgs();
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZInter, args))
+            .thenApply(result -> (String[]) result);
     }
 
-    @Override
     public CompletableFuture<GlideString[]> zinter(KeyArrayBinary keys) {
-        // TODO: Implement properly after fixing KeyArrayBinary.toArgs() signature
-        throw new UnsupportedOperationException("zinter(KeyArrayBinary) not yet implemented");
+        GlideString[] args = keys.toArgs();
+        String[] stringArgs = new String[args.length];
+        for (int i = 0; i < args.length; i++) {
+            stringArgs[i] = args[i].toString();
+        }
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZInter, stringArgs))
+            .thenApply(result -> ArrayTransformUtils.toGlideStringArray((String[]) result));
     }
 
     @Override
     public CompletableFuture<Map<String, Double>> zinterWithScores(KeysOrWeightedKeys keysOrWeightedKeys) {
-        // TODO: Implement properly
-        throw new UnsupportedOperationException("zinterWithScores(KeysOrWeightedKeys) not yet implemented");
+        String[] keysArgs = keysOrWeightedKeys.toArgs();
+        String[] args = ArrayTransformUtils.concatenateArrays(keysArgs, new String[]{"WITHSCORES"});
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZInter, args))
+            .thenApply(result -> (Map<String, Double>) result);
     }
 
     @Override
     public CompletableFuture<Map<GlideString, Double>> zinterWithScores(KeysOrWeightedKeysBinary keysOrWeightedKeys) {
-        // TODO: Implement properly
-        throw new UnsupportedOperationException("zinterWithScores(KeysOrWeightedKeysBinary) not yet implemented");
+        GlideString[] rawKeysArgs = keysOrWeightedKeys.toArgs();
+        String[] keysArgs = new String[rawKeysArgs.length];
+        for (int i = 0; i < rawKeysArgs.length; i++) {
+            keysArgs[i] = rawKeysArgs[i].toString();
+        }
+        String[] args = ArrayTransformUtils.concatenateArrays(keysArgs, new String[]{"WITHSCORES"});
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZInter, args))
+            .thenApply(result -> (Map<GlideString, Double>) result);
     }
 
     @Override
     public CompletableFuture<Map<String, Double>> zinterWithScores(KeysOrWeightedKeys keysOrWeightedKeys, Aggregate aggregate) {
-        // TODO: Implement properly
-        throw new UnsupportedOperationException("zinterWithScores(KeysOrWeightedKeys, Aggregate) not yet implemented");
+        String[] keysArgs = keysOrWeightedKeys.toArgs();
+        String[] aggregateArgs = aggregate.toArgs();
+        String[] args = ArrayTransformUtils.concatenateArrays(keysArgs, aggregateArgs, new String[]{"WITHSCORES"});
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZInter, args))
+            .thenApply(result -> (Map<String, Double>) result);
     }
 
     @Override
     public CompletableFuture<Map<GlideString, Double>> zinterWithScores(KeysOrWeightedKeysBinary keysOrWeightedKeys, Aggregate aggregate) {
-        // TODO: Implement properly
-        throw new UnsupportedOperationException("zinterWithScores(KeysOrWeightedKeysBinary, Aggregate) not yet implemented");
+        GlideString[] rawKeysArgs = keysOrWeightedKeys.toArgs();
+        String[] keysArgs = new String[rawKeysArgs.length];
+        for (int i = 0; i < rawKeysArgs.length; i++) {
+            keysArgs[i] = rawKeysArgs[i].toString();
+        }
+        String[] aggregateArgs = aggregate.toArgs();
+        String[] args = ArrayTransformUtils.concatenateArrays(keysArgs, aggregateArgs, new String[]{"WITHSCORES"});
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZInter, args))
+            .thenApply(result -> (Map<GlideString, Double>) result);
     }
 
     @Override
     public CompletableFuture<Long> zinterstore(String destination, KeysOrWeightedKeys keysOrWeightedKeys, Aggregate aggregate) {
-        // TODO: Implement properly
-        throw new UnsupportedOperationException("zinterstore(String, KeysOrWeightedKeys, Aggregate) not yet implemented");
+        String[] keysArgs = keysOrWeightedKeys.toArgs();
+        String[] aggregateArgs = aggregate.toArgs();
+        String[] args = ArrayTransformUtils.concatenateArrays(new String[]{destination}, keysArgs, aggregateArgs);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZInterStore, args))
+            .thenApply(result -> (Long) result);
     }
 
-    @Override
     public CompletableFuture<Long> zinterstore(GlideString destination, KeysOrWeightedKeys keysOrWeightedKeys, Aggregate aggregate) {
-        // TODO: Implement properly
-        throw new UnsupportedOperationException("zinterstore(GlideString, KeysOrWeightedKeys, Aggregate) not yet implemented");
+        String[] keysArgs = keysOrWeightedKeys.toArgs();
+        String[] aggregateArgs = aggregate.toArgs();
+        String[] args = ArrayTransformUtils.concatenateArrays(new String[]{destination.toString()}, keysArgs, aggregateArgs);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZInterStore, args))
+            .thenApply(result -> (Long) result);
     }
 
     @Override
     public CompletableFuture<Long> zinterstore(String destination, KeysOrWeightedKeys keysOrWeightedKeys) {
-        // TODO: Implement properly
-        throw new UnsupportedOperationException("zinterstore(String, KeysOrWeightedKeys) not yet implemented");
+        String[] keysArgs = keysOrWeightedKeys.toArgs();
+        String[] args = ArrayTransformUtils.concatenateArrays(new String[]{destination}, keysArgs);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZInterStore, args))
+            .thenApply(result -> (Long) result);
     }
 
-    @Override
     public CompletableFuture<Long> zinterstore(GlideString destination, KeysOrWeightedKeys keysOrWeightedKeys) {
-        // TODO: Implement properly
-        throw new UnsupportedOperationException("zinterstore(GlideString, KeysOrWeightedKeys) not yet implemented");
+        String[] keysArgs = keysOrWeightedKeys.toArgs();
+        String[] args = ArrayTransformUtils.concatenateArrays(new String[]{destination.toString()}, keysArgs);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZInterStore, args))
+            .thenApply(result -> (Long) result);
     }
 
-    @Override
     public CompletableFuture<Long> zinterstore(GlideString destination, KeysOrWeightedKeysBinary keysOrWeightedKeys) {
         GlideString[] rawArgs = keysOrWeightedKeys.toArgs();
         String[] args = new String[rawArgs.length];
@@ -2153,7 +2199,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             .thenApply(result -> (Long) result);
     }
 
-    @Override
     public CompletableFuture<ClusterValue<Long>> zinterstore(GlideString destination, KeysOrWeightedKeysBinary keysOrWeightedKeys, Route route) {
         GlideString[] rawArgs = keysOrWeightedKeys.toArgs();
         String[] args = new String[rawArgs.length];
@@ -2183,7 +2228,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             .thenApply(result -> (Long) result);
     }
 
-    @Override
     public CompletableFuture<ClusterValue<Long>> zinterstore(GlideString destination, KeysOrWeightedKeysBinary keysOrWeightedKeys, Aggregate aggregate, Route route) {
         GlideString[] rawArgs = keysOrWeightedKeys.toArgs();
         String[] args = new String[rawArgs.length];
@@ -2208,7 +2252,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             .thenApply(result -> (Long) result);
     }
 
-    @Override
     public CompletableFuture<Long> zintercard(GlideString[] keys) {
         String[] args = new String[keys.length + 1];
         args[0] = String.valueOf(keys.length);
@@ -2230,7 +2273,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             .thenApply(result -> (Long) result);
     }
 
-    @Override
     public CompletableFuture<Long> zintercard(GlideString[] keys, long limit) {
         String[] args = new String[keys.length + 3];
         args[0] = String.valueOf(keys.length);
@@ -2246,26 +2288,42 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
     // ZRANGESTORE family methods - basic implementations for compilation
     @Override
     public CompletableFuture<Long> zrangestore(String destination, String source, RangeQuery rangeQuery, boolean reverse) {
-        // TODO: Implement properly after fixing RangeQuery.toArgs() method
-        throw new UnsupportedOperationException("zrangestore(String, String, RangeQuery, boolean) not yet implemented");
+        String[] args = new String[5];
+        args[0] = destination;
+        args[1] = source;
+        args[2] = rangeQuery.getStart();
+        args[3] = rangeQuery.getEnd();
+        if (reverse) {
+            args[4] = "REV";
+        }
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRangeStore, reverse ? args : Arrays.copyOf(args, 4)))
+            .thenApply(result -> (Long) result);
     }
 
     @Override
     public CompletableFuture<Long> zrangestore(GlideString destination, GlideString source, RangeQuery rangeQuery, boolean reverse) {
-        // TODO: Implement properly after fixing RangeQuery.toArgs() method
-        throw new UnsupportedOperationException("zrangestore(GlideString, GlideString, RangeQuery, boolean) not yet implemented");
+        String[] args = new String[5];
+        args[0] = destination.toString();
+        args[1] = source.toString();
+        args[2] = rangeQuery.getStart();
+        args[3] = rangeQuery.getEnd();
+        if (reverse) {
+            args[4] = "REV";
+        }
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRangeStore, reverse ? args : Arrays.copyOf(args, 4)))
+            .thenApply(result -> (Long) result);
     }
 
     @Override
     public CompletableFuture<Long> zrangestore(String destination, String source, RangeQuery rangeQuery) {
-        // TODO: Implement properly after fixing RangeQuery.toArgs() method
-        throw new UnsupportedOperationException("zrangestore(String, String, RangeQuery) not yet implemented");
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRangeStore, destination, source, rangeQuery.getStart(), rangeQuery.getEnd()))
+            .thenApply(result -> (Long) result);
     }
 
     @Override
     public CompletableFuture<Long> zrangestore(GlideString destination, GlideString source, RangeQuery rangeQuery) {
-        // TODO: Implement properly after fixing RangeQuery.toArgs() method
-        throw new UnsupportedOperationException("zrangestore(GlideString, GlideString, RangeQuery) not yet implemented");
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRangeStore, destination.toString(), source.toString(), rangeQuery.getStart(), rangeQuery.getEnd()))
+            .thenApply(result -> (Long) result);
     }
 
     // ZINCRBY methods
@@ -2288,55 +2346,46 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             .thenApply(result -> result == null ? null : result.toString());
     }
 
-    @Override
     public CompletableFuture<ClusterValue<String>> zrandmember(String key, Route route) {
         return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRandMember, key), route)
             .thenApply(result -> ClusterValue.of(result == null ? null : result.toString()));
     }
 
-    @Override
     public CompletableFuture<GlideString> zrandmember(GlideString key) {
-        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRandMember, key.getBytes()))
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRandMember, key.toString()))
             .thenApply(result -> result == null ? null : GlideString.of((byte[]) result));
     }
 
-    @Override
     public CompletableFuture<ClusterValue<GlideString>> zrandmember(GlideString key, Route route) {
-        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRandMember, key.getBytes()), route)
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRandMember, key.toString()), route)
             .thenApply(result -> ClusterValue.of(result == null ? null : GlideString.of((byte[]) result)));
     }
 
-    @Override
     public CompletableFuture<String[]> zrandmemberWithCount(String key, long count) {
         return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRandMember, key, String.valueOf(count)))
             .thenApply(result -> (String[]) result);
     }
 
-    @Override
     public CompletableFuture<ClusterValue<String[]>> zrandmemberWithCount(String key, long count, Route route) {
         return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRandMember, key, String.valueOf(count)), route)
             .thenApply(result -> ClusterValue.of((String[]) result));
     }
 
-    @Override
     public CompletableFuture<GlideString[]> zrandmemberWithCount(GlideString key, long count) {
-        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRandMember, key.getBytes(), String.valueOf(count).getBytes()))
-            .thenApply(result -> ArrayTransformUtils.convertByteArrayArrayToGlideStringArray((byte[][]) result));
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRandMember, key.toString(), String.valueOf(count)))
+            .thenApply(result -> ArrayTransformUtils.toGlideStringArray((byte[][]) result));
     }
 
-    @Override
     public CompletableFuture<ClusterValue<GlideString[]>> zrandmemberWithCount(GlideString key, long count, Route route) {
-        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRandMember, key.getBytes(), String.valueOf(count).getBytes()), route)
-            .thenApply(result -> ClusterValue.of(ArrayTransformUtils.convertByteArrayArrayToGlideStringArray((byte[][]) result)));
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRandMember, key.toString(), String.valueOf(count)), route)
+            .thenApply(result -> ClusterValue.of(ArrayTransformUtils.toGlideStringArray((byte[][]) result)));
     }
 
-    @Override
     public CompletableFuture<Object[][]> zrandmemberWithCountWithScores(String key, long count) {
         return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRandMember, key, String.valueOf(count), "WITHSCORES"))
             .thenApply(result -> (Object[][]) result);
     }
 
-    @Override
     public CompletableFuture<ClusterValue<Object[][]>> zrandmemberWithCountWithScores(String key, long count, Route route) {
         return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRandMember, key, String.valueOf(count), "WITHSCORES"), route)
             .thenApply(result -> ClusterValue.of((Object[][]) result));
@@ -2344,13 +2393,12 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
 
     @Override
     public CompletableFuture<Object[][]> zrandmemberWithCountWithScores(GlideString key, long count) {
-        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRandMember, key.getBytes(), String.valueOf(count).getBytes(), "WITHSCORES".getBytes()))
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRandMember, key.toString(), String.valueOf(count), "WITHSCORES"))
             .thenApply(result -> (Object[][]) result);
     }
 
-    @Override
     public CompletableFuture<ClusterValue<Object[][]>> zrandmemberWithCountWithScores(GlideString key, long count, Route route) {
-        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRandMember, key.getBytes(), String.valueOf(count).getBytes(), "WITHSCORES".getBytes()), route)
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRandMember, key.toString(), String.valueOf(count), "WITHSCORES"), route)
             .thenApply(result -> ClusterValue.of((Object[][]) result));
     }
 
@@ -2365,7 +2413,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             .thenApply(result -> (Map<String, Object>) result);
     }
 
-    @Override
     public CompletableFuture<ClusterValue<Map<String, Object>>> zmpop(String[] keys, ScoreFilter modifier, Route route) {
         String[] args = new String[keys.length + 2];
         args[0] = String.valueOf(keys.length);
@@ -2375,31 +2422,28 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             .thenApply(result -> ClusterValue.of((Map<String, Object>) result));
     }
 
-    @Override
     public CompletableFuture<Map<GlideString, Object>> zmpop(GlideString[] keys, ScoreFilter modifier) {
-        byte[][] args = new byte[keys.length + 2][];
-        args[0] = String.valueOf(keys.length).getBytes();
+        String[] args = new String[keys.length + 2];
+        args[0] = String.valueOf(keys.length);
         for (int i = 0; i < keys.length; i++) {
-            args[i + 1] = keys[i].getBytes();
+            args[i + 1] = keys[i].toString();
         }
-        args[keys.length + 1] = modifier.toString().getBytes();
+        args[keys.length + 1] = modifier.toString();
         return client.executeCommand(new io.valkey.glide.core.commands.Command(ZMPop, args))
             .thenApply(result -> (Map<GlideString, Object>) result);
     }
 
-    @Override
     public CompletableFuture<ClusterValue<Map<GlideString, Object>>> zmpop(GlideString[] keys, ScoreFilter modifier, Route route) {
-        byte[][] args = new byte[keys.length + 2][];
-        args[0] = String.valueOf(keys.length).getBytes();
+        String[] args = new String[keys.length + 2];
+        args[0] = String.valueOf(keys.length);
         for (int i = 0; i < keys.length; i++) {
-            args[i + 1] = keys[i].getBytes();
+            args[i + 1] = keys[i].toString();
         }
-        args[keys.length + 1] = modifier.toString().getBytes();
+        args[keys.length + 1] = modifier.toString();
         return client.executeCommand(new io.valkey.glide.core.commands.Command(ZMPop, args), route)
             .thenApply(result -> ClusterValue.of((Map<GlideString, Object>) result));
     }
 
-    @Override
     public CompletableFuture<Map<String, Object>> zmpop(String[] keys, ScoreFilter modifier, long count) {
         String[] args = new String[keys.length + 3];
         args[0] = String.valueOf(keys.length);
@@ -2410,7 +2454,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             .thenApply(result -> (Map<String, Object>) result);
     }
 
-    @Override
     public CompletableFuture<ClusterValue<Map<String, Object>>> zmpop(String[] keys, ScoreFilter modifier, long count, Route route) {
         String[] args = new String[keys.length + 3];
         args[0] = String.valueOf(keys.length);
@@ -2421,28 +2464,26 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             .thenApply(result -> ClusterValue.of((Map<String, Object>) result));
     }
 
-    @Override
     public CompletableFuture<Map<GlideString, Object>> zmpop(GlideString[] keys, ScoreFilter modifier, long count) {
-        byte[][] args = new byte[keys.length + 3][];
-        args[0] = String.valueOf(keys.length).getBytes();
+        String[] args = new String[keys.length + 3];
+        args[0] = String.valueOf(keys.length);
         for (int i = 0; i < keys.length; i++) {
-            args[i + 1] = keys[i].getBytes();
+            args[i + 1] = keys[i].toString();
         }
-        args[keys.length + 1] = modifier.toString().getBytes();
-        args[keys.length + 2] = String.valueOf(count).getBytes();
+        args[keys.length + 1] = modifier.toString();
+        args[keys.length + 2] = String.valueOf(count);
         return client.executeCommand(new io.valkey.glide.core.commands.Command(ZMPop, args))
             .thenApply(result -> (Map<GlideString, Object>) result);
     }
 
-    @Override
     public CompletableFuture<ClusterValue<Map<GlideString, Object>>> zmpop(GlideString[] keys, ScoreFilter modifier, long count, Route route) {
-        byte[][] args = new byte[keys.length + 3][];
-        args[0] = String.valueOf(keys.length).getBytes();
+        String[] args = new String[keys.length + 3];
+        args[0] = String.valueOf(keys.length);
         for (int i = 0; i < keys.length; i++) {
-            args[i + 1] = keys[i].getBytes();
+            args[i + 1] = keys[i].toString();
         }
-        args[keys.length + 1] = modifier.toString().getBytes();
-        args[keys.length + 2] = String.valueOf(count).getBytes();
+        args[keys.length + 1] = modifier.toString();
+        args[keys.length + 2] = String.valueOf(count);
         return client.executeCommand(new io.valkey.glide.core.commands.Command(ZMPop, args), route)
             .thenApply(result -> ClusterValue.of((Map<GlideString, Object>) result));
     }
@@ -2459,7 +2500,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             .thenApply(result -> (Map<String, Object>) result);
     }
 
-    @Override
     public CompletableFuture<ClusterValue<Map<String, Object>>> bzmpop(String[] keys, ScoreFilter modifier, double timeout, Route route) {
         String[] args = new String[keys.length + 3];
         args[0] = String.valueOf(keys.length);
@@ -2470,28 +2510,26 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             .thenApply(result -> ClusterValue.of((Map<String, Object>) result));
     }
 
-    @Override
     public CompletableFuture<Map<GlideString, Object>> bzmpop(GlideString[] keys, ScoreFilter modifier, double timeout) {
-        byte[][] args = new byte[keys.length + 3][];
-        args[0] = String.valueOf(keys.length).getBytes();
+        String[] args = new String[keys.length + 3];
+        args[0] = String.valueOf(keys.length);
         for (int i = 0; i < keys.length; i++) {
-            args[i + 1] = keys[i].getBytes();
+            args[i + 1] = keys[i].toString();
         }
-        args[keys.length + 1] = modifier.toString().getBytes();
-        args[keys.length + 2] = String.valueOf(timeout).getBytes();
+        args[keys.length + 1] = modifier.toString();
+        args[keys.length + 2] = String.valueOf(timeout);
         return client.executeCommand(new io.valkey.glide.core.commands.Command(BZMPop, args))
             .thenApply(result -> (Map<GlideString, Object>) result);
     }
 
-    @Override
     public CompletableFuture<ClusterValue<Map<GlideString, Object>>> bzmpop(GlideString[] keys, ScoreFilter modifier, double timeout, Route route) {
-        byte[][] args = new byte[keys.length + 3][];
-        args[0] = String.valueOf(keys.length).getBytes();
+        String[] args = new String[keys.length + 3];
+        args[0] = String.valueOf(keys.length);
         for (int i = 0; i < keys.length; i++) {
-            args[i + 1] = keys[i].getBytes();
+            args[i + 1] = keys[i].toString();
         }
-        args[keys.length + 1] = modifier.toString().getBytes();
-        args[keys.length + 2] = String.valueOf(timeout).getBytes();
+        args[keys.length + 1] = modifier.toString();
+        args[keys.length + 2] = String.valueOf(timeout);
         return client.executeCommand(new io.valkey.glide.core.commands.Command(BZMPop, args), route)
             .thenApply(result -> ClusterValue.of((Map<GlideString, Object>) result));
     }
@@ -2508,7 +2546,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             .thenApply(result -> (Map<String, Object>) result);
     }
 
-    @Override
     public CompletableFuture<ClusterValue<Map<String, Object>>> bzmpop(String[] keys, ScoreFilter modifier, double timeout, long count, Route route) {
         String[] args = new String[keys.length + 4];
         args[0] = String.valueOf(keys.length);
@@ -2520,30 +2557,28 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             .thenApply(result -> ClusterValue.of((Map<String, Object>) result));
     }
 
-    @Override
     public CompletableFuture<Map<GlideString, Object>> bzmpop(GlideString[] keys, ScoreFilter modifier, double timeout, long count) {
-        byte[][] args = new byte[keys.length + 4][];
-        args[0] = String.valueOf(keys.length).getBytes();
+        String[] args = new String[keys.length + 4];
+        args[0] = String.valueOf(keys.length);
         for (int i = 0; i < keys.length; i++) {
-            args[i + 1] = keys[i].getBytes();
+            args[i + 1] = keys[i].toString();
         }
-        args[keys.length + 1] = modifier.toString().getBytes();
-        args[keys.length + 2] = String.valueOf(timeout).getBytes();
-        args[keys.length + 3] = String.valueOf(count).getBytes();
+        args[keys.length + 1] = modifier.toString();
+        args[keys.length + 2] = String.valueOf(timeout);
+        args[keys.length + 3] = String.valueOf(count);
         return client.executeCommand(new io.valkey.glide.core.commands.Command(BZMPop, args))
             .thenApply(result -> (Map<GlideString, Object>) result);
     }
 
-    @Override
     public CompletableFuture<ClusterValue<Map<GlideString, Object>>> bzmpop(GlideString[] keys, ScoreFilter modifier, double timeout, long count, Route route) {
-        byte[][] args = new byte[keys.length + 4][];
-        args[0] = String.valueOf(keys.length).getBytes();
+        String[] args = new String[keys.length + 4];
+        args[0] = String.valueOf(keys.length);
         for (int i = 0; i < keys.length; i++) {
-            args[i + 1] = keys[i].getBytes();
+            args[i + 1] = keys[i].toString();
         }
-        args[keys.length + 1] = modifier.toString().getBytes();
-        args[keys.length + 2] = String.valueOf(timeout).getBytes();
-        args[keys.length + 3] = String.valueOf(count).getBytes();
+        args[keys.length + 1] = modifier.toString();
+        args[keys.length + 2] = String.valueOf(timeout);
+        args[keys.length + 3] = String.valueOf(count);
         return client.executeCommand(new io.valkey.glide.core.commands.Command(BZMPop, args), route)
             .thenApply(result -> ClusterValue.of((Map<GlideString, Object>) result));
     }
@@ -2555,7 +2590,6 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             .thenApply(result -> (Long) result);
     }
 
-    @Override
     public CompletableFuture<ClusterValue<Long>> zlexcount(String key, LexRange minLex, LexRange maxLex, Route route) {
         return client.executeCommand(new io.valkey.glide.core.commands.Command(ZLexCount, key, minLex.toString(), maxLex.toString()), route)
             .thenApply(result -> ClusterValue.of((Long) result));
@@ -2563,17 +2597,586 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
 
     @Override
     public CompletableFuture<Long> zlexcount(GlideString key, LexRange minLex, LexRange maxLex) {
-        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZLexCount, key.getBytes(), minLex.toString().getBytes(), maxLex.toString().getBytes()))
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZLexCount, key.toString(), minLex.toString(), maxLex.toString()))
+            .thenApply(result -> (Long) result);
+    }
+
+    public CompletableFuture<ClusterValue<Long>> zlexcount(GlideString key, LexRange minLex, LexRange maxLex, Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZLexCount, key.toString(), minLex.toString(), maxLex.toString()), route)
+            .thenApply(result -> ClusterValue.of((Long) result));
+    }
+
+    // ============= ZREMRANGEBYSCORE METHODS =============
+    @Override
+    public CompletableFuture<Long> zremrangebyscore(String key, ScoreRange minScore, ScoreRange maxScore) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRemRangeByScore, key, minScore.toArgs(), maxScore.toArgs()))
+            .thenApply(result -> (Long) result);
+    }
+
+    public CompletableFuture<ClusterValue<Long>> zremrangebyscore(String key, ScoreRange minScore, ScoreRange maxScore, Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRemRangeByScore, key, minScore.toArgs(), maxScore.toArgs()), route)
+            .thenApply(result -> ClusterValue.of((Long) result));
+    }
+
+    @Override
+    public CompletableFuture<Long> zremrangebyscore(GlideString key, ScoreRange minScore, ScoreRange maxScore) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRemRangeByScore, key.toString(), minScore.toArgs(), maxScore.toArgs()))
+            .thenApply(result -> (Long) result);
+    }
+
+    public CompletableFuture<ClusterValue<Long>> zremrangebyscore(GlideString key, ScoreRange minScore, ScoreRange maxScore, Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRemRangeByScore, key.toString(), minScore.toArgs(), maxScore.toArgs()), route)
+            .thenApply(result -> ClusterValue.of((Long) result));
+    }
+
+    // ============= ZREMRANGEBYLEX METHODS =============
+    @Override
+    public CompletableFuture<Long> zremrangebylex(String key, LexRange minLex, LexRange maxLex) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRemRangeByLex, key, minLex.toString(), maxLex.toString()))
+            .thenApply(result -> (Long) result);
+    }
+
+    public CompletableFuture<ClusterValue<Long>> zremrangebylex(String key, LexRange minLex, LexRange maxLex, Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRemRangeByLex, key, minLex.toString(), maxLex.toString()), route)
+            .thenApply(result -> ClusterValue.of((Long) result));
+    }
+
+    @Override
+    public CompletableFuture<Long> zremrangebylex(GlideString key, LexRange minLex, LexRange maxLex) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRemRangeByLex, key.toString(), minLex.toString(), maxLex.toString()))
+            .thenApply(result -> (Long) result);
+    }
+
+    public CompletableFuture<ClusterValue<Long>> zremrangebylex(GlideString key, LexRange minLex, LexRange maxLex, Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRemRangeByLex, key.toString(), minLex.toString(), maxLex.toString()), route)
+            .thenApply(result -> ClusterValue.of((Long) result));
+    }
+
+    // ============= ZREMRANGEBYRANK METHODS =============
+    @Override
+    public CompletableFuture<Long> zremrangebyrank(String key, long start, long end) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRemRangeByRank, key, String.valueOf(start), String.valueOf(end)))
+            .thenApply(result -> (Long) result);
+    }
+
+    public CompletableFuture<ClusterValue<Long>> zremrangebyrank(String key, long start, long end, Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRemRangeByRank, key, String.valueOf(start), String.valueOf(end)), route)
+            .thenApply(result -> ClusterValue.of((Long) result));
+    }
+
+    @Override
+    public CompletableFuture<Long> zremrangebyrank(GlideString key, long start, long end) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRemRangeByRank, key.toString(), String.valueOf(start), String.valueOf(end)))
+            .thenApply(result -> (Long) result);
+    }
+
+    public CompletableFuture<ClusterValue<Long>> zremrangebyrank(GlideString key, long start, long end, Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRemRangeByRank, key.toString(), String.valueOf(start), String.valueOf(end)), route)
+            .thenApply(result -> ClusterValue.of((Long) result));
+    }
+
+    // ============= ZCOUNT METHODS =============
+    @Override
+    public CompletableFuture<Long> zcount(String key, ScoreRange minScore, ScoreRange maxScore) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZCount, key, minScore.toArgs(), maxScore.toArgs()))
+            .thenApply(result -> (Long) result);
+    }
+
+    public CompletableFuture<ClusterValue<Long>> zcount(String key, ScoreRange minScore, ScoreRange maxScore, Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZCount, key, minScore.toArgs(), maxScore.toArgs()), route)
+            .thenApply(result -> ClusterValue.of((Long) result));
+    }
+
+    @Override
+    public CompletableFuture<Long> zcount(GlideString key, ScoreRange minScore, ScoreRange maxScore) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZCount, key.toString(), minScore.toArgs(), maxScore.toArgs()))
+            .thenApply(result -> (Long) result);
+    }
+
+    public CompletableFuture<ClusterValue<Long>> zcount(GlideString key, ScoreRange minScore, ScoreRange maxScore, Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZCount, key.toString(), minScore.toArgs(), maxScore.toArgs()), route)
+            .thenApply(result -> ClusterValue.of((Long) result));
+    }
+
+    // ============= ZMSCORE METHODS =============
+    @Override
+    public CompletableFuture<Double[]> zmscore(String key, String[] members) {
+        String[] args = new String[members.length + 1];
+        args[0] = key;
+        System.arraycopy(members, 0, args, 1, members.length);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZMScore, args))
+            .thenApply(result -> (Double[]) result);
+    }
+
+    public CompletableFuture<ClusterValue<Double[]>> zmscore(String key, String[] members, Route route) {
+        String[] args = new String[members.length + 1];
+        args[0] = key;
+        System.arraycopy(members, 0, args, 1, members.length);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZMScore, args), route)
+            .thenApply(result -> ClusterValue.of((Double[]) result));
+    }
+
+    public CompletableFuture<Double[]> zmscore(GlideString key, GlideString[] members) {
+        String[] args = new String[members.length + 1];
+        args[0] = key.toString();
+        for (int i = 0; i < members.length; i++) {
+            args[i + 1] = members[i].toString();
+        }
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZMScore, args))
+            .thenApply(result -> (Double[]) result);
+    }
+
+    public CompletableFuture<ClusterValue<Double[]>> zmscore(GlideString key, GlideString[] members, Route route) {
+        String[] args = new String[members.length + 1];
+        args[0] = key.toString();
+        for (int i = 0; i < members.length; i++) {
+            args[i + 1] = members[i].toString();
+        }
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZMScore, args), route)
+            .thenApply(result -> ClusterValue.of((Double[]) result));
+    }
+
+    // ============= ZREVRANKWITHSCORE METHODS =============
+    @Override
+    public CompletableFuture<Object[]> zrevrankWithScore(String key, String member) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRevRank, key, member, "WITHSCORE"))
+            .thenApply(result -> (Object[]) result);
+    }
+
+    public CompletableFuture<ClusterValue<Object[]>> zrevrankWithScore(String key, String member, Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRevRank, key, member, "WITHSCORE"), route)
+            .thenApply(result -> ClusterValue.of((Object[]) result));
+    }
+
+    @Override
+    public CompletableFuture<Object[]> zrevrankWithScore(GlideString key, GlideString member) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRevRank, key.toString(), member.toString(), "WITHSCORE"))
+            .thenApply(result -> (Object[]) result);
+    }
+
+    public CompletableFuture<ClusterValue<Object[]>> zrevrankWithScore(GlideString key, GlideString member, Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRevRank, key.toString(), member.toString(), "WITHSCORE"), route)
+            .thenApply(result -> ClusterValue.of((Object[]) result));
+    }
+
+    // ============= ZREVRANK METHODS =============
+    @Override
+    public CompletableFuture<Long> zrevrank(String key, String member) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRevRank, key, member))
+            .thenApply(result -> (Long) result);
+    }
+
+    public CompletableFuture<ClusterValue<Long>> zrevrank(String key, String member, Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRevRank, key, member), route)
+            .thenApply(result -> ClusterValue.of((Long) result));
+    }
+
+    @Override
+    public CompletableFuture<Long> zrevrank(GlideString key, GlideString member) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRevRank, key.toString(), member.toString()))
+            .thenApply(result -> (Long) result);
+    }
+
+    public CompletableFuture<ClusterValue<Long>> zrevrank(GlideString key, GlideString member, Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRevRank, key.toString(), member.toString()), route)
+            .thenApply(result -> ClusterValue.of((Long) result));
+    }
+
+    // ============= ZRANKWITHSCORE METHODS =============
+    @Override
+    public CompletableFuture<Object[]> zrankWithScore(String key, String member) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRank, key, member, "WITHSCORE"))
+            .thenApply(result -> (Object[]) result);
+    }
+
+    public CompletableFuture<ClusterValue<Object[]>> zrankWithScore(String key, String member, Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRank, key, member, "WITHSCORE"), route)
+            .thenApply(result -> ClusterValue.of((Object[]) result));
+    }
+
+    @Override
+    public CompletableFuture<Object[]> zrankWithScore(GlideString key, GlideString member) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRank, key.toString(), member.toString(), "WITHSCORE"))
+            .thenApply(result -> (Object[]) result);
+    }
+
+    public CompletableFuture<ClusterValue<Object[]>> zrankWithScore(GlideString key, GlideString member, Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRank, key.toString(), member.toString(), "WITHSCORE"), route)
+            .thenApply(result -> ClusterValue.of((Object[]) result));
+    }
+
+    // ============= ZRANK METHODS =============
+    @Override
+    public CompletableFuture<Long> zrank(String key, String member) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRank, key, member))
+            .thenApply(result -> (Long) result);
+    }
+
+    public CompletableFuture<ClusterValue<Long>> zrank(String key, String member, Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRank, key, member), route)
+            .thenApply(result -> ClusterValue.of((Long) result));
+    }
+
+    @Override
+    public CompletableFuture<Long> zrank(GlideString key, GlideString member) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRank, key.toString(), member.toString()))
+            .thenApply(result -> (Long) result);
+    }
+
+    public CompletableFuture<ClusterValue<Long>> zrank(GlideString key, GlideString member, Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRank, key.toString(), member.toString()), route)
+            .thenApply(result -> ClusterValue.of((Long) result));
+    }
+
+    // ============= ZRANGEWITHSCORES METHODS =============
+    @Override
+    public CompletableFuture<Map<String, Double>> zrangeWithScores(String key, ScoredRangeQuery rangeQuery, boolean reverse) {
+        String[] args = new String[5];
+        args[0] = key;
+        args[1] = rangeQuery.getStart();
+        args[2] = rangeQuery.getEnd();
+        args[3] = "WITHSCORES";
+        if (reverse) {
+            args[4] = "REV";
+        }
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRange, reverse ? args : Arrays.copyOf(args, 4)))
+            .thenApply(result -> (Map<String, Double>) result);
+    }
+
+    public CompletableFuture<ClusterValue<Map<String, Double>>> zrangeWithScores(String key, ScoredRangeQuery rangeQuery, boolean reverse, Route route) {
+        String[] args = new String[5];
+        args[0] = key;
+        args[1] = rangeQuery.getStart();
+        args[2] = rangeQuery.getEnd();
+        args[3] = "WITHSCORES";
+        if (reverse) {
+            args[4] = "REV";
+        }
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRange, reverse ? args : Arrays.copyOf(args, 4)), route)
+            .thenApply(result -> ClusterValue.of((Map<String, Double>) result));
+    }
+
+    @Override
+    public CompletableFuture<Map<GlideString, Double>> zrangeWithScores(GlideString key, ScoredRangeQuery rangeQuery, boolean reverse) {
+        String[] args = new String[5];
+        args[0] = key.toString();
+        args[1] = rangeQuery.getStart();
+        args[2] = rangeQuery.getEnd();
+        args[3] = "WITHSCORES";
+        if (reverse) {
+            args[4] = "REV";
+        }
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRange, reverse ? args : Arrays.copyOf(args, 4)))
+            .thenApply(result -> (Map<GlideString, Double>) result);
+    }
+
+    public CompletableFuture<ClusterValue<Map<GlideString, Double>>> zrangeWithScores(GlideString key, ScoredRangeQuery rangeQuery, boolean reverse, Route route) {
+        String[] args = new String[5];
+        args[0] = key.toString();
+        args[1] = rangeQuery.getStart();
+        args[2] = rangeQuery.getEnd();
+        args[3] = "WITHSCORES";
+        if (reverse) {
+            args[4] = "REV";
+        }
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRange, reverse ? args : Arrays.copyOf(args, 4)), route)
+            .thenApply(result -> ClusterValue.of((Map<GlideString, Double>) result));
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Double>> zrangeWithScores(String key, ScoredRangeQuery rangeQuery) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRange, key, rangeQuery.getStart(), rangeQuery.getEnd(), "WITHSCORES"))
+            .thenApply(result -> (Map<String, Double>) result);
+    }
+
+    public CompletableFuture<ClusterValue<Map<String, Double>>> zrangeWithScores(String key, ScoredRangeQuery rangeQuery, Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRange, key, rangeQuery.getStart(), rangeQuery.getEnd(), "WITHSCORES"), route)
+            .thenApply(result -> ClusterValue.of((Map<String, Double>) result));
+    }
+
+    @Override
+    public CompletableFuture<Map<GlideString, Double>> zrangeWithScores(GlideString key, ScoredRangeQuery rangeQuery) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRange, key.toString(), rangeQuery.getStart(), rangeQuery.getEnd(), "WITHSCORES"))
+            .thenApply(result -> (Map<GlideString, Double>) result);
+    }
+
+    public CompletableFuture<ClusterValue<Map<GlideString, Double>>> zrangeWithScores(GlideString key, ScoredRangeQuery rangeQuery, Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRange, key.toString(), rangeQuery.getStart(), rangeQuery.getEnd(), "WITHSCORES"), route)
+            .thenApply(result -> ClusterValue.of((Map<GlideString, Double>) result));
+    }
+
+    @Override
+    public CompletableFuture<String[]> zrange(String key, RangeQuery rangeQuery, boolean reverse) {
+        String[] args = new String[4];
+        args[0] = key;
+        args[1] = rangeQuery.getStart();
+        args[2] = rangeQuery.getEnd();
+        if (reverse) {
+            args[3] = "REV";
+        }
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRange, reverse ? args : Arrays.copyOf(args, 3)))
+            .thenApply(result -> (String[]) result);
+    }
+
+    @Override
+    public CompletableFuture<String[]> zrange(String key, RangeQuery rangeQuery) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRange, key, rangeQuery.getStart(), rangeQuery.getEnd()))
+            .thenApply(result -> (String[]) result);
+    }
+
+    public CompletableFuture<GlideString[]> zrange(GlideString key, RangeQuery rangeQuery, boolean reverse) {
+        String[] args = new String[4];
+        args[0] = key.toString();
+        args[1] = rangeQuery.getStart();
+        args[2] = rangeQuery.getEnd();
+        if (reverse) {
+            args[3] = "REV";
+        }
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRange, reverse ? args : Arrays.copyOf(args, 3)))
+            .thenApply(result -> ArrayTransformUtils.toGlideStringArray((String[]) result));
+    }
+
+    public CompletableFuture<GlideString[]> zrange(GlideString key, RangeQuery rangeQuery) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRange, key.toString(), rangeQuery.getStart(), rangeQuery.getEnd()))
+            .thenApply(result -> ArrayTransformUtils.toGlideStringArray((String[]) result));
+    }
+
+    @Override
+    public CompletableFuture<Object[]> bzpopmax(String[] keys, double timeout) {
+        String[] args = new String[keys.length + 1];
+        System.arraycopy(keys, 0, args, 0, keys.length);
+        args[keys.length] = Double.toString(timeout);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(BZPopMax, args))
+            .thenApply(result -> (Object[]) result);
+    }
+
+    public CompletableFuture<Object[]> bzpopmax(GlideString[] keys, double timeout) {
+        String[] args = new String[keys.length + 1];
+        for (int i = 0; i < keys.length; i++) {
+            args[i] = keys[i].toString();
+        }
+        args[keys.length] = Double.toString(timeout);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(BZPopMax, args))
+            .thenApply(result -> (Object[]) result);
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Double>> zpopmax(String key, long count) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZPopMax, key, Long.toString(count)))
+            .thenApply(result -> (Map<String, Double>) result);
+    }
+
+    @Override
+    public CompletableFuture<Map<GlideString, Double>> zpopmax(GlideString key, long count) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZPopMax, key.toString(), Long.toString(count)))
+            .thenApply(result -> (Map<GlideString, Double>) result);
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Double>> zpopmax(String key) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZPopMax, key))
+            .thenApply(result -> (Map<String, Double>) result);
+    }
+
+    public CompletableFuture<Map<GlideString, Double>> zpopmax(GlideString key) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZPopMax, key.toString()))
+            .thenApply(result -> (Map<GlideString, Double>) result);
+    }
+
+    @Override
+    public CompletableFuture<Object[]> bzpopmin(String[] keys, double timeout) {
+        String[] args = new String[keys.length + 1];
+        System.arraycopy(keys, 0, args, 0, keys.length);
+        args[keys.length] = Double.toString(timeout);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(BZPopMin, args))
+            .thenApply(result -> (Object[]) result);
+    }
+
+    public CompletableFuture<Object[]> bzpopmin(GlideString[] keys, double timeout) {
+        String[] args = new String[keys.length + 1];
+        for (int i = 0; i < keys.length; i++) {
+            args[i] = keys[i].toString();
+        }
+        args[keys.length] = Double.toString(timeout);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(BZPopMin, args))
+            .thenApply(result -> (Object[]) result);
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Double>> zpopmin(String key, long count) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZPopMin, key, Long.toString(count)))
+            .thenApply(result -> (Map<String, Double>) result);
+    }
+
+    @Override
+    public CompletableFuture<Map<GlideString, Double>> zpopmin(GlideString key, long count) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZPopMin, key.toString(), Long.toString(count)))
+            .thenApply(result -> (Map<GlideString, Double>) result);
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Double>> zpopmin(String key) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZPopMin, key))
+            .thenApply(result -> (Map<String, Double>) result);
+    }
+
+    public CompletableFuture<Map<GlideString, Double>> zpopmin(GlideString key) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZPopMin, key.toString()))
+            .thenApply(result -> (Map<GlideString, Double>) result);
+    }
+
+    @Override
+    public CompletableFuture<Double> zaddIncr(String key, String member, double increment, ZAddOptions options) {
+        String[] optionArgs = options.toArgs();
+        String[] args = new String[optionArgs.length + 5];
+        args[0] = key;
+        System.arraycopy(optionArgs, 0, args, 1, optionArgs.length);
+        args[optionArgs.length + 1] = "INCR";
+        args[optionArgs.length + 2] = Double.toString(increment);
+        args[optionArgs.length + 3] = member;
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZAdd, args))
+            .thenApply(result -> (Double) result);
+    }
+
+    @Override
+    public CompletableFuture<Double> zaddIncr(GlideString key, GlideString member, double increment, ZAddOptions options) {
+        String[] optionArgs = options.toArgs();
+        String[] args = new String[optionArgs.length + 5];
+        args[0] = key.toString();
+        System.arraycopy(optionArgs, 0, args, 1, optionArgs.length);
+        args[optionArgs.length + 1] = "INCR";
+        args[optionArgs.length + 2] = Double.toString(increment);
+        args[optionArgs.length + 3] = member.toString();
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZAdd, args))
+            .thenApply(result -> (Double) result);
+    }
+
+    @Override
+    public CompletableFuture<Double> zaddIncr(String key, String member, double increment) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZAdd, key, "INCR", Double.toString(increment), member))
+            .thenApply(result -> (Double) result);
+    }
+
+    @Override
+    public CompletableFuture<Double> zaddIncr(GlideString key, GlideString member, double increment) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZAdd, key.toString(), "INCR", Double.toString(increment), member.toString()))
+            .thenApply(result -> (Double) result);
+    }
+
+    @Override
+    public CompletableFuture<Long> zadd(String key, Map<String, Double> membersScoresMap, ZAddOptions options, boolean changed) {
+        String[] optionArgs = options.toArgs();
+        List<String> args = new ArrayList<>();
+        args.add(key);
+        args.addAll(Arrays.asList(optionArgs));
+        if (changed) {
+            args.add("CH");
+        }
+        for (Map.Entry<String, Double> entry : membersScoresMap.entrySet()) {
+            args.add(Double.toString(entry.getValue()));
+            args.add(entry.getKey());
+        }
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZAdd, args.toArray(new String[0])))
             .thenApply(result -> (Long) result);
     }
 
     @Override
-    public CompletableFuture<ClusterValue<Long>> zlexcount(GlideString key, LexRange minLex, LexRange maxLex, Route route) {
-        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZLexCount, key.getBytes(), minLex.toString().getBytes(), maxLex.toString().getBytes()), route)
-            .thenApply(result -> ClusterValue.of((Long) result));
+    public CompletableFuture<Long> zadd(GlideString key, Map<GlideString, Double> membersScoresMap, ZAddOptions options, boolean changed) {
+        String[] optionArgs = options.toArgs();
+        List<String> args = new ArrayList<>();
+        args.add(key.toString());
+        args.addAll(Arrays.asList(optionArgs));
+        if (changed) {
+            args.add("CH");
+        }
+        for (Map.Entry<GlideString, Double> entry : membersScoresMap.entrySet()) {
+            args.add(Double.toString(entry.getValue()));
+            args.add(entry.getKey().toString());
+        }
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZAdd, args.toArray(new String[0])))
+            .thenApply(result -> (Long) result);
     }
 
-    // TODO: Add remaining SortedSetBaseCommands methods as needed for compilation
-    // This is a placeholder approach - full implementation needed
+    @Override
+    public CompletableFuture<Long> zadd(String key, Map<String, Double> membersScoresMap, ZAddOptions options) {
+        String[] optionArgs = options.toArgs();
+        List<String> args = new ArrayList<>();
+        args.add(key);
+        args.addAll(Arrays.asList(optionArgs));
+        for (Map.Entry<String, Double> entry : membersScoresMap.entrySet()) {
+            args.add(Double.toString(entry.getValue()));
+            args.add(entry.getKey());
+        }
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZAdd, args.toArray(new String[0])))
+            .thenApply(result -> (Long) result);
+    }
+
+    @Override
+    public CompletableFuture<Long> zadd(GlideString key, Map<GlideString, Double> membersScoresMap, ZAddOptions options) {
+        String[] optionArgs = options.toArgs();
+        List<String> args = new ArrayList<>();
+        args.add(key.toString());
+        args.addAll(Arrays.asList(optionArgs));
+        for (Map.Entry<GlideString, Double> entry : membersScoresMap.entrySet()) {
+            args.add(Double.toString(entry.getValue()));
+            args.add(entry.getKey().toString());
+        }
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZAdd, args.toArray(new String[0])))
+            .thenApply(result -> (Long) result);
+    }
+
+    @Override
+    public CompletableFuture<Long> zadd(String key, Map<String, Double> membersScoresMap, boolean changed) {
+        List<String> args = new ArrayList<>();
+        args.add(key);
+        if (changed) {
+            args.add("CH");
+        }
+        for (Map.Entry<String, Double> entry : membersScoresMap.entrySet()) {
+            args.add(Double.toString(entry.getValue()));
+            args.add(entry.getKey());
+        }
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZAdd, args.toArray(new String[0])))
+            .thenApply(result -> (Long) result);
+    }
+
+    @Override
+    public CompletableFuture<Long> zadd(GlideString key, Map<GlideString, Double> membersScoresMap, boolean changed) {
+        List<String> args = new ArrayList<>();
+        args.add(key.toString());
+        if (changed) {
+            args.add("CH");
+        }
+        for (Map.Entry<GlideString, Double> entry : membersScoresMap.entrySet()) {
+            args.add(Double.toString(entry.getValue()));
+            args.add(entry.getKey().toString());
+        }
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZAdd, args.toArray(new String[0])))
+            .thenApply(result -> (Long) result);
+    }
+
+    @Override
+    public CompletableFuture<Long> zadd(String key, Map<String, Double> membersScoresMap) {
+        List<String> args = new ArrayList<>();
+        args.add(key);
+        for (Map.Entry<String, Double> entry : membersScoresMap.entrySet()) {
+            args.add(Double.toString(entry.getValue()));
+            args.add(entry.getKey());
+        }
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZAdd, args.toArray(new String[0])))
+            .thenApply(result -> (Long) result);
+    }
+
+    @Override
+    public CompletableFuture<Long> zadd(GlideString key, Map<GlideString, Double> membersScoresMap) {
+        List<String> args = new ArrayList<>();
+        args.add(key.toString());
+        for (Map.Entry<GlideString, Double> entry : membersScoresMap.entrySet()) {
+            args.add(Double.toString(entry.getValue()));
+            args.add(entry.getKey().toString());
+        }
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZAdd, args.toArray(new String[0])))
+            .thenApply(result -> (Long) result);
+    }
 
 }
