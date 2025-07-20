@@ -4,8 +4,8 @@ plugins {
     id 'java-library'
     id 'maven-publish'
     id 'signing'
-    id 'io.freefair.lombok' version '8.6'
-    id 'com.github.spotbugs' version '6.0.18'
+    id 'io.freefair.lombok' version '8.14'
+    id 'com.github.spotbugs' version '6.2.2'
     id 'com.google.osdetector' version '1.7.3'
     id 'com.gradleup.shadow' version '8.3.5'
 }
@@ -19,21 +19,21 @@ configurations {
 }
 
 dependencies {
-    implementation group: 'com.google.protobuf', name: 'protobuf-java', version: '4.29.1'
-    shadow group: 'org.apache.commons', name: 'commons-lang3', version: '3.13.0'
+    implementation group: 'com.google.protobuf', name: 'protobuf-java', version: '4.31.1'
+    shadow group: 'org.apache.commons', name: 'commons-lang3', version: '3.18.0'
 
-    implementation group: 'io.netty', name: 'netty-handler', version: '4.1.121.Final'
+    implementation group: 'io.netty', name: 'netty-handler', version: '4.2.3.Final'
     // https://github.com/netty/netty/wiki/Native-transports
     // At the moment, Windows is not supported
-    implementation group: 'io.netty', name: 'netty-transport-native-epoll', version: '4.1.121.Final', classifier: 'linux-x86_64'
-    implementation group: 'io.netty', name: 'netty-transport-native-epoll', version: '4.1.121.Final', classifier: 'linux-aarch_64'
-    implementation group: 'io.netty', name: 'netty-transport-native-kqueue', version: '4.1.121.Final', classifier: 'osx-aarch_64'
-    implementation group: 'io.netty', name: 'netty-transport-native-kqueue', version: '4.1.121.Final', classifier: 'osx-x86_64'
+    implementation group: 'io.netty', name: 'netty-transport-native-epoll', version: '4.2.3.Final', classifier: 'linux-x86_64'
+    implementation group: 'io.netty', name: 'netty-transport-native-epoll', version: '4.2.3.Final', classifier: 'linux-aarch_64'
+    implementation group: 'io.netty', name: 'netty-transport-native-kqueue', version: '4.2.3.Final', classifier: 'osx-aarch_64'
+    implementation group: 'io.netty', name: 'netty-transport-native-kqueue', version: '4.2.3.Final', classifier: 'osx-x86_64'
 
     // junit
     testImplementation group: 'org.mockito', name: 'mockito-inline', version: '3.12.4'
     testImplementation group: 'org.mockito', name: 'mockito-junit-jupiter', version: '3.12.4'
-    testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter', version: '5.10.2'
+    testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter', version: '5.13.3'
 
     //lombok
     compileOnly 'org.projectlombok:lombok:1.18.32'
