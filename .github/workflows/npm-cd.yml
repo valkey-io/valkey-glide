@@ -444,7 +444,7 @@ jobs:
               # Delete artifacts if not published
             - name: Delete artifacts
               if: always() && ${{ needs.get-build-parameters.outputs.should_publish == 'false' }}
-              uses: geekyeggo/delete-artifact@v2
+              uses: geekyeggo/delete-artifact@v5
               with:
                   name: |
                       npm-packages-${{ github.run_id }}
@@ -547,7 +547,7 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - name: Delete artifacts
-              uses: geekyeggo/delete-artifact@v2
+              uses: geekyeggo/delete-artifact@v5
               with:
                   name: |
                       npm-packages-${{ github.run_id }}
