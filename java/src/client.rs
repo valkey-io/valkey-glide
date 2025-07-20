@@ -30,7 +30,7 @@ use crate::jni_wrappers::create_jni_string;
 use crate::{jni_error, jni_result};
 
 // ============================================================================
-// SIMPLE CLIENT - Thin wrapper around glide-core
+// JNI CLIENT - Thin wrapper around glide-core
 // ============================================================================
 
 /// Simplified client wrapper that directly uses glide-core
@@ -431,19 +431,22 @@ pub unsafe extern "system" fn Java_io_valkey_glide_core_client_GlideClient_execu
     args: jobject,
 ) -> jobject {
     let mut result = || -> JniResult<jobject> {
-        // 1. Validate and convert parameters
-        JniSafetyValidator::validate_client_handle(client_handle)?;
+        // 1. Validate and convert parameters with comprehensive bounds checking
+        JniSafetyValidator::validate_client_handle_safe(client_handle)?;
 
         // SAFETY: command is a valid jstring passed from Java (function is marked unsafe)
         let jstr_cmd = JString::from_raw(command);
         let cmd_str: String = env.get_string(&jstr_cmd)?.into();
-        JniSafetyValidator::validate_no_interior_nulls(&cmd_str)?;
+        JniSafetyValidator::validate_string_content(&cmd_str)?;
 
-        // Convert Java string array to Vec<String>
+        // Convert Java string array to Vec<String> with bounds checking
         let args_vec = if args.is_null() {
             Vec::new()
         } else {
-            java_string_array_to_vec(&mut env, args)?
+            let args = java_string_array_to_vec(&mut env, args)?;
+            // Validate command argument count for library safety
+            JniSafetyValidator::validate_command_args_count(args.len())?;
+            args
         };
 
         // 2. Execute via JniClient using registry with automatic cleanup
@@ -467,18 +470,29 @@ pub unsafe extern "system" fn Java_io_valkey_glide_core_client_GlideClient_execu
     jni_result!(&mut env, result(), ptr::null_mut())
 }
 
-/// Helper: Convert Java string array to Vec<String>
+/// Helper: Convert Java string array to Vec<String> with comprehensive bounds checking
 fn java_string_array_to_vec(env: &mut JNIEnv, array: jobject) -> JniResult<Vec<String>> {
     let jarray = unsafe { JObject::from_raw(array) };
     let jobj_array = JObjectArray::from(jarray);
     let length = env.get_array_length(&jobj_array)?;
+
+    // Comprehensive bounds checking for array operations
+    JniSafetyValidator::validate_array_length(length)?;
+    JniSafetyValidator::validate_array_creation(length, std::mem::size_of::<String>())?;
+
     let mut result = Vec::with_capacity(length as usize);
 
     for i in 0..length {
+        // Validate each array access
+        JniSafetyValidator::validate_array_range(i, i + 1, length)?;
+
         let element = env.get_object_array_element(&jobj_array, i)?;
         if !element.is_null() {
             let jstr = unsafe { JString::from_raw(element.as_raw()) };
             let rust_string: String = env.get_string(&jstr)?.into();
+
+            // Validate string content for library safety
+            JniSafetyValidator::validate_string_content(&rust_string)?;
             result.push(rust_string);
         }
     }
@@ -506,14 +520,19 @@ fn convert_value_to_java_object(env: &mut JNIEnv, value: Value) -> JniResult<job
         }
 
         Value::BulkString(bytes) => {
+            // Validate buffer size for library safety
+            JniSafetyValidator::validate_buffer_size(bytes.len())?;
+
             // Convert bytes to Java String with proper UTF-8 handling
             match String::from_utf8(bytes.clone()) {
                 Ok(s) => {
+                    // Validate string content comprehensively
+                    JniSafetyValidator::validate_string_content(&s)?;
                     let java_string = create_jni_string(env, &s)?;
                     Ok(java_string.as_raw())
                 }
                 Err(_) => {
-                    // For non-UTF-8 data, return byte array
+                    // For non-UTF-8 data, return byte array with size validation
                     let byte_array = env.byte_array_from_slice(&bytes)?;
                     Ok(byte_array.as_raw())
                 }
@@ -521,21 +540,30 @@ fn convert_value_to_java_object(env: &mut JNIEnv, value: Value) -> JniResult<job
         }
 
         Value::Array(values) => {
-            // Create Object array to hold the results
+            // Validate array size for library safety
             let length = values.len() as i32;
+            JniSafetyValidator::validate_array_creation(length, std::mem::size_of::<jobject>())?;
+
+            // Create Object array to hold the results
             let object_class = env.find_class("java/lang/Object")?;
             let object_array = env.new_object_array(length, object_class, JObject::null())?;
 
             for (i, val) in values.into_iter().enumerate() {
+                // Validate array index for each operation
+                let index = i as i32;
+                JniSafetyValidator::validate_array_range(index, index + 1, length)?;
+
                 let java_obj = convert_value_to_java_object(env, val)?;
                 let java_obj = unsafe { JObject::from_raw(java_obj) };
-                env.set_object_array_element(&object_array, i as i32, java_obj)?;
+                env.set_object_array_element(&object_array, index, java_obj)?;
             }
 
             Ok(object_array.as_raw())
         }
 
         Value::SimpleString(status) => {
+            // Validate string content for library safety
+            JniSafetyValidator::validate_string_content(&status)?;
             let java_string = create_jni_string(env, &status)?;
             Ok(java_string.as_raw())
         }
@@ -543,6 +571,8 @@ fn convert_value_to_java_object(env: &mut JNIEnv, value: Value) -> JniResult<job
         // For other Value types, convert to string representation
         _ => {
             let string_repr = format!("{value:?}");
+            // Validate string representation for library safety
+            JniSafetyValidator::validate_string_content(&string_repr)?;
             let java_string = create_jni_string(env, &string_repr)?;
             Ok(java_string.as_raw())
         }

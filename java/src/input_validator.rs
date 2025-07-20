@@ -52,6 +52,17 @@ pub enum ValidationError {
     ArrayIndexOutOfBounds { index: i32, length: i32 },
     /// Array length is negative (JNI violation)
     NegativeArrayLength(i32),
+    /// Integer overflow in size calculation
+    IntegerOverflow {
+        operation: &'static str,
+        values: String,
+    },
+    /// Buffer size exceeds library safety limits
+    BufferSizeExceedsLimit { size: usize, limit: usize },
+    /// Invalid UTF-8 sequence in string
+    InvalidUtf8,
+    /// Array length would cause memory overflow
+    ArraySizeTooLarge { length: i32, element_size: usize },
     /// JNI operation failed
     JniError(jni::errors::Error),
 }
@@ -60,7 +71,7 @@ impl std::fmt::Display for ValidationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ValidationError::RequiredPointerNull(name) => {
-                write!(f, "Required {} pointer is null", name)
+                write!(f, "Required {name} pointer is null")
             }
             ValidationError::InvalidClientHandle => {
                 write!(f, "Invalid client handle")
@@ -72,17 +83,31 @@ impl std::fmt::Display for ValidationError {
                 write!(f, "String contains null bytes")
             }
             ValidationError::ArrayIndexOutOfBounds { index, length } => {
-                write!(
-                    f,
-                    "Array index {} out of bounds (length: {})",
-                    index, length
-                )
+                write!(f, "Array index {index} out of bounds (length: {length})")
             }
             ValidationError::NegativeArrayLength(length) => {
-                write!(f, "Array length cannot be negative: {}", length)
+                write!(f, "Array length cannot be negative: {length}")
+            }
+            ValidationError::IntegerOverflow { operation, values } => {
+                write!(f, "Integer overflow in {operation}: {values}")
+            }
+            ValidationError::BufferSizeExceedsLimit { size, limit } => {
+                write!(f, "Buffer size {size} exceeds safety limit {limit}")
+            }
+            ValidationError::InvalidUtf8 => {
+                write!(f, "Invalid UTF-8 sequence in string")
+            }
+            ValidationError::ArraySizeTooLarge {
+                length,
+                element_size,
+            } => {
+                write!(
+                    f,
+                    "Array size too large: {length} elements of {element_size} bytes each"
+                )
             }
             ValidationError::JniError(e) => {
-                write!(f, "JNI error: {}", e)
+                write!(f, "JNI error: {e}")
             }
         }
     }
@@ -94,6 +119,25 @@ impl From<jni::errors::Error> for ValidationError {
     fn from(e: jni::errors::Error) -> Self {
         ValidationError::JniError(e)
     }
+}
+
+/// Library safety limits for preventing resource exhaustion
+pub mod safety_limits {
+    /// Maximum buffer size for individual operations (128MB)
+    /// Prevents memory exhaustion while allowing large operations
+    pub const MAX_BUFFER_SIZE: usize = 128 * 1024 * 1024;
+
+    /// Maximum array length for safety checks
+    /// Based on JVM array size limits and practical memory constraints
+    pub const MAX_ARRAY_LENGTH: i32 = i32::MAX - 8;
+
+    /// Maximum string length for validation (64MB)
+    /// Prevents extremely large string allocations
+    pub const MAX_STRING_LENGTH: usize = 64 * 1024 * 1024;
+
+    /// Maximum number of command arguments
+    /// Prevents command explosion attacks at library level
+    pub const MAX_COMMAND_ARGS: usize = 10_000;
 }
 
 /// JNI boundary safety validator
@@ -173,6 +217,173 @@ impl JniSafetyValidator {
         Self::validate_required_pointer(args, "args")?;
         Ok(())
     }
+
+    // ============================================================================
+    // COMPREHENSIVE BOUNDS CHECKING FOR LIBRARY SAFETY (Fix #8)
+    // ============================================================================
+
+    /// Validate integer multiplication for size calculations with overflow protection
+    pub fn validate_size_calculation(
+        count: i32,
+        element_size: usize,
+    ) -> Result<usize, ValidationError> {
+        // Check for negative count
+        if count < 0 {
+            return Err(ValidationError::NegativeArrayLength(count));
+        }
+
+        // Check for array size limits
+        if count > safety_limits::MAX_ARRAY_LENGTH {
+            return Err(ValidationError::ArraySizeTooLarge {
+                length: count,
+                element_size,
+            });
+        }
+
+        // Safe conversion to usize and overflow check
+        let count_usize = count as usize;
+        match count_usize.checked_mul(element_size) {
+            Some(total_size) => {
+                if total_size > safety_limits::MAX_BUFFER_SIZE {
+                    Err(ValidationError::BufferSizeExceedsLimit {
+                        size: total_size,
+                        limit: safety_limits::MAX_BUFFER_SIZE,
+                    })
+                } else {
+                    Ok(total_size)
+                }
+            }
+            None => Err(ValidationError::IntegerOverflow {
+                operation: "array size calculation",
+                values: format!("{count} * {element_size}"),
+            }),
+        }
+    }
+
+    /// Validate buffer size is within library safety limits
+    pub fn validate_buffer_size(size: usize) -> Result<(), ValidationError> {
+        if size > safety_limits::MAX_BUFFER_SIZE {
+            Err(ValidationError::BufferSizeExceedsLimit {
+                size,
+                limit: safety_limits::MAX_BUFFER_SIZE,
+            })
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Validate string length and UTF-8 encoding
+    pub fn validate_string_content(s: &str) -> Result<(), ValidationError> {
+        // Check string length limits
+        if s.len() > safety_limits::MAX_STRING_LENGTH {
+            return Err(ValidationError::BufferSizeExceedsLimit {
+                size: s.len(),
+                limit: safety_limits::MAX_STRING_LENGTH,
+            });
+        }
+
+        // Validate UTF-8 encoding (this also catches interior nulls)
+        if !s.is_ascii() && std::str::from_utf8(s.as_bytes()).is_err() {
+            return Err(ValidationError::InvalidUtf8);
+        }
+
+        // Check for interior null bytes specifically for JNI safety
+        Self::validate_no_interior_nulls(s)?;
+
+        Ok(())
+    }
+
+    /// Validate array creation parameters with comprehensive bounds checking
+    pub fn validate_array_creation(
+        length: i32,
+        element_size: usize,
+    ) -> Result<(), ValidationError> {
+        // Validate the size calculation includes all the safety checks
+        Self::validate_size_calculation(length, element_size)?;
+        Ok(())
+    }
+
+    /// Validate command argument count to prevent resource exhaustion
+    pub fn validate_command_args_count(count: usize) -> Result<(), ValidationError> {
+        if count > safety_limits::MAX_COMMAND_ARGS {
+            Err(ValidationError::BufferSizeExceedsLimit {
+                size: count,
+                limit: safety_limits::MAX_COMMAND_ARGS,
+            })
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Validate integer addition with overflow protection
+    pub fn validate_addition(
+        a: i32,
+        b: i32,
+        operation: &'static str,
+    ) -> Result<i32, ValidationError> {
+        match a.checked_add(b) {
+            Some(result) => Ok(result),
+            None => Err(ValidationError::IntegerOverflow {
+                operation,
+                values: format!("{a} + {b}"),
+            }),
+        }
+    }
+
+    /// Validate array index range with comprehensive bounds checking
+    pub fn validate_array_range(
+        start_index: i32,
+        end_index: i32,
+        array_length: i32,
+    ) -> Result<(), ValidationError> {
+        // Validate individual indices
+        if start_index < 0 {
+            return Err(ValidationError::ArrayIndexOutOfBounds {
+                index: start_index,
+                length: array_length,
+            });
+        }
+
+        if end_index > array_length {
+            return Err(ValidationError::ArrayIndexOutOfBounds {
+                index: end_index,
+                length: array_length,
+            });
+        }
+
+        // Validate range ordering
+        if start_index > end_index {
+            return Err(ValidationError::IntegerOverflow {
+                operation: "array range validation",
+                values: format!("start {start_index} > end {end_index}"),
+            });
+        }
+
+        Ok(())
+    }
+
+    /// Enhanced client handle validation with overflow protection
+    pub fn validate_client_handle_safe(handle: jlong) -> Result<u64, ValidationError> {
+        // Check for negative handles (invalid)
+        if handle < 0 {
+            return Err(ValidationError::InvalidClientHandle);
+        }
+
+        // Check for zero handle (reserved)
+        if handle == 0 {
+            return Err(ValidationError::InvalidClientHandle);
+        }
+
+        // Safe conversion to u64
+        let handle_u64 = handle as u64;
+
+        // Check if client exists in registry
+        if !client_exists(handle_u64) {
+            return Err(ValidationError::ClientNotFound);
+        }
+
+        Ok(handle_u64)
+    }
 }
 
 /// Convert validation error to JNI error for consistent error handling
@@ -180,7 +391,7 @@ impl From<ValidationError> for JniError {
     fn from(e: ValidationError) -> Self {
         match e {
             ValidationError::RequiredPointerNull(name) => {
-                JniError::InvalidInput(format!("Required {} is null", name))
+                JniError::InvalidInput(format!("Required {name} is null"))
             }
             ValidationError::InvalidClientHandle => {
                 JniError::InvalidHandle("Invalid client handle".to_string())
@@ -192,12 +403,27 @@ impl From<ValidationError> for JniError {
                 JniError::InvalidInput("String contains null bytes".to_string())
             }
             ValidationError::ArrayIndexOutOfBounds { index, length } => JniError::InvalidInput(
-                format!("Array index {} out of bounds (length: {})", index, length),
+                format!("Array index {index} out of bounds (length: {length})"),
             ),
             ValidationError::NegativeArrayLength(length) => {
-                JniError::InvalidInput(format!("Array length cannot be negative: {}", length))
+                JniError::InvalidInput(format!("Array length cannot be negative: {length}"))
             }
-            ValidationError::JniError(e) => JniError::Runtime(format!("JNI error: {}", e)),
+            ValidationError::IntegerOverflow { operation, values } => {
+                JniError::InvalidInput(format!("Integer overflow in {operation}: {values}"))
+            }
+            ValidationError::BufferSizeExceedsLimit { size, limit } => {
+                JniError::InvalidInput(format!("Buffer size {size} exceeds safety limit {limit}"))
+            }
+            ValidationError::InvalidUtf8 => {
+                JniError::InvalidInput("Invalid UTF-8 sequence in string".to_string())
+            }
+            ValidationError::ArraySizeTooLarge {
+                length,
+                element_size,
+            } => JniError::InvalidInput(format!(
+                "Array size too large: {length} elements of {element_size} bytes each"
+            )),
+            ValidationError::JniError(e) => JniError::Runtime(format!("JNI error: {e}")),
         }
     }
 }
