@@ -3,9 +3,10 @@ anyio[trio]>=4.9.0
 uvloop
 pytest
 pytest-html
+pytest-timeout
 black >= 24.3.0
 flake8 == 5.0
-isort == 5.10
+isort == 6.0.1
 mypy == 1.13.0
 mypy-protobuf == 3.5
 types-protobuf ~= 5.29.1
