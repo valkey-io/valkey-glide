@@ -1,0 +1,30 @@
+syntax = "proto3";
+package response;
+
+enum RequestErrorType {
+    Unspecified = 0;
+    ExecAbort = 1;
+    Timeout = 2;
+    Disconnect = 3;
+}
+
+message RequestError {
+    RequestErrorType type = 1;
+    string message = 2;
+}
+
+message Response {
+    uint32 callback_idx = 1;
+    oneof value {
+        uint64 resp_pointer = 2;
+        ConstantResponse constant_response = 3;
+        RequestError request_error = 4;
+        string closing_error = 5;
+    }
+    bool is_push = 6;
+    optional uint64 root_span_ptr = 7;
+}
+
+enum ConstantResponse {
+  OK = 0;
+}
