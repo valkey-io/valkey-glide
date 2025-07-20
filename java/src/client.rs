@@ -3,7 +3,7 @@
 //! Unified JNI client implementation that properly leverages glide-core.
 //!
 //! This module provides the complete JNI client architecture:
-//! - SimpleClient: Thin wrapper around glide-core's Client
+//! - JniClient: Thin wrapper around glide-core's Client
 //! - JNI functions: Essential infrastructure and command execution
 //! - Single source of truth: glide-core handles all Valkey protocol logic
 //!
@@ -21,6 +21,7 @@ use std::ptr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::sync::{LazyLock, Mutex};
+use std::time::{Duration, Instant};
 use tokio::runtime::Runtime;
 
 use crate::error::{JniError, JniResult};
@@ -36,15 +37,15 @@ use crate::{jni_error, jni_result};
 ///
 /// This eliminates all the unnecessary abstraction layers and callback complexity
 /// by using glide-core's native async support with a simple blocking interface.
-pub struct SimpleClient {
+pub struct JniClient {
     /// The glide-core client - our single source of truth
     core_client: Client,
     /// Tokio runtime for executing async operations
     runtime: Arc<Runtime>,
 }
 
-impl SimpleClient {
-    /// Create a new SimpleClient wrapping a glide-core Client
+impl JniClient {
+    /// Create a new JniClient wrapping a glide-core Client
     ///
     /// This is the only place where we create runtime overhead - everything else
     /// delegates directly to glide-core's battle-tested implementation.
@@ -58,7 +59,7 @@ impl SimpleClient {
 
         logger_core::log_debug(
             "simple-client",
-            "Created SimpleClient with direct glide-core integration",
+            "Created JniClient with direct glide-core integration",
         );
 
         Ok(Self {
@@ -178,7 +179,7 @@ impl SimpleClient {
     }
 }
 
-impl Clone for SimpleClient {
+impl Clone for JniClient {
     fn clone(&self) -> Self {
         Self {
             core_client: self.core_client.clone(),
@@ -199,38 +200,145 @@ pub fn create_valkey_command(command: &str, args: &[String]) -> Cmd {
 }
 
 // ============================================================================
-// CLIENT REGISTRY - Essential infrastructure
+// CLIENT REGISTRY - Essential infrastructure with memory leak prevention
 // ============================================================================
 
-/// Client registry with enhanced safety
-static CLIENTS: LazyLock<Mutex<HashMap<u64, Arc<Mutex<SimpleClient>>>>> =
+/// Client entry with metadata for cleanup tracking
+struct ClientEntry {
+    /// The actual client
+    client: Arc<Mutex<JniClient>>,
+    /// When this client was created
+    created_at: Instant,
+    /// Last time this client was accessed
+    last_accessed: Instant,
+}
+
+impl ClientEntry {
+    fn new(client: JniClient) -> Self {
+        let now = Instant::now();
+        Self {
+            client: Arc::new(Mutex::new(client)),
+            created_at: now,
+            last_accessed: now,
+        }
+    }
+
+    fn access(&mut self) -> Arc<Mutex<JniClient>> {
+        self.last_accessed = Instant::now();
+        self.client.clone()
+    }
+
+    fn is_expired(&self, timeout: Duration) -> bool {
+        self.last_accessed.elapsed() > timeout
+    }
+}
+
+impl std::fmt::Debug for ClientEntry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ClientEntry")
+            .field("created_at", &self.created_at)
+            .field("last_accessed", &self.last_accessed)
+            .finish()
+    }
+}
+
+/// Client registry with enhanced safety and automatic cleanup
+static CLIENTS: LazyLock<Mutex<HashMap<u64, ClientEntry>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
 /// Client handle counter
 static CLIENT_COUNTER: AtomicU64 = AtomicU64::new(1);
 
-/// Get client from registry with proper error handling
-fn get_client(handle: u64) -> JniResult<Arc<Mutex<SimpleClient>>> {
-    let clients = CLIENTS
+/// Default client timeout (30 minutes of inactivity)
+const DEFAULT_CLIENT_TIMEOUT: Duration = Duration::from_secs(30 * 60);
+
+/// Get client from registry with proper error handling and lazy cleanup
+fn get_client(handle: u64) -> JniResult<Arc<Mutex<JniClient>>> {
+    let mut clients = CLIENTS
         .lock()
         .map_err(|_| jni_error!(Runtime, "Failed to lock client registry"))?;
 
-    clients
-        .get(&handle)
-        .cloned()
-        .ok_or_else(|| jni_error!(InvalidHandle, "Client handle {} not found", handle))
+    // Perform lazy cleanup of expired clients while we have the lock
+    cleanup_expired_clients_locked(&mut clients);
+
+    // Get the requested client and update its access time
+    match clients.get_mut(&handle) {
+        Some(entry) => {
+            logger_core::log_debug("client-registry", format!("Accessing client {handle}"));
+            Ok(entry.access())
+        }
+        None => Err(jni_error!(
+            InvalidHandle,
+            "Client handle {} not found",
+            handle
+        )),
+    }
+}
+
+/// Cleanup expired clients while holding the registry lock
+/// This is called during normal operations for lazy cleanup
+fn cleanup_expired_clients_locked(clients: &mut HashMap<u64, ClientEntry>) {
+    let timeout = DEFAULT_CLIENT_TIMEOUT;
+    let initial_count = clients.len();
+
+    clients.retain(|&handle, entry| {
+        if entry.is_expired(timeout) {
+            logger_core::log_debug(
+                "client-registry",
+                format!(
+                    "Cleaning up expired client {handle} (idle for {:?})",
+                    entry.last_accessed.elapsed()
+                ),
+            );
+            unregister_client(handle);
+            false // Remove this entry
+        } else {
+            true // Keep this entry
+        }
+    });
+
+    let cleaned_count = initial_count - clients.len();
+    if cleaned_count > 0 {
+        logger_core::log_debug(
+            "client-registry",
+            format!("Lazy cleanup removed {cleaned_count} expired clients"),
+        );
+    }
+}
+
+/// Force cleanup of all expired clients (can be called manually)
+pub fn cleanup_expired_clients() -> usize {
+    let mut clients = match CLIENTS.lock() {
+        Ok(clients) => clients,
+        Err(_) => {
+            logger_core::log_warn("client-registry", "Failed to lock registry for cleanup");
+            return 0;
+        }
+    };
+
+    let initial_count = clients.len();
+    cleanup_expired_clients_locked(&mut clients);
+    initial_count - clients.len()
 }
 
 /// Register a new client in the registry
-pub fn register_simple_client(handle: u64, client: SimpleClient) -> JniResult<()> {
+pub fn register_simple_client(handle: u64, client: JniClient) -> JniResult<()> {
     let mut clients = CLIENTS
         .lock()
         .map_err(|_| jni_error!(Runtime, "Failed to lock client registry for insertion"))?;
 
-    clients.insert(handle, Arc::new(Mutex::new(client)));
+    // Perform lazy cleanup when adding new clients to prevent buildup
+    cleanup_expired_clients_locked(&mut clients);
+
+    // Create client entry with metadata
+    let entry = ClientEntry::new(client);
+    clients.insert(handle, entry);
     register_client(handle);
 
-    logger_core::log_debug("client", format!("Registered client with handle: {handle}"));
+    logger_core::log_debug(
+        "client-registry",
+        format!("Registered client with handle: {handle}"),
+    );
     Ok(())
 }
 
@@ -240,7 +348,7 @@ pub fn register_simple_client(handle: u64, client: SimpleClient) -> JniResult<()
 
 /// Create a client - PLACEHOLDER for proper implementation
 /// In real implementation, this would create glide-core Client with proper configuration
-/// 
+///
 /// # Safety
 /// This function is called from Java via JNI with a valid jstring parameter.
 #[no_mangle]
@@ -259,7 +367,7 @@ pub unsafe extern "system" fn Java_io_valkey_glide_core_client_GlideClient_creat
         // PLACEHOLDER: In real implementation, this would:
         // 1. Parse connection string
         // 2. Create glide-core Client with proper configuration
-        // 3. Wrap in SimpleClient and register in registry
+        // 3. Wrap in JniClient and register in registry
 
         logger_core::log_debug("client", "Creating placeholder client");
 
@@ -338,26 +446,22 @@ pub unsafe extern "system" fn Java_io_valkey_glide_core_client_GlideClient_execu
             java_string_array_to_vec(&mut env, args)?
         };
 
-        // 2. Execute via SimpleClient if available
-        // For placeholder implementation, return success indicator
+        // 2. Execute via JniClient using registry with automatic cleanup
         logger_core::log_debug(
             "client",
             format!("Executing command: {cmd_str} with {} args", args_vec.len()),
         );
 
-        // PLACEHOLDER: In real implementation, this would use SimpleClient
-        // let client_arc = get_client(client_handle as u64)?;
-        // let mut client = client_arc.lock().map_err(|_| {
-        //     jni_error!(Runtime, "Failed to lock client")
-        // })?;
-        //
-        // let cmd = create_valkey_command(&cmd_str, &args_vec);
-        // let response = client.execute_command(cmd)?;
-        // convert_value_to_java_object(&mut env, response)
+        let client_arc = get_client(client_handle as u64)?;
+        let mut client = client_arc
+            .lock()
+            .map_err(|_| jni_error!(Runtime, "Failed to lock client for command execution"))?;
 
-        // For now, return a simple success string
-        let java_string = create_jni_string(&env, "OK")?;
-        Ok(java_string.as_raw())
+        let cmd = create_valkey_command(&cmd_str, &args_vec);
+        let response = client.execute_command(cmd)?;
+
+        // Convert Valkey Value to Java object
+        convert_value_to_java_object(&mut env, response)
     };
 
     jni_result!(&mut env, result(), ptr::null_mut())
@@ -382,6 +486,69 @@ fn java_string_array_to_vec(env: &mut JNIEnv, array: jobject) -> JniResult<Vec<S
     Ok(result)
 }
 
+/// Helper: Convert Valkey Value to Java object
+///
+/// This function handles the conversion from Valkey Value types to appropriate Java objects.
+/// Uses proper JNI safety patterns and follows library boundary validation principles.
+fn convert_value_to_java_object(env: &mut JNIEnv, value: Value) -> JniResult<jobject> {
+    match value {
+        Value::Nil => Ok(ptr::null_mut()),
+
+        Value::Int(i) => {
+            let long_class = env.find_class("java/lang/Long")?;
+            let long_value = env.call_static_method(
+                long_class,
+                "valueOf",
+                "(J)Ljava/lang/Long;",
+                &[jni::objects::JValue::Long(i)],
+            )?;
+            Ok(long_value.l()?.as_raw())
+        }
+
+        Value::BulkString(bytes) => {
+            // Convert bytes to Java String with proper UTF-8 handling
+            match String::from_utf8(bytes.clone()) {
+                Ok(s) => {
+                    let java_string = create_jni_string(env, &s)?;
+                    Ok(java_string.as_raw())
+                }
+                Err(_) => {
+                    // For non-UTF-8 data, return byte array
+                    let byte_array = env.byte_array_from_slice(&bytes)?;
+                    Ok(byte_array.as_raw())
+                }
+            }
+        }
+
+        Value::Array(values) => {
+            // Create Object array to hold the results
+            let length = values.len() as i32;
+            let object_class = env.find_class("java/lang/Object")?;
+            let object_array = env.new_object_array(length, object_class, JObject::null())?;
+
+            for (i, val) in values.into_iter().enumerate() {
+                let java_obj = convert_value_to_java_object(env, val)?;
+                let java_obj = unsafe { JObject::from_raw(java_obj) };
+                env.set_object_array_element(&object_array, i as i32, java_obj)?;
+            }
+
+            Ok(object_array.as_raw())
+        }
+
+        Value::SimpleString(status) => {
+            let java_string = create_jni_string(env, &status)?;
+            Ok(java_string.as_raw())
+        }
+
+        // For other Value types, convert to string representation
+        _ => {
+            let string_repr = format!("{value:?}");
+            let java_string = create_jni_string(env, &string_repr)?;
+            Ok(java_string.as_raw())
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -389,8 +556,8 @@ mod tests {
     #[test]
     fn test_create_valkey_command() {
         let cmd = create_valkey_command("SET", &["key".to_string(), "value".to_string()]);
-        // Basic validation that command was created
-        assert!(cmd.arg_idx(0).is_some());
+        // Basic validation that command was created - use public method instead
+        assert!(cmd.args_iter().count() > 0);
     }
 
     #[test]
@@ -398,7 +565,7 @@ mod tests {
         assert!(true, "Unified client eliminates all duplication");
         assert!(
             true,
-            "SimpleClient directly uses glide-core without duplication"
+            "JniClient directly uses glide-core without duplication"
         );
         assert!(true, "All Valkey protocol logic handled by glide-core");
         assert!(true, "JNI layer only handles Java <-> Rust conversion");
