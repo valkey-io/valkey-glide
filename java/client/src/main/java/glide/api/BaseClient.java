@@ -4843,13 +4843,14 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
      * @param keysAndIds A map of stream names to stream IDs
      * @return A CompletableFuture containing the stream data
      */
-    public CompletableFuture<Object> xread(Map<String, String> keysAndIds) {
+    public CompletableFuture<Map<String, Map<String, String[][]>>> xread(Map<String, String> keysAndIds) {
         List<String> args = new ArrayList<>();
         args.add("XREAD");
         args.add("STREAMS");
         args.addAll(keysAndIds.keySet());
         args.addAll(keysAndIds.values());
-        return executeCustomCommand(args.toArray(new String[0]));
+        return executeCustomCommand(args.toArray(new String[0]))
+                .thenApply(result -> (Map<String, Map<String, String[][]>>) result);
     }
 
     // ============================================================================
