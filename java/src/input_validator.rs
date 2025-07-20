@@ -5,7 +5,7 @@
 //! This module provides validation functions that prevent library crashes and undefined
 //! behavior at the JNI boundary. It does NOT perform application-level validation like
 //! command whitelisting or business logic checks - those are the responsibility of the
-//! application and Redis server.
+//! application and Valkey server.
 
 use jni::objects::JObjectArray;
 use jni::sys::{jlong, jobjectArray, jstring};

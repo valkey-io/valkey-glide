@@ -19,14 +19,17 @@ public interface ScriptingAndFunctionsCommands {
      * Loads a library to Valkey.
      *
      * @since Valkey 7.0 and above.
-     * @see <a href="https://valkey.io/commands/function-load/">valkey.io</a> for details.
+     * @see <a href="https://valkey.io/commands/function-load/">valkey.io</a> for
+     *      details.
      * @param libraryCode The source code that implements the library.
-     * @param replace Whether the given library should overwrite a library with the same name if it
-     *     already exists.
+     * @param replace     Whether the given library should overwrite a library with
+     *                    the same name if it
+     *                    already exists.
      * @return The library name that was loaded.
      * @example
-     *     <pre>{@code
-     * String code = "#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)";
+     *
+     *          <pre>{@code
+     * String code = "#!lua name=mylib \n server.register_function('myfunc', function(keys, args) return args[1] end)";
      * String response = client.functionLoad(code, true).get();
      * assert response.equals("mylib");
      * }</pre>
@@ -37,14 +40,17 @@ public interface ScriptingAndFunctionsCommands {
      * Loads a library to Valkey.
      *
      * @since Valkey 7.0 and above.
-     * @see <a href="https://valkey.io/commands/function-load/">valkey.io</a> for details.
+     * @see <a href="https://valkey.io/commands/function-load/">valkey.io</a> for
+     *      details.
      * @param libraryCode The source code that implements the library.
-     * @param replace Whether the given library should overwrite a library with the same name if it
-     *     already exists.
+     * @param replace     Whether the given library should overwrite a library with
+     *                    the same name if it
+     *                    already exists.
      * @return The library name that was loaded.
      * @example
-     *     <pre>{@code
-     * GlideString code = gs("#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)");
+     *
+     *          <pre>{@code
+     * GlideString code = gs("#!lua name=mylib \n server.register_function('myfunc', function(keys, args) return args[1] end)");
      * GlideString response = client.functionLoad(code, true).get();
      * assert response.equals(gs("mylib"));
      * }</pre>

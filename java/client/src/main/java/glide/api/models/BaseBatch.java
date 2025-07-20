@@ -481,9 +481,10 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     }
 
     /**
-     * Returns the internal encoding of the Redis object stored at key.
+     * Returns the internal encoding of the Valkey object stored at key.
      *
-     * @see <a href="https://valkey.io/commands/object-encoding/">valkey.io</a> for details.
+     * @see <a href="https://valkey.io/commands/object-encoding/">valkey.io</a> for
+     *      details.
      * @param key The key to check the encoding of.
      * @return This batch instance for method chaining.
      */
@@ -493,9 +494,10 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     }
 
     /**
-     * Returns the internal encoding of the Redis object stored at key.
+     * Returns the internal encoding of the Valkey object stored at key.
      *
-     * @see <a href="https://valkey.io/commands/object-encoding/">valkey.io</a> for details.
+     * @see <a href="https://valkey.io/commands/object-encoding/">valkey.io</a> for
+     *      details.
      * @param key The key to check the encoding of.
      * @return This batch instance for method chaining.
      */
