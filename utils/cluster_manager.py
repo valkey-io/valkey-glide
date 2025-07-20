@@ -49,7 +49,7 @@ def get_command(commands: List[str]) -> str:
                 return command
         except Exception as e:
             logging.error(f"Error checking {command}: {e}")
-    raise Exception(f"Neither ${'nor'.join(command)} found in the system.")
+    raise Exception(f"Neither {' nor '.join(commands)} found in the system.")
 
 
 # Determine which server to use by checking `valkey-server` and `redis-server`
