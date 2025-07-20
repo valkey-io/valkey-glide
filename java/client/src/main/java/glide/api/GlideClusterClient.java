@@ -4660,4 +4660,95 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
             .thenApply(result -> ClusterValue.of((Long) result));
     }
 
+    // ============= LCS COMMAND IMPLEMENTATION =============
+
+    // LCSIDX methods
+    @Override
+    public CompletableFuture<Map<String, Object>> lcsIdx(String key1, String key2) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(LCS, key1, key2, "IDX"))
+            .thenApply(result -> (Map<String, Object>) result);
+    }
+
+    public CompletableFuture<ClusterValue<Map<String, Object>>> lcsIdx(String key1, String key2, Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(LCS, key1, key2, "IDX"), route)
+            .thenApply(result -> ClusterValue.of((Map<String, Object>) result));
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Object>> lcsIdx(GlideString key1, GlideString key2) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(LCS, key1.toString(), key2.toString(), "IDX"))
+            .thenApply(result -> (Map<String, Object>) result);
+    }
+
+    public CompletableFuture<ClusterValue<Map<String, Object>>> lcsIdx(GlideString key1, GlideString key2, Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(LCS, key1.toString(), key2.toString(), "IDX"), route)
+            .thenApply(result -> ClusterValue.of((Map<String, Object>) result));
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Object>> lcsIdx(String key1, String key2, long minMatchLen) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(LCS, key1, key2, "IDX", "MINMATCHLEN", String.valueOf(minMatchLen)))
+            .thenApply(result -> (Map<String, Object>) result);
+    }
+
+    public CompletableFuture<ClusterValue<Map<String, Object>>> lcsIdx(String key1, String key2, long minMatchLen, Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(LCS, key1, key2, "IDX", "MINMATCHLEN", String.valueOf(minMatchLen)), route)
+            .thenApply(result -> ClusterValue.of((Map<String, Object>) result));
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Object>> lcsIdx(GlideString key1, GlideString key2, long minMatchLen) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(LCS, key1.toString(), key2.toString(), "IDX", "MINMATCHLEN", String.valueOf(minMatchLen)))
+            .thenApply(result -> (Map<String, Object>) result);
+    }
+
+    public CompletableFuture<ClusterValue<Map<String, Object>>> lcsIdx(GlideString key1, GlideString key2, long minMatchLen, Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(LCS, key1.toString(), key2.toString(), "IDX", "MINMATCHLEN", String.valueOf(minMatchLen)), route)
+            .thenApply(result -> ClusterValue.of((Map<String, Object>) result));
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Object>> lcsIdxWithMatchLen(String key1, String key2) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(LCS, key1, key2, "IDX", "WITHMATCHLEN"))
+            .thenApply(result -> (Map<String, Object>) result);
+    }
+
+    public CompletableFuture<ClusterValue<Map<String, Object>>> lcsIdxWithMatchLen(String key1, String key2, Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(LCS, key1, key2, "IDX", "WITHMATCHLEN"), route)
+            .thenApply(result -> ClusterValue.of((Map<String, Object>) result));
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Object>> lcsIdxWithMatchLen(GlideString key1, GlideString key2) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(LCS, key1.toString(), key2.toString(), "IDX", "WITHMATCHLEN"))
+            .thenApply(result -> (Map<String, Object>) result);
+    }
+
+    public CompletableFuture<ClusterValue<Map<String, Object>>> lcsIdxWithMatchLen(GlideString key1, GlideString key2, Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(LCS, key1.toString(), key2.toString(), "IDX", "WITHMATCHLEN"), route)
+            .thenApply(result -> ClusterValue.of((Map<String, Object>) result));
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Object>> lcsIdxWithMatchLen(String key1, String key2, long minMatchLen) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(LCS, key1, key2, "IDX", "WITHMATCHLEN", "MINMATCHLEN", String.valueOf(minMatchLen)))
+            .thenApply(result -> (Map<String, Object>) result);
+    }
+
+    public CompletableFuture<ClusterValue<Map<String, Object>>> lcsIdxWithMatchLen(String key1, String key2, long minMatchLen, Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(LCS, key1, key2, "IDX", "WITHMATCHLEN", "MINMATCHLEN", String.valueOf(minMatchLen)), route)
+            .thenApply(result -> ClusterValue.of((Map<String, Object>) result));
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Object>> lcsIdxWithMatchLen(GlideString key1, GlideString key2, long minMatchLen) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(LCS, key1.toString(), key2.toString(), "IDX", "WITHMATCHLEN", "MINMATCHLEN", String.valueOf(minMatchLen)))
+            .thenApply(result -> (Map<String, Object>) result);
+    }
+
+    public CompletableFuture<ClusterValue<Map<String, Object>>> lcsIdxWithMatchLen(GlideString key1, GlideString key2, long minMatchLen, Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(LCS, key1.toString(), key2.toString(), "IDX", "WITHMATCHLEN", "MINMATCHLEN", String.valueOf(minMatchLen)), route)
+            .thenApply(result -> ClusterValue.of((Map<String, Object>) result));
+    }
+
 }
