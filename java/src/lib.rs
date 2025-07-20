@@ -6,14 +6,18 @@
 //! glide-core client, eliminating Unix Domain Socket overhead and enabling
 //! zero-copy operations for maximum performance.
 
-mod error;
-mod client;
-mod callback;
-mod runtime;
 mod async_bridge;
+mod callback;
+mod client;
+mod error;
+mod input_validator;
+mod jni_wrappers;
+mod runtime;
 
-pub use error::*;
-pub use client::*;
-pub use callback::*;
-pub use runtime::*;
 pub use async_bridge::*;
+pub use callback::*;
+pub use client::*;
+pub use error::*;
+pub use input_validator::*;
+pub use jni_wrappers::*;
+pub use runtime::*;

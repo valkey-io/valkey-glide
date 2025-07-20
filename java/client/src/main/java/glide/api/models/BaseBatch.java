@@ -7,7 +7,10 @@ import java.util.List;
 import java.util.Map;
 import static glide.api.models.commands.RequestType.*;
 import glide.api.models.commands.scan.HScanOptions;
+import glide.api.models.commands.scan.SScanOptions;
 import glide.api.models.commands.ListDirection;
+import glide.api.models.commands.ExpireOptions;
+import glide.api.models.commands.SortOptions;
 
 /**
  * Base class for all batch operations.
@@ -17,7 +20,7 @@ import glide.api.models.commands.ListDirection;
 public abstract class BaseBatch<T extends BaseBatch<T>> {
     /** List of commands to execute as a batch */
     protected final List<Command> commands;
-    
+
     /** Whether this batch should be executed atomically (transaction) */
     protected final boolean isAtomic;
 
@@ -108,7 +111,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param value The value to set.
      * @return This batch instance for method chaining.
      */
-    
+
     public T set(String key, String value) {
         return addCommand(SET, key, value);
     }
@@ -121,7 +124,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param value The value to set.
      * @return This batch instance for method chaining.
      */
-    
+
     public T set(GlideString key, GlideString value) {
         return addCommand(SET, key.toString(), value.toString());
     }
@@ -133,7 +136,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param key The key to get.
      * @return This batch instance for method chaining.
      */
-    
+
     public T get(String key) {
         return addCommand(GET, key);
     }
@@ -145,7 +148,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param key The key to get.
      * @return This batch instance for method chaining.
      */
-    
+
     public T get(GlideString key) {
         return addCommand(GET, key.toString());
     }
@@ -156,7 +159,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @see <a href="https://valkey.io/commands/ping/">valkey.io</a> for details.
      * @return This batch instance for method chaining.
      */
-    
+
     public T ping() {
         return addCommand(Ping);
     }
@@ -168,7 +171,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param message The message to include in the ping.
      * @return This batch instance for method chaining.
      */
-    
+
     public T ping(String message) {
         return addCommand(Ping, message);
     }
@@ -180,7 +183,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param message The message to include in the ping.
      * @return This batch instance for method chaining.
      */
-    
+
     public T ping(GlideString message) {
         return addCommand(Ping, message.toString());
     }
@@ -191,7 +194,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @see <a href="https://valkey.io/commands/flushall/">valkey.io</a> for details.
      * @return This batch instance for method chaining.
      */
-    
+
     public T flushall() {
         return addCommand(FlushAll);
     }
@@ -203,7 +206,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param mode The flush mode (SYNC or ASYNC).
      * @return This batch instance for method chaining.
      */
-    
+
     public T flushall(glide.api.models.commands.FlushMode mode) {
         return addCommand(FlushAll, mode.toString());
     }
@@ -216,7 +219,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param elements The elements to prepend.
      * @return This batch instance for method chaining.
      */
-    
+
     public T lpush(String key, String... elements) {
         String[] args = new String[elements.length + 1];
         args[0] = key;
@@ -232,7 +235,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param elements The elements to prepend.
      * @return This batch instance for method chaining.
      */
-    
+
     public T lpush(GlideString key, GlideString... elements) {
         String[] args = new String[elements.length + 1];
         args[0] = key.toString();
@@ -250,7 +253,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param members The members to add.
      * @return This batch instance for method chaining.
      */
-    
+
     public T sadd(String key, String... members) {
         String[] args = new String[members.length + 1];
         args[0] = key;
@@ -266,7 +269,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param members The members to add.
      * @return This batch instance for method chaining.
      */
-    
+
     public T sadd(GlideString key, GlideString... members) {
         String[] args = new String[members.length + 1];
         args[0] = key.toString();
@@ -284,7 +287,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param fieldValuePairs The field-value pairs to set.
      * @return This batch instance for method chaining.
      */
-    
+
     public T hset(String key, Map<String, String> fieldValuePairs) {
         String[] args = new String[fieldValuePairs.size() * 2 + 1];
         args[0] = key;
@@ -304,7 +307,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param fieldValuePairs The field-value pairs to set.
      * @return This batch instance for method chaining.
      */
-    
+
     public T hset(GlideString key, Map<GlideString, GlideString> fieldValuePairs) {
         String[] args = new String[fieldValuePairs.size() * 2 + 1];
         args[0] = key.toString();
@@ -324,7 +327,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param membersScoresMap A map of members to their scores.
      * @return This batch instance for method chaining.
      */
-    
+
     public T zadd(String key, Map<String, Double> membersScoresMap) {
         String[] args = new String[membersScoresMap.size() * 2 + 1];
         args[0] = key;
@@ -344,7 +347,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param membersScoresMap A map of members to their scores.
      * @return This batch instance for method chaining.
      */
-    
+
     public T zadd(GlideString key, Map<GlideString, Double> membersScoresMap) {
         String[] args = new String[membersScoresMap.size() * 2 + 1];
         args[0] = key.toString();
@@ -364,7 +367,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param elements The elements to add.
      * @return This batch instance for method chaining.
      */
-    
+
     public T pfadd(String key, String... elements) {
         String[] args = new String[elements.length + 1];
         args[0] = key;
@@ -380,7 +383,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param elements The elements to add.
      * @return This batch instance for method chaining.
      */
-    
+
     public T pfadd(GlideString key, GlideString... elements) {
         String[] args = new String[elements.length + 1];
         args[0] = key.toString();
@@ -396,7 +399,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param args The command arguments.
      * @return This batch instance for method chaining.
      */
-    
+
     public T customCommand(String... args) {
         return addCommand(CustomCommand, args);
     }
@@ -408,7 +411,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param keys The keys to check.
      * @return This batch instance for method chaining.
      */
-    
+
     public T exists(String... keys) {
         return addCommand(Exists, keys);
     }
@@ -420,7 +423,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param keys The keys to check.
      * @return This batch instance for method chaining.
      */
-    
+
     public T exists(GlideString... keys) {
         String[] stringKeys = new String[keys.length];
         for (int i = 0; i < keys.length; i++) {
@@ -436,7 +439,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param key The key to remove timeout from.
      * @return This batch instance for method chaining.
      */
-    
+
     public T persist(String key) {
         return addCommand(Persist, key);
     }
@@ -448,7 +451,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param key The key to remove timeout from.
      * @return This batch instance for method chaining.
      */
-    
+
     public T persist(GlideString key) {
         return addCommand(Persist, key.toString());
     }
@@ -460,7 +463,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param key The key to check the type of.
      * @return This batch instance for method chaining.
      */
-    
+
     public T type(String key) {
         return addCommand(Type, key);
     }
@@ -472,7 +475,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param key The key to check the type of.
      * @return This batch instance for method chaining.
      */
-    
+
     public T type(GlideString key) {
         return addCommand(Type, key.toString());
     }
@@ -484,7 +487,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param key The key to check the encoding of.
      * @return This batch instance for method chaining.
      */
-    
+
     public T objectEncoding(String key) {
         return addCommand(ObjectEncoding, key);
     }
@@ -496,7 +499,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param key The key to check the encoding of.
      * @return This batch instance for method chaining.
      */
-    
+
     public T objectEncoding(GlideString key) {
         return addCommand(ObjectEncoding, key.toString());
     }
@@ -508,7 +511,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param keys The keys to touch.
      * @return This batch instance for method chaining.
      */
-    
+
     public T touch(String... keys) {
         return addCommand(Touch, keys);
     }
@@ -520,7 +523,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param keys The keys to touch.
      * @return This batch instance for method chaining.
      */
-    
+
     public T touch(GlideString... keys) {
         String[] stringKeys = new String[keys.length];
         for (int i = 0; i < keys.length; i++) {
@@ -537,7 +540,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param newkey The new key name.
      * @return This batch instance for method chaining.
      */
-    
+
     public T rename(String key, String newkey) {
         return addCommand(Rename, key, newkey);
     }
@@ -550,7 +553,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param newkey The new key name.
      * @return This batch instance for method chaining.
      */
-    
+
     public T rename(GlideString key, GlideString newkey) {
         return addCommand(Rename, key.toString(), newkey.toString());
     }
@@ -563,7 +566,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param newkey The new key name.
      * @return This batch instance for method chaining.
      */
-    
+
     public T renamenx(String key, String newkey) {
         return addCommand(RenameNX, key, newkey);
     }
@@ -576,7 +579,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param newkey The new key name.
      * @return This batch instance for method chaining.
      */
-    
+
     public T renamenx(GlideString key, GlideString newkey) {
         return addCommand(RenameNX, key.toString(), newkey.toString());
     }
@@ -588,7 +591,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param keys The keys to unlink.
      * @return This batch instance for method chaining.
      */
-    
+
     public T unlink(String... keys) {
         return addCommand(UNLINK, keys);
     }
@@ -600,7 +603,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param keys The keys to unlink.
      * @return This batch instance for method chaining.
      */
-    
+
     public T unlink(GlideString... keys) {
         String[] stringKeys = new String[keys.length];
         for (int i = 0; i < keys.length; i++) {
@@ -616,7 +619,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param keys The keys to delete.
      * @return This batch instance for method chaining.
      */
-    
+
     public T del(String... keys) {
         return addCommand(Del, keys);
     }
@@ -628,7 +631,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param keys The keys to delete.
      * @return This batch instance for method chaining.
      */
-    
+
     public T del(GlideString... keys) {
         String[] stringKeys = new String[keys.length];
         for (int i = 0; i < keys.length; i++) {
@@ -644,7 +647,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param key The key to sort.
      * @return This batch instance for method chaining.
      */
-    
+
     public T sort(String key) {
         return addCommand(Sort, key);
     }
@@ -656,7 +659,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param key The key to sort.
      * @return This batch instance for method chaining.
      */
-    
+
     public T sort(GlideString key) {
         return addCommand(Sort, key.toString());
     }
@@ -669,7 +672,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param destination The key to store the result in.
      * @return This batch instance for method chaining.
      */
-    
+
     public T sortStore(String key, String destination) {
         return addCommand(Sort, key, "STORE", destination);
     }
@@ -682,9 +685,99 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param destination The key to store the result in.
      * @return This batch instance for method chaining.
      */
-    
+
     public T sortStore(GlideString key, GlideString destination) {
         return addCommand(Sort, key.toString(), "STORE", destination.toString());
+    }
+
+    /**
+     * Sorts the elements in the list, set or sorted set at key.
+     * Read-only version of SORT.
+     *
+     * @see <a href="https://valkey.io/commands/sort_ro/">valkey.io</a> for details.
+     * @param key The key to sort.
+     * @return This batch instance for method chaining.
+     */
+    public T sortReadOnly(String key) {
+        return addCommand(SortReadOnly, key);
+    }
+
+    /**
+     * Sorts the elements in the list, set or sorted set at key.
+     * Read-only version of SORT.
+     *
+     * @see <a href="https://valkey.io/commands/sort_ro/">valkey.io</a> for details.
+     * @param key The key to sort.
+     * @return This batch instance for method chaining.
+     */
+    public T sortReadOnly(GlideString key) {
+        return addCommand(SortReadOnly, key.toString());
+    }
+
+    /**
+     * Sorts the elements in the list, set or sorted set at key with options.
+     *
+     * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.
+     * @param key     The key to sort.
+     * @param options The sort options.
+     * @return This batch instance for method chaining.
+     */
+    public T sort(String key, SortOptions options) {
+        String[] args = options.toArgs();
+        String[] fullArgs = new String[args.length + 1];
+        fullArgs[0] = key;
+        System.arraycopy(args, 0, fullArgs, 1, args.length);
+        return addCommand(Sort, fullArgs);
+    }
+
+    /**
+     * Sorts the elements in the list, set or sorted set at key with options.
+     *
+     * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.
+     * @param key     The key to sort.
+     * @param options The sort options.
+     * @return This batch instance for method chaining.
+     */
+    public T sort(GlideString key, SortOptions options) {
+        String[] args = options.toArgs();
+        String[] fullArgs = new String[args.length + 1];
+        fullArgs[0] = key.toString();
+        System.arraycopy(args, 0, fullArgs, 1, args.length);
+        return addCommand(Sort, fullArgs);
+    }
+
+    /**
+     * Sorts the elements in the list, set or sorted set at key with options.
+     * Read-only version of SORT.
+     *
+     * @see <a href="https://valkey.io/commands/sort_ro/">valkey.io</a> for details.
+     * @param key     The key to sort.
+     * @param options The sort options.
+     * @return This batch instance for method chaining.
+     */
+    public T sortReadOnly(String key, SortOptions options) {
+        String[] args = options.toArgs();
+        String[] fullArgs = new String[args.length + 1];
+        fullArgs[0] = key;
+        System.arraycopy(args, 0, fullArgs, 1, args.length);
+        return addCommand(SortReadOnly, fullArgs);
+    }
+
+    /**
+     * Sorts the elements in the list, set or sorted set at key with options.
+     * Read-only version of SORT.
+     *
+     * @see <a href="https://valkey.io/commands/sort_ro/">valkey.io</a> for details.
+     * @param key     The key to sort.
+     * @param options The sort options.
+     * @return This batch instance for method chaining.
+     */
+    public T sortReadOnly(GlideString key, SortOptions options) {
+        String[] args = options.toArgs();
+        String[] fullArgs = new String[args.length + 1];
+        fullArgs[0] = key.toString();
+        System.arraycopy(args, 0, fullArgs, 1, args.length);
+        return addCommand(SortReadOnly, fullArgs);
     }
 
     /**
@@ -695,7 +788,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param seconds The timeout in seconds.
      * @return This batch instance for method chaining.
      */
-    
+
     public T expire(String key, long seconds) {
         return addCommand(EXPIRE, key, String.valueOf(seconds));
     }
@@ -708,7 +801,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param seconds The timeout in seconds.
      * @return This batch instance for method chaining.
      */
-    
+
     public T expire(GlideString key, long seconds) {
         return addCommand(EXPIRE, key.toString(), String.valueOf(seconds));
     }
@@ -721,7 +814,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param timestamp The Unix timestamp when the key should expire.
      * @return This batch instance for method chaining.
      */
-    
+
     public T expireAt(String key, long timestamp) {
         return addCommand(EXPIREAT, key, String.valueOf(timestamp));
     }
@@ -734,7 +827,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param timestamp The Unix timestamp when the key should expire.
      * @return This batch instance for method chaining.
      */
-    
+
     public T expireAt(GlideString key, long timestamp) {
         return addCommand(EXPIREAT, key.toString(), String.valueOf(timestamp));
     }
@@ -747,7 +840,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param milliseconds The expiration time in milliseconds.
      * @return This batch instance for method chaining.
      */
-    
+
     public T pexpire(String key, long milliseconds) {
         return addCommand(PEXPIRE, key, String.valueOf(milliseconds));
     }
@@ -760,9 +853,45 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param milliseconds The expiration time in milliseconds.
      * @return This batch instance for method chaining.
      */
-    
+
     public T pexpire(GlideString key, long milliseconds) {
         return addCommand(PEXPIRE, key.toString(), String.valueOf(milliseconds));
+    }
+
+    /**
+     * Set an expiration time on a key in milliseconds with conditional options.
+     *
+     * @see <a href="https://valkey.io/commands/pexpire/">valkey.io</a> for details.
+     * @param key           The key to set expiration on.
+     * @param milliseconds  The expiration time in milliseconds.
+     * @param expireOptions The expiration conditions.
+     * @return This batch instance for method chaining.
+     */
+    public T pexpire(String key, long milliseconds, ExpireOptions expireOptions) {
+        String[] args = expireOptions.toArgs();
+        String[] fullArgs = new String[args.length + 2];
+        fullArgs[0] = key;
+        fullArgs[1] = String.valueOf(milliseconds);
+        System.arraycopy(args, 0, fullArgs, 2, args.length);
+        return addCommand(PEXPIRE, fullArgs);
+    }
+
+    /**
+     * Set an expiration time on a key in milliseconds with conditional options.
+     *
+     * @see <a href="https://valkey.io/commands/pexpire/">valkey.io</a> for details.
+     * @param key           The key to set expiration on.
+     * @param milliseconds  The expiration time in milliseconds.
+     * @param expireOptions The expiration conditions.
+     * @return This batch instance for method chaining.
+     */
+    public T pexpire(GlideString key, long milliseconds, ExpireOptions expireOptions) {
+        String[] args = expireOptions.toArgs();
+        String[] fullArgs = new String[args.length + 2];
+        fullArgs[0] = key.toString();
+        fullArgs[1] = String.valueOf(milliseconds);
+        System.arraycopy(args, 0, fullArgs, 2, args.length);
+        return addCommand(PEXPIRE, fullArgs);
     }
 
     /**
@@ -773,7 +902,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param timestamp The Unix timestamp in milliseconds when the key should expire.
      * @return This batch instance for method chaining.
      */
-    
+
     public T pexpireAt(String key, long timestamp) {
         return addCommand(PEXPIREAT, key, String.valueOf(timestamp));
     }
@@ -786,9 +915,53 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param timestamp The Unix timestamp in milliseconds when the key should expire.
      * @return This batch instance for method chaining.
      */
-    
+
     public T pexpireAt(GlideString key, long timestamp) {
         return addCommand(PEXPIREAT, key.toString(), String.valueOf(timestamp));
+    }
+
+    /**
+     * Set a timeout on key in milliseconds. After the timeout has expired, the key
+     * will
+     * automatically be deleted.
+     *
+     * @see <a href="https://valkey.io/commands/pexpireat/">valkey.io</a> for
+     *      details.
+     * @param key           The key to set timeout on.
+     * @param timestamp     The timeout in milliseconds.
+     * @param expireOptions The expire options.
+     * @return This batch instance for method chaining.
+     */
+
+    public T pexpireAt(String key, long timestamp, ExpireOptions expireOptions) {
+        String[] args = expireOptions.toArgs();
+        String[] fullArgs = new String[args.length + 2];
+        fullArgs[0] = key;
+        fullArgs[1] = String.valueOf(timestamp);
+        System.arraycopy(args, 0, fullArgs, 2, args.length);
+        return addCommand(PEXPIREAT, fullArgs);
+    }
+
+    /**
+     * Set a timeout on key in milliseconds. After the timeout has expired, the key
+     * will
+     * automatically be deleted.
+     *
+     * @see <a href="https://valkey.io/commands/pexpireat/">valkey.io</a> for
+     *      details.
+     * @param key           The key to set timeout on.
+     * @param timestamp     The timeout in milliseconds.
+     * @param expireOptions The expire options.
+     * @return This batch instance for method chaining.
+     */
+
+    public T pexpireAt(GlideString key, long timestamp, ExpireOptions expireOptions) {
+        String[] args = expireOptions.toArgs();
+        String[] fullArgs = new String[args.length + 2];
+        fullArgs[0] = key.toString();
+        fullArgs[1] = String.valueOf(timestamp);
+        System.arraycopy(args, 0, fullArgs, 2, args.length);
+        return addCommand(PEXPIREAT, fullArgs);
     }
 
     /**
@@ -798,7 +971,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param key The key to check.
      * @return This batch instance for method chaining.
      */
-    
+
     public T ttl(String key) {
         return addCommand(TTL, key);
     }
@@ -810,9 +983,83 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param key The key to check.
      * @return This batch instance for method chaining.
      */
-    
+
     public T ttl(GlideString key) {
         return addCommand(TTL, key.toString());
+    }
+
+    /**
+     * GET the remaining time to live of a key that has a timeout in milliseconds.
+     *
+     * @see <a href="https://valkey.io/commands/pttl/">valkey.io</a> for details.
+     * @param key The key to check.
+     * @return This batch instance for method chaining.
+     */
+    public T pttl(String key) {
+        return addCommand(PTTL, key);
+    }
+
+    /**
+     * GET the remaining time to live of a key that has a timeout in milliseconds.
+     *
+     * @see <a href="https://valkey.io/commands/pttl/">valkey.io</a> for details.
+     * @param key The key to check.
+     * @return This batch instance for method chaining.
+     */
+    public T pttl(GlideString key) {
+        return addCommand(PTTL, key.toString());
+    }
+
+    /**
+     * Returns the absolute Unix timestamp in seconds at which the given key will
+     * expire.
+     *
+     * @see <a href="https://valkey.io/commands/expiretime/">valkey.io</a> for
+     *      details.
+     * @param key The key to check.
+     * @return This batch instance for method chaining.
+     */
+    public T expiretime(String key) {
+        return addCommand(ExpireTime, key);
+    }
+
+    /**
+     * Returns the absolute Unix timestamp in seconds at which the given key will
+     * expire.
+     *
+     * @see <a href="https://valkey.io/commands/expiretime/">valkey.io</a> for
+     *      details.
+     * @param key The key to check.
+     * @return This batch instance for method chaining.
+     */
+    public T expiretime(GlideString key) {
+        return addCommand(ExpireTime, key.toString());
+    }
+
+    /**
+     * Returns the absolute Unix timestamp in milliseconds at which the given key
+     * will expire.
+     *
+     * @see <a href="https://valkey.io/commands/pexpiretime/">valkey.io</a> for
+     *      details.
+     * @param key The key to check.
+     * @return This batch instance for method chaining.
+     */
+    public T pexpiretime(String key) {
+        return addCommand(PExpireTime, key);
+    }
+
+    /**
+     * Returns the absolute Unix timestamp in milliseconds at which the given key
+     * will expire.
+     *
+     * @see <a href="https://valkey.io/commands/pexpiretime/">valkey.io</a> for
+     *      details.
+     * @param key The key to check.
+     * @return This batch instance for method chaining.
+     */
+    public T pexpiretime(GlideString key) {
+        return addCommand(PExpireTime, key.toString());
     }
 
     /**
@@ -824,7 +1071,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param end The ending index.
      * @return This batch instance for method chaining.
      */
-    
+
     public T lrange(String key, long start, long end) {
         return addCommand(LRange, key, String.valueOf(start), String.valueOf(end));
     }
@@ -838,7 +1085,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param end The ending index.
      * @return This batch instance for method chaining.
      */
-    
+
     public T lrange(GlideString key, long start, long end) {
         return addCommand(LRange, key.toString(), String.valueOf(start), String.valueOf(end));
     }
@@ -852,7 +1099,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param replace If true, remove the destination key if it exists before copying.
      * @return This batch instance for method chaining.
      */
-    
+
     public T copy(String source, String destination, boolean replace) {
         if (replace) {
             return addCommand(Copy, source, destination, "REPLACE");
@@ -870,7 +1117,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param replace If true, remove the destination key if it exists before copying.
      * @return This batch instance for method chaining.
      */
-    
+
     public T copy(GlideString source, GlideString destination, boolean replace) {
         if (replace) {
             return addCommand(Copy, source.toString(), destination.toString(), "REPLACE");
@@ -889,7 +1136,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param mode The flush mode.
      * @return This batch instance for method chaining.
      */
-    
+
     public T functionFlush(glide.api.models.commands.FlushMode mode) {
         return addCommand(FunctionFlush, mode.toString());
     }
@@ -900,7 +1147,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @see <a href="https://valkey.io/commands/function-flush/">valkey.io</a> for details.
      * @return This batch instance for method chaining.
      */
-    
+
     public T functionFlush() {
         return addCommand(FunctionFlush);
     }
@@ -911,7 +1158,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @see <a href="https://valkey.io/commands/randomkey/">valkey.io</a> for details.
      * @return This batch instance for method chaining.
      */
-    
+
     public T randomKey() {
         return addCommand(RandomKey);
     }
@@ -924,7 +1171,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param key2 The second key.
      * @return This batch instance for method chaining.
      */
-    
+
     public T lcs(String key1, String key2) {
         return addCommand(LCS, key1, key2);
     }
@@ -937,7 +1184,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param key2 The second key.
      * @return This batch instance for method chaining.
      */
-    
+
     public T lcs(GlideString key1, GlideString key2) {
         return addCommand(LCS, key1.toString(), key2.toString());
     }
@@ -949,7 +1196,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param key The key to get.
      * @return This batch instance for method chaining.
      */
-    
+
     public T getex(String key) {
         return addCommand(GETEX, key);
     }
@@ -962,7 +1209,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param options Options for the getex command.
      * @return This batch instance for method chaining.
      */
-    
+
     public T getex(String key, glide.api.models.commands.GetExOptions options) {
         return addCommand(GETEX, key, options.toString());
     }
@@ -975,7 +1222,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param field The field to get.
      * @return This batch instance for method chaining.
      */
-    
+
     public T hget(String key, String field) {
         return addCommand(HGet, key, field);
     }
@@ -988,7 +1235,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param field The field to get.
      * @return This batch instance for method chaining.
      */
-    
+
     public T hget(GlideString key, GlideString field) {
         return addCommand(HGet, key.toString(), field.toString());
     }
@@ -1000,7 +1247,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param key The key of the list.
      * @return This batch instance for method chaining.
      */
-    
+
     public T llen(String key) {
         return addCommand(LLen, key);
     }
@@ -1012,7 +1259,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param key The key of the list.
      * @return This batch instance for method chaining.
      */
-    
+
     public T llen(GlideString key) {
         return addCommand(LLen, key.toString());
     }
@@ -1024,7 +1271,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param message The message to echo.
      * @return This batch instance for method chaining.
      */
-    
+
     public T echo(String message) {
         return addCommand(Echo, message);
     }
@@ -1036,7 +1283,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param message The message to echo.
      * @return This batch instance for method chaining.
      */
-    
+
     public T echo(GlideString message) {
         return addCommand(Echo, message.toString());
     }
@@ -1048,7 +1295,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param key The key of the set.
      * @return This batch instance for method chaining.
      */
-    
+
     public T scard(String key) {
         return addCommand(SCard, key);
     }
@@ -1060,7 +1307,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param key The key of the set.
      * @return This batch instance for method chaining.
      */
-    
+
     public T scard(GlideString key) {
         return addCommand(SCard, key.toString());
     }
@@ -1073,7 +1320,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param members The members to remove.
      * @return This batch instance for method chaining.
      */
-    
+
     public T srem(String key, String... members) {
         String[] args = new String[members.length + 1];
         args[0] = key;
@@ -1089,7 +1336,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param members The members to remove.
      * @return This batch instance for method chaining.
      */
-    
+
     public T srem(GlideString key, GlideString... members) {
         String[] args = new String[members.length + 1];
         args[0] = key.toString();
@@ -1100,6 +1347,32 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     }
 
     /**
+     * Check if a member exists in a set.
+     *
+     * @see <a href="https://valkey.io/commands/sismember/">valkey.io</a> for
+     *      details.
+     * @param key    The set key
+     * @param member The member to check
+     * @return This batch instance for method chaining
+     */
+    public T sismember(String key, String member) {
+        return addCommand(SIsMember, key, member);
+    }
+
+    /**
+     * Check if a member exists in a set (GlideString variant).
+     *
+     * @see <a href="https://valkey.io/commands/sismember/">valkey.io</a> for
+     *      details.
+     * @param key    The set key
+     * @param member The member to check
+     * @return This batch instance for method chaining
+     */
+    public T sismember(GlideString key, GlideString member) {
+        return addCommand(SIsMember, key.toString(), member.toString());
+    }
+
+    /**
      * Returns the rank of a member in a sorted set.
      *
      * @see <a href="https://valkey.io/commands/zrank/">valkey.io</a> for details.
@@ -1107,7 +1380,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param member The member to find the rank of.
      * @return This batch instance for method chaining.
      */
-    
+
     public T zrank(String key, String member) {
         return addCommand(ZRank, key, member);
     }
@@ -1120,7 +1393,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param member The member to find the rank of.
      * @return This batch instance for method chaining.
      */
-    
+
     public T zrank(GlideString key, GlideString member) {
         return addCommand(ZRank, key.toString(), member.toString());
     }
@@ -1132,7 +1405,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param key The key of the string.
      * @return This batch instance for method chaining.
      */
-    
+
     public T bitcount(String key) {
         return addCommand(BitCount, key);
     }
@@ -1144,7 +1417,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param key The key of the string.
      * @return This batch instance for method chaining.
      */
-    
+
     public T bitcount(GlideString key) {
         return addCommand(BitCount, key.toString());
     }
@@ -1159,9 +1432,25 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param indexType The index type (BIT or BYTE).
      * @return This batch instance for method chaining.
      */
-    
+
     public T bitcount(String key, int start, int end, glide.api.models.commands.bitmap.BitmapIndexType indexType) {
         return addCommand(BitCount, key, String.valueOf(start), String.valueOf(end), indexType.toString());
+    }
+
+    /**
+     * Returns the number of bits set to 1 in the string value stored at key within
+     * the given range.
+     *
+     * @see <a href="https://valkey.io/commands/bitcount/">valkey.io</a> for
+     *      details.
+     * @param key   The key of the string.
+     * @param start The start index.
+     * @param end   The end index.
+     * @return This batch instance for method chaining.
+     */
+
+    public T bitcount(String key, long start, long end) {
+        return addCommand(BitCount, key, String.valueOf(start), String.valueOf(end));
     }
 
     /**
@@ -1171,7 +1460,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param keys The keys of the sets.
      * @return This batch instance for method chaining.
      */
-    
+
     public T sintercard(String... keys) {
         return addCommand(SInterCard, keys);
     }
@@ -1183,7 +1472,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param keys The keys of the sets.
      * @return This batch instance for method chaining.
      */
-    
+
     public T sintercard(GlideString... keys) {
         String[] stringKeys = new String[keys.length];
         for (int i = 0; i < keys.length; i++) {
@@ -1193,13 +1482,72 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     }
 
     /**
+     * Returns the cardinality of the intersection of the sets stored at the
+     * specified keys with a limit.
+     *
+     * @see <a href="https://valkey.io/commands/sintercard/">valkey.io</a> for
+     *      details.
+     * @param keys  The keys of the sets.
+     * @param limit The maximum number of intersecting elements to count.
+     * @return This batch instance for method chaining.
+     */
+    public T sintercard(String[] keys, int limit) {
+        String[] args = new String[keys.length + 3];
+        args[0] = String.valueOf(keys.length);
+        System.arraycopy(keys, 0, args, 1, keys.length);
+        args[keys.length + 1] = "LIMIT";
+        args[keys.length + 2] = String.valueOf(limit);
+        return addCommand(SInterCard, args);
+    }
+
+    /**
+     * Returns the cardinality of the intersection of the sets stored at the
+     * specified keys with a limit.
+     *
+     * @see <a href="https://valkey.io/commands/sintercard/">valkey.io</a> for
+     *      details.
+     * @param keys  The keys of the sets.
+     * @param limit The maximum number of intersecting elements to count.
+     * @return This batch instance for method chaining.
+     */
+    public T sintercard(String[] keys, long limit) {
+        String[] args = new String[keys.length + 3];
+        args[0] = String.valueOf(keys.length);
+        System.arraycopy(keys, 0, args, 1, keys.length);
+        args[keys.length + 1] = "LIMIT";
+        args[keys.length + 2] = String.valueOf(limit);
+        return addCommand(SInterCard, args);
+    }
+
+    /**
+     * Returns the cardinality of the intersection of the sets stored at the
+     * specified keys with a limit.
+     *
+     * @see <a href="https://valkey.io/commands/sintercard/">valkey.io</a> for
+     *      details.
+     * @param keys  The keys of the sets.
+     * @param limit The maximum number of intersecting elements to count.
+     * @return This batch instance for method chaining.
+     */
+    public T sintercard(GlideString[] keys, long limit) {
+        String[] args = new String[keys.length + 3];
+        args[0] = String.valueOf(keys.length);
+        for (int i = 0; i < keys.length; i++) {
+            args[i + 1] = keys[i].toString();
+        }
+        args[keys.length + 1] = "LIMIT";
+        args[keys.length + 2] = String.valueOf(limit);
+        return addCommand(SInterCard, args);
+    }
+
+    /**
      * Returns the cardinality of the HyperLogLog stored at key.
      *
      * @see <a href="https://valkey.io/commands/pfcount/">valkey.io</a> for details.
      * @param keys The keys of the HyperLogLogs.
      * @return This batch instance for method chaining.
      */
-    
+
     public T pfcount(String... keys) {
         return addCommand(PfCount, keys);
     }
@@ -1211,7 +1559,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param keys The keys of the HyperLogLogs.
      * @return This batch instance for method chaining.
      */
-    
+
     public T pfcount(GlideString... keys) {
         String[] stringKeys = new String[keys.length];
         for (int i = 0; i < keys.length; i++) {
@@ -1227,7 +1575,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param configParams A map of configuration parameters to their values.
      * @return This batch instance for method chaining.
      */
-    
+
     public T configSet(Map<String, String> configParams) {
         String[] args = new String[configParams.size() * 2];
         int index = 0;
@@ -1247,7 +1595,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param options Options for the xadd command.
      * @return This batch instance for method chaining.
      */
-    
+
     public T xadd(String key, Map<String, String> values, glide.api.models.commands.stream.StreamAddOptions options) {
         String[] args = new String[values.size() * 2 + 2];
         args[0] = key;
@@ -1261,6 +1609,27 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     }
 
     /**
+     * Adds an entry to the specified stream with field-value pairs as a 2D array.
+     *
+     * @see <a href="https://valkey.io/commands/xadd/">valkey.io</a> for details.
+     * @param key     The key of the stream.
+     * @param values  Field-value pairs as a 2D array to be added to the entry.
+     * @param options Options for the xadd command.
+     * @return This batch instance for method chaining.
+     */
+    public T xadd(String key, String[][] values, glide.api.models.commands.stream.StreamAddOptions options) {
+        String[] args = new String[values.length * 2 + 2];
+        args[0] = key;
+        args[1] = options.toString();
+        int index = 2;
+        for (String[] pair : values) {
+            args[index++] = pair[0];
+            args[index++] = pair[1];
+        }
+        return addCommand(XAdd, args);
+    }
+
+    /**
      * Acknowledges the successful processing of pending messages.
      *
      * @see <a href="https://valkey.io/commands/xack/">valkey.io</a> for details.
@@ -1269,7 +1638,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param ids The IDs of the messages to acknowledge.
      * @return This batch instance for method chaining.
      */
-    
+
     public T xack(String key, String groupName, String... ids) {
         String[] args = new String[ids.length + 2];
         args[0] = key;
@@ -1289,7 +1658,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param start The starting ID for the range of messages to claim.
      * @return This batch instance for method chaining.
      */
-    
+
     public T xautoclaim(String key, String groupName, String consumerName, long minIdleTime, String start) {
         return addCommand(XAutoClaim, key, groupName, consumerName, String.valueOf(minIdleTime), start);
     }
@@ -1302,7 +1671,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param timeout The timeout in seconds.
      * @return This batch instance for method chaining.
      */
-    
+
     public T bzpopmin(String[] keys, double timeout) {
         String[] args = new String[keys.length + 1];
         System.arraycopy(keys, 0, args, 0, keys.length);
@@ -1317,7 +1686,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param key The key to get and delete.
      * @return This batch instance for method chaining.
      */
-    
+
     public T getdel(String key) {
         return addCommand(GETDEL, key);
     }
@@ -1329,7 +1698,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param key The key to get and delete.
      * @return This batch instance for method chaining.
      */
-    
+
     public T getdel(GlideString key) {
         return addCommand(GETDEL, key.toString());
     }
@@ -1342,7 +1711,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param key2 The second key.
      * @return This batch instance for method chaining.
      */
-    
+
     public T lcsLen(String key1, String key2) {
         return addCommand(LCS, key1, key2, "LEN");
     }
@@ -1355,7 +1724,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param key2 The second key.
      * @return This batch instance for method chaining.
      */
-    
+
     public T lcsLen(GlideString key1, GlideString key2) {
         return addCommand(LCS, key1.toString(), key2.toString(), "LEN");
     }
@@ -1367,7 +1736,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param key The key of the hash.
      * @return This batch instance for method chaining.
      */
-    
+
     public T hlen(String key) {
         return addCommand(HLen, key);
     }
@@ -1379,7 +1748,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param key The key of the hash.
      * @return This batch instance for method chaining.
      */
-    
+
     public T hlen(GlideString key) {
         return addCommand(HLen, key.toString());
     }
@@ -1393,7 +1762,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param options The expire options.
      * @return This batch instance for method chaining.
      */
-    
+
     public T expire(String key, int seconds, glide.api.models.commands.ExpireOptions options) {
         return addCommand(EXPIRE, key, String.valueOf(seconds), options.toString());
     }
@@ -1407,7 +1776,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param options The expire options.
      * @return This batch instance for method chaining.
      */
-    
+
     public T expire(GlideString key, int seconds, glide.api.models.commands.ExpireOptions options) {
         return addCommand(EXPIRE, key.toString(), String.valueOf(seconds), options.toString());
     }
@@ -1421,7 +1790,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param options The expire options.
      * @return This batch instance for method chaining.
      */
-    
+
     public T expireAt(String key, int timestamp, glide.api.models.commands.ExpireOptions options) {
         return addCommand(EXPIREAT, key, String.valueOf(timestamp), options.toString());
     }
@@ -1435,7 +1804,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param options The expire options.
      * @return This batch instance for method chaining.
      */
-    
+
     public T expireAt(GlideString key, int timestamp, glide.api.models.commands.ExpireOptions options) {
         return addCommand(EXPIREAT, key.toString(), String.valueOf(timestamp), options.toString());
     }
@@ -1449,7 +1818,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param options The set options.
      * @return This batch instance for method chaining.
      */
-    
+
     public T set(String key, String value, glide.api.models.commands.SetOptions options) {
         return addCommand(SET, key, value, options.toString());
     }
@@ -1463,7 +1832,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param options The set options.
      * @return This batch instance for method chaining.
      */
-    
+
     public T set(GlideString key, GlideString value, glide.api.models.commands.SetOptions options) {
         return addCommand(SET, key.toString(), value.toString(), options.toString());
     }
@@ -1476,7 +1845,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param key2 The second key.
      * @return This batch instance for method chaining.
      */
-    
+
     public T lcsIdx(String key1, String key2) {
         return addCommand(LCS, key1, key2, "IDX");
     }
@@ -1489,9 +1858,88 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param key2 The second key.
      * @return This batch instance for method chaining.
      */
-    
+
     public T lcsIdx(GlideString key1, GlideString key2) {
         return addCommand(LCS, key1.toString(), key2.toString(), "IDX");
+    }
+
+    /**
+     * Gets the longest common subsequence indices between strings stored at key1
+     * and key2 with minimum match length.
+     *
+     * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
+     * @param key1        The first key.
+     * @param key2        The second key.
+     * @param minMatchLen The minimum match length.
+     * @return This batch instance for method chaining.
+     */
+    public T lcsIdx(String key1, String key2, long minMatchLen) {
+        return addCommand(LCS, key1, key2, "IDX", "MINMATCHLEN", String.valueOf(minMatchLen));
+    }
+
+    /**
+     * Gets the longest common subsequence indices between strings stored at key1
+     * and key2 with minimum match length.
+     *
+     * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
+     * @param key1        The first key.
+     * @param key2        The second key.
+     * @param minMatchLen The minimum match length.
+     * @return This batch instance for method chaining.
+     */
+    public T lcsIdx(GlideString key1, GlideString key2, long minMatchLen) {
+        return addCommand(LCS, key1.toString(), key2.toString(), "IDX", "MINMATCHLEN", String.valueOf(minMatchLen));
+    }
+
+    /**
+     * Returns the longest common subsequence indices and lengths between strings.
+     *
+     * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
+     * @param key1 The first key.
+     * @param key2 The second key.
+     * @return This batch instance for method chaining.
+     */
+    public T lcsIdxWithMatchLen(String key1, String key2) {
+        return addCommand(LCS, key1, key2, "IDX", "WITHMATCHLEN");
+    }
+
+    /**
+     * Returns the longest common subsequence indices and lengths between strings.
+     *
+     * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
+     * @param key1 The first key.
+     * @param key2 The second key.
+     * @return This batch instance for method chaining.
+     */
+    public T lcsIdxWithMatchLen(GlideString key1, GlideString key2) {
+        return addCommand(LCS, key1.toString(), key2.toString(), "IDX", "WITHMATCHLEN");
+    }
+
+    /**
+     * Returns the longest common subsequence indices and lengths between strings.
+     *
+     * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
+     * @param key1        The first key.
+     * @param key2        The second key.
+     * @param minMatchLen The minimum match length.
+     * @return This batch instance for method chaining.
+     */
+    public T lcsIdxWithMatchLen(String key1, String key2, long minMatchLen) {
+        return addCommand(LCS, key1, key2, "IDX", "WITHMATCHLEN", "MINMATCHLEN", String.valueOf(minMatchLen));
+    }
+
+    /**
+     * Returns the longest common subsequence indices and lengths between strings.
+     *
+     * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
+     * @param key1        The first key.
+     * @param key2        The second key.
+     * @param minMatchLen The minimum match length.
+     * @return This batch instance for method chaining.
+     */
+    public T lcsIdxWithMatchLen(GlideString key1, GlideString key2, long minMatchLen) {
+        return addCommand(LCS, key1.toString(), key2.toString(), "IDX", "WITHMATCHLEN", "MINMATCHLEN",
+                String.valueOf(minMatchLen));
     }
 
     /**
@@ -1503,7 +1951,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param args The arguments to pass to the function
      * @return This batch instance for method chaining
      */
-    
+
     public T fcall(String function, String[] keys, String[] args) {
         String[] commandArgs = new String[1 + keys.length + args.length];
         commandArgs[0] = function;
@@ -1521,7 +1969,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param args The arguments to pass to the function
      * @return This batch instance for method chaining
      */
-    
+
     public T fcallReadOnly(String function, String[] keys, String[] args) {
         String[] commandArgs = new String[1 + keys.length + args.length];
         commandArgs[0] = function;
@@ -1537,7 +1985,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param key The key
      * @return This batch instance for method chaining
      */
-    
+
     public T strlen(String key) {
         return addCommand(Strlen, key);
     }
@@ -1549,7 +1997,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param key The key
      * @return This batch instance for method chaining
      */
-    
+
     public T strlen(GlideString key) {
         return addCommand(Strlen, key.toString());
     }
@@ -1562,7 +2010,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param value The value to append
      * @return This batch instance for method chaining
      */
-    
+
     public T append(String key, String value) {
         return addCommand(Append, key, value);
     }
@@ -1575,7 +2023,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param value The value to append
      * @return This batch instance for method chaining
      */
-    
+
     public T append(GlideString key, GlideString value) {
         return addCommand(Append, key.toString(), value.toString());
     }
@@ -1587,7 +2035,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param keyValueMap The key-value pairs to set
      * @return This batch instance for method chaining
      */
-    
+
     public T mset(Map<String, String> keyValueMap) {
         String[] args = new String[keyValueMap.size() * 2];
         int i = 0;
@@ -1605,7 +2053,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param keyValueMap The key-value pairs to set
      * @return This batch instance for method chaining
      */
-    
+
     public T msetGlideString(Map<GlideString, GlideString> keyValueMap) {
         String[] args = new String[keyValueMap.size() * 2];
         int i = 0;
@@ -1623,7 +2071,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param keys The keys to get
      * @return This batch instance for method chaining
      */
-    
+
     public T mget(String[] keys) {
         return addCommand(MGet, keys);
     }
@@ -1635,7 +2083,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param keys The keys to get
      * @return This batch instance for method chaining
      */
-    
+
     public T mget(GlideString[] keys) {
         String[] stringKeys = new String[keys.length];
         for (int i = 0; i < keys.length; i++) {
@@ -1651,7 +2099,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param key The key
      * @return This batch instance for method chaining
      */
-    
+
     public T incr(String key) {
         return addCommand(Incr, key);
     }
@@ -1663,7 +2111,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param key The key
      * @return This batch instance for method chaining
      */
-    
+
     public T incr(GlideString key) {
         return addCommand(Incr, key.toString());
     }
@@ -1676,7 +2124,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param amount The amount to increment
      * @return This batch instance for method chaining
      */
-    
+
     public T incrBy(String key, long amount) {
         return addCommand(IncrBy, key, String.valueOf(amount));
     }
@@ -1689,7 +2137,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param amount The amount to increment
      * @return This batch instance for method chaining
      */
-    
+
     public T incrBy(GlideString key, long amount) {
         return addCommand(IncrBy, key.toString(), String.valueOf(amount));
     }
@@ -1701,7 +2149,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param key The key
      * @return This batch instance for method chaining
      */
-    
+
     public T decr(String key) {
         return addCommand(Decr, key);
     }
@@ -1713,7 +2161,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param key The key
      * @return This batch instance for method chaining
      */
-    
+
     public T decr(GlideString key) {
         return addCommand(Decr, key.toString());
     }
@@ -1726,7 +2174,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param amount The amount to decrement
      * @return This batch instance for method chaining
      */
-    
+
     public T decrBy(String key, long amount) {
         return addCommand(DecrBy, key, String.valueOf(amount));
     }
@@ -1739,7 +2187,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param amount The amount to decrement
      * @return This batch instance for method chaining
      */
-    
+
     public T decrBy(GlideString key, long amount) {
         return addCommand(DecrBy, key.toString(), String.valueOf(amount));
     }
@@ -1838,6 +2286,36 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     public T sscan(GlideString key, GlideString cursor) {
         return addCommand(SScan, key.toString(), cursor.toString());
+    }
+
+    /**
+     * SCAN over members of a set with options.
+     *
+     * @see <a href="https://valkey.io/commands/sscan/">valkey.io</a> for details.
+     * @param key     The set key
+     * @param cursor  The cursor
+     * @param options The scan options
+     * @return This batch instance for method chaining
+     */
+    public T sscan(String key, String cursor, SScanOptions options) {
+        List<String> args = new ArrayList<>();
+        args.add(key);
+        args.add(cursor);
+        args.addAll(java.util.Arrays.asList(options.toArgs()));
+        return addCommand(SScan, args.toArray(new String[0]));
+    }
+
+    /**
+     * SCAN over members of a set with options (GlideString variant).
+     *
+     * @see <a href="https://valkey.io/commands/sscan/">valkey.io</a> for details.
+     * @param key     The set key
+     * @param cursor  The cursor
+     * @param options The scan options
+     * @return This batch instance for method chaining
+     */
+    public T sscan(GlideString key, GlideString cursor, SScanOptions options) {
+        return sscan(key.toString(), cursor.toString(), options);
     }
 
     /**
@@ -1973,6 +2451,26 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
         for (java.util.Map.Entry<String, String> entry : values.entrySet()) {
             args[i++] = entry.getKey();
             args[i++] = entry.getValue();
+        }
+        return addCommand(XAdd, args);
+    }
+
+    /**
+     * Add a stream entry with field-value pairs as a 2D array.
+     *
+     * @see <a href="https://valkey.io/commands/xadd/">valkey.io</a> for details.
+     * @param key    The stream key
+     * @param values The field-value pairs as a 2D array
+     * @return This batch instance for method chaining
+     */
+    public T xadd(String key, String[][] values) {
+        String[] args = new String[values.length * 2 + 2];
+        args[0] = key;
+        args[1] = "*"; // Auto-generate ID
+        int i = 2;
+        for (String[] pair : values) {
+            args[i++] = pair[0];
+            args[i++] = pair[1];
         }
         return addCommand(XAdd, args);
     }
@@ -2137,6 +2635,42 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
             stringKeys[i] = keys[i].toString();
         }
         return lmpop(stringKeys, direction);
+    }
+
+    /**
+     * Pop elements from multiple lists with count.
+     *
+     * @see <a href="https://valkey.io/commands/lmpop/">valkey.io</a> for details.
+     * @param keys      The list keys
+     * @param direction The direction
+     * @param count     The count of elements to pop
+     * @return This batch instance for method chaining
+     */
+    public T lmpop(String[] keys, ListDirection direction, long count) {
+        String[] args = new String[keys.length + 4];
+        args[0] = String.valueOf(keys.length);
+        System.arraycopy(keys, 0, args, 1, keys.length);
+        args[args.length - 3] = direction.toString();
+        args[args.length - 2] = "COUNT";
+        args[args.length - 1] = String.valueOf(count);
+        return addCommand(LMPop, args);
+    }
+
+    /**
+     * Pop elements from multiple lists with count (GlideString variant).
+     *
+     * @see <a href="https://valkey.io/commands/lmpop/">valkey.io</a> for details.
+     * @param keys      The list keys
+     * @param direction The direction
+     * @param count     The count of elements to pop
+     * @return This batch instance for method chaining
+     */
+    public T lmpop(GlideString[] keys, ListDirection direction, long count) {
+        String[] stringKeys = new String[keys.length];
+        for (int i = 0; i < keys.length; i++) {
+            stringKeys[i] = keys[i].toString();
+        }
+        return lmpop(stringKeys, direction, count);
     }
 
     /**
@@ -2305,6 +2839,175 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     public T zaddIncr(GlideString key, GlideString member, int increment) {
         return zaddIncr(key.toString(), member.toString(), increment);
+    }
+
+    /**
+     * Get all fields and values from a hash.
+     *
+     * @see <a href="https://valkey.io/commands/hgetall/">valkey.io</a> for details.
+     * @param key The hash key
+     * @return This batch instance for method chaining
+     */
+    public T hgetall(String key) {
+        return addCommand(HGetAll, key);
+    }
+
+    /**
+     * Get all fields and values from a hash (GlideString variant).
+     *
+     * @see <a href="https://valkey.io/commands/hgetall/">valkey.io</a> for details.
+     * @param key The hash key
+     * @return This batch instance for method chaining
+     */
+    public T hgetall(GlideString key) {
+        return addCommand(HGetAll, key.toString());
+    }
+
+    /**
+     * Delete one or more fields from a hash.
+     *
+     * @see <a href="https://valkey.io/commands/hdel/">valkey.io</a> for details.
+     * @param key    The hash key
+     * @param fields The fields to delete
+     * @return This batch instance for method chaining
+     */
+    public T hdel(String key, String... fields) {
+        String[] args = new String[fields.length + 1];
+        args[0] = key;
+        System.arraycopy(fields, 0, args, 1, fields.length);
+        return addCommand(HDel, args);
+    }
+
+    /**
+     * Delete one or more fields from a hash (GlideString variant).
+     *
+     * @see <a href="https://valkey.io/commands/hdel/">valkey.io</a> for details.
+     * @param key    The hash key
+     * @param fields The fields to delete
+     * @return This batch instance for method chaining
+     */
+    public T hdel(GlideString key, GlideString... fields) {
+        String[] args = new String[fields.length + 1];
+        args[0] = key.toString();
+        for (int i = 0; i < fields.length; i++) {
+            args[i + 1] = fields[i].toString();
+        }
+        return addCommand(HDel, args);
+    }
+
+    /**
+     * Remove and return first element from a list.
+     *
+     * @see <a href="https://valkey.io/commands/lpop/">valkey.io</a> for details.
+     * @param key The list key
+     * @return This batch instance for method chaining
+     */
+    public T lpop(String key) {
+        return addCommand(LPop, key);
+    }
+
+    /**
+     * Remove and return first element from a list (GlideString variant).
+     *
+     * @see <a href="https://valkey.io/commands/lpop/">valkey.io</a> for details.
+     * @param key The list key
+     * @return This batch instance for method chaining
+     */
+    public T lpop(GlideString key) {
+        return addCommand(LPop, key.toString());
+    }
+
+    /**
+     * Remove and return multiple elements from the beginning of a list.
+     *
+     * @see <a href="https://valkey.io/commands/lpop/">valkey.io</a> for details.
+     * @param key   The list key
+     * @param count The number of elements to pop
+     * @return This batch instance for method chaining
+     */
+    public T lpopCount(String key, long count) {
+        return addCommand(LPop, key, String.valueOf(count));
+    }
+
+    /**
+     * Remove and return multiple elements from the beginning of a list.
+     *
+     * @see <a href="https://valkey.io/commands/lpop/">valkey.io</a> for details.
+     * @param key   The list key
+     * @param count The number of elements to pop
+     * @return This batch instance for method chaining
+     */
+    public T lpopCount(String key, int count) {
+        return lpopCount(key, (long) count);
+    }
+
+    /**
+     * Remove and return multiple elements from the beginning of a list (GlideString
+     * variant).
+     *
+     * @see <a href="https://valkey.io/commands/lpop/">valkey.io</a> for details.
+     * @param key   The list key
+     * @param count The number of elements to pop
+     * @return This batch instance for method chaining
+     */
+    public T lpopCount(GlideString key, long count) {
+        return addCommand(LPop, key.toString(), String.valueOf(count));
+    }
+
+    /**
+     * Block and pop from multiple lists with timeout.
+     *
+     * @see <a href="https://valkey.io/commands/blmpop/">valkey.io</a> for details.
+     * @param keys      The list keys
+     * @param direction The direction to pop from
+     * @param timeout   The timeout in seconds
+     * @return This batch instance for method chaining
+     */
+    public T blmpop(String[] keys, ListDirection direction, double timeout) {
+        String[] args = new String[keys.length + 3];
+        args[0] = String.valueOf(timeout);
+        args[1] = String.valueOf(keys.length);
+        System.arraycopy(keys, 0, args, 2, keys.length);
+        args[keys.length + 2] = direction == ListDirection.LEFT ? "LEFT" : "RIGHT";
+        return addCommand(BLMPop, args);
+    }
+
+    /**
+     * Block and pop from multiple lists with timeout (GlideString variant).
+     *
+     * @see <a href="https://valkey.io/commands/blmpop/">valkey.io</a> for details.
+     * @param keys      The list keys
+     * @param direction The direction to pop from
+     * @param timeout   The timeout in seconds
+     * @return This batch instance for method chaining
+     */
+    public T blmpop(GlideString[] keys, ListDirection direction, double timeout) {
+        String[] stringKeys = new String[keys.length];
+        for (int i = 0; i < keys.length; i++) {
+            stringKeys[i] = keys[i].toString();
+        }
+        return blmpop(stringKeys, direction, timeout);
+    }
+
+    /**
+     * Block and pop from multiple lists with count and timeout.
+     *
+     * @see <a href="https://valkey.io/commands/blmpop/">valkey.io</a> for details.
+     * @param keys      The list keys
+     * @param direction The direction to pop from
+     * @param count     The maximum number of elements to pop
+     * @param timeout   The timeout in seconds
+     * @return This batch instance for method chaining
+     */
+    public T blmpop(String[] keys, ListDirection direction, long count, double timeout) {
+        String[] args = new String[keys.length + 5];
+        args[0] = String.valueOf(timeout);
+        args[1] = String.valueOf(keys.length);
+        System.arraycopy(keys, 0, args, 2, keys.length);
+        args[keys.length + 2] = direction == ListDirection.LEFT ? "LEFT" : "RIGHT";
+        args[keys.length + 3] = "COUNT";
+        args[keys.length + 4] = String.valueOf(count);
+        return addCommand(BLMPop, args);
     }
 
     /**

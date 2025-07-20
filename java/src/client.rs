@@ -6,33 +6,41 @@
 //! eliminating Unix Domain Socket overhead and enabling zero-copy operations.
 //! Each client instance is completely isolated with its own runtime and resources.
 
-use glide_core::client::{Client, ConnectionRequest, NodeAddress, TlsMode, AuthenticationInfo};
-use glide_core::{GlideOpenTelemetry, GlideOpenTelemetryConfigBuilder, GlideOpenTelemetrySignalsExporter, GlideSpan};
+use glide_core::client::{AuthenticationInfo, Client, ConnectionRequest, NodeAddress, TlsMode};
+use glide_core::{
+    GlideOpenTelemetry, GlideOpenTelemetryConfigBuilder, GlideOpenTelemetrySignalsExporter,
+    GlideSpan,
+};
 
 // Import GlideSpanStatus from telemetrylib via glide_core re-export
-use telemetrylib::GlideSpanStatus;
-use redis::cluster_routing::{RoutingInfo, Route, SlotAddr};
-use redis::cluster_topology::get_slot;
-use jni::objects::{JClass, JObject, JString, JObjectArray, JByteArray};
+use jni::objects::{JByteArray, JClass, JObject, JObjectArray, JString};
+use jni::signature::{Primitive, ReturnType};
 use jni::sys::{jboolean, jdouble, jint, jlong, jobject, jstring, JNI_TRUE};
 use jni::JNIEnv;
+use redis::cluster_routing::{MultipleNodeRoutingInfo, SingleNodeRoutingInfo};
+use redis::cluster_routing::{Route, RoutingInfo, SlotAddr};
+use redis::cluster_topology::get_slot;
 use redis::{cmd, Value};
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::ptr;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use std::sync::{LazyLock, Mutex};
 use std::time::Duration;
-use redis::cluster_routing::{MultipleNodeRoutingInfo, SingleNodeRoutingInfo};
-use jni::signature::{Primitive, ReturnType};
+use telemetrylib::GlideSpanStatus;
 
-use crate::error::JniResult;
-use crate::runtime::JniRuntime;
 use crate::async_bridge::AsyncBridge;
+use crate::error::{JniError, JniResult};
+use crate::input_validator::{register_client, unregister_client, JniSafetyValidator};
+use crate::jni_wrappers::{create_jni_string, jni_string_to_rust};
+use crate::runtime::JniRuntime;
 
 /// Convert Java Route object to Rust RoutingInfo
 /// This eliminates the over-engineered routing conversion that duplicated logic
-fn convert_java_route_to_routing_info(env: &mut JNIEnv, route: JObject) -> JniResult<Option<RoutingInfo>> {
+fn convert_java_route_to_routing_info(
+    env: &mut JNIEnv,
+    route: JObject,
+) -> JniResult<Option<RoutingInfo>> {
     if route.is_null() {
         return Ok(None);
     }
@@ -49,9 +57,19 @@ fn convert_java_route_to_routing_info(env: &mut JNIEnv, route: JObject) -> JniRe
             let ordinal = ordinal_obj.i()?;
 
             match ordinal {
-                0 => Ok(Some(RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllNodes, None)))),
-                1 => Ok(Some(RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllMasters, None)))),
-                _ => Err(jni_error!(InvalidInput, "Unknown SimpleMultiNodeRoute ordinal: {}", ordinal)),
+                0 => Ok(Some(RoutingInfo::MultiNode((
+                    MultipleNodeRoutingInfo::AllNodes,
+                    None,
+                )))),
+                1 => Ok(Some(RoutingInfo::MultiNode((
+                    MultipleNodeRoutingInfo::AllMasters,
+                    None,
+                )))),
+                _ => Err(jni_error!(
+                    InvalidInput,
+                    "Unknown SimpleMultiNodeRoute ordinal: {}",
+                    ordinal
+                )),
             }
         }
         "SimpleSingleNodeRoute" => {
@@ -61,7 +79,11 @@ fn convert_java_route_to_routing_info(env: &mut JNIEnv, route: JObject) -> JniRe
 
             match ordinal {
                 2 => Ok(Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random))),
-                _ => Err(jni_error!(InvalidInput, "Unknown SimpleSingleNodeRoute ordinal: {}", ordinal)),
+                _ => Err(jni_error!(
+                    InvalidInput,
+                    "Unknown SimpleSingleNodeRoute ordinal: {}",
+                    ordinal
+                )),
             }
         }
         "SlotIdRoute" => {
@@ -69,20 +91,21 @@ fn convert_java_route_to_routing_info(env: &mut JNIEnv, route: JObject) -> JniRe
             let slot_id_obj = env.call_method(&route, "getSlotId", "()I", &[])?;
             let slot_id = slot_id_obj.i()? as u16;
 
-            Ok(Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(
-                Route::new(slot_id, SlotAddr::Master)
-            ))))
+            Ok(Some(RoutingInfo::SingleNode(
+                SingleNodeRoutingInfo::SpecificNode(Route::new(slot_id, SlotAddr::Master)),
+            )))
         }
         "SlotKeyRoute" => {
             // Get slot key via getSlotKey() method
-            let slot_key_obj = env.call_method(&route, "getSlotKey", "()Ljava/lang/String;", &[])?;
+            let slot_key_obj =
+                env.call_method(&route, "getSlotKey", "()Ljava/lang/String;", &[])?;
             let slot_key: String = env.get_string(&JString::from(slot_key_obj.l()?))?.into();
 
             // Calculate slot from key using glide-core logic
             let slot = get_slot(slot_key.as_bytes());
-            Ok(Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(
-                Route::new(slot, SlotAddr::Master)
-            ))))
+            Ok(Some(RoutingInfo::SingleNode(
+                SingleNodeRoutingInfo::SpecificNode(Route::new(slot, SlotAddr::Master)),
+            )))
         }
         "ByAddressRoute" => {
             // Get host via getHost() method
@@ -93,12 +116,18 @@ fn convert_java_route_to_routing_info(env: &mut JNIEnv, route: JObject) -> JniRe
             let port_obj = env.call_method(&route, "getPort", "()I", &[])?;
             let port = port_obj.i()? as u16;
 
-            Ok(Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress { host, port })))
+            Ok(Some(RoutingInfo::SingleNode(
+                SingleNodeRoutingInfo::ByAddress { host, port },
+            )))
         }
-        _ => Err(jni_error!(InvalidInput, "Unknown route type: {}", class_name_str)),
+        _ => Err(jni_error!(
+            InvalidInput,
+            "Unknown route type: {}",
+            class_name_str
+        )),
     }
 }
-use crate::{jni_result, jni_error};
+use crate::{jni_error, jni_result};
 
 // JNI-specific validation limits (to prevent JNI-level issues)
 const MAX_ADDRESSES_COUNT: usize = 10000; // Generous limit for JNI array handling
@@ -116,11 +145,7 @@ pub struct JniClient {
 
 impl JniClient {
     /// Create a new JniClient instance
-    pub fn new(
-        core_client: Client,
-        default_timeout: Duration,
-        client_id: u64,
-    ) -> JniResult<Self> {
+    pub fn new(core_client: Client, default_timeout: Duration, client_id: u64) -> JniResult<Self> {
         let runtime = JniRuntime::new(&format!("glide-jni-{}", client_id))?;
         let async_bridge = AsyncBridge::new(runtime);
 
@@ -133,11 +158,8 @@ impl JniClient {
 
     /// Execute a command asynchronously
     pub fn execute_command(&self, cmd: redis::Cmd) -> JniResult<Value> {
-        self.async_bridge.execute_command_async(
-            self.core_client.clone(),
-            cmd,
-            self.default_timeout,
-        )
+        self.async_bridge
+            .execute_command_async(self.core_client.clone(), cmd, self.default_timeout)
     }
 
     /// Execute a command with routing
@@ -236,17 +258,20 @@ fn generate_client_handle() -> u64 {
 
 /// Get a client from the registry
 fn get_client(handle: u64) -> JniResult<JniClient> {
-    let registry = CLIENT_REGISTRY.lock()
+    let registry = CLIENT_REGISTRY
+        .lock()
         .map_err(|_| jni_error!(LockPoisoned, "Client registry lock poisoned"))?;
 
-    registry.get(&handle)
+    registry
+        .get(&handle)
         .cloned()
         .ok_or_else(|| jni_error!(InvalidHandle, "Client handle {} not found", handle))
 }
 
 /// Insert a client into the registry
 fn insert_client(handle: u64, client: JniClient) -> JniResult<()> {
-    let mut registry = CLIENT_REGISTRY.lock()
+    let mut registry = CLIENT_REGISTRY
+        .lock()
         .map_err(|_| jni_error!(LockPoisoned, "Client registry lock poisoned"))?;
 
     registry.insert(handle, client);
@@ -255,7 +280,8 @@ fn insert_client(handle: u64, client: JniClient) -> JniResult<()> {
 
 /// Remove a client from the registry
 fn remove_client(handle: u64) -> JniResult<Option<JniClient>> {
-    let mut registry = CLIENT_REGISTRY.lock()
+    let mut registry = CLIENT_REGISTRY
+        .lock()
         .map_err(|_| jni_error!(LockPoisoned, "Client registry lock poisoned"))?;
 
     Ok(registry.remove(&handle))
@@ -267,27 +293,25 @@ fn remove_client(handle: u64) -> JniResult<Option<JniClient>> {
 
 /// Validate and parse address for JNI-specific issues (null bytes, basic format)
 fn validate_and_parse_address(addr_str: &str) -> JniResult<NodeAddress> {
-    if addr_str.is_empty() {
-        return Err(jni_error!(InvalidInput, "Address cannot be empty"));
-    }
+    // Only validate JNI safety concerns - let glide-core handle address format validation
+    JniSafetyValidator::validate_no_interior_nulls(addr_str).map_err(JniError::from)?;
 
-    if addr_str.contains('\0') {
-        return Err(jni_error!(InvalidInput, "Address contains null bytes"));
-    }
-
+    // Split address and let glide-core validate the format
     let parts: Vec<&str> = addr_str.split(':').collect();
     if parts.len() != 2 {
-        return Err(jni_error!(InvalidInput, "Address must be in format 'host:port'"));
+        // This is still needed for basic parsing - we can't pass malformed data to glide-core
+        return Err(jni_error!(
+            InvalidInput,
+            "Address must be in format 'host:port'"
+        ));
     }
 
     let host = parts[0];
     let port_str = parts[1];
 
-    if host.is_empty() {
-        return Err(jni_error!(InvalidInput, "Host cannot be empty"));
-    }
-
-    let port = port_str.parse::<u16>()
+    // Basic parsing required for NodeAddress struct construction
+    let port = port_str
+        .parse::<u16>()
         .map_err(|_| jni_error!(InvalidInput, "Invalid port number: {}", port_str))?;
 
     Ok(NodeAddress {
@@ -297,7 +321,10 @@ fn validate_and_parse_address(addr_str: &str) -> JniResult<NodeAddress> {
 }
 
 /// Parse Java string array to vector of NodeAddress with basic validation
-fn parse_addresses(env: &mut JNIEnv, addresses_array: &JObjectArray) -> JniResult<Vec<NodeAddress>> {
+fn parse_addresses(
+    env: &mut JNIEnv,
+    addresses_array: &JObjectArray,
+) -> JniResult<Vec<NodeAddress>> {
     let length = env.get_array_length(addresses_array)?;
     let mut parsed_addresses = Vec::with_capacity(length as usize);
 
@@ -317,12 +344,8 @@ fn parse_addresses(env: &mut JNIEnv, addresses_array: &JObjectArray) -> JniResul
 }
 
 /// Validate credential string for JNI-specific issues (null bytes only)
-fn validate_credential(credential: &str, field_name: &str) -> JniResult<()> {
-    if credential.contains('\0') {
-        return Err(jni_error!(InvalidInput, "{} contains null bytes", field_name));
-    }
-
-    Ok(())
+fn validate_credential(credential: &str, _field_name: &str) -> JniResult<()> {
+    JniSafetyValidator::validate_no_interior_nulls(credential).map_err(JniError::from)
 }
 
 /// Parse optional Java string to Rust Option<String> with validation
@@ -330,8 +353,7 @@ fn parse_optional_string(env: &mut JNIEnv, jstring: jstring) -> JniResult<Option
     if jstring.is_null() {
         Ok(None)
     } else {
-        let jstr = unsafe { JString::from_raw(jstring) };
-        let s: String = env.get_string(&jstr)?.into();
+        let s = jni_string_to_rust(env, jstring)?;
         Ok(Some(s))
     }
 }
@@ -356,7 +378,9 @@ where
             Ok(value)
         }
         Err(e) => {
-            unsafe { let _ = env.pop_local_frame(&JObject::null()); }
+            unsafe {
+                let _ = env.pop_local_frame(&JObject::null());
+            }
             Err(e)
         }
     }
@@ -457,9 +481,10 @@ pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_createClient
         let async_bridge = AsyncBridge::new(runtime);
 
         // Create the glide-core client using the async bridge's runtime
-        let core_client = async_bridge.runtime().block_on(async {
-            Client::new(connection_request, None).await
-        })?.map_err(|e| jni_error!(Connection, "Failed to create client: {}", e))?;
+        let core_client = async_bridge
+            .runtime()
+            .block_on(async { Client::new(connection_request, None).await })?
+            .map_err(|e| jni_error!(Connection, "Failed to create client: {}", e))?;
 
         // Create the JniClient instance
         let jni_client = JniClient {
@@ -470,6 +495,9 @@ pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_createClient
 
         // Insert into registry
         insert_client(client_handle, jni_client)?;
+
+        // Register client for validation
+        register_client(client_handle);
 
         Ok(client_handle as jlong)
     };
@@ -491,6 +519,9 @@ pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_closeClient(
             client.shutdown();
         }
 
+        // Unregister client from validation
+        unregister_client(handle);
+
         Ok(())
     };
 
@@ -507,15 +538,17 @@ pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_executeComma
     args: jobject,
 ) -> jobject {
     let result = with_local_frame(&mut env, 50, |env| -> JniResult<jobject> {
+        // Validate JNI entry point parameters
+        JniSafetyValidator::validate_execute_command_params(client_handle, command, args)
+            .map_err(JniError::from)?;
+
         let handle = client_handle as u64;
         let client = get_client(handle)?;
 
-        let command_str: String = env.get_string(&unsafe { JString::from_raw(command) })?.into();
+        let command_str = jni_string_to_rust(env, command)?;
 
         // Only basic JNI safety checks
-        if command_str.contains('\0') {
-            return Err(jni_error!(InvalidInput, "Command contains null bytes"));
-        }
+        JniSafetyValidator::validate_no_interior_nulls(&command_str).map_err(JniError::from)?;
 
         let args_array = unsafe { JObjectArray::from(JObject::from_raw(args)) };
         let args_length = env.get_array_length(&args_array)?;
@@ -543,22 +576,24 @@ fn convert_value_to_java_object(env: &mut JNIEnv, value: Value) -> JniResult<job
     match value {
         Value::Nil => Ok(ptr::null_mut()),
         Value::SimpleString(s) => {
-            let java_string = env.new_string(&s)?;
-            Ok(java_string.into_raw())
+            let java_string = create_jni_string(env, &s)?;
+            Ok(java_string.as_raw())
         }
-        Value::BulkString(bytes) => {
-            match String::from_utf8(bytes.clone()) {
-                Ok(string) => {
-                    let java_string = env.new_string(&string)?;
-                    Ok(java_string.into_raw())
-                }
-                Err(_) => {
-                    let byte_array = env.new_byte_array(bytes.len() as i32)?;
-                    env.set_byte_array_region(&byte_array, 0, &bytes.iter().map(|&b| b as i8).collect::<Vec<i8>>())?;
-                    Ok(byte_array.into_raw())
-                }
+        Value::BulkString(bytes) => match String::from_utf8(bytes.clone()) {
+            Ok(string) => {
+                let java_string = create_jni_string(env, &string)?;
+                Ok(java_string.as_raw())
             }
-        }
+            Err(_) => {
+                let byte_array = env.new_byte_array(bytes.len() as i32)?;
+                env.set_byte_array_region(
+                    &byte_array,
+                    0,
+                    &bytes.iter().map(|&b| b as i8).collect::<Vec<i8>>(),
+                )?;
+                Ok(byte_array.into_raw())
+            }
+        },
         Value::Int(i) => {
             let long_class = env.find_class("java/lang/Long")?;
             let long_value = env.new_object(long_class, "(J)V", &[i.into()])?;
@@ -566,7 +601,8 @@ fn convert_value_to_java_object(env: &mut JNIEnv, value: Value) -> JniResult<job
         }
         Value::Array(arr) => {
             let object_class = env.find_class("java/lang/Object")?;
-            let java_array = env.new_object_array(arr.len() as i32, object_class, JObject::null())?;
+            let java_array =
+                env.new_object_array(arr.len() as i32, object_class, JObject::null())?;
 
             for (i, item) in arr.into_iter().enumerate() {
                 let java_item = convert_value_to_java_object(env, item)?;
@@ -577,10 +613,14 @@ fn convert_value_to_java_object(env: &mut JNIEnv, value: Value) -> JniResult<job
             Ok(java_array.into_raw())
         }
         Value::Okay => {
-            let java_string = env.new_string("OK")?;
-            Ok(java_string.into_raw())
+            let java_string = create_jni_string(env, "OK")?;
+            Ok(java_string.as_raw())
         }
-        other => Err(jni_error!(UnexpectedResponse, "Unsupported response type: {:?}", other)),
+        other => Err(jni_error!(
+            UnexpectedResponse,
+            "Unsupported response type: {:?}",
+            other
+        )),
     }
 }
 
@@ -597,7 +637,9 @@ pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_executeStrin
         let handle = client_handle as u64;
         let client = get_client(handle)?;
 
-        let cmd_str: String = env.get_string(&unsafe { JString::from_raw(command) })?.into();
+        let cmd_str: String = env
+            .get_string(&unsafe { JString::from_raw(command) })?
+            .into();
 
         // Only basic JNI safety checks
         if cmd_str.contains('\0') {
@@ -654,7 +696,9 @@ pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_executeLongC
         let handle = client_handle as u64;
         let client = get_client(handle)?;
 
-        let cmd_str: String = env.get_string(&unsafe { JString::from_raw(command) })?.into();
+        let cmd_str: String = env
+            .get_string(&unsafe { JString::from_raw(command) })?
+            .into();
 
         // Only basic JNI safety checks
         if cmd_str.contains('\0') {
@@ -677,10 +721,15 @@ pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_executeLongC
             Value::Int(i) => Ok(i),
             Value::BulkString(bytes) => {
                 let string_val = String::from_utf8_lossy(&bytes);
-                string_val.parse::<i64>()
-                    .map_err(|_| jni_error!(ConversionError, "Cannot convert to Long: {}", string_val))
+                string_val.parse::<i64>().map_err(|_| {
+                    jni_error!(ConversionError, "Cannot convert to Long: {}", string_val)
+                })
             }
-            _ => Err(jni_error!(ConversionError, "Expected numeric response, got: {:?}", response))
+            _ => Err(jni_error!(
+                ConversionError,
+                "Expected numeric response, got: {:?}",
+                response
+            )),
         }
     };
 
@@ -700,7 +749,9 @@ pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_executeDoubl
         let handle = client_handle as u64;
         let client = get_client(handle)?;
 
-        let cmd_str: String = env.get_string(&unsafe { JString::from_raw(command) })?.into();
+        let cmd_str: String = env
+            .get_string(&unsafe { JString::from_raw(command) })?
+            .into();
 
         // Only basic JNI safety checks
         if cmd_str.contains('\0') {
@@ -722,14 +773,18 @@ pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_executeDoubl
         match response {
             Value::BulkString(bytes) => {
                 let string_val = String::from_utf8_lossy(&bytes);
-                string_val.parse::<f64>()
-                    .map_err(|_| jni_error!(ConversionError, "Cannot convert to Double: {}", string_val))
+                string_val.parse::<f64>().map_err(|_| {
+                    jni_error!(ConversionError, "Cannot convert to Double: {}", string_val)
+                })
             }
-            Value::SimpleString(s) => {
-                s.parse::<f64>()
-                    .map_err(|_| jni_error!(ConversionError, "Cannot convert to Double: {}", s))
-            }
-            _ => Err(jni_error!(ConversionError, "Expected numeric response, got: {:?}", response))
+            Value::SimpleString(s) => s
+                .parse::<f64>()
+                .map_err(|_| jni_error!(ConversionError, "Cannot convert to Double: {}", s)),
+            _ => Err(jni_error!(
+                ConversionError,
+                "Expected numeric response, got: {:?}",
+                response
+            )),
         }
     };
 
@@ -749,7 +804,9 @@ pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_executeBoole
         let handle = client_handle as u64;
         let client = get_client(handle)?;
 
-        let cmd_str: String = env.get_string(&unsafe { JString::from_raw(command) })?.into();
+        let cmd_str: String = env
+            .get_string(&unsafe { JString::from_raw(command) })?
+            .into();
 
         // Only basic JNI safety checks
         if cmd_str.contains('\0') {
@@ -775,21 +832,27 @@ pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_executeBoole
                 match string_val.as_ref() {
                     "true" | "1" => Ok(JNI_TRUE),
                     "false" | "0" => Ok(0),
-                    _ => string_val.parse::<i64>()
+                    _ => string_val
+                        .parse::<i64>()
                         .map(|i| if i != 0 { JNI_TRUE } else { 0 })
-                        .map_err(|_| jni_error!(ConversionError, "Cannot convert to Boolean: {}", string_val))
+                        .map_err(|_| {
+                            jni_error!(ConversionError, "Cannot convert to Boolean: {}", string_val)
+                        }),
                 }
             }
-            Value::SimpleString(s) => {
-                match s.as_ref() {
-                    "true" | "1" => Ok(JNI_TRUE),
-                    "false" | "0" => Ok(0),
-                    _ => s.parse::<i64>()
-                        .map(|i| if i != 0 { JNI_TRUE } else { 0 })
-                        .map_err(|_| jni_error!(ConversionError, "Cannot convert to Boolean: {}", s))
-                }
-            }
-            _ => Err(jni_error!(ConversionError, "Expected boolean response, got: {:?}", response))
+            Value::SimpleString(s) => match s.as_ref() {
+                "true" | "1" => Ok(JNI_TRUE),
+                "false" | "0" => Ok(0),
+                _ => s
+                    .parse::<i64>()
+                    .map(|i| if i != 0 { JNI_TRUE } else { 0 })
+                    .map_err(|_| jni_error!(ConversionError, "Cannot convert to Boolean: {}", s)),
+            },
+            _ => Err(jni_error!(
+                ConversionError,
+                "Expected boolean response, got: {:?}",
+                response
+            )),
         }
     };
 
@@ -809,7 +872,9 @@ pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_executeArray
         let handle = client_handle as u64;
         let client = get_client(handle)?;
 
-        let cmd_str: String = env.get_string(&unsafe { JString::from_raw(command) })?.into();
+        let cmd_str: String = env
+            .get_string(&unsafe { JString::from_raw(command) })?
+            .into();
 
         // Only basic JNI safety checks
         if cmd_str.contains('\0') {
@@ -831,7 +896,8 @@ pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_executeArray
         match response {
             Value::Array(arr) => {
                 let object_class = env.find_class("java/lang/Object")?;
-                let java_array = env.new_object_array(arr.len() as i32, object_class, JObject::null())?;
+                let java_array =
+                    env.new_object_array(arr.len() as i32, object_class, JObject::null())?;
 
                 for (i, item) in arr.into_iter().enumerate() {
                     let java_item = convert_value_to_java_object(env, item)?;
@@ -842,7 +908,11 @@ pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_executeArray
                 Ok(java_array.into_raw())
             }
             Value::Nil => Ok(ptr::null_mut()),
-            _ => Err(jni_error!(ConversionError, "Expected array response, got: {:?}", response))
+            _ => Err(jni_error!(
+                ConversionError,
+                "Expected array response, got: {:?}",
+                response
+            )),
         }
     });
 
@@ -866,7 +936,10 @@ pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_getClientSta
         let client = get_client(handle)?;
 
         let pending_callbacks = client.pending_callbacks()?;
-        let stats = format!("{{\"pending_callbacks\": {}, \"client_handle\": {}}}", pending_callbacks, handle);
+        let stats = format!(
+            "{{\"pending_callbacks\": {}, \"client_handle\": {}}}",
+            pending_callbacks, handle
+        );
 
         let java_string = env.new_string(&stats)?;
         Ok(java_string.into_raw())
@@ -963,15 +1036,16 @@ pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_scriptShow(
 
         // Convert response to String
         let script_source = match response {
-            redis::Value::BulkString(bytes) => {
-                String::from_utf8(bytes)
-                    .map_err(|_| jni_error!(ConversionError, "Failed to convert script to UTF-8"))?
-            },
+            redis::Value::BulkString(bytes) => String::from_utf8(bytes)
+                .map_err(|_| jni_error!(ConversionError, "Failed to convert script to UTF-8"))?,
             redis::Value::Nil => {
                 return Err(jni_error!(ConversionError, "Script not found"));
-            },
+            }
             _ => {
-                return Err(jni_error!(ConversionError, "Unexpected response type from SCRIPT SHOW"));
+                return Err(jni_error!(
+                    ConversionError,
+                    "Unexpected response type from SCRIPT SHOW"
+                ));
             }
         };
 
@@ -1054,16 +1128,16 @@ pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_fcall(
                 let string_val = String::from_utf8_lossy(&bytes);
                 let java_string = env.new_string(&string_val)?;
                 java_string.into_raw()
-            },
+            }
             redis::Value::Okay => {
                 let java_string = env.new_string("OK")?;
                 java_string.into_raw()
-            },
+            }
             redis::Value::Nil => ptr::null_mut(),
             redis::Value::Int(num) => {
                 let java_long = env.new_object("java/lang/Long", "(J)V", &[num.into()])?;
                 java_long.into_raw()
-            },
+            }
             _ => {
                 let java_string = env.new_string(&format!("{:?}", response))?;
                 java_string.into_raw()
@@ -1107,7 +1181,7 @@ pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_functionList
                 let string_val = String::from_utf8_lossy(&bytes);
                 let java_string = env.new_string(&string_val)?;
                 java_string.into_raw()
-            },
+            }
             redis::Value::Nil => ptr::null_mut(),
             _ => {
                 let java_string = env.new_string(&format!("{:?}", response))?;
@@ -1152,9 +1226,7 @@ pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_functionLoad
 
         // Convert response to String (library name)
         let library_name = match response {
-            redis::Value::BulkString(bytes) => {
-                String::from_utf8_lossy(&bytes).to_string()
-            },
+            redis::Value::BulkString(bytes) => String::from_utf8_lossy(&bytes).to_string(),
             redis::Value::Okay => "OK".to_string(),
             _ => format!("{:?}", response),
         };
@@ -1192,9 +1264,7 @@ pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_functionDele
         // Convert response to String
         let result_str = match response {
             redis::Value::Okay => "OK".to_string(),
-            redis::Value::BulkString(bytes) => {
-                String::from_utf8_lossy(&bytes).to_string()
-            },
+            redis::Value::BulkString(bytes) => String::from_utf8_lossy(&bytes).to_string(),
             _ => format!("{:?}", response),
         };
 
@@ -1234,9 +1304,7 @@ pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_functionFlus
         // Convert response to String
         let result_str = match response {
             redis::Value::Okay => "OK".to_string(),
-            redis::Value::BulkString(bytes) => {
-                String::from_utf8_lossy(&bytes).to_string()
-            },
+            redis::Value::BulkString(bytes) => String::from_utf8_lossy(&bytes).to_string(),
             _ => format!("{:?}", response),
         };
 
@@ -1272,7 +1340,7 @@ pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_functionStat
                 let string_val = String::from_utf8_lossy(&bytes);
                 let java_string = env.new_string(&string_val)?;
                 java_string.into_raw()
-            },
+            }
             redis::Value::Nil => ptr::null_mut(),
             _ => {
                 let java_string = env.new_string(&format!("{:?}", response))?;
@@ -1354,8 +1422,14 @@ pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_initOpenTe
         if !traces_endpoint.is_null() {
             let traces_endpoint_str: String = env.get_string(&traces_endpoint)?.into();
             if !traces_endpoint_str.is_empty() {
-                let traces_exporter = traces_endpoint_str.parse::<GlideOpenTelemetrySignalsExporter>()
-                    .map_err(|e| crate::error::JniError::Configuration(format!("Invalid traces endpoint: {}", e)))?;
+                let traces_exporter = traces_endpoint_str
+                    .parse::<GlideOpenTelemetrySignalsExporter>()
+                    .map_err(|e| {
+                        crate::error::JniError::Configuration(format!(
+                            "Invalid traces endpoint: {}",
+                            e
+                        ))
+                    })?;
 
                 let sample_percentage = if traces_sample_percentage >= 0 {
                     Some(traces_sample_percentage as u32)
@@ -1363,7 +1437,8 @@ pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_initOpenTe
                     None
                 };
 
-                config_builder = config_builder.with_trace_exporter(traces_exporter, sample_percentage);
+                config_builder =
+                    config_builder.with_trace_exporter(traces_exporter, sample_percentage);
             }
         }
 
@@ -1371,8 +1446,14 @@ pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_initOpenTe
         if !metrics_endpoint.is_null() {
             let metrics_endpoint_str: String = env.get_string(&metrics_endpoint)?.into();
             if !metrics_endpoint_str.is_empty() {
-                let metrics_exporter = metrics_endpoint_str.parse::<GlideOpenTelemetrySignalsExporter>()
-                    .map_err(|e| crate::error::JniError::Configuration(format!("Invalid metrics endpoint: {}", e)))?;
+                let metrics_exporter = metrics_endpoint_str
+                    .parse::<GlideOpenTelemetrySignalsExporter>()
+                    .map_err(|e| {
+                        crate::error::JniError::Configuration(format!(
+                            "Invalid metrics endpoint: {}",
+                            e
+                        ))
+                    })?;
 
                 config_builder = config_builder.with_metrics_exporter(metrics_exporter);
             }
@@ -1381,8 +1462,12 @@ pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_initOpenTe
         let config = config_builder.build();
 
         // Initialize OpenTelemetry
-        GlideOpenTelemetry::initialise(config)
-            .map_err(|e| crate::error::JniError::Configuration(format!("Failed to initialize OpenTelemetry: {}", e)))?;
+        GlideOpenTelemetry::initialise(config).map_err(|e| {
+            crate::error::JniError::Configuration(format!(
+                "Failed to initialize OpenTelemetry: {}",
+                e
+            ))
+        })?;
 
         Ok(())
     };
@@ -1399,10 +1484,15 @@ pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_initOpenTe
             // 5 - OpenTelemetry initialization failure
             match e {
                 crate::error::JniError::Configuration(msg) => {
-                    if msg.contains("traces endpoint") { 2 }
-                    else if msg.contains("metrics endpoint") { 3 }
-                    else if msg.contains("Both traces and metrics") { 1 }
-                    else { 5 }
+                    if msg.contains("traces endpoint") {
+                        2
+                    } else if msg.contains("metrics endpoint") {
+                        3
+                    } else if msg.contains("Both traces and metrics") {
+                        1
+                    } else {
+                        5
+                    }
                 }
                 crate::error::JniError::Runtime(_) => 4,
                 _ => 5,
@@ -1547,12 +1637,10 @@ pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_executeComma
         let handle = client_handle as u64;
         let client = get_client(handle)?;
 
-        let command_str: String = env.get_string(&unsafe { JString::from_raw(command) })?.into();
+        let command_str = jni_string_to_rust(env, command)?;
 
         // Only basic JNI safety checks
-        if command_str.contains('\0') {
-            return Err(jni_error!(InvalidInput, "Command contains null bytes"));
-        }
+        JniSafetyValidator::validate_no_interior_nulls(&command_str).map_err(JniError::from)?;
 
         let args_array = unsafe { JObjectArray::from(JObject::from_raw(args)) };
         let args_length = env.get_array_length(&args_array)?;
@@ -1568,7 +1656,9 @@ pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_executeComma
         let routing_info = if route_config.is_null() {
             None
         } else {
-            Some(parse_routing_configuration(env, unsafe { JObject::from_raw(route_config) })?)
+            Some(parse_routing_configuration(env, unsafe {
+                JObject::from_raw(route_config)
+            })?)
         };
 
         let response = client.execute_command_with_routing(cmd, routing_info)?;
@@ -1592,31 +1682,67 @@ fn parse_routing_configuration(env: &mut JNIEnv, route_config: JObject) -> JniRe
         "glide.api.models.configuration.RequestRoutingConfiguration$SimpleSingleNodeRoute" => {
             // Get the ordinal value to determine the route type
             let ordinal_method = env.get_method_id(&route_class, "getOrdinal", "()I")?;
-            let ordinal = unsafe { env.call_method_unchecked(&route_config, ordinal_method, ReturnType::Primitive(Primitive::Int), &[])? };
+            let ordinal = unsafe {
+                env.call_method_unchecked(
+                    &route_config,
+                    ordinal_method,
+                    ReturnType::Primitive(Primitive::Int),
+                    &[],
+                )?
+            };
 
             match ordinal.i()? {
                 2 => Ok(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)),
                 _ => Ok(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)),
             }
-        },
+        }
         "glide.api.models.configuration.RequestRoutingConfiguration$SimpleMultiNodeRoute" => {
             // Get the ordinal value to determine the route type
             let ordinal_method = env.get_method_id(&route_class, "getOrdinal", "()I")?;
-            let ordinal = unsafe { env.call_method_unchecked(&route_config, ordinal_method, ReturnType::Primitive(Primitive::Int), &[])? };
+            let ordinal = unsafe {
+                env.call_method_unchecked(
+                    &route_config,
+                    ordinal_method,
+                    ReturnType::Primitive(Primitive::Int),
+                    &[],
+                )?
+            };
 
             match ordinal.i()? {
-                0 => Ok(RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllNodes, None))),
-                1 => Ok(RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllMasters, None))),
-                _ => Ok(RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllNodes, None))),
+                0 => Ok(RoutingInfo::MultiNode((
+                    MultipleNodeRoutingInfo::AllNodes,
+                    None,
+                ))),
+                1 => Ok(RoutingInfo::MultiNode((
+                    MultipleNodeRoutingInfo::AllMasters,
+                    None,
+                ))),
+                _ => Ok(RoutingInfo::MultiNode((
+                    MultipleNodeRoutingInfo::AllNodes,
+                    None,
+                ))),
             }
-        },
+        }
         "glide.api.models.configuration.RequestRoutingConfiguration$SlotIdRoute" => {
             // Get slot ID and slot type
             let slot_id_method = env.get_method_id(&route_class, "getSlotId", "()I")?;
-            let slot_type_method = env.get_method_id(&route_class, "getSlotType", "()Lglide/api/models/configuration/RequestRoutingConfiguration$SlotType;")?;
+            let slot_type_method = env.get_method_id(
+                &route_class,
+                "getSlotType",
+                "()Lglide/api/models/configuration/RequestRoutingConfiguration$SlotType;",
+            )?;
 
-            let slot_id = unsafe { env.call_method_unchecked(&route_config, slot_id_method, ReturnType::Primitive(Primitive::Int), &[])? };
-            let slot_type_obj = unsafe { env.call_method_unchecked(&route_config, slot_type_method, ReturnType::Object, &[])? };
+            let slot_id = unsafe {
+                env.call_method_unchecked(
+                    &route_config,
+                    slot_id_method,
+                    ReturnType::Primitive(Primitive::Int),
+                    &[],
+                )?
+            };
+            let slot_type_obj = unsafe {
+                env.call_method_unchecked(&route_config, slot_type_method, ReturnType::Object, &[])?
+            };
 
             // Parse slot ID and slot type for proper slot-based routing
             let _slot_id = slot_id.i()? as u16;
@@ -1624,17 +1750,28 @@ fn parse_routing_configuration(env: &mut JNIEnv, route_config: JObject) -> JniRe
 
             // Use RandomPrimary for master nodes, Random for any node
             match slot_addr {
-                SlotAddr::Master => Ok(RoutingInfo::SingleNode(SingleNodeRoutingInfo::RandomPrimary)),
+                SlotAddr::Master => Ok(RoutingInfo::SingleNode(
+                    SingleNodeRoutingInfo::RandomPrimary,
+                )),
                 _ => Ok(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)),
             }
-        },
+        }
         "glide.api.models.configuration.RequestRoutingConfiguration$SlotKeyRoute" => {
             // Get slot key and slot type
-            let slot_key_method = env.get_method_id(&route_class, "getSlotKey", "()Ljava/lang/String;")?;
-            let slot_type_method = env.get_method_id(&route_class, "getSlotType", "()Lglide/api/models/configuration/RequestRoutingConfiguration$SlotType;")?;
+            let slot_key_method =
+                env.get_method_id(&route_class, "getSlotKey", "()Ljava/lang/String;")?;
+            let slot_type_method = env.get_method_id(
+                &route_class,
+                "getSlotType",
+                "()Lglide/api/models/configuration/RequestRoutingConfiguration$SlotType;",
+            )?;
 
-            let slot_key_obj = unsafe { env.call_method_unchecked(&route_config, slot_key_method, ReturnType::Object, &[])? };
-            let slot_type_obj = unsafe { env.call_method_unchecked(&route_config, slot_type_method, ReturnType::Object, &[])? };
+            let slot_key_obj = unsafe {
+                env.call_method_unchecked(&route_config, slot_key_method, ReturnType::Object, &[])?
+            };
+            let slot_type_obj = unsafe {
+                env.call_method_unchecked(&route_config, slot_type_method, ReturnType::Object, &[])?
+            };
 
             let slot_key: String = env.get_string(&slot_key_obj.l()?.into())?.into();
             let slot_addr = parse_slot_type(env, slot_type_obj.l()?)?;
@@ -1644,22 +1781,36 @@ fn parse_routing_configuration(env: &mut JNIEnv, route_config: JObject) -> JniRe
 
             // Use RandomPrimary for master nodes, Random for any node
             match slot_addr {
-                SlotAddr::Master => Ok(RoutingInfo::SingleNode(SingleNodeRoutingInfo::RandomPrimary)),
+                SlotAddr::Master => Ok(RoutingInfo::SingleNode(
+                    SingleNodeRoutingInfo::RandomPrimary,
+                )),
                 _ => Ok(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)),
             }
-        },
+        }
         "glide.api.models.configuration.RequestRoutingConfiguration$ByAddressRoute" => {
             // Get host and port
             let host_method = env.get_method_id(&route_class, "getHost", "()Ljava/lang/String;")?;
             let port_method = env.get_method_id(&route_class, "getPort", "()I")?;
 
-            let host_obj = unsafe { env.call_method_unchecked(&route_config, host_method, ReturnType::Object, &[])? };
-            let port = unsafe { env.call_method_unchecked(&route_config, port_method, ReturnType::Primitive(Primitive::Int), &[])? };
+            let host_obj = unsafe {
+                env.call_method_unchecked(&route_config, host_method, ReturnType::Object, &[])?
+            };
+            let port = unsafe {
+                env.call_method_unchecked(
+                    &route_config,
+                    port_method,
+                    ReturnType::Primitive(Primitive::Int),
+                    &[],
+                )?
+            };
 
             let host: String = env.get_string(&host_obj.l()?.into())?.into();
             let port_num = port.i()? as u16;
-            Ok(RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress { host, port: port_num }))
-        },
+            Ok(RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress {
+                host,
+                port: port_num,
+            }))
+        }
         _ => {
             // Unknown route type, default to random
             Ok(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random))
@@ -1704,13 +1855,24 @@ fn calculate_slot(key: &str) -> u16 {
 fn parse_slot_type(env: &mut JNIEnv, slot_type: JObject) -> JniResult<SlotAddr> {
     let class = env.get_object_class(&slot_type)?;
     let ordinal_method = env.get_method_id(&class, "ordinal", "()I")?;
-    let ordinal = unsafe { env.call_method_unchecked(&slot_type, ordinal_method, ReturnType::Primitive(Primitive::Int), &[])? };
+    let ordinal = unsafe {
+        env.call_method_unchecked(
+            &slot_type,
+            ordinal_method,
+            ReturnType::Primitive(Primitive::Int),
+            &[],
+        )?
+    };
 
     let ordinal_value = ordinal.i()?;
     match ordinal_value {
         0 => Ok(SlotAddr::Master),
         1 => Ok(SlotAddr::Master), // Use Master for replica too since SlotAddr doesn't have Replica
-        _ => Err(jni_error!(InvalidInput, "Invalid SlotType ordinal: {}", ordinal_value)),
+        _ => Err(jni_error!(
+            InvalidInput,
+            "Invalid SlotType ordinal: {}",
+            ordinal_value
+        )),
     }
 }
 
@@ -1732,7 +1894,7 @@ pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_executeComma
         let handle = client_handle as u64;
         let client = get_client(handle)?;
 
-        let command_str: String = env.get_string(&unsafe { JString::from_raw(command) })?.into();
+        let command_str = jni_string_to_rust(env, command)?;
 
         // Basic JNI safety checks
         if command_str.contains('\0') {
@@ -1753,7 +1915,8 @@ pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_executeComma
         }
 
         // Convert Java Route object directly to RoutingInfo - no intermediate conversion!
-        let routing_info = convert_java_route_to_routing_info(env, unsafe { JObject::from_raw(route) })?;
+        let routing_info =
+            convert_java_route_to_routing_info(env, unsafe { JObject::from_raw(route) })?;
 
         let response = client.execute_command_with_routing(cmd, routing_info)?;
         convert_value_to_java_object(env, response)
@@ -1777,7 +1940,9 @@ pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_executeStrin
         let handle = client_handle as u64;
         let client = get_client(handle)?;
 
-        let cmd_str: String = env.get_string(&unsafe { JString::from_raw(command) })?.into();
+        let cmd_str: String = env
+            .get_string(&unsafe { JString::from_raw(command) })?
+            .into();
 
         // Basic JNI safety checks
         if cmd_str.contains('\0') {
@@ -1795,7 +1960,8 @@ pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_executeStrin
         }
 
         // Convert Java Route object directly to RoutingInfo - single conversion point!
-        let routing_info = convert_java_route_to_routing_info(&mut env, unsafe { JObject::from_raw(route) })?;
+        let routing_info =
+            convert_java_route_to_routing_info(&mut env, unsafe { JObject::from_raw(route) })?;
 
         let response = client.execute_command_with_routing(cmd, routing_info)?;
 
@@ -1854,17 +2020,32 @@ pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_executePipel
             // Extract command type and arguments from Command object
 
             // Get getType() method to retrieve CommandType
-            let command_type_obj = env.call_method(&command_obj, "getType", "()Lio/valkey/glide/core/commands/CommandType;", &[])?;
+            let command_type_obj = env.call_method(
+                &command_obj,
+                "getType",
+                "()Lio/valkey/glide/core/commands/CommandType;",
+                &[],
+            )?;
             let command_type_obj = command_type_obj.l()?;
 
             // Get getCommandName() from CommandType enum
-            let command_name_obj = env.call_method(&command_type_obj, "getCommandName", "()Ljava/lang/String;", &[])?;
+            let command_name_obj = env.call_method(
+                &command_type_obj,
+                "getCommandName",
+                "()Ljava/lang/String;",
+                &[],
+            )?;
             let command_name_jstring = JString::from(command_name_obj.l()?);
             let command_name_str = env.get_string(&command_name_jstring)?;
             let command_name: String = command_name_str.into();
 
             // Get getArgumentsArray() method to retrieve arguments
-            let args_obj = env.call_method(&command_obj, "getArgumentsArray", "()[Ljava/lang/String;", &[])?;
+            let args_obj = env.call_method(
+                &command_obj,
+                "getArgumentsArray",
+                "()[Ljava/lang/String;",
+                &[],
+            )?;
             let args_array = JObjectArray::from(args_obj.l()?);
             let args_length = env.get_array_length(&args_array)?;
 
@@ -1889,7 +2070,10 @@ pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_executePipel
         // Validate retry strategy for atomic batches
         let is_atomic_bool = is_atomic != 0;
         if is_atomic_bool && (retry_server_error != 0 || retry_connection_error != 0) {
-            return Err(jni_error!(InvalidInput, "Retry strategy is not supported for atomic batches"));
+            return Err(jni_error!(
+                InvalidInput,
+                "Retry strategy is not supported for atomic batches"
+            ));
         }
 
         // Execute commands based on atomic flag with timeout and retry configuration
@@ -1904,7 +2088,8 @@ pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_executePipel
 
         // Convert responses to Java array
         let object_class = env.find_class("java/lang/Object")?;
-        let java_array = env.new_object_array(responses.len() as i32, object_class, JObject::null())?;
+        let java_array =
+            env.new_object_array(responses.len() as i32, object_class, JObject::null())?;
 
         for (i, response) in responses.into_iter().enumerate() {
             let java_response = convert_value_to_java_object(env, response)?;
@@ -1938,9 +2123,9 @@ pub extern "system" fn Java_io_valkey_glide_core_client_GlideClient_executePipel
         commands,
         routing_info,
         is_atomic,
-        0,    // Default timeout
-        0,    // No retry server error
-        0,    // No retry connection error
+        0, // Default timeout
+        0, // No retry server error
+        0, // No retry connection error
     )
 }
 

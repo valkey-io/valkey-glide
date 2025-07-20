@@ -73,11 +73,13 @@ task buildNative(type: Exec) {
 // Make Java build depend on native build
 compileJava.dependsOn buildNative
 
-// Copy native libraries to resources
-task copyNativeLibs(type: Copy, dependsOn: buildNative) {
+// Copy native libraries to resources - USING EXISTING LIBS
+task copyNativeLibs(type: Copy) {
     from 'target/release/'
     into 'src/main/resources/native/'
     include '*.so', '*.dylib', '*.dll'
+    // Only copy if source files exist
+    onlyIf { file('target/release').exists() }
 }
 
 // Make JAR building depend on copying native libs

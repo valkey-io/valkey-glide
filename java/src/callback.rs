@@ -57,7 +57,9 @@ impl CallbackRegistry {
             timeout_duration,
         };
 
-        let mut callbacks = self.callbacks.lock()
+        let mut callbacks = self
+            .callbacks
+            .lock()
             .map_err(|_| JniError::LockPoisoned("Callback registry lock poisoned".to_string()))?;
 
         callbacks.insert(callback_id, callback_data);
@@ -70,7 +72,9 @@ impl CallbackRegistry {
         callback_id: CallbackId,
         result: redis::RedisResult<Value>,
     ) -> JniResult<()> {
-        let mut callbacks = self.callbacks.lock()
+        let mut callbacks = self
+            .callbacks
+            .lock()
             .map_err(|_| JniError::LockPoisoned("Callback registry lock poisoned".to_string()))?;
 
         if let Some(callback_data) = callbacks.remove(&callback_id) {
@@ -79,7 +83,10 @@ impl CallbackRegistry {
                 JniError::Runtime("Failed to send callback result - receiver dropped".to_string())
             })?;
         } else {
-            return Err(JniError::InvalidHandle(format!("Callback ID {} not found", callback_id)));
+            return Err(JniError::InvalidHandle(format!(
+                "Callback ID {} not found",
+                callback_id
+            )));
         }
 
         Ok(())
@@ -87,7 +94,9 @@ impl CallbackRegistry {
 
     /// Clean up expired callbacks
     pub fn cleanup_expired_callbacks(&self) -> JniResult<Vec<CallbackId>> {
-        let mut callbacks = self.callbacks.lock()
+        let mut callbacks = self
+            .callbacks
+            .lock()
             .map_err(|_| JniError::LockPoisoned("Callback registry lock poisoned".to_string()))?;
 
         let now = Instant::now();
@@ -114,12 +123,13 @@ impl CallbackRegistry {
 
     /// Get the current number of pending callbacks
     pub fn pending_count(&self) -> JniResult<usize> {
-        let callbacks = self.callbacks.lock()
+        let callbacks = self
+            .callbacks
+            .lock()
             .map_err(|_| JniError::LockPoisoned("Callback registry lock poisoned".to_string()))?;
         Ok(callbacks.len())
     }
 }
-
 
 impl Default for CallbackRegistry {
     fn default() -> Self {
@@ -147,7 +157,9 @@ mod tests {
 
         // Complete the callback
         let result = Ok(Value::SimpleString("test".to_string()));
-        registry.complete_callback(callback_id, result.clone()).unwrap();
+        registry
+            .complete_callback(callback_id, result.clone())
+            .unwrap();
 
         // Check pending count after completion
         assert_eq!(registry.pending_count().unwrap(), 0);
@@ -195,8 +207,12 @@ mod tests {
         assert_eq!(registry.pending_count().unwrap(), 2);
 
         // Complete both callbacks
-        registry.complete_callback(id1, Ok(Value::SimpleString("first".to_string()))).unwrap();
-        registry.complete_callback(id2, Ok(Value::SimpleString("second".to_string()))).unwrap();
+        registry
+            .complete_callback(id1, Ok(Value::SimpleString("first".to_string())))
+            .unwrap();
+        registry
+            .complete_callback(id2, Ok(Value::SimpleString("second".to_string())))
+            .unwrap();
 
         // Check results
         let result1 = receiver1.await.unwrap().unwrap();

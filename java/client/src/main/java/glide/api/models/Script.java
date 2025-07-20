@@ -14,7 +14,7 @@ public class Script implements AutoCloseable {
 
     /** Hash string representing the code. */
     @Getter private final String hash;
-    
+
     /** The original script code. */
     @Getter private final String code;
 
@@ -48,7 +48,7 @@ public class Script implements AutoCloseable {
 
     /**
      * Compute SHA1 hash of script code for EVALSHA command.
-     * 
+     *
      * @param code The script code to hash
      * @return The SHA1 hash as a hex string
      */
@@ -70,7 +70,7 @@ public class Script implements AutoCloseable {
         }
     }
 
-    /** 
+    /**
      * Drop the linked script from native script storage.
      * This decrements the reference count and removes the script when it reaches zero.
      */
@@ -87,6 +87,7 @@ public class Script implements AutoCloseable {
      * @deprecated Use try-with-resources or explicit close() instead
      */
     @Deprecated(forRemoval = true)
+    @SuppressWarnings("removal")
     @Override
     protected void finalize() throws Throwable {
         try {

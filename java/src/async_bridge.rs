@@ -7,13 +7,14 @@
 //! operations to maintain performance and prevent deadlocks.
 
 use glide_core::client::Client;
-use redis::{Cmd, Value};
 use redis::cluster_routing::RoutingInfo;
+use redis::{Cmd, Value};
 use std::time::Duration;
 
 use crate::callback::CallbackRegistry;
 use crate::error::{JniError, JniResult};
 use crate::runtime::JniRuntime;
+use logger_core::{log_debug, log_warn};
 
 /// Bridge for executing async operations from sync JNI context
 #[derive(Clone)]
@@ -50,10 +51,13 @@ impl AsyncBridge {
         // Spawn async task
         let task = async move {
             let result = client_clone.send_command(&cmd, None).await;
-            
+
             // Complete the callback with the result
             if let Err(e) = callback_registry.complete_callback(callback_id, result) {
-                eprintln!("Failed to complete callback {}: {}", callback_id, e);
+                log_warn(
+                    "jni-async-bridge",
+                    format!("Failed to complete callback {}: {}", callback_id, e),
+                );
             }
         };
 
@@ -92,10 +96,13 @@ impl AsyncBridge {
         // Spawn async task
         let task = async move {
             let result = client_clone.send_command(&cmd, routing).await;
-            
+
             // Complete the callback with the result
             if let Err(e) = callback_registry.complete_callback(callback_id, result) {
-                eprintln!("Failed to complete callback {}: {}", callback_id, e);
+                log_warn(
+                    "jni-async-bridge",
+                    format!("Failed to complete callback {}: {}", callback_id, e),
+                );
             }
         };
 
@@ -134,11 +141,16 @@ impl AsyncBridge {
 
         // Spawn async task
         let task = async move {
-            let result = client_clone.send_pipeline(&pipeline, routing, raise_on_error, None, Default::default()).await;
-            
+            let result = client_clone
+                .send_pipeline(&pipeline, routing, raise_on_error, None, Default::default())
+                .await;
+
             // Complete the callback with the result
             if let Err(e) = callback_registry.complete_callback(callback_id, result) {
-                eprintln!("Failed to complete callback {}: {}", callback_id, e);
+                log_warn(
+                    "jni-async-bridge",
+                    format!("Failed to complete callback {}: {}", callback_id, e),
+                );
             }
         };
 
@@ -146,20 +158,35 @@ impl AsyncBridge {
         self.runtime.spawn(task)?;
 
         // Wait for the callback to complete using sync channel with timeout
-        println!("DEBUG: Waiting for callback {} with timeout {:?}", callback_id, timeout);
+        log_debug(
+            "jni-async-bridge",
+            format!(
+                "Waiting for callback {} with timeout {:?}",
+                callback_id, timeout
+            ),
+        );
         match receiver.recv_timeout(timeout) {
             Ok(result) => {
-                println!("DEBUG: Callback {} received result: {:?}", callback_id, result);
+                log_debug(
+                    "jni-async-bridge",
+                    format!("Callback {} received result: {:?}", callback_id, result),
+                );
                 result.map_err(JniError::from)
             }
             Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                println!("DEBUG: Callback {} timed out", callback_id);
+                log_debug(
+                    "jni-async-bridge",
+                    format!("Callback {} timed out", callback_id),
+                );
                 // Clean up the callback on timeout
                 self.callback_registry.cleanup_expired_callbacks().ok();
                 Err(JniError::Timeout("Operation timeout".to_string()))
             }
             Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-                println!("DEBUG: Callback {} receiver dropped", callback_id);
+                log_debug(
+                    "jni-async-bridge",
+                    format!("Callback {} receiver dropped", callback_id),
+                );
                 Err(JniError::Runtime("Callback receiver dropped".to_string()))
             }
         }
@@ -183,11 +210,16 @@ impl AsyncBridge {
 
         // Spawn async task
         let task = async move {
-            let result = client_clone.send_transaction(&transaction, routing, None, raise_on_error).await;
-            
+            let result = client_clone
+                .send_transaction(&transaction, routing, None, raise_on_error)
+                .await;
+
             // Complete the callback with the result
             if let Err(e) = callback_registry.complete_callback(callback_id, result) {
-                eprintln!("Failed to complete callback {}: {}", callback_id, e);
+                log_warn(
+                    "jni-async-bridge",
+                    format!("Failed to complete callback {}: {}", callback_id, e),
+                );
             }
         };
 
@@ -195,20 +227,35 @@ impl AsyncBridge {
         self.runtime.spawn(task)?;
 
         // Wait for the callback to complete using sync channel with timeout
-        println!("DEBUG: Waiting for callback {} with timeout {:?}", callback_id, timeout);
+        log_debug(
+            "jni-async-bridge",
+            format!(
+                "Waiting for callback {} with timeout {:?}",
+                callback_id, timeout
+            ),
+        );
         match receiver.recv_timeout(timeout) {
             Ok(result) => {
-                println!("DEBUG: Callback {} received result: {:?}", callback_id, result);
+                log_debug(
+                    "jni-async-bridge",
+                    format!("Callback {} received result: {:?}", callback_id, result),
+                );
                 result.map_err(JniError::from)
             }
             Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                println!("DEBUG: Callback {} timed out", callback_id);
+                log_debug(
+                    "jni-async-bridge",
+                    format!("Callback {} timed out", callback_id),
+                );
                 // Clean up the callback on timeout
                 self.callback_registry.cleanup_expired_callbacks().ok();
                 Err(JniError::Timeout("Operation timeout".to_string()))
             }
             Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-                println!("DEBUG: Callback {} receiver dropped", callback_id);
+                log_debug(
+                    "jni-async-bridge",
+                    format!("Callback {} receiver dropped", callback_id),
+                );
                 Err(JniError::Runtime("Callback receiver dropped".to_string()))
             }
         }
@@ -253,15 +300,19 @@ pub fn create_command(command: &str, args: &[&[u8]]) -> redis::Cmd {
 /// Helper function to validate timeout duration
 pub fn validate_timeout(timeout_ms: i32) -> JniResult<Duration> {
     if timeout_ms < 0 {
-        return Err(JniError::InvalidInput("Timeout cannot be negative".to_string()));
+        return Err(JniError::InvalidInput(
+            "Timeout cannot be negative".to_string(),
+        ));
     }
-    
+
     if timeout_ms == 0 {
         // Default timeout
         Ok(Duration::from_millis(5000))
     } else if timeout_ms > 300_000 {
         // Maximum 5 minutes
-        Err(JniError::InvalidInput("Timeout too large (max 5 minutes)".to_string()))
+        Err(JniError::InvalidInput(
+            "Timeout too large (max 5 minutes)".to_string(),
+        ))
     } else {
         Ok(Duration::from_millis(timeout_ms as u64))
     }
@@ -277,7 +328,7 @@ mod tests {
     fn test_async_bridge_creation() {
         let runtime = JniRuntime::new("test-bridge").unwrap();
         let bridge = AsyncBridge::new(runtime);
-        
+
         assert_eq!(bridge.pending_callbacks().unwrap(), 0);
         assert!(!bridge.is_shutting_down());
     }
@@ -294,14 +345,14 @@ mod tests {
         // Valid timeout
         assert!(validate_timeout(1000).is_ok());
         assert_eq!(validate_timeout(1000).unwrap(), Duration::from_millis(1000));
-        
+
         // Zero timeout (default)
         assert!(validate_timeout(0).is_ok());
         assert_eq!(validate_timeout(0).unwrap(), Duration::from_millis(5000));
-        
+
         // Negative timeout
         assert!(validate_timeout(-1).is_err());
-        
+
         // Too large timeout
         assert!(validate_timeout(400_000).is_err());
     }
@@ -310,7 +361,7 @@ mod tests {
     fn test_async_bridge_shutdown() {
         let runtime = JniRuntime::new("test-bridge").unwrap();
         let bridge = AsyncBridge::new(runtime);
-        
+
         bridge.shutdown();
         assert!(bridge.is_shutting_down());
     }

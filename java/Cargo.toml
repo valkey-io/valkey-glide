@@ -14,6 +14,7 @@ jni = "0.21.1"
 thiserror = "2.0"
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "time"] }
 redis = { path = "../glide-core/redis-rs/redis", features = ["tokio-comp"] }
+logger_core = { path = "../logger_core" }
 
 [dependencies.glide-core]
 path = "../glide-core"

@@ -105,7 +105,6 @@ javadoc.dependsOn('copyNativeLib')
 copyNativeLib.dependsOn('buildRust')
 compileTestJava.dependsOn('copyNativeLib')
 test.dependsOn('buildRust')
-test.dependsOn('buildRust')
 
 test {
     exclude "glide/ffi/FfiTest.class"
@@ -211,6 +210,7 @@ jar {
 
 shadowJar {
     dependsOn('copyNativeLib')
+    dependsOn('buildRust')
     archiveClassifier = osdetector.classifier
     excludes.remove("module-info.class")
     relocate('io.netty', 'glide.io.netty')

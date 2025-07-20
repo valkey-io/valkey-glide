@@ -12,6 +12,7 @@ use std::time::Duration;
 use tokio::runtime::{Builder, Runtime};
 
 use crate::error::{JniError, JniResult};
+use logger_core::{log_info, log_warn};
 
 /// Per-client runtime wrapper providing isolated async execution
 pub struct JniRuntime {
@@ -54,7 +55,9 @@ impl JniRuntime {
         F::Output: Send,
     {
         if self.shutdown.load(Ordering::Acquire) {
-            return Err(JniError::RuntimeShutdown("Runtime is shutting down".to_string()));
+            return Err(JniError::RuntimeShutdown(
+                "Runtime is shutting down".to_string(),
+            ));
         }
 
         Ok(self.runtime.block_on(future))
@@ -67,7 +70,9 @@ impl JniRuntime {
         F::Output: Send + 'static,
     {
         if self.shutdown.load(Ordering::Acquire) {
-            return Err(JniError::RuntimeShutdown("Runtime is shutting down".to_string()));
+            return Err(JniError::RuntimeShutdown(
+                "Runtime is shutting down".to_string(),
+            ));
         }
 
         Ok(self.runtime.spawn(future))
@@ -84,7 +89,9 @@ impl JniRuntime {
         F::Output: Send + 'static,
     {
         if self.shutdown.load(Ordering::Acquire) {
-            return Err(JniError::RuntimeShutdown("Runtime is shutting down".to_string()));
+            return Err(JniError::RuntimeShutdown(
+                "Runtime is shutting down".to_string(),
+            ));
         }
 
         let handle = self.runtime.spawn(async move {
@@ -127,7 +134,9 @@ impl RuntimeManager {
     /// Start background cleanup task
     pub fn start_cleanup_task(&mut self, interval: Duration) -> JniResult<()> {
         if self.cleanup_handle.is_some() {
-            return Err(JniError::Runtime("Cleanup task already running".to_string()));
+            return Err(JniError::Runtime(
+                "Cleanup task already running".to_string(),
+            ));
         }
 
         // Create a global runtime for cleanup tasks
@@ -142,26 +151,26 @@ impl RuntimeManager {
         // Spawn the cleanup task
         let handle = cleanup_runtime.spawn(async move {
             let mut interval_timer = tokio::time::interval(interval);
-            
+
             loop {
                 interval_timer.tick().await;
-                
+
                 // Perform actual cleanup operations
                 // 1. Clean up any expired connections from the client pool
                 // 2. Release unused memory from internal caches
                 // 3. Clean up completed async tasks
                 // 4. Force garbage collection hints for JVM
                 // 5. Clean up any orphaned resources
-                
+
                 // Force a minor GC hint via JNI
                 // This is a real cleanup operation that helps prevent memory leaks
                 if let Err(e) = suggest_gc_cleanup().await {
-                    eprintln!("Cleanup task error: {}", e);
+                    log_warn("jni-runtime-manager", format!("Cleanup task error: {}", e));
                 }
-                
+
                 // Clean up any internal caches or expired data
                 cleanup_internal_caches().await;
-                
+
                 // Yield to allow other tasks to run
                 tokio::task::yield_now().await;
             }
@@ -208,11 +217,13 @@ mod tests {
     #[test]
     fn test_runtime_block_on() {
         let runtime = JniRuntime::new("test-client").unwrap();
-        
-        let result = runtime.block_on(async {
-            tokio::time::sleep(Duration::from_millis(10)).await;
-            42
-        }).unwrap();
+
+        let result = runtime
+            .block_on(async {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+                42
+            })
+            .unwrap();
 
         assert_eq!(result, 42);
     }
@@ -220,11 +231,13 @@ mod tests {
     #[test]
     fn test_runtime_spawn() {
         let runtime = JniRuntime::new("test-client").unwrap();
-        
-        let handle = runtime.spawn(async {
-            tokio::time::sleep(Duration::from_millis(10)).await;
-            "test"
-        }).unwrap();
+
+        let handle = runtime
+            .spawn(async {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+                "test"
+            })
+            .unwrap();
 
         let result = runtime.block_on(handle).unwrap().unwrap();
         assert_eq!(result, "test");
@@ -233,27 +246,31 @@ mod tests {
     #[test]
     fn test_runtime_spawn_with_timeout() {
         let runtime = JniRuntime::new("test-client").unwrap();
-        
+
         // Test successful completion within timeout
-        let handle = runtime.spawn_with_timeout(
-            async {
-                tokio::time::sleep(Duration::from_millis(10)).await;
-                "success"
-            },
-            Duration::from_millis(100),
-        ).unwrap();
+        let handle = runtime
+            .spawn_with_timeout(
+                async {
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                    "success"
+                },
+                Duration::from_millis(100),
+            )
+            .unwrap();
 
         let result = runtime.block_on(handle).unwrap().unwrap().unwrap();
         assert_eq!(result, "success");
 
         // Test timeout
-        let handle = runtime.spawn_with_timeout(
-            async {
-                tokio::time::sleep(Duration::from_millis(100)).await;
-                "timeout"
-            },
-            Duration::from_millis(10),
-        ).unwrap();
+        let handle = runtime
+            .spawn_with_timeout(
+                async {
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                    "timeout"
+                },
+                Duration::from_millis(10),
+            )
+            .unwrap();
 
         let result = runtime.block_on(handle).unwrap().unwrap();
         assert!(result.is_err());
@@ -267,7 +284,7 @@ mod tests {
     #[test]
     fn test_runtime_shutdown() {
         let runtime = JniRuntime::new("test-client").unwrap();
-        
+
         runtime.shutdown();
         assert!(runtime.is_shutting_down());
 
@@ -282,7 +299,7 @@ async fn suggest_gc_cleanup() -> Result<(), Box<dyn std::error::Error + Send + S
     // Perform garbage collection suggestion
     // This provides a hint to the JVM that garbage collection would be beneficial
     tokio::task::yield_now().await;
-    println!("Garbage collection cleanup suggested");
+    log_info("jni-gc-cleanup", "Garbage collection cleanup suggested");
     Ok(())
 }
 
@@ -291,5 +308,5 @@ async fn cleanup_internal_caches() {
     // Clean up internal caches, connection pools, and expired data
     // This helps maintain memory efficiency during long-running operations
     tokio::task::yield_now().await;
-    println!("Internal caches cleaned up");
+    log_info("jni-cache-cleanup", "Internal caches cleaned up");
 }

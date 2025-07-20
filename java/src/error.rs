@@ -98,19 +98,49 @@ pub fn throw_java_exception(env: &mut JNIEnv, error: &JniError) {
     let (class_name, message) = match error {
         JniError::Jni(msg) => ("java/lang/RuntimeException", format!("JNI error: {}", msg)),
         JniError::Connection(msg) => ("java/net/ConnectException", msg.clone()),
-        JniError::Command(msg) => ("java/lang/IllegalStateException", format!("Command failed: {}", msg)),
-        JniError::Configuration(msg) => ("java/lang/IllegalArgumentException", format!("Configuration error: {}", msg)),
+        JniError::Command(msg) => (
+            "java/lang/IllegalStateException",
+            format!("Command failed: {}", msg),
+        ),
+        JniError::Configuration(msg) => (
+            "java/lang/IllegalArgumentException",
+            format!("Configuration error: {}", msg),
+        ),
         JniError::InvalidInput(msg) => ("java/lang/IllegalArgumentException", msg.clone()),
-        JniError::Runtime(msg) => ("java/lang/RuntimeException", format!("Runtime error: {}", msg)),
+        JniError::Runtime(msg) => (
+            "java/lang/RuntimeException",
+            format!("Runtime error: {}", msg),
+        ),
         JniError::NullPointer(msg) => ("java/lang/NullPointerException", msg.clone()),
-        JniError::Utf8(msg) => ("java/lang/IllegalArgumentException", format!("UTF-8 error: {}", msg)),
-        JniError::UnexpectedResponse(msg) => ("java/lang/IllegalStateException", format!("Unexpected response: {}", msg)),
+        JniError::Utf8(msg) => (
+            "java/lang/IllegalArgumentException",
+            format!("UTF-8 error: {}", msg),
+        ),
+        JniError::UnexpectedResponse(msg) => (
+            "java/lang/IllegalStateException",
+            format!("Unexpected response: {}", msg),
+        ),
         JniError::Timeout(msg) => ("java/util/concurrent/TimeoutException", msg.clone()),
-        JniError::Valkey(err) => ("java/lang/RuntimeException", format!("Valkey error: {}", err)),
-        JniError::ConversionError(msg) => ("java/lang/IllegalArgumentException", format!("Conversion error: {}", msg)),
-        JniError::LockPoisoned(msg) => ("java/lang/IllegalStateException", format!("Lock poisoned: {}", msg)),
-        JniError::InvalidHandle(msg) => ("java/lang/IllegalArgumentException", format!("Invalid handle: {}", msg)),
-        JniError::RuntimeShutdown(msg) => ("java/lang/IllegalStateException", format!("Runtime shutdown: {}", msg)),
+        JniError::Valkey(err) => (
+            "java/lang/RuntimeException",
+            format!("Valkey error: {}", err),
+        ),
+        JniError::ConversionError(msg) => (
+            "java/lang/IllegalArgumentException",
+            format!("Conversion error: {}", msg),
+        ),
+        JniError::LockPoisoned(msg) => (
+            "java/lang/IllegalStateException",
+            format!("Lock poisoned: {}", msg),
+        ),
+        JniError::InvalidHandle(msg) => (
+            "java/lang/IllegalArgumentException",
+            format!("Invalid handle: {}", msg),
+        ),
+        JniError::RuntimeShutdown(msg) => (
+            "java/lang/IllegalStateException",
+            format!("Runtime shutdown: {}", msg),
+        ),
     };
 
     // Attempt to throw the exception, ignoring errors since we're already in error handling
