@@ -86,7 +86,7 @@
     },
     "devDependencies": {
         "@jest/globals": "29",
-        "@types/jest": "29",
+        "@types/jest": "30",
         "@types/minimist": "1",
         "@types/semver": "7",
         "@types/uuid": "10",
