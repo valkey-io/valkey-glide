@@ -15,5 +15,10 @@ public enum ListDirection {
     /**
      * Represents the option that elements should be popped from or added to the right side of a list.
      */
-    RIGHT
+    RIGHT;
+    
+    @Override
+    public String toString() {
+        return name();
+    }
 }

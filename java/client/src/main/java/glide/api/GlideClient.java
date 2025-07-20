@@ -11,9 +11,13 @@ import glide.api.models.GlideString;
 import glide.api.commands.TransactionsCommands;
 import glide.api.commands.GenericCommands;
 import glide.api.commands.ServerManagementCommands;
-import glide.api.commands.PubSubBaseCommands;
 import glide.api.commands.StandaloneServerManagement;
+import glide.api.commands.PubSubBaseCommands;
+import glide.api.commands.ScriptingAndFunctionsCommands;
 import glide.api.models.commands.scan.ScanOptions;
+import glide.api.models.commands.FlushMode;
+import glide.api.models.commands.function.FunctionRestorePolicy;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 import static glide.api.models.commands.RequestType.*;
@@ -22,7 +26,8 @@ import static glide.api.models.commands.RequestType.*;
  * Glide client for connecting to a single Valkey/Redis instance.
  * This class provides the integration test API while using the refactored core client underneath.
  */
-public class GlideClient extends BaseClient implements TransactionsCommands, GenericCommands, ServerManagementCommands, PubSubBaseCommands {
+public class GlideClient extends BaseClient implements TransactionsCommands, GenericCommands, ServerManagementCommands,
+        PubSubBaseCommands, ScriptingAndFunctionsCommands {
 
     private GlideClient(io.valkey.glide.core.client.GlideClient client) {
         super(client, createStandaloneServerManagement(client));
@@ -546,11 +551,11 @@ public class GlideClient extends BaseClient implements TransactionsCommands, Gen
         // Build command arguments with options
         java.util.List<String> args = new java.util.ArrayList<>();
         args.add(cursor);
-        
+
         if (options != null) {
             args.addAll(java.util.Arrays.asList(options.toArgs()));
         }
-        
+
         return executeCommand(Scan, args.toArray(new String[0]))
             .thenApply(result -> {
                 // Parse scan response: [new_cursor, [key1, key2, ...]]
@@ -740,7 +745,7 @@ public class GlideClient extends BaseClient implements TransactionsCommands, Gen
 
     /**
      * Flushes all the previously watched keys for a transaction.
-     * 
+     *
      * @see <a href="https://valkey.io/commands/unwatch/">valkey.io</a> for details.
      * @return <code>OK</code>.
      */
@@ -751,7 +756,7 @@ public class GlideClient extends BaseClient implements TransactionsCommands, Gen
 
     /**
      * Marks the given keys to be watched for conditional execution of a transaction.
-     * 
+     *
      * @see <a href="https://valkey.io/commands/watch/">valkey.io</a> for details.
      * @param keys The keys to watch.
      * @return <code>OK</code>.
@@ -763,7 +768,7 @@ public class GlideClient extends BaseClient implements TransactionsCommands, Gen
 
     /**
      * Marks the given keys to be watched for conditional execution of a transaction.
-     * 
+     *
      * @see <a href="https://valkey.io/commands/watch/">valkey.io</a> for details.
      * @param keys The keys to watch.
      * @return <code>OK</code>.
@@ -900,5 +905,215 @@ public class GlideClient extends BaseClient implements TransactionsCommands, Gen
     public CompletableFuture<String> info(String... sections) {
         return serverManagement.getInfo(sections)
             .thenApply(result -> (String) result);
+    }
+
+    // ScriptingAndFunctionsCommands implementation
+    @Override
+    @SuppressWarnings("unchecked")
+    public CompletableFuture<Map<String, Map<String, Map<String, Object>>>> functionStats() {
+        return executeCommand(FunctionStats)
+                .thenApply(result -> (Map<String, Map<String, Map<String, Object>>>) result);
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public CompletableFuture<Map<String, Map<GlideString, Map<GlideString, Object>>>> functionStatsBinary() {
+        return executeCommand(FunctionStats)
+                .thenApply(result -> {
+                    // Convert String keys to GlideString keys for the nested maps
+                    Map<String, Map<String, Map<String, Object>>> stringResult = (Map<String, Map<String, Map<String, Object>>>) result;
+                    Map<String, Map<GlideString, Map<GlideString, Object>>> binaryResult = new java.util.HashMap<>();
+
+                    for (Map.Entry<String, Map<String, Map<String, Object>>> nodeEntry : stringResult.entrySet()) {
+                        Map<GlideString, Map<GlideString, Object>> nodeData = new java.util.HashMap<>();
+                        for (Map.Entry<String, Map<String, Object>> dataEntry : nodeEntry.getValue().entrySet()) {
+                            Map<GlideString, Object> innerData = new java.util.HashMap<>();
+                            for (Map.Entry<String, Object> innerEntry : dataEntry.getValue().entrySet()) {
+                                innerData.put(GlideString.of(innerEntry.getKey()), innerEntry.getValue());
+                            }
+                            nodeData.put(GlideString.of(dataEntry.getKey()), innerData);
+                        }
+                        binaryResult.put(nodeEntry.getKey(), nodeData);
+                    }
+                return binaryResult;
+            });
+    }
+
+    @Override
+    public CompletableFuture<String> scriptFlush() {
+        return executeCommand(ScriptFlush)
+            .thenApply(result -> result.toString());
+    }
+
+    @Override
+    public CompletableFuture<String> scriptFlush(glide.api.models.commands.FlushMode flushMode) {
+        return executeCommand(ScriptFlush, flushMode.toString())
+            .thenApply(result -> result.toString());
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public CompletableFuture<Boolean[]> scriptExists(String[] sha1s) {
+        return executeCommand(ScriptExists, sha1s)
+            .thenApply(result -> (Boolean[]) result);
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public CompletableFuture<Boolean[]> scriptExists(GlideString[] sha1s) {
+        String[] stringArgs = new String[sha1s.length];
+        for (int i = 0; i < sha1s.length; i++) {
+            stringArgs[i] = sha1s[i].toString();
+        }
+        return executeCommand(ScriptExists, stringArgs)
+            .thenApply(result -> (Boolean[]) result);
+    }
+
+    // Function-related methods
+    @Override
+    public CompletableFuture<String> functionLoad(String libraryCode, boolean replace) {
+        if (replace) {
+            return executeCommand(FunctionLoad, "REPLACE", libraryCode)
+                .thenApply(result -> result.toString());
+        } else {
+            return executeCommand(FunctionLoad, libraryCode)
+                .thenApply(result -> result.toString());
+        }
+    }
+
+    @Override
+    public CompletableFuture<GlideString> functionLoad(GlideString libraryCode, boolean replace) {
+        if (replace) {
+            return executeCommand(FunctionLoad, "REPLACE", libraryCode.toString())
+                .thenApply(result -> GlideString.of(result.toString()));
+        } else {
+            return executeCommand(FunctionLoad, libraryCode.toString())
+                .thenApply(result -> GlideString.of(result.toString()));
+        }
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public CompletableFuture<Map<String, Object>[]> functionList(boolean withCode) {
+        if (withCode) {
+            return executeCommand(FunctionList, "WITHCODE")
+                .thenApply(result -> (Map<String, Object>[]) result);
+        } else {
+            return executeCommand(FunctionList)
+                .thenApply(result -> (Map<String, Object>[]) result);
+        }
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public CompletableFuture<Map<GlideString, Object>[]> functionListBinary(boolean withCode) {
+        // For binary version, convert the string result to GlideString keys
+        return functionList(withCode).thenApply(result -> {
+            Map<GlideString, Object>[] binaryResult = new Map[result.length];
+            for (int i = 0; i < result.length; i++) {
+                Map<GlideString, Object> binaryMap = new java.util.HashMap<>();
+                for (Map.Entry<String, Object> entry : result[i].entrySet()) {
+                    binaryMap.put(GlideString.of(entry.getKey()), entry.getValue());
+                }
+                binaryResult[i] = binaryMap;
+            }
+            return binaryResult;
+        });
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public CompletableFuture<Map<String, Object>[]> functionList(String libNamePattern, boolean withCode) {
+        if (withCode) {
+            return executeCommand(FunctionList, "LIBRARYNAME", libNamePattern, "WITHCODE")
+                .thenApply(result -> (Map<String, Object>[]) result);
+        } else {
+            return executeCommand(FunctionList, "LIBRARYNAME", libNamePattern)
+                .thenApply(result -> (Map<String, Object>[]) result);
+        }
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public CompletableFuture<Map<GlideString, Object>[]> functionListBinary(GlideString libNamePattern, boolean withCode) {
+        return functionList(libNamePattern.toString(), withCode).thenApply(result -> {
+            Map<GlideString, Object>[] binaryResult = new Map[result.length];
+            for (int i = 0; i < result.length; i++) {
+                Map<GlideString, Object> binaryMap = new java.util.HashMap<>();
+                for (Map.Entry<String, Object> entry : result[i].entrySet()) {
+                    binaryMap.put(GlideString.of(entry.getKey()), entry.getValue());
+                }
+                binaryResult[i] = binaryMap;
+            }
+            return binaryResult;
+        });
+    }
+
+    @Override
+    public CompletableFuture<String> functionFlush() {
+        return executeCommand(FunctionFlush)
+            .thenApply(result -> result.toString());
+    }
+
+    @Override
+    public CompletableFuture<String> functionFlush(FlushMode mode) {
+        return executeCommand(FunctionFlush, mode.toString())
+            .thenApply(result -> result.toString());
+    }
+
+    @Override
+    public CompletableFuture<String> functionDelete(String libName) {
+        return executeCommand(FunctionDelete, libName)
+            .thenApply(result -> result.toString());
+    }
+
+    @Override
+    public CompletableFuture<String> functionDelete(GlideString libName) {
+        return executeCommand(FunctionDelete, libName.toString())
+            .thenApply(result -> result.toString());
+    }
+
+    @Override
+    public CompletableFuture<byte[]> functionDump() {
+        return executeCommand(FunctionDump)
+            .thenApply(result -> result.toString().getBytes());
+    }
+
+    @Override
+    public CompletableFuture<String> functionRestore(byte[] payload) {
+        return executeCommand(FunctionRestore, new String(payload))
+            .thenApply(result -> result.toString());
+    }
+
+    @Override
+    public CompletableFuture<String> functionRestore(byte[] payload, glide.api.models.commands.function.FunctionRestorePolicy policy) {
+        return executeCommand(FunctionRestore, policy.toString(), new String(payload))
+            .thenApply(result -> result.toString());
+    }
+
+    @Override
+    public CompletableFuture<Object> fcall(String function) {
+        return executeCommand(FCall, function);
+    }
+
+    @Override
+    public CompletableFuture<Object> fcall(GlideString function) {
+        return executeCommand(FCall, function.toString());
+    }
+
+    @Override
+    public CompletableFuture<Object> fcallReadOnly(String function) {
+        return executeCommand(FCallReadOnly, function);
+    }
+
+    @Override
+    public CompletableFuture<Object> fcallReadOnly(GlideString function) {
+        return executeCommand(FCallReadOnly, function.toString());
+    }
+
+    @Override
+    public CompletableFuture<String> functionKill() {
+        return executeCommand(FunctionKill)
+            .thenApply(result -> result.toString());
     }
 }

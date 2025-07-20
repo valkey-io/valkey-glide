@@ -2,7 +2,86 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "build",
+            "label": "java-build-client",
+            "command": "./gradlew",
+            "type": "shell",
+            "args": [":client:compileJava"],
+            "group": "build",
+            "options": {
+                "cwd": "${workspaceFolder}/java"
+            },
+            "problemMatcher": "$gradle",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "java-build-all",
+            "command": "./gradlew",
+            "type": "shell",
+            "args": ["build"],
+            "group": "build",
+            "options": {
+                "cwd": "${workspaceFolder}/java"
+            },
+            "problemMatcher": "$gradle",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "java-test-compile",
+            "command": "./gradlew",
+            "type": "shell",
+            "args": [":integTest:compileTestJava", "--continue"],
+            "group": "test",
+            "options": {
+                "cwd": "${workspaceFolder}/java"
+            },
+            "problemMatcher": "$gradle",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "java-clean",
+            "command": "./gradlew",
+            "type": "shell",
+            "args": ["clean"],
+            "group": "build",
+            "options": {
+                "cwd": "${workspaceFolder}/java"
+            },
+            "problemMatcher": "$gradle"
+        },
+        {
+            "label": "java-check-errors",
+            "command": "./gradlew",
+            "type": "shell",
+            "args": [":integTest:compileTestJava", "--continue"],
+            "group": "test",
+            "options": {
+                "cwd": "${workspaceFolder}/java"
+            },
+            "problemMatcher": "$gradle",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "csharp-build",
             "command": "dotnet",
             "type": "process",
             "args": [
@@ -10,30 +89,6 @@
                 "${workspaceFolder}/csharp/tests/tests.csproj",
                 "/property:GenerateFullPaths=true",
                 "/consoleloggerparameters:NoSummary"
-            ],
-            "problemMatcher": "$msCompile"
-        },
-        {
-            "label": "publish",
-            "command": "dotnet",
-            "type": "process",
-            "args": [
-                "publish",
-                "${workspaceFolder}/csharp/tests/tests.csproj",
-                "/property:GenerateFullPaths=true",
-                "/consoleloggerparameters:NoSummary"
-            ],
-            "problemMatcher": "$msCompile"
-        },
-        {
-            "label": "watch",
-            "command": "dotnet",
-            "type": "process",
-            "args": [
-                "watch",
-                "run",
-                "--project",
-                "${workspaceFolder}/csharp/tests/tests.csproj"
             ],
             "problemMatcher": "$msCompile"
         }

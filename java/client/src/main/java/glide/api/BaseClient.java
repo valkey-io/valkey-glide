@@ -72,14 +72,14 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         for (String[] array : arrays) {
             totalLength += array.length;
         }
-        
+
         String[] result = new String[totalLength];
         int currentIndex = 0;
         for (String[] array : arrays) {
             System.arraycopy(array, 0, result, currentIndex, array.length);
             currentIndex += array.length;
         }
-        
+
         return result;
     }
 
@@ -1017,7 +1017,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         String commandName = args[0];
         String[] commandArgs = new String[args.length - 1];
         System.arraycopy(args, 1, commandArgs, 0, args.length - 1);
-        
+
         return executeRawCommand(commandName, commandArgs);
     }
 
@@ -1037,7 +1037,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
                 String[] fullCommand = new String[args.length + 1];
                 fullCommand[0] = commandName;
                 System.arraycopy(args, 0, fullCommand, 1, args.length);
-                
+
                 // Use the JNI client's executeRawCommand method
                 return client.executeRawCommand(commandName, args);
             } catch (Exception e) {
@@ -1078,7 +1078,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         return CompletableFuture.supplyAsync(() -> {
             try {
                 List<Command> commands = batch.getCommands();
-                
+
                 if (batch.isAtomic()) {
                     // Execute as atomic transaction using MULTI/EXEC
                     return executeAtomicBatch(commands, raiseOnError);
@@ -1102,7 +1102,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
     private Object[] executeAtomicBatch(List<Command> commands, boolean raiseOnError) throws Exception {
         return executeAtomicBatchWithOptions(commands, raiseOnError, null);
     }
-    
+
     /**
      * Execute commands as an atomic transaction using MULTI/EXEC with options.
      * Uses optimized pipeline execution for better performance.
@@ -1111,13 +1111,13 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         try {
             // Convert List<Command> to Command[]
             Command[] commandArray = commands.toArray(new Command[0]);
-            
+
             // Use the optimized batch execution with atomic flag and options
-            CompletableFuture<Object[]> result = options != null 
+            CompletableFuture<Object[]> result = options != null
                 ? client.executeBatchWithClusterOptions(commandArray, options, true)
                 : client.executeTransaction(commandArray);
             Object[] results = result.get();
-            
+
             return results != null ? results : new Object[0];
         } catch (Exception e) {
             if (raiseOnError) {
@@ -1134,7 +1134,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
     private Object[] executeNonAtomicBatch(List<Command> commands, boolean raiseOnError) throws Exception {
         return executeNonAtomicBatchWithOptions(commands, raiseOnError, null);
     }
-    
+
     /**
      * Execute commands as a pipeline (non-atomic) with options.
      * Uses optimized bulk execution for significant performance improvement.
@@ -1143,13 +1143,13 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         try {
             // Convert List<Command> to Command[]
             Command[] commandArray = commands.toArray(new Command[0]);
-            
+
             // Use the optimized batch execution (non-atomic) with options
-            CompletableFuture<Object[]> result = options != null 
+            CompletableFuture<Object[]> result = options != null
                 ? client.executeBatchWithClusterOptions(commandArray, options, false)
                 : client.executeBatch(commandArray);
             Object[] results = result.get();
-            
+
             return results != null ? results : new Object[0];
         } catch (Exception e) {
             if (raiseOnError) {
@@ -2095,7 +2095,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         // Try EVALSHA first, fall back to EVAL if script not loaded
         return evalsha(script.getHash(), keys, args)
             .handle((result, throwable) -> {
-                if (throwable != null && throwable.getMessage() != null && 
+                if (throwable != null && throwable.getMessage() != null &&
                     throwable.getMessage().contains("NOSCRIPT")) {
                     // Script not loaded, use EVAL
                     return eval(script.getCode(), keys, args);
@@ -2567,7 +2567,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
 
     /**
      * Reset server statistics.
-     * 
+     *
      * @return A CompletableFuture containing "OK" if successful
      */
     public CompletableFuture<String> configResetStat() {
@@ -2576,7 +2576,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
 
     /**
      * Display a piece of generative computer art and the Valkey version.
-     * 
+     *
      * @return A CompletableFuture containing the art and version
      */
     public CompletableFuture<String> lolwut() {
@@ -2586,7 +2586,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
 
     /**
      * Display a piece of generative computer art and the Valkey version.
-     * 
+     *
      * @param parameters Additional parameters for output customization
      * @return A CompletableFuture containing the art and version
      */
@@ -2601,7 +2601,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
 
     /**
      * Display a piece of generative computer art and the Valkey version.
-     * 
+     *
      * @param version Version of computer art to generate
      * @return A CompletableFuture containing the art and version
      */
@@ -2612,7 +2612,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
 
     /**
      * Display a piece of generative computer art and the Valkey version.
-     * 
+     *
      * @param version Version of computer art to generate
      * @param parameters Additional parameters for output customization
      * @return A CompletableFuture containing the art and version
@@ -2642,8 +2642,8 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         stats.put("requests_failed", 0);
         stats.put("total_commands_implemented", 350); // Updated command count
         stats.put("command_categories", java.util.Arrays.asList(
-            "string", "hash", "list", "set", "sorted_set", 
-            "key_management", "server_management", "scripting", 
+            "string", "hash", "list", "set", "sorted_set",
+            "key_management", "server_management", "scripting",
             "utility", "client_management", "object_inspection"
         ));
         stats.put("api_version", "2.1");
@@ -2652,7 +2652,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
     }
 
     // ==================== HASH COMMANDS ====================
-    
+
     /**
      * Sets field in the hash stored at key to value, only if field does not yet exist.
      */
@@ -4636,7 +4636,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
     }
 
     // ============================================================================
-    // Function Commands  
+    // Function Commands
     // ============================================================================
 
     /**
@@ -4747,15 +4747,6 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
             args.add(libraryName);
         }
         return executeCommand(FunctionList, args.toArray(new String[0]));
-    }
-
-    /**
-     * GET function statistics.
-     *
-     * @return A CompletableFuture containing function statistics
-     */
-    public CompletableFuture<Object> functionStats() {
-        return executeCommand(FunctionStats);
     }
 
     /**
@@ -4887,23 +4878,23 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         List<String> args = new ArrayList<>();
         args.add(destination);
         args.add(source);
-        
+
         // Add origin arguments using toArgs() method
         args.addAll(Arrays.asList(origin.toArgs()));
-        
+
         // Add shape arguments using toArgs() method
         args.addAll(Arrays.asList(shape.toArgs()));
-        
+
         // Add store options using toArgs() method
         if (storeOptions != null) {
             args.addAll(Arrays.asList(storeOptions.toArgs()));
         }
-        
+
         // Add result options using toArgs() method
         if (resultOptions != null) {
             args.addAll(Arrays.asList(resultOptions.toArgs()));
         }
-        
+
         return executeCommand(GeoSearchStore, args.toArray(new String[0]))
                 .thenApply(result -> result instanceof Long ? (Long) result : Long.parseLong(result.toString()));
     }
@@ -4964,7 +4955,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
     /**
      * Update the connection password for reconnection.
      *
-     * @param password The new password to use  
+     * @param password The new password to use
      * @return A CompletableFuture containing "OK" on success
      */
     public CompletableFuture<String> updateConnectionPassword(String password) {
@@ -4988,7 +4979,7 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
         String[] args = options.getArgs() != null ? options.getArgs().toArray(new String[0]) : new String[0];
         return invokeScript(script, keys, args);
     }
-    
+
     public CompletableFuture<Object> invokeScript(Script script, ScriptOptionsGlideString options) {
         // Convert GlideString options to String options and delegate
         List<String> keys = new ArrayList<>();
@@ -4997,19 +4988,19 @@ public abstract class BaseClient implements StringBaseCommands, HashBaseCommands
                 keys.add(key.toString());
             }
         }
-        
-        List<String> args = new ArrayList<>(); 
+
+        List<String> args = new ArrayList<>();
         if (options.getArgs() != null) {
             for (glide.api.models.GlideString arg : options.getArgs()) {
                 args.add(arg.toString());
             }
         }
-        
+
         ScriptOptions stringOptions = ScriptOptions.builder()
             .keys(keys)
             .args(args)
             .build();
-            
+
         return invokeScript(script, stringOptions);
     }
 
