@@ -80,7 +80,7 @@ jobs:
         if: github.repository_owner == 'valkey-io'
         name: Publish packages to PyPi
         runs-on: ${{ matrix.build.RUNNER }}
-        timeout-minutes: 35
+        timeout-minutes: 60
         strategy:
             fail-fast: false
             matrix:
@@ -178,6 +178,13 @@ jobs:
                   ln -sf .gitignore glide-sync/.gitignore
                   ln -sf .gitignore glide-async/.gitignore
 
+            - name: Copy README file into package directories
+              working-directory: ./python
+              run: |
+                  # Copy the README file into each package directory to include it in the distributions
+                  cp README.md glide-sync/README.md
+                  cp README.md glide-async/README.md
+
             - name: Setup PyPy for macOS
               if: startsWith(matrix.build.NAMED_OS, 'darwin')
               run: |
@@ -226,94 +233,95 @@ jobs:
                   sudo chmod -R a+rx /opt/pypy*/lib/*.dylib
 
             ### ASYNC CLIENT ###
-            # - name: Prepare the async client for deployment, vendor the glide-shared code
-            #   working-directory: ./python
-            #   run: cp -r glide-shared/glide_shared glide-async/python
 
-            # - name: Build Python Async client wheels (linux)
-            #   if: startsWith(matrix.build.NAMED_OS, 'linux')
-            #   uses: PyO3/maturin-action@v1
-            #   with:
-            #       working-directory: ./python/glide-async
-            #       target: ${{ matrix.build.TARGET }}
-            #       args: --release --strip --out wheels -i ${{ (github.event_name != 'pull_request' && github.event_name != 'workflow_dispatch') && 'python3.9 python3.10 python3.11 python3.12 python3.13 pypy3.9 pypy3.10 pypy3.11' || 'python3.12' }}
-            #       manylinux: auto
-            #       container: ${{ matrix.build.CONTAINER != '' && matrix.build.CONTAINER || '2014' }}
-            #       before-script-linux: |
-            #           # Install protobuf compiler
-            #           if [[ $(`which apt`) != '' ]]
-            #           then
-            #             echo "installing unzip and curl"
-            #             apt-get update
-            #             apt install unzip curl python3.13 pypy3 -y
-            #           fi
-            #           PB_REL="https://github.com/protocolbuffers/protobuf/releases"
-            #           ARCH=`uname -p`
-            #           if [[ $ARCH == 'x86_64' ]]; then
-            #             PROTOC_ARCH="x86_64"
-            #           elif [[ $ARCH == 'aarch64' ]]; then
-            #             PROTOC_ARCH="aarch_64"
-            #             export CC_aarch64_unknown_linux_gnu=gcc
-            #             export CFLAGS_aarch64_unknown_linux_gnu="-march=armv8-a"
-            #           else
-            #             echo "Running on unsupported architecture: $ARCH. Expected one of: ['x86_64', 'aarch64']"
-            #             exit 1
-            #           fi
-            #           curl -LO $PB_REL/download/v3.20.3/protoc-3.20.3-linux-${PROTOC_ARCH}.zip
-            #           unzip protoc-3.20.3-linux-${PROTOC_ARCH}.zip -d $HOME/.local
-            #           export PATH="$PATH:$HOME/.local/bin"
+            - name: Prepare the async client for deployment, vendor the glide-shared code
+              working-directory: ./python
+              run: cp -r glide-shared/glide_shared glide-async/python
 
-            #           # Install PyPy
-            #           if [[ "$ARCH" == "x86_64" ]]; then
-            #             PYPY_VERSION_3_11=pypy3.11-v7.3.19-linux64
-            #             PYPY_VERSION_3_10=pypy3.10-v7.3.19-linux64
-            #             PYPY_VERSION_3_9=pypy3.9-v7.3.16-linux64
+            - name: Build Python Async client wheels (linux)
+              if: startsWith(matrix.build.NAMED_OS, 'linux')
+              uses: PyO3/maturin-action@v1
+              with:
+                  working-directory: ./python/glide-async
+                  target: ${{ matrix.build.TARGET }}
+                  args: --release --strip --out wheels -i ${{ (github.event_name != 'pull_request' && github.event_name != 'workflow_dispatch') && 'python3.9 python3.10 python3.11 python3.12 python3.13 pypy3.9 pypy3.10 pypy3.11' || 'python3.12' }}
+                  manylinux: auto
+                  container: ${{ matrix.build.CONTAINER != '' && matrix.build.CONTAINER || '2014' }}
+                  before-script-linux: |
+                      # Install protobuf compiler
+                      if [[ $(`which apt`) != '' ]]
+                      then
+                        echo "installing unzip and curl"
+                        apt-get update
+                        apt install unzip curl python3.13 pypy3 -y
+                      fi
+                      PB_REL="https://github.com/protocolbuffers/protobuf/releases"
+                      ARCH=`uname -p`
+                      if [[ $ARCH == 'x86_64' ]]; then
+                        PROTOC_ARCH="x86_64"
+                      elif [[ $ARCH == 'aarch64' ]]; then
+                        PROTOC_ARCH="aarch_64"
+                        export CC_aarch64_unknown_linux_gnu=gcc
+                        export CFLAGS_aarch64_unknown_linux_gnu="-march=armv8-a"
+                      else
+                        echo "Running on unsupported architecture: $ARCH. Expected one of: ['x86_64', 'aarch64']"
+                        exit 1
+                      fi
+                      curl -LO $PB_REL/download/v3.20.3/protoc-3.20.3-linux-${PROTOC_ARCH}.zip
+                      unzip protoc-3.20.3-linux-${PROTOC_ARCH}.zip -d $HOME/.local
+                      export PATH="$PATH:$HOME/.local/bin"
 
-            #             echo "Downloading PyPy 3.9 for x86_64"
-            #             curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_9}.tar.bz2"
-            #             tar -xf "${PYPY_VERSION_3_9}.tar.bz2"  --exclude="*/bin/python*" -C /opt
+                      # Install PyPy
+                      if [[ "$ARCH" == "x86_64" ]]; then
+                        PYPY_VERSION_3_11=pypy3.11-v7.3.19-linux64
+                        PYPY_VERSION_3_10=pypy3.10-v7.3.19-linux64
+                        PYPY_VERSION_3_9=pypy3.9-v7.3.16-linux64
 
-            #             echo "Downloading PyPy 3.10 for x86_64"
-            #             curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_10}.tar.bz2"
-            #             tar -xf "${PYPY_VERSION_3_10}.tar.bz2" --exclude="*/bin/python*" -C /opt
+                        echo "Downloading PyPy 3.9 for x86_64"
+                        curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_9}.tar.bz2"
+                        tar -xf "${PYPY_VERSION_3_9}.tar.bz2"  --exclude="*/bin/python*" -C /opt
 
-            #             echo "Downloading PyPy 3.11 for x86_64"
-            #             curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
-            #             tar -xf "${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
+                        echo "Downloading PyPy 3.10 for x86_64"
+                        curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_10}.tar.bz2"
+                        tar -xf "${PYPY_VERSION_3_10}.tar.bz2" --exclude="*/bin/python*" -C /opt
 
-            #             export PATH="/opt/${PYPY_VERSION_3_11}/bin:/opt/${PYPY_VERSION_3_10}/bin:/opt/${PYPY_VERSION_3_9}/bin:$PATH"
+                        echo "Downloading PyPy 3.11 for x86_64"
+                        curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
+                        tar -xf "${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
 
-            #           elif [[ "$ARCH" == "aarch64" ]]; then
-            #             PYPY_VERSION_3_11=pypy3.11-v7.3.19-aarch64
-            #             PYPY_VERSION_3_10=pypy3.10-v7.3.19-aarch64
-            #             PYPY_VERSION_3_9=pypy3.9-v7.3.16-aarch64
+                        export PATH="/opt/${PYPY_VERSION_3_11}/bin:/opt/${PYPY_VERSION_3_10}/bin:/opt/${PYPY_VERSION_3_9}/bin:$PATH"
 
-            #             echo "Downloading PyPy 3.9 for aarch64"
-            #             curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_9}.tar.bz2"
-            #             tar -xf "${PYPY_VERSION_3_9}.tar.bz2" --exclude="*/bin/python*" -C /opt
+                      elif [[ "$ARCH" == "aarch64" ]]; then
+                        PYPY_VERSION_3_11=pypy3.11-v7.3.19-aarch64
+                        PYPY_VERSION_3_10=pypy3.10-v7.3.19-aarch64
+                        PYPY_VERSION_3_9=pypy3.9-v7.3.16-aarch64
 
-            #             echo "Downloading PyPy 3.10 for aarch64"
-            #             curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_10}.tar.bz2"
-            #             tar -xf "${PYPY_VERSION_3_10}.tar.bz2" --exclude="*/bin/python*" -C /opt
+                        echo "Downloading PyPy 3.9 for aarch64"
+                        curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_9}.tar.bz2"
+                        tar -xf "${PYPY_VERSION_3_9}.tar.bz2" --exclude="*/bin/python*" -C /opt
 
-            #             echo "Downloading PyPy 3.11 for aarch64"
-            #             curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
-            #             tar -xf "${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
+                        echo "Downloading PyPy 3.10 for aarch64"
+                        curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_10}.tar.bz2"
+                        tar -xf "${PYPY_VERSION_3_10}.tar.bz2" --exclude="*/bin/python*" -C /opt
 
-            #             export PATH="/opt/${PYPY_VERSION_3_11}/bin:/opt/${PYPY_VERSION_3_10}/bin:/opt/${PYPY_VERSION_3_9}/bin:$PATH"
-            #           else
-            #             echo "Running on unsupported architecture: $ARCH. Expected one of: ['x86_64', 'aarch64']"
-            #             exit 1
-            #           fi
+                        echo "Downloading PyPy 3.11 for aarch64"
+                        curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
+                        tar -xf "${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
 
-            # - name: Build Python Async client wheels (macos)
-            #   if: startsWith(matrix.build.NAMED_OS, 'darwin')
-            #   uses: PyO3/maturin-action@v1
-            #   with:
-            #       maturin-version: 0.14.17
-            #       working-directory: ./python/glide-async
-            #       target: ${{ matrix.build.TARGET }}
-            #       args: --release --strip --out wheels -i  ${{ (github.event_name != 'pull_request' && github.event_name != 'workflow_dispatch') && 'python3.9 python3.10 python3.11 python3.12 python3.13 pypy3.9 pypy3.10 pypy3.11' || 'python3.12' }}
+                        export PATH="/opt/${PYPY_VERSION_3_11}/bin:/opt/${PYPY_VERSION_3_10}/bin:/opt/${PYPY_VERSION_3_9}/bin:$PATH"
+                      else
+                        echo "Running on unsupported architecture: $ARCH. Expected one of: ['x86_64', 'aarch64']"
+                        exit 1
+                      fi
+
+            - name: Build Python Async client wheels (macos)
+              if: startsWith(matrix.build.NAMED_OS, 'darwin')
+              uses: PyO3/maturin-action@v1
+              with:
+                  maturin-version: 0.14.17
+                  working-directory: ./python/glide-async
+                  target: ${{ matrix.build.TARGET }}
+                  args: --release --strip --out wheels -i  ${{ (github.event_name != 'pull_request' && github.event_name != 'workflow_dispatch') && 'python3.9 python3.10 python3.11 python3.12 python3.13 pypy3.9 pypy3.10 pypy3.11' || 'python3.12' }}
 
             ### SYNC CLIENT ###
 
@@ -349,13 +357,13 @@ jobs:
 
             ### UPLOAD WHEELS ###
 
-            # - name: Upload Python Async client wheels
-            #   if: github.event_name != 'pull_request'
-            #   uses: actions/upload-artifact@v4
-            #   with:
-            #       name: wheels-${{ matrix.build.TARGET }}-async
-            #       path: python/glide-async/wheels
-            #       if-no-files-found: error
+            - name: Upload Python Async client wheels
+              if: github.event_name != 'pull_request'
+              uses: actions/upload-artifact@v4
+              with:
+                  name: wheels-${{ matrix.build.TARGET }}-async
+                  path: python/glide-async/wheels
+                  if-no-files-found: error
 
             - name: Upload Python Sync client wheels
               if: github.event_name != 'pull_request'
@@ -393,43 +401,44 @@ jobs:
 
             ### ASYNC CLIENT ###
 
-            # - name: Async client - Build source distributions
-            #   uses: PyO3/maturin-action@v1
-            #   with:
-            #       working-directory: ./python/glide-async
-            #       command: sdist
-            #       args: --out sdist
+            - name: Async client - Build source distributions
+              uses: PyO3/maturin-action@v1
+              with:
+                  working-directory: ./python/glide-async
+                  command: sdist
+                  args: --out sdist
 
-            # - name: Async client - Download binaries
-            #   uses: actions/download-artifact@v4
-            #   with:
-            #       path: python/glide-async/wheels
-            #       merge-multiple: true
+            - name: Async client - Download binaries
+              uses: actions/download-artifact@v4
+              with:
+                  path: python/glide-async/wheels
+                  merge-multiple: true
 
-            # - name: Async client - Publish binaries and source to PyPI
-            #   if: ${{ github.event_name == 'push' || inputs.publish == true }}
-            #   uses: PyO3/maturin-action@v1
-            #   env:
-            #       MATURIN_PYPI_TOKEN: ${{ secrets.LIVEPYPI_API_TOKEN }}
-            #       MATURIN_REPOSITORY: pypi
-            #   with:
-            #       command: upload
-            #       args: --skip-existing python/glide-async/wheels/* python/glide-async/sdist/*
+            - name: Async client - Publish binaries and source to PyPI
+              if: ${{ github.event_name == 'push' || inputs.publish == true }}
+              uses: PyO3/maturin-action@v1
+              env:
+                  MATURIN_PYPI_TOKEN: ${{ secrets.LIVEPYPI_API_TOKEN }}
+                  MATURIN_REPOSITORY: pypi
+              with:
+                  command: upload
+                  args: --skip-existing python/glide-async/wheels/* python/glide-async/sdist/*
 
-            # - name: Async client - Upload built wheels and sdist as GitHub artifacts
-            #   uses: actions/upload-artifact@v4
-            #   with:
-            #       name: python-async-packages
-            #       path: |
-            #           python/glide-async/wheels/*.whl
-            #           python/glide-async/dist/*.tar.gz
+            - name: Async client - Upload built wheels and sdist as GitHub artifacts
+              uses: actions/upload-artifact@v4
+              with:
+                  name: python-async-packages
+                  path: |
+                      python/glide-async/wheels/*.whl
+                      python/glide-async/dist/*.tar.gz
 
             ### SYNC CLIENT ###
 
-            - name: Install build & twine
+            - name: Install build and release tools
               run: |
                   python3 -m pip install --upgrade pip
                   python3 -m pip install build twine
+                  python3 -m pip install -U packaging
 
             - name: Sync client - Build source distributions
               working-directory: ./python/glide-sync
@@ -550,7 +559,7 @@ jobs:
                   PYPI_VERSION="${PYPI_VERSION//-rc/rc}"
                   echo "PYPI_VERSION=${PYPI_VERSION}" >> $GITHUB_ENV
 
-            - name: Run the tests
+            - name: Run the Async Client tests
               shell: bash
               working-directory: ./utils/release-candidate-testing/python
               run: |
@@ -564,7 +573,7 @@ jobs:
                   fi
                   python rc_test.py
 
-            - name: Run the tests with PyPy
+            - name: Run the Async Clients tests with PyPy
               shell: bash
               working-directory: ./utils/release-candidate-testing/python
               run: |
@@ -577,6 +586,34 @@ jobs:
                     pip install valkey-glide
                   fi
                   pypy3 rc_test.py
+
+            - name: Run the Sync Client tests
+              shell: bash
+              working-directory: ./utils/release-candidate-testing/python
+              run: |
+                  python -m venv venv
+                  source venv/bin/activate
+                  pip install -U pip
+                  if [[ "${{ env.PIP_PRE }}" == "true" ]]; then
+                    pip install "valkey-glide-sync==${{ env.PYPI_VERSION }}"
+                  else
+                    pip install valkey-glide-sync
+                  fi
+                  python sync_rc_test.py
+
+            - name: Run the Sync Client tests with PyPy
+              shell: bash
+              working-directory: ./utils/release-candidate-testing/python
+              run: |
+                  pypy3 -m venv pypy_venv
+                  source pypy_venv/bin/activate
+                  pip install -U pip
+                  if [[ "${{ env.PIP_PRE }}" == "true" ]]; then
+                    pip install "valkey-glide-sync==${{ env.PYPI_VERSION }}"
+                  else
+                    pip install valkey-glide-sync
+                  fi
+                  pypy3 sync_rc_test.py
 
             # Reset the repository to make sure we get the clean checkout of the action later in other actions.
             # It is not required since in other actions we are cleaning before the action, but it is a good practice to do it here as well.

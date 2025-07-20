@@ -3,6 +3,7 @@
 
 import argparse
 import os
+import platform
 import subprocess
 import sys
 from pathlib import Path
@@ -35,6 +36,28 @@ FFI_OUTPUT_DIR_RELEASE = FFI_DIR / "target" / "release"
 FFI_TARGET_LIB_NAME = "libglide_ffi.so"
 GLIDE_SYNC_NAME = "GlidePySync"
 GLIDE_ASYNC_NAME = "GlidePy"
+
+
+def find_libglide_ffi(lib_dir: Path) -> Path:
+    """
+    Searches for the correct shared library file depending on the OS.
+    """
+    possible_names = {
+        "Linux": "libglide_ffi.so",
+        "Darwin": "libglide_ffi.dylib",
+        "Windows": "glide_ffi.dll",
+    }
+
+    system = platform.system()
+    lib_name = possible_names.get(system)
+    if not lib_name:
+        raise RuntimeError(f"Unsupported platform: {system}")
+
+    lib_path = lib_dir / lib_name
+    if not lib_path.exists():
+        raise FileNotFoundError(f"Could not find {lib_name} in {lib_dir}")
+
+    return lib_path
 
 
 def set_venv_paths(custom_path: Optional[str] = None):
@@ -135,7 +158,7 @@ def generate_protobuf_files() -> None:
     if not mypy_plugin_path.exists():
         print("❌ Error: protoc-gen-mypy not found in venv.")
         print(
-            f"Hint: Try `pip install --requirement {PYTHON_DIR}/dev_requirements.txt`"
+            f"Hint: Try 'pip install --requirement {PYTHON_DIR}/dev_requirements.txt'"
         )
         sys.exit(1)
 
@@ -298,29 +321,40 @@ def build_sync_client(
     if wheel:
         return build_sync_client_wheel(env)
 
+    install_glide_shared(env)
+    env.update(
+        {  # Update it with your GLIDE variables
+            "GLIDE_NAME": GLIDE_SYNC_NAME,
+            "GLIDE_VERSION": glide_version,
+        }
+    )
     # Build the FFI library
-    build_args = ["pip", "install", "."]
+    build_args = ["cargo", "build"]
+    if release:
+        build_args += ["--release", "--strip"]
 
     run_command(
         build_args,
-        cwd=GLIDE_SYNC_DIR,
-        label="build and install GLIDE Python Sync client",
+        cwd=FFI_DIR,
+        label="Build the FFI rust library",
         env=env,
     )
 
-    # Locate the output .so file
-    so_path = (
-        FFI_OUTPUT_DIR_RELEASE / FFI_TARGET_LIB_NAME
+    # Locate the FFI library output file
+    libglide_ffi_path = (
+        find_libglide_ffi(FFI_OUTPUT_DIR_RELEASE)
         if release
-        else FFI_OUTPUT_DIR_DEBUG / FFI_TARGET_LIB_NAME
+        else find_libglide_ffi(FFI_OUTPUT_DIR_DEBUG)
     )
-    if not so_path.exists():
-        raise FileNotFoundError(f"Expected shared object not found at {so_path}")
+    if not libglide_ffi_path.exists():
+        raise FileNotFoundError(
+            f"Expected shared object not found at {libglide_ffi_path}"
+        )
 
     # Copy to glide_sync package dir
     dest_path = GLIDE_SYNC_DIR / "glide_sync" / FFI_TARGET_LIB_NAME
-    print(f"[INFO] Copying: {so_path} to: {dest_path}")
-    copy2(so_path, dest_path)
+    print(f"[INFO] Copying: {libglide_ffi_path} to: {dest_path}")
+    copy2(libglide_ffi_path, dest_path)
 
     print(f"[INFO] Installing glide-sync: {GLIDE_SYNC_DIR}")
     run_command(
@@ -366,7 +400,7 @@ def activate_venv(no_cache: bool = False) -> Dict[Any, Any]:
     env = os.environ.copy()
     env["VIRTUAL_ENV"] = str(venv_ctx["venv_dir"])
     env_path = env["PATH"]
-    env["PATH"] = f"{venv_ctx['venv_bin_dir']}:{env_path}"
+    env["PATH"] = f"{venv_ctx['venv_bin_dir']}:{env_path}"  # noqa: E231
     return env
 
 

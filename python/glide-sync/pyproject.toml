@@ -25,7 +25,6 @@ requires = [
     "wheel", 
     "cffi>=1.0.0"
 ]
-build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 package-dir = {"" = "./"}
@@ -57,8 +56,8 @@ if [[ "$OS" == "darwin" ]]; then
 
     if command -v brew &>/dev/null; then
         echo "Using Homebrew to install protobuf"
-        brew install protobuf@3.20 || true
-        brew link protobuf@3.20 --force || true
+        brew install protobuf || true
+        brew link protobuf --force || true
         exit 0
     fi
 

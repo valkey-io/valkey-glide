@@ -322,21 +322,23 @@ This section explains how the `valkey-glide` (async client) and `valkey-glide-sy
     ```
 ### Sync Client (`valkey-glide-sync`)
 
-1. **Source distribution (sdist)**  
-   If a source distribution is required, we copy the Rust crates (`ffi`, `glide-core`, and `logger_core`) into the `glide-sync` directory.  
-   This is necessary because `setup.py` must include these folders inside the sdist so that the package can be built from source on the target machine (e.g., on PyPI or in a CI environment).
+1. **Vendoring dependencies (for both sdist and wheel)**  
+   During the build process (for both source distributions and wheels), we vendor (copy) all required Rust crates and Python modules into the `glide-sync` directory.
+   This includes:
+   - ffi
+   - glide-core
+   - logger_core
+   - glide_shared (Python module)
 
-2. **Wheel-only builds**  
-   If a wheel is being built (e.g., via `python -m build --wheel`), we do **not** copy the Rust crates.  
-   Instead, we create a symbolic link (`symlink`) from `valkey-glide/python/glide-sync/ffi/` to the root `valkey-glide/ffi` directory.  
-   This ensures that Cargo can still find the source files, while avoiding duplication or unnecessary copying.
+   Vendoring ensures that all dependencies are self-contained within the package at build time, which is required for reproducible builds and compatibility with tools like cibuildwheel.
 
-3. **Build steps**  
+2. **Build steps**
+   - The necessary dependencies are vendored into the `glide-sync` directory before the build starts.
    - We run `cargo build` in the `glide-sync/ffi/` folder to compile the Rust FFI library.
-   - The resulting shared object file (`libglide_ffi.so`) is copied into the `glide-sync/glide_sync/` directory.
-   - We then use the `setup.py` script to build the Python package, either as a wheel or as an sdist.
+   - The resulting shared object file (e.g. `libglide_ffi.so`) is copied into the `glide-sync/glide_sync/` directory.
+   - We then build the Python package, either as a wheel or as an sdist.
 
-4. **Multiplatform packaging for PyPI**  
+3. **Multiplatform packaging for PyPI**  
    To support building wheels for multiple platforms (Linux, macOS, and different Python versions), we use the [`cibuildwheel`](https://github.com/pypa/cibuildwheel) tool.  
    This tool installs all required Python versions and runs the build inside isolated Docker containers (e.g., manylinux2014).  
    Because the sync client depends on external Rust code (`glide-core`, `ffi`, `logger_core`), we run `cibuildwheel` from the **project root** and specify `python/glide-sync` as the build target.  

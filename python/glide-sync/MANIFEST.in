@@ -1,4 +1,5 @@
-# Ensure ffi and glide-core and logger are included
+include README.md
+# Ensure ffi, glide-core and logger are included
 recursive-include ffi *
 recursive-include glide-core *
 recursive-include logger_core *

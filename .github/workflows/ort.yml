@@ -122,11 +122,10 @@ jobs:
                   python -m pip install --upgrade pip
                   pip install git+https://github.com/nexB/python-inspector
 
-            - name: Install dev requirments
+            - name: Install dev requirements
               working-directory: ./python
               run: |
                   python -m pip install -r dev_requirements.txt
-                  pip install git+https://github.com/nexB/python-inspector
 
             - name: Run ORT tools for Python
               uses: ./.github/workflows/run-ort-tools
