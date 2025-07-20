@@ -13,7 +13,6 @@ mod cluster_client_tests {
     use glide_core::connection_request::{
         self, PubSubChannelsOrPatterns, PubSubSubscriptions, ReadFrom,
     };
-    use redis::ProtocolVersion as RedisProtocolVersion;
     use redis::cluster_routing::{
         MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
     };
@@ -323,8 +322,13 @@ mod cluster_client_tests {
                 for (_node_addr_value, node_result_value) in node_results_map {
                     match node_result_value {
                         Value::BulkString(bytes) => {
+                            // RESP2 response
                             let s = String::from_utf8_lossy(&bytes);
                             total_clients += s.lines().count();
+                        }
+                        Value::VerbatimString { text, format: _ } => {
+                            // RESP3 response
+                            total_clients += text.lines().count();
                         }
                         _ => {
                             logger_core::log_warn(
@@ -365,8 +369,8 @@ mod cluster_client_tests {
     #[serial_test::serial]
     #[timeout(LONG_CLUSTER_TEST_TIMEOUT)]
     fn test_lazy_cluster_connection_establishes_on_first_command(
-        #[values(RedisProtocolVersion::RESP2, RedisProtocolVersion::RESP3)]
-        protocol: RedisProtocolVersion,
+        #[values(GlideProtocolVersion::RESP2, GlideProtocolVersion::RESP3)]
+        protocol: GlideProtocolVersion,
     ) {
         block_on_all(async move {
             const USE_TLS: bool = false;
@@ -375,20 +379,19 @@ mod cluster_client_tests {
             // and the monitoring client.
             let base_config_for_dedicated_cluster = TestConfiguration {
                 use_tls: USE_TLS,
-                protocol: match protocol {
-                    RedisProtocolVersion::RESP2 => GlideProtocolVersion::RESP2,
-                    RedisProtocolVersion::RESP3 => GlideProtocolVersion::RESP3,
-                },
+                protocol,
                 shared_server: false, // <<<< This ensures a dedicated cluster is made
                 cluster_mode: ClusterMode::Enabled,
                 lazy_connect: false, // Monitoring client connects eagerly
+                client_name: Some("base_config".into()),
                 ..Default::default()
             };
 
             // 2. Setup the dedicated cluster (Cluster A) and the monitoring client.
             // `monitoring_test_basics` now owns Cluster A.
-            let monitoring_test_basics =
-                setup_test_basics_internal(base_config_for_dedicated_cluster.clone()).await;
+            let mut monitoring_client_config = base_config_for_dedicated_cluster.clone();
+            monitoring_client_config.client_name = Some("monitoring_client".into());
+            let monitoring_test_basics = setup_test_basics_internal(monitoring_client_config).await;
             let mut monitoring_client = monitoring_test_basics.client;
 
             // Get addresses from the DEDICATED Cluster A
@@ -411,8 +414,9 @@ mod cluster_client_tests {
             // 4. Manually create the ConnectionRequest for the lazy client,
             //    pointing to the DEDICATED Cluster A.
             //    We use the `base_config_for_dedicated_cluster` for other settings.
-            let mut lazy_client_config = base_config_for_dedicated_cluster.clone();
+            let mut lazy_client_config = base_config_for_dedicated_cluster;
             lazy_client_config.lazy_connect = true;
+            lazy_client_config.client_name = Some("lazy_config".into());
 
             // Create connection request directly with our dedicated cluster addresses
             let lazy_connection_request = utilities::create_connection_request(
