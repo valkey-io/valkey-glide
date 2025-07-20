@@ -9,11 +9,13 @@
 //!
 //! ARCHITECTURE PRINCIPLE: Eliminate duplication, leverage glide-core directly
 
-use glide_core::client::Client;
+use glide_core::client::{
+    AuthenticationInfo, Client, ConnectionRequest, ConnectionRetryStrategy, NodeAddress, TlsMode,
+};
 use redis::cluster_routing::RoutingInfo;
 use redis::{Cmd, Value};
 
-use jni::objects::{JClass, JObject, JString};
+use jni::objects::{JClass, JObject, JObjectArray, JString};
 use jni::sys::{jlong, jobject, jstring};
 use jni::JNIEnv;
 use std::collections::HashMap;
@@ -58,7 +60,7 @@ impl JniClient {
         );
 
         logger_core::log_debug(
-            "simple-client",
+            "jni-client",
             "Created JniClient with direct glide-core integration",
         );
 
@@ -73,7 +75,7 @@ impl JniClient {
     /// This is the core method - everything else is just parameter conversion.
     /// No callbacks, no complex async bridges, just direct delegation to glide-core.
     pub fn execute_command(&mut self, cmd: Cmd) -> JniResult<Value> {
-        logger_core::log_debug("simple-client", format!("Executing command: {cmd:?}"));
+        logger_core::log_debug("jni-client", format!("Executing command: {cmd:?}"));
 
         // Use glide-core's send_command directly - that's it!
         let result = self
@@ -82,11 +84,11 @@ impl JniClient {
 
         match result {
             Ok(value) => {
-                logger_core::log_debug("simple-client", "Command executed successfully");
+                logger_core::log_debug("jni-client", "Command executed successfully");
                 Ok(value)
             }
             Err(e) => {
-                logger_core::log_debug("simple-client", format!("Command failed: {e}"));
+                logger_core::log_debug("jni-client", format!("Command failed: {e}"));
                 Err(JniError::from(e))
             }
         }
@@ -101,7 +103,7 @@ impl JniClient {
         routing: Option<RoutingInfo>,
     ) -> JniResult<Value> {
         logger_core::log_debug(
-            "simple-client",
+            "jni-client",
             format!("Executing command with routing: {cmd:?}, routing: {routing:?}"),
         );
 
@@ -113,14 +115,14 @@ impl JniClient {
         match result {
             Ok(value) => {
                 logger_core::log_debug(
-                    "simple-client",
+                    "jni-client",
                     "Command with routing executed successfully",
                 );
                 Ok(value)
             }
             Err(e) => {
                 logger_core::log_debug(
-                    "simple-client",
+                    "jni-client",
                     format!("Command with routing failed: {e}"),
                 );
                 Err(JniError::from(e))
@@ -132,7 +134,7 @@ impl JniClient {
     ///
     /// For batch operations.
     pub fn execute_pipeline(&mut self, pipeline: redis::Pipeline) -> JniResult<Value> {
-        logger_core::log_debug("simple-client", "Executing pipeline");
+        logger_core::log_debug("jni-client", "Executing pipeline");
 
         // Use glide-core's send_pipeline directly - that's it!
         let result = self.runtime.block_on(async {
@@ -143,11 +145,11 @@ impl JniClient {
 
         match result {
             Ok(value) => {
-                logger_core::log_debug("simple-client", "Pipeline executed successfully");
+                logger_core::log_debug("jni-client", "Pipeline executed successfully");
                 Ok(value)
             }
             Err(e) => {
-                logger_core::log_debug("simple-client", format!("Pipeline failed: {e}"));
+                logger_core::log_debug("jni-client", format!("Pipeline failed: {e}"));
                 Err(JniError::from(e))
             }
         }
@@ -157,7 +159,7 @@ impl JniClient {
     ///
     /// For MULTI/EXEC transactions.
     pub fn execute_transaction(&mut self, transaction: redis::Pipeline) -> JniResult<Value> {
-        logger_core::log_debug("simple-client", "Executing transaction");
+        logger_core::log_debug("jni-client", "Executing transaction");
 
         // Use glide-core's send_transaction directly - that's it!
         let result = self.runtime.block_on(async {
@@ -168,11 +170,11 @@ impl JniClient {
 
         match result {
             Ok(value) => {
-                logger_core::log_debug("simple-client", "Transaction executed successfully");
+                logger_core::log_debug("jni-client", "Transaction executed successfully");
                 Ok(value)
             }
             Err(e) => {
-                logger_core::log_debug("simple-client", format!("Transaction failed: {e}"));
+                logger_core::log_debug("jni-client", format!("Transaction failed: {e}"));
                 Err(JniError::from(e))
             }
         }
@@ -347,36 +349,140 @@ pub fn register_simple_client(handle: u64, client: JniClient) -> JniResult<()> {
 // ============================================================================
 
 /// Create a client - PLACEHOLDER for proper implementation
-/// In real implementation, this would create glide-core Client with proper configuration
+/// Create a client with the proper configuration parameters to match Java API
 ///
 /// # Safety
-/// This function is called from Java via JNI with a valid jstring parameter.
+/// This function is called from Java via JNI with valid parameters.
 #[no_mangle]
 pub unsafe extern "system" fn Java_io_valkey_glide_core_client_GlideClient_createClient(
     mut env: JNIEnv,
     _class: JClass,
-    connection_string: jstring,
+    addresses: jobject, // String[]
+    database_id: jni::sys::jint,
+    username: jstring, // String (nullable)
+    password: jstring, // String (nullable)
+    use_tls: jni::sys::jboolean,
+    cluster_mode: jni::sys::jboolean,
+    request_timeout_ms: jni::sys::jint,
+    connection_timeout_ms: jni::sys::jint,
 ) -> jlong {
     let mut result = || -> JniResult<jlong> {
-        // Validate input
-        // SAFETY: connection_string is a valid jstring passed from Java (function is marked unsafe)
-        let jstr_conn = JString::from_raw(connection_string);
-        let conn_str: String = env.get_string(&jstr_conn)?.into();
-        JniSafetyValidator::validate_no_interior_nulls(&conn_str)?;
+        // Extract addresses array
+        let addresses_array = JObjectArray::from(JObject::from_raw(addresses));
+        let addresses_list = env.get_array_length(&addresses_array)?;
 
-        // PLACEHOLDER: In real implementation, this would:
-        // 1. Parse connection string
-        // 2. Create glide-core Client with proper configuration
-        // 3. Wrap in JniClient and register in registry
+        let mut addr_strings = Vec::new();
+        for i in 0..addresses_list {
+            let addr_obj = env.get_object_array_element(&addresses_array, i)?;
+            let addr_string: String = env.get_string(&JString::from(addr_obj))?.into();
+            JniSafetyValidator::validate_no_interior_nulls(&addr_string)?;
+            addr_strings.push(addr_string);
+        }
 
-        logger_core::log_debug("client", "Creating placeholder client");
+        // Extract optional username/password
+        let username_opt = if !username.is_null() {
+            let jstr = JString::from_raw(username);
+            let user_str: String = env.get_string(&jstr)?.into();
+            JniSafetyValidator::validate_no_interior_nulls(&user_str)?;
+            Some(user_str)
+        } else {
+            None
+        };
 
-        // Generate handle for the placeholder
-        let handle = CLIENT_COUNTER.fetch_add(1, Ordering::SeqCst);
+        let password_opt = if !password.is_null() {
+            let jstr = JString::from_raw(password);
+            let pass_str: String = env.get_string(&jstr)?.into();
+            JniSafetyValidator::validate_no_interior_nulls(&pass_str)?;
+            Some(pass_str)
+        } else {
+            None
+        };
 
         logger_core::log_debug(
             "client",
-            format!("Created placeholder client with handle: {handle}"),
+            format!(
+                "Creating client with {} addresses, db={}, cluster={}, tls={}",
+                addr_strings.len(),
+                database_id,
+                cluster_mode != 0,
+                use_tls != 0
+            ),
+        );
+
+        // Create real glide-core client configuration
+        let addresses: Vec<NodeAddress> = addr_strings
+            .iter()
+            .map(|addr| {
+                let parts: Vec<&str> = addr.split(':').collect();
+                NodeAddress {
+                    host: parts[0].to_string(),
+                    port: parts.get(1).unwrap_or(&"6379").parse().unwrap_or(6379),
+                }
+            })
+            .collect();
+
+        let connection_config = ConnectionRequest {
+            addresses,
+            cluster_mode_enabled: cluster_mode != 0,
+            tls_mode: if use_tls != 0 {
+                Some(TlsMode::SecureTls)
+            } else {
+                None
+            },
+            database_id: if cluster_mode != 0 {
+                0
+            } else {
+                database_id as i64
+            },
+            authentication_info: match (username_opt, password_opt) {
+                (Some(user), Some(pass)) => Some(AuthenticationInfo {
+                    username: Some(user),
+                    password: Some(pass),
+                }),
+                (None, Some(pass)) => Some(AuthenticationInfo {
+                    username: None,
+                    password: Some(pass),
+                }),
+                _ => None,
+            },
+            connection_retry_strategy: Some(ConnectionRetryStrategy {
+                exponent_base: 2,
+                factor: 50,
+                number_of_retries: 3,
+                jitter_percent: Some(10),
+            }),
+            request_timeout: Some(request_timeout_ms as u32),
+            connection_timeout: Some(connection_timeout_ms as u32),
+            ..Default::default()
+        };
+
+        // Create the actual client using a separate runtime for connection
+        let connection_runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| jni_error!(Runtime, "Failed to create connection runtime: {e}"))?;
+
+        let core_client = connection_runtime.block_on(async {
+            Client::new(connection_config, None)
+                .await
+                .map_err(|e| jni_error!(Connection, "Failed to connect to Valkey: {e}"))
+        })?;
+
+        let jni_client = JniClient::new(core_client)?;
+        let handle = CLIENT_COUNTER.fetch_add(1, Ordering::SeqCst);
+
+        // Register in the client registry
+        let mut clients = CLIENTS
+            .lock()
+            .map_err(|_| jni_error!(Runtime, "Failed to lock client registry"))?;
+
+        let entry = ClientEntry::new(jni_client);
+        clients.insert(handle, entry);
+        register_client(handle);
+
+        logger_core::log_debug(
+            "client",
+            format!("Created real Valkey client with handle: {handle}"),
         );
 
         Ok(handle as jlong)
