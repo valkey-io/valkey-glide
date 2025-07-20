@@ -23,6 +23,7 @@ import glide.api.commands.GenericClusterCommands;
 import glide.api.commands.HyperLogLogBaseCommands;
 import glide.api.commands.PubSubBaseCommands;
 import glide.api.commands.ScriptingAndFunctionsClusterCommands;
+import glide.api.commands.SortedSetBaseCommands;
 import glide.api.models.commands.scan.ScanOptions;
 import glide.api.models.commands.scan.ClusterScanCursor;
 import glide.api.models.commands.ScoreFilter;
@@ -30,6 +31,13 @@ import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.ScriptOptionsGlideString;
 import glide.api.models.commands.ScriptArgOptions;
 import glide.api.models.commands.ScriptArgOptionsGlideString;
+import glide.api.models.commands.WeightAggregateOptions.Aggregate;
+import glide.api.models.commands.WeightAggregateOptions.KeyArray;
+import glide.api.models.commands.WeightAggregateOptions.KeyArrayBinary;
+import glide.api.models.commands.WeightAggregateOptions.KeysOrWeightedKeys;
+import glide.api.models.commands.WeightAggregateOptions.KeysOrWeightedKeysBinary;
+import glide.api.models.commands.RangeOptions.RangeQuery;
+import glide.api.models.commands.RangeOptions.LexRange;
 import glide.api.models.Response;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -48,7 +56,7 @@ import static glide.api.models.commands.RequestType.*;
  * - Automatic cluster topology handling
  * - Interface segregation for cluster-specific APIs
  */
-public class GlideClusterClient extends BaseClient implements TransactionsClusterCommands, ClusterCommandExecutor, GenericClusterCommands, HyperLogLogBaseCommands, PubSubBaseCommands, ServerManagementClusterCommands, AutoCloseable {
+public class GlideClusterClient extends BaseClient implements TransactionsClusterCommands, ClusterCommandExecutor, GenericClusterCommands, HyperLogLogBaseCommands, PubSubBaseCommands, ServerManagementClusterCommands, SortedSetBaseCommands, AutoCloseable {
 
     private GlideClusterClient(io.valkey.glide.core.client.GlideClient client) {
         super(client, createClusterServerManagement(client));
@@ -1887,5 +1895,685 @@ public class GlideClusterClient extends BaseClient implements TransactionsCluste
         return client.executeCommand(new io.valkey.glide.core.commands.Command(Info))
             .thenApply(result -> ClusterValue.of(result.toString()));
     }
+
+    // ZDIFF family methods
+    @Override
+    public CompletableFuture<String[]> zdiff(String[] keys) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZDiff, keys))
+            .thenApply(result -> (String[]) result);
+    }
+
+    @Override
+    public CompletableFuture<GlideString[]> zdiff(GlideString[] keys) {
+        String[] stringKeys = Arrays.stream(keys).map(GlideString::toString).toArray(String[]::new);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZDiff, stringKeys))
+            .thenApply(result -> {
+                String[] stringResult = (String[]) result;
+                return Arrays.stream(stringResult).map(GlideString::of).toArray(GlideString[]::new);
+            });
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Double>> zdiffWithScores(String[] keys) {
+        String[] args = Arrays.copyOf(keys, keys.length + 1);
+        args[keys.length] = "WITHSCORES";
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZDiff, args))
+            .thenApply(result -> (Map<String, Double>) result);
+    }
+
+    @Override
+    public CompletableFuture<Map<GlideString, Double>> zdiffWithScores(GlideString[] keys) {
+        String[] stringKeys = Arrays.stream(keys).map(GlideString::toString).toArray(String[]::new);
+        String[] args = Arrays.copyOf(stringKeys, stringKeys.length + 1);
+        args[stringKeys.length] = "WITHSCORES";
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZDiff, args))
+            .thenApply(result -> {
+                Map<String, Double> stringResult = (Map<String, Double>) result;
+                return stringResult.entrySet().stream()
+                    .collect(java.util.stream.Collectors.toMap(
+                        entry -> GlideString.of(entry.getKey()),
+                        Map.Entry::getValue
+                    ));
+            });
+    }
+
+    @Override
+    public CompletableFuture<Long> zdiffstore(String destination, String[] keys) {
+        String[] args = new String[keys.length + 1];
+        args[0] = destination;
+        System.arraycopy(keys, 0, args, 1, keys.length);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZDiffStore, args))
+            .thenApply(result -> (Long) result);
+    }
+
+    @Override
+    public CompletableFuture<Long> zdiffstore(GlideString destination, GlideString[] keys) {
+        String[] args = new String[keys.length + 1];
+        args[0] = destination.toString();
+        for (int i = 0; i < keys.length; i++) {
+            args[i + 1] = keys[i].toString();
+        }
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZDiffStore, args))
+            .thenApply(result -> (Long) result);
+    }
+
+    // ZUNION family methods - basic implementations for compilation
+    @Override
+    public CompletableFuture<String[]> zunion(KeyArray keys) {
+        // TODO: Implement properly after fixing KeyArray.toArgs() signature
+        throw new UnsupportedOperationException("zunion(KeyArray) not yet implemented");
+    }
+
+    @Override
+    public CompletableFuture<GlideString[]> zunion(KeyArrayBinary keys) {
+        // TODO: Implement properly after fixing KeyArrayBinary.toArgs() signature  
+        throw new UnsupportedOperationException("zunion(KeyArrayBinary) not yet implemented");
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Double>> zunionWithScores(KeysOrWeightedKeys keysOrWeightedKeys, Aggregate aggregate) {
+        // TODO: Implement properly
+        throw new UnsupportedOperationException("zunionWithScores(KeysOrWeightedKeys, Aggregate) not yet implemented");
+    }
+
+    @Override
+    public CompletableFuture<Map<GlideString, Double>> zunionWithScores(KeysOrWeightedKeysBinary keysOrWeightedKeys, Aggregate aggregate) {
+        // TODO: Implement properly
+        throw new UnsupportedOperationException("zunionWithScores(KeysOrWeightedKeysBinary, Aggregate) not yet implemented");
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Double>> zunionWithScores(KeysOrWeightedKeys keysOrWeightedKeys) {
+        // TODO: Implement properly
+        throw new UnsupportedOperationException("zunionWithScores(KeysOrWeightedKeys) not yet implemented");
+    }
+
+    @Override
+    public CompletableFuture<Map<GlideString, Double>> zunionWithScores(KeysOrWeightedKeysBinary keysOrWeightedKeys) {
+        // TODO: Implement properly
+        throw new UnsupportedOperationException("zunionWithScores(KeysOrWeightedKeysBinary) not yet implemented");
+    }
+
+    @Override
+    public CompletableFuture<Long> zunionstore(String destination, KeysOrWeightedKeys keysOrWeightedKeys, Aggregate aggregate) {
+        // TODO: Implement properly
+        throw new UnsupportedOperationException("zunionstore(String, KeysOrWeightedKeys, Aggregate) not yet implemented");
+    }
+
+    @Override
+    public CompletableFuture<Long> zunionstore(GlideString destination, KeysOrWeightedKeys keysOrWeightedKeys, Aggregate aggregate) {
+        // TODO: Implement properly
+        throw new UnsupportedOperationException("zunionstore(GlideString, KeysOrWeightedKeys, Aggregate) not yet implemented");
+    }
+
+    @Override
+    public CompletableFuture<Long> zunionstore(String destination, KeysOrWeightedKeys keysOrWeightedKeys) {
+        // TODO: Implement properly  
+        throw new UnsupportedOperationException("zunionstore(String, KeysOrWeightedKeys) not yet implemented");
+    }
+
+    @Override
+    public CompletableFuture<Long> zunionstore(GlideString destination, KeysOrWeightedKeys keysOrWeightedKeys) {
+        // TODO: Implement properly
+        throw new UnsupportedOperationException("zunionstore(GlideString, KeysOrWeightedKeys) not yet implemented");
+    }
+
+    @Override
+    public CompletableFuture<Long> zunionstore(GlideString destination, KeysOrWeightedKeysBinary keysOrWeightedKeys) {
+        GlideString[] rawArgs = keysOrWeightedKeys.toArgs();
+        String[] args = new String[rawArgs.length];
+        for (int i = 0; i < rawArgs.length; i++) {
+            args[i] = rawArgs[i].toString();
+        }
+        String[] finalArgs = new String[args.length + 1];
+        finalArgs[0] = destination.toString();
+        System.arraycopy(args, 0, finalArgs, 1, args.length);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZUnionStore, finalArgs))
+            .thenApply(result -> (Long) result);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Long>> zunionstore(GlideString destination, KeysOrWeightedKeysBinary keysOrWeightedKeys, Route route) {
+        GlideString[] rawArgs = keysOrWeightedKeys.toArgs();
+        String[] args = new String[rawArgs.length];
+        for (int i = 0; i < rawArgs.length; i++) {
+            args[i] = rawArgs[i].toString();
+        }
+        String[] finalArgs = new String[args.length + 1];
+        finalArgs[0] = destination.toString();
+        System.arraycopy(args, 0, finalArgs, 1, args.length);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZUnionStore, finalArgs), route)
+            .thenApply(result -> ClusterValue.of((Long) result));
+    }
+
+    @Override
+    public CompletableFuture<Long> zunionstore(GlideString destination, KeysOrWeightedKeysBinary keysOrWeightedKeys, Aggregate aggregate) {
+        GlideString[] rawArgs = keysOrWeightedKeys.toArgs();
+        String[] args = new String[rawArgs.length];
+        for (int i = 0; i < rawArgs.length; i++) {
+            args[i] = rawArgs[i].toString();
+        }
+        String[] finalArgs = new String[args.length + 3];
+        finalArgs[0] = destination.toString();
+        System.arraycopy(args, 0, finalArgs, 1, args.length);
+        finalArgs[args.length + 1] = "AGGREGATE";
+        finalArgs[args.length + 2] = aggregate.toString();
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZUnionStore, finalArgs))
+            .thenApply(result -> (Long) result);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Long>> zunionstore(GlideString destination, KeysOrWeightedKeysBinary keysOrWeightedKeys, Aggregate aggregate, Route route) {
+        GlideString[] rawArgs = keysOrWeightedKeys.toArgs();
+        String[] args = new String[rawArgs.length];
+        for (int i = 0; i < rawArgs.length; i++) {
+            args[i] = rawArgs[i].toString();
+        }
+        String[] finalArgs = new String[args.length + 3];
+        finalArgs[0] = destination.toString();
+        System.arraycopy(args, 0, finalArgs, 1, args.length);
+        finalArgs[args.length + 1] = "AGGREGATE";
+        finalArgs[args.length + 2] = aggregate.toString();
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZUnionStore, finalArgs), route)
+            .thenApply(result -> ClusterValue.of((Long) result));
+    }
+
+    // ZINTER family methods - basic implementations for compilation
+    @Override
+    public CompletableFuture<String[]> zinter(KeyArray keys) {
+        // TODO: Implement properly after fixing KeyArray.toArgs() signature
+        throw new UnsupportedOperationException("zinter(KeyArray) not yet implemented");
+    }
+
+    @Override
+    public CompletableFuture<GlideString[]> zinter(KeyArrayBinary keys) {
+        // TODO: Implement properly after fixing KeyArrayBinary.toArgs() signature
+        throw new UnsupportedOperationException("zinter(KeyArrayBinary) not yet implemented");
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Double>> zinterWithScores(KeysOrWeightedKeys keysOrWeightedKeys) {
+        // TODO: Implement properly
+        throw new UnsupportedOperationException("zinterWithScores(KeysOrWeightedKeys) not yet implemented");
+    }
+
+    @Override
+    public CompletableFuture<Map<GlideString, Double>> zinterWithScores(KeysOrWeightedKeysBinary keysOrWeightedKeys) {
+        // TODO: Implement properly
+        throw new UnsupportedOperationException("zinterWithScores(KeysOrWeightedKeysBinary) not yet implemented");
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Double>> zinterWithScores(KeysOrWeightedKeys keysOrWeightedKeys, Aggregate aggregate) {
+        // TODO: Implement properly
+        throw new UnsupportedOperationException("zinterWithScores(KeysOrWeightedKeys, Aggregate) not yet implemented");
+    }
+
+    @Override
+    public CompletableFuture<Map<GlideString, Double>> zinterWithScores(KeysOrWeightedKeysBinary keysOrWeightedKeys, Aggregate aggregate) {
+        // TODO: Implement properly
+        throw new UnsupportedOperationException("zinterWithScores(KeysOrWeightedKeysBinary, Aggregate) not yet implemented");
+    }
+
+    @Override
+    public CompletableFuture<Long> zinterstore(String destination, KeysOrWeightedKeys keysOrWeightedKeys, Aggregate aggregate) {
+        // TODO: Implement properly
+        throw new UnsupportedOperationException("zinterstore(String, KeysOrWeightedKeys, Aggregate) not yet implemented");
+    }
+
+    @Override
+    public CompletableFuture<Long> zinterstore(GlideString destination, KeysOrWeightedKeys keysOrWeightedKeys, Aggregate aggregate) {
+        // TODO: Implement properly
+        throw new UnsupportedOperationException("zinterstore(GlideString, KeysOrWeightedKeys, Aggregate) not yet implemented");
+    }
+
+    @Override
+    public CompletableFuture<Long> zinterstore(String destination, KeysOrWeightedKeys keysOrWeightedKeys) {
+        // TODO: Implement properly
+        throw new UnsupportedOperationException("zinterstore(String, KeysOrWeightedKeys) not yet implemented");
+    }
+
+    @Override
+    public CompletableFuture<Long> zinterstore(GlideString destination, KeysOrWeightedKeys keysOrWeightedKeys) {
+        // TODO: Implement properly
+        throw new UnsupportedOperationException("zinterstore(GlideString, KeysOrWeightedKeys) not yet implemented");
+    }
+
+    @Override
+    public CompletableFuture<Long> zinterstore(GlideString destination, KeysOrWeightedKeysBinary keysOrWeightedKeys) {
+        GlideString[] rawArgs = keysOrWeightedKeys.toArgs();
+        String[] args = new String[rawArgs.length];
+        for (int i = 0; i < rawArgs.length; i++) {
+            args[i] = rawArgs[i].toString();
+        }
+        String[] finalArgs = new String[args.length + 1];
+        finalArgs[0] = destination.toString();
+        System.arraycopy(args, 0, finalArgs, 1, args.length);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZInterStore, finalArgs))
+            .thenApply(result -> (Long) result);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Long>> zinterstore(GlideString destination, KeysOrWeightedKeysBinary keysOrWeightedKeys, Route route) {
+        GlideString[] rawArgs = keysOrWeightedKeys.toArgs();
+        String[] args = new String[rawArgs.length];
+        for (int i = 0; i < rawArgs.length; i++) {
+            args[i] = rawArgs[i].toString();
+        }
+        String[] finalArgs = new String[args.length + 1];
+        finalArgs[0] = destination.toString();
+        System.arraycopy(args, 0, finalArgs, 1, args.length);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZInterStore, finalArgs), route)
+            .thenApply(result -> ClusterValue.of((Long) result));
+    }
+
+    @Override
+    public CompletableFuture<Long> zinterstore(GlideString destination, KeysOrWeightedKeysBinary keysOrWeightedKeys, Aggregate aggregate) {
+        GlideString[] rawArgs = keysOrWeightedKeys.toArgs();
+        String[] args = new String[rawArgs.length];
+        for (int i = 0; i < rawArgs.length; i++) {
+            args[i] = rawArgs[i].toString();
+        }
+        String[] finalArgs = new String[args.length + 3];
+        finalArgs[0] = destination.toString();
+        System.arraycopy(args, 0, finalArgs, 1, args.length);
+        finalArgs[args.length + 1] = "AGGREGATE";
+        finalArgs[args.length + 2] = aggregate.toString();
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZInterStore, finalArgs))
+            .thenApply(result -> (Long) result);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Long>> zinterstore(GlideString destination, KeysOrWeightedKeysBinary keysOrWeightedKeys, Aggregate aggregate, Route route) {
+        GlideString[] rawArgs = keysOrWeightedKeys.toArgs();
+        String[] args = new String[rawArgs.length];
+        for (int i = 0; i < rawArgs.length; i++) {
+            args[i] = rawArgs[i].toString();
+        }
+        String[] finalArgs = new String[args.length + 3];
+        finalArgs[0] = destination.toString();
+        System.arraycopy(args, 0, finalArgs, 1, args.length);
+        finalArgs[args.length + 1] = "AGGREGATE";
+        finalArgs[args.length + 2] = aggregate.toString();
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZInterStore, finalArgs), route)
+            .thenApply(result -> ClusterValue.of((Long) result));
+    }
+
+    @Override
+    public CompletableFuture<Long> zintercard(String[] keys) {
+        String[] args = new String[keys.length + 1];
+        args[0] = String.valueOf(keys.length);
+        System.arraycopy(keys, 0, args, 1, keys.length);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZInterCard, args))
+            .thenApply(result -> (Long) result);
+    }
+
+    @Override
+    public CompletableFuture<Long> zintercard(GlideString[] keys) {
+        String[] args = new String[keys.length + 1];
+        args[0] = String.valueOf(keys.length);
+        for (int i = 0; i < keys.length; i++) {
+            args[i + 1] = keys[i].toString();
+        }
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZInterCard, args))
+            .thenApply(result -> (Long) result);
+    }
+
+    @Override
+    public CompletableFuture<Long> zintercard(String[] keys, long limit) {
+        String[] args = new String[keys.length + 3];
+        args[0] = String.valueOf(keys.length);
+        System.arraycopy(keys, 0, args, 1, keys.length);
+        args[args.length - 2] = "LIMIT";
+        args[args.length - 1] = String.valueOf(limit);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZInterCard, args))
+            .thenApply(result -> (Long) result);
+    }
+
+    @Override
+    public CompletableFuture<Long> zintercard(GlideString[] keys, long limit) {
+        String[] args = new String[keys.length + 3];
+        args[0] = String.valueOf(keys.length);
+        for (int i = 0; i < keys.length; i++) {
+            args[i + 1] = keys[i].toString();
+        }
+        args[args.length - 2] = "LIMIT";
+        args[args.length - 1] = String.valueOf(limit);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZInterCard, args))
+            .thenApply(result -> (Long) result);
+    }
+
+    // ZRANGESTORE family methods - basic implementations for compilation
+    @Override
+    public CompletableFuture<Long> zrangestore(String destination, String source, RangeQuery rangeQuery, boolean reverse) {
+        // TODO: Implement properly after fixing RangeQuery.toArgs() method
+        throw new UnsupportedOperationException("zrangestore(String, String, RangeQuery, boolean) not yet implemented");
+    }
+
+    @Override
+    public CompletableFuture<Long> zrangestore(GlideString destination, GlideString source, RangeQuery rangeQuery, boolean reverse) {
+        // TODO: Implement properly after fixing RangeQuery.toArgs() method
+        throw new UnsupportedOperationException("zrangestore(GlideString, GlideString, RangeQuery, boolean) not yet implemented");
+    }
+
+    @Override
+    public CompletableFuture<Long> zrangestore(String destination, String source, RangeQuery rangeQuery) {
+        // TODO: Implement properly after fixing RangeQuery.toArgs() method
+        throw new UnsupportedOperationException("zrangestore(String, String, RangeQuery) not yet implemented");
+    }
+
+    @Override
+    public CompletableFuture<Long> zrangestore(GlideString destination, GlideString source, RangeQuery rangeQuery) {
+        // TODO: Implement properly after fixing RangeQuery.toArgs() method
+        throw new UnsupportedOperationException("zrangestore(GlideString, GlideString, RangeQuery) not yet implemented");
+    }
+
+    // ZINCRBY methods
+    @Override
+    public CompletableFuture<Double> zincrby(String key, double increment, String member) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZIncrBy, key, String.valueOf(increment), member))
+            .thenApply(result -> Double.parseDouble(result.toString()));
+    }
+
+    @Override
+    public CompletableFuture<Double> zincrby(GlideString key, double increment, GlideString member) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZIncrBy, key.toString(), String.valueOf(increment), member.toString()))
+            .thenApply(result -> Double.parseDouble(result.toString()));
+    }
+
+    // Additional missing SortedSetBaseCommands methods - basic implementations for compilation
+    @Override
+    public CompletableFuture<String> zrandmember(String key) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRandMember, key))
+            .thenApply(result -> result == null ? null : result.toString());
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<String>> zrandmember(String key, Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRandMember, key), route)
+            .thenApply(result -> ClusterValue.of(result == null ? null : result.toString()));
+    }
+
+    @Override
+    public CompletableFuture<GlideString> zrandmember(GlideString key) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRandMember, key.getBytes()))
+            .thenApply(result -> result == null ? null : GlideString.of((byte[]) result));
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<GlideString>> zrandmember(GlideString key, Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRandMember, key.getBytes()), route)
+            .thenApply(result -> ClusterValue.of(result == null ? null : GlideString.of((byte[]) result)));
+    }
+
+    @Override
+    public CompletableFuture<String[]> zrandmemberWithCount(String key, long count) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRandMember, key, String.valueOf(count)))
+            .thenApply(result -> (String[]) result);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<String[]>> zrandmemberWithCount(String key, long count, Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRandMember, key, String.valueOf(count)), route)
+            .thenApply(result -> ClusterValue.of((String[]) result));
+    }
+
+    @Override
+    public CompletableFuture<GlideString[]> zrandmemberWithCount(GlideString key, long count) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRandMember, key.getBytes(), String.valueOf(count).getBytes()))
+            .thenApply(result -> ArrayTransformUtils.convertByteArrayArrayToGlideStringArray((byte[][]) result));
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<GlideString[]>> zrandmemberWithCount(GlideString key, long count, Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRandMember, key.getBytes(), String.valueOf(count).getBytes()), route)
+            .thenApply(result -> ClusterValue.of(ArrayTransformUtils.convertByteArrayArrayToGlideStringArray((byte[][]) result)));
+    }
+
+    @Override
+    public CompletableFuture<Object[][]> zrandmemberWithCountWithScores(String key, long count) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRandMember, key, String.valueOf(count), "WITHSCORES"))
+            .thenApply(result -> (Object[][]) result);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Object[][]>> zrandmemberWithCountWithScores(String key, long count, Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRandMember, key, String.valueOf(count), "WITHSCORES"), route)
+            .thenApply(result -> ClusterValue.of((Object[][]) result));
+    }
+
+    @Override
+    public CompletableFuture<Object[][]> zrandmemberWithCountWithScores(GlideString key, long count) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRandMember, key.getBytes(), String.valueOf(count).getBytes(), "WITHSCORES".getBytes()))
+            .thenApply(result -> (Object[][]) result);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Object[][]>> zrandmemberWithCountWithScores(GlideString key, long count, Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZRandMember, key.getBytes(), String.valueOf(count).getBytes(), "WITHSCORES".getBytes()), route)
+            .thenApply(result -> ClusterValue.of((Object[][]) result));
+    }
+
+    // ============= ZMPOP METHODS =============
+    @Override
+    public CompletableFuture<Map<String, Object>> zmpop(String[] keys, ScoreFilter modifier) {
+        String[] args = new String[keys.length + 2];
+        args[0] = String.valueOf(keys.length);
+        System.arraycopy(keys, 0, args, 1, keys.length);
+        args[keys.length + 1] = modifier.toString();
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZMPop, args))
+            .thenApply(result -> (Map<String, Object>) result);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Map<String, Object>>> zmpop(String[] keys, ScoreFilter modifier, Route route) {
+        String[] args = new String[keys.length + 2];
+        args[0] = String.valueOf(keys.length);
+        System.arraycopy(keys, 0, args, 1, keys.length);
+        args[keys.length + 1] = modifier.toString();
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZMPop, args), route)
+            .thenApply(result -> ClusterValue.of((Map<String, Object>) result));
+    }
+
+    @Override
+    public CompletableFuture<Map<GlideString, Object>> zmpop(GlideString[] keys, ScoreFilter modifier) {
+        byte[][] args = new byte[keys.length + 2][];
+        args[0] = String.valueOf(keys.length).getBytes();
+        for (int i = 0; i < keys.length; i++) {
+            args[i + 1] = keys[i].getBytes();
+        }
+        args[keys.length + 1] = modifier.toString().getBytes();
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZMPop, args))
+            .thenApply(result -> (Map<GlideString, Object>) result);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Map<GlideString, Object>>> zmpop(GlideString[] keys, ScoreFilter modifier, Route route) {
+        byte[][] args = new byte[keys.length + 2][];
+        args[0] = String.valueOf(keys.length).getBytes();
+        for (int i = 0; i < keys.length; i++) {
+            args[i + 1] = keys[i].getBytes();
+        }
+        args[keys.length + 1] = modifier.toString().getBytes();
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZMPop, args), route)
+            .thenApply(result -> ClusterValue.of((Map<GlideString, Object>) result));
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Object>> zmpop(String[] keys, ScoreFilter modifier, long count) {
+        String[] args = new String[keys.length + 3];
+        args[0] = String.valueOf(keys.length);
+        System.arraycopy(keys, 0, args, 1, keys.length);
+        args[keys.length + 1] = modifier.toString();
+        args[keys.length + 2] = String.valueOf(count);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZMPop, args))
+            .thenApply(result -> (Map<String, Object>) result);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Map<String, Object>>> zmpop(String[] keys, ScoreFilter modifier, long count, Route route) {
+        String[] args = new String[keys.length + 3];
+        args[0] = String.valueOf(keys.length);
+        System.arraycopy(keys, 0, args, 1, keys.length);
+        args[keys.length + 1] = modifier.toString();
+        args[keys.length + 2] = String.valueOf(count);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZMPop, args), route)
+            .thenApply(result -> ClusterValue.of((Map<String, Object>) result));
+    }
+
+    @Override
+    public CompletableFuture<Map<GlideString, Object>> zmpop(GlideString[] keys, ScoreFilter modifier, long count) {
+        byte[][] args = new byte[keys.length + 3][];
+        args[0] = String.valueOf(keys.length).getBytes();
+        for (int i = 0; i < keys.length; i++) {
+            args[i + 1] = keys[i].getBytes();
+        }
+        args[keys.length + 1] = modifier.toString().getBytes();
+        args[keys.length + 2] = String.valueOf(count).getBytes();
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZMPop, args))
+            .thenApply(result -> (Map<GlideString, Object>) result);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Map<GlideString, Object>>> zmpop(GlideString[] keys, ScoreFilter modifier, long count, Route route) {
+        byte[][] args = new byte[keys.length + 3][];
+        args[0] = String.valueOf(keys.length).getBytes();
+        for (int i = 0; i < keys.length; i++) {
+            args[i + 1] = keys[i].getBytes();
+        }
+        args[keys.length + 1] = modifier.toString().getBytes();
+        args[keys.length + 2] = String.valueOf(count).getBytes();
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZMPop, args), route)
+            .thenApply(result -> ClusterValue.of((Map<GlideString, Object>) result));
+    }
+
+    // ============= BZMPOP METHODS =============
+    @Override
+    public CompletableFuture<Map<String, Object>> bzmpop(String[] keys, ScoreFilter modifier, double timeout) {
+        String[] args = new String[keys.length + 3];
+        args[0] = String.valueOf(keys.length);
+        System.arraycopy(keys, 0, args, 1, keys.length);
+        args[keys.length + 1] = modifier.toString();
+        args[keys.length + 2] = String.valueOf(timeout);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(BZMPop, args))
+            .thenApply(result -> (Map<String, Object>) result);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Map<String, Object>>> bzmpop(String[] keys, ScoreFilter modifier, double timeout, Route route) {
+        String[] args = new String[keys.length + 3];
+        args[0] = String.valueOf(keys.length);
+        System.arraycopy(keys, 0, args, 1, keys.length);
+        args[keys.length + 1] = modifier.toString();
+        args[keys.length + 2] = String.valueOf(timeout);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(BZMPop, args), route)
+            .thenApply(result -> ClusterValue.of((Map<String, Object>) result));
+    }
+
+    @Override
+    public CompletableFuture<Map<GlideString, Object>> bzmpop(GlideString[] keys, ScoreFilter modifier, double timeout) {
+        byte[][] args = new byte[keys.length + 3][];
+        args[0] = String.valueOf(keys.length).getBytes();
+        for (int i = 0; i < keys.length; i++) {
+            args[i + 1] = keys[i].getBytes();
+        }
+        args[keys.length + 1] = modifier.toString().getBytes();
+        args[keys.length + 2] = String.valueOf(timeout).getBytes();
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(BZMPop, args))
+            .thenApply(result -> (Map<GlideString, Object>) result);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Map<GlideString, Object>>> bzmpop(GlideString[] keys, ScoreFilter modifier, double timeout, Route route) {
+        byte[][] args = new byte[keys.length + 3][];
+        args[0] = String.valueOf(keys.length).getBytes();
+        for (int i = 0; i < keys.length; i++) {
+            args[i + 1] = keys[i].getBytes();
+        }
+        args[keys.length + 1] = modifier.toString().getBytes();
+        args[keys.length + 2] = String.valueOf(timeout).getBytes();
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(BZMPop, args), route)
+            .thenApply(result -> ClusterValue.of((Map<GlideString, Object>) result));
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Object>> bzmpop(String[] keys, ScoreFilter modifier, double timeout, long count) {
+        String[] args = new String[keys.length + 4];
+        args[0] = String.valueOf(keys.length);
+        System.arraycopy(keys, 0, args, 1, keys.length);
+        args[keys.length + 1] = modifier.toString();
+        args[keys.length + 2] = String.valueOf(timeout);
+        args[keys.length + 3] = String.valueOf(count);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(BZMPop, args))
+            .thenApply(result -> (Map<String, Object>) result);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Map<String, Object>>> bzmpop(String[] keys, ScoreFilter modifier, double timeout, long count, Route route) {
+        String[] args = new String[keys.length + 4];
+        args[0] = String.valueOf(keys.length);
+        System.arraycopy(keys, 0, args, 1, keys.length);
+        args[keys.length + 1] = modifier.toString();
+        args[keys.length + 2] = String.valueOf(timeout);
+        args[keys.length + 3] = String.valueOf(count);
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(BZMPop, args), route)
+            .thenApply(result -> ClusterValue.of((Map<String, Object>) result));
+    }
+
+    @Override
+    public CompletableFuture<Map<GlideString, Object>> bzmpop(GlideString[] keys, ScoreFilter modifier, double timeout, long count) {
+        byte[][] args = new byte[keys.length + 4][];
+        args[0] = String.valueOf(keys.length).getBytes();
+        for (int i = 0; i < keys.length; i++) {
+            args[i + 1] = keys[i].getBytes();
+        }
+        args[keys.length + 1] = modifier.toString().getBytes();
+        args[keys.length + 2] = String.valueOf(timeout).getBytes();
+        args[keys.length + 3] = String.valueOf(count).getBytes();
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(BZMPop, args))
+            .thenApply(result -> (Map<GlideString, Object>) result);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Map<GlideString, Object>>> bzmpop(GlideString[] keys, ScoreFilter modifier, double timeout, long count, Route route) {
+        byte[][] args = new byte[keys.length + 4][];
+        args[0] = String.valueOf(keys.length).getBytes();
+        for (int i = 0; i < keys.length; i++) {
+            args[i + 1] = keys[i].getBytes();
+        }
+        args[keys.length + 1] = modifier.toString().getBytes();
+        args[keys.length + 2] = String.valueOf(timeout).getBytes();
+        args[keys.length + 3] = String.valueOf(count).getBytes();
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(BZMPop, args), route)
+            .thenApply(result -> ClusterValue.of((Map<GlideString, Object>) result));
+    }
+
+    // ============= ZLEXCOUNT METHODS =============
+    @Override
+    public CompletableFuture<Long> zlexcount(String key, LexRange minLex, LexRange maxLex) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZLexCount, key, minLex.toString(), maxLex.toString()))
+            .thenApply(result -> (Long) result);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Long>> zlexcount(String key, LexRange minLex, LexRange maxLex, Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZLexCount, key, minLex.toString(), maxLex.toString()), route)
+            .thenApply(result -> ClusterValue.of((Long) result));
+    }
+
+    @Override
+    public CompletableFuture<Long> zlexcount(GlideString key, LexRange minLex, LexRange maxLex) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZLexCount, key.getBytes(), minLex.toString().getBytes(), maxLex.toString().getBytes()))
+            .thenApply(result -> (Long) result);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Long>> zlexcount(GlideString key, LexRange minLex, LexRange maxLex, Route route) {
+        return client.executeCommand(new io.valkey.glide.core.commands.Command(ZLexCount, key.getBytes(), minLex.toString().getBytes(), maxLex.toString().getBytes()), route)
+            .thenApply(result -> ClusterValue.of((Long) result));
+    }
+
+    // TODO: Add remaining SortedSetBaseCommands methods as needed for compilation
+    // This is a placeholder approach - full implementation needed
 
 }

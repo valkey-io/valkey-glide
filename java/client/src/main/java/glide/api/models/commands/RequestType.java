@@ -121,6 +121,7 @@ public final class RequestType {
     public static final String ZDiffStore = "ZDIFFSTORE";
     public static final String ZIncrBy = "ZINCRBY";
     public static final String ZInter = "ZINTER";
+    public static final String ZInterCard = "ZINTERCARD";
     public static final String ZInterStore = "ZINTERSTORE";
     public static final String ZLexCount = "ZLEXCOUNT";
     public static final String ZMScore = "ZMSCORE";
@@ -128,6 +129,7 @@ public final class RequestType {
     public static final String ZPopMin = "ZPOPMIN";
     public static final String ZRandMember = "ZRANDMEMBER";
     public static final String ZRange = "ZRANGE";
+    public static final String ZRangeStore = "ZRANGESTORE";
     public static final String ZRangeByLex = "ZRANGEBYLEX";
     public static final String ZRangeByScore = "ZRANGEBYSCORE";
     public static final String ZRank = "ZRANK";
