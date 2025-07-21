@@ -47,46 +47,14 @@ mod cluster_async {
         ))
     }
 
-    async fn retry_publish_until_expected_subscribers(
-        connection: &mut redis::cluster_async::ClusterConnection,
-        channel: &str,
-        message: &str,
-        expected_count: i64,
-        max_retries: u32,
-    ) -> redis::RedisResult<redis::Value> {
-        use futures_time::time::Duration;
-        let mut delay_ms = 100u64;
-
-        for attempt in 0..max_retries {
-            let result = redis::cmd("PUBLISH")
-                .arg(channel)
-                .arg(message)
-                .query_async(connection)
-                .await;
-
-            match result {
-                Ok(redis::Value::Int(count)) if count == expected_count => {
-                    return Ok(redis::Value::Int(count));
-                }
-                Ok(redis::Value::Int(count)) => {
-                    // Got a different count than expected, retry after delay
-                    if attempt < max_retries - 1 {
-                        tokio::time::sleep(Duration::from_millis(delay_ms).into()).await;
-                        delay_ms = delay_ms * 2; // exponential backoff
-                    } else {
-                        return Ok(redis::Value::Int(count)); // return the last result
-                    }
-                }
-                Ok(other) => return Ok(other),
-                Err(e) => return Err(e),
-            }
-        }
-
-        // This should not be reached due to the loop logic above
-        unreachable!()
+    #[derive(Debug, Clone, Copy)]
+    enum PublishCommand {
+        Publish,
+        SPublish,
     }
 
-    async fn retry_spublish_until_expected_subscribers(
+    async fn retry_publish_until_expected_subscribers(
+        command: PublishCommand,
         connection: &mut redis::cluster_async::ClusterConnection,
         channel: &str,
         message: &str,
@@ -97,7 +65,12 @@ mod cluster_async {
         let mut delay_ms = 100u64;
 
         for attempt in 0..max_retries {
-            let result = redis::cmd("SPUBLISH")
+            let cmd_name = match command {
+                PublishCommand::Publish => "PUBLISH",
+                PublishCommand::SPublish => "SPUBLISH",
+            };
+            
+            let result = redis::cmd(cmd_name)
                 .arg(channel)
                 .arg(message)
                 .query_async(connection)
@@ -111,7 +84,7 @@ mod cluster_async {
                     // Got a different count than expected, retry after delay
                     if attempt < max_retries - 1 {
                         tokio::time::sleep(Duration::from_millis(delay_ms).into()).await;
-                        delay_ms = delay_ms * 2; // exponential backoff
+                        delay_ms *= 2; // exponential backoff
                     } else {
                         return Ok(redis::Value::Int(count)); // return the last result
                     }
@@ -4834,6 +4807,7 @@ mod cluster_async {
 
             // validate PUBLISH - retry until expected subscribers are available
             let result = retry_publish_until_expected_subscribers(
+                PublishCommand::Publish,
                 &mut publishing_con,
                 "test_channel",
                 "test_message",
@@ -4863,7 +4837,8 @@ mod cluster_async {
 
             if use_sharded {
                 // validate SPUBLISH - retry until expected subscribers are available
-                let result = retry_spublish_until_expected_subscribers(
+                let result = retry_publish_until_expected_subscribers(
+                    PublishCommand::SPublish,
                     &mut publishing_con,
                     "test_channel_?",
                     "test_message",
@@ -4907,6 +4882,7 @@ mod cluster_async {
 
             // validate PUBLISH - retry until expected subscribers are available
             let result = retry_publish_until_expected_subscribers(
+                PublishCommand::Publish,
                 &mut publishing_con,
                 "test_channel",
                 "test_message",
@@ -4936,7 +4912,8 @@ mod cluster_async {
 
             if use_sharded {
                 // validate SPUBLISH - retry until expected subscribers are available
-                let result = retry_spublish_until_expected_subscribers(
+                let result = retry_publish_until_expected_subscribers(
+                    PublishCommand::SPublish,
                     &mut publishing_con,
                     "test_channel_?",
                     "test_message",
@@ -5026,6 +5003,7 @@ mod cluster_async {
 
             // validate PUBLISH - retry until expected subscribers are available
             let result = retry_publish_until_expected_subscribers(
+                PublishCommand::Publish,
                 &mut publishing_con,
                 "test_channel_?",
                 "test_message",
@@ -5055,7 +5033,8 @@ mod cluster_async {
 
             if use_sharded {
                 // validate SPUBLISH - retry until expected subscribers are available
-                let result = retry_spublish_until_expected_subscribers(
+                let result = retry_publish_until_expected_subscribers(
+                    PublishCommand::SPublish,
                     &mut publishing_con,
                     "test_channel_?",
                     "test_message",
@@ -5149,6 +5128,7 @@ mod cluster_async {
 
             // validate PUBLISH - retry until expected subscribers are available
             let result = retry_publish_until_expected_subscribers(
+                PublishCommand::Publish,
                 &mut publishing_con,
                 "test_channel_?",
                 "test_message",
@@ -5183,7 +5163,8 @@ mod cluster_async {
 
             if use_sharded {
                 // validate SPUBLISH - retry until expected subscribers are available
-                let result = retry_spublish_until_expected_subscribers(
+                let result = retry_publish_until_expected_subscribers(
+                    PublishCommand::SPublish,
                     &mut publishing_con,
                     "test_channel_?",
                     "test_message",
