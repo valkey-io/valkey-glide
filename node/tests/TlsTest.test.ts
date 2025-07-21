@@ -42,7 +42,7 @@ describe("tls GlideClusterClient", () => {
     afterEach(async () => {
         await flushAndCloseClient(
             true,
-            cluster.getAddresses(),
+            cluster?.getAddresses(),
             client,
             TLS_OPTIONS,
         );
@@ -103,7 +103,7 @@ describe("tls GlideClient", () => {
     afterEach(async () => {
         await flushAndCloseClient(
             false,
-            cluster.getAddresses(),
+            cluster?.getAddresses(),
             client,
             TLS_OPTIONS,
         );
