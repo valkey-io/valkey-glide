@@ -2,7 +2,9 @@
 package glide.api.commands;
 
 import glide.api.models.GlideString;
+import glide.api.models.commands.scan.ScanCursor;
 import glide.api.models.commands.scan.ScanOptions;
+import glide.api.models.commands.scan.ScanResult;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -210,27 +212,26 @@ public interface GenericCommands {
      * @see <a href="https://valkey.io/commands/scan/">valkey.io</a> for details.
      * @param cursor The cursor that points to the next iteration of results. A value of <code>"0"
      *     </code> indicates the start of the search.
-     * @return An <code>Array</code> of <code>Objects</code>. The first element is always the <code>
-     *     cursor</code> for the next iteration of results. <code>"0"</code> will be the <code>cursor
+     * @return An <code>ScanResult</code> containing both a cursor and the data. The <code>
+     *     cursor</code> is for the next iteration of results. <code>"0"</code> will be the <code>
+     *     cursor
      *     </code> returned on the last iteration of the scan.<br>
-     *     The second element is always an <code>Array</code> of matched keys from the database.
+     *     The data is a String array of matched keys from the database.
      * @example
      *     <pre>{@code
      * // Assume database contains a set with 200 keys
-     * String cursor = "0";
-     * Object[] result;
+     * ScanCursor cursor = new ScanCursor("0");
+     * ScanResult<String[]> result;
      * do {
      *     result = client.scan(cursor).get();
-     *     cursor = result[0].toString();
-     *     Object[] stringResults = (Object[]) result[1];
-     *     String keyList = Arrays.stream(stringResults)
-     *         .map(obj -> (String)obj)
-     *         .collect(Collectors.joining(", "));
+     *     cursor = result.getCursor();
+     *     String[] stringResults = result.getData();
+     *     String keyList = String.join(", ", stringResults);
      *     System.out.println("\nSCAN iteration: " + keyList);
-     * } while (!cursor.equals("0"));
+     * } while (!"0".equals(cursor.getString()));
      * }</pre>
      */
-    CompletableFuture<Object[]> scan(String cursor);
+    CompletableFuture<ScanResult<String[]>> scan(ScanCursor cursor);
 
     /**
      * Iterates incrementally over a database for matching keys.
@@ -238,28 +239,27 @@ public interface GenericCommands {
      * @see <a href="https://valkey.io/commands/scan/">valkey.io</a> for details.
      * @param cursor The cursor that points to the next iteration of results. A value of <code>gs("0")
      *     </code> indicates the start of the search.
-     * @return An <code>Array</code> of <code>Objects</code>. The first element is always the <code>
-     *     cursor</code> for the next iteration of results. <code>gs("0")</code> will be the <code>
-     *     cursor
-     *     </code> returned on the last iteration of the scan.<br>
-     *     The second element is always an <code>Array</code> of matched keys from the database.
+     * @return An <code>ScanResult</code> containing both a cursor and the data. The <code>
+     *     cursor</code> is for the next iteration of results. <code>gs("0")</code> will be the <code>
+     *     cursor</code> returned on the last iteration of the scan.<br>
+     *     The data is a GlideString array of matched keys from the database.
      * @example
      *     <pre>{@code
      * // Assume database contains a set with 200 keys
-     * GlideString cursor = gs("0");
-     * Object[] result;
+     * ScanCursor cursor = new ScanCursor(gs("0"));
+     * ScanResult<GlideString[]> result;
      * do {
-     *     result = client.scan(cursor).get();
-     *     cursor = gs(result[0].toString());
-     *     Object[] stringResults = (Object[]) result[1];
-     *     String keyList = Arrays.stream(stringResults)
-     *         .map(obj -> obj.toString())
+     *     result = client.scanBinary(cursor).get();
+     *     cursor = result.getCursor();
+     *     GlideString[] glideStringResults = result.getData();
+     *     String keyList = Arrays.stream(glideStringResults)
+     *         .map(GlideString::toString())
      *         .collect(Collectors.joining(", "));
      *     System.out.println("\nSCAN iteration: " + keyList);
-     * } while (!cursor.equals(gs("0")));
+     * } while (!gs("0").equals(cursor.getGlideString()));
      * }</pre>
      */
-    CompletableFuture<Object[]> scan(GlideString cursor);
+    CompletableFuture<ScanResult<GlideString[]>> scanBinary(ScanCursor cursor);
 
     /**
      * Iterates incrementally over a database for matching keys.
@@ -268,29 +268,28 @@ public interface GenericCommands {
      * @param cursor The cursor that points to the next iteration of results. A value of <code>"0"
      *     </code> indicates the start of the search.
      * @param options The {@link ScanOptions}.
-     * @return An <code>Array</code> of <code>Objects</code>. The first element is always the <code>
-     *     cursor</code> for the next iteration of results. <code>"0"</code> will be the <code>cursor
-     *     </code> returned on the last iteration of the scan.<br>
-     *     The second element is always an <code>Array</code> of matched keys from the database.
+     * @return An <code>ScanResult</code> containing both a cursor and the data. The <code>
+     *      cursor</code> is for the next iteration of results. <code>"0"</code> will be the <code>
+     *     cursor
+     *      </code> returned on the last iteration of the scan.<br>
+     *     The data is a String array of matched keys from the database.
      * @example
      *     <pre>{@code
      * // Assume database contains a set with 200 keys
-     * String cursor = "0";
-     * Object[] result;
+     * ScanCursor cursor = new ScanCursor("0");
+     * ScanResult<String[]> result;
      * // match keys on pattern *11*
      * ScanOptions options = ScanOptions.builder().matchPattern("*11*").build();
      * do {
      *     result = client.scan(cursor, options).get();
-     *     cursor = result[0].toString();
-     *     Object[] stringResults = (Object[]) result[1];
-     *     String keyList = Arrays.stream(stringResults)
-     *         .map(obj -> (String)obj)
-     *         .collect(Collectors.joining(", "));
+     *     cursor = result.getCursor();
+     *     String[] stringResults = result.getData();
+     *     String keyList = String.join(", ", stringResults);
      *     System.out.println("\nSCAN iteration: " + keyList);
-     * } while (!cursor.equals("0"));
+     * } while (!"0".equals(cursor.getString()));
      * }</pre>
      */
-    CompletableFuture<Object[]> scan(String cursor, ScanOptions options);
+    CompletableFuture<ScanResult<String[]>> scan(ScanCursor cursor, ScanOptions options);
 
     /**
      * Iterates incrementally over a database for matching keys.
@@ -299,28 +298,28 @@ public interface GenericCommands {
      * @param cursor The cursor that points to the next iteration of results. A value of <code>gs("0")
      *     </code> indicates the start of the search.
      * @param options The {@link ScanOptions}.
-     * @return An <code>Array</code> of <code>Objects</code>. The first element is always the <code>
-     *     cursor</code> for the next iteration of results. <code>gs("0")</code> will be the <code>
-     *     cursor
-     *     </code> returned on the last iteration of the scan.<br>
-     *     The second element is always an <code>Array</code> of matched keys from the database.
+     * @return An <code>ScanResult</code> containing both a cursor and the data. The <code>
+     *      cursor</code> is for the next iteration of results. <code>gs("0")</code> will be the
+     *     <code>
+     *      cursor</code> returned on the last iteration of the scan.<br>
+     *     The data is a GlideString array of matched keys from the database.
      * @example
      *     <pre>{@code
      * // Assume database contains a set with 200 keys
-     * GlideString cursor = gs("0");
-     * Object[] result;
+     * ScanCursor cursor = new ScanCursor(gs("0"));
+     * ScanResult<GlideString[]> result;
      * // match keys on pattern *11*
      * ScanOptions options = ScanOptions.builder().matchPattern("*11*").build();
      * do {
-     *     result = client.scan(cursor, options).get();
-     *     cursor = gs(result[0].toString());
-     *     Object[] stringResults = (Object[]) result[1];
-     *     String keyList = Arrays.stream(stringResults)
-     *         .map(obj -> obj.toString())
+     *     result = client.scanBinary(cursor, options).get();
+     *     cursor = result.getCursor();
+     *     GlideString[] glideStringResults = result.getData();
+     *     String keyList = Arrays.stream(glideStringResults)
+     *         .map(GlideString::toString())
      *         .collect(Collectors.joining(", "));
      *     System.out.println("\nSCAN iteration: " + keyList);
-     * } while (!cursor.equals(gs("0")));
+     * } while (!gs("0").equals(cursor.getGlideString()));
      * }</pre>
      */
-    CompletableFuture<Object[]> scan(GlideString cursor, ScanOptions options);
+    CompletableFuture<ScanResult<GlideString[]>> scanBinary(ScanCursor cursor, ScanOptions options);
 }

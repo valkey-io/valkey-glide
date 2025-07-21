@@ -54,7 +54,9 @@ import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.batch.BatchOptions;
 import glide.api.models.commands.function.FunctionRestorePolicy;
+import glide.api.models.commands.scan.ScanCursor;
 import glide.api.models.commands.scan.ScanOptions;
+import glide.api.models.commands.scan.ScanResult;
 import glide.api.models.configuration.BackoffStrategy;
 import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.configuration.GlideClientConfiguration;
@@ -556,27 +558,30 @@ public class GlideClient extends BaseClient
     }
 
     @Override
-    public CompletableFuture<Object[]> scan(@NonNull String cursor) {
-        return commandManager.submitNewCommand(Scan, new String[] {cursor}, this::handleArrayResponse);
-    }
-
-    @Override
-    public CompletableFuture<Object[]> scan(@NonNull GlideString cursor) {
+    public CompletableFuture<ScanResult<String[]>> scan(@NonNull ScanCursor cursor) {
         return commandManager.submitNewCommand(
-                Scan, new GlideString[] {cursor}, this::handleArrayResponseBinary);
+                Scan, new String[] {cursor.getString()}, this::handleScanResponse);
     }
 
     @Override
-    public CompletableFuture<Object[]> scan(@NonNull String cursor, @NonNull ScanOptions options) {
-        String[] arguments = ArrayUtils.addFirst(options.toArgs(), cursor);
-        return commandManager.submitNewCommand(Scan, arguments, this::handleArrayResponse);
+    public CompletableFuture<ScanResult<GlideString[]>> scanBinary(@NonNull ScanCursor cursor) {
+        return commandManager.submitNewCommand(
+                Scan, new GlideString[] {cursor.getGlideString()}, this::handleScanBinaryResponse);
     }
 
     @Override
-    public CompletableFuture<Object[]> scan(
-            @NonNull GlideString cursor, @NonNull ScanOptions options) {
-        GlideString[] arguments = new ArgsBuilder().add(cursor).add(options.toArgs()).toArray();
-        return commandManager.submitNewCommand(Scan, arguments, this::handleArrayResponseBinary);
+    public CompletableFuture<ScanResult<String[]>> scan(
+            @NonNull ScanCursor cursor, @NonNull ScanOptions options) {
+        String[] arguments = ArrayUtils.addFirst(options.toArgs(), cursor.getString());
+        return commandManager.submitNewCommand(Scan, arguments, this::handleScanResponse);
+    }
+
+    @Override
+    public CompletableFuture<ScanResult<GlideString[]>> scanBinary(
+            @NonNull ScanCursor cursor, @NonNull ScanOptions options) {
+        GlideString[] arguments =
+                new ArgsBuilder().add(cursor.getGlideString()).add(options.toArgs()).toArray();
+        return commandManager.submitNewCommand(Scan, arguments, this::handleScanBinaryResponse);
     }
 
     @Override
