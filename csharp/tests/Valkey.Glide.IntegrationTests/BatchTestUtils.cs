@@ -31,6 +31,116 @@ internal class BatchTestUtils
         _ = batch.StringLength(nonExistingKey);
         testData.Add(new(0L, "StringLength(nonExistingKey)"));
 
+        // StringAppend tests
+        string appendValue = "-appended";
+        _ = batch.StringAppend(key1, appendValue);
+        testData.Add(new((long)(value1.Length + appendValue.Length), "StringAppend(key1, appendValue)"));
+
+        _ = batch.StringGet(key1);
+        testData.Add(new(new gs(value1 + appendValue), "StringGet(key1) after append"));
+
+        // Append to non-existing key (should create it)
+        _ = batch.StringAppend(nonExistingKey, "new-value");
+        testData.Add(new(9L, "StringAppend(nonExistingKey, new-value)"));
+
+        _ = batch.StringGet(nonExistingKey);
+        testData.Add(new(new gs("new-value"), "StringGet(nonExistingKey) after append"));
+
+        // Append empty string
+        _ = batch.StringAppend(key2, "");
+        testData.Add(new((long)value2.Length, "StringAppend(key2, empty-string)"));
+
+        _ = batch.StringGet(key2);
+        testData.Add(new(new gs(value2), "StringGet(key2) after append empty string"));
+
+        // Increment/Decrement tests
+        string numKey1 = $"{prefix}num1-{Guid.NewGuid()}";
+        string numKey2 = $"{prefix}num2-{Guid.NewGuid()}";
+        string numKey3 = $"{prefix}num3-{Guid.NewGuid()}";
+        string numKey4 = $"{prefix}num4-{Guid.NewGuid()}";
+        string floatKey1 = $"{prefix}float1-{Guid.NewGuid()}";
+        string floatKey2 = $"{prefix}float2-{Guid.NewGuid()}";
+
+        // Set initial values
+        _ = batch.StringSet(numKey1, "10");
+        testData.Add(new(true, "StringSet(numKey1, 10)"));
+
+        _ = batch.StringSet(numKey2, "20");
+        testData.Add(new(true, "StringSet(numKey2, 20)"));
+
+        _ = batch.StringSet(floatKey1, "10.5");
+        testData.Add(new(true, "StringSet(floatKey1, 10.5)"));
+
+        // Test StringIncrement (by 1)
+        _ = batch.StringIncrement(numKey1);
+        testData.Add(new(11L, "StringIncrement(numKey1)"));
+
+        _ = batch.StringGet(numKey1);
+        testData.Add(new(new gs("11"), "StringGet(numKey1) after increment"));
+
+        // Test StringIncrement with amount
+        _ = batch.StringIncrement(numKey2, 5);
+        testData.Add(new(25L, "StringIncrement(numKey2, 5)"));
+
+        _ = batch.StringGet(numKey2);
+        testData.Add(new(new gs("25"), "StringGet(numKey2) after increment by 5"));
+
+        // Test StringIncrement with negative amount
+        _ = batch.StringIncrement(numKey2, -3);
+        testData.Add(new(22L, "StringIncrement(numKey2, -3)"));
+
+        _ = batch.StringGet(numKey2);
+        testData.Add(new(new gs("22"), "StringGet(numKey2) after increment by -3"));
+
+        // Test StringIncrement on non-existent key
+        _ = batch.StringIncrement(numKey3);
+        testData.Add(new(1L, "StringIncrement(numKey3) non-existent key"));
+
+        _ = batch.StringGet(numKey3);
+        testData.Add(new(new gs("1"), "StringGet(numKey3) after increment non-existent key"));
+
+        // Test StringIncrement with float
+        _ = batch.StringIncrement(floatKey1, 0.5);
+        testData.Add(new(11.0, "StringIncrement(floatKey1, 0.5)"));
+
+        _ = batch.StringGet(floatKey1);
+        testData.Add(new(new gs("11"), "StringGet(floatKey1) after increment by 0.5"));
+
+        // Test StringIncrement with float on non-existent key
+        _ = batch.StringIncrement(floatKey2, 0.5);
+        testData.Add(new(0.5, "StringIncrement(floatKey2, 0.5) non-existent key"));
+
+        _ = batch.StringGet(floatKey2);
+        testData.Add(new(new gs("0.5"), "StringGet(floatKey2) after increment non-existent key"));
+
+        // Test StringDecrement (by 1)
+        _ = batch.StringDecrement(numKey1);
+        testData.Add(new(10L, "StringDecrement(numKey1)"));
+
+        _ = batch.StringGet(numKey1);
+        testData.Add(new(new gs("10"), "StringGet(numKey1) after decrement"));
+
+        // Test StringDecrement with amount
+        _ = batch.StringDecrement(numKey2, 2);
+        testData.Add(new(20L, "StringDecrement(numKey2, 2)"));
+
+        _ = batch.StringGet(numKey2);
+        testData.Add(new(new gs("20"), "StringGet(numKey2) after decrement by 2"));
+
+        // Test StringDecrement with negative amount
+        _ = batch.StringDecrement(numKey2, -5);
+        testData.Add(new(25L, "StringDecrement(numKey2, -5)"));
+
+        _ = batch.StringGet(numKey2);
+        testData.Add(new(new gs("25"), "StringGet(numKey2) after decrement by -5"));
+
+        // Test StringDecrement on non-existent key
+        _ = batch.StringDecrement(numKey4);
+        testData.Add(new(-1L, "StringDecrement(numKey4) non-existent key"));
+
+        _ = batch.StringGet(numKey4);
+        testData.Add(new(new gs("-1"), "StringGet(numKey4) after decrement non-existent key"));
+
         return testData;
     }
 
