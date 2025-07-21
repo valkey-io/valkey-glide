@@ -1,0 +1,4 @@
+# MIRI currently only runs on nightly builds, so we set the toolchain here
+[toolchain]
+channel = "nightly-2025-07-10"
+components = [ "miri" ]
