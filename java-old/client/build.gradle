@@ -79,7 +79,7 @@ tasks.register('protobuf', Exec) {
     }
     commandLine 'protoc',
         '-Iprotobuf=glide-core/src/protobuf/',
-        '--java_out=java/client/src/main/java/glide/models/protobuf',
+        '--java_out=java-old/client/src/main/java/glide/models/protobuf',
         'glide-core/src/protobuf/connection_request.proto',
         'glide-core/src/protobuf/command_request.proto',
         'glide-core/src/protobuf/response.proto'

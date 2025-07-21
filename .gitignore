@@ -95,3 +95,4 @@ java/bin/
 # Temporary files in repo root
 temp/
 sqlite_mcp_server.db
+**/valkey-cluster/

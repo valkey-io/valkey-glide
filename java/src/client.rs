@@ -32,96 +32,102 @@ use crate::jni_wrappers::create_jni_string;
 use crate::{jni_error, jni_result};
 
 // ============================================================================
+// SHARED RUNTIME - Global runtime for all clients
+// ============================================================================
+
+/// Shared multi-threaded runtime for all JNI clients
+/// This allows true concurrency across all client operations
+static SHARED_RUNTIME: LazyLock<Arc<Runtime>> = LazyLock::new(|| {
+    Arc::new(
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .thread_name("glide-jni")
+            .worker_threads(16) // High worker thread count for concurrency
+            .max_blocking_threads(32)
+            .build()
+            .expect("Failed to create shared runtime"),
+    )
+});
+
+// ============================================================================
 // JNI CLIENT - Thin wrapper around glide-core
 // ============================================================================
 
-/// Simplified client wrapper that directly uses glide-core
+/// Simplified client wrapper that directly uses glide-core with shared runtime
 ///
-/// This eliminates all the unnecessary abstraction layers and callback complexity
-/// by using glide-core's native async support with a simple blocking interface.
+/// Uses a global shared multi-threaded runtime to enable true concurrency
+/// across all client operations while maintaining a simple blocking interface.
 pub struct JniClient {
     /// The glide-core client - our single source of truth
     core_client: Client,
-    /// Tokio runtime for executing async operations
-    runtime: Arc<Runtime>,
 }
 
 impl JniClient {
     /// Create a new JniClient wrapping a glide-core Client
     ///
-    /// This is the only place where we create runtime overhead - everything else
-    /// delegates directly to glide-core's battle-tested implementation.
+    /// Uses the shared global runtime for all operations.
     pub fn new(core_client: Client) -> JniResult<Self> {
-        let runtime = Arc::new(
-            tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .map_err(|e| JniError::Runtime(format!("Failed to create runtime: {e}")))?,
-        );
-
         logger_core::log_debug(
             "jni-client",
-            "Created JniClient with direct glide-core integration",
+            "Created JniClient with shared runtime",
         );
 
-        Ok(Self {
-            core_client,
-            runtime,
-        })
+        Ok(Self { core_client })
     }
 
-    /// Create a new JniClient with an existing runtime
+    /// Create a new JniClient (alternative constructor for compatibility)
     ///
-    /// This ensures the same runtime used for connection is used for commands,
-    /// preventing connection drops due to runtime lifecycle issues.
-    pub fn with_runtime(core_client: Client, runtime: Arc<Runtime>) -> JniResult<Self> {
+    /// Uses the same shared runtime as the default constructor.
+    pub fn with_runtime(core_client: Client, _runtime: Arc<Runtime>) -> JniResult<Self> {
         logger_core::log_debug(
             "jni-client",
-            "Created JniClient with shared runtime for connection consistency",
+            "Created JniClient (compatibility constructor)",
         );
 
-        Ok(Self {
-            core_client,
-            runtime,
-        })
+        Ok(Self { core_client })
     }
 
-    /// Execute a Valkey command using glide-core's complete pipeline
+    /// Execute a Valkey command using spawn+callback for true concurrency
     ///
-    /// This leverages glide-core's:
-    /// - Automatic value conversion based on command type (expected_type_for_cmd)
-    /// - Timeout handling (including special logic for blocking commands)
-    /// - Cluster routing and error handling
-    /// 
-    /// No duplication - glide-core handles ALL Valkey protocol complexity.
+    /// This spawns async tasks and uses a callback channel to get results,
+    /// allowing multiple commands to be in-flight concurrently.
     pub fn execute_command(&mut self, cmd: Cmd) -> JniResult<Value> {
         logger_core::log_debug("jni-client", format!("Executing command: {cmd:?}"));
 
-        // Let glide-core handle everything automatically:
-        // - expected_type_for_cmd() determines return type conversion
-        // - get_request_timeout() handles blocking command timeouts  
-        // - convert_to_expected_type() performs automatic value conversion
-        // - Cluster routing, retry logic, connection management, etc.
-        let result = self
-            .runtime
-            .block_on(async { self.core_client.send_command(&cmd, None).await });
+        // Create a one-shot channel for the result
+        let (tx, rx) = std::sync::mpsc::channel();
+        let mut client = self.core_client.clone();
 
-        match result {
-            Ok(value) => {
-                logger_core::log_debug("jni-client", "Command executed successfully");
-                Ok(value) // Value is already properly converted by glide-core!
-            }
-            Err(e) => {
-                logger_core::log_debug("jni-client", format!("Command failed: {e}"));
-                Err(JniError::from(e))
+        // Spawn the async task - this returns immediately
+        SHARED_RUNTIME.spawn(async move {
+            let result = client.send_command(&cmd, None).await;
+            // Send result back through channel
+            let _ = tx.send(result);
+        });
+
+        // Block only on receiving the result (not on the entire async operation)
+        // This allows multiple commands to be spawned concurrently
+        match rx.recv_timeout(Duration::from_millis(5000)) {
+            Ok(result) => match result {
+                Ok(value) => {
+                    logger_core::log_debug("jni-client", "Command executed successfully");
+                    Ok(value)
+                }
+                Err(e) => {
+                    logger_core::log_debug("jni-client", format!("Command failed: {e}"));
+                    Err(JniError::from(e))
+                }
+            },
+            Err(_) => {
+                logger_core::log_debug("jni-client", "Command timed out");
+                Err(JniError::Timeout("Command timeout".to_string()))
             }
         }
     }
 
-    /// Execute a Valkey command with routing using glide-core's complete pipeline
+    /// Execute a Valkey command with routing using spawn+callback
     ///
-    /// Identical to execute_command() but allows explicit routing.
-    /// glide-core handles all complexity automatically.
+    /// Uses spawn+callback for concurrent execution with routing.
     pub fn execute_command_with_routing(
         &mut self,
         cmd: Cmd,
@@ -132,37 +138,48 @@ impl JniClient {
             format!("Executing command with routing: {cmd:?}, routing: {routing:?}"),
         );
 
-        // glide-core handles routing, value conversion, timeouts, everything
-        let result = self
-            .runtime
-            .block_on(async { self.core_client.send_command(&cmd, routing).await });
+        // Create a one-shot channel for the result
+        let (tx, rx) = std::sync::mpsc::channel();
+        let mut client = self.core_client.clone();
 
-        match result {
-            Ok(value) => {
-                logger_core::log_debug(
-                    "jni-client",
-                    "Command with routing executed successfully",
-                );
-                Ok(value) // Already properly converted by glide-core
-            }
-            Err(e) => {
-                logger_core::log_debug(
-                    "jni-client",
-                    format!("Command with routing failed: {e}"),
-                );
-                Err(JniError::from(e))
+        // Spawn the async task - this returns immediately
+        SHARED_RUNTIME.spawn(async move {
+            let result = client.send_command(&cmd, routing).await;
+            let _ = tx.send(result);
+        });
+
+        // Block only on receiving the result
+        match rx.recv_timeout(Duration::from_millis(5000)) {
+            Ok(result) => match result {
+                Ok(value) => {
+                    logger_core::log_debug(
+                        "jni-client",
+                        "Command with routing executed successfully",
+                    );
+                    Ok(value)
+                }
+                Err(e) => {
+                    logger_core::log_debug(
+                        "jni-client",
+                        format!("Command with routing failed: {e}"),
+                    );
+                    Err(JniError::from(e))
+                }
+            },
+            Err(_) => {
+                logger_core::log_debug("jni-client", "Command with routing timed out");
+                Err(JniError::Timeout("Command timeout".to_string()))
             }
         }
     }
 
-    /// Execute a pipeline using glide-core directly
+    /// Execute a pipeline using shared runtime
     ///
-    /// For batch operations.
+    /// For batch operations with concurrent execution capability.
     pub fn execute_pipeline(&mut self, pipeline: redis::Pipeline) -> JniResult<Value> {
         logger_core::log_debug("jni-client", "Executing pipeline");
 
-        // Use glide-core's send_pipeline directly - that's it!
-        let result = self.runtime.block_on(async {
+        let result = SHARED_RUNTIME.block_on(async {
             self.core_client
                 .send_pipeline(&pipeline, None, false, None, Default::default())
                 .await
@@ -180,14 +197,13 @@ impl JniClient {
         }
     }
 
-    /// Execute a transaction using glide-core directly
+    /// Execute a transaction using shared runtime
     ///
-    /// For MULTI/EXEC transactions.
+    /// For MULTI/EXEC transactions with concurrent execution capability.
     pub fn execute_transaction(&mut self, transaction: redis::Pipeline) -> JniResult<Value> {
         logger_core::log_debug("jni-client", "Executing transaction");
 
-        // Use glide-core's send_transaction directly - that's it!
-        let result = self.runtime.block_on(async {
+        let result = SHARED_RUNTIME.block_on(async {
             self.core_client
                 .send_transaction(&transaction, None, None, false)
                 .await
@@ -210,7 +226,6 @@ impl Clone for JniClient {
     fn clone(&self) -> Self {
         Self {
             core_client: self.core_client.clone(),
-            runtime: self.runtime.clone(),
         }
     }
 }
@@ -482,21 +497,14 @@ pub unsafe extern "system" fn Java_io_valkey_glide_core_client_GlideClient_creat
             ..Default::default()
         };
 
-        // Create runtime first, then use it for both connection and future operations
-        let runtime = Arc::new(
-            tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .map_err(|e| jni_error!(Runtime, "Failed to create runtime: {e}"))?
-        );
-
-        let core_client = runtime.block_on(async {
+        // Use shared runtime for client creation
+        let core_client = SHARED_RUNTIME.block_on(async {
             Client::new(connection_config, None)
                 .await
-                .map_err(|e| jni_error!(Connection, "Failed to connect to Valkey: {e}"))
+                .map_err(|e| JniError::Connection(format!("Failed to connect to Valkey: {e}")))
         })?;
 
-        let jni_client = JniClient::with_runtime(core_client, runtime)?;
+        let jni_client = JniClient::new(core_client)?;
         let handle = CLIENT_COUNTER.fetch_add(1, Ordering::SeqCst);
 
         // Register in the client registry

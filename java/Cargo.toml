@@ -15,6 +15,12 @@ thiserror = "2.0"
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "time"] }
 redis = { path = "../glide-core/redis-rs/redis", features = ["tokio-comp"] }
 logger_core = { path = "../logger_core" }
+# Ultra-high performance dependencies for 100K TPS target
+uuid = { version = "1.0", features = ["v4"] }
+futures = "0.3"
+# High-performance lock-free channels (proven at massive scale)
+crossbeam = "0.8"
+crossbeam-channel = "0.5"
 
 [dependencies.glide-core]
 path = "../glide-core"

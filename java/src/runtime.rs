@@ -32,13 +32,13 @@ impl Clone for JniRuntime {
 }
 
 impl JniRuntime {
-    /// Create a new per-client runtime
+    /// Create a new per-client runtime optimized for async multiplexing
     pub fn new(thread_name_prefix: &str) -> JniResult<Self> {
         let runtime = Builder::new_multi_thread()
             .enable_all()
             .thread_name(thread_name_prefix)
-            .worker_threads(2) // Limit threads per client
-            .max_blocking_threads(4) // Limit blocking threads per client
+            .worker_threads(16) // More worker threads for high concurrency
+            .max_blocking_threads(32) // More blocking threads
             .build()
             .map_err(|e| JniError::Runtime(format!("Failed to create runtime: {}", e)))?;
 
