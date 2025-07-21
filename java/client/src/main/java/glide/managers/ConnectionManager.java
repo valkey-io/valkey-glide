@@ -158,6 +158,10 @@ public class ConnectionManager {
             connectionRequestBuilder.setConnectionRetryStrategy(reconnectionStrategyBuilder.build());
         }
 
+        if (configuration.isLazyConnect()) {
+            connectionRequestBuilder.setLazyConnect(configuration.isLazyConnect());
+        }
+
         return connectionRequestBuilder;
     }
 

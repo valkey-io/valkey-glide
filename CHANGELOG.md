@@ -1,3 +1,13 @@
+## 2.1
+
+#### Changes
+
+#### Fixes
+
+* Java: Add lazy connection support to Java module ([#4350](https://github.com/valkey-io/valkey-glide/pull/4370))
+
+## 2.0 (2025-06-18)
+
 #### Changes
 
 * Java: fix addReturnField method in FT module ([#4084]https://github.com/valkey-io/valkey-glide/pull/4084)
