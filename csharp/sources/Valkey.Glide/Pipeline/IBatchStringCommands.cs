@@ -34,4 +34,28 @@ internal interface IBatchStringCommands
     /// <inheritdoc cref="Commands.IStringBaseCommands.StringLengthAsync(ValkeyKey, CommandFlags)" path="/*[not(self::remarks) and not(self::returns)]" />
     /// <returns>Command Response - <inheritdoc cref="Commands.IStringBaseCommands.StringLengthAsync(ValkeyKey, CommandFlags)" /></returns>
     IBatch StringLength(ValkeyKey key);
+
+    /// <inheritdoc cref="Commands.IStringBaseCommands.StringAppendAsync(ValkeyKey, ValkeyValue, CommandFlags)" path="/*[not(self::remarks) and not(self::returns)]" />
+    /// <returns>Command Response - <inheritdoc cref="Commands.IStringBaseCommands.StringAppendAsync(ValkeyKey, ValkeyValue, CommandFlags)" /></returns>
+    IBatch StringAppend(ValkeyKey key, ValkeyValue value);
+
+    /// <inheritdoc cref="Commands.IStringBaseCommands.StringDecrementAsync(ValkeyKey, CommandFlags)" path="/*[not(self::remarks) and not(self::returns)]" />
+    /// <returns>Command Response - <inheritdoc cref="Commands.IStringBaseCommands.StringDecrementAsync(ValkeyKey, CommandFlags)" /></returns>
+    IBatch StringDecrement(ValkeyKey key);
+
+    /// <inheritdoc cref="Commands.IStringBaseCommands.StringDecrementAsync(ValkeyKey, long, CommandFlags)" path="/*[not(self::remarks) and not(self::returns)]" />
+    /// <returns>Command Response - <inheritdoc cref="Commands.IStringBaseCommands.StringDecrementAsync(ValkeyKey, long, CommandFlags)" /></returns>
+    IBatch StringDecrement(ValkeyKey key, long decrement);
+
+    /// <inheritdoc cref="Commands.IStringBaseCommands.StringIncrementAsync(ValkeyKey, CommandFlags)" path="/*[not(self::remarks) and not(self::returns)]" />
+    /// <returns>Command Response - <inheritdoc cref="Commands.IStringBaseCommands.StringIncrementAsync(ValkeyKey, CommandFlags)" /></returns>
+    IBatch StringIncrement(ValkeyKey key);
+
+    /// <inheritdoc cref="Commands.IStringBaseCommands.StringIncrementAsync(ValkeyKey, long, CommandFlags)" path="/*[not(self::remarks) and not(self::returns)]" />
+    /// <returns>Command Response - <inheritdoc cref="Commands.IStringBaseCommands.StringIncrementAsync(ValkeyKey, long, CommandFlags)" /></returns>
+    IBatch StringIncrement(ValkeyKey key, long increment);
+
+    /// <inheritdoc cref="Commands.IStringBaseCommands.StringIncrementAsync(ValkeyKey, double, CommandFlags)" path="/*[not(self::remarks) and not(self::returns)]" />
+    /// <returns>Command Response - <inheritdoc cref="Commands.IStringBaseCommands.StringIncrementAsync(ValkeyKey, double, CommandFlags)" /></returns>
+    IBatch StringIncrement(ValkeyKey key, double increment);
 }

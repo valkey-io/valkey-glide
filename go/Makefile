@@ -123,7 +123,7 @@ lint:
 
 lint-ci: lint
 	if [ "$$(gofumpt -l . | wc -l)" -gt 0 ]; then exit 1; fi
-	if [ "$$(golines -l --shorten-comments -m 127 . | wc -l)" -gt 0]; then exit 1; fi
+	if [ "$$(golines -l --shorten-comments -m 127 . | wc -l)" -gt 0 ]; then exit 1; fi
 
 format:
 	gofumpt -w .
