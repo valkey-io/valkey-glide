@@ -61,15 +61,22 @@ internal partial class Request
     /// <param name="args">The command arguments</param>
     /// <returns>A command that converts a HashSet to a ValkeyValue array</returns>
     private static Cmd<object[], ValkeyValue[]> ObjectArrayToValkeyValueArray(RequestType request, GlideString[] args)
-        => new(request, args, false, set => [.. set.Cast<GlideString>().Select(gs => gs)]);
+        => new(request, args, false, set => [.. set.Select(obj => {
+            GlideString glideString = obj is GlideString gs ? gs : new GlideString((string)obj);
+            return (ValkeyValue)glideString;
+        })]);
 
     private static Cmd<object[], HashEntry[]> ObjectArrayToHashEntries(RequestType request, GlideString[] args, bool isNullable = false)
         => new(request, args, isNullable, objects => [.. objects.Select(he => {
             object[] arr = (object[])he;
-            return new HashEntry((GlideString)arr[0], (GlideString)arr[1]);
+            GlideString key = arr[0] is GlideString gs0 ? gs0 : new GlideString((string)arr[0]);
+            GlideString value = arr[1] is GlideString gs1 ? gs1 : new GlideString((string)arr[1]);
+            return new HashEntry(key, value);
         })]);
 
     private static Cmd<Dictionary<GlideString, object>, HashEntry[]> DictionaryToHashEntries(RequestType request, GlideString[] args, bool isNullable = false)
-        => new(request, args, isNullable, dict => [.. dict.Select(he =>
-            new HashEntry(he.Key, (GlideString)he.Value))]);
+        => new(request, args, isNullable, dict => [.. dict.Select(he => {
+            GlideString value = he.Value is GlideString gs ? gs : new GlideString((string)he.Value);
+            return new HashEntry(he.Key, value);
+        })]);
 }
