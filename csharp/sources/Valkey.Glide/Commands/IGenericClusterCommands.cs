@@ -144,7 +144,10 @@ public interface IGenericClusterCommands
     /// the caller to process both successful and failed commands together. In this case, error details
     /// will be provided as instances of <see cref="RequestException" />.
     /// </param>
-    /// <returns>An array of results, where each entry corresponds to a command’s execution result.</returns>
+    /// <returns>
+    /// An array of results, where each entry corresponds to a command’s execution result
+    /// or <see langword="null" /> if a transaction failed due to a <c>WATCH</c> command.
+    /// </returns>
     Task<object?[]?> Exec(ClusterBatch batch, bool raiseOnError);
 
     /// <summary>
@@ -243,6 +246,9 @@ public interface IGenericClusterCommands
     /// will be provided as instances of <see cref="RequestException" />.
     /// </param>
     /// <param name="options">A <see cref="ClusterBatchOptions" /> object containing execution options.</param>
-    /// <returns>An array of results, where each entry corresponds to a command’s execution result.</returns>
+    /// <returns>
+    /// An array of results, where each entry corresponds to a command’s execution result
+    /// or <see langword="null" /> if a transaction failed due to a <c>WATCH</c> command.
+    /// </returns>
     Task<object?[]?> Exec(ClusterBatch batch, bool raiseOnError, ClusterBatchOptions options);
 }
