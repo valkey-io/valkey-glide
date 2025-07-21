@@ -25,7 +25,7 @@ public class SharedBatchTests
     public async Task BatchTimeout(BaseClient client, bool isAtomic)
     {
         bool isCluster = client is GlideClusterClient;
-        IBatch batch = isCluster ? new ClusterBatch(isAtomic) : new Batch(isAtomic);
+        Pipeline.IBatch batch = isCluster ? new ClusterBatch(isAtomic) : new Batch(isAtomic);
         _ = batch.CustomCommand(["DEBUG", "sleep", "0.5"]);
         BaseBatchOptions options = isCluster ? new ClusterBatchOptions(timeout: 100) : new BatchOptions(timeout: 100);
 
@@ -53,7 +53,7 @@ public class SharedBatchTests
         string key1 = "{BatchRaiseOnError}" + Guid.NewGuid();
         string key2 = "{BatchRaiseOnError}" + Guid.NewGuid();
 
-        IBatch batch = isCluster ? new ClusterBatch(isAtomic) : new Batch(isAtomic);
+        Pipeline.IBatch batch = isCluster ? new ClusterBatch(isAtomic) : new Batch(isAtomic);
         // TODO replace custom command
         _ = batch.StringSet(key1, "hello").CustomCommand(["lpop", key1]).CustomCommand(["del", key1]).CustomCommand(["rename", key1, key2]);
 
@@ -87,7 +87,7 @@ public class SharedBatchTests
         string key1 = "{DumpRestore}" + Guid.NewGuid();
         string key2 = "{DumpRestore}" + Guid.NewGuid();
 
-        IBatch batch = isCluster ? new ClusterBatch(isAtomic) : new Batch(isAtomic);
+        Pipeline.IBatch batch = isCluster ? new ClusterBatch(isAtomic) : new Batch(isAtomic);
         _ = batch.StringSet(key1, "hello").KeyDump(key1);
 
         object?[] res = isCluster
@@ -100,7 +100,7 @@ public class SharedBatchTests
             () => Assert.IsType<byte[]?>(res[1])
         );
 
-        IBatch batch2 = isCluster ? new ClusterBatch(isAtomic) : new Batch(isAtomic);
+        Pipeline.IBatch batch2 = isCluster ? new ClusterBatch(isAtomic) : new Batch(isAtomic);
         _ = batch2.KeyDelete([key1, key2]).KeyRestore(key1, (byte[])res[1]!).KeyRestoreDateTime(key2, (byte[])res[1]!);
 
         res = isCluster

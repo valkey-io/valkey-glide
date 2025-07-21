@@ -161,7 +161,10 @@ public interface IGenericCommands
     /// will be provided as instances of <see cref="RequestException" />.
     /// </param>
     /// <param name="options">A <see cref="BatchOptions" /> object containing execution options.</param>
-    /// <returns>An array of results, where each entry corresponds to a command’s execution result.</returns>
+    /// <returns>
+    /// An array of results, where each entry corresponds to a command’s execution result
+    /// or <see langword="null" /> if a transaction failed due to a <c>WATCH</c> command.
+    /// </returns>
     Task<object?[]?> Exec(Batch batch, bool raiseOnError, BatchOptions options);
 
     /// <summary>
