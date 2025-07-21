@@ -1,7 +1,5 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-#![allow(unused)]
-
 pub use redis::{RedisFuture, Value, ErrorKind, RedisError, RedisResult, ObjectType, PushKind};
 use telemetrylib::GlideSpan;
 
@@ -18,11 +16,11 @@ pub struct Cmd;
 impl Routable for Cmd {}
 
 impl Cmd {
-    pub fn arg<T: ToRedisArgs>(&mut self, arg: T) -> &mut Cmd {
+    pub fn arg<T: ToRedisArgs>(&mut self, _arg: T) -> &mut Cmd {
         self
     }
 
-    pub fn set_span(&mut self, span: Option<GlideSpan>) -> &mut Cmd {
+    pub fn set_span(&mut self, _span: Option<GlideSpan>) -> &mut Cmd {
         self
     }
 }
@@ -30,7 +28,7 @@ impl Cmd {
 pub struct Pipeline;
 
 impl Pipeline {
-    pub fn with_capacity(capacity: usize) -> Self {
+    pub fn with_capacity(_capacity: usize) -> Self {
         Pipeline
     }
 
@@ -42,11 +40,11 @@ impl Pipeline {
         true
     }
 
-    pub fn add_command(&mut self, cmd: Cmd) -> &mut Self {
+    pub fn add_command(&mut self, _cmd: Cmd) -> &mut Self {
         self
     }
 
-    pub fn set_pipeline_span(&mut self, span: Option<GlideSpan>) {}
+    pub fn set_pipeline_span(&mut self, _span: Option<GlideSpan>) {}
     
     pub fn span(&self) -> Option<GlideSpan> {
         Some(GlideSpan)
@@ -82,15 +80,15 @@ impl ClusterScanArgsBuilder {
         ClusterScanArgs
     }
 
-    pub fn with_count(mut self, count: u32) -> Self {
+    pub fn with_count(self, _count: u32) -> Self {
         self
     }
 
-    pub fn with_object_type(mut self, object_type: ObjectType) -> Self {
+    pub fn with_object_type(self, _object_type: ObjectType) -> Self {
         self
     }
 
-    pub fn with_match_pattern<T: Into<Vec<u8>>>(mut self, pattern: T) -> Self {
+    pub fn with_match_pattern<T: Into<Vec<u8>>>(self, _pattern: T) -> Self {
         self
     }
 }
@@ -103,7 +101,7 @@ pub struct PushInfo {
 pub struct PipelineRetryStrategy;
 
 impl PipelineRetryStrategy {
-    pub fn new(retry_server_error: bool, retry_connection_error: bool) -> Self {
+    pub fn new(_retry_server_error: bool, _retry_connection_error: bool) -> Self {
         PipelineRetryStrategy
     }
 }

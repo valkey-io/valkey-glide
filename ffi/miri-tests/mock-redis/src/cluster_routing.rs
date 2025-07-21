@@ -1,13 +1,12 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-#![allow(unused)]
-
 pub trait Routable {
     fn command(&self) -> Option<Vec<u8>> {
         None
     }
 }
 
+#[allow(unused)]
 pub struct Route(u16, SlotAddr);
 
 impl Route {
@@ -65,7 +64,7 @@ pub enum ResponsePolicy {
 }
 
 impl ResponsePolicy {
-    pub fn for_command(cmd: &[u8]) -> Option<ResponsePolicy> {
+    pub fn for_command(_cmd: &[u8]) -> Option<ResponsePolicy> {
         Some(ResponsePolicy::OneSucceeded)
     }
 }

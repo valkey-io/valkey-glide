@@ -1,7 +1,5 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-#![allow(unused)]
-
 use std::fmt;
 use std::time::Duration;
 
@@ -20,7 +18,7 @@ pub struct GlideSpan;
 pub struct TraceError;
 
 impl GlideSpan {
-    pub fn add_span(&self, name: &str) -> Result<GlideSpan, TraceError> {
+    pub fn add_span(&self, _name: &str) -> Result<GlideSpan, TraceError> {
         Ok(GlideSpan)
     }
 
@@ -37,7 +35,7 @@ impl GlideOpenTelemetrySignalsExporter {
 
 impl std::str::FromStr for GlideOpenTelemetrySignalsExporter {
     type Err = Error;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(_s: &str) -> Result<Self, Self::Err> {
         Ok(GlideOpenTelemetrySignalsExporter)
     }
 }
@@ -57,18 +55,18 @@ impl GlideOpenTelemetryConfigBuilder {
         GlideOpenTelemetryConfig
     }
 
-    pub fn with_flush_interval(mut self, duration: Duration) -> Self {
+    pub fn with_flush_interval(self, _duration: Duration) -> Self {
         self
     }
 
-    pub fn with_metrics_exporter(mut self, exporter: GlideOpenTelemetrySignalsExporter) -> Self {
+    pub fn with_metrics_exporter(self, _exporter: GlideOpenTelemetrySignalsExporter) -> Self {
         self
     }
 
     pub fn with_trace_exporter(
-        mut self, 
-        exporter: GlideOpenTelemetrySignalsExporter,
-        sample_percentage: Option<u32>,
+        self,
+        _exporter: GlideOpenTelemetrySignalsExporter,
+        _sample_percentage: Option<u32>,
     ) -> Self {
         self
     }
@@ -77,11 +75,11 @@ impl GlideOpenTelemetryConfigBuilder {
 pub struct GlideOpenTelemetry;
 
 impl GlideOpenTelemetry {
-    pub fn initialise(config: GlideOpenTelemetryConfig) -> Result<(), GlideOTELError> {
+    pub fn initialise(_config: GlideOpenTelemetryConfig) -> Result<(), GlideOTELError> {
         todo!()
     }
 
-    pub fn new_span(name: &str) -> GlideSpan {
+    pub fn new_span(_name: &str) -> GlideSpan {
         todo!()
     }
 }

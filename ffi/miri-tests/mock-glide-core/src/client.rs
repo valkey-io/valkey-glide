@@ -1,7 +1,5 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-#![allow(unused)]
-
 pub use glide_core::client::{GlideRt, get_or_init_runtime};
 
 use crate::connection_request::ConnectionRequest;
@@ -18,70 +16,70 @@ impl fmt::Display for ConnectionError {
 
 #[derive(Clone)]
 pub struct Client {
-    push_sender: Option<tokio::sync::mpsc::UnboundedSender<PushInfo>>
+    _push_sender: Option<tokio::sync::mpsc::UnboundedSender<PushInfo>>
 }
 
 impl Client {
     pub async fn new(
-        request: ConnectionRequest,
+        _request: ConnectionRequest,
         push_sender: Option<tokio::sync::mpsc::UnboundedSender<PushInfo>>,
     ) -> Result<Self, ConnectionError> {
         Ok(Client {
-            push_sender
+            _push_sender: push_sender
         })
     }
 
     pub fn send_pipeline<'a>(
         &'a mut self,
-        pipeline: &'a Pipeline,
-        routing: Option<RoutingInfo>,
-        raise_on_error: bool,
-        pipeline_timeout: Option<u32>,
-        pipeline_retry_strategy: PipelineRetryStrategy,
+        _pipeline: &'a Pipeline,
+        _routing: Option<RoutingInfo>,
+        _raise_on_error: bool,
+        _pipeline_timeout: Option<u32>,
+        _pipeline_retry_strategy: PipelineRetryStrategy,
     ) -> redis::RedisFuture<'a, Value> {
         todo!()
     }
 
     pub fn send_transaction<'a>(
         &'a mut self,
-        pipeline: &'a Pipeline,
-        routing: Option<RoutingInfo>,
-        transaction_timeout: Option<u32>,
-        raise_on_error: bool,
+        _pipeline: &'a Pipeline,
+        _routing: Option<RoutingInfo>,
+        _transaction_timeout: Option<u32>,
+        _raise_on_error: bool,
     ) -> redis::RedisFuture<'a, Value> {
         todo!()
     }
 
     pub async fn invoke_script<'a>(
         &'a mut self,
-        hash: &'a str,
-        keys: &Vec<&[u8]>,
-        args: &Vec<&[u8]>,
-        routing: Option<RoutingInfo>,
+        _hash: &'a str,
+        _keys: &Vec<&[u8]>,
+        _args: &Vec<&[u8]>,
+        _routing: Option<RoutingInfo>,
     ) -> redis::RedisResult<Value> {
         todo!()
     }
 
     pub async fn update_connection_password(
         &mut self,
-        password: Option<String>,
-        immediate_auth: bool,
+        _password: Option<String>,
+        _immediate_auth: bool,
     ) -> redis::RedisResult<Value> {
         todo!()
     }
 
     pub fn send_command<'a>(
         &'a mut self,
-        cmd: &'a Cmd,
-        routing: Option<RoutingInfo>,
+        _cmd: &'a Cmd,
+        _routing: Option<RoutingInfo>,
     ) -> redis::RedisFuture<'a, redis::Value> {
         todo!()
     }
 
     pub async fn cluster_scan<'a>(
         &'a mut self,
-        scan_state_cursor: &'a ScanStateRC,
-        cluster_scan_args: ClusterScanArgs,
+        _scan_state_cursor: &'a ScanStateRC,
+        _cluster_scan_args: ClusterScanArgs,
     ) -> RedisResult<Value> {
         todo!()
     }
