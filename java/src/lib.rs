@@ -2,31 +2,41 @@
 
 //! High-Performance JNI Bridge for Valkey GLIDE
 //!
-//! Professional architecture achieving exceptional performance through:
-//! - Lock-free parallel command queuing with crossbeam channels
-//! - Zero-copy JNI optimizations with direct ByteBuffer support
-//! - High-throughput batch processing with adaptive sizing
-//! - Multi-threaded pipeline execution for maximum concurrency
-//! - Memory-efficient resource management
-//! - Comprehensive performance monitoring
-//! 
-//! TARGET: 100K+ TPS with ultra-low latency
+//! This library provides a production-ready, high-performance Java Native Interface (JNI)
+//! bridge for Valkey GLIDE. The architecture is designed to achieve exceptional throughput
+//! and low latency through advanced optimization techniques.
+//!
+//! ## Key Features
+//!
+//! - **Lock-free Command Queuing**: Utilizes crossbeam channels for maximum concurrency
+//! - **Dynamic Worker Scaling**: Automatically scales workers based on system capabilities
+//! - **Batch Processing**: Intelligent command batching with adaptive sizing
+//! - **Zero-Copy Optimizations**: Minimizes memory allocations and copies
+//! - **Robust Resource Management**: Comprehensive cleanup and error handling
+//! - **Performance Monitoring**: Real-time metrics and adaptive optimization
+//!
+//! ## Performance Target
+//!
+//! Designed to achieve high throughput with low latency on modern hardware configurations.
+//!
+//! ## Architecture
+//!
+//! The system consists of three core components:
+//! 1. **Command Queue**: High-performance command queuing and batching
+//! 2. **Batch Dispatcher**: Parallel pipeline execution with worker pools
+//! 3. **JNI Interface**: Clean Java integration layer
 
-// High-performance core modules
+// Core high-performance modules
 mod command_queue;
 mod batch_dispatcher;
 mod jni_interface;
 
-// Core utility modules
+// Essential utility modules
 mod error;
 mod input_validator;
 mod jni_wrappers;
 
-// Legacy modules (compatibility)
-mod async_bridge;
-mod callback;
-mod client;
-mod runtime;
+// Legacy modules removed - architecture now clean and minimal
 
 // Export high-performance interface
 pub use command_queue::*;
@@ -38,8 +48,4 @@ pub use error::*;
 pub use input_validator::*;
 pub use jni_wrappers::*;
 
-// Legacy exports (will be phased out)
-pub use async_bridge::*;
-pub use callback::*;
-pub use client::*;
-pub use runtime::*;
+// Clean architecture - no legacy exports needed

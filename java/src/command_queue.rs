@@ -200,7 +200,7 @@ pub struct CommandQueue {
     /// Round-robin sender selection for load balancing
     next_sender: AtomicUsize,
     /// Configuration for adaptive batching
-    batch_config: BatchConfig,
+    batch_config: QueueBatchConfig,
     /// Performance counters (cache-aligned to prevent false sharing)
     stats: Arc<QueueCounters>,
     /// Queue shutdown signal
@@ -219,9 +219,9 @@ struct QueueCounters {
     optimization_attempts: AtomicU64,
 }
 
-/// High-performance batch configuration
+/// High-performance queue batch configuration
 #[derive(Debug, Clone)]
-pub struct BatchConfig {
+pub struct QueueBatchConfig {
     /// Minimum batch size (prevents over-batching for latency)
     pub min_batch_size: usize,
     /// Maximum batch size (Redis pipeline optimal range)
@@ -236,7 +236,7 @@ pub struct BatchConfig {
     pub size_optimization: bool,
 }
 
-impl Default for BatchConfig {
+impl Default for QueueBatchConfig {
     fn default() -> Self {
         Self {
             // Optimized for high throughput
@@ -253,11 +253,11 @@ impl Default for BatchConfig {
 impl CommandQueue {
     /// Create new high-performance command queue
     pub fn new() -> Self {
-        Self::with_config(BatchConfig::default())
+        Self::with_config(QueueBatchConfig::default())
     }
 
     /// Create queue with custom configuration
-    pub fn with_config(batch_config: BatchConfig) -> Self {
+    pub fn with_config(batch_config: QueueBatchConfig) -> Self {
         // Create multiple crossbeam channels for maximum parallelism
         const CHANNEL_COUNT: usize = 16; // Multiple channels for excellent scalability
         
@@ -521,7 +521,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_priority_batching() {
-        let mut config = BatchConfig::default();
+        let mut config = QueueBatchConfig::default();
         config.priority_batching = true;
         let queue = CommandQueue::with_config(config);
         

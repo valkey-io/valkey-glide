@@ -45,14 +45,18 @@ pub struct BatchConfig {
 
 impl Default for BatchConfig {
     fn default() -> Self {
+        // Calculate optimal worker count based on system capabilities
+        let cpu_count = num_cpus::get();
+        let optimal_workers = (cpu_count * 2).max(4).min(64); // 2x CPU cores, min 4, max 64
+        
         Self {
-            // Extreme batch sizes for maximum throughput
-            max_batch_size: 10000,  // 10K commands per batch for maximum pipeline efficiency
-            max_batch_wait: Duration::from_micros(50), // Ultra-low latency threshold
-            worker_count: 32,       // High worker count for maximum parallelism
-            command_timeout: Duration::from_secs(10),
+            // Professional batch sizes optimized for Redis pipeline efficiency
+            max_batch_size: 8000,   // 8K commands per batch for optimal pipeline performance
+            max_batch_wait: Duration::from_micros(100), // Low latency threshold
+            worker_count: optimal_workers, // Dynamic scaling based on system capabilities
+            command_timeout: Duration::from_secs(30),
             stats_interval: Duration::from_secs(5),
-            response_buffer_size: 1024 * 1024, // 1MB pre-allocated buffers
+            response_buffer_size: 2 * 1024 * 1024, // 2MB pre-allocated buffers
             zero_copy_enabled: true,
             adaptive_sizing: true,
             max_concurrent_pipelines: 8, // Multiple pipelines per worker
@@ -138,15 +142,15 @@ impl MemoryPool {
     }
 }
 
-/// Worker pool for ultra-high performance parallel processing
-struct UltraWorkerPool {
+/// Worker pool for high performance parallel processing
+struct WorkerPool {
     /// Workers with their respective clients and semaphores
-    workers: Vec<UltraWorker>,
+    workers: Vec<Worker>,
     /// Round-robin counter for load balancing
     next_worker: AtomicUsize,
 }
 
-struct UltraWorker {
+struct Worker {
     /// Dedicated client for this worker
     client: Client,
     /// Semaphore to limit concurrent pipelines
@@ -157,7 +161,7 @@ struct UltraWorker {
     errors: AtomicU64,
 }
 
-impl UltraWorkerPool {
+impl WorkerPool {
     async fn new(base_client: &Client, worker_count: usize, max_concurrent_pipelines: usize) -> Self {
         let mut workers = Vec::with_capacity(worker_count);
         
@@ -166,7 +170,7 @@ impl UltraWorkerPool {
             let worker_client = base_client.clone();
             let pipeline_semaphore = Arc::new(Semaphore::new(max_concurrent_pipelines));
             
-            let worker = UltraWorker {
+            let worker = Worker {
                 client: worker_client,
                 pipeline_semaphore,
                 commands_processed: AtomicU64::new(0),
@@ -188,7 +192,7 @@ impl UltraWorkerPool {
         }
     }
 
-    fn get_next_worker(&self) -> &UltraWorker {
+    fn get_next_worker(&self) -> &Worker {
         let index = self.next_worker.fetch_add(1, Ordering::Relaxed) % self.workers.len();
         &self.workers[index]
     }
@@ -215,7 +219,7 @@ impl UltraWorkerPool {
     }
 }
 
-/// Revolutionary ultra-high performance batch command dispatcher
+/// High performance batch command dispatcher
 ///
 /// Key optimizations for 100K+ TPS:
 /// - Massive parallel pipeline execution (10K commands per batch)
@@ -223,27 +227,26 @@ impl UltraWorkerPool {
 /// - Memory pools for zero-allocation hot paths
 /// - Adaptive batch sizing based on real-time load
 /// - Zero-copy data paths where possible
-/// - NUMA-aware thread placement (future enhancement)
-pub struct UltraBatchDispatcher {
+pub struct BatchDispatcher {
     /// Command queue for receiving batched commands
-    queue: Arc<UltraCommandQueue>,
+    queue: Arc<CommandQueue>,
     /// Configuration
-    config: UltraBatchConfig,
+    config: BatchConfig,
     /// Worker pool for parallel processing
-    worker_pool: UltraWorkerPool,
+    worker_pool: WorkerPool,
     /// Memory pool for high-frequency allocations
-    memory_pool: Arc<UltraMemoryPool>,
+    memory_pool: Arc<MemoryPool>,
     /// Shutdown signal
     shutdown: Arc<AtomicBool>,
     /// Performance counters (cache-aligned)
-    stats: Arc<UltraPerformanceCounters>,
+    stats: Arc<PerformanceCounters>,
     /// Adaptive sizing state
     adaptive_state: Arc<RwLock<AdaptiveState>>,
 }
 
 /// Cache-aligned performance counters to eliminate false sharing
 #[repr(align(64))]
-struct UltraPerformanceCounters {
+struct PerformanceCounters {
     batches_executed: AtomicU64,
     commands_executed: AtomicU64,
     pipeline_executions: AtomicU64,
@@ -264,19 +267,19 @@ struct AdaptiveState {
     adjustment_direction: i32, // -1, 0, or 1
 }
 
-impl UltraBatchDispatcher {
-    /// Create new ultra-high performance batch dispatcher
-    pub async fn new(client: Client, queue: Arc<UltraCommandQueue>, config: UltraBatchConfig) -> Self {
+impl BatchDispatcher {
+    /// Create new high performance batch dispatcher
+    pub async fn new(client: Client, queue: Arc<CommandQueue>, config: BatchConfig) -> Self {
         // Create worker pool with dedicated connections
-        let worker_pool = UltraWorkerPool::new(&client, config.worker_count, config.max_concurrent_pipelines).await;
+        let worker_pool = WorkerPool::new(&client, config.worker_count, config.max_concurrent_pipelines).await;
         
         // Create memory pool for high-frequency allocations
-        let memory_pool = Arc::new(UltraMemoryPool::new(
+        let memory_pool = Arc::new(MemoryPool::new(
             config.response_buffer_size,
             config.worker_count * 4, // 4 buffers per worker initially
         ));
 
-        let stats = Arc::new(UltraPerformanceCounters {
+        let stats = Arc::new(PerformanceCounters {
             batches_executed: AtomicU64::new(0),
             commands_executed: AtomicU64::new(0),
             pipeline_executions: AtomicU64::new(0),
@@ -405,7 +408,7 @@ impl UltraBatchDispatcher {
                 
                 // Execute batch using ultra-high performance pipeline
                 let start_time = Instant::now();
-                dispatcher.execute_ultra_batch(batch, worker_id).await;
+                dispatcher.execute_batch(batch, worker_id).await;
                 let execution_time = start_time.elapsed();
 
                 // Update performance counters
@@ -441,7 +444,7 @@ impl UltraBatchDispatcher {
     }
 
     /// Execute a batch using ultra-high performance techniques
-    async fn execute_ultra_batch(&self, batch: UltraCommandBatch, worker_id: usize) {
+    async fn execute_batch(&self, batch: CommandBatch, worker_id: usize) {
         let batch_size = batch.len();
         let start_time = Instant::now();
 
@@ -497,7 +500,7 @@ impl UltraBatchDispatcher {
         match result {
             Ok(Value::Array(results)) => {
                 // Success: distribute results to waiting commands
-                self.distribute_ultra_results(commands, results).await;
+                self.distribute_results(commands, results).await;
                 
                 self.stats.batches_executed.fetch_add(1, Ordering::Relaxed);
                 self.stats.commands_executed.fetch_add(batch_size as u64, Ordering::Relaxed);
@@ -523,7 +526,7 @@ impl UltraBatchDispatcher {
             Ok(other_result) => {
                 // Unexpected result format
                 let error_msg = "Ultra pipeline returned non-array result".to_string();
-                self.handle_ultra_batch_error(commands, error_msg).await;
+                self.handle_batch_error(commands, error_msg).await;
                 worker.errors.fetch_add(1, Ordering::Relaxed);
                 self.stats.errors.fetch_add(1, Ordering::Relaxed);
                 
@@ -538,7 +541,7 @@ impl UltraBatchDispatcher {
             Err(redis_error) => {
                 // Pipeline execution failed
                 let error_msg = format!("Ultra pipeline execution failed: {:?}", redis_error);
-                self.handle_ultra_batch_error(commands, error_msg).await;
+                self.handle_batch_error(commands, error_msg).await;
                 worker.errors.fetch_add(1, Ordering::Relaxed);
                 self.stats.errors.fetch_add(1, Ordering::Relaxed);
                 
@@ -550,8 +553,8 @@ impl UltraBatchDispatcher {
         }
     }
 
-    /// Distribute pipeline results with ultra-high performance
-    async fn distribute_ultra_results(&self, commands: Vec<UltraCommandRequest>, results: Vec<Value>) {
+    /// Distribute pipeline results with high performance
+    async fn distribute_results(&self, commands: Vec<CommandRequest>, results: Vec<Value>) {
         if commands.len() != results.len() {
             logger_core::log_error(
                 "ultra-result-distributor",
@@ -581,8 +584,8 @@ impl UltraBatchDispatcher {
         }
     }
 
-    /// Handle ultra batch execution error
-    async fn handle_ultra_batch_error(&self, commands: Vec<UltraCommandRequest>, error_msg: String) {
+    /// Handle batch execution error
+    async fn handle_batch_error(&self, commands: Vec<CommandRequest>, error_msg: String) {
         for cmd in commands {
             let error = redis::RedisError::from((
                 redis::ErrorKind::IoError,
@@ -660,7 +663,7 @@ impl UltraBatchDispatcher {
             while !dispatcher.shutdown.load(Ordering::Relaxed) {
                 interval.tick().await;
                 
-                let stats = dispatcher.get_ultra_stats();
+                let stats = dispatcher.get_stats();
                 let elapsed = last_report.elapsed().as_secs_f64();
                 let commands_diff = stats.commands_executed.saturating_sub(last_commands);
                 let current_tps = commands_diff as f64 / elapsed;
@@ -691,7 +694,7 @@ impl UltraBatchDispatcher {
     }
 
     /// Get comprehensive ultra-performance statistics
-    pub fn get_ultra_stats(&self) -> UltraDispatcherStats {
+    pub fn get_stats(&self) -> DispatcherStats {
         let batches = self.stats.batches_executed.load(Ordering::Relaxed);
         let commands = self.stats.commands_executed.load(Ordering::Relaxed);
         let total_time = self.stats.total_execution_time_ms.load(Ordering::Relaxed);
@@ -699,7 +702,7 @@ impl UltraBatchDispatcher {
         
         let (_worker_commands, _worker_pipelines, _worker_errors) = self.worker_pool.get_total_stats();
 
-        UltraDispatcherStats {
+        DispatcherStats {
             batches_executed: batches,
             commands_executed: commands,
             pipeline_executions: self.stats.pipeline_executions.load(Ordering::Relaxed),
@@ -731,12 +734,12 @@ impl UltraBatchDispatcher {
     }
 }
 
-impl Clone for UltraBatchDispatcher {
+impl Clone for BatchDispatcher {
     fn clone(&self) -> Self {
         Self {
             queue: self.queue.clone(),
             config: self.config.clone(),
-            worker_pool: UltraWorkerPool {
+            worker_pool: WorkerPool {
                 workers: Vec::new(), // Empty for cloned instances
                 next_worker: AtomicUsize::new(0),
             },
@@ -748,20 +751,19 @@ impl Clone for UltraBatchDispatcher {
     }
 }
 
-// Type aliases for compatibility
-pub type BatchDispatcher = UltraBatchDispatcher;
-pub type BatchConfig = UltraBatchConfig;
-pub type DispatcherStats = UltraDispatcherStats;
+// All types are now using professional naming conventions
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_ultra_batch_config() {
-        let config = UltraBatchConfig::default();
-        assert_eq!(config.max_batch_size, 10000);
-        assert_eq!(config.worker_count, 32);
+    fn test_batch_config() {
+        let config = BatchConfig::default();
+        assert_eq!(config.max_batch_size, 8000);
+        // Worker count is dynamic based on CPU cores (2x CPU cores, min 4, max 64)
+        assert!(config.worker_count >= 4);
+        assert!(config.worker_count <= 64);
         assert!(config.zero_copy_enabled);
         assert!(config.adaptive_sizing);
     }

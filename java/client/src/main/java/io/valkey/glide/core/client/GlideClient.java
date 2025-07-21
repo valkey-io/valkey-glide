@@ -11,9 +11,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /**
  * High-performance client for Valkey GLIDE with direct glide-core integration.
  * <p>
- * This implementation bypasses Unix Domain Sockets and uses direct JNI calls
- * to the Rust glide-core for maximum performance while maintaining the same
- * async API as the standard Glide client.
+ * This implementation uses direct JNI calls to the Rust glide-core for maximum 
+ * performance while maintaining the same async API as the standard Glide client.
  */
 public class GlideClient implements AutoCloseable {
     private static final Cleaner CLEANER = Cleaner.create();
@@ -26,8 +25,10 @@ public class GlideClient implements AutoCloseable {
             System.err.println("Failed to load native library: " + e.getMessage());
             throw e;
         }
-    }    /**
-     * Native handle to the client instance in Rust (atomic for thread safety)
+    }
+
+    /**
+     * Native handle to the client instance in Rust
      */
     private final AtomicLong nativeClientHandle = new AtomicLong(0);
     
@@ -118,8 +119,8 @@ public class GlideClient implements AutoCloseable {
             throw new IllegalArgumentException("At least one address must be provided");
         }
 
-        // Use REVOLUTIONARY ultra-high performance client with zero-copy optimizations for 100K+ TPS
-        long handle = createRevolutionaryClient(
+        // Create client with high performance optimizations
+        long handle = createClient(
             config.getAddresses(),
             config.getDatabaseId(),
             config.getUsername(),
@@ -153,10 +154,8 @@ public class GlideClient implements AutoCloseable {
         this(new Config(Arrays.asList(host + ":" + port)));
     }
 
-
     /**
      * Execute any server command using the generic command execution system.
-     * This method provides a unified interface for all server operations.
      *
      * @param command The command to execute
      * @return CompletableFuture with the command result
@@ -177,131 +176,8 @@ public class GlideClient implements AutoCloseable {
             }
 
             long handle = nativeClientHandle.get();
-            // Use REVOLUTIONARY zero-copy execution for 100K+ TPS with adaptive batching
-            Object result = executeRevolutionaryCommand(
-                handle, 
-                command.getType(), 
-                byteArgs, 
-                1,  // Normal priority
-                0   // Unknown response size
-            );
-            return CompletableFuture.completedFuture(result);
-        } catch (Exception e) {
-            CompletableFuture<Object> future = new CompletableFuture<>();
-            future.completeExceptionally(e);
-            return future;
-        }
-    }
-
-    // ==================== TYPED EXECUTION METHODS ====================
-    // These methods provide direct typed returns, eliminating protobuf overhead
-
-    /**
-     * Execute a command expecting a String result.
-     * Uses unified native executeCommand - glide-core handles all value conversion automatically.
-     *
-     * @param command The command to execute
-     * @param args Command arguments
-     * @return CompletableFuture with String result
-     */
-    public CompletableFuture<String> executeStringCommand(String command, String[] args) {
-        return executeRawCommand(command, args).thenApply(result -> {
-            if (result == null) return null;
-            if (result instanceof String) return (String) result;
-            if (result instanceof byte[]) return new String((byte[]) result);
-            return result.toString();
-        });
-    }
-
-    /**
-     * Execute a command expecting a Long result.
-     * Uses unified native executeCommand - glide-core handles all value conversion automatically.
-     *
-     * @param command The command to execute
-     * @param args Command arguments
-     * @return CompletableFuture with Long result
-     */
-    public CompletableFuture<Long> executeLongCommand(String command, String[] args) {
-        return executeRawCommand(command, args).thenApply(result -> {
-            if (result == null) return null;
-            if (result instanceof Long) return (Long) result;
-            if (result instanceof Number) return ((Number) result).longValue();
-            if (result instanceof String) return Long.parseLong((String) result);
-            throw new ClassCastException("Cannot convert " + result.getClass() + " to Long");
-        });
-    }
-
-    /**
-     * Execute a command expecting a Double result.
-     * Uses unified native executeCommand - glide-core handles all value conversion automatically.
-     *
-     * @param command The command to execute
-     * @param args Command arguments
-     * @return CompletableFuture with Double result
-     */
-    public CompletableFuture<Double> executeDoubleCommand(String command, String[] args) {
-        return executeRawCommand(command, args).thenApply(result -> {
-            if (result == null) return null;
-            if (result instanceof Double) return (Double) result;
-            if (result instanceof Number) return ((Number) result).doubleValue();
-            if (result instanceof String) return Double.parseDouble((String) result);
-            throw new ClassCastException("Cannot convert " + result.getClass() + " to Double");
-        });
-    }
-
-    /**
-     * Execute a command expecting a Boolean result.
-     * Uses unified native executeCommand - glide-core handles all value conversion automatically.
-     *
-     * @param command The command to execute
-     * @param args Command arguments
-     * @return CompletableFuture with Boolean result
-     */
-    public CompletableFuture<Boolean> executeBooleanCommand(String command, String[] args) {
-        return executeRawCommand(command, args).thenApply(result -> {
-            if (result == null) return null;
-            if (result instanceof Boolean) return (Boolean) result;
-            if (result instanceof Long) return ((Long) result) != 0;
-            if (result instanceof String) return Boolean.parseBoolean((String) result);
-            throw new ClassCastException("Cannot convert " + result.getClass() + " to Boolean");
-        });
-    }
-
-    /**
-     * Execute a command expecting an Object[] result.
-     * Uses unified native executeCommand - glide-core handles all value conversion automatically.
-     *
-     * @param command The command to execute
-     * @param args Command arguments
-     * @return CompletableFuture with Object[] result
-     */
-    public CompletableFuture<Object[]> executeArrayCommand(String command, String[] args) {
-        return executeRawCommand(command, args).thenApply(result -> {
-            if (result == null) return null;
-            if (result instanceof Object[]) return (Object[]) result;
-            if (result instanceof List) return ((List<?>) result).toArray();
-            throw new ClassCastException("Cannot convert " + result.getClass() + " to Object[]");
-        });
-    }
-
-    /**
-     * Execute a command expecting any Object result (for complex types).
-     * Uses glide-core's default value conversion
-     *
-     * @param command The command to execute
-     * @param args Command arguments
-     * @return CompletableFuture with Object result
-     */
-    public CompletableFuture<Object> executeObjectCommand(String command, String[] args) {
-        checkNotClosed();
-        try {
-            // Convert String[] to byte[][] for the native method
-            byte[][] byteArgs = new byte[args.length][];
-            for (int i = 0; i < args.length; i++) {
-                byteArgs[i] = args[i].getBytes(java.nio.charset.StandardCharsets.UTF_8);
-            }
-            long handle = nativeClientHandle.get();
-            Object result = executeCommand(handle, command, byteArgs);
+            // Execute command through high performance pipeline
+            Object result = executeCommand(handle, command.getType(), byteArgs);
             return CompletableFuture.completedFuture(result);
         } catch (Exception e) {
             CompletableFuture<Object> future = new CompletableFuture<>();
@@ -311,81 +187,46 @@ public class GlideClient implements AutoCloseable {
     }
 
     /**
-     * Convenience method to execute a command and return a typed result.
-     * This method handles common type casting scenarios.
-     *
-     * @param command The command to execute
-     * @param expectedType The expected return type
-     * @param <T> The type to cast the result to
-     * @return CompletableFuture with the typed result
+     * Check if client is closed and throw exception if it is
      */
-    @SuppressWarnings("unchecked")
-    public <T> CompletableFuture<T> executeCommand(Command command, Class<T> expectedType) {
-        return executeCommand(command).thenApply(result -> {
-            if (result == null) {
-                return null;
-            }
-            if (expectedType.isInstance(result)) {
-                return (T) result;
-            }
-            throw new ClassCastException("Expected " + expectedType.getSimpleName() +
-                                       " but got " + result.getClass().getSimpleName());
-        });
+    private void checkNotClosed() {
+        if (nativeClientHandle.get() == 0) {
+            throw new IllegalStateException("Client is closed");
+        }
     }
 
     /**
-     * Check if the client is closed
-     *
-     * @return true if the client is closed
-     */
-    public boolean isClosed() {
-        return nativeClientHandle.get() == 0;
-    }
-    
-    /**
-     * Close the client and release native resources with atomic operations
+     * Close the client and cleanup all resources
      */
     @Override
     public void close() {
-        // Atomic compare-and-swap ensures only one cleanup
-        long handle = nativeClientHandle.getAndSet(0);
-        if (handle != 0 && cleanupInProgress.compareAndSet(false, true)) {
-            try {
-                nativeState.cleanup();
-                cleanable.clean();
-            } finally {
-                // Mark as permanently closed
-                cleanupInProgress.set(true);
-            }
+        if (!cleanupInProgress.compareAndSet(false, true)) {
+            // Cleanup already in progress or completed
+            return;
         }
+
+        long handle = nativeClientHandle.getAndSet(0);
+        if (handle != 0) {
+            closeClient(handle);
+        }
+
+        // Also trigger the cleaner cleanup (safe to call multiple times)
+        cleanable.clean();
     }
 
     /**
-     * Shared state for coordinating cleanup between explicit close() and Cleaner
+     * Shared state for cleanup coordination
      */
     private static class NativeState {
-        private volatile long nativePtr;
+        volatile long nativePtr;
 
         NativeState(long nativePtr) {
             this.nativePtr = nativePtr;
         }
-
-        /**
-         * Safely cleanup the native resource, ensuring it's only done once
-         */
-        synchronized void cleanup() {
-            long ptr = nativePtr;
-            if (ptr != 0) {
-                nativePtr = 0;
-                // Use REVOLUTIONARY client cleanup
-                closeRevolutionaryClient(ptr);
-            }
-        }
     }
 
     /**
-     * Cleanup action for Cleaner - modern replacement for finalize()
-     * Only runs if close() was not called explicitly
+     * Cleanup action for the Cleaner
      */
     private static class CleanupAction implements Runnable {
         private final NativeState nativeState;
@@ -396,31 +237,26 @@ public class GlideClient implements AutoCloseable {
 
         @Override
         public void run() {
-            // This will be a no-op if close() was already called
-            nativeState.cleanup();
+            long ptr = nativeState.nativePtr;
+            if (ptr != 0) {
+                nativeState.nativePtr = 0;
+                // Use client cleanup
+                closeClient(ptr);
+            }
         }
     }
 
-    /**
-     * Check that the client is not closed
-     */
-    private void checkNotClosed() {
-        if (isClosed()) {
-            throw new IllegalStateException("Client is closed");
-        }
-    }
-
-    // Native method declarations - match the Rust JNI function signatures
+    // ==================== NATIVE METHODS ====================
 
     /**
-     * Create a new Glide client with full configuration
+     * Create client
      *
-     * @param addresses Array of "host:port" addresses
-     * @param databaseId Database ID to select
-     * @param username Username for authentication (null if not used)
-     * @param password Password for authentication (null if not used)
-     * @param useTls Whether to use TLS encryption
-     * @param clusterMode Whether to use cluster mode
+     * @param addresses Array of server addresses in "host:port" format
+     * @param databaseId database number (standalone only)
+     * @param username authentication username (can be null)
+     * @param password authentication password (can be null)
+     * @param useTls whether to use TLS encryption
+     * @param clusterMode whether to enable cluster mode
      * @param requestTimeoutMs Request timeout in milliseconds
      * @param connectionTimeoutMs Connection timeout in milliseconds
      * @return native pointer to client instance
@@ -437,488 +273,19 @@ public class GlideClient implements AutoCloseable {
     );
 
     /**
+     * Execute command
+     *
+     * @param clientPtr native pointer to client instance
+     * @param command the command name
+     * @param args array of byte arrays containing command arguments
+     * @return command result as Object
+     */
+    private static native Object executeCommand(long clientPtr, String command, byte[][] args);
+
+    /**
      * Close and release a native client
      *
      * @param clientPtr native pointer to client instance
      */
     private static native void closeClient(long clientPtr);
-
-
-    /**
-     * Execute any command with arguments
-     *
-     * @param clientPtr native pointer to client instance
-     * @param command the command name
-     * @param args array of byte arrays containing command arguments
-     * @return command result as Object (can be String, Long, byte[], Object[], etc.)
-     */
-    private static native Object executeCommand(long clientPtr, String command, byte[][] args);
-
-    // ==================== REVOLUTIONARY ULTRA-HIGH PERFORMANCE NATIVE METHODS ====================
-    // Revolutionary zero-copy architecture for 100K+ TPS - BEYOND ALL EXISTING IMPLEMENTATIONS
-
-    /**
-     * Create REVOLUTIONARY ultra-performance client with zero-copy optimizations
-     * Target: 100K+ TPS through massive parallelism and zero-copy data paths
-     *
-     * @param addresses Array of "host:port" addresses
-     * @param databaseId Database ID to select
-     * @param username Username for authentication (null if not used)
-     * @param password Password for authentication (null if not used)
-     * @param useTls Whether to use TLS encryption
-     * @param clusterMode Whether to use cluster mode
-     * @param requestTimeoutMs Request timeout in milliseconds
-     * @param connectionTimeoutMs Connection timeout in milliseconds
-     * @return native pointer to revolutionary client instance
-     */
-    private static native long createRevolutionaryClient(
-        String[] addresses,
-        int databaseId,
-        String username,
-        String password,
-        boolean useTls,
-        boolean clusterMode,
-        int requestTimeoutMs,
-        int connectionTimeoutMs
-    );
-
-    /**
-     * Execute command using REVOLUTIONARY zero-copy optimizations
-     * Features: adaptive batching, priority queuing, zero-copy data transfer
-     *
-     * @param clientPtr native pointer to revolutionary client instance
-     * @param command the command name
-     * @param args array of byte arrays containing command arguments
-     * @param priority command priority (0=low, 1=normal, 2=high, 3=critical)
-     * @param expectedResponseSize expected response size for optimization (0=unknown)
-     * @return command result as Object
-     */
-    private static native Object executeRevolutionaryCommand(
-        long clientPtr, 
-        String command, 
-        byte[][] args,
-        int priority,
-        int expectedResponseSize
-    );
-
-    /**
-     * Execute batch of commands using REVOLUTIONARY zero-copy direct ByteBuffer
-     * Ultimate performance: 10K+ commands per batch via direct memory access
-     *
-     * @param clientPtr native pointer to revolutionary client instance
-     * @param commandsBuffer direct ByteBuffer containing serialized commands
-     * @param commandCount number of commands in the buffer
-     * @return batch result as Object
-     */
-    private static native Object executeRevolutionaryBatch(
-        long clientPtr,
-        java.nio.ByteBuffer commandsBuffer,
-        int commandCount
-    );
-
-    /**
-     * Get REVOLUTIONARY ultra-performance statistics with comprehensive metrics
-     * Includes: zero-copy hits, direct buffer usage, adaptive adjustments, peak TPS
-     *
-     * @param clientPtr native pointer to revolutionary client instance
-     * @return JSON string with comprehensive performance statistics
-     */
-    private static native String getRevolutionaryStats(long clientPtr);
-
-    /**
-     * Close REVOLUTIONARY ultra-performance client
-     *
-     * @param clientPtr native pointer to revolutionary client instance
-     */
-    private static native void closeRevolutionaryClient(long clientPtr);
-
-    // ==================== LEGACY ULTRA-HIGH PERFORMANCE NATIVE METHODS ====================
-    // Legacy batching architecture for 60K+ TPS (kept for compatibility)
-
-    /**
-     * Create ultra-performance client with batching dispatcher
-     *
-     * @param addresses Array of "host:port" addresses
-     * @param databaseId Database ID to select
-     * @param username Username for authentication (null if not used)
-     * @param password Password for authentication (null if not used)
-     * @param useTls Whether to use TLS encryption
-     * @param clusterMode Whether to use cluster mode
-     * @param requestTimeoutMs Request timeout in milliseconds
-     * @param connectionTimeoutMs Connection timeout in milliseconds
-     * @return native pointer to ultra client instance
-     */
-    private static native long createUltraClient(
-        String[] addresses,
-        int databaseId,
-        String username,
-        String password,
-        boolean useTls,
-        boolean clusterMode,
-        int requestTimeoutMs,
-        int connectionTimeoutMs
-    );
-
-    /**
-     * Execute command using ultra-high performance batching
-     *
-     * @param clientPtr native pointer to ultra client instance
-     * @param command the command name
-     * @param args array of byte arrays containing command arguments
-     * @return command result as Object
-     */
-    private static native Object executeUltraCommand(long clientPtr, String command, byte[][] args);
-
-    /**
-     * Get ultra-performance statistics as JSON
-     *
-     * @param clientPtr native pointer to ultra client instance
-     * @return JSON string with performance statistics
-     */
-    private static native String getUltraStats(long clientPtr);
-
-    /**
-     * Close ultra-performance client
-     *
-     * @param clientPtr native pointer to ultra client instance
-     */
-    private static native void closeUltraClient(long clientPtr);
-
-    // ==================== TYPED NATIVE METHODS ====================
-    // These provide direct typed returns, leveraging glide-core's value_conversion.rs
-
-    // All type-specific native methods removed - using unified executeCommand only
-    // glide-core handles value conversion automatically via expected_type_for_cmd()
-
-    /**
-     * Execute a raw command that's not in the CommandType enum.
-     * This is used for custom commands that aren't predefined.
-     *
-     * @param commandName The command name
-     * @param args The command arguments
-     * @return A CompletableFuture containing the command result
-     */
-    public CompletableFuture<Object> executeRawCommand(String commandName, String[] args) {
-        return CompletableFuture.supplyAsync(() -> {
-            long handle = nativeClientHandle.get();
-            if (handle == 0) {
-                throw new IllegalStateException("Client is closed");
-            }
-            
-            // Convert to byte arrays for JNI call
-            byte[][] byteArgs = new byte[args.length][];
-            for (int i = 0; i < args.length; i++) {
-                byteArgs[i] = args[i].getBytes();
-            }
-            
-            return executeCommand(handle, commandName, byteArgs);
-        });
-    }
-
-    /**
-     * Execute a command expecting a Double result
-     * Uses glide-core's ExpectedReturnType::Double for conversion
-     */
-    private static native double executeDoubleCommand(long clientPtr, String command, String[] args);
-
-    /**
-     * Execute a command expecting a Boolean result
-     * Uses glide-core's ExpectedReturnType::Boolean for conversion
-     */
-    // Additional type-specific native methods removed
-    // All commands now use unified executeCommand with Java-side type conversion
-
-    // ==================== SIMPLIFIED ROUTING NATIVE METHODS ====================
-    // These methods accept Route objects directly - conversion happens in Rust
-
-    /**
-     * Execute a command with Route object support
-     *
-     * @param clientPtr Native client handle
-     * @param command Command name
-     * @param args Command arguments
-     * @param route Java Route object (null for no routing)
-     * @return Command result
-     */
-    private static native Object executeCommandWithRoute(long clientPtr, String command, byte[][] args, Object route);
-
-    /**
-     * Execute a command with Route object support expecting a String result
-     *
-     * @param clientPtr Native client handle
-     * @param command Command name
-     * @param args Command arguments
-     * @param route Java Route object (null for no routing)
-     * @return String result
-     */
-    // executeStringCommandWithRoute removed - use executeCommandWithRoute
-
-    /**
-     * Execute multiple commands as a batch for optimal performance
-     * This method implements bulk command execution to eliminate per-command round trips
-     *
-     * @param clientPtr Native client handle
-     * @param commands Array of Command objects to execute
-     * @param route Java Route object (null for no routing)
-     * @param isAtomic Whether to execute as atomic transaction (MULTI/EXEC) or non-atomic batch
-     * @return Array of command results
-     */
-    private static native Object[] executePipeline(long clientPtr, Object[] commands, Object route, boolean isAtomic);
-
-    /**
-     * Execute multiple commands as a batch with full ClusterBatchOptions support
-     * This method implements bulk command execution with timeout and retry strategies
-     *
-     * @param clientPtr Native client handle
-     * @param commands Array of Command objects to execute
-     * @param route Java Route object (null for no routing)
-     * @param isAtomic Whether to execute as atomic transaction (MULTI/EXEC) or non-atomic batch
-     * @param timeoutMs Timeout in milliseconds (0 for default)
-     * @param retryServerError Whether to retry on server errors like TRYAGAIN
-     * @param retryConnectionError Whether to retry on connection errors
-     * @return Array of command results
-     */
-    private static native Object[] executePipelineWithOptions(long clientPtr, Object[] commands, Object route, boolean isAtomic, int timeoutMs, boolean retryServerError, boolean retryConnectionError);
-
-    // ==================== JAVA ROUTING METHODS ====================
-    // These methods accept Java Route objects and convert them to native routing parameters
-
-    /**
-     * Execute multiple commands efficiently as a batch with optional routing
-     * This method provides significant performance improvements over individual command execution
-     *
-     * @param commands Array of Command objects to execute
-     * @param route The routing configuration (Route object, null for no routing)
-     * @param isAtomic Whether to execute as atomic transaction (MULTI/EXEC) or non-atomic batch
-     * @return CompletableFuture with array of command results
-     */
-    public CompletableFuture<Object[]> executeBatchWithRoute(Command[] commands, Object route, boolean isAtomic) {
-        if (commands == null || commands.length == 0) {
-            throw new IllegalArgumentException("Commands array cannot be null or empty");
-        }
-
-        checkNotClosed();
-
-        try {
-            long handle = nativeClientHandle.get();
-            // Use the new optimized batch execution
-            Object[] results = executePipeline(handle, commands, route, isAtomic);
-            return CompletableFuture.completedFuture(results);
-        } catch (Exception e) {
-            CompletableFuture<Object[]> future = new CompletableFuture<>();
-            future.completeExceptionally(e);
-            return future;
-        }
-    }
-
-    /**
-     * Execute multiple commands efficiently as a non-atomic batch
-     * This method provides significant performance improvements for batch operations
-     *
-     * @param commands Array of Command objects to execute
-     * @return CompletableFuture with array of command results
-     */
-    public CompletableFuture<Object[]> executeBatch(Command[] commands) {
-        return executeBatchWithRoute(commands, null, false);
-    }
-
-    /**
-     * Execute multiple commands as an atomic transaction using MULTI/EXEC
-     *
-     * @param commands Array of Command objects to execute
-     * @return CompletableFuture with array of command results
-     */
-    public CompletableFuture<Object[]> executeTransaction(Command[] commands) {
-        return executeBatchWithRoute(commands, null, true);
-    }
-
-    /**
-     * Execute multiple commands efficiently as a batch with full ClusterBatchOptions support
-     * This method processes all ClusterBatchOptions features including routing, timeout, and retry strategies
-     *
-     * @param commands Array of Command objects to execute
-     * @param options ClusterBatchOptions containing routing, timeout, and retry configuration
-     * @param isAtomic Whether to execute as atomic transaction (MULTI/EXEC) or non-atomic batch
-     * @return CompletableFuture with array of command results
-     */
-    public CompletableFuture<Object[]> executeBatchWithClusterOptions(Command[] commands, Object options, boolean isAtomic) {
-        if (commands == null || commands.length == 0) {
-            throw new IllegalArgumentException("Commands array cannot be null or empty");
-        }
-
-        checkNotClosed();
-
-        try {
-            long handle = nativeClientHandle.get();
-            
-            // Extract options from ClusterBatchOptions object
-            Object route = null;
-            int timeoutMs = 0;
-            boolean retryServerError = false;
-            boolean retryConnectionError = false;
-            
-            if (options != null) {
-                try {
-                    // Use reflection to extract ClusterBatchOptions fields
-                    Class<?> optionsClass = options.getClass();
-                    
-                    // Extract timeout from BaseBatchOptions (parent class)
-                    try {
-                        java.lang.reflect.Method getTimeoutMethod = optionsClass.getMethod("getTimeout");
-                        Object timeoutObj = getTimeoutMethod.invoke(options);
-                        if (timeoutObj instanceof Integer) {
-                            timeoutMs = (Integer) timeoutObj;
-                        }
-                    } catch (Exception e) {
-                        // Timeout is optional, ignore if not found
-                    }
-                    
-                    // Extract route from ClusterBatchOptions
-                    try {
-                        java.lang.reflect.Method getRouteMethod = optionsClass.getMethod("getRoute");
-                        route = getRouteMethod.invoke(options);
-                    } catch (Exception e) {
-                        // Route is optional, ignore if not found
-                    }
-                    
-                    // Extract retry strategy from ClusterBatchOptions
-                    try {
-                        java.lang.reflect.Method getRetryStrategyMethod = optionsClass.getMethod("getRetryStrategy");
-                        Object retryStrategy = getRetryStrategyMethod.invoke(options);
-                        
-                        if (retryStrategy != null) {
-                            Class<?> retryStrategyClass = retryStrategy.getClass();
-                            
-                            try {
-                                java.lang.reflect.Method isRetryServerErrorMethod = retryStrategyClass.getMethod("isRetryServerError");
-                                retryServerError = (Boolean) isRetryServerErrorMethod.invoke(retryStrategy);
-                            } catch (Exception e) {
-                                // Default to false
-                            }
-                            
-                            try {
-                                java.lang.reflect.Method isRetryConnectionErrorMethod = retryStrategyClass.getMethod("isRetryConnectionError");
-                                retryConnectionError = (Boolean) isRetryConnectionErrorMethod.invoke(retryStrategy);
-                            } catch (Exception e) {
-                                // Default to false
-                            }
-                        }
-                    } catch (Exception e) {
-                        // Retry strategy is optional, ignore if not found
-                    }
-                    
-                } catch (Exception e) {
-                    throw new RuntimeException("Failed to process ClusterBatchOptions: " + e.getMessage(), e);
-                }
-            }
-            
-            // Use the optimized batch execution with full options support
-            Object[] results = executePipelineWithOptions(handle, commands, route, isAtomic, timeoutMs, retryServerError, retryConnectionError);
-            return CompletableFuture.completedFuture(results);
-        } catch (Exception e) {
-            CompletableFuture<Object[]> future = new CompletableFuture<>();
-            future.completeExceptionally(e);
-            return future;
-        }
-    }
-
-    /**
-     * Execute a command with Java Route object support
-     *
-     * @param command The command to execute
-     * @param route The routing configuration (Route object)
-     * @return CompletableFuture with the command result
-     */
-    public CompletableFuture<Object> executeCommand(Command command, Object route) {
-        if (command == null) {
-            throw new IllegalArgumentException("Command cannot be null");
-        }
-
-        checkNotClosed();
-
-        try {
-            // Convert String[] to byte[][]
-            String[] args = command.getArgumentsArray();
-            byte[][] byteArgs = new byte[args.length][];
-            for (int i = 0; i < args.length; i++) {
-                byteArgs[i] = args[i].getBytes();
-            }
-
-            long handle = nativeClientHandle.get();
-            // Pass Route object directly to JNI - conversion happens in Rust
-            Object result = executeCommandWithRoute(handle, command.getType(), byteArgs, route);
-            return CompletableFuture.completedFuture(result);
-        } catch (Exception e) {
-            CompletableFuture<Object> future = new CompletableFuture<>();
-            future.completeExceptionally(e);
-            return future;
-        }
-    }
-
-    /**
-     * Execute a command with Java Route object support expecting a String result
-     *
-     * @param command The command to execute
-     * @param args Command arguments
-     * @param route The routing configuration (Route object)
-     * @return CompletableFuture with String result
-     */
-    public CompletableFuture<String> executeStringCommand(String command, String[] args, Object route) {
-        checkNotClosed();
-        try {
-            long handle = nativeClientHandle.get();
-            Object result = executeCommandWithRoute(handle, command, convertToByteArrays(args), route);
-            String stringResult;
-            if (result == null) stringResult = null;
-            else if (result instanceof String) stringResult = (String) result;
-            else if (result instanceof byte[]) stringResult = new String((byte[]) result);
-            else stringResult = result.toString();
-            return CompletableFuture.completedFuture(stringResult);
-        } catch (Exception e) {
-            CompletableFuture<String> future = new CompletableFuture<>();
-            future.completeExceptionally(e);
-            return future;
-        }
-    }
-    
-    // Helper method to convert String[] to byte[][]
-    private byte[][] convertToByteArrays(String[] args) {
-        if (args == null) return null;
-        byte[][] result = new byte[args.length][];
-        for (int i = 0; i < args.length; i++) {
-            result[i] = args[i] != null ? args[i].getBytes() : null;
-        }
-        return result;
-    }
-
-    // ==================== SIMPLIFIED ROUTING ====================
-    // Routing is now handled directly in Rust JNI layer without Java-side conversion
-
-    /**
-     * Update the connection password for reconnection.
-     *
-     * @param password The new password to use (null to remove password)
-     * @param immediateAuth Whether to authenticate immediately with the new password
-     * @return A CompletableFuture containing "OK" on success
-     */
-    public CompletableFuture<String> updateConnectionPassword(String password, boolean immediateAuth) {
-        return CompletableFuture.supplyAsync(() -> {
-            long handle = nativeClientHandle.get();
-            if (handle == 0) {
-                throw new IllegalStateException("Client is closed");
-            }
-            
-            return updateConnectionPasswordNative(handle, password, immediateAuth);
-        });
-    }
-
-    /**
-     * Native method to update connection password
-     *
-     * @param clientPtr Native client handle
-     * @param password The new password (null to remove password)
-     * @param immediateAuth Whether to authenticate immediately
-     * @return "OK" on success
-     */
-    private static native String updateConnectionPasswordNative(long clientPtr, String password, boolean immediateAuth);
 }
