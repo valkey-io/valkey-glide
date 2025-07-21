@@ -56,7 +56,7 @@ internal partial class Request
         => new(request, args, isNullable, response => (ValkeyValue)response);
 
     /// <summary>
-    /// Create a Cmd which converts an array of objects to an array of ValkeyValues.
+    /// Create a Cmd which converts an array of GlideStrings to an array of ValkeyValues.
     /// </summary>
     /// <param name="request">The request type</param>
     /// <param name="args">The command arguments</param>
