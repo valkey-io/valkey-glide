@@ -463,7 +463,7 @@ impl ClientAdapter {
                     if let Some(failure_callback) = failure_callback {
                         unsafe { Self::send_async_redis_error(failure_callback, err, request_id) };
                     } else {
-                        eprintln!("Error converting value to CommandResponse: {:?}", err);
+                        eprintln!("Error converting value to CommandResponse: {err:?}");
                         return create_error_result_with_redis_error(err);
                     }
                 }
@@ -472,7 +472,7 @@ impl ClientAdapter {
                 if let Some(failure_callback) = failure_callback {
                     unsafe { Self::send_async_redis_error(failure_callback, err, request_id) };
                 } else {
-                    eprintln!("Error executing command: {:?}", err);
+                    eprintln!("Error executing command: {err:?}");
                     return create_error_result_with_redis_error(err);
                 }
             }
@@ -1157,11 +1157,16 @@ pub unsafe extern "C-unwind" fn command(
         Routes::default()
     };
 
+    let child_span = create_child_span(cmd.span().as_ref(), "send_command");
     let mut client = client_adapter.core.client.clone();
-    client_adapter.execute_request(request_id, async move {
+    let result = client_adapter.execute_request(request_id, async move {
         let routing_info = get_route(route, Some(&cmd))?;
         client.send_command(&cmd, routing_info).await
-    })
+    });
+    if let Ok(span) = child_span {
+        span.end();
+    }
+    result
 }
 
 /// Creates a heap-allocated `CommandResult` containing a `CommandError`.
@@ -1276,7 +1281,7 @@ fn get_route(route: Routes, cmd: Option<&Cmd>) -> RedisResult<Option<RoutingInfo
                     return Err(RedisError::from((
                         ErrorKind::ClientError,
                         "simple_route was not a valid enum variant",
-                        format!("Value: {}", value),
+                        format!("Value: {value}"),
                     )));
                 }
             };
@@ -1322,7 +1327,7 @@ fn get_route(route: Routes, cmd: Option<&Cmd>) -> RedisResult<Option<RoutingInfo
         _ => Err(RedisError::from((
             ErrorKind::ClientError,
             "Unknown route type.",
-            format!("Value: {:?}", route),
+            format!("Value: {route:?}"),
         ))),
     }
 }
@@ -1336,67 +1341,16 @@ fn get_slot_addr(slot_type: &protobuf::EnumOrUnknown<SlotTypes>) -> RedisResult<
         RedisError::from((
             ErrorKind::ClientError,
             "Received unexpected slot id type",
-            format!("Value: {:?}", slot_type),
+            format!("Value: {slot_type:?}"),
         ))
     })
-}
-
-// This struct is used to keep track of the cursor of a cluster scan.
-#[repr(C)]
-pub struct ClusterScanCursor {
-    cursor: *const c_char,
-}
-
-impl ClusterScanCursor {
-    /// Construct a new `ClusterScanCursor`.
-    ///
-    /// This smart constructor ensures that any valid `ClusterScanCursor` is a UTF-8 string.
-    /// This is necessary to enforce safety and avoid panicking in the `Drop` impl.
-    ///
-    /// # Safety
-    /// * Memory pointed to by `new_cursor` must contain a valid nul terminator at the end of the string.
-    /// * `new_cursor` must be valid for reads of bytes up to and including the nul terminator. This means in particular:
-    ///     * The entire memory range of this CStr must be contained within a single allocated object!
-    /// * The nul terminator must be within `isize::MAX` from `new_cursor`.
-    #[unsafe(no_mangle)]
-    pub unsafe extern "C" fn new_cluster_cursor(new_cursor: *const c_char) -> Self {
-        if !new_cursor.is_null() && unsafe { CStr::from_ptr(new_cursor) }.to_str().is_ok() {
-            ClusterScanCursor { cursor: new_cursor }
-        } else {
-            ClusterScanCursor::default()
-        }
-    }
-
-    fn get_cursor(&self) -> *const c_char {
-        self.cursor
-    }
-}
-
-impl Default for ClusterScanCursor {
-    fn default() -> Self {
-        let default_value = CString::new("0").unwrap();
-        ClusterScanCursor {
-            cursor: default_value.into_raw(),
-        }
-    }
-}
-
-impl Drop for ClusterScanCursor {
-    // It is best practice to avoid panicking in Drop impls (https://doc.rust-lang.org/std/ops/trait.Drop.html#tymethod.drop)
-    // so we use a "smart constructor" to guarantee that a valid ClusterScanCursor
-    // is able to be safely dropped.
-    fn drop(&mut self) {
-        if let Ok(temp_str) = unsafe { CStr::from_ptr(self.cursor).to_str() } {
-            glide_core::cluster_scan_container::remove_scan_state_cursor(temp_str.to_string());
-        }
-    }
 }
 
 /// Allows the client to request a cluster scan command to be executed.
 ///
 /// `client_adapter_ptr` is a pointer to a valid `GlideClusterClient` returned in the `ConnectionResponse` from [`create_client`].
 /// `request_id` is a unique identifier for a valid payload buffer which is created in the client.
-/// `cursor` is a ClusterScanCursor struct to hold relevant cursor information.
+/// `cursor` is a cursor string.
 /// `arg_count` keeps track of how many option arguments are passed in the client.
 /// `args` is a pointer to C string representation of the string args.
 /// `args_len` is a pointer to the lengths of the C string representation of the string args.
@@ -1408,12 +1362,14 @@ impl Drop for ClusterScanCursor {
 /// * `client_adapter_ptr` must be obtained from the `ConnectionResponse` returned from [`create_client`].
 /// * `client_adapter_ptr` must be valid until `close_client` is called.
 /// * `request_id` must be valid until it is passed in a call to [`free_command_response`].
+/// * `cursor` must not be null. It must point to a valid C string ([`CStr`]). See the safety documentation of [`CStr::from_ptr`].
+/// * `cursor` must remain valid until the end of this call. The caller is responsible for freeing the memory allocated for this string.
 /// * Both the `success_callback` and `failure_callback` function pointers need to live while the client is open/active. The caller is responsible for freeing both callbacks.
 #[unsafe(no_mangle)]
 pub unsafe extern "C-unwind" fn request_cluster_scan(
     client_adapter_ptr: *const c_void,
     request_id: usize,
-    cursor: ClusterScanCursor,
+    cursor: *const c_char,
     arg_count: c_ulong,
     args: *const usize,
     args_len: *const c_ulong,
@@ -1423,14 +1379,10 @@ pub unsafe extern "C-unwind" fn request_cluster_scan(
         Arc::increment_strong_count(client_adapter_ptr);
         Arc::from_raw(client_adapter_ptr as *mut ClientAdapter)
     };
-    let c_str = unsafe { CStr::from_ptr(cursor.get_cursor()) };
-    let temp_str = match c_str.to_str() {
-        Ok(temp_str) => temp_str,
-        Err(e) => {
-            return unsafe { client_adapter.handle_redis_error(RedisError::from(e), request_id) };
-        }
-    };
-    let cursor_id = temp_str.to_string();
+    let cursor_id = unsafe { CStr::from_ptr(cursor) }
+        .to_str()
+        .unwrap_or("0")
+        .to_owned();
 
     let cluster_scan_args: ClusterScanArgs = if arg_count > 0 {
         let arg_vec = unsafe {
@@ -1933,7 +1885,7 @@ pub(crate) unsafe fn create_pipeline(ptr: *const BatchInfo) -> Result<Pipeline, 
     for (i, cmd_ptr) in cmd_pointers.iter().enumerate() {
         match unsafe { create_cmd(*cmd_ptr) } {
             Ok(cmd) => pipeline.add_command(cmd),
-            Err(err) => return Err(format!("Coudln't create {:?}'th command: {:?}", i, err)),
+            Err(err) => return Err(format!("Coudln't create {i:?}'th command: {err:?}")),
         };
     }
     if info.is_atomic {
@@ -2109,7 +2061,7 @@ pub unsafe extern "C" fn init_open_telemetry(
                 config = config.with_trace_exporter(exporter, sample_percentage);
             }
             Err(e) => {
-                let error_msg = format!("Invalid traces exporter configuration: {}", e);
+                let error_msg = format!("Invalid traces exporter configuration: {e}");
                 return CString::new(error_msg)
                     .unwrap_or_else(|_| {
                         CString::new("Couldn't convert error message to C string").unwrap()
@@ -2129,7 +2081,7 @@ pub unsafe extern "C" fn init_open_telemetry(
                 config = config.with_metrics_exporter(exporter);
             }
             Err(e) => {
-                let error_msg = format!("Invalid metrics exporter configuration: {}", e);
+                let error_msg = format!("Invalid metrics exporter configuration: {e}");
                 return CString::new(error_msg)
                     .unwrap_or_else(|_| {
                         CString::new("Couldn't convert error message to C string").unwrap()
@@ -2147,8 +2099,7 @@ pub unsafe extern "C" fn init_open_telemetry(
 
     if flush_interval_ms <= 0 {
         let error_msg = format!(
-            "InvalidInput: flushIntervalMs must be a positive integer (got: {})",
-            flush_interval_ms
+            "InvalidInput: flushIntervalMs must be a positive integer (got: {flush_interval_ms})"
         );
         return CString::new(error_msg)
             .unwrap_or_else(|_| CString::new("Couldn't convert error message to C string").unwrap())
@@ -2166,7 +2117,7 @@ pub unsafe extern "C" fn init_open_telemetry(
             {
                 Ok(_) => std::ptr::null(), // Success
                 Err(e) => {
-                    let error_msg = format!("Failed to initialize OpenTelemetry: {}", e);
+                    let error_msg = format!("Failed to initialize OpenTelemetry: {e}");
                     CString::new(error_msg)
                         .unwrap_or_else(|_| {
                             CString::new("Couldn't convert error message to C string").unwrap()
@@ -2231,8 +2182,7 @@ fn create_child_span(span: Option<&GlideSpan>, name: &str) -> Result<GlideSpan, 
     match parent_span.add_span(name) {
         Ok(child_span) => Ok(child_span),
         Err(error_msg) => Err(format!(
-            "Opentelemetry failed to create child span with name `{}`. Error: {:?}",
-            name, error_msg
+            "Opentelemetry failed to create child span with name `{name}`. Error: {error_msg:?}"
         )),
     }
 }

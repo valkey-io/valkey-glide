@@ -220,6 +220,78 @@ export async function GetAndSetRandomValue(client: Client) {
     expect(intoString(result)).toEqual(value);
 }
 
+/**
+ * Parse CLIENT LIST output and count the number of client connections
+ * @param output - The output from CLIENT LIST command
+ * @returns The number of connected clients
+ */
+export async function getClientListOutputCount(
+    output: GlideReturnType,
+): Promise<number> {
+    if (output === null) {
+        return 0;
+    }
+
+    const text =
+        output instanceof Buffer ? output.toString("utf8") : String(output);
+
+    if (!text.trim()) {
+        return 0;
+    }
+
+    return text.split("\n").filter((line) => line.trim().length > 0).length;
+}
+
+/**
+ * Get the count of client connections for a client
+ * @param client - GlideClient or GlideClusterClient instance
+ * @returns The number of connected clients
+ */
+export async function getClientCount(
+    client: GlideClient | GlideClusterClient,
+): Promise<number> {
+    if (client instanceof GlideClusterClient) {
+        // For cluster client, execute CLIENT LIST on all nodes
+        const result = await client.customCommand(["CLIENT", "LIST"], {
+            route: "allNodes",
+        });
+
+        // Sum counts from all nodes
+        let totalCount = 0;
+
+        for (const nodeOutput of Object.values(
+            result as Record<string, GlideReturnType>,
+        )) {
+            totalCount += await getClientListOutputCount(nodeOutput);
+        }
+
+        return totalCount;
+    } else {
+        // For standalone client
+        const result = await client.customCommand(["CLIENT", "LIST"]);
+        return await getClientListOutputCount(result);
+    }
+}
+
+/**
+ * Get the expected number of new connections when a lazy client is initialized
+ * @param client - GlideClient or GlideClusterClient instance
+ * @returns The number of expected new connections
+ */
+export async function getExpectedNewConnections(
+    client: GlideClient | GlideClusterClient,
+): Promise<number> {
+    if (client instanceof GlideClusterClient) {
+        // For cluster, get node count and multiply by 2 (2 connections per node)
+        const result = await client.customCommand(["CLUSTER", "NODES"]);
+        const nodesInfo = String(result).trim().split("\n");
+        return nodesInfo.length * 2;
+    } else {
+        // For standalone, always expect 1 new connection
+        return 1;
+    }
+}
+
 export async function flushallOnPort(port: number): Promise<void> {
     try {
         const command = await checkWhichCommandAvailable(
@@ -437,18 +509,20 @@ export const getClientConfigurationOption = (
 
 export async function flushAndCloseClient(
     cluster_mode: boolean,
-    addresses: [string, number][],
+    addresses: [string, number][] | undefined,
     client?: BaseClient,
     tlsConfig?: TestTLSConfig,
 ) {
     try {
-        await testTeardown(
-            cluster_mode,
-            getClientConfigurationOption(addresses, ProtocolVersion.RESP3, {
-                ...tlsConfig,
-                requestTimeout: 2000,
-            }),
-        );
+        if (addresses) {
+            await testTeardown(
+                cluster_mode,
+                getClientConfigurationOption(addresses, ProtocolVersion.RESP3, {
+                    ...tlsConfig,
+                    requestTimeout: 2000,
+                }),
+            );
+        }
     } finally {
         // some tests don't initialize a client
         client?.close();

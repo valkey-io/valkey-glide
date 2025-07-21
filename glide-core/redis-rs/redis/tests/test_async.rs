@@ -506,6 +506,7 @@ mod basic_async {
             addr: ctx.server.client_addr().clone(),
             redis: redis::RedisConnectionInfo {
                 password: Some("asdcasc".to_string()),
+                protocol: redis::ProtocolVersion::RESP2,
                 ..Default::default()
             },
         };
@@ -769,7 +770,7 @@ mod basic_async {
                 sub_conn.subscribe(channel_name.clone()).await?;
 
                 let rcv_msg = rx.recv().await.unwrap();
-                println!("Received PushInfo: {:?}", rcv_msg);
+                println!("Received PushInfo: {rcv_msg:?}");
 
                 Ok::<_, RedisError>(())
             })

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -585,18 +586,18 @@ func (suite *GlideTestSuite) TestLCS_existingAndNonExistingKeys() {
 
 		res, err := client.LCS(context.Background(), key1, key2)
 		suite.NoError(err)
-		assert.Equal(suite.T(), "", res)
+		assert.Equal(suite.T(), "", res.MatchString)
 
 		suite.verifyOK(client.Set(context.Background(), key1, "Dummy string"))
 		suite.verifyOK(client.Set(context.Background(), key2, "Dummy value"))
 
 		res, err = client.LCS(context.Background(), key1, key2)
 		suite.NoError(err)
-		assert.Equal(suite.T(), "Dummy ", res)
+		assert.Equal(suite.T(), "Dummy ", res.MatchString)
 	})
 }
 
-func (suite *GlideTestSuite) TestLCSLen_existingAndNonExistingKeys() {
+func (suite *GlideTestSuite) TestLCS_len_existingAndNonExistingKeys() {
 	suite.SkipIfServerVersionLowerThan("7.0.0", suite.T())
 
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
@@ -605,14 +606,14 @@ func (suite *GlideTestSuite) TestLCSLen_existingAndNonExistingKeys() {
 
 		res, err := client.LCSLen(context.Background(), key1, key2)
 		suite.NoError(err)
-		assert.Equal(suite.T(), int64(0), res)
+		assert.Equal(suite.T(), int64(0), res.Len)
 
 		suite.verifyOK(client.Set(context.Background(), key1, "ohmytext"))
 		suite.verifyOK(client.Set(context.Background(), key2, "mynewtext"))
 
 		res, err = client.LCSLen(context.Background(), key1, key2)
 		suite.NoError(err)
-		assert.Equal(suite.T(), int64(6), res)
+		assert.Equal(suite.T(), int64(6), res.Len)
 	})
 }
 
@@ -632,19 +633,21 @@ func (suite *GlideTestSuite) TestLCS_BasicIDXOption() {
 		suite.NoError(err)
 		assert.NotNil(suite.T(), lcsIdxResult)
 
-		assert.Equal(suite.T(), int64(6), lcsIdxResult["len"])
+		assert.Equal(suite.T(), int64(6), lcsIdxResult.Len)
 
-		matches := lcsIdxResult["matches"].([]any)
+		matches := lcsIdxResult.Matches
 		assert.Len(suite.T(), matches, 2)
 
-		expectedMatches := []any{
-			[]any{
-				[]any{int64(4), int64(7)},
-				[]any{int64(5), int64(8)},
+		expectedMatches := []models.LCSMatchedPosition{
+			{
+				Key1:     models.LCSPosition{Start: 4, End: 7},
+				Key2:     models.LCSPosition{Start: 5, End: 8},
+				MatchLen: 0,
 			},
-			[]any{
-				[]any{int64(2), int64(3)},
-				[]any{int64(0), int64(1)},
+			{
+				Key1:     models.LCSPosition{Start: 2, End: 3},
+				Key2:     models.LCSPosition{Start: 0, End: 1},
+				MatchLen: 0,
 			},
 		}
 		assert.Equal(suite.T(), expectedMatches, matches)
@@ -670,14 +673,15 @@ func (suite *GlideTestSuite) TestLCS_MinMatchLengthOption() {
 		suite.NoError(err)
 		assert.NotNil(suite.T(), lcsIdxMinMatchResult)
 
-		assert.Equal(suite.T(), int64(6), lcsIdxMinMatchResult["len"])
+		assert.Equal(suite.T(), int64(6), lcsIdxMinMatchResult.Len)
 
-		matches := lcsIdxMinMatchResult["matches"].([]any)
+		matches := lcsIdxMinMatchResult.Matches
 		assert.Len(suite.T(), matches, 1)
 
-		expectedMatch := []any{
-			[]any{int64(4), int64(7)},
-			[]any{int64(5), int64(8)},
+		expectedMatch := models.LCSMatchedPosition{
+			Key1:     models.LCSPosition{Start: 4, End: 7},
+			Key2:     models.LCSPosition{Start: 5, End: 8},
+			MatchLen: 0,
 		}
 		assert.Equal(suite.T(), expectedMatch, matches[0])
 	})
@@ -701,17 +705,17 @@ func (suite *GlideTestSuite) TestLCS_WithMatchLengthOption() {
 		lcsIdxFullOptionsResult, err := client.LCSWithOptions(context.Background(), "{lcs}key1", "{lcs}key2", *opts)
 
 		suite.NoError(err)
-		assert.NotNil(suite.T(), lcsIdxFullOptionsResult)
+		require.NotNil(suite.T(), lcsIdxFullOptionsResult)
 
-		assert.Equal(suite.T(), int64(6), lcsIdxFullOptionsResult["len"])
+		assert.Equal(suite.T(), int64(6), lcsIdxFullOptionsResult.Len)
 
-		matches := lcsIdxFullOptionsResult["matches"].([]any)
+		matches := lcsIdxFullOptionsResult.Matches
 		assert.Len(suite.T(), matches, 1)
 
-		expectedMatch := []any{
-			[]any{int64(4), int64(7)},
-			[]any{int64(5), int64(8)},
-			int64(4),
+		expectedMatch := models.LCSMatchedPosition{
+			Key1:     models.LCSPosition{Start: 4, End: 7},
+			Key2:     models.LCSPosition{Start: 5, End: 8},
+			MatchLen: 4,
 		}
 		assert.Equal(suite.T(), expectedMatch, matches[0])
 	})
@@ -1237,7 +1241,7 @@ func (suite *GlideTestSuite) TestHScan() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		key1 := "{key}-1" + uuid.NewString()
 		key2 := "{key}-2" + uuid.NewString()
-		initialCursor := "0"
+		initialCursor := models.NewCursor()
 		defaultCount := 20
 
 		// Setup test data
@@ -1256,47 +1260,47 @@ func (suite *GlideTestSuite) TestHScan() {
 		t := suite.T()
 
 		// Check for empty set.
-		resCursor, resCollection, err := client.HScan(context.Background(), key1, initialCursor)
+		result, err := client.HScan(context.Background(), key1, initialCursor)
 		suite.NoError(err)
-		assert.Equal(t, initialCursor, resCursor)
-		assert.Empty(t, resCollection)
+		assert.Equal(t, initialCursor.String(), result.Cursor.String())
+		assert.Empty(t, result.Data)
 
 		// Negative cursor check.
 		if suite.serverVersion >= "8.0.0" {
-			_, _, err = client.HScan(context.Background(), key1, "-1")
+			_, err = client.HScan(context.Background(), key1, models.NewCursorFromString("-1"))
 			assert.NotEmpty(t, err)
 		} else {
-			resCursor, resCollection, _ = client.HScan(context.Background(), key1, "-1")
-			assert.Equal(t, initialCursor, resCursor)
-			assert.Empty(t, resCollection)
+			result, _ = client.HScan(context.Background(), key1, models.NewCursorFromString("-1"))
+			assert.Equal(t, initialCursor.String(), result.Cursor.String())
+			assert.Empty(t, result.Data)
 		}
 
 		// Result contains the whole set
 		hsetResult, _ := client.HSet(context.Background(), key1, charMap)
 		assert.Equal(t, int64(len(charMembers)), hsetResult)
 
-		resCursor, resCollection, _ = client.HScan(context.Background(), key1, initialCursor)
-		assert.Equal(t, initialCursor, resCursor)
+		result, _ = client.HScan(context.Background(), key1, initialCursor)
+		assert.Equal(t, initialCursor.String(), result.Cursor.String())
 		// Length includes the score which is twice the map size
-		assert.Equal(t, len(charMap)*2, len(resCollection))
+		assert.Equal(t, len(charMap)*2, len(result.Data))
 
 		resultKeys := make([]string, 0)
 		resultValues := make([]string, 0)
 
-		for i := 0; i < len(resCollection); i += 2 {
-			resultKeys = append(resultKeys, resCollection[i])
-			resultValues = append(resultValues, resCollection[i+1])
+		for i := 0; i < len(result.Data); i += 2 {
+			resultKeys = append(resultKeys, result.Data[i])
+			resultValues = append(resultValues, result.Data[i+1])
 		}
 		keysList, valuesList := convertMapKeysAndValuesToLists(charMap)
 		assert.True(t, isSubset(resultKeys, keysList) && isSubset(keysList, resultKeys))
 		assert.True(t, isSubset(resultValues, valuesList) && isSubset(valuesList, resultValues))
 
 		opts := options.NewHashScanOptions().SetMatch("a")
-		resCursor, resCollection, _ = client.HScanWithOptions(context.Background(), key1, initialCursor, *opts)
-		assert.Equal(t, initialCursor, resCursor)
-		assert.Equal(t, len(resCollection), 2)
-		assert.Equal(t, resCollection[0], "a")
-		assert.Equal(t, resCollection[1], "0")
+		result, _ = client.HScanWithOptions(context.Background(), key1, initialCursor, *opts)
+		assert.Equal(t, initialCursor.String(), result.Cursor.String())
+		assert.Equal(t, len(result.Data), 2)
+		assert.Equal(t, result.Data[0], "a")
+		assert.Equal(t, result.Data[1], "0")
 
 		// Result contains a subset of the key
 		combinedMap := make(map[string]string)
@@ -1309,36 +1313,36 @@ func (suite *GlideTestSuite) TestHScan() {
 
 		hsetResult, _ = client.HSet(context.Background(), key1, combinedMap)
 		assert.Equal(t, int64(len(numberMap)), hsetResult)
-		resultCursor := "0"
 		secondResultAllKeys := make([]string, 0)
 		secondResultAllValues := make([]string, 0)
 		isFirstLoop := true
+		cursor := models.NewCursor()
 		for {
-			resCursor, resCollection, _ = client.HScan(context.Background(), key1, resultCursor)
-			resultCursor = resCursor
-			for i := 0; i < len(resCollection); i += 2 {
-				secondResultAllKeys = append(secondResultAllKeys, resCollection[i])
-				secondResultAllValues = append(secondResultAllValues, resCollection[i+1])
+			result, _ = client.HScan(context.Background(), key1, cursor)
+			cursor = result.Cursor
+			for i := 0; i < len(result.Data); i += 2 {
+				secondResultAllKeys = append(secondResultAllKeys, result.Data[i])
+				secondResultAllValues = append(secondResultAllValues, result.Data[i+1])
 			}
 			if isFirstLoop {
-				assert.NotEqual(t, "0", resultCursor)
+				assert.NotEqual(t, models.NewCursor(), cursor)
 				isFirstLoop = false
-			} else if resultCursor == "0" {
+			} else if cursor.IsFinished() {
 				break
 			}
 
 			// Scan with result cursor to get the next set of data.
-			newResultCursor, secondResult, _ := client.HScan(context.Background(), key1, resultCursor)
-			assert.NotEqual(t, resultCursor, newResultCursor)
-			resultCursor = newResultCursor
-			assert.False(t, reflect.DeepEqual(secondResult, resCollection))
-			for i := 0; i < len(secondResult); i += 2 {
-				secondResultAllKeys = append(secondResultAllKeys, secondResult[i])
-				secondResultAllValues = append(secondResultAllValues, secondResult[i+1])
+			newResult, err := client.HScan(context.Background(), key1, cursor)
+			assert.NoError(t, err)
+			assert.NotEqual(t, cursor, newResult.Cursor)
+			cursor = newResult.Cursor
+			assert.NotEqual(t, newResult.Data, result.Data)
+			for i := 0; i < len(newResult.Data); i += 2 {
+				secondResultAllKeys = append(secondResultAllKeys, newResult.Data[i])
+				secondResultAllValues = append(secondResultAllValues, newResult.Data[i+1])
 			}
 
-			// 0 is returned for the cursor of the last iteration.
-			if resultCursor == "0" {
+			if cursor.IsFinished() {
 				break
 			}
 		}
@@ -1348,35 +1352,35 @@ func (suite *GlideTestSuite) TestHScan() {
 
 		// Test match pattern
 		opts = options.NewHashScanOptions().SetMatch("*")
-		resCursor, resCollection, _ = client.HScanWithOptions(context.Background(), key1, initialCursor, *opts)
-		resCursorInt, _ := strconv.Atoi(resCursor)
+		result, _ = client.HScanWithOptions(context.Background(), key1, initialCursor, *opts)
+		resCursorInt, _ := strconv.Atoi(result.Cursor.String())
 		assert.True(t, resCursorInt >= 0)
-		assert.True(t, int(len(resCollection)) >= defaultCount)
+		assert.True(t, int(len(result.Data)) >= defaultCount)
 
 		// Test count
 		opts = options.NewHashScanOptions().SetCount(int64(20))
-		resCursor, resCollection, _ = client.HScanWithOptions(context.Background(), key1, initialCursor, *opts)
-		resCursorInt, _ = strconv.Atoi(resCursor)
+		result, _ = client.HScanWithOptions(context.Background(), key1, initialCursor, *opts)
+		resCursorInt, _ = strconv.Atoi(result.Cursor.String())
 		assert.True(t, resCursorInt >= 0)
-		assert.True(t, len(resCollection) >= 20)
+		assert.True(t, len(result.Data) >= 20)
 
 		// Test count with match returns a non-empty list
 		opts = options.NewHashScanOptions().SetMatch("1*").SetCount(int64(20))
-		resCursor, resCollection, _ = client.HScanWithOptions(context.Background(), key1, initialCursor, *opts)
-		resCursorInt, _ = strconv.Atoi(resCursor)
+		result, _ = client.HScanWithOptions(context.Background(), key1, initialCursor, *opts)
+		resCursorInt, _ = strconv.Atoi(result.Cursor.String())
 		assert.True(t, resCursorInt >= 0)
-		assert.True(t, len(resCollection) >= 0)
+		assert.True(t, len(result.Data) >= 0)
 
 		if suite.serverVersion >= "8.0.0" {
-			opts = options.NewHashScanOptions().SetNoValue(true)
-			resCursor, resCollection, _ = client.HScanWithOptions(context.Background(), key1, initialCursor, *opts)
-			resCursorInt, _ = strconv.Atoi(resCursor)
+			opts = options.NewHashScanOptions().SetNoValues(true)
+			result, _ = client.HScanWithOptions(context.Background(), key1, initialCursor, *opts)
+			resCursorInt, _ = strconv.Atoi(result.Cursor.String())
 			assert.True(t, resCursorInt >= 0)
 
 			// Check if all fields don't start with "num"
 			containsElementsWithNumKeyword := false
-			for i := 0; i < len(resCollection); i++ {
-				if strings.Contains(resCollection[i], "num") {
+			for i := 0; i < len(result.Data); i++ {
+				if strings.Contains(result.Data[i], "num") {
 					containsElementsWithNumKeyword = true
 					break
 				}
@@ -1386,17 +1390,17 @@ func (suite *GlideTestSuite) TestHScan() {
 
 		// Check if Non-hash key throws an error.
 		suite.verifyOK(client.Set(context.Background(), key2, "test"))
-		_, _, err = client.HScan(context.Background(), key2, initialCursor)
+		_, err = client.HScan(context.Background(), key2, initialCursor)
 		assert.NotEmpty(t, err)
 
 		// Check if Non-hash key throws an error when HSCAN called with options.
 		opts = options.NewHashScanOptions().SetMatch("test").SetCount(int64(1))
-		_, _, err = client.HScanWithOptions(context.Background(), key2, initialCursor, *opts)
+		_, err = client.HScanWithOptions(context.Background(), key2, initialCursor, *opts)
 		assert.NotEmpty(t, err)
 
 		// Check if a negative cursor value throws an error.
 		opts = options.NewHashScanOptions().SetCount(int64(-1))
-		_, _, err = client.HScanWithOptions(context.Background(), key1, initialCursor, *opts)
+		_, err = client.HScanWithOptions(context.Background(), key1, initialCursor, *opts)
 		assert.NotEmpty(t, err)
 	})
 }
@@ -2623,7 +2627,7 @@ func (suite *GlideTestSuite) TestSScan() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		key1 := "{key}-1-" + uuid.NewString()
 		key2 := "{key}-2-" + uuid.NewString()
-		initialCursor := "0"
+		initialCursor := models.NewCursor()
 		defaultCount := 10
 		// use large dataset to force an iterative cursor.
 		numMembers := make([]string, 50000)
@@ -2638,19 +2642,19 @@ func (suite *GlideTestSuite) TestSScan() {
 		}
 
 		// empty set
-		resCursor, resCollection, err := client.SScan(context.Background(), key1, initialCursor)
+		result, err := client.SScan(context.Background(), key1, initialCursor)
 		assert.NoError(t, err)
-		assert.Equal(t, initialCursor, resCursor)
-		assert.Empty(t, resCollection)
+		assert.Equal(t, initialCursor.String(), result.Cursor.String())
+		assert.Empty(t, result.Data)
 
 		// negative cursor
 		if suite.serverVersion < "8.0.0" {
-			resCursor, resCollection, err = client.SScan(context.Background(), key1, "-1")
+			result, err = client.SScan(context.Background(), key1, models.NewCursorFromString("-1"))
 			assert.NoError(t, err)
-			assert.Equal(t, initialCursor, resCursor)
-			assert.Empty(t, resCollection)
+			assert.Equal(t, initialCursor.String(), result.Cursor.String())
+			assert.Empty(t, result.Data)
 		} else {
-			_, _, err = client.SScan(context.Background(), key1, "-1")
+			_, err = client.SScan(context.Background(), key1, models.NewCursorFromString("-1"))
 			suite.Error(err)
 		}
 
@@ -2658,34 +2662,35 @@ func (suite *GlideTestSuite) TestSScan() {
 		res, err := client.SAdd(context.Background(), key1, charMembers)
 		assert.NoError(t, err)
 		assert.Equal(t, int64(len(charMembers)), res)
-		resCursor, resCollection, err = client.SScan(context.Background(), key1, initialCursor)
+		result, err = client.SScan(context.Background(), key1, initialCursor)
 		assert.NoError(t, err)
-		assert.Equal(t, initialCursor, resCursor)
-		assert.Equal(t, len(charMembers), len(resCollection))
-		assert.True(t, isSubset(resCollection, charMembers))
+		assert.Equal(t, initialCursor.String(), result.Cursor.String())
+		assert.Equal(t, len(charMembers), len(result.Data))
+		suite.Subset(result.Data, charMembers)
 
 		opts := options.NewBaseScanOptions().SetMatch("a")
-		resCursor, resCollection, err = client.SScanWithOptions(context.Background(), key1, initialCursor, *opts)
+		result, err = client.SScanWithOptions(context.Background(), key1, initialCursor, *opts)
 		assert.NoError(t, err)
-		assert.Equal(t, initialCursor, resCursor)
-		assert.True(t, isSubset(resCollection, []string{"a"}))
+		assert.Equal(t, initialCursor.String(), result.Cursor.String())
+		suite.Subset(result.Data, []string{"a"})
 
 		// result contains a subset of the key
 		res, err = client.SAdd(context.Background(), key1, numMembers)
 		assert.NoError(t, err)
 		assert.Equal(t, int64(50000), res)
-		resCursor, resCollection, err = client.SScan(context.Background(), key1, "0")
-		assert.NoError(t, err)
-		resultCollection := resCollection
+		resultCollection := []string{}
 
+		cursor := models.NewCursor()
 		// 0 is returned for the cursor of the last iteration
-		for resCursor != "0" {
-			nextCursor, nextCol, err := client.SScan(context.Background(), key1, resCursor)
+		for !cursor.IsFinished() {
+			result, err := client.SScan(context.Background(), key1, cursor)
 			assert.NoError(t, err)
-			assert.NotEqual(t, nextCursor, resCursor)
-			assert.False(t, isSubset(resultCollection, nextCol))
-			resultCollection = append(resultCollection, nextCol...)
-			resCursor = nextCursor
+			assert.NotEqual(t, cursor, result.Cursor)
+			if len(result.Data) > 0 {
+				assert.False(t, isSubset(result.Data, resultCollection))
+			}
+			resultCollection = append(resultCollection, result.Data...)
+			cursor = result.Cursor
 		}
 		assert.NotEmpty(t, resultCollection)
 		assert.True(t, isSubset(numMembersResult, resultCollection))
@@ -2693,31 +2698,31 @@ func (suite *GlideTestSuite) TestSScan() {
 
 		// test match pattern
 		opts = options.NewBaseScanOptions().SetMatch("*")
-		resCursor, resCollection, err = client.SScanWithOptions(context.Background(), key1, initialCursor, *opts)
+		result, err = client.SScanWithOptions(context.Background(), key1, initialCursor, *opts)
 		assert.NoError(t, err)
-		assert.NotEqual(t, initialCursor, resCursor)
-		assert.GreaterOrEqual(t, len(resCollection), defaultCount)
+		assert.NotEqual(t, initialCursor, result.Cursor)
+		assert.GreaterOrEqual(t, len(result.Data), defaultCount)
 
 		// test count
 		opts = options.NewBaseScanOptions().SetCount(20)
-		resCursor, resCollection, err = client.SScanWithOptions(context.Background(), key1, initialCursor, *opts)
+		result, err = client.SScanWithOptions(context.Background(), key1, initialCursor, *opts)
 		assert.NoError(t, err)
-		assert.NotEqual(t, initialCursor, resCursor)
-		assert.GreaterOrEqual(t, len(resCollection), 20)
+		assert.NotEqual(t, initialCursor, result.Cursor)
+		assert.GreaterOrEqual(t, len(result.Data), 20)
 
 		// test count with match, returns a non-empty array
 		opts = options.NewBaseScanOptions().SetMatch("1*").SetCount(20)
-		resCursor, resCollection, err = client.SScanWithOptions(context.Background(), key1, initialCursor, *opts)
+		result, err = client.SScanWithOptions(context.Background(), key1, initialCursor, *opts)
 		assert.NoError(t, err)
-		assert.NotEqual(t, initialCursor, resCursor)
-		assert.GreaterOrEqual(t, len(resCollection), 0)
+		assert.NotEqual(t, initialCursor, result.Cursor)
+		assert.GreaterOrEqual(t, len(result.Data), 0)
 
 		// error cases
 		// non-set key
 		_, err = client.Set(context.Background(), key2, "test")
 		suite.NoError(err)
 
-		_, _, err = client.SScan(context.Background(), key2, initialCursor)
+		_, err = client.SScan(context.Background(), key2, initialCursor)
 		suite.Error(err)
 	})
 }
@@ -3105,7 +3110,7 @@ func (suite *GlideTestSuite) TestLMPopAndLMPopCount() {
 		suite.NoError(err)
 		assert.Equal(
 			suite.T(),
-			map[string][]string{key1: {"five"}},
+			[]models.KeyValues{{Key: key1, Values: []string{"five"}}},
 			res5,
 		)
 
@@ -3113,9 +3118,7 @@ func (suite *GlideTestSuite) TestLMPopAndLMPopCount() {
 		suite.NoError(err)
 		assert.Equal(
 			suite.T(),
-			map[string][]string{
-				key2: {"one", "two"},
-			},
+			[]models.KeyValues{{Key: key2, Values: []string{"one", "two"}}},
 			res6,
 		)
 
@@ -3159,7 +3162,7 @@ func (suite *GlideTestSuite) TestBLMPopAndBLMPopCount() {
 		suite.NoError(err)
 		assert.Equal(
 			suite.T(),
-			map[string][]string{key1: {"five"}},
+			[]models.KeyValues{{Key: key1, Values: []string{"five"}}},
 			res5,
 		)
 
@@ -3173,9 +3176,7 @@ func (suite *GlideTestSuite) TestBLMPopAndBLMPopCount() {
 		suite.NoError(err)
 		assert.Equal(
 			suite.T(),
-			map[string][]string{
-				key2: {"one", "two"},
-			},
+			[]models.KeyValues{{Key: key2, Values: []string{"one", "two"}}},
 			res6,
 		)
 
@@ -3401,7 +3402,7 @@ func (suite *GlideTestSuite) TestExpire() {
 
 		suite.verifyOK(client.Set(context.Background(), key, value))
 
-		result, err := client.Expire(context.Background(), key, 1)
+		result, err := client.Expire(context.Background(), key, 1*time.Second)
 		assert.Nil(suite.T(), err, "Expected no error from Expire command")
 		assert.True(suite.T(), result, "Expire command should return true when expiry is set")
 
@@ -3417,7 +3418,7 @@ func (suite *GlideTestSuite) TestExpire_KeyDoesNotExist() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		key := uuid.New().String()
 		// Trying to set an expiry on a non-existent key
-		result, err := client.Expire(context.Background(), key, 1)
+		result, err := client.Expire(context.Background(), key, 1*time.Second)
 		suite.NoError(err)
 		assert.False(suite.T(), result)
 	})
@@ -3431,7 +3432,7 @@ func (suite *GlideTestSuite) TestExpireWithOptions_HasNoExpiry() {
 
 		suite.verifyOK(client.Set(context.Background(), key, value))
 
-		result, err := client.ExpireWithOptions(context.Background(), key, 2, constants.HasNoExpiry)
+		result, err := client.ExpireWithOptions(context.Background(), key, 2*time.Second, constants.HasNoExpiry)
 		suite.NoError(err)
 		assert.True(suite.T(), result)
 
@@ -3441,7 +3442,7 @@ func (suite *GlideTestSuite) TestExpireWithOptions_HasNoExpiry() {
 		suite.NoError(err)
 		assert.Equal(suite.T(), "", resultGet.Value())
 
-		result, err = client.ExpireWithOptions(context.Background(), key, 1, constants.HasNoExpiry)
+		result, err = client.ExpireWithOptions(context.Background(), key, 1*time.Second, constants.HasNoExpiry)
 		suite.NoError(err)
 		assert.False(suite.T(), result)
 	})
@@ -3455,11 +3456,11 @@ func (suite *GlideTestSuite) TestExpireWithOptions_HasExistingExpiry() {
 
 		suite.verifyOK(client.Set(context.Background(), key, value))
 
-		resexp, err := client.ExpireWithOptions(context.Background(), key, 20, constants.HasNoExpiry)
+		resexp, err := client.ExpireWithOptions(context.Background(), key, 20*time.Second, constants.HasNoExpiry)
 		suite.NoError(err)
 		assert.True(suite.T(), resexp)
 
-		resultExpire, err := client.ExpireWithOptions(context.Background(), key, 1, constants.HasExistingExpiry)
+		resultExpire, err := client.ExpireWithOptions(context.Background(), key, 1*time.Second, constants.HasExistingExpiry)
 		suite.NoError(err)
 		assert.True(suite.T(), resultExpire)
 
@@ -3479,11 +3480,16 @@ func (suite *GlideTestSuite) TestExpireWithOptions_NewExpiryGreaterThanCurrent()
 		value := uuid.New().String()
 		suite.verifyOK(client.Set(context.Background(), key, value))
 
-		resultExpire, err := client.ExpireWithOptions(context.Background(), key, 2, constants.HasNoExpiry)
+		resultExpire, err := client.ExpireWithOptions(context.Background(), key, 2*time.Second, constants.HasNoExpiry)
 		suite.NoError(err)
 		assert.True(suite.T(), resultExpire)
 
-		resultExpire, err = client.ExpireWithOptions(context.Background(), key, 5, constants.NewExpiryGreaterThanCurrent)
+		resultExpire, err = client.ExpireWithOptions(
+			context.Background(),
+			key,
+			5*time.Second,
+			constants.NewExpiryGreaterThanCurrent,
+		)
 		suite.NoError(err)
 		assert.True(suite.T(), resultExpire)
 		time.Sleep(6 * time.Second)
@@ -3501,16 +3507,26 @@ func (suite *GlideTestSuite) TestExpireWithOptions_NewExpiryLessThanCurrent() {
 
 		suite.verifyOK(client.Set(context.Background(), key, value))
 
-		resultExpire, err := client.ExpireWithOptions(context.Background(), key, 10, constants.HasNoExpiry)
+		resultExpire, err := client.ExpireWithOptions(context.Background(), key, 10*time.Second, constants.HasNoExpiry)
 		suite.NoError(err)
 		assert.True(suite.T(), resultExpire)
 
-		resultExpire, err = client.ExpireWithOptions(context.Background(), key, 5, constants.NewExpiryLessThanCurrent)
+		resultExpire, err = client.ExpireWithOptions(
+			context.Background(),
+			key,
+			5*time.Second,
+			constants.NewExpiryLessThanCurrent,
+		)
 		suite.NoError(err)
 
 		assert.True(suite.T(), resultExpire)
 
-		resultExpire, err = client.ExpireWithOptions(context.Background(), key, 15, constants.NewExpiryGreaterThanCurrent)
+		resultExpire, err = client.ExpireWithOptions(
+			context.Background(),
+			key,
+			15*time.Second,
+			constants.NewExpiryGreaterThanCurrent,
+		)
 		suite.NoError(err)
 
 		assert.True(suite.T(), resultExpire)
@@ -3529,7 +3545,7 @@ func (suite *GlideTestSuite) TestExpireAtWithOptions_HasNoExpiry() {
 		value := uuid.New().String()
 		suite.verifyOK(client.Set(context.Background(), key, value))
 
-		futureTimestamp := time.Now().Add(10 * time.Second).Unix()
+		futureTimestamp := time.Now().Add(10 * time.Second)
 
 		resultExpire, err := client.ExpireAtWithOptions(context.Background(), key, futureTimestamp, constants.HasNoExpiry)
 		suite.NoError(err)
@@ -3540,7 +3556,7 @@ func (suite *GlideTestSuite) TestExpireAtWithOptions_HasNoExpiry() {
 		resultExpireWithOptions, err := client.ExpireAtWithOptions(
 			context.Background(),
 			key,
-			futureTimestamp+10,
+			futureTimestamp.Add(10),
 			constants.HasNoExpiry,
 		)
 		suite.NoError(err)
@@ -3555,7 +3571,7 @@ func (suite *GlideTestSuite) TestExpireAtWithOptions_HasExistingExpiry() {
 		value := uuid.New().String()
 		suite.verifyOK(client.Set(context.Background(), key, value))
 
-		futureTimestamp := time.Now().Add(10 * time.Second).Unix()
+		futureTimestamp := time.Now().Add(10 * time.Second)
 		resultExpireAt, err := client.ExpireAt(context.Background(), key, futureTimestamp)
 		suite.NoError(err)
 		assert.True(suite.T(), resultExpireAt)
@@ -3563,7 +3579,7 @@ func (suite *GlideTestSuite) TestExpireAtWithOptions_HasExistingExpiry() {
 		resultExpireWithOptions, err := client.ExpireAtWithOptions(
 			context.Background(),
 			key,
-			futureTimestamp+10,
+			futureTimestamp.Add(10),
 			constants.HasExistingExpiry,
 		)
 		suite.NoError(err)
@@ -3579,12 +3595,12 @@ func (suite *GlideTestSuite) TestExpireAtWithOptions_NewExpiryGreaterThanCurrent
 
 		suite.verifyOK(client.Set(context.Background(), key, value))
 
-		futureTimestamp := time.Now().Add(10 * time.Second).Unix()
+		futureTimestamp := time.Now().Add(10 * time.Second)
 		resultExpireAt, err := client.ExpireAt(context.Background(), key, futureTimestamp)
 		suite.NoError(err)
 		assert.True(suite.T(), resultExpireAt)
 
-		newFutureTimestamp := time.Now().Add(20 * time.Second).Unix()
+		newFutureTimestamp := time.Now().Add(20 * time.Second)
 		resultExpireWithOptions, err := client.ExpireAtWithOptions(context.Background(),
 			key,
 			newFutureTimestamp,
@@ -3603,12 +3619,12 @@ func (suite *GlideTestSuite) TestExpireAtWithOptions_NewExpiryLessThanCurrent() 
 
 		suite.verifyOK(client.Set(context.Background(), key, value))
 
-		futureTimestamp := time.Now().Add(10 * time.Second).Unix()
+		futureTimestamp := time.Now().Add(10 * time.Second)
 		resultExpireAt, err := client.ExpireAt(context.Background(), key, futureTimestamp)
 		suite.NoError(err)
 		assert.True(suite.T(), resultExpireAt)
 
-		newFutureTimestamp := time.Now().Add(5 * time.Second).Unix()
+		newFutureTimestamp := time.Now().Add(5 * time.Second)
 		resultExpireWithOptions, err := client.ExpireAtWithOptions(
 			context.Background(),
 			key,
@@ -3652,17 +3668,16 @@ func (suite *GlideTestSuite) TestPExpireWithOptions_HasExistingExpiry() {
 
 		suite.verifyOK(client.Set(context.Background(), key, value))
 
-		initialExpire := 500
-		resultExpire, err := client.PExpire(context.Background(), key, int64(initialExpire))
+		resultExpire, err := client.PExpire(context.Background(), key, 500*time.Millisecond)
 		suite.NoError(err)
 		assert.True(suite.T(), resultExpire)
 
-		newExpire := 1000
+		newExpire := 1000 * time.Millisecond
 
 		resultExpireWithOptions, err := client.PExpireWithOptions(
 			context.Background(),
 			key,
-			int64(newExpire),
+			newExpire,
 			constants.HasExistingExpiry,
 		)
 		suite.NoError(err)
@@ -3683,12 +3698,12 @@ func (suite *GlideTestSuite) TestPExpireWithOptions_HasNoExpiry() {
 
 		suite.verifyOK(client.Set(context.Background(), key, value))
 
-		newExpire := 500
+		newExpire := 500 * time.Millisecond
 
 		resultExpireWithOptions, err := client.PExpireWithOptions(
 			context.Background(),
 			key,
-			int64(newExpire),
+			newExpire,
 			constants.HasNoExpiry,
 		)
 		suite.NoError(err)
@@ -3709,17 +3724,16 @@ func (suite *GlideTestSuite) TestPExpireWithOptions_NewExpiryGreaterThanCurrent(
 
 		suite.verifyOK(client.Set(context.Background(), key, value))
 
-		initialExpire := 500
-		resultExpire, err := client.PExpire(context.Background(), key, int64(initialExpire))
+		resultExpire, err := client.PExpire(context.Background(), key, 500*time.Millisecond)
 		suite.NoError(err)
 		assert.True(suite.T(), resultExpire)
 
-		newExpire := 1000
+		newExpire := 1000 * time.Millisecond
 
 		resultExpireWithOptions, err := client.PExpireWithOptions(
 			context.Background(),
 			key,
-			int64(newExpire),
+			newExpire,
 			constants.NewExpiryGreaterThanCurrent,
 		)
 		suite.NoError(err)
@@ -3740,17 +3754,16 @@ func (suite *GlideTestSuite) TestPExpireWithOptions_NewExpiryLessThanCurrent() {
 
 		suite.verifyOK(client.Set(context.Background(), key, value))
 
-		initialExpire := 500
-		resultExpire, err := client.PExpire(context.Background(), key, int64(initialExpire))
+		resultExpire, err := client.PExpire(context.Background(), key, 500*time.Millisecond)
 		suite.NoError(err)
 		assert.True(suite.T(), resultExpire)
 
-		newExpire := 200
+		newExpire := 200 * time.Millisecond
 
 		resultExpireWithOptions, err := client.PExpireWithOptions(
 			context.Background(),
 			key,
-			int64(newExpire),
+			newExpire,
 			constants.NewExpiryLessThanCurrent,
 		)
 		suite.NoError(err)
@@ -3769,7 +3782,7 @@ func (suite *GlideTestSuite) TestPExpireAt() {
 		value := uuid.New().String()
 		suite.verifyOK(client.Set(context.Background(), key, value))
 
-		expireAfterMilliseconds := time.Now().Unix() * 1000
+		expireAfterMilliseconds := time.Now().Add(1000 * time.Millisecond)
 		resultPExpireAt, err := client.PExpireAt(context.Background(), key, expireAfterMilliseconds)
 		suite.NoError(err)
 
@@ -3791,7 +3804,7 @@ func (suite *GlideTestSuite) TestPExpireAtWithOptions_HasNoExpiry() {
 
 		suite.verifyOK(client.Set(context.Background(), key, value))
 
-		timestamp := time.Now().Unix() * 1000
+		timestamp := time.Now().Add(1000 * time.Millisecond)
 		result, err := client.PExpireAtWithOptions(context.Background(), key, timestamp, constants.HasNoExpiry)
 
 		suite.NoError(err)
@@ -3811,11 +3824,10 @@ func (suite *GlideTestSuite) TestPExpireAtWithOptions_HasExistingExpiry() {
 		value := uuid.New().String()
 
 		suite.verifyOK(client.Set(context.Background(), key, value))
-		initialExpire := 500
-		resultExpire, err := client.PExpire(context.Background(), key, int64(initialExpire))
+		resultExpire, err := client.PExpire(context.Background(), key, 500*time.Millisecond)
 		suite.NoError(err)
 		assert.True(suite.T(), resultExpire)
-		newExpire := time.Now().Unix()*1000 + 1000
+		newExpire := time.Now().Add(1000 * time.Millisecond)
 
 		resultExpireWithOptions, err := client.PExpireAtWithOptions(
 			context.Background(),
@@ -3841,12 +3853,12 @@ func (suite *GlideTestSuite) TestPExpireAtWithOptions_NewExpiryGreaterThanCurren
 
 		suite.verifyOK(client.Set(context.Background(), key, value))
 
-		initialExpire := time.Now().UnixMilli() + 1000
+		initialExpire := time.Now().Add(1000 * time.Millisecond)
 		resultExpire, err := client.PExpireAt(context.Background(), key, initialExpire)
 		suite.NoError(err)
 		assert.True(suite.T(), resultExpire)
 
-		newExpire := time.Now().UnixMilli() + 2000
+		newExpire := time.Now().Add(2000 * time.Millisecond)
 
 		resultExpireWithOptions, err := client.PExpireAtWithOptions(
 			context.Background(),
@@ -3872,12 +3884,11 @@ func (suite *GlideTestSuite) TestPExpireAtWithOptions_NewExpiryLessThanCurrent()
 
 		suite.verifyOK(client.Set(context.Background(), key, value))
 
-		initialExpire := 1000
-		resultExpire, err := client.PExpire(context.Background(), key, int64(initialExpire))
+		resultExpire, err := client.PExpire(context.Background(), key, 1000*time.Millisecond)
 		suite.NoError(err)
 		assert.True(suite.T(), resultExpire)
 
-		newExpire := time.Now().Unix()*1000 + 500
+		newExpire := time.Now().Add(500 * time.Millisecond)
 
 		resultExpireWithOptions, err := client.PExpireAtWithOptions(
 			context.Background(),
@@ -3908,14 +3919,14 @@ func (suite *GlideTestSuite) TestExpireTime() {
 		suite.NoError(err)
 		assert.Equal(suite.T(), value, result.Value())
 
-		expireTime := time.Now().Unix() + 3
+		expireTime := time.Now().Add(3 * time.Second)
 		resultExpAt, err := client.ExpireAt(context.Background(), key, expireTime)
 		suite.NoError(err)
 		assert.True(suite.T(), resultExpAt)
 
 		resexptime, err := client.ExpireTime(context.Background(), key)
 		suite.NoError(err)
-		assert.Equal(suite.T(), expireTime, resexptime)
+		assert.Equal(suite.T(), expireTime.Unix(), resexptime)
 
 		time.Sleep(4 * time.Second)
 
@@ -3949,14 +3960,14 @@ func (suite *GlideTestSuite) TestPExpireTime() {
 		suite.NoError(err)
 		assert.Equal(suite.T(), value, result.Value())
 
-		pexpireTime := time.Now().UnixMilli() + 3000
+		pexpireTime := time.Now().Add(3000 * time.Millisecond)
 		resultExpAt, err := client.PExpireAt(context.Background(), key, pexpireTime)
 		suite.NoError(err)
 		assert.True(suite.T(), resultExpAt)
 
 		respexptime, err := client.PExpireTime(context.Background(), key)
 		suite.NoError(err)
-		assert.Equal(suite.T(), pexpireTime, respexptime)
+		assert.Equal(suite.T(), pexpireTime.UnixMilli(), respexptime)
 
 		time.Sleep(4 * time.Second)
 
@@ -4011,7 +4022,7 @@ func (suite *GlideTestSuite) TestTTL_WithValidKey() {
 		value := uuid.New().String()
 		suite.verifyOK(client.Set(context.Background(), key, value))
 
-		resExpire, err := client.Expire(context.Background(), key, 1)
+		resExpire, err := client.Expire(context.Background(), key, 1*time.Second)
 		suite.NoError(err)
 		assert.True(suite.T(), resExpire)
 		resTTL, err := client.TTL(context.Background(), key)
@@ -4026,7 +4037,7 @@ func (suite *GlideTestSuite) TestTTL_WithExpiredKey() {
 		value := uuid.New().String()
 		suite.verifyOK(client.Set(context.Background(), key, value))
 
-		resExpire, err := client.Expire(context.Background(), key, 1)
+		resExpire, err := client.Expire(context.Background(), key, 1*time.Second)
 		suite.NoError(err)
 		assert.True(suite.T(), resExpire)
 
@@ -4044,7 +4055,7 @@ func (suite *GlideTestSuite) TestPTTL_WithValidKey() {
 		value := uuid.New().String()
 		suite.verifyOK(client.Set(context.Background(), key, value))
 
-		resExpire, err := client.Expire(context.Background(), key, 1)
+		resExpire, err := client.Expire(context.Background(), key, 1*time.Second)
 		suite.NoError(err)
 		assert.True(suite.T(), resExpire)
 
@@ -4060,7 +4071,7 @@ func (suite *GlideTestSuite) TestPTTL_WithExpiredKey() {
 		value := uuid.New().String()
 		suite.verifyOK(client.Set(context.Background(), key, value))
 
-		resExpire, err := client.Expire(context.Background(), key, 1)
+		resExpire, err := client.Expire(context.Background(), key, 1*time.Second)
 		suite.NoError(err)
 		assert.True(suite.T(), resExpire)
 
@@ -4241,7 +4252,7 @@ func (suite *GlideTestSuite) TestSortWithOptions_DescendingOrder() {
 		options := options.NewSortOptions().
 			SetOrderBy(options.DESC).
 			SetIsAlpha(true).
-			SetSortLimit(0, 3)
+			SetLimit(options.Limit{Offset: 0, Count: 3})
 
 		sortResult, err := client.SortWithOptions(context.Background(), key, *options)
 
@@ -4348,7 +4359,7 @@ func (suite *GlideTestSuite) TestSortStoreWithOptions_Limit() {
 		sortedKey := "{listKey}" + uuid.New().String()
 		client.LPush(context.Background(), key, []string{"10", "20", "30", "40", "50"})
 
-		options := options.NewSortOptions().SetSortLimit(1, 3)
+		options := options.NewSortOptions().SetLimit(options.Limit{Offset: 1, Count: 3})
 		result, err := client.SortStoreWithOptions(context.Background(), key, sortedKey, *options)
 
 		suite.NoError(err)
@@ -4390,7 +4401,7 @@ func (suite *GlideTestSuite) TestSortReadyOnlyWithOptions_DescendingOrder() {
 		options := options.NewSortOptions().
 			SetOrderBy(options.DESC).
 			SetIsAlpha(true).
-			SetSortLimit(0, 3)
+			SetLimit(options.Limit{Offset: 0, Count: 3})
 
 		sortResult, err := client.SortReadOnlyWithOptions(context.Background(), key, *options)
 
@@ -4620,26 +4631,26 @@ func (suite *GlideTestSuite) TestXAdd() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		key := uuid.NewString()
 		// stream does not exist
-		res, err := client.XAdd(context.Background(), key, [][]string{{"field1", "value1"}, {"field1", "value2"}})
+		_, err := client.XAdd(
+			context.Background(),
+			key,
+			[]models.FieldValue{{Field: "field1", Value: "value1"}, {Field: "field1", Value: "value2"}},
+		)
 		suite.NoError(err)
-		assert.False(suite.T(), res.IsNil())
 		// don't check the value, because it contains server's timestamp
 
 		// adding data to existing stream
-		res, err = client.XAdd(context.Background(), key, [][]string{{"field3", "value3"}})
+		_, err = client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field3", Value: "value3"}})
 		suite.NoError(err)
-		assert.False(suite.T(), res.IsNil())
 
 		// incorrect input
-		_, err = client.XAdd(context.Background(), key, [][]string{})
-		suite.Error(err)
-		_, err = client.XAdd(context.Background(), key, [][]string{{"1", "2", "3"}})
+		_, err = client.XAdd(context.Background(), key, []models.FieldValue{})
 		suite.Error(err)
 
 		// key is not a string
 		key = uuid.NewString()
 		client.Set(context.Background(), key, "abc")
-		_, err = client.XAdd(context.Background(), key, [][]string{{"f", "v"}})
+		_, err = client.XAdd(context.Background(), key, []models.FieldValue{{Field: "f", Value: "v"}})
 		suite.Error(err)
 	})
 }
@@ -4650,7 +4661,7 @@ func (suite *GlideTestSuite) TestXAddWithOptions() {
 		// stream does not exist
 		res, err := client.XAddWithOptions(context.Background(),
 			key,
-			[][]string{{"field1", "value1"}},
+			[]models.FieldValue{{Field: "field1", Value: "value1"}},
 			*options.NewXAddOptions().SetDontMakeNewStream(),
 		)
 		suite.NoError(err)
@@ -4660,18 +4671,18 @@ func (suite *GlideTestSuite) TestXAddWithOptions() {
 		res, err = client.XAddWithOptions(
 			context.Background(),
 			key,
-			[][]string{{"field1", "value1"}},
+			[]models.FieldValue{{Field: "field1", Value: "value1"}},
 			*options.NewXAddOptions().SetId("0-1"),
 		)
 		suite.NoError(err)
 		assert.Equal(suite.T(), "0-1", res.Value())
 
-		client.XAdd(context.Background(), key, [][]string{{"field2", "value2"}})
+		client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field2", Value: "value2"}})
 		// TODO run XLen there
 		// this will trim the first entry.
 		res, err = client.XAddWithOptions(context.Background(),
 			key,
-			[][]string{{"field3", "value3"}},
+			[]models.FieldValue{{Field: "field3", Value: "value3"}},
 			*options.NewXAddOptions().SetTrimOptions(options.NewXTrimOptionsWithMaxLen(2).SetExactTrimming()),
 		)
 		suite.NoError(err)
@@ -4716,16 +4727,20 @@ func (suite *GlideTestSuite) TestXAutoClaim() {
 			"Can't send XGROUP CREATECONSUMER as a custom command",
 		)
 
-		xadd, err := client.XAddWithOptions(context.Background(),
+		xadd, err := client.XAddWithOptions(
+			context.Background(),
 			key,
-			[][]string{{"entry1_field1", "entry1_value1"}, {"entry1_field2", "entry1_value2"}},
+			[]models.FieldValue{
+				{Field: "entry1_field1", Value: "entry1_value1"},
+				{Field: "entry1_field2", Value: "entry1_value2"},
+			},
 			*options.NewXAddOptions().SetId("0-1"),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), "0-1", xadd.Value())
 		xadd, err = client.XAddWithOptions(context.Background(),
 			key,
-			[][]string{{"entry2_field1", "entry2_value1"}},
+			[]models.FieldValue{{Field: "entry2_field1", Value: "entry2_value1"}},
 			*options.NewXAddOptions().SetId("0-2"),
 		)
 		assert.NoError(suite.T(), err)
@@ -4741,23 +4756,24 @@ func (suite *GlideTestSuite) TestXAutoClaim() {
 
 		// Check that we have two entries with the correct IDs and fields
 		assert.Equal(suite.T(), 2, len(streamResponse.Entries))
-
-		// Create a map of entry IDs to their fields for easier comparison
-		entryMap := make(map[string]map[string]string)
-		for _, entry := range streamResponse.Entries {
-			entryMap[entry.ID] = entry.Fields
-		}
-
-		// Verify entries
-		assert.Contains(suite.T(), entryMap, "0-1")
-		assert.Equal(
-			suite.T(),
-			map[string]string{"entry1_field1": "entry1_value1", "entry1_field2": "entry1_value2"},
-			entryMap["0-1"],
-		)
-
-		assert.Contains(suite.T(), entryMap, "0-2")
-		assert.Equal(suite.T(), map[string]string{"entry2_field1": "entry2_value1"}, entryMap["0-2"])
+		sort.Slice(streamResponse.Entries, func(i, j int) bool {
+			return streamResponse.Entries[i].ID < streamResponse.Entries[j].ID
+		})
+		assert.Equal(suite.T(), streamResponse, models.StreamResponse{
+			Entries: []models.StreamEntry{{
+				ID: "0-1",
+				Fields: []models.FieldValue{{
+					Field: "entry1_field1", Value: "entry1_value1",
+				}, {
+					Field: "entry1_field2", Value: "entry1_value2",
+				}},
+			}, {
+				ID: "0-2",
+				Fields: []models.FieldValue{{
+					Field: "entry2_field1", Value: "entry2_value1",
+				}},
+			}},
+		})
 
 		opts := options.NewXAutoClaimOptions().SetCount(1)
 		xautoclaim, err := client.XAutoClaimWithOptions(context.Background(), key, group, consumer, 0, "0-0", *opts)
@@ -4770,8 +4786,14 @@ func (suite *GlideTestSuite) TestXAutoClaim() {
 			suite.T(),
 			models.XAutoClaimResponse{
 				NextEntry: "0-2",
-				ClaimedEntries: map[string][][]string{
-					"0-1": {{"entry1_field1", "entry1_value1"}, {"entry1_field2", "entry1_value2"}},
+				ClaimedEntries: []models.StreamEntry{
+					{
+						ID: "0-1",
+						Fields: []models.FieldValue{
+							{Field: "entry1_field1", Value: "entry1_value1"},
+							{Field: "entry1_field2", Value: "entry1_value2"},
+						},
+					},
 				},
 				DeletedMessages: deletedEntries,
 			},
@@ -4793,7 +4815,7 @@ func (suite *GlideTestSuite) TestXAutoClaim() {
 		// add one more entry
 		xadd, err = client.XAddWithOptions(context.Background(),
 			key,
-			[][]string{{"entry3_field1", "entry3_value1"}},
+			[]models.FieldValue{{Field: "entry3_field1", Value: "entry3_value1"}},
 			*options.NewXAddOptions().SetId("0-3"),
 		)
 		assert.NoError(suite.T(), err)
@@ -4806,7 +4828,7 @@ func (suite *GlideTestSuite) TestXAutoClaim() {
 			suite.T(),
 			models.XAutoClaimResponse{
 				NextEntry:       "0-0",
-				ClaimedEntries:  map[string][][]string{},
+				ClaimedEntries:  []models.StreamEntry{},
 				DeletedMessages: deletedEntries,
 			},
 			xautoclaim,
@@ -4853,12 +4875,10 @@ func (suite *GlideTestSuite) TestXReadGroup() {
 			"Can't send XGROUP CREATECONSUMER as a custom command",
 		)
 
-		entry1, err := client.XAdd(context.Background(), key1, [][]string{{"a", "b"}})
+		entry1, err := client.XAdd(context.Background(), key1, []models.FieldValue{{Field: "a", Value: "b"}})
 		assert.NoError(suite.T(), err)
-		assert.False(suite.T(), entry1.IsNil())
-		entry2, err := client.XAdd(context.Background(), key1, [][]string{{"c", "d"}})
+		entry2, err := client.XAdd(context.Background(), key1, []models.FieldValue{{Field: "c", Value: "d"}})
 		assert.NoError(suite.T(), err)
-		assert.False(suite.T(), entry2.IsNil())
 
 		// read the entire stream for the consumer and mark messages as pending
 		res, err := client.XReadGroup(context.Background(), group, consumer, map[string]string{key1: ">"})
@@ -4871,23 +4891,25 @@ func (suite *GlideTestSuite) TestXReadGroup() {
 
 		// Check that we have two entries with the correct IDs and fields
 		assert.Equal(suite.T(), 2, len(streamResponse.Entries))
-
-		// Create a map of entry IDs to their fields for easier comparison
-		entryMap := make(map[string]map[string]string)
-		for _, entry := range streamResponse.Entries {
-			entryMap[entry.ID] = entry.Fields
-		}
-
-		// Verify entry1 has the correct fields
-		assert.Contains(suite.T(), entryMap, entry1.Value())
-		assert.Equal(suite.T(), map[string]string{"a": "b"}, entryMap[entry1.Value()])
-
-		// Verify entry2 has the correct fields
-		assert.Contains(suite.T(), entryMap, entry2.Value())
-		assert.Equal(suite.T(), map[string]string{"c": "d"}, entryMap[entry2.Value()])
+		sort.Slice(streamResponse.Entries, func(i, j int) bool {
+			return streamResponse.Entries[i].ID < streamResponse.Entries[j].ID
+		})
+		assert.Equal(suite.T(), streamResponse, models.StreamResponse{
+			Entries: []models.StreamEntry{{
+				ID: entry1,
+				Fields: []models.FieldValue{{
+					Field: "a", Value: "b",
+				}},
+			}, {
+				ID: entry2,
+				Fields: []models.FieldValue{{
+					Field: "c", Value: "d",
+				}},
+			}},
+		})
 
 		// delete one of the entries
-		sendWithCustomCommand(suite, client, []string{"xdel", key1, entry1.Value()}, "Can't send XDEL as a custom command")
+		sendWithCustomCommand(suite, client, []string{"xdel", key1, entry1}, "Can't send XDEL as a custom command")
 
 		// now xreadgroup returns one empty entry and one non-empty entry
 		res, err = client.XReadGroup(context.Background(), group, consumer, map[string]string{key1: "0"})
@@ -4897,20 +4919,19 @@ func (suite *GlideTestSuite) TestXReadGroup() {
 		assert.Equal(suite.T(), 1, len(res))
 		streamResponse, exists = res[key1]
 		assert.True(suite.T(), exists)
-
 		// Check entries
-		entryMap = make(map[string]map[string]string)
+		entryMap := make(map[string][]models.FieldValue)
 		for _, entry := range streamResponse.Entries {
 			entryMap[entry.ID] = entry.Fields
 		}
 
 		// Verify entry1 exists but has no fields (was deleted)
-		assert.Contains(suite.T(), entryMap, entry1.Value())
-		assert.Empty(suite.T(), entryMap[entry1.Value()])
+		assert.Contains(suite.T(), entryMap, entry1)
+		assert.Empty(suite.T(), entryMap[entry1])
 
 		// Verify entry2 has the correct fields
-		assert.Contains(suite.T(), entryMap, entry2.Value())
-		assert.Equal(suite.T(), map[string]string{"c": "d"}, entryMap[entry2.Value()])
+		assert.Contains(suite.T(), entryMap, entry2)
+		assert.Equal(suite.T(), entryMap[entry2], []models.FieldValue{{Field: "c", Value: "d"}})
 
 		// try to read new messages only
 		res, err = client.XReadGroup(context.Background(), group, consumer, map[string]string{key1: ">"})
@@ -4918,9 +4939,8 @@ func (suite *GlideTestSuite) TestXReadGroup() {
 		assert.Empty(suite.T(), res)
 
 		// add a message and read it with ">"
-		entry3, err := client.XAdd(context.Background(), key1, [][]string{{"e", "f"}})
+		entry3, err := client.XAdd(context.Background(), key1, []models.FieldValue{{Field: "e", Value: "f"}})
 		assert.NoError(suite.T(), err)
-		assert.False(suite.T(), entry3.IsNil())
 		res, err = client.XReadGroup(context.Background(), group, consumer, map[string]string{key1: ">"})
 		assert.NoError(suite.T(), err)
 
@@ -4931,8 +4951,15 @@ func (suite *GlideTestSuite) TestXReadGroup() {
 
 		// Check that we have one entry with the correct ID and fields
 		assert.Equal(suite.T(), 1, len(streamResponse.Entries))
-		assert.Equal(suite.T(), entry3.Value(), streamResponse.Entries[0].ID)
-		assert.Equal(suite.T(), map[string]string{"e": "f"}, streamResponse.Entries[0].Fields)
+		assert.Equal(suite.T(), entry3, streamResponse.Entries[0].ID)
+		assert.Equal(suite.T(), streamResponse, models.StreamResponse{
+			Entries: []models.StreamEntry{{
+				ID: entry3,
+				Fields: []models.FieldValue{{
+					Field: "e", Value: "f",
+				}},
+			}},
+		})
 
 		// add second key with a group and a consumer, but no messages
 		sendWithCustomCommand(
@@ -4961,20 +4988,21 @@ func (suite *GlideTestSuite) TestXReadGroup() {
 		assert.Equal(suite.T(), 3, len(streamResponse1.Entries))
 
 		// Create a map of entry IDs to their fields for key1
-		entryMap1 := make(map[string]map[string]string)
+		entryMap1 := make(map[string][]models.FieldValue)
 		for _, entry := range streamResponse1.Entries {
 			entryMap1[entry.ID] = entry.Fields
 		}
 
 		// Verify entries in key1
-		assert.Contains(suite.T(), entryMap1, entry1.Value())
-		assert.Empty(suite.T(), entryMap1[entry1.Value()])
+		assert.Contains(suite.T(), entryMap1, entry1)
+		assert.Empty(suite.T(), entryMap1[entry1])
 
-		assert.Contains(suite.T(), entryMap1, entry2.Value())
-		assert.Equal(suite.T(), map[string]string{"c": "d"}, entryMap1[entry2.Value()])
+		// Check for field "c" with value "d" in entry2
+		assert.Contains(suite.T(), entryMap1, entry2)
+		assert.Equal(suite.T(), entryMap1[entry2], []models.FieldValue{{Field: "c", Value: "d"}})
 
-		assert.Contains(suite.T(), entryMap1, entry3.Value())
-		assert.Equal(suite.T(), map[string]string{"e": "f"}, entryMap1[entry3.Value()])
+		assert.Contains(suite.T(), entryMap1, entry3)
+		assert.NotContains(suite.T(), entryMap1[entry3], []models.FieldValue{{Field: "e", Value: "f"}})
 
 		// Check key2 stream (should be empty)
 		streamResponse2, exists := res[key2]
@@ -4993,7 +5021,7 @@ func (suite *GlideTestSuite) TestXReadGroup() {
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), int64(1), del)
 		// group and consumer don't exist
-		xadd, err := client.XAdd(context.Background(), key3, [][]string{{"a", "b"}})
+		xadd, err := client.XAdd(context.Background(), key3, []models.FieldValue{{Field: "a", Value: "b"}})
 		assert.NoError(suite.T(), err)
 		assert.NotNil(suite.T(), xadd)
 		_, err = client.XReadGroup(context.Background(), "_", "_", map[string]string{key3: "0"})
@@ -5031,7 +5059,7 @@ func (suite *GlideTestSuite) TestXRead() {
 
 		res, err := client.XAddWithOptions(context.Background(),
 			key1,
-			[][]string{{"k1_field1", "k1_value1"}, {"k1_field1", "k1_value2"}},
+			[]models.FieldValue{{Field: "k1_field1", Value: "k1_value1"}, {Field: "k1_field1", Value: "k1_value2"}},
 			*options.NewXAddOptions().SetId("0-1"),
 		)
 		suite.NoError(err)
@@ -5039,7 +5067,7 @@ func (suite *GlideTestSuite) TestXRead() {
 
 		res, err = client.XAddWithOptions(context.Background(),
 			key2,
-			[][]string{{"k2_field1", "k2_value1"}},
+			[]models.FieldValue{{Field: "k2_field1", Value: "k2_value1"}},
 			*options.NewXAddOptions().SetId("2-0"),
 		)
 		suite.NoError(err)
@@ -5061,14 +5089,17 @@ func (suite *GlideTestSuite) TestXRead() {
 		assert.True(suite.T(), exists)
 		assert.Equal(suite.T(), 1, len(streamResponse1.Entries))
 		assert.Equal(suite.T(), "0-1", streamResponse1.Entries[0].ID)
-		assert.Equal(suite.T(), map[string]string{"k1_field1": "k1_value2"}, streamResponse1.Entries[0].Fields)
+		assert.Equal(suite.T(), streamResponse1.Entries[0].Fields,
+			[]models.FieldValue{{Field: "k1_field1", Value: "k1_value1"}, {Field: "k1_field1", Value: "k1_value2"}})
 
 		// Check key2 stream
 		streamResponse2, exists := read[key2]
 		assert.True(suite.T(), exists)
 		assert.Equal(suite.T(), 1, len(streamResponse2.Entries))
 		assert.Equal(suite.T(), "2-0", streamResponse2.Entries[0].ID)
-		assert.Equal(suite.T(), map[string]string{"k2_field1": "k2_value1"}, streamResponse2.Entries[0].Fields)
+
+		assert.Equal(suite.T(), streamResponse2.Entries[0].Fields,
+			[]models.FieldValue{{Field: "k2_field1", Value: "k2_value1"}})
 
 		// Key exists, but it is not a stream
 		client.Set(context.Background(), key3, "xread")
@@ -5126,21 +5157,21 @@ func (suite *GlideTestSuite) TestXGroupSetId() {
 		// Setup: Create stream with 3 entries, create consumer group, read entries to add them to the Pending Entries List
 		xadd, err := client.XAddWithOptions(context.Background(),
 			key,
-			[][]string{{"f0", "v0"}},
+			[]models.FieldValue{{Field: "f0", Value: "v0"}},
 			*options.NewXAddOptions().SetId("1-0"),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), "1-0", xadd.Value())
 		xadd, err = client.XAddWithOptions(context.Background(),
 			key,
-			[][]string{{"f1", "v1"}},
+			[]models.FieldValue{{Field: "f1", Value: "v1"}},
 			*options.NewXAddOptions().SetId("1-1"),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), "1-1", xadd.Value())
 		xadd, err = client.XAddWithOptions(context.Background(),
 			key,
-			[][]string{{"f2", "v2"}},
+			[]models.FieldValue{{Field: "f2", Value: "v2"}},
 			*options.NewXAddOptions().SetId("1-2"),
 		)
 		assert.NoError(suite.T(), err)
@@ -5162,21 +5193,28 @@ func (suite *GlideTestSuite) TestXGroupSetId() {
 		assert.True(suite.T(), exists)
 
 		// Check entries
-		entryMap := make(map[string]map[string]string)
+		entryMap := make(map[string][]models.FieldValue)
 		for _, entry := range streamResponse.Entries {
 			entryMap[entry.ID] = entry.Fields
 		}
 
-		// Verify entries
+		// // Verify entries
 		assert.Contains(suite.T(), entryMap, "1-0")
-		assert.Equal(suite.T(), map[string]string{"f0": "v0"}, entryMap["1-0"])
+		assert.Equal(suite.T(), entryMap["1-0"],
+			[]models.FieldValue{{Field: "f0", Value: "v0"}},
+		)
 
 		assert.Contains(suite.T(), entryMap, "1-1")
-		assert.Equal(suite.T(), map[string]string{"f1": "v1"}, entryMap["1-1"])
+		// Check for field "f1" with value "v1" in entry 1-1
+		assert.Equal(suite.T(), entryMap["1-1"],
+			[]models.FieldValue{{Field: "f1", Value: "v1"}},
+		)
 
 		assert.Contains(suite.T(), entryMap, "1-2")
-		assert.Equal(suite.T(), map[string]string{"f2": "v2"}, entryMap["1-2"])
-
+		// Check for field "f2" with value "v2" in entry 1-2
+		assert.Equal(suite.T(), entryMap["1-2"],
+			[]models.FieldValue{{Field: "f2", Value: "v2"}},
+		)
 		// Sanity check: xreadgroup should not return more entries since they're all already in the
 		// Pending Entries List.
 		xreadgroup, err = client.XReadGroup(context.Background(), group, consumer, map[string]string{key: ">"})
@@ -5203,7 +5241,7 @@ func (suite *GlideTestSuite) TestXGroupSetId() {
 		// Check entries
 		assert.Equal(suite.T(), 1, len(streamResponse.Entries))
 		assert.Equal(suite.T(), "1-2", streamResponse.Entries[0].ID)
-		assert.Equal(suite.T(), map[string]string{"f2": "v2"}, streamResponse.Entries[0].Fields)
+		assert.Equal(suite.T(), []models.FieldValue{{Field: "f2", Value: "v2"}}, streamResponse.Entries[0].Fields)
 
 		// An error is raised if XGROUP SETID is called with a non-existing key
 		_, err = client.XGroupSetId(context.Background(), uuid.NewString(), group, "1-1")
@@ -5243,7 +5281,7 @@ func (suite *GlideTestSuite) TestZAddAndZAddIncr() {
 
 		resIncr, err := client.ZAddIncr(context.Background(), key, "one", float64(2))
 		assert.Nil(t, err)
-		assert.Equal(t, float64(3), resIncr.Value())
+		assert.Equal(t, float64(3), resIncr)
 
 		// error cases
 		// non-sortedset key
@@ -5269,13 +5307,13 @@ func (suite *GlideTestSuite) TestZAddAndZAddIncr() {
 		suite.NoError(err)
 		assert.Equal(suite.T(), int64(3), res)
 
-		resIncr, err = client.ZAddIncrWithOptions(context.Background(), key3, "one", 5, *onlyIfDoesNotExistOpts)
+		resIncr2, err := client.ZAddIncrWithOptions(context.Background(), key3, "one", 5, *onlyIfDoesNotExistOpts)
 		suite.NoError(err)
-		assert.True(suite.T(), resIncr.IsNil())
+		assert.True(suite.T(), resIncr2.IsNil())
 
-		resIncr, err = client.ZAddIncrWithOptions(context.Background(), key3, "one", 5, *onlyIfExistsOpts)
+		resIncr2, err = client.ZAddIncrWithOptions(context.Background(), key3, "one", 5, *onlyIfExistsOpts)
 		suite.NoError(err)
-		assert.Equal(suite.T(), float64(6), resIncr.Value())
+		assert.Equal(suite.T(), float64(6), resIncr2.Value())
 
 		// with GT or LT
 		membersScoreMap2 := map[string]float64{
@@ -5303,13 +5341,13 @@ func (suite *GlideTestSuite) TestZAddAndZAddIncr() {
 		suite.NoError(err)
 		assert.Equal(suite.T(), int64(0), res)
 
-		resIncr, err = client.ZAddIncrWithOptions(context.Background(), key4, "one", -3, *ltOpts)
+		resIncr2, err = client.ZAddIncrWithOptions(context.Background(), key4, "one", -3, *ltOpts)
 		suite.NoError(err)
-		assert.Equal(suite.T(), float64(7), resIncr.Value())
+		assert.Equal(suite.T(), float64(7), resIncr2.Value())
 
-		resIncr, err = client.ZAddIncrWithOptions(context.Background(), key4, "one", -3, *gtOpts)
+		resIncr2, err = client.ZAddIncrWithOptions(context.Background(), key4, "one", -3, *gtOpts)
 		suite.NoError(err)
-		assert.True(suite.T(), resIncr.IsNil())
+		assert.True(suite.T(), resIncr2.IsNil())
 	})
 }
 
@@ -5869,7 +5907,7 @@ func (suite *GlideTestSuite) TestPersist() {
 		keyName := "{keyName}" + uuid.NewString()
 		t := suite.T()
 		suite.verifyOK(client.Set(context.Background(), keyName, initialValue))
-		resultExpire, err := client.Expire(context.Background(), keyName, 300)
+		resultExpire, err := client.Expire(context.Background(), keyName, 300*time.Second)
 		assert.Nil(t, err)
 		assert.True(t, resultExpire)
 		resultPersist, err := client.Persist(context.Background(), keyName)
@@ -5901,14 +5939,14 @@ func (suite *GlideTestSuite) TestZRank() {
 		assert.Equal(suite.T(), int64(1), res.Value())
 
 		if suite.serverVersion >= "7.2.0" {
-			res2Rank, res2Score, err := client.ZRankWithScore(context.Background(), key, "one")
+			res2, err := client.ZRankWithScore(context.Background(), key, "one")
 			suite.NoError(err)
-			assert.Equal(suite.T(), int64(0), res2Rank.Value())
-			assert.Equal(suite.T(), float64(1.5), res2Score.Value())
-			res4Rank, res4Score, err := client.ZRankWithScore(context.Background(), key, "non-existing-member")
+			assert.Equal(suite.T(), int64(0), res2.Value().Rank)
+			assert.Equal(suite.T(), float64(1.5), res2.Value().Score)
+			res4, err := client.ZRankWithScore(context.Background(), key, "non-existing-member")
 			suite.NoError(err)
-			assert.True(suite.T(), res4Rank.IsNil())
-			assert.True(suite.T(), res4Score.IsNil())
+			assert.True(suite.T(), res4.IsNil())
+			assert.True(suite.T(), res4.IsNil())
 		}
 
 		res3, err := client.ZRank(context.Background(), key, "non-existing-member")
@@ -5933,14 +5971,14 @@ func (suite *GlideTestSuite) TestZRevRank() {
 		assert.Equal(suite.T(), int64(1), res.Value())
 
 		if suite.serverVersion >= "7.2.0" {
-			res2Rank, res2Score, err := client.ZRevRankWithScore(context.Background(), key, "one")
+			res2, err := client.ZRevRankWithScore(context.Background(), key, "one")
 			suite.NoError(err)
-			assert.Equal(suite.T(), int64(2), res2Rank.Value())
-			assert.Equal(suite.T(), float64(1.5), res2Score.Value())
-			res4Rank, res4Score, err := client.ZRevRankWithScore(context.Background(), key, "non-existing-member")
+			assert.Equal(suite.T(), int64(2), res2.Value().Rank)
+			assert.Equal(suite.T(), float64(1.5), res2.Value().Score)
+			res4, err := client.ZRevRankWithScore(context.Background(), key, "non-existing-member")
 			suite.NoError(err)
-			assert.True(suite.T(), res4Rank.IsNil())
-			assert.True(suite.T(), res4Score.IsNil())
+			assert.True(suite.T(), res4.IsNil())
+			assert.True(suite.T(), res4.IsNil())
 		}
 
 		res3, err := client.ZRevRank(context.Background(), key, "non-existing-member")
@@ -5964,7 +6002,7 @@ func (suite *GlideTestSuite) Test_XAdd_XLen_XTrim() {
 		t := suite.T()
 		xAddResult, err := client.XAddWithOptions(context.Background(),
 			key1,
-			[][]string{{field1, "foo"}, {field2, "bar"}},
+			[]models.FieldValue{{Field: field1, Value: "foo"}, {Field: field2, Value: "bar"}},
 			*options.NewXAddOptions().SetDontMakeNewStream(),
 		)
 		assert.NoError(t, err)
@@ -5972,18 +6010,17 @@ func (suite *GlideTestSuite) Test_XAdd_XLen_XTrim() {
 
 		xAddResult, err = client.XAddWithOptions(context.Background(),
 			key1,
-			[][]string{{field1, "foo1"}, {field2, "bar1"}},
+			[]models.FieldValue{{Field: field1, Value: "foo1"}, {Field: field2, Value: "bar1"}},
 			*options.NewXAddOptions().SetId("0-1"),
 		)
 		assert.NoError(t, err)
 		assert.Equal(t, xAddResult.Value(), "0-1")
 
-		xAddResult, err = client.XAdd(context.Background(),
+		_, err = client.XAdd(context.Background(),
 			key1,
-			[][]string{{field1, "foo2"}, {field2, "bar2"}},
+			[]models.FieldValue{{Field: field1, Value: "foo2"}, {Field: field2, Value: "bar2"}},
 		)
 		assert.NoError(t, err)
-		assert.False(t, xAddResult.IsNil())
 
 		xLenResult, err := client.XLen(context.Background(), key1)
 		assert.NoError(t, err)
@@ -5992,7 +6029,7 @@ func (suite *GlideTestSuite) Test_XAdd_XLen_XTrim() {
 		// Trim the first entry.
 		xAddResult, err = client.XAddWithOptions(context.Background(),
 			key1,
-			[][]string{{field1, "foo3"}, {field2, "bar2"}},
+			[]models.FieldValue{{Field: field1, Value: "foo3"}, {Field: field2, Value: "bar2"}},
 			*options.NewXAddOptions().SetTrimOptions(
 				options.NewXTrimOptionsWithMaxLen(2).SetExactTrimming(),
 			),
@@ -6007,7 +6044,7 @@ func (suite *GlideTestSuite) Test_XAdd_XLen_XTrim() {
 		// Trim the second entry.
 		xAddResult, err = client.XAddWithOptions(context.Background(),
 			key1,
-			[][]string{{field1, "foo4"}, {field2, "bar4"}},
+			[]models.FieldValue{{Field: field1, Value: "foo4"}, {Field: field2, Value: "bar4"}},
 			*options.NewXAddOptions().SetTrimOptions(
 				options.NewXTrimOptionsWithMinId(id).SetExactTrimming(),
 			),
@@ -6176,7 +6213,7 @@ func (suite *GlideTestSuite) Test_XDel() {
 
 		xAddResult, err := client.XAddWithOptions(context.Background(),
 			key1,
-			[][]string{{"f1", "foo1"}, {"f2", "bar2"}},
+			[]models.FieldValue{{Field: "f1", Value: "foo1"}, {Field: "f2", Value: "bar2"}},
 			*options.NewXAddOptions().SetId(streamId1),
 		)
 		assert.NoError(t, err)
@@ -6184,7 +6221,7 @@ func (suite *GlideTestSuite) Test_XDel() {
 
 		xAddResult, err = client.XAddWithOptions(context.Background(),
 			key1,
-			[][]string{{"f1", "foo1"}, {"f2", "bar2"}},
+			[]models.FieldValue{{Field: "f1", Value: "foo1"}, {Field: "f2", Value: "bar2"}},
 			*options.NewXAddOptions().SetId(streamId2),
 		)
 		assert.NoError(t, err)
@@ -6216,7 +6253,7 @@ func (suite *GlideTestSuite) Test_XDel() {
 func (suite *GlideTestSuite) TestZScan() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		key1 := uuid.New().String()
-		initialCursor := "0"
+		initialCursor := models.NewCursor()
 		defaultCount := 20
 
 		// Set up test data - use a large number of entries to force an iterative cursor
@@ -6235,20 +6272,20 @@ func (suite *GlideTestSuite) TestZScan() {
 		}
 
 		// Empty set
-		resCursor, resCollection, err := client.ZScan(context.Background(), key1, initialCursor)
+		result, err := client.ZScan(context.Background(), key1, initialCursor)
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), initialCursor, resCursor)
-		assert.Empty(suite.T(), resCollection)
+		suite.Equal(initialCursor.String(), result.Cursor.String())
+		assert.Empty(suite.T(), result.Data)
 
 		// Negative cursor
 		if suite.serverVersion >= "8.0.0" {
-			_, _, err = client.ZScan(context.Background(), key1, "-1")
+			_, err = client.ZScan(context.Background(), key1, models.NewCursorFromString("-1"))
 			suite.Error(err)
 		} else {
-			resCursor, resCollection, err = client.ZScan(context.Background(), key1, "-1")
+			result, err = client.ZScan(context.Background(), key1, models.NewCursorFromString("-1"))
 			suite.NoError(err)
-			suite.Equal(initialCursor, resCursor)
-			suite.Empty(resCollection)
+			suite.Equal(initialCursor.String(), result.Cursor.String())
+			suite.Empty(result.Data)
 		}
 
 		// Result contains the whole set
@@ -6256,18 +6293,18 @@ func (suite *GlideTestSuite) TestZScan() {
 		suite.NoError(err)
 		suite.Equal(int64(5), res)
 
-		resCursor, resCollection, err = client.ZScan(context.Background(), key1, initialCursor)
+		result, err = client.ZScan(context.Background(), key1, initialCursor)
 		suite.NoError(err)
-		suite.Equal(initialCursor, resCursor)
-		suite.Equal(len(charMap)*2, len(resCollection))
+		suite.Equal(initialCursor.String(), result.Cursor.String())
+		suite.Equal(len(charMap)*2, len(result.Data))
 
 		resultKeySet := make([]string, 0, len(charMap))
 		resultValueSet := make([]string, 0, len(charMap))
 
 		// Iterate through array taking pairs of items
-		for i := 0; i < len(resCollection); i += 2 {
-			resultKeySet = append(resultKeySet, resCollection[i])
-			resultValueSet = append(resultValueSet, resCollection[i+1])
+		for i := 0; i < len(result.Data); i += 2 {
+			resultKeySet = append(resultKeySet, result.Data[i])
+			resultValueSet = append(resultValueSet, result.Data[i+1])
 		}
 
 		// Verify all expected keys exist in result
@@ -6277,29 +6314,30 @@ func (suite *GlideTestSuite) TestZScan() {
 		assert.True(suite.T(), isSubset(charMapValues, resultValueSet))
 
 		opts := options.NewZScanOptions().SetMatch("a")
-		resCursor, resCollection, err = client.ZScanWithOptions(context.Background(), key1, initialCursor, *opts)
+		result, err = client.ZScanWithOptions(context.Background(), key1, initialCursor, *opts)
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), initialCursor, resCursor)
-		assert.Equal(suite.T(), resCollection, []string{"a", "0"})
+		suite.Equal(initialCursor.String(), result.Cursor.String())
+		assert.Equal(suite.T(), result.Data, []string{"a", "0"})
 
 		// Result contains a subset of the key
 		res, err = client.ZAdd(context.Background(), key1, numberMap)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), int64(50000), res)
 
-		resCursor, resCollection, err = client.ZScan(context.Background(), key1, "0")
-		assert.NoError(suite.T(), err)
-		resultCollection := resCollection
+		resultCollection := []string{}
 		resKeys := []string{}
 
+		cursor := models.NewCursor()
 		// 0 is returned for the cursor of the last iteration
-		for resCursor != "0" {
-			nextCursor, nextCol, err := client.ZScan(context.Background(), key1, resCursor)
+		for !cursor.IsFinished() {
+			result, err := client.ZScan(context.Background(), key1, cursor)
 			assert.NoError(suite.T(), err)
-			assert.NotEqual(suite.T(), nextCursor, resCursor)
-			assert.False(suite.T(), isSubset(resultCollection, nextCol))
-			resultCollection = append(resultCollection, nextCol...)
-			resCursor = nextCursor
+			assert.NotEqual(suite.T(), cursor, result.Cursor)
+			if len(result.Data) > 0 {
+				assert.False(suite.T(), isSubset(result.Data, resultCollection))
+			}
+			resultCollection = append(resultCollection, result.Data...)
+			cursor = result.Cursor
 		}
 
 		for i := 0; i < len(resultCollection); i += 2 {
@@ -6312,36 +6350,43 @@ func (suite *GlideTestSuite) TestZScan() {
 
 		// Test match pattern
 		opts = options.NewZScanOptions().SetMatch("*")
-		resCursor, resCollection, err = client.ZScanWithOptions(context.Background(), key1, initialCursor, *opts)
+		result, err = client.ZScanWithOptions(context.Background(), key1, initialCursor, *opts)
 		assert.NoError(suite.T(), err)
-		assert.NotEqual(suite.T(), initialCursor, resCursor)
-		assert.GreaterOrEqual(suite.T(), len(resCollection), defaultCount)
+		assert.NotEqual(suite.T(), initialCursor, result.Cursor)
+		assert.GreaterOrEqual(suite.T(), len(result.Data), defaultCount)
 
 		// test count
 		opts = options.NewZScanOptions().SetCount(20)
-		resCursor, resCollection, err = client.ZScanWithOptions(context.Background(), key1, initialCursor, *opts)
+		result, err = client.ZScanWithOptions(context.Background(), key1, initialCursor, *opts)
 		assert.NoError(suite.T(), err)
-		assert.NotEqual(suite.T(), initialCursor, resCursor)
-		assert.GreaterOrEqual(suite.T(), len(resCollection), 20)
+		assert.NotEqual(suite.T(), initialCursor, result.Cursor)
+		assert.GreaterOrEqual(suite.T(), len(result.Data), 20)
 
 		// test count with match, returns a non-empty array
 		opts = options.NewZScanOptions().SetMatch("1*").SetCount(20)
-		resCursor, resCollection, err = client.ZScanWithOptions(context.Background(), key1, initialCursor, *opts)
+		result, err = client.ZScanWithOptions(context.Background(), key1, initialCursor, *opts)
 		assert.NoError(suite.T(), err)
-		assert.NotEqual(suite.T(), initialCursor, resCursor)
-		assert.GreaterOrEqual(suite.T(), len(resCollection), 0)
+		assert.NotEqual(suite.T(), initialCursor, result.Cursor)
+		assert.GreaterOrEqual(suite.T(), len(result.Data), 0)
 
 		// Test NoScores option for Redis 8.0.0+
 		if suite.serverVersion >= "8.0.0" {
-			opts = options.NewZScanOptions().SetNoScores(true)
-			resCursor, resCollection, err = client.ZScanWithOptions(context.Background(), key1, initialCursor, *opts)
+			// Use a fresh key for NoScores test to avoid interference from previous entries
+			noScoresKey := uuid.New().String()
+			// Add only "member" entries to ensure all returned fields start with "member"
+			res, err := client.ZAdd(context.Background(), noScoresKey, numberMap)
 			assert.NoError(suite.T(), err)
-			cursor, err := strconv.ParseInt(resCursor, 10, 64)
+			assert.Equal(suite.T(), int64(50000), res)
+
+			opts = options.NewZScanOptions().SetNoScores(true)
+			result, err = client.ZScanWithOptions(context.Background(), noScoresKey, initialCursor, *opts)
+			assert.NoError(suite.T(), err)
+			cursor, err := strconv.ParseInt(result.Cursor.String(), 10, 64)
 			assert.NoError(suite.T(), err)
 			assert.GreaterOrEqual(suite.T(), cursor, int64(0))
 
 			// Verify all fields start with "member"
-			for _, field := range resCollection {
+			for _, field := range result.Data {
 				assert.True(suite.T(), strings.HasPrefix(field, "member"))
 			}
 		}
@@ -6353,16 +6398,16 @@ func (suite *GlideTestSuite) TestZScan() {
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), "OK", setRes)
 
-		_, _, err = client.ZScan(context.Background(), stringKey, initialCursor)
+		_, err = client.ZScan(context.Background(), stringKey, initialCursor)
 		suite.Error(err)
 
 		opts = options.NewZScanOptions().SetMatch("test").SetCount(1)
-		_, _, err = client.ZScanWithOptions(context.Background(), stringKey, initialCursor, *opts)
+		_, err = client.ZScanWithOptions(context.Background(), stringKey, initialCursor, *opts)
 		suite.Error(err)
 
 		// Negative count
 		opts = options.NewZScanOptions().SetCount(-1)
-		_, _, err = client.ZScanWithOptions(context.Background(), key1, "-1", *opts)
+		_, err = client.ZScanWithOptions(context.Background(), key1, models.NewCursor(), *opts)
 		suite.Error(err)
 	})
 }
@@ -6401,19 +6446,19 @@ func (suite *GlideTestSuite) TestXPending() {
 			assert.NoError(suite.T(), err)
 			assert.True(suite.T(), resp.(bool))
 
-			streamid_1, err := client.XAdd(context.Background(), key, [][]string{{"field1", "value1"}})
+			streamid_1, err := client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field1", Value: "value1"}})
 			assert.NoError(suite.T(), err)
-			streamid_2, err := client.XAdd(context.Background(), key, [][]string{{"field2", "value2"}})
+			streamid_2, err := client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field2", Value: "value2"}})
 			assert.NoError(suite.T(), err)
 
 			_, err = client.XReadGroup(context.Background(), groupName, consumer1, map[string]string{key: ">"})
 			assert.NoError(suite.T(), err)
 
-			_, err = client.XAdd(context.Background(), key, [][]string{{"field3", "value3"}})
+			_, err = client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field3", Value: "value3"}})
 			assert.NoError(suite.T(), err)
-			_, err = client.XAdd(context.Background(), key, [][]string{{"field4", "value4"}})
+			_, err = client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field4", Value: "value4"}})
 			assert.NoError(suite.T(), err)
-			streamid_5, err := client.XAdd(context.Background(), key, [][]string{{"field5", "value5"}})
+			streamid_5, err := client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field5", Value: "value5"}})
 			assert.NoError(suite.T(), err)
 
 			_, err = client.XReadGroup(context.Background(), groupName, consumer2, map[string]string{key: ">"})
@@ -6421,8 +6466,8 @@ func (suite *GlideTestSuite) TestXPending() {
 
 			expectedSummary := models.XPendingSummary{
 				NumOfMessages: 5,
-				StartId:       streamid_1,
-				EndId:         streamid_5,
+				StartId:       models.CreateStringResult(streamid_1),
+				EndId:         models.CreateStringResult(streamid_5),
 				ConsumerMessages: []models.ConsumerPendingMessage{
 					{ConsumerName: consumer1, MessageCount: 2},
 					{ConsumerName: consumer2, MessageCount: 3},
@@ -6447,8 +6492,8 @@ func (suite *GlideTestSuite) TestXPending() {
 				*options.NewXPendingOptions("-", "+", 10).SetConsumer(consumer1),
 			)
 			assert.Equal(suite.T(), len(detailResult), 2)
-			assert.Equal(suite.T(), streamid_1.Value(), detailResult[0].Id)
-			assert.Equal(suite.T(), streamid_2.Value(), detailResult[1].Id)
+			assert.Equal(suite.T(), streamid_1, detailResult[0].Id)
+			assert.Equal(suite.T(), streamid_2, detailResult[1].Id)
 		}
 
 		execCluster := func(client interfaces.GlideClusterClientCommands) {
@@ -6475,19 +6520,19 @@ func (suite *GlideTestSuite) TestXPending() {
 			assert.NoError(suite.T(), err)
 			assert.True(suite.T(), resp.SingleValue().(bool))
 
-			streamid_1, err := client.XAdd(context.Background(), key, [][]string{{"field1", "value1"}})
+			streamid_1, err := client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field1", Value: "value1"}})
 			assert.NoError(suite.T(), err)
-			streamid_2, err := client.XAdd(context.Background(), key, [][]string{{"field2", "value2"}})
+			streamid_2, err := client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field2", Value: "value2"}})
 			assert.NoError(suite.T(), err)
 
 			_, err = client.XReadGroup(context.Background(), groupName, consumer1, map[string]string{key: ">"})
 			assert.NoError(suite.T(), err)
 
-			_, err = client.XAdd(context.Background(), key, [][]string{{"field3", "value3"}})
+			_, err = client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field3", Value: "value3"}})
 			assert.NoError(suite.T(), err)
-			_, err = client.XAdd(context.Background(), key, [][]string{{"field4", "value4"}})
+			_, err = client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field4", Value: "value4"}})
 			assert.NoError(suite.T(), err)
-			streamid_5, err := client.XAdd(context.Background(), key, [][]string{{"field5", "value5"}})
+			streamid_5, err := client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field5", Value: "value5"}})
 			assert.NoError(suite.T(), err)
 
 			_, err = client.XReadGroup(context.Background(), groupName, consumer2, map[string]string{key: ">"})
@@ -6495,8 +6540,8 @@ func (suite *GlideTestSuite) TestXPending() {
 
 			expectedSummary := models.XPendingSummary{
 				NumOfMessages: 5,
-				StartId:       streamid_1,
-				EndId:         streamid_5,
+				StartId:       models.CreateStringResult(streamid_1),
+				EndId:         models.CreateStringResult(streamid_5),
 				ConsumerMessages: []models.ConsumerPendingMessage{
 					{ConsumerName: consumer1, MessageCount: 2},
 					{ConsumerName: consumer2, MessageCount: 3},
@@ -6521,8 +6566,8 @@ func (suite *GlideTestSuite) TestXPending() {
 				*options.NewXPendingOptions("-", "+", 10).SetConsumer(consumer1),
 			)
 			assert.Equal(suite.T(), len(detailResult), 2)
-			assert.Equal(suite.T(), streamid_1.Value(), detailResult[0].Id)
-			assert.Equal(suite.T(), streamid_2.Value(), detailResult[1].Id)
+			assert.Equal(suite.T(), streamid_1, detailResult[0].Id)
+			assert.Equal(suite.T(), streamid_2, detailResult[1].Id)
 
 			//
 		}
@@ -6575,9 +6620,9 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			assert.NoError(suite.T(), err)
 			assert.True(suite.T(), resp.(bool))
 
-			_, err = client.XAdd(context.Background(), key, [][]string{{"field1", "value1"}})
+			_, err = client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field1", Value: "value1"}})
 			assert.NoError(suite.T(), err)
-			_, err = client.XAdd(context.Background(), key, [][]string{{"field2", "value2"}})
+			_, err = client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field2", Value: "value2"}})
 			assert.NoError(suite.T(), err)
 
 			// no pending messages yet...
@@ -6728,9 +6773,9 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			assert.NoError(suite.T(), err)
 			assert.True(suite.T(), resp.SingleValue().(bool))
 
-			_, err = client.XAdd(context.Background(), key, [][]string{{"field1", "value1"}})
+			_, err = client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field1", Value: "value1"}})
 			assert.NoError(suite.T(), err)
-			_, err = client.XAdd(context.Background(), key, [][]string{{"field2", "value2"}})
+			_, err = client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field2", Value: "value2"}})
 			assert.NoError(suite.T(), err)
 
 			// no pending messages yet...
@@ -6953,7 +6998,7 @@ func (suite *GlideTestSuite) TestDumpRestore() {
 		deletedCount, err := client.Del(context.Background(), []string{key})
 		assert.Nil(t, err)
 		assert.Equal(t, int64(1), deletedCount)
-		result_test1, err := client.Restore(context.Background(), key, int64(0), resultDump.Value())
+		result_test1, err := client.Restore(context.Background(), key, 0, resultDump.Value())
 		suite.NoError(err)
 		assert.Equal(suite.T(), "OK", result_test1)
 		resultGetRestoreKey, err := client.Get(context.Background(), key)
@@ -6984,7 +7029,7 @@ func (suite *GlideTestSuite) TestRestoreWithOptions() {
 		assert.Nil(t, err)
 		assert.Equal(t, int64(1), deletedCount)
 		optsReplace := options.NewRestoreOptions().SetReplace()
-		result_test1, err := client.RestoreWithOptions(context.Background(), key, int64(0), resultDump.Value(), *optsReplace)
+		result_test1, err := client.RestoreWithOptions(context.Background(), key, 0, resultDump.Value(), *optsReplace)
 		suite.NoError(err)
 		assert.Equal(suite.T(), "OK", result_test1)
 		resultGetRestoreKey, err := client.Get(context.Background(), key)
@@ -6996,7 +7041,7 @@ func (suite *GlideTestSuite) TestRestoreWithOptions() {
 		assert.Nil(t, err)
 		assert.Equal(t, int64(1), delete_test2)
 		opts_test2 := options.NewRestoreOptions().SetABSTTL()
-		result_test2, err := client.RestoreWithOptions(context.Background(), key, int64(0), resultDump.Value(), *opts_test2)
+		result_test2, err := client.RestoreWithOptions(context.Background(), key, 0, resultDump.Value(), *opts_test2)
 		suite.NoError(err)
 		assert.Equal(suite.T(), "OK", result_test2)
 		resultGet_test2, err := client.Get(context.Background(), key)
@@ -7008,7 +7053,7 @@ func (suite *GlideTestSuite) TestRestoreWithOptions() {
 		assert.Nil(t, err)
 		assert.Equal(t, int64(1), delete_test3)
 		opts_test3 := options.NewRestoreOptions().SetEviction(constants.FREQ, 10)
-		result_test3, err := client.RestoreWithOptions(context.Background(), key, int64(0), resultDump.Value(), *opts_test3)
+		result_test3, err := client.RestoreWithOptions(context.Background(), key, 0, resultDump.Value(), *opts_test3)
 		suite.NoError(err)
 		assert.Equal(suite.T(), "OK", result_test3)
 		resultGet_test3, err := client.Get(context.Background(), key)
@@ -7020,7 +7065,7 @@ func (suite *GlideTestSuite) TestRestoreWithOptions() {
 		assert.Nil(t, err)
 		assert.Equal(t, int64(1), delete_test4)
 		opts_test4 := options.NewRestoreOptions().SetEviction(constants.IDLETIME, 10)
-		result_test4, err := client.RestoreWithOptions(context.Background(), key, int64(0), resultDump.Value(), *opts_test4)
+		result_test4, err := client.RestoreWithOptions(context.Background(), key, 0, resultDump.Value(), *opts_test4)
 		suite.NoError(err)
 		assert.Equal(suite.T(), "OK", result_test4)
 		resultGet_test4, err := client.Get(context.Background(), key)
@@ -7542,9 +7587,9 @@ func (suite *GlideTestSuite) TestXGroupStreamCommands() {
 		suite.Equal(int64(0), respInt64)
 
 		// Add two stream entries
-		streamId1, err := client.XAdd(context.Background(), key, [][]string{{"field1", "value1"}})
+		streamId1, err := client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field1", Value: "value1"}})
 		suite.NoError(err)
-		streamId2, err := client.XAdd(context.Background(), key, [][]string{{"field2", "value2"}})
+		streamId2, err := client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field2", Value: "value2"}})
 		suite.NoError(err)
 
 		// read the stream for the consumer and mark messages as pending
@@ -7560,20 +7605,22 @@ func (suite *GlideTestSuite) TestXGroupStreamCommands() {
 		assert.Equal(suite.T(), 2, len(streamResponse.Entries))
 
 		// Create a map of entry IDs to their fields for easier comparison
-		entryMap := make(map[string]map[string]string)
+		entryMap := make(map[string][]models.FieldValue)
 		for _, entry := range streamResponse.Entries {
 			entryMap[entry.ID] = entry.Fields
 		}
 
 		// Verify entries
-		assert.Contains(suite.T(), entryMap, streamId1.Value())
-		assert.Equal(suite.T(), map[string]string{"field1": "value1"}, entryMap[streamId1.Value()])
+		assert.Contains(suite.T(), entryMap, streamId1)
+		// Check for field "field1" with value "value1" in entry
+		assert.Equal(suite.T(), entryMap[streamId1], []models.FieldValue{{Field: "field1", Value: "value1"}})
 
-		assert.Contains(suite.T(), entryMap, streamId2.Value())
-		assert.Equal(suite.T(), map[string]string{"field2": "value2"}, entryMap[streamId2.Value()])
+		assert.Contains(suite.T(), entryMap, streamId2)
+		// Check for field "field2" with value "value2" in entry
+		assert.Equal(suite.T(), entryMap[streamId2], []models.FieldValue{{Field: "field2", Value: "value2"}})
 
 		// delete one of the streams using XDel
-		respInt64, err = client.XDel(context.Background(), key, []string{streamId1.Value()})
+		respInt64, err = client.XDel(context.Background(), key, []string{streamId1})
 		suite.NoError(err)
 		suite.Equal(int64(1), respInt64)
 
@@ -7587,25 +7634,27 @@ func (suite *GlideTestSuite) TestXGroupStreamCommands() {
 		assert.True(suite.T(), exists)
 
 		// Check entries
-		entryMap = make(map[string]map[string]string)
+		entryMap = make(map[string][]models.FieldValue)
 		for _, entry := range streamResponse.Entries {
 			entryMap[entry.ID] = entry.Fields
 		}
 
 		// Verify entries
-		assert.Contains(suite.T(), entryMap, streamId1.Value())
-		assert.Empty(suite.T(), entryMap[streamId1.Value()])
+		assert.Contains(suite.T(), entryMap, streamId1)
+		assert.Empty(suite.T(), entryMap[streamId1])
 
-		assert.Contains(suite.T(), entryMap, streamId2.Value())
-		assert.Equal(suite.T(), map[string]string{"field2": "value2"}, entryMap[streamId2.Value()])
+		assert.Contains(suite.T(), entryMap, streamId2)
+
+		// Check for field "field2" with value "value2" in entry
+		assert.Equal(suite.T(), entryMap[streamId2], []models.FieldValue{{Field: "field2", Value: "value2"}})
 
 		// add a new stream entry
-		streamId3, err := client.XAdd(context.Background(), key, [][]string{{"field3", "value3"}})
+		streamId3, err := client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field3", Value: "value3"}})
 		suite.NoError(err)
 		suite.NotNil(streamId3)
 
 		// xack that streamid1 and streamid2 have been processed
-		xackResult, err := client.XAck(context.Background(), key, groupName, []string{streamId1.Value(), streamId2.Value()})
+		xackResult, err := client.XAck(context.Background(), key, groupName, []string{streamId1, streamId2})
 		suite.NoError(err)
 		suite.Equal(int64(2), xackResult)
 
@@ -7615,7 +7664,7 @@ func (suite *GlideTestSuite) TestXGroupStreamCommands() {
 		suite.Equal(int64(0), respInt64)
 
 		// xack streamid_1, and streamid_2 already received returns 0L
-		xackResult, err = client.XAck(context.Background(), key, groupName, []string{streamId1.Value(), streamId2.Value()})
+		xackResult, err = client.XAck(context.Background(), key, groupName, []string{streamId1})
 		suite.NoError(err)
 		suite.Equal(int64(0), xackResult)
 
@@ -7628,11 +7677,13 @@ func (suite *GlideTestSuite) TestXGroupStreamCommands() {
 		streamResponse, exists = resp[key]
 		assert.True(suite.T(), exists)
 		assert.Equal(suite.T(), 1, len(streamResponse.Entries))
-		assert.Equal(suite.T(), streamId3.Value(), streamResponse.Entries[0].ID)
-		assert.Equal(suite.T(), map[string]string{"field3": "value3"}, streamResponse.Entries[0].Fields)
+		assert.Equal(suite.T(), streamId3, streamResponse.Entries[0].ID)
+
+		// Check for field "field3" with value "value3" in entry
+		assert.Equal(suite.T(), []models.FieldValue{{Field: "field3", Value: "value3"}}, streamResponse.Entries[0].Fields)
 
 		// Use non existent group, so xack streamid_3 returns 0
-		xackResult, err = client.XAck(context.Background(), key, "non-existent-group", []string{streamId3.Value()})
+		xackResult, err = client.XAck(context.Background(), key, "non-existent-group", []string{streamId3})
 		suite.NoError(err)
 		suite.Equal(int64(0), xackResult)
 
@@ -7661,7 +7712,7 @@ func (suite *GlideTestSuite) TestXInfoStream() {
 		xadd, err := client.XAddWithOptions(
 			context.Background(),
 			key,
-			[][]string{{"a", "b"}, {"c", "d"}},
+			[]models.FieldValue{{Field: "a", Value: "b"}, {Field: "c", Value: "d"}},
 			*options.NewXAddOptions().SetId("1-0"),
 		)
 		suite.NoError(err)
@@ -7674,45 +7725,77 @@ func (suite *GlideTestSuite) TestXInfoStream() {
 
 		infoSmall, err := client.XInfoStream(context.Background(), key)
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), int64(1), infoSmall["length"])
-		assert.Equal(suite.T(), int64(1), infoSmall["groups"])
-		expectedEntry := []any{"1-0", []any{"a", "b", "c", "d"}}
-		assert.Equal(suite.T(), expectedEntry, infoSmall["first-entry"])
-		assert.Equal(suite.T(), expectedEntry, infoSmall["last-entry"])
+		assert.Equal(suite.T(), int64(1), infoSmall.Length)
+		assert.Equal(suite.T(), int64(1), infoSmall.Groups)
+
+		// Check the first entry
+		assert.Equal(suite.T(), "1-0", infoSmall.FirstEntry.ID)
+
+		// Check fields in the first entry
+		assert.Equal(
+			suite.T(),
+			infoSmall.FirstEntry.Fields,
+			[]models.FieldValue{{Field: "a", Value: "b"}, {Field: "c", Value: "d"}},
+		)
+
+		// Check the last entry
+		assert.Equal(suite.T(), "1-0", infoSmall.LastEntry.ID)
+
+		// Check fields in the last entry
+		assert.Equal(
+			suite.T(),
+			infoSmall.LastEntry.Fields,
+			[]models.FieldValue{{Field: "a", Value: "b"}, {Field: "c", Value: "d"}},
+		)
 
 		xadd, err = client.XAddWithOptions(
 			context.Background(),
 			key,
-			[][]string{{"e", "f"}},
+			[]models.FieldValue{{Field: "e", Value: "f"}},
 			*options.NewXAddOptions().SetId("1-1"),
 		)
 		suite.NoError(err)
 		assert.Equal(suite.T(), "1-1", xadd.Value())
 
-		infoFull, err := client.XInfoStreamFullWithOptions(
+		infoFull, _ := client.XInfoStreamFullWithOptions(
 			context.Background(),
 			key,
-			options.NewXInfoStreamOptionsOptions().SetCount(1),
+			*options.NewXInfoStreamOptions().SetCount(1),
 		)
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), infoFull["length"])
-
+		assert.Equal(suite.T(), int64(2), infoFull.Length)
 		if suite.serverVersion >= "7.0.0" {
-			assert.Equal(suite.T(), "1-0", infoFull["recorded-first-entry-id"])
+			assert.Equal(suite.T(), "1-0", infoFull.RecordedFirstEntryId.Value())
 		} else {
-			assert.NotContains(suite.T(), infoFull, "recorded-first-entry-id")
-			assert.NotContains(suite.T(), infoFull, "max-deleted-entry-id")
-			assert.NotContains(suite.T(), infoFull, "entries-added")
-			assert.NotContains(suite.T(), infoFull["groups"].([]any)[0], "entries-read")
-			assert.NotContains(suite.T(), infoFull["groups"].([]any)[0], "lag")
+			assert.True(suite.T(), infoFull.RecordedFirstEntryId.IsNil())
+			assert.True(suite.T(), infoFull.MaxDeletedEntryID.IsNil())
+			assert.True(suite.T(), infoFull.EntriesAdded.IsNil())
+			assert.True(suite.T(), infoFull.Groups[0].EntriesRead.IsNil())
+			assert.True(suite.T(), infoFull.Groups[0].Lag.IsNil())
 		}
+		// first group
+		assert.Equal(suite.T(), len(infoFull.Groups), 1)
+		groupItem := infoFull.Groups[0]
+		if suite.serverVersion >= "7.0.0" {
+			assert.Equal(suite.T(), groupItem.EntriesRead.Value(), int64(1))
+			assert.Equal(suite.T(), groupItem.Lag.Value(), int64(1))
+		}
+		assert.Equal(suite.T(), groupItem.LastDeliveredId, "1-0")
+		assert.Equal(suite.T(), groupItem.Name, group)
+		assert.Equal(suite.T(), len(groupItem.Pending), int(1))
+
 		// first consumer of first group
-		cns := infoFull["groups"].([]any)[0].(map[string]any)["consumers"].([]any)[0]
-		assert.Contains(suite.T(), cns, "seen-time")
+		cns := infoFull.Groups[0].Consumers[0]
+		assert.NotNil(suite.T(), cns.SeenTime)
+		assert.Equal(suite.T(), cns.Name, consumer)
+		assert.Equal(suite.T(), cns.PelCount, int64(1))
+		assert.Equal(suite.T(), len(cns.Pending), int(1))
+		assert.Equal(suite.T(), cns.Pending[0].Id, "1-0")
+		assert.Equal(suite.T(), cns.Pending[0].DeliveredCount, int64(1))
 		if suite.serverVersion >= "7.2.0" {
-			assert.Contains(suite.T(), cns, "active-time")
+			assert.False(suite.T(), cns.ActiveTime.IsNil())
 		} else {
-			assert.NotContains(suite.T(), cns, "active-time")
+			assert.True(suite.T(), cns.ActiveTime.IsNil())
 		}
 	})
 }
@@ -7726,14 +7809,14 @@ func (suite *GlideTestSuite) TestXInfoConsumers() {
 
 		xadd, err := client.XAddWithOptions(context.Background(),
 			key,
-			[][]string{{"e1_f1", "e1_v1"}, {"e1_f2", "e1_v2"}},
+			[]models.FieldValue{{Field: "e1_f1", Value: "e1_v1"}, {Field: "e1_f2", Value: "e1_v2"}},
 			*options.NewXAddOptions().SetId("0-1"),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), "0-1", xadd.Value())
 		xadd, err = client.XAddWithOptions(context.Background(),
 			key,
-			[][]string{{"e2_f1", "e2_v1"}, {"e2_f2", "e2_v2"}},
+			[]models.FieldValue{{Field: "e2_f1", Value: "e2_v1"}, {Field: "e2_f2", Value: "e2_v2"}},
 			*options.NewXAddOptions().SetId("0-2"),
 		)
 		assert.NoError(suite.T(), err)
@@ -7741,7 +7824,7 @@ func (suite *GlideTestSuite) TestXInfoConsumers() {
 		xadd, err = client.XAddWithOptions(
 			context.Background(),
 			key,
-			[][]string{{"e3_f1", "e3_v1"}},
+			[]models.FieldValue{{Field: "e3_f1", Value: "e3_v1"}},
 			*options.NewXAddOptions().SetId("0-3"),
 		)
 		assert.NoError(suite.T(), err)
@@ -7765,7 +7848,13 @@ func (suite *GlideTestSuite) TestXInfoConsumers() {
 		// Check that we have one entry with the correct ID and fields
 		assert.Equal(suite.T(), 1, len(streamResponse.Entries))
 		assert.Equal(suite.T(), "0-1", streamResponse.Entries[0].ID)
-		assert.Equal(suite.T(), map[string]string{"e1_f1": "e1_v1", "e1_f2": "e1_v2"}, streamResponse.Entries[0].Fields)
+
+		// Check for fields in the entry
+		assert.Equal(
+			suite.T(),
+			streamResponse.Entries[0].Fields,
+			[]models.FieldValue{{Field: "e1_f1", Value: "e1_v1"}, {Field: "e1_f2", Value: "e1_v2"}},
+		)
 
 		// Sleep to ensure the idle time value and inactive time value returned by xinfo_consumers is > 0
 		time.Sleep(2000 * time.Millisecond)
@@ -7798,17 +7887,39 @@ func (suite *GlideTestSuite) TestXInfoConsumers() {
 		assert.Equal(suite.T(), 2, len(streamResponse.Entries))
 
 		// Create a map of entry IDs to their fields for easier comparison
-		entryMap := make(map[string]map[string]string)
+		entryMap := make(map[string][]models.FieldValue)
 		for _, entry := range streamResponse.Entries {
 			entryMap[entry.ID] = entry.Fields
 		}
 
 		// Verify entries
 		assert.Contains(suite.T(), entryMap, "0-2")
-		assert.Equal(suite.T(), map[string]string{"e2_f1": "e2_v1", "e2_f2": "e2_v2"}, entryMap["0-2"])
-
 		assert.Contains(suite.T(), entryMap, "0-3")
-		assert.Equal(suite.T(), map[string]string{"e3_f1": "e3_v1"}, entryMap["0-3"])
+		sort.Slice(streamResponse.Entries, func(i, j int) bool {
+			return streamResponse.Entries[i].ID < streamResponse.Entries[j].ID
+		})
+		// Check for fields
+		assert.Equal(
+			suite.T(),
+			streamResponse,
+			models.StreamResponse{
+				Entries: []models.StreamEntry{
+					{
+						ID: "0-2",
+						Fields: []models.FieldValue{
+							{Field: "e2_f1", Value: "e2_v1"},
+							{Field: "e2_f2", Value: "e2_v2"},
+						},
+					},
+					{
+						ID: "0-3",
+						Fields: []models.FieldValue{
+							{Field: "e3_f1", Value: "e3_v1"},
+						},
+					},
+				},
+			},
+		)
 
 		// Verify that xinfo_consumers contains info for 2 consumers now
 		info, err = client.XInfoConsumers(context.Background(), key, group)
@@ -7827,7 +7938,7 @@ func (suite *GlideTestSuite) TestXInfoConsumers() {
 
 		// Passing a non-existing group raises an error
 		key = uuid.NewString()
-		_, err = client.XAdd(context.Background(), key, [][]string{{"a", "b"}})
+		_, err = client.XAdd(context.Background(), key, []models.FieldValue{{Field: "a", Value: "b"}})
 		suite.NoError(err)
 		_, err = client.XInfoConsumers(context.Background(), key, "_")
 		suite.Error(err)
@@ -7885,14 +7996,14 @@ func (suite *GlideTestSuite) TestXInfoGroups() {
 
 		xadd, err := client.XAddWithOptions(context.Background(),
 			key,
-			[][]string{{"e1_f1", "e1_v1"}, {"e1_f2", "e1_v2"}},
+			[]models.FieldValue{{Field: "e1_f1", Value: "e1_v1"}, {Field: "e1_f2", Value: "e1_v2"}},
 			*options.NewXAddOptions().SetId("0-1"),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), "0-1", xadd.Value())
 		xadd, err = client.XAddWithOptions(context.Background(),
 			key,
-			[][]string{{"e2_f1", "e2_v1"}, {"e2_f2", "e2_v2"}},
+			[]models.FieldValue{{Field: "e2_f1", Value: "e2_v1"}, {Field: "e2_f2", Value: "e2_v2"}},
 			*options.NewXAddOptions().SetId("0-2"),
 		)
 		assert.NoError(suite.T(), err)
@@ -7900,7 +8011,7 @@ func (suite *GlideTestSuite) TestXInfoGroups() {
 		xadd, err = client.XAddWithOptions(
 			context.Background(),
 			key,
-			[][]string{{"e3_f1", "e3_v1"}},
+			[]models.FieldValue{{Field: "e3_f1", Value: "e3_v1"}},
 			*options.NewXAddOptions().SetId("0-3"),
 		)
 		assert.NoError(suite.T(), err)
@@ -7945,20 +8056,47 @@ func (suite *GlideTestSuite) TestXInfoGroups() {
 		assert.Equal(suite.T(), 3, len(streamResponse.Entries))
 
 		// Create a map of entry IDs to their fields for easier comparison
-		entryMap := make(map[string]map[string]string)
+		entryMap := make(map[string][]models.FieldValue)
+
 		for _, entry := range streamResponse.Entries {
 			entryMap[entry.ID] = entry.Fields
 		}
 
 		// Verify entries
 		assert.Contains(suite.T(), entryMap, "0-1")
-		assert.Equal(suite.T(), map[string]string{"e1_f1": "e1_v1", "e1_f2": "e1_v2"}, entryMap["0-1"])
-
 		assert.Contains(suite.T(), entryMap, "0-2")
-		assert.Equal(suite.T(), map[string]string{"e2_f1": "e2_v1", "e2_f2": "e2_v2"}, entryMap["0-2"])
-
 		assert.Contains(suite.T(), entryMap, "0-3")
-		assert.Equal(suite.T(), map[string]string{"e3_f1": "e3_v1"}, entryMap["0-3"])
+		sort.Slice(streamResponse.Entries, func(i, j int) bool {
+			return streamResponse.Entries[i].ID < streamResponse.Entries[j].ID
+		})
+		assert.Equal(
+			suite.T(),
+			streamResponse,
+			models.StreamResponse{
+				Entries: []models.StreamEntry{
+					{
+						ID: "0-1",
+						Fields: []models.FieldValue{
+							{Field: "e1_f1", Value: "e1_v1"},
+							{Field: "e1_f2", Value: "e1_v2"},
+						},
+					},
+					{
+						ID: "0-2",
+						Fields: []models.FieldValue{
+							{Field: "e2_f1", Value: "e2_v1"},
+							{Field: "e2_f2", Value: "e2_v2"},
+						},
+					},
+					{
+						ID: "0-3",
+						Fields: []models.FieldValue{
+							{Field: "e3_f1", Value: "e3_v1"},
+						},
+					},
+				},
+			},
+		)
 
 		// after reading, `lag` is reset, and `pending`, consumer count and last ID are set
 		xinfo, err = client.XInfoGroups(context.Background(), key)
@@ -8030,7 +8168,7 @@ func (suite *GlideTestSuite) TestXInfoGroups() {
 
 		// create a second stream
 		key = uuid.NewString()
-		_, err = client.XAdd(context.Background(), key, [][]string{{"1", "2"}})
+		_, err = client.XAdd(context.Background(), key, []models.FieldValue{{Field: "1", Value: "2"}})
 		assert.NoError(suite.T(), err)
 		// no group yet exists
 		xinfo, err = client.XInfoGroups(context.Background(), key)
@@ -8095,12 +8233,12 @@ func (suite *GlideTestSuite) TestWait() {
 		key := uuid.New().String()
 		client.Set(context.Background(), key, "test")
 		// Test 1:  numberOfReplicas (2)
-		resultInt64, err := client.Wait(context.Background(), 2, 2000)
+		resultInt64, err := client.Wait(context.Background(), 2, 2000*time.Millisecond)
 		assert.NoError(suite.T(), err)
 		assert.True(suite.T(), resultInt64 >= 2)
 
 		// Test 2: Invalid timeout (negative)
-		_, err = client.Wait(context.Background(), 2, -1)
+		_, err = client.Wait(context.Background(), 2, -1*time.Millisecond)
 
 		// Assert error and message for invalid timeout
 		assert.NotNil(suite.T(), err)
@@ -8357,9 +8495,9 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 		assert.True(suite.T(), respBool)
 
 		// Add two stream entries for consumer 1
-		streamid_1, err := client.XAdd(context.Background(), key, [][]string{{"field1", "value1"}})
+		streamid_1, err := client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field1", Value: "value1"}})
 		assert.NoError(suite.T(), err)
-		streamid_2, err := client.XAdd(context.Background(), key, [][]string{{"field2", "value2"}})
+		streamid_2, err := client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field2", Value: "value2"}})
 		assert.NoError(suite.T(), err)
 
 		// Read the stream entries for consumer 1 and mark messages as pending
@@ -8375,24 +8513,33 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 		assert.Equal(suite.T(), 2, len(streamResponse.Entries))
 
 		// Create a map of entry IDs to their fields for easier comparison
-		entryMap := make(map[string]map[string]string)
+		entryMap := make(map[string][]models.FieldValue)
 		for _, entry := range streamResponse.Entries {
 			entryMap[entry.ID] = entry.Fields
 		}
 
 		// Verify entries
-		assert.Contains(suite.T(), entryMap, streamid_1.Value())
-		assert.Equal(suite.T(), map[string]string{"field1": "value1"}, entryMap[streamid_1.Value()])
+		assert.Contains(suite.T(), entryMap, streamid_1)
 
-		assert.Contains(suite.T(), entryMap, streamid_2.Value())
-		assert.Equal(suite.T(), map[string]string{"field2": "value2"}, entryMap[streamid_2.Value()])
+		// Check for field "field1" with value "value1" in entry
+		assert.Equal(
+			suite.T(),
+			entryMap[streamid_1],
+			[]models.FieldValue{{Field: "field1", Value: "value1"}})
+
+		assert.Contains(suite.T(), entryMap, streamid_2)
+		// Check for field "field2" with value "value2" in entry
+		assert.Equal(
+			suite.T(),
+			entryMap[streamid_2],
+			[]models.FieldValue{{Field: "field2", Value: "value2"}})
 
 		// Add 3 more stream entries for consumer 2
-		streamid_3, err := client.XAdd(context.Background(), key, [][]string{{"field3", "value3"}})
+		streamid_3, err := client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field3", Value: "value3"}})
 		assert.NoError(suite.T(), err)
-		streamid_4, err := client.XAdd(context.Background(), key, [][]string{{"field4", "value4"}})
+		streamid_4, err := client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field4", Value: "value4"}})
 		assert.NoError(suite.T(), err)
-		streamid_5, err := client.XAdd(context.Background(), key, [][]string{{"field5", "value5"}})
+		streamid_5, err := client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field5", Value: "value5"}})
 		assert.NoError(suite.T(), err)
 
 		// read the entire stream for consumer 2 and mark messages as pending
@@ -8408,25 +8555,38 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 		assert.Equal(suite.T(), 3, len(streamResponse2.Entries))
 
 		// Create a map of entry IDs to their fields for easier comparison
-		entryMap2 := make(map[string]map[string]string)
+		entryMap2 := make(map[string][]models.FieldValue)
 		for _, entry := range streamResponse2.Entries {
 			entryMap2[entry.ID] = entry.Fields
 		}
 
 		// Verify entries
-		assert.Contains(suite.T(), entryMap2, streamid_3.Value())
-		assert.Equal(suite.T(), map[string]string{"field3": "value3"}, entryMap2[streamid_3.Value()])
-
-		assert.Contains(suite.T(), entryMap2, streamid_4.Value())
-		assert.Equal(suite.T(), map[string]string{"field4": "value4"}, entryMap2[streamid_4.Value()])
-
-		assert.Contains(suite.T(), entryMap2, streamid_5.Value())
-		assert.Equal(suite.T(), map[string]string{"field5": "value5"}, entryMap2[streamid_5.Value()])
+		assert.Contains(suite.T(), entryMap2, streamid_3)
+		assert.Contains(suite.T(), entryMap2, streamid_4)
+		assert.Contains(suite.T(), entryMap2, streamid_5)
+		sort.Slice(streamResponse2.Entries, func(i, j int) bool {
+			return streamResponse2.Entries[i].ID < streamResponse2.Entries[j].ID
+		})
+		entries := []models.StreamEntry{
+			{ID: streamid_3, Fields: []models.FieldValue{{Field: "field3", Value: "value3"}}},
+			{ID: streamid_4, Fields: []models.FieldValue{{Field: "field4", Value: "value4"}}},
+			{ID: streamid_5, Fields: []models.FieldValue{{Field: "field5", Value: "value5"}}},
+		}
+		sort.Slice(entries, func(i, j int) bool {
+			return entries[i].ID < entries[j].ID
+		})
+		assert.Equal(
+			suite.T(),
+			streamResponse2,
+			models.StreamResponse{
+				Entries: entries,
+			},
+		)
 
 		expectedSummary := models.XPendingSummary{
 			NumOfMessages: 5,
-			StartId:       streamid_1,
-			EndId:         streamid_5,
+			StartId:       models.CreateStringResult(streamid_1),
+			EndId:         models.CreateStringResult(streamid_5),
 			ConsumerMessages: []models.ConsumerPendingMessage{
 				{ConsumerName: consumer1, MessageCount: 2},
 				{ConsumerName: consumer2, MessageCount: 3},
@@ -8452,23 +8612,23 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 		assert.Greater(suite.T(), len(pendingResultExtended), 2)
 		// because of the idle time return, we have to exclude it from the expected result
 		// and check separately
-		assert.Equal(suite.T(), pendingResultExtended[0].Id, streamid_1.Value())
+		assert.Equal(suite.T(), pendingResultExtended[0].Id, streamid_1)
 		assert.Equal(suite.T(), pendingResultExtended[0].ConsumerName, consumer1)
 		assert.GreaterOrEqual(suite.T(), pendingResultExtended[0].DeliveryCount, int64(0))
 
-		assert.Equal(suite.T(), pendingResultExtended[1].Id, streamid_2.Value())
+		assert.Equal(suite.T(), pendingResultExtended[1].Id, streamid_2)
 		assert.Equal(suite.T(), pendingResultExtended[1].ConsumerName, consumer1)
 		assert.GreaterOrEqual(suite.T(), pendingResultExtended[1].DeliveryCount, int64(0))
 
-		assert.Equal(suite.T(), pendingResultExtended[2].Id, streamid_3.Value())
+		assert.Equal(suite.T(), pendingResultExtended[2].Id, streamid_3)
 		assert.Equal(suite.T(), pendingResultExtended[2].ConsumerName, consumer2)
 		assert.GreaterOrEqual(suite.T(), pendingResultExtended[2].DeliveryCount, int64(0))
 
-		assert.Equal(suite.T(), pendingResultExtended[3].Id, streamid_4.Value())
+		assert.Equal(suite.T(), pendingResultExtended[3].Id, streamid_4)
 		assert.Equal(suite.T(), pendingResultExtended[3].ConsumerName, consumer2)
 		assert.GreaterOrEqual(suite.T(), pendingResultExtended[3].DeliveryCount, int64(0))
 
-		assert.Equal(suite.T(), pendingResultExtended[4].Id, streamid_5.Value())
+		assert.Equal(suite.T(), pendingResultExtended[4].Id, streamid_5)
 		assert.Equal(suite.T(), pendingResultExtended[4].ConsumerName, consumer2)
 		assert.GreaterOrEqual(suite.T(), pendingResultExtended[4].DeliveryCount, int64(0))
 
@@ -8477,13 +8637,21 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 			key,
 			groupName,
 			consumer1,
-			int64(0),
-			[]string{streamid_3.Value(), streamid_5.Value()},
+			0,
+			[]string{streamid_3, streamid_5},
 		)
 		assert.NoError(suite.T(), err)
 		expectedClaimResult := map[string]models.XClaimResponse{
-			streamid_3.Value(): {Fields: map[string]string{"field3": "value3"}},
-			streamid_5.Value(): {Fields: map[string]string{"field5": "value5"}},
+			streamid_3: {
+				Fields: []models.FieldValue{
+					{Field: "field3", Value: "value3"},
+				},
+			},
+			streamid_5: {
+				Fields: []models.FieldValue{
+					{Field: "field5", Value: "value5"},
+				},
+			},
 		}
 		assert.Equal(suite.T(), expectedClaimResult, claimResult)
 
@@ -8491,14 +8659,14 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 			key,
 			groupName,
 			consumer1,
-			int64(0),
-			[]string{streamid_3.Value(), streamid_5.Value()},
+			0,
+			[]string{streamid_3, streamid_5},
 		)
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), []string{streamid_3.Value(), streamid_5.Value()}, claimResultJustId)
+		assert.Equal(suite.T(), []string{streamid_3, streamid_5}, claimResultJustId)
 
 		// add one more stream
-		streamid_6, err := client.XAdd(context.Background(), key, [][]string{{"field6", "value6"}})
+		streamid_6, err := client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field6", Value: "value6"}})
 		assert.NoError(suite.T(), err)
 
 		// using force, we can xclaim the message without reading it
@@ -8506,53 +8674,59 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 			key,
 			groupName,
 			consumer1,
-			int64(0),
-			[]string{streamid_6.Value()},
+			0,
+			[]string{streamid_6},
 			*options.NewXClaimOptions().SetForce().SetRetryCount(99),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(
 			suite.T(),
-			map[string]models.XClaimResponse{streamid_6.Value(): {Fields: map[string]string{"field6": "value6"}}},
+			map[string]models.XClaimResponse{
+				streamid_6: {
+					Fields: []models.FieldValue{
+						{Field: "field6", Value: "value6"},
+					},
+				},
+			},
 			claimResult,
 		)
 
 		forcePendingResult, err := client.XPendingWithOptions(context.Background(),
 			key,
 			groupName,
-			*options.NewXPendingOptions(streamid_6.Value(), streamid_6.Value(), 1),
+			*options.NewXPendingOptions(streamid_6, streamid_6, 1),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), 1, len(forcePendingResult))
-		assert.Equal(suite.T(), streamid_6.Value(), forcePendingResult[0].Id)
+		assert.Equal(suite.T(), streamid_6, forcePendingResult[0].Id)
 		assert.Equal(suite.T(), consumer1, forcePendingResult[0].ConsumerName)
 		assert.Equal(suite.T(), int64(99), forcePendingResult[0].DeliveryCount)
 
 		// acknowledge streams 2, 3, 4 and 6 and remove them from xpending results
 		xackResult, err := client.XAck(context.Background(),
 			key, groupName,
-			[]string{streamid_2.Value(), streamid_3.Value(), streamid_4.Value(), streamid_6.Value()})
+			[]string{streamid_2, streamid_3, streamid_4, streamid_6})
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), int64(4), xackResult)
 
 		pendingResultExtended, err = client.XPendingWithOptions(context.Background(),
 			key,
 			groupName,
-			*options.NewXPendingOptions(streamid_3.Value(), "+", 10),
+			*options.NewXPendingOptions(streamid_3, "+", 10),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), 1, len(pendingResultExtended))
-		assert.Equal(suite.T(), streamid_5.Value(), pendingResultExtended[0].Id)
+		assert.Equal(suite.T(), streamid_5, pendingResultExtended[0].Id)
 		assert.Equal(suite.T(), consumer1, pendingResultExtended[0].ConsumerName)
 
 		pendingResultExtended, err = client.XPendingWithOptions(context.Background(),
 			key,
 			groupName,
-			*options.NewXPendingOptions("-", "("+streamid_5.Value(), 10),
+			*options.NewXPendingOptions("-", "("+streamid_5, 10),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), 1, len(pendingResultExtended))
-		assert.Equal(suite.T(), streamid_1.Value(), pendingResultExtended[0].Id)
+		assert.Equal(suite.T(), streamid_1, pendingResultExtended[0].Id)
 		assert.Equal(suite.T(), consumer1, pendingResultExtended[0].ConsumerName)
 
 		pendingResultExtended, err = client.XPendingWithOptions(context.Background(),
@@ -8588,7 +8762,7 @@ func (suite *GlideTestSuite) TestXClaimFailure() {
 		assert.True(suite.T(), consumerCreateResult)
 
 		// Add stream entry and mark as pending
-		streamid_1, err := client.XAdd(context.Background(), key, [][]string{{"field1", "value1"}})
+		streamid_1, err := client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field1", Value: "value1"}})
 		assert.NoError(suite.T(), err)
 		assert.NotNil(suite.T(), streamid_1)
 
@@ -8597,25 +8771,46 @@ func (suite *GlideTestSuite) TestXClaimFailure() {
 		assert.NotNil(suite.T(), readGroupResult)
 
 		// claim with invalid stream entry IDs
-		_, err = client.XClaimJustId(context.Background(), key, groupName, consumer1, int64(1), []string{"invalid-stream-id"})
-		suite.Error(err)
+		_, err = client.XClaimJustId(
+			context.Background(),
+			key,
+			groupName,
+			consumer1,
+			1*time.Millisecond,
+			[]string{"invalid-stream-id"},
+		)
+		assert.Error(suite.T(), err)
 
 		// claim with empty stream entry IDs returns empty map
-		claimResult, err := client.XClaimJustId(context.Background(), key, groupName, consumer1, int64(1), []string{})
-		suite.NoError(err)
-		suite.Equal([]string{}, claimResult)
+		claimResult, err := client.XClaimJustId(
+			context.Background(),
+			key,
+			groupName,
+			consumer1,
+			1*time.Millisecond,
+			[]string{},
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), []string{}, claimResult)
 
 		// non existent key causes a RequestError
 		claimOptions := options.NewXClaimOptions().SetIdleTime(1)
-		_, err = client.XClaim(context.Background(), stringKey, groupName, consumer1, int64(1), []string{streamid_1.Value()})
+		_, err = client.XClaim(
+			context.Background(),
+			stringKey,
+			groupName,
+			consumer1,
+			1*time.Millisecond,
+			[]string{streamid_1},
+		)
 		suite.ErrorContains(err, "NOGROUP")
 
 		_, err = client.XClaimWithOptions(context.Background(),
 			stringKey,
 			groupName,
 			consumer1,
-			int64(1),
-			[]string{streamid_1.Value()},
+			1*time.Millisecond,
+			[]string{streamid_1},
 			*claimOptions,
 		)
 		suite.ErrorContains(err, "NOGROUP")
@@ -8625,8 +8820,8 @@ func (suite *GlideTestSuite) TestXClaimFailure() {
 			stringKey,
 			groupName,
 			consumer1,
-			int64(1),
-			[]string{streamid_1.Value()},
+			1*time.Millisecond,
+			[]string{streamid_1},
 		)
 		suite.ErrorContains(err, "NOGROUP")
 
@@ -8634,24 +8829,31 @@ func (suite *GlideTestSuite) TestXClaimFailure() {
 			stringKey,
 			groupName,
 			consumer1,
-			int64(1),
-			[]string{streamid_1.Value()},
+			1*time.Millisecond,
+			[]string{streamid_1},
 			*claimOptions,
 		)
 		suite.ErrorContains(err, "NOGROUP")
 
 		// key exists, but is not a stream
 		_, err = client.Set(context.Background(), stringKey, "test")
-		suite.NoError(err)
-		_, err = client.XClaim(context.Background(), stringKey, groupName, consumer1, int64(1), []string{streamid_1.Value()})
-		suite.Error(err)
+		assert.NoError(suite.T(), err)
+		_, err = client.XClaim(
+			context.Background(),
+			stringKey,
+			groupName,
+			consumer1,
+			1*time.Millisecond,
+			[]string{streamid_1},
+		)
+		assert.Error(suite.T(), err)
 
 		_, err = client.XClaimWithOptions(context.Background(),
 			stringKey,
 			groupName,
 			consumer1,
-			int64(1),
-			[]string{streamid_1.Value()},
+			1*time.Millisecond,
+			[]string{streamid_1},
 			*claimOptions,
 		)
 		suite.Error(err)
@@ -8661,8 +8863,8 @@ func (suite *GlideTestSuite) TestXClaimFailure() {
 			stringKey,
 			groupName,
 			consumer1,
-			int64(1),
-			[]string{streamid_1.Value()},
+			1*time.Millisecond,
+			[]string{streamid_1},
 		)
 		suite.Error(err)
 
@@ -8670,8 +8872,8 @@ func (suite *GlideTestSuite) TestXClaimFailure() {
 			stringKey,
 			groupName,
 			consumer1,
-			int64(1),
-			[]string{streamid_1.Value()},
+			1*time.Millisecond,
+			[]string{streamid_1},
 			*claimOptions,
 		)
 		suite.Error(err)
@@ -8730,14 +8932,14 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 		// add stream entries
 		streamId1, err := client.XAdd(context.Background(),
 			key,
-			[][]string{{"field1", "value1"}},
+			[]models.FieldValue{{Field: "field1", Value: "value1"}},
 		)
 		assert.NoError(suite.T(), err)
 		assert.NotNil(suite.T(), streamId1)
 
 		streamId2, err := client.XAdd(context.Background(),
 			key,
-			[][]string{{"field2", "value2"}},
+			[]models.FieldValue{{Field: "field2", Value: "value2"}},
 		)
 		assert.NoError(suite.T(), err)
 		assert.NotNil(suite.T(), streamId2)
@@ -8756,9 +8958,9 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 		assert.NoError(suite.T(), err)
 		assert.Equal(
 			suite.T(),
-			[]models.XRangeResponse{
-				{StreamId: streamId1.Value(), Entries: [][]string{{"field1", "value1"}}},
-				{StreamId: streamId2.Value(), Entries: [][]string{{"field2", "value2"}}},
+			[]models.StreamEntry{
+				{ID: streamId1, Fields: []models.FieldValue{{Field: "field1", Value: "value1"}}},
+				{ID: streamId2, Fields: []models.FieldValue{{Field: "field2", Value: "value2"}}},
 			},
 			xrangeResult,
 		)
@@ -8773,9 +8975,9 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 		assert.NoError(suite.T(), err)
 		assert.Equal(
 			suite.T(),
-			[]models.XRangeResponse{
-				{StreamId: streamId2.Value(), Entries: [][]string{{"field2", "value2"}}},
-				{StreamId: streamId1.Value(), Entries: [][]string{{"field1", "value1"}}},
+			[]models.StreamEntry{
+				{ID: streamId2, Fields: []models.FieldValue{{Field: "field2", Value: "value2"}}},
+				{ID: streamId1, Fields: []models.FieldValue{{Field: "field1", Value: "value1"}}},
 			},
 			xrevrangeResult,
 		)
@@ -8803,7 +9005,7 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 		streamId3, err := client.XAdd(
 			context.Background(),
 			key,
-			[][]string{{"field3", "value3"}},
+			[]models.FieldValue{{Field: "field3", Value: "value3"}},
 		)
 		assert.NoError(suite.T(), err)
 		assert.NotNil(suite.T(), streamId3)
@@ -8814,15 +9016,15 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 			xrangeResult, err = client.XRangeWithOptions(
 				context.Background(),
 				key,
-				options.NewStreamBoundary(streamId2.Value(), false),
+				options.NewStreamBoundary(streamId2, false),
 				positiveInfinity,
 				*options.NewXRangeOptions().SetCount(1),
 			)
 			assert.NoError(suite.T(), err)
 			assert.Equal(
 				suite.T(),
-				[]models.XRangeResponse{
-					{StreamId: streamId3.Value(), Entries: [][]string{{"field3", "value3"}}},
+				[]models.StreamEntry{
+					{ID: streamId3, Fields: []models.FieldValue{{Field: "field3", Value: "value3"}}},
 				},
 				xrangeResult,
 			)
@@ -8832,14 +9034,14 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 				context.Background(),
 				key,
 				positiveInfinity,
-				options.NewStreamBoundary(streamId2.Value(), false),
+				options.NewStreamBoundary(streamId2, false),
 				*options.NewXRangeOptions().SetCount(1),
 			)
 			assert.NoError(suite.T(), err)
 			assert.Equal(
 				suite.T(),
-				[]models.XRangeResponse{
-					{StreamId: streamId3.Value(), Entries: [][]string{{"field3", "value3"}}},
+				[]models.StreamEntry{
+					{ID: streamId3, Fields: []models.FieldValue{{Field: "field3", Value: "value3"}}},
 				},
 				xrevrangeResult,
 			)
@@ -8854,23 +9056,23 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 			*options.NewXRangeOptions().SetCount(0),
 		)
 		assert.NoError(suite.T(), err)
-		assert.Empty(suite.T(), xrangeResult)
+		assert.Nil(suite.T(), xrangeResult)
 
 		xrevrangeResult, err = client.XRevRangeWithOptions(
 			context.Background(),
 			key,
 			positiveInfinity,
 			negativeInfinity,
-			*options.NewXRangeOptions().SetCount(-1),
+			*options.NewXRangeOptions().SetCount(0),
 		)
 		assert.NoError(suite.T(), err)
-		assert.Empty(suite.T(), xrevrangeResult)
+		assert.Nil(suite.T(), xrevrangeResult)
 
 		// xrange and xrevrange against an empty stream
 		xdelResult, err := client.XDel(
 			context.Background(),
 			key,
-			[]string{streamId1.Value(), streamId2.Value(), streamId3.Value()},
+			[]string{streamId1, streamId2, streamId3},
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), int64(3), xdelResult)
@@ -9652,7 +9854,7 @@ func (suite *GlideTestSuite) TestZUnionAndZUnionWithScores() {
 		zUnionWithScoresResult, err := client.ZUnionWithScores(
 			context.Background(),
 			options.KeyArray{Keys: []string{key1, key2}},
-			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+			*options.NewZUnionOptions().SetAggregate(options.AggregateSum),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(
@@ -9664,7 +9866,7 @@ func (suite *GlideTestSuite) TestZUnionAndZUnionWithScores() {
 		// Union results with max aggregate
 		zUnionWithMaxAggregateResult, err := client.ZUnionWithScores(context.Background(),
 			options.KeyArray{Keys: []string{key1, key2}},
-			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateMax),
+			*options.NewZUnionOptions().SetAggregate(options.AggregateMax),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(
@@ -9676,7 +9878,7 @@ func (suite *GlideTestSuite) TestZUnionAndZUnionWithScores() {
 		// Union results with min aggregate
 		zUnionWithMinAggregateResult, err := client.ZUnionWithScores(context.Background(),
 			options.KeyArray{Keys: []string{key1, key2}},
-			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateMin),
+			*options.NewZUnionOptions().SetAggregate(options.AggregateMin),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(
@@ -9688,7 +9890,7 @@ func (suite *GlideTestSuite) TestZUnionAndZUnionWithScores() {
 		// Union results with sum aggregate
 		zUnionWithSumAggregateResult, err := client.ZUnionWithScores(context.Background(),
 			options.KeyArray{Keys: []string{key1, key2}},
-			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+			*options.NewZUnionOptions().SetAggregate(options.AggregateSum),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(
@@ -9705,7 +9907,7 @@ func (suite *GlideTestSuite) TestZUnionAndZUnionWithScores() {
 					{Key: key2, Weight: 2.0},
 				},
 			},
-			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+			*options.NewZUnionOptions().SetAggregate(options.AggregateSum),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(
@@ -9717,7 +9919,7 @@ func (suite *GlideTestSuite) TestZUnionAndZUnionWithScores() {
 		// non-existent key - empty union
 		zUnionWithNonExistentKeyResult, err := client.ZUnionWithScores(context.Background(),
 			options.KeyArray{Keys: []string{key1, key3}},
-			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+			*options.NewZUnionOptions().SetAggregate(options.AggregateSum),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(
@@ -9728,7 +9930,7 @@ func (suite *GlideTestSuite) TestZUnionAndZUnionWithScores() {
 
 		// empty key list - empty union
 		zUnionWithEmptyKeyArray, err := client.ZUnionWithScores(context.Background(), options.KeyArray{Keys: []string{}},
-			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+			*options.NewZUnionOptions().SetAggregate(options.AggregateSum),
 		)
 		assert.NotNil(suite.T(), err)
 		assert.Empty(suite.T(), zUnionWithEmptyKeyArray)
@@ -9742,7 +9944,7 @@ func (suite *GlideTestSuite) TestZUnionAndZUnionWithScores() {
 
 		_, err = client.ZUnionWithScores(context.Background(),
 			options.KeyArray{Keys: []string{key1, key3}},
-			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+			*options.NewZUnionOptions().SetAggregate(options.AggregateSum),
 		)
 		suite.Error(err)
 	})
@@ -9785,7 +9987,7 @@ func (suite *GlideTestSuite) TestZUnionStoreAndZUnionStoreWithOptions() {
 			context.Background(),
 			dest,
 			options.KeyArray{Keys: []string{key1, key2}},
-			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+			*options.NewZUnionOptions().SetAggregate(options.AggregateSum),
 		)
 		assert.NoError(suite.T(), err)
 		zRangeDest, err := client.ZRangeWithScores(context.Background(), dest, options.NewRangeByIndexQuery(0, -1))
@@ -9801,7 +10003,7 @@ func (suite *GlideTestSuite) TestZUnionStoreAndZUnionStoreWithOptions() {
 		zUnionStoreWithMaxAggregateResult, err := client.ZUnionStoreWithOptions(context.Background(),
 			dest,
 			options.KeyArray{Keys: []string{key1, key2}},
-			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateMax),
+			*options.NewZUnionOptions().SetAggregate(options.AggregateMax),
 		)
 		assert.NoError(suite.T(), err)
 		zRangeDest, err = client.ZRangeWithScores(context.Background(), dest, options.NewRangeByIndexQuery(0, -1))
@@ -9817,7 +10019,7 @@ func (suite *GlideTestSuite) TestZUnionStoreAndZUnionStoreWithOptions() {
 		zUnionStoreWithMinAggregateResult, err := client.ZUnionStoreWithOptions(context.Background(),
 			dest,
 			options.KeyArray{Keys: []string{key1, key2}},
-			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateMin),
+			*options.NewZUnionOptions().SetAggregate(options.AggregateMin),
 		)
 		assert.NoError(suite.T(), err)
 		zRangeDest, err = client.ZRangeWithScores(context.Background(), dest, options.NewRangeByIndexQuery(0, -1))
@@ -9833,7 +10035,7 @@ func (suite *GlideTestSuite) TestZUnionStoreAndZUnionStoreWithOptions() {
 		zUnionStoreWithSumAggregateResult, err := client.ZUnionStoreWithOptions(context.Background(),
 			dest,
 			options.KeyArray{Keys: []string{key1, key2}},
-			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+			*options.NewZUnionOptions().SetAggregate(options.AggregateSum),
 		)
 		assert.NoError(suite.T(), err)
 		zRangeDest, err = client.ZRangeWithScores(context.Background(), dest, options.NewRangeByIndexQuery(0, -1))
@@ -9854,7 +10056,7 @@ func (suite *GlideTestSuite) TestZUnionStoreAndZUnionStoreWithOptions() {
 					{Key: key2, Weight: 2.0},
 				},
 			},
-			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+			*options.NewZUnionOptions().SetAggregate(options.AggregateSum),
 		)
 		assert.NoError(suite.T(), err)
 		zRangeDest, err = client.ZRangeWithScores(context.Background(), dest, options.NewRangeByIndexQuery(0, -1))
@@ -9870,7 +10072,7 @@ func (suite *GlideTestSuite) TestZUnionStoreAndZUnionStoreWithOptions() {
 		zUnionStoreWithNonExistentKeyResult, err := client.ZUnionStoreWithOptions(context.Background(),
 			dest,
 			options.KeyArray{Keys: []string{key1, key3}},
-			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+			*options.NewZUnionOptions().SetAggregate(options.AggregateSum),
 		)
 		assert.NoError(suite.T(), err)
 		zRangeDest, err = client.ZRangeWithScores(context.Background(), dest, options.NewRangeByIndexQuery(0, -1))
@@ -9884,7 +10086,7 @@ func (suite *GlideTestSuite) TestZUnionStoreAndZUnionStoreWithOptions() {
 		zUnionStoreWithEmptyKeyArray, err := client.ZUnionStoreWithOptions(context.Background(),
 			dest,
 			options.KeyArray{Keys: []string{}},
-			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+			*options.NewZUnionOptions().SetAggregate(options.AggregateSum),
 		)
 		assert.NotNil(suite.T(), err)
 		zRangeDest, err = client.ZRangeWithScores(context.Background(), dest, options.NewRangeByIndexQuery(0, -1))
@@ -9902,7 +10104,7 @@ func (suite *GlideTestSuite) TestZUnionStoreAndZUnionStoreWithOptions() {
 		_, err = client.ZUnionStoreWithOptions(context.Background(),
 			dest,
 			options.KeyArray{Keys: []string{key1, key3}},
-			options.NewZUnionOptionsBuilder().SetAggregate(options.AggregateSum),
+			*options.NewZUnionOptions().SetAggregate(options.AggregateSum),
 		)
 		suite.Error(err)
 	})
@@ -9945,7 +10147,7 @@ func (suite *GlideTestSuite) TestZInterCard() {
 		res, err = client.ZInterCardWithOptions(
 			context.Background(),
 			[]string{key1, key2},
-			options.NewZInterCardOptions().SetLimit(0),
+			*options.NewZInterCardOptions().SetLimit(0),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), int64(2), res)
@@ -9953,7 +10155,7 @@ func (suite *GlideTestSuite) TestZInterCard() {
 		res, err = client.ZInterCardWithOptions(
 			context.Background(),
 			[]string{key1, key2},
-			options.NewZInterCardOptions().SetLimit(1),
+			*options.NewZInterCardOptions().SetLimit(1),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), int64(1), res)
@@ -9961,7 +10163,7 @@ func (suite *GlideTestSuite) TestZInterCard() {
 		res, err = client.ZInterCardWithOptions(
 			context.Background(),
 			[]string{key1, key2},
-			options.NewZInterCardOptions().SetLimit(3),
+			*options.NewZInterCardOptions().SetLimit(3),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), int64(2), res)
@@ -9973,7 +10175,7 @@ func (suite *GlideTestSuite) TestZInterCard() {
 		_, err = client.ZInterCardWithOptions(
 			context.Background(),
 			[]string{key1, key3},
-			options.NewZInterCardOptions().SetLimit(3),
+			*options.NewZInterCardOptions().SetLimit(3),
 		)
 		suite.Error(err)
 	})
@@ -9992,7 +10194,7 @@ func (suite *GlideTestSuite) TestZLexCount() {
 		// count members in range a exclusive to c inclusive
 		result, err := client.ZLexCount(context.Background(),
 			key1,
-			options.NewRangeByLexQuery(
+			*options.NewRangeByLexQuery(
 				options.NewLexBoundary("a", false),
 				options.NewLexBoundary("c", true),
 			),
@@ -10003,7 +10205,7 @@ func (suite *GlideTestSuite) TestZLexCount() {
 		// count members in range negative to positive infinity
 		result, err = client.ZLexCount(context.Background(),
 			key1,
-			options.NewRangeByLexQuery(
+			*options.NewRangeByLexQuery(
 				options.NewInfiniteLexBoundary("-"),
 				options.NewInfiniteLexBoundary("+"),
 			),
@@ -10014,7 +10216,7 @@ func (suite *GlideTestSuite) TestZLexCount() {
 		// count members in range negative infinity to c inclusive
 		result, err = client.ZLexCount(context.Background(),
 			key1,
-			options.NewRangeByLexQuery(
+			*options.NewRangeByLexQuery(
 				options.NewInfiniteLexBoundary("-"),
 				options.NewLexBoundary("c", true),
 			),
@@ -10025,7 +10227,7 @@ func (suite *GlideTestSuite) TestZLexCount() {
 		// non-existent key
 		result, err = client.ZLexCount(context.Background(),
 			key2,
-			options.NewRangeByLexQuery(
+			*options.NewRangeByLexQuery(
 				options.NewLexBoundary("a", false),
 				options.NewLexBoundary("c", true),
 			),
@@ -10039,7 +10241,7 @@ func (suite *GlideTestSuite) TestZLexCount() {
 
 		_, err = client.ZLexCount(context.Background(),
 			key2,
-			options.NewRangeByLexQuery(
+			*options.NewRangeByLexQuery(
 				options.NewLexBoundary("a", false),
 				options.NewLexBoundary("c", true),
 			),
@@ -11060,6 +11262,6 @@ func (suite *GlideTestSuite) TestRegisterClientNameAndVersion() {
 			infoStr = v.SingleValue().(string)
 		}
 		assert.Contains(suite.T(), infoStr, "lib-name=GlideGo", "lib-name not found or incorrect")
-		assert.Contains(suite.T(), infoStr, "lib-ver=unknown", "lib-ver not found or incorrect")
+		assert.Regexp(suite.T(), "lib-ver=unknown|lib-ver=v", infoStr, "lib-ver not found or incorrect")
 	})
 }

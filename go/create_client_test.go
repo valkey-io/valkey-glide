@@ -6,16 +6,24 @@ import (
 	"fmt"
 	"time"
 
-	config2 "github.com/valkey-io/valkey-glide/go/v2/config"
+	"github.com/valkey-io/valkey-glide/go/v2/config"
+	"github.com/valkey-io/valkey-glide/go/v2/models"
 )
 
 func ExampleNewClient() {
-	config := config2.NewClientConfiguration().
+	clientConf := config.NewClientConfiguration().
 		WithAddress(&getStandaloneAddresses()[0]).
 		WithUseTLS(false).
-		WithReconnectStrategy(config2.NewBackoffStrategy(5, 1000, 2)).
-		WithDatabaseId(1)
-	client, err := NewClient(config)
+		WithReconnectStrategy(config.NewBackoffStrategy(5, 1000, 2)).
+		WithDatabaseId(1).
+		WithSubscriptionConfig(
+			config.NewStandaloneSubscriptionConfig().
+				WithSubscription(config.PatternChannelMode, "news.*").
+				WithCallback(func(message *models.PubSubMessage, ctx any) {
+					fmt.Printf("Received message on '%s': %s", message.Channel, message.Message)
+				}, nil),
+		)
+	client, err := NewClient(clientConf)
 	if err != nil {
 		fmt.Println("Failed to create a client and connect: ", err)
 	}
@@ -26,11 +34,18 @@ func ExampleNewClient() {
 }
 
 func ExampleNewClusterClient() {
-	config := config2.NewClusterClientConfiguration().
+	clientConf := config.NewClusterClientConfiguration().
 		WithAddress(&getClusterAddresses()[0]).
 		WithRequestTimeout(5 * time.Second).
-		WithUseTLS(false)
-	client, err := NewClusterClient(config)
+		WithUseTLS(false).
+		WithSubscriptionConfig(
+			config.NewClusterSubscriptionConfig().
+				WithSubscription(config.PatternClusterChannelMode, "news.*").
+				WithCallback(func(message *models.PubSubMessage, ctx any) {
+					fmt.Printf("Received message on '%s': %s", message.Channel, message.Message)
+				}, nil),
+		)
+	client, err := NewClusterClient(clientConf)
 	if err != nil {
 		fmt.Println("Failed to create a client and connect: ", err)
 	}

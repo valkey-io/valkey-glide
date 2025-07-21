@@ -4109,38 +4109,45 @@ export function runBaseTests(config: {
         config.timeout,
     );
 
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "script flush test_%p",
-        async (protocol) => {
-            await runTest(async (client: BaseClient) => {
-                // Load a script
-                const script = new Script("return 'Hello'");
-                expect(await client.invokeScript(script)).toEqual("Hello");
+    describe("script flush test", () => {
+        it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+            "script flush test_%p",
+            async (protocol) => {
+                await runTest(async (client: BaseClient) => {
+                    // Load a script - create a unique script for each test iteration
+                    const randomString = getRandomKey();
+                    const script = new Script(`return '${randomString}'`);
+                    expect(await client.invokeScript(script)).toEqual(
+                        randomString,
+                    );
 
-                // Check existence of script
-                expect(await client.scriptExists([script.getHash()])).toEqual([
-                    true,
-                ]);
+                    // Check existence of script
+                    expect(
+                        await client.scriptExists([script.getHash()]),
+                    ).toEqual([true]);
 
-                // Flush the script cache
-                expect(await client.scriptFlush()).toEqual("OK");
+                    // Flush the script cache
+                    expect(await client.scriptFlush()).toEqual("OK");
 
-                // Check that the script no longer exists
-                expect(await client.scriptExists([script.getHash()])).toEqual([
-                    false,
-                ]);
+                    // Check that the script no longer exists
+                    expect(
+                        await client.scriptExists([script.getHash()]),
+                    ).toEqual([false]);
 
-                // Test with ASYNC mode
-                await client.invokeScript(script);
-                expect(await client.scriptFlush(FlushMode.ASYNC)).toEqual("OK");
-                expect(await client.scriptExists([script.getHash()])).toEqual([
-                    false,
-                ]);
-                script.release();
-            }, protocol);
-        },
-        config.timeout,
-    );
+                    // Test with ASYNC mode
+                    await client.invokeScript(script);
+                    expect(await client.scriptFlush(FlushMode.ASYNC)).toEqual(
+                        "OK",
+                    );
+                    expect(
+                        await client.scriptExists([script.getHash()]),
+                    ).toEqual([false]);
+                    script.release();
+                }, protocol);
+            },
+            config.timeout,
+        );
+    });
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `script show test_%p`,
@@ -4176,13 +4183,15 @@ export function runBaseTests(config: {
         "script is not removed while another instance exists - %p",
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const script1 = new Script("return 'Script Exists'");
-                const script2 = new Script("return 'Script Exists'");
+                // Create a unique script for each test iteration to prevent GC interference
+                const randomString = getRandomKey();
+                const script1 = new Script(`return '${randomString}'`);
+                const script2 = new Script(`return '${randomString}'`);
                 expect(script1.getHash()).toEqual(script2.getHash());
 
                 // Invoke script1 and release reference
                 expect(await client.invokeScript(script1)).toEqual(
-                    "Script Exists",
+                    randomString,
                 );
 
                 // Manually simulate release of script1 reference
@@ -4198,7 +4207,7 @@ export function runBaseTests(config: {
 
                 // Invoke script2 - should be available in the local script cache and reloaded
                 expect(await client.invokeScript(script2)).toEqual(
-                    "Script Exists",
+                    randomString,
                 );
 
                 // Release script2 and flush again

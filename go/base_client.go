@@ -30,15 +30,13 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/valkey-io/valkey-glide/go/v2/constants"
-
 	"github.com/valkey-io/valkey-glide/go/v2/config"
+	"github.com/valkey-io/valkey-glide/go/v2/constants"
 	"github.com/valkey-io/valkey-glide/go/v2/internal"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/protobuf"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/utils"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
-	"github.com/valkey-io/valkey-glide/go/v2/pipeline"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -56,7 +54,7 @@ type clientConfiguration interface {
 type baseClient struct {
 	pending        map[unsafe.Pointer]struct{}
 	coreClient     unsafe.Pointer
-	mu             sync.Mutex
+	mu             *sync.Mutex
 	messageHandler *MessageHandler
 }
 
@@ -155,7 +153,7 @@ func createClient(config clientConfiguration) (*baseClient, error) {
 	if err != nil {
 		return nil, NewClosingError(err.Error())
 	}
-	client := &baseClient{pending: make(map[unsafe.Pointer]struct{})}
+	client := &baseClient{pending: make(map[unsafe.Pointer]struct{}), mu: &sync.Mutex{}}
 
 	cResponse := (*C.struct_ConnectionResponse)(
 		C.create_client(
@@ -224,21 +222,13 @@ func slotTypeToProtobuf(slotType config.SlotType) (protobuf.SlotTypes, error) {
 
 func routeToProtobuf(route config.Route) (*protobuf.Routes, error) {
 	switch route := route.(type) {
+	// enum variants have the same ordinals
 	case config.SimpleNodeRoute:
-		{
-			var simpleRoute protobuf.SimpleRoutes
-			switch route {
-			case config.AllNodes:
-				simpleRoute = protobuf.SimpleRoutes_AllNodes
-			case config.AllPrimaries:
-				simpleRoute = protobuf.SimpleRoutes_AllPrimaries
-			case config.RandomRoute:
-				simpleRoute = protobuf.SimpleRoutes_Random
-			default:
-				return nil, errors.New("invalid simple node route")
-			}
-			return &protobuf.Routes{Value: &protobuf.Routes_SimpleRoutes{SimpleRoutes: simpleRoute}}, nil
-		}
+		return &protobuf.Routes{Value: &protobuf.Routes_SimpleRoutes{SimpleRoutes: protobuf.SimpleRoutes(route)}}, nil
+	case config.SimpleMultiNodeRoute:
+		return &protobuf.Routes{Value: &protobuf.Routes_SimpleRoutes{SimpleRoutes: protobuf.SimpleRoutes(route)}}, nil
+	case config.SimpleSingleNodeRoute:
+		return &protobuf.Routes{Value: &protobuf.Routes_SimpleRoutes{SimpleRoutes: protobuf.SimpleRoutes(route)}}, nil
 	case *config.SlotIdRoute:
 		{
 			slotType, err := slotTypeToProtobuf(route.SlotType)
@@ -408,9 +398,9 @@ func toCStrings(args []string) ([]C.uintptr_t, []C.ulong) {
 
 func (client *baseClient) executeBatch(
 	ctx context.Context,
-	batch pipeline.Batch,
+	batch internal.Batch,
 	raiseOnError bool,
-	options *pipeline.BatchOptions,
+	options *internal.BatchOptions,
 ) ([]any, error) {
 	// Check if context is already done
 	select {
@@ -505,14 +495,15 @@ func (client *baseClient) executeBatch(
 	return batch.Convert(response)
 }
 
-func createBatchOptionsInfo(pinner pinner, options pipeline.BatchOptions) C.BatchOptionsInfo {
+func createBatchOptionsInfo(pinner pinner, options internal.BatchOptions) C.BatchOptionsInfo {
 	info := C.BatchOptionsInfo{}
-	if options.RetryStrategy != nil {
-		info.retry_server_error = C._Bool(options.RetryStrategy.RetryServerError)
-		info.retry_connection_error = C._Bool(options.RetryStrategy.RetryConnectionError)
-	} else {
-		info.retry_server_error = C._Bool(false)
-		info.retry_connection_error = C._Bool(false)
+	info.retry_server_error = C._Bool(false)
+	info.retry_connection_error = C._Bool(false)
+	if options.RetryServerError != nil {
+		info.retry_server_error = C._Bool(*options.RetryServerError)
+	}
+	if options.RetryConnectionError != nil {
+		info.retry_connection_error = C._Bool(*options.RetryConnectionError)
 	}
 	if options.Timeout != nil {
 		info.has_timeout = C._Bool(true)
@@ -521,7 +512,7 @@ func createBatchOptionsInfo(pinner pinner, options pipeline.BatchOptions) C.Batc
 		info.has_timeout = C._Bool(false)
 	}
 	if options.Route != nil {
-		info.route_info = (*C.RouteInfo)(pinner.Pin(unsafe.Pointer(createRouteInfo(pinner, *options.Route))))
+		info.route_info = (*C.RouteInfo)(pinner.Pin(unsafe.Pointer(createRouteInfo(pinner, options.Route))))
 	} else {
 		info.route_info = nil
 	}
@@ -533,6 +524,10 @@ func createRouteInfo(pinner pinner, route config.Route) *C.RouteInfo {
 	if route != nil {
 		routeInfo := C.RouteInfo{}
 		switch r := route.(type) {
+		case config.SimpleSingleNodeRoute:
+			routeInfo.route_type = (uint32)(r)
+		case config.SimpleMultiNodeRoute:
+			routeInfo.route_type = (uint32)(r)
 		case config.SimpleNodeRoute:
 			// enum variants have the same ordinals
 			routeInfo.route_type = (uint32)(r)
@@ -558,7 +553,7 @@ func createRouteInfo(pinner pinner, route config.Route) *C.RouteInfo {
 	return nil
 }
 
-func createBatchInfo(pinner pinner, batch pipeline.Batch) C.BatchInfo {
+func createBatchInfo(pinner pinner, batch internal.Batch) C.BatchInfo {
 	numCommands := len(batch.Commands)
 	info := C.BatchInfo{}
 	info.is_atomic = C._Bool(batch.IsAtomic)
@@ -578,10 +573,10 @@ func createBatchInfo(pinner pinner, batch pipeline.Batch) C.BatchInfo {
 	return info
 }
 
-func createCmdInfo(pinner pinner, cmd pipeline.Cmd) C.CmdInfo {
+func createCmdInfo(pinner pinner, cmd internal.Cmd) C.CmdInfo {
 	numArgs := len(cmd.Args)
 	info := C.CmdInfo{}
-	info.request_type = uint32(cmd.RequestType)
+	info.request_type = cmd.RequestType
 	cArgsPtr := make([]*C.uchar, numArgs)
 	argLengthsPtr := make([]C.ulong, numArgs)
 	for i, str := range cmd.Args {
@@ -747,8 +742,8 @@ func (client *baseClient) Set(ctx context.Context, key string, value string) (st
 }
 
 // SetWithOptions sets the given key with the given value using the given options. The return value is dependent on the
-// passed options. If the value is successfully set, "OK" is returned. If value isn't set because of [OnlyIfExists] or
-// [OnlyIfDoesNotExist] conditions, models.CreateNilStringResult() is returned. If [SetOptions#ReturnOldValue] is
+// passed options. If the value is successfully set, "OK" is returned. If value isn't set because of [constants.OnlyIfExists]
+// or [constants.OnlyIfDoesNotExist] conditions, models.CreateNilStringResult() is returned. If [constants.ReturnOldValue] is
 // set, the old value is returned.
 //
 // See [valkey.io] for details.
@@ -951,8 +946,8 @@ func (client *baseClient) MSetNX(ctx context.Context, keyValueMap map[string]str
 //
 // Return value:
 //
-//	An array of values corresponding to the provided keys.
-//	If a key is not found, its corresponding value in the list will be a [models.CreateNilStringResult()]
+//	An array of [models.Result[string]] values corresponding to the provided keys.
+//	If a key is not found, its corresponding value in the list will be a [models.CreateNilStringResult()].
 //
 // [valkey.io]: https://valkey.io/commands/mget/
 func (client *baseClient) MGet(ctx context.Context, keys []string) ([]models.Result[string], error) {
@@ -1212,17 +1207,20 @@ func (client *baseClient) Append(ctx context.Context, key string, value string) 
 //
 // Return value:
 //
-//	A string containing all the longest common subsequences combined between the 2 strings.
-//	An empty string is returned if the keys do not exist or have no common subsequences.
+//	A [models.LCSMatch] object containing:
+//	- `MatchString`: A string containing all the longest common subsequences combined between the 2 strings. An empty string is
+//		returned if the keys do not exist or have no common subsequences.
+//	- `Matches`: Empty array.
+//	- `Len`: 0
 //
 // [valkey.io]: https://valkey.io/commands/lcs/
-func (client *baseClient) LCS(ctx context.Context, key1 string, key2 string) (string, error) {
+func (client *baseClient) LCS(ctx context.Context, key1 string, key2 string) (*models.LCSMatch, error) {
 	result, err := client.executeCommand(ctx, C.LCS, []string{key1, key2})
 	if err != nil {
-		return models.DefaultStringResponse, err
+		return nil, err
 	}
 
-	return handleStringResponse(result)
+	return handleLCSMatchResponse(result, internal.SimpleLCSString)
 }
 
 // Returns the total length of all the longest common subsequences between strings stored at `key1` and `key2`.
@@ -1245,16 +1243,19 @@ func (client *baseClient) LCS(ctx context.Context, key1 string, key2 string) (st
 //
 // Return value:
 //
-//	The total length of all the longest common subsequences the 2 strings.
+//	A [models.LCSMatch] object containing:
+//	- `MatchString`: Empty string.
+//	- `Matches`: Empty array.
+//	- `Len`: The total length of all the longest common subsequences the 2 strings.
 //
 // [valkey.io]: https://valkey.io/commands/lcs/
-func (client *baseClient) LCSLen(ctx context.Context, key1, key2 string) (int64, error) {
+func (client *baseClient) LCSLen(ctx context.Context, key1, key2 string) (*models.LCSMatch, error) {
 	result, err := client.executeCommand(ctx, C.LCS, []string{key1, key2, options.LCSLenCommand})
 	if err != nil {
-		return models.DefaultIntResponse, err
+		return nil, err
 	}
 
-	return handleIntResponse(result)
+	return handleLCSMatchResponse(result, internal.SimpleLCSLength)
 }
 
 // Returns the longest common subsequence between strings stored at `key1` and `key2`.
@@ -1278,20 +1279,18 @@ func (client *baseClient) LCSLen(ctx context.Context, key1, key2 string) (int64,
 //
 // Return value:
 //
-//	A Map containing the indices of the longest common subsequence between the 2 strings
-//	and the total length of all the longest common subsequences. The resulting map contains
-//	two keys, "matches" and "len":
-//	  - "len" is mapped to the total length of the all longest common subsequences between
-//	     the 2 strings.
-//	  - "matches" is mapped to a array that stores pairs of indices that represent the location
-//	     of the common subsequences in the strings held by key1 and key2.
+//	A [models.LCSMatch] object containing:
+//	- `MatchString`: Empty string.
+//	- `Matches`: Array of [models.LCSMatchedPosition] objects with the common subsequences in the strings held by key1 and
+//		key2. If WithMatchLen is specified, the array also contains the length of each match, otherwise the length is 0.
+//	- `Len`: The total length of all the longest common subsequences the 2 strings.
 //
 // [valkey.io]: https://valkey.io/commands/lcs/
 func (client *baseClient) LCSWithOptions(
 	ctx context.Context,
 	key1, key2 string,
 	opts options.LCSIdxOptions,
-) (map[string]any, error) {
+) (*models.LCSMatch, error) {
 	optArgs, err := opts.ToArgs()
 	if err != nil {
 		return nil, err
@@ -1300,7 +1299,8 @@ func (client *baseClient) LCSWithOptions(
 	if err != nil {
 		return nil, err
 	}
-	return handleStringToAnyMapResponse(response)
+
+	return handleLCSMatchResponse(response, internal.ComplexLCSMatch)
 }
 
 // GetDel gets the value associated with the given key and deletes the key.
@@ -1361,7 +1361,7 @@ func (client *baseClient) HGet(ctx context.Context, key string, field string) (m
 //
 // Return value:
 //
-//	A map of all fields and their values as models.Result[string] in the hash, or an empty map when key does not exist.
+//	A map of all fields and their values in the hash, or an empty map when key does not exist.
 //
 // [valkey.io]: https://valkey.io/commands/hgetall/
 func (client *baseClient) HGetAll(ctx context.Context, key string) (map[string]string, error) {
@@ -1385,9 +1385,8 @@ func (client *baseClient) HGetAll(ctx context.Context, key string) (map[string]s
 //
 // Return value:
 //
-//	An array of models.Result[string]s associated with the given fields, in the same order as they are requested.
-//	For every field that does not exist in the hash, a [models.Result[string]](models.CreateNilStringResult()) is
-//	returned.
+//	An array of [models.Result[string]] values associated with the given fields, in the same order as they are requested.
+//	For every field that does not exist in the hash, a [models.CreateNilStringResult()] is returned.
 //	If key does not exist, returns an empty string array.
 //
 // [valkey.io]: https://valkey.io/commands/hmget/
@@ -1664,22 +1663,19 @@ func (client *baseClient) HIncrByFloat(ctx context.Context, key string, field st
 //	ctx - The context for controlling the command execution.
 //	key - The key of the hash.
 //	cursor - The cursor that points to the next iteration of results.
-//	         A value of `"0"` indicates the start of the search.
-//	         For Valkey 8.0 and above, negative cursors are treated like the initial cursor("0").
 //
 // Return value:
 //
-//	An array of the cursor and the subset of the hash held by `key`. The first element is always the `cursor`
-//	for the next iteration of results. The `cursor` will be `"0"` on the last iteration of the subset.
-//	The second element is always an array of the subset of the set held in `key`. The array in the
-//	second element is always a flattened series of String pairs, where the key is at even indices
-//	and the value is at odd indices.
+//	An object which holds the next cursor and the subset of the hash held by `key`.
+//	The cursor will return `false` from `IsFinished()` method on the last iteration of the subset.
+//	The data array in the result is always a flattened series of string pairs, where the hash field names
+//	are at even indices, and the hash field value are at odd indices.
 //
 // [valkey.io]: https://valkey.io/commands/hscan/
-func (client *baseClient) HScan(ctx context.Context, key string, cursor string) (string, []string, error) {
-	result, err := client.executeCommand(ctx, C.HScan, []string{key, cursor})
+func (client *baseClient) HScan(ctx context.Context, key string, cursor models.Cursor) (models.ScanResult, error) {
+	result, err := client.executeCommand(ctx, C.HScan, []string{key, cursor.String()})
 	if err != nil {
-		return models.DefaultStringResponse, nil, err
+		return models.ScanResult{}, err
 	}
 	return handleScanResponse(result)
 }
@@ -1694,33 +1690,30 @@ func (client *baseClient) HScan(ctx context.Context, key string, cursor string) 
 //	ctx - The context for controlling the command execution.
 //	key - The key of the hash.
 //	cursor - The cursor that points to the next iteration of results.
-//	         A value of `"0"` indicates the start of the search.
-//	         For Valkey 8.0 and above, negative cursors are treated like the initial cursor("0").
 //	options - The [options.HashScanOptions].
 //
 // Return value:
 //
-//	An array of the cursor and the subset of the hash held by `key`. The first element is always the `cursor`
-//	for the next iteration of results. The `cursor` will be `"0"` on the last iteration of the subset.
-//	The second element is always an array of the subset of the set held in `key`. The array in the
-//	second element is always a flattened series of String pairs, where the key is at even indices
-//	and the value is at odd indices.
+//	An object which holds the next cursor and the subset of the hash held by `key`.
+//	The cursor will return `false` from `IsFinished()` method on the last iteration of the subset.
+//	The data array in the result is always a flattened series of string pairs, where the hash field names
+//	are at even indices, and the hash field value are at odd indices.
 //
 // [valkey.io]: https://valkey.io/commands/hscan/
 func (client *baseClient) HScanWithOptions(
 	ctx context.Context,
 	key string,
-	cursor string,
+	cursor models.Cursor,
 	options options.HashScanOptions,
-) (string, []string, error) {
+) (models.ScanResult, error) {
 	optionArgs, err := options.ToArgs()
 	if err != nil {
-		return models.DefaultStringResponse, nil, err
+		return models.ScanResult{}, err
 	}
 
-	result, err := client.executeCommand(ctx, C.HScan, append([]string{key, cursor}, optionArgs...))
+	result, err := client.executeCommand(ctx, C.HScan, append([]string{key, cursor.String()}, optionArgs...))
 	if err != nil {
-		return models.DefaultStringResponse, nil, err
+		return models.ScanResult{}, err
 	}
 	return handleScanResponse(result)
 }
@@ -2544,20 +2537,18 @@ func (client *baseClient) SUnion(ctx context.Context, keys []string) (map[string
 //	ctx - The context for controlling the command execution.
 //	key - The key of the set.
 //	cursor - The cursor that points to the next iteration of results.
-//	         A value of `"0"` indicates the start of the search.
-//	         For Valkey 8.0 and above, negative cursors are treated like the initial cursor("0").
 //
 // Return value:
 //
-//	An array of the cursor and the subset of the set held by `key`. The first element is always the `cursor` and
-//	for the next iteration of results. The `cursor` will be `"0"` on the last iteration of the set.
-//	The second element is always an array of the subset of the set held in `key`.
+//	An object which holds the next cursor and the subset of the hash held by `key`.
+//	The cursor will return `false` from `IsFinished()` method on the last iteration of the subset.
+//	The data array in the result is always an array of the subset of the set held in `key`.
 //
 // [valkey.io]: https://valkey.io/commands/sscan/
-func (client *baseClient) SScan(ctx context.Context, key string, cursor string) (string, []string, error) {
-	result, err := client.executeCommand(ctx, C.SScan, []string{key, cursor})
+func (client *baseClient) SScan(ctx context.Context, key string, cursor models.Cursor) (models.ScanResult, error) {
+	result, err := client.executeCommand(ctx, C.SScan, []string{key, cursor.String()})
 	if err != nil {
-		return models.DefaultStringResponse, nil, err
+		return models.ScanResult{}, err
 	}
 	return handleScanResponse(result)
 }
@@ -2571,31 +2562,29 @@ func (client *baseClient) SScan(ctx context.Context, key string, cursor string) 
 //	ctx - The context for controlling the command execution.
 //	key - The key of the set.
 //	cursor - The cursor that points to the next iteration of results.
-//	         A value of `"0"` indicates the start of the search.
-//	         For Valkey 8.0 and above, negative cursors are treated like the initial cursor("0").
 //	options - [options.BaseScanOptions]
 //
 // Return value:
 //
-//	An array of the cursor and the subset of the set held by `key`. The first element is always the `cursor` and
-//	for the next iteration of results. The `cursor` will be `"0"` on the last iteration of the set.
-//	The second element is always an array of the subset of the set held in `key`.
+//	An object which holds the next cursor and the subset of the hash held by `key`.
+//	The cursor will return `false` from `IsFinished()` method on the last iteration of the subset.
+//	The data array in the result is always an array of the subset of the set held in `key`.
 //
 // [valkey.io]: https://valkey.io/commands/sscan/
 func (client *baseClient) SScanWithOptions(
 	ctx context.Context,
 	key string,
-	cursor string,
+	cursor models.Cursor,
 	options options.BaseScanOptions,
-) (string, []string, error) {
+) (models.ScanResult, error) {
 	optionArgs, err := options.ToArgs()
 	if err != nil {
-		return models.DefaultStringResponse, nil, err
+		return models.ScanResult{}, err
 	}
 
-	result, err := client.executeCommand(ctx, C.SScan, append([]string{key, cursor}, optionArgs...))
+	result, err := client.executeCommand(ctx, C.SScan, append([]string{key, cursor.String()}, optionArgs...))
 	if err != nil {
-		return models.DefaultStringResponse, nil, err
+		return models.ScanResult{}, err
 	}
 	return handleScanResponse(result)
 }
@@ -2643,7 +2632,7 @@ func (client *baseClient) SMove(ctx context.Context, source string, destination 
 //
 // Return value:
 //
-//	Array of elements as models.Result[string] in the specified range.
+//	Array of strings in the specified range.
 //	If start exceeds the end of the list, or if start is greater than end, an empty array will be returned.
 //	If end exceeds the actual end of the list, the range will stop at the actual end of the list.
 //	If key does not exist an empty array will be returned.
@@ -2702,10 +2691,10 @@ func (client *baseClient) LIndex(ctx context.Context, key string, index int64) (
 //
 // Return value:
 //
-//	Always `"OK"`.
-//	If start exceeds the end of the list, or if start is greater than end, the result will be an empty list (which causes
-//	key to be removed).
-//	If end exceeds the actual end of the list, it will be treated like the last element of the list.
+//	Always "OK".
+//	If `start` exceeds the end of the list, or if `start` is greater than `end`, the list is emptied
+//	and the key is removed.
+//	If `end` exceeds the actual end of the list, it will be treated like the last element of the list.
 //	If key does not exist, `"OK"` will be returned without changes to the database.
 //
 // [valkey.io]: https://valkey.io/commands/ltrim/
@@ -2743,10 +2732,6 @@ func (client *baseClient) LLen(ctx context.Context, key string) (int64, error) {
 }
 
 // Removes the first count occurrences of elements equal to element from the list stored at key.
-// If count is positive: Removes elements equal to element moving from head to tail.
-// If count is negative: Removes elements equal to element moving from tail to head.
-// If count is 0 or count is greater than the occurrences of elements equal to element, it removes all elements equal to
-// element.
 //
 // See [valkey.io] for details.
 //
@@ -2755,6 +2740,10 @@ func (client *baseClient) LLen(ctx context.Context, key string) (int64, error) {
 //	ctx     - The context for controlling the command execution.
 //	key     - The key of the list.
 //	count   - The count of the occurrences of elements equal to element to remove.
+//			  If count is positive: Removes elements equal to element moving from head to tail.
+//			  If count is negative: Removes elements equal to element moving from tail to head.
+//			  If count is 0 or count is greater than the occurrences of elements equal to element,
+//			  it removes all elements equal to element.
 //	element - The element to remove from the list.
 //
 // Return value:
@@ -2830,7 +2819,7 @@ func (client *baseClient) RPopCount(ctx context.Context, key string, count int64
 //
 //	ctx            - The context for controlling the command execution.
 //	key            - The key of the list.
-//	insertPosition - The relative position to insert into - either options.Before or options.After the pivot.
+//	insertPosition - The relative position to insert into - either constants.Before or constants.After the pivot.
 //	pivot          - An element of the list.
 //	element        - The new element to insert.
 //
@@ -3000,7 +2989,7 @@ func (client *baseClient) LPushX(ctx context.Context, key string, elements []str
 //
 // Return value:
 //
-//	A map of key name mapped array of popped element.
+//	A slice of [models.KeyValues], each containing a key name and an array of popped elements.
 //	If no elements could be popped, returns 'nil'.
 //
 // [valkey.io]: https://valkey.io/commands/lmpop/
@@ -3008,7 +2997,7 @@ func (client *baseClient) LMPop(
 	ctx context.Context,
 	keys []string,
 	listDirection constants.ListDirection,
-) (map[string][]string, error) {
+) ([]models.KeyValues, error) {
 	listDirectionStr, err := listDirection.ToString()
 	if err != nil {
 		return nil, err
@@ -3029,7 +3018,7 @@ func (client *baseClient) LMPop(
 		return nil, err
 	}
 
-	return handleStringToStringArrayMapOrNilResponse(result)
+	return handleKeyValuesArrayOrNilResponse(result)
 }
 
 // Pops one or more elements from the first non-empty list from the provided keys.
@@ -3053,7 +3042,7 @@ func (client *baseClient) LMPop(
 //
 // Return value:
 //
-//	A map of key name mapped array of popped elements.
+//	A slice of [models.KeyValues], each containing a key name and an array of popped elements.
 //	If no elements could be popped, returns 'nil'.
 //
 // [valkey.io]: https://valkey.io/commands/lmpop/
@@ -3062,7 +3051,7 @@ func (client *baseClient) LMPopCount(
 	keys []string,
 	listDirection constants.ListDirection,
 	count int64,
-) (map[string][]string, error) {
+) ([]models.KeyValues, error) {
 	listDirectionStr, err := listDirection.ToString()
 	if err != nil {
 		return nil, err
@@ -3083,11 +3072,11 @@ func (client *baseClient) LMPopCount(
 		return nil, err
 	}
 
-	return handleStringToStringArrayMapOrNilResponse(result)
+	return handleKeyValuesArrayOrNilResponse(result)
 }
 
 // Blocks the connection until it pops one element from the first non-empty list from the provided keys.
-// BLMPop is the blocking variant of [LMPop].
+// BLMPop is the blocking variant of [Client.LMPop] and [ClusterClient.LMPop].
 //
 // Note:
 //   - When in cluster mode, all keys must map to the same hash slot.
@@ -3108,7 +3097,7 @@ func (client *baseClient) LMPopCount(
 //
 // Return value:
 //
-//	A map of key name mapped array of popped element.
+//	A slice of [models.KeyValues], each containing a key name and an array of popped elements.
 //	If no member could be popped and the timeout expired, returns `nil`.
 //
 // [valkey.io]: https://valkey.io/commands/blmpop/
@@ -3118,7 +3107,7 @@ func (client *baseClient) BLMPop(
 	keys []string,
 	listDirection constants.ListDirection,
 	timeout time.Duration,
-) (map[string][]string, error) {
+) ([]models.KeyValues, error) {
 	listDirectionStr, err := listDirection.ToString()
 	if err != nil {
 		return nil, err
@@ -3139,11 +3128,11 @@ func (client *baseClient) BLMPop(
 		return nil, err
 	}
 
-	return handleStringToStringArrayMapOrNilResponse(result)
+	return handleKeyValuesArrayOrNilResponse(result)
 }
 
 // Blocks the connection until it pops one or more elements from the first non-empty list from the provided keys.
-// BLMPopCount is the blocking variant of [LMPopCount].
+// BLMPopCount is the blocking variant of [Client.LMPopCount] [ClusterClient.LMPopCount].
 //
 // Note:
 //   - When in cluster mode, all keys must map to the same hash slot.
@@ -3167,7 +3156,7 @@ func (client *baseClient) BLMPop(
 //
 // Return value:
 //
-//	A map of key name mapped array of popped element.
+//	A slice of [models.KeyValues], each containing a key name and an array of popped elements.
 //	If no member could be popped and the timeout expired, returns `nil`.
 //
 // [valkey.io]: https://valkey.io/commands/blmpop/
@@ -3178,7 +3167,7 @@ func (client *baseClient) BLMPopCount(
 	listDirection constants.ListDirection,
 	count int64,
 	timeout time.Duration,
-) (map[string][]string, error) {
+) ([]models.KeyValues, error) {
 	listDirectionStr, err := listDirection.ToString()
 	if err != nil {
 		return nil, err
@@ -3199,7 +3188,7 @@ func (client *baseClient) BLMPopCount(
 		return nil, err
 	}
 
-	return handleStringToStringArrayMapOrNilResponse(result)
+	return handleKeyValuesArrayOrNilResponse(result)
 }
 
 // Sets the list element at index to element.
@@ -3272,14 +3261,14 @@ func (client *baseClient) LMove(
 	return handleStringOrNilResponse(result)
 }
 
-// Blocks the connection until it pops atomically and removes the left/right-most element to the list stored at source
-// depending on whereFrom, and pushes the element at the first/last element of the list stored at <destination depending on
-// wherefrom.
-// BLMove is the blocking variant of [LMove].
+// Blocks the connection until it pops atomically and removes the left/right-most element to the list stored at `source`
+// depending on `whereFrom`, and pushes the element at the first/last element of the list stored at `destination` depending on
+// `whereFrom`.
+// `BLMove` is the blocking variant of [Client.LMove] and [ClusterClient.LMove].
 //
 // Note:
-//   - When in cluster mode, all source and destination must map to the same hash slot.
-//   - BLMove is a client blocking command, see [Blocking Commands] for more details and best practices.
+//   - When in cluster mode, `source` and `destination` must map to the same hash slot.
+//   - `BLMove` is a client blocking command, see [Blocking Commands] for more details and best practices.
 //
 // Since:
 //
@@ -3292,14 +3281,14 @@ func (client *baseClient) LMove(
 //	ctx         - The context for controlling the command execution.
 //	source      - The key to the source list.
 //	destination - The key to the destination list.
-//	wherefrom   - The ListDirection the element should be removed from.
-//	whereto     - The ListDirection the element should be added to.
+//	whereFrom   - The ListDirection the element should be removed from.
+//	whereTo     - The ListDirection the element should be added to.
 //	timeout     - The duration to wait for a blocking operation to complete. A value of `0` will block indefinitely.
 //
 // Return value:
 //
-//	A models.Result[string] containing the popped element or models.CreateNilStringResult() if source does not exist or if the
-//	operation timed-out.
+//	A models.Result[string] containing the popped element or models.CreateNilStringResult() if `source` does not exist or if
+//	the operation timed-out.
 //
 // [valkey.io]: https://valkey.io/commands/blmove/
 // [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
@@ -3367,7 +3356,7 @@ func (client *baseClient) Del(ctx context.Context, keys []string) (int64, error)
 //
 // Note:
 //
-//	In cluster mode, if keys in `keyValueMap` map to different hash slots, the command
+//	In cluster mode, if keys in `keys` map to different hash slots, the command
 //	will be split across these slots and executed separately for each. This means the command
 //	is atomic only at the slot level. If one or more slot-specific requests fail, the entire
 //	call will return the first encountered error, even though some requests may have succeeded
@@ -3398,7 +3387,7 @@ func (client *baseClient) Exists(ctx context.Context, keys []string) (int64, err
 // Expire sets a timeout on key. After the timeout has expired, the key will automatically be deleted.
 //
 // If key already has an existing expire set, the time to live is updated to the new value.
-// If seconds is a non-positive number, the key will be deleted rather than expired.
+// If expireTime is a non-positive number, the key will be deleted rather than expired.
 // The timeout will only be cleared by commands that delete or overwrite the contents of key.
 //
 // See [valkey.io] for details.
@@ -3407,7 +3396,7 @@ func (client *baseClient) Exists(ctx context.Context, keys []string) (int64, err
 //
 //	ctx - The context for controlling the command execution.
 //	key - The key to expire.
-//	seconds - Time in seconds for the key to expire
+//	expireTime - Duration for the key to expire
 //
 // Return value:
 //
@@ -3415,8 +3404,8 @@ func (client *baseClient) Exists(ctx context.Context, keys []string) (int64, err
 //	or operation skipped due to the provided arguments.
 //
 // [valkey.io]: https://valkey.io/commands/expire/
-func (client *baseClient) Expire(ctx context.Context, key string, seconds int64) (bool, error) {
-	result, err := client.executeCommand(ctx, C.Expire, []string{key, utils.IntToString(seconds)})
+func (client *baseClient) Expire(ctx context.Context, key string, expireTime time.Duration) (bool, error) {
+	result, err := client.executeCommand(ctx, C.Expire, []string{key, utils.FloatToString(expireTime.Seconds())})
 	if err != nil {
 		return models.DefaultBoolResponse, err
 	}
@@ -3427,7 +3416,7 @@ func (client *baseClient) Expire(ctx context.Context, key string, seconds int64)
 // Expire sets a timeout on key. After the timeout has expired, the key will automatically be deleted.
 //
 // If key already has an existing expire set, the time to live is updated to the new value.
-// If seconds is a non-positive number, the key will be deleted rather than expired.
+// If expireTime is a non-positive number, the key will be deleted rather than expired.
 // The timeout will only be cleared by commands that delete or overwrite the contents of key.
 //
 // See [valkey.io] for details.
@@ -3436,26 +3425,30 @@ func (client *baseClient) Expire(ctx context.Context, key string, seconds int64)
 //
 //	ctx - The context for controlling the command execution.
 //	key - The key to expire.
-//	seconds - Time in seconds for the key to expire.
+//	expireTime - Duration for the key to expire
 //	expireCondition - The option to set expiry, see [options.ExpireCondition].
 //
 // Return value:
 //
-//	`true` if the timeout was set. `false` if the    timeout was not set. e.g. key doesn't exist,
+//	`true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
 //	or operation skipped due to the provided arguments.
 //
 // [valkey.io]: https://valkey.io/commands/expire/
 func (client *baseClient) ExpireWithOptions(
 	ctx context.Context,
 	key string,
-	seconds int64,
+	expireTime time.Duration,
 	expireCondition constants.ExpireCondition,
 ) (bool, error) {
 	expireConditionStr, err := expireCondition.ToString()
 	if err != nil {
 		return models.DefaultBoolResponse, err
 	}
-	result, err := client.executeCommand(ctx, C.Expire, []string{key, utils.IntToString(seconds), expireConditionStr})
+	result, err := client.executeCommand(
+		ctx,
+		C.Expire,
+		[]string{key, utils.FloatToString(expireTime.Seconds()), expireConditionStr},
+	)
 	if err != nil {
 		return models.DefaultBoolResponse, err
 	}
@@ -3468,7 +3461,7 @@ func (client *baseClient) ExpireWithOptions(
 // If key already has an existing expire set, the time to live is updated to the new value.
 // The timeout will only be cleared by commands that delete or overwrite the contents of key
 // If key already has an existing expire set, the time to live is updated to the new value.
-// If seconds is a non-positive number, the key will be deleted rather than expired.
+// If expireTime is a non-positive number, the key will be deleted rather than expired.
 // The timeout will only be cleared by commands that delete or overwrite the contents of key.
 //
 // See [valkey.io] for details.
@@ -3477,7 +3470,7 @@ func (client *baseClient) ExpireWithOptions(
 //
 //	ctx - The context for controlling the command execution.
 //	key - The key to expire.
-//	unixTimestampInSeconds - Absolute Unix timestamp
+//	expireTime - The timestamp for expiry.
 //
 // Return value:
 //
@@ -3485,8 +3478,8 @@ func (client *baseClient) ExpireWithOptions(
 //	or operation skipped due to the provided arguments.
 //
 // [valkey.io]: https://valkey.io/commands/expireat/
-func (client *baseClient) ExpireAt(ctx context.Context, key string, unixTimestampInSeconds int64) (bool, error) {
-	result, err := client.executeCommand(ctx, C.ExpireAt, []string{key, utils.IntToString(unixTimestampInSeconds)})
+func (client *baseClient) ExpireAt(ctx context.Context, key string, expireTime time.Time) (bool, error) {
+	result, err := client.executeCommand(ctx, C.ExpireAt, []string{key, utils.IntToString(expireTime.Unix())})
 	if err != nil {
 		return models.DefaultBoolResponse, err
 	}
@@ -3500,7 +3493,7 @@ func (client *baseClient) ExpireAt(ctx context.Context, key string, unixTimestam
 // If key already has an existing expire set, the time to live is updated to the new value.
 // The timeout will only be cleared by commands that delete or overwrite the contents of key
 // If key already has an existing expire set, the time to live is updated to the new value.
-// If seconds is a non-positive number, the key will be deleted rather than expired.
+// If expireTime is a non-positive number, the key will be deleted rather than expired.
 // The timeout will only be cleared by commands that delete or overwrite the contents of key.
 //
 // See [valkey.io] for details.
@@ -3509,7 +3502,7 @@ func (client *baseClient) ExpireAt(ctx context.Context, key string, unixTimestam
 //
 //	ctx - The context for controlling the command execution.
 //	key - The key to expire.
-//	unixTimestampInSeconds - Absolute Unix timestamp.
+//	expireTime - The timestamp for expiry.
 //	expireCondition - The option to set expiry - see [options.ExpireCondition].
 //
 // Return value:
@@ -3521,7 +3514,7 @@ func (client *baseClient) ExpireAt(ctx context.Context, key string, unixTimestam
 func (client *baseClient) ExpireAtWithOptions(
 	ctx context.Context,
 	key string,
-	unixTimestampInSeconds int64,
+	expireTime time.Time,
 	expireCondition constants.ExpireCondition,
 ) (bool, error) {
 	expireConditionStr, err := expireCondition.ToString()
@@ -3530,7 +3523,7 @@ func (client *baseClient) ExpireAtWithOptions(
 	}
 	result, err := client.executeCommand(ctx,
 		C.ExpireAt,
-		[]string{key, utils.IntToString(unixTimestampInSeconds), expireConditionStr},
+		[]string{key, utils.IntToString(expireTime.Unix()), expireConditionStr},
 	)
 	if err != nil {
 		return models.DefaultBoolResponse, err
@@ -3540,7 +3533,7 @@ func (client *baseClient) ExpireAtWithOptions(
 
 // Sets a timeout on key in milliseconds. After the timeout has expired, the key will automatically be deleted.
 // If key already has an existing expire set, the time to live is updated to the new value.
-// If milliseconds is a non-positive number, the key will be deleted rather than expired.
+// If expireTime is a non-positive number, the key will be deleted rather than expired.
 // The timeout will only be cleared by commands that delete or overwrite the contents of key.
 //
 // See [valkey.io] for details.
@@ -3549,7 +3542,7 @@ func (client *baseClient) ExpireAtWithOptions(
 //
 //	ctx - The context for controlling the command execution.
 //	key - The key to set timeout on it.
-//	milliseconds - The timeout in milliseconds.
+//	expireTime - Duration for the key to expire.
 //
 // Return value:
 //
@@ -3557,8 +3550,8 @@ func (client *baseClient) ExpireAtWithOptions(
 //	or operation skipped due to the provided arguments.
 //
 // [valkey.io]: https://valkey.io/commands/pexpire/
-func (client *baseClient) PExpire(ctx context.Context, key string, milliseconds int64) (bool, error) {
-	result, err := client.executeCommand(ctx, C.PExpire, []string{key, utils.IntToString(milliseconds)})
+func (client *baseClient) PExpire(ctx context.Context, key string, expireTime time.Duration) (bool, error) {
+	result, err := client.executeCommand(ctx, C.PExpire, []string{key, utils.IntToString(expireTime.Milliseconds())})
 	if err != nil {
 		return models.DefaultBoolResponse, err
 	}
@@ -3567,7 +3560,7 @@ func (client *baseClient) PExpire(ctx context.Context, key string, milliseconds 
 
 // Sets a timeout on key in milliseconds. After the timeout has expired, the key will automatically be deleted.
 // If key already has an existing expire set, the time to live is updated to the new value.
-// If milliseconds is a non-positive number, the key will be deleted rather than expired.
+// If expireTime is a non-positive number, the key will be deleted rather than expired.
 // The timeout will only be cleared by commands that delete or overwrite the contents of key.
 //
 // See [valkey.io] for details.
@@ -3576,7 +3569,7 @@ func (client *baseClient) PExpire(ctx context.Context, key string, milliseconds 
 //
 //	ctx - The context for controlling the command execution.
 //	key - The key to set timeout on it.
-//	milliseconds - The timeout in milliseconds.
+//	expireTime - Duration for the key to expire
 //	option - The option to set expiry, see [options.ExpireCondition].
 //
 // Return value:
@@ -3588,14 +3581,18 @@ func (client *baseClient) PExpire(ctx context.Context, key string, milliseconds 
 func (client *baseClient) PExpireWithOptions(
 	ctx context.Context,
 	key string,
-	milliseconds int64,
+	expireTime time.Duration,
 	expireCondition constants.ExpireCondition,
 ) (bool, error) {
 	expireConditionStr, err := expireCondition.ToString()
 	if err != nil {
 		return models.DefaultBoolResponse, err
 	}
-	result, err := client.executeCommand(ctx, C.PExpire, []string{key, utils.IntToString(milliseconds), expireConditionStr})
+	result, err := client.executeCommand(
+		ctx,
+		C.PExpire,
+		[]string{key, utils.IntToString(expireTime.Milliseconds()), expireConditionStr},
+	)
 	if err != nil {
 		return models.DefaultBoolResponse, err
 	}
@@ -3614,7 +3611,7 @@ func (client *baseClient) PExpireWithOptions(
 //
 //	ctx - The context for controlling the command execution.
 //	key - The key to set timeout on it.
-//	unixMilliseconds - The timeout in an absolute Unix timestamp.
+//	expireTime - The timestamp for expiry.
 //
 // Return value:
 //
@@ -3622,8 +3619,8 @@ func (client *baseClient) PExpireWithOptions(
 //	or operation skipped due to the provided arguments.
 //
 // [valkey.io]: https://valkey.io/commands/pexpireat/
-func (client *baseClient) PExpireAt(ctx context.Context, key string, unixTimestampInMilliSeconds int64) (bool, error) {
-	result, err := client.executeCommand(ctx, C.PExpireAt, []string{key, utils.IntToString(unixTimestampInMilliSeconds)})
+func (client *baseClient) PExpireAt(ctx context.Context, key string, expireTime time.Time) (bool, error) {
+	result, err := client.executeCommand(ctx, C.PExpireAt, []string{key, utils.IntToString(expireTime.UnixMilli())})
 	if err != nil {
 		return models.DefaultBoolResponse, err
 	}
@@ -3642,7 +3639,7 @@ func (client *baseClient) PExpireAt(ctx context.Context, key string, unixTimesta
 //
 //	ctx - The context for controlling the command execution.
 //	key - The key to set timeout on it.
-//	unixMilliseconds - The timeout in an absolute Unix timestamp.
+//	expireTime - The timestamp for expiry.
 //	expireCondition - The option to set expiry, see [options.ExpireCondition].
 //
 // Return value:
@@ -3654,7 +3651,7 @@ func (client *baseClient) PExpireAt(ctx context.Context, key string, unixTimesta
 func (client *baseClient) PExpireAtWithOptions(
 	ctx context.Context,
 	key string,
-	unixTimestampInMilliSeconds int64,
+	expireTime time.Time,
 	expireCondition constants.ExpireCondition,
 ) (bool, error) {
 	expireConditionStr, err := expireCondition.ToString()
@@ -3663,7 +3660,7 @@ func (client *baseClient) PExpireAtWithOptions(
 	}
 	result, err := client.executeCommand(ctx,
 		C.PExpireAt,
-		[]string{key, utils.IntToString(unixTimestampInMilliSeconds), expireConditionStr},
+		[]string{key, utils.IntToString(expireTime.UnixMilli()), expireConditionStr},
 	)
 	if err != nil {
 		return models.DefaultBoolResponse, err
@@ -3850,7 +3847,7 @@ func (client *baseClient) PfMerge(ctx context.Context, destination string, sourc
 }
 
 // Unlink (delete) multiple keys from the database. A key is ignored if it does not exist.
-// This command, similar to [Del], however, this command does not block the server.
+// This command, similar to [Client.Del] and [ClusterClient.Del], however, this command does not block the server.
 //
 // Note:
 //
@@ -3997,8 +3994,12 @@ func (client *baseClient) RenameNX(ctx context.Context, key string, newKey strin
 //	The id of the added entry.
 //
 // [valkey.io]: https://valkey.io/commands/xadd/
-func (client *baseClient) XAdd(ctx context.Context, key string, values [][]string) (models.Result[string], error) {
-	return client.XAddWithOptions(ctx, key, values, *options.NewXAddOptions())
+func (client *baseClient) XAdd(ctx context.Context, key string, values []models.FieldValue) (string, error) {
+	result, err := client.XAddWithOptions(ctx, key, values, *options.NewXAddOptions())
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return result.Value(), nil
 }
 
 // Adds an entry to the specified stream stored at `key`. If the `key` doesn't exist, the stream is created.
@@ -4014,14 +4015,14 @@ func (client *baseClient) XAdd(ctx context.Context, key string, values [][]strin
 //
 // Return value:
 //
-//	The id of the added entry, or `nil` if `opts.makeStream` is set to `false` and no stream with the
-//	matching `key` exists.
+//	The id of the added entry, or `nil` if [options.XAddOptions.MakeStream] is set to `false`
+//	and no stream with the matching `key` exists.
 //
 // [valkey.io]: https://valkey.io/commands/xadd/
 func (client *baseClient) XAddWithOptions(
 	ctx context.Context,
 	key string,
-	values [][]string,
+	values []models.FieldValue,
 	options options.XAddOptions,
 ) (models.Result[string], error) {
 	args := []string{}
@@ -4032,13 +4033,7 @@ func (client *baseClient) XAddWithOptions(
 	}
 	args = append(args, optionArgs...)
 	for _, pair := range values {
-		if len(pair) != 2 {
-			return models.CreateNilStringResult(), fmt.Errorf(
-				"array entry had the wrong length. Expected length 2 but got length %d",
-				len(pair),
-			)
-		}
-		args = append(args, pair...)
+		args = append(args, []string{pair.Field, pair.Value}...)
 	}
 
 	result, err := client.executeCommand(ctx, C.XAdd, args)
@@ -4068,7 +4063,7 @@ func (client *baseClient) XAddWithOptions(
 //	- Each value is a StreamResponse containing:
 //	  - Entries: []StreamEntry, where each StreamEntry has:
 //	    - ID: The unique identifier of the entry
-//	    - Fields: map[string]string of field-value pairs for the entry
+//	    - Fields: []FieldValue array of field-value pairs for the entry.
 //
 // [valkey.io]: https://valkey.io/commands/xread/
 func (client *baseClient) XRead(ctx context.Context, keysAndIds map[string]string) (map[string]models.StreamResponse, error) {
@@ -4096,7 +4091,7 @@ func (client *baseClient) XRead(ctx context.Context, keysAndIds map[string]strin
 //	- Each value is a StreamResponse containing:
 //	  - Entries: []StreamEntry, where each StreamEntry has:
 //	    - ID: The unique identifier of the entry
-//	    - Fields: map[string]string of field-value pairs for the entry
+//	    - Fields: []FieldValue array of field-value pairs for the entry
 //
 // [valkey.io]: https://valkey.io/commands/xread/
 func (client *baseClient) XReadWithOptions(
@@ -4237,7 +4232,7 @@ func (client *baseClient) ZAdd(
 //	ctx - The context for controlling the command execution.
 //	key - The key of the set.
 //	membersScoreMap - A map of members to their scores.
-//	opts - The options for the command. See [ZAddOptions] for details.
+//	opts - The options for the command. See [Client.ZAddOptions] [ClusterClient.ZAddOptions] for details.
 //
 // Return value:
 //
@@ -4302,7 +4297,7 @@ func (client *baseClient) zAddIncrBase(
 //
 // Return value:
 //
-//	models.Result[float64] - The new score of the member.
+//	The new score of the member.
 //
 // [valkey.io]: https://valkey.io/commands/zadd/
 func (client *baseClient) ZAddIncr(
@@ -4310,13 +4305,18 @@ func (client *baseClient) ZAddIncr(
 	key string,
 	member string,
 	increment float64,
-) (models.Result[float64], error) {
+) (float64, error) {
 	options, err := options.NewZAddOptions().SetIncr(true, increment, member)
 	if err != nil {
-		return models.CreateNilFloat64Result(), err
+		return models.DefaultFloatResponse, err
 	}
 
-	return client.zAddIncrBase(ctx, key, options)
+	res, err := client.zAddIncrBase(ctx, key, options)
+	if err != nil {
+		return models.DefaultFloatResponse, err
+	}
+
+	return res.Value(), nil
 }
 
 // Increments the score of member in the sorted set stored at `key` by `increment`.
@@ -4556,11 +4556,11 @@ func (client *baseClient) ZCard(ctx context.Context, key string) (int64, error) 
 // Blocks the connection until it removes and returns a member-score pair
 // with the lowest score from the first non-empty sorted set.
 // The given `keys` being checked in the order they are provided.
-// BZPOPMIN is the blocking variant of [ZPOPMIN].
+// `BZPopMin` is the blocking variant of [Client.BZPopMin] and [ClusterClient.BZPopMin].
 //
 // Note:
 //   - When in cluster mode, all `keys` must map to the same hash slot.
-//   - `BZPOPMIN` is a client blocking command, see [Blocking Commands] for more details and best practices.
+//   - `BZPopMin` is a client blocking command, see [Blocking Commands] for more details and best practices.
 //
 // See [valkey.io] for more details.
 //
@@ -4594,7 +4594,7 @@ func (client *baseClient) BZPopMin(
 
 // Blocks the connection until it pops and returns a member-score pair from the first non-empty sorted set, with the
 // given keys being checked in the order they are provided.
-// BZMPop is the blocking variant of [ZMPop].
+// BZMPop is the blocking variant of [Client.ZMPop] and [ClusterClient.ZMPop].
 //
 // Note:
 //   - When in cluster mode, all keys must map to the same hash slot.
@@ -4656,7 +4656,7 @@ func (client *baseClient) BZMPop(
 
 // Blocks the connection until it pops and returns a member-score pair from the first non-empty sorted set, with the
 // given keys being checked in the order they are provided.
-// BZMPop is the blocking variant of [ZMPop].
+// BZMPop is the blocking variant of [Client.ZMPop] and [ClusterClient.ZMPop].
 //
 // Note:
 //   - When in cluster mode, all keys must map to the same hash slot.
@@ -4675,7 +4675,7 @@ func (client *baseClient) BZMPop(
 //	scoreFilter   - The element pop criteria - either [options.MIN] or [options.MAX] to pop members with the lowest/highest
 //					scores accordingly.
 //	count         - The maximum number of popped elements.
-//	timeout   - The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
+//	timeout       - The duration to wait for a blocking operation to complete. A value of `0` will block indefinitely.
 //	opts          - Pop options, see [options.ZMPopOptions].
 //
 // Return value:
@@ -4727,7 +4727,7 @@ func (client *baseClient) BZMPopWithOptions(
 // Returns the specified range of elements in the sorted set stored at `key`.
 // `ZRANGE` can perform different types of range queries: by index (rank), by the score, or by lexicographical order.
 //
-// To get the elements with their scores, see [ZRangeWithScores].
+// To get the elements with their scores, see [Client.ZRangeWithScores] and [ClusterClient.ZRangeWithScores].
 //
 // See [valkey.io] for more details.
 //
@@ -4909,7 +4909,7 @@ func (client *baseClient) ZCount(ctx context.Context, key string, rangeOptions o
 
 // Returns the rank of `member` in the sorted set stored at `key`, with
 // scores ordered from low to high, starting from `0`.
-// To get the rank of `member` with its score, see [ZRankWithScore].
+// To get the rank of `member` with its score, see [Client.ZRankWithScore] and [ClusterClient.ZRankWithScore].
 //
 // See [valkey.io] for details.
 //
@@ -4922,8 +4922,7 @@ func (client *baseClient) ZCount(ctx context.Context, key string, rangeOptions o
 // Return value:
 //
 //	The rank of `member` in the sorted set.
-//	If `key` doesn't exist, or if `member` is not present in the set,
-//	`nil` will be returned.
+//	If `key` doesn't exist, or if `member` is not present in the set, an empty [models.Result] will be returned.
 //
 // [valkey.io]: https://valkey.io/commands/zrank/
 func (client *baseClient) ZRank(ctx context.Context, key string, member string) (models.Result[int64], error) {
@@ -4937,6 +4936,10 @@ func (client *baseClient) ZRank(ctx context.Context, key string, member string) 
 // Returns the rank of `member` in the sorted set stored at `key` with its
 // score, where scores are ordered from the lowest to highest, starting from `0`.
 //
+// Since:
+//
+//	Valkey 7.2.0 and above.
+//
 // See [valkey.io] for details.
 //
 // Parameters:
@@ -4947,26 +4950,25 @@ func (client *baseClient) ZRank(ctx context.Context, key string, member string) 
 //
 // Return value:
 //
-//	A tuple containing the rank of `member` and its score.
-//	If `key` doesn't exist, or if `member` is not present in the set,
-//	`nil` will be returned.
+//	A [models.Result[models.RankAndScore]] containing the rank of `member` and its score.
+//	If `key` doesn't exist, or if `member` is not present in the set, an empty [models.Result] will be returned.
 //
 // [valkey.io]: https://valkey.io/commands/zrank/
 func (client *baseClient) ZRankWithScore(
 	ctx context.Context,
 	key string,
 	member string,
-) (models.Result[int64], models.Result[float64], error) {
+) (models.Result[models.RankAndScore], error) {
 	result, err := client.executeCommand(ctx, C.ZRank, []string{key, member, constants.WithScoreKeyword})
 	if err != nil {
-		return models.CreateNilInt64Result(), models.CreateNilFloat64Result(), err
+		return models.CreateNilRankAndScoreResult(), err
 	}
-	return handleLongAndDoubleOrNullResponse(result)
+	return handleRankAndScoreOrNilResponse(result)
 }
 
 // Returns the rank of `member` in the sorted set stored at `key`, where
 // scores are ordered from the highest to lowest, starting from `0`.
-// To get the rank of `member` with its score, see [ZRevRankWithScore].
+// To get the rank of `member` with its score, see [Client.ZRevRankWithScore] and [ClusterClient.ZRevRankWithScore].
 //
 // See [valkey.io] for details.
 //
@@ -4978,10 +4980,8 @@ func (client *baseClient) ZRankWithScore(
 //
 // Return value:
 //
-//	The rank of `member` in the sorted set, where ranks are ordered from high to
-//	low based on scores.
-//	If `key` doesn't exist, or if `member` is not present in the set,
-//	`nil` will be returned.
+//	The rank of `member` in the sorted set, where ranks are ordered from high to low based on scores.
+//	If `key` doesn't exist, or if `member` is not present in the set, an empty [models.Result] will be returned.
 //
 // [valkey.io]: https://valkey.io/commands/zrevrank/
 func (client *baseClient) ZRevRank(ctx context.Context, key string, member string) (models.Result[int64], error) {
@@ -4994,7 +4994,10 @@ func (client *baseClient) ZRevRank(ctx context.Context, key string, member strin
 
 // Returns the rank of `member` in the sorted set stored at `key`, where
 // scores are ordered from the highest to lowest, starting from `0`.
-// To get the rank of `member` with its score, see [ZRevRankWithScore].
+//
+// Since:
+//
+//	Valkey 7.2.0 and above.
 //
 // See [valkey.io] for details.
 //
@@ -5006,21 +5009,20 @@ func (client *baseClient) ZRevRank(ctx context.Context, key string, member strin
 //
 // Return value:
 //
-//	A tuple containing the rank of `member` and its score.
-//	If `key` doesn't exist, or if `member` is not present in the set,
-//	`nil` will be returned.s
+//	A [models.Result[models.RankAndScore]] containing the rank of `member` and its score.
+//	If `key` doesn't exist, or if `member` is not present in the set, an empty [models.Result] will be returned.
 //
 // [valkey.io]: https://valkey.io/commands/zrevrank/
 func (client *baseClient) ZRevRankWithScore(
 	ctx context.Context,
 	key string,
 	member string,
-) (models.Result[int64], models.Result[float64], error) {
+) (models.Result[models.RankAndScore], error) {
 	result, err := client.executeCommand(ctx, C.ZRevRank, []string{key, member, constants.WithScoreKeyword})
 	if err != nil {
-		return models.CreateNilInt64Result(), models.CreateNilFloat64Result(), err
+		return models.CreateNilRankAndScoreResult(), err
 	}
-	return handleLongAndDoubleOrNullResponse(result)
+	return handleRankAndScoreOrNilResponse(result)
 }
 
 // Trims the stream by evicting older entries.
@@ -5095,7 +5097,7 @@ func (client *baseClient) XLen(ctx context.Context, key string) (int64, error) {
 //	  - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is
 //	    equivalent to the next ID in the stream after the entries that were scanned, or "0-0" if
 //	    the entire stream was scanned.
-//	  - A map of the claimed entries.
+//	  - A array of the claimed entries as `[]models.StreamEntry`.
 //	  - If you are using Valkey 7.0.0 or above, the response will also include an array containing
 //	    the message IDs that were in the Pending Entries List but no longer exist in the stream.
 //	    These IDs are deleted from the Pending Entries List.
@@ -5106,7 +5108,7 @@ func (client *baseClient) XAutoClaim(
 	key string,
 	group string,
 	consumer string,
-	minIdleTime int64,
+	minIdleTime time.Duration,
 	start string,
 ) (models.XAutoClaimResponse, error) {
 	return client.XAutoClaimWithOptions(ctx, key, group, consumer, minIdleTime, start, *options.NewXAutoClaimOptions())
@@ -5136,7 +5138,7 @@ func (client *baseClient) XAutoClaim(
 //	  - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is
 //	    equivalent to the next ID in the stream after the entries that were scanned, or "0-0" if
 //	    the entire stream was scanned.
-//	  - A map of the claimed entries.
+//	  - A array of the claimed entries as `[]models.StreamEntry`.
 //	  - If you are using Valkey 7.0.0 or above, the response will also include an array containing
 //	    the message IDs that were in the Pending Entries List but no longer exist in the stream.
 //	    These IDs are deleted from the Pending Entries List.
@@ -5147,11 +5149,11 @@ func (client *baseClient) XAutoClaimWithOptions(
 	key string,
 	group string,
 	consumer string,
-	minIdleTime int64,
+	minIdleTime time.Duration,
 	start string,
 	options options.XAutoClaimOptions,
 ) (models.XAutoClaimResponse, error) {
-	args := []string{key, group, consumer, utils.IntToString(minIdleTime), start}
+	args := []string{key, group, consumer, utils.IntToString(minIdleTime.Milliseconds()), start}
 	optArgs, err := options.ToArgs()
 	if err != nil {
 		return models.XAutoClaimResponse{}, err
@@ -5198,7 +5200,7 @@ func (client *baseClient) XAutoClaimJustId(
 	key string,
 	group string,
 	consumer string,
-	minIdleTime int64,
+	minIdleTime time.Duration,
 	start string,
 ) (models.XAutoClaimJustIdResponse, error) {
 	return client.XAutoClaimJustIdWithOptions(ctx, key, group, consumer, minIdleTime, start, *options.NewXAutoClaimOptions())
@@ -5239,11 +5241,11 @@ func (client *baseClient) XAutoClaimJustIdWithOptions(
 	key string,
 	group string,
 	consumer string,
-	minIdleTime int64,
+	minIdleTime time.Duration,
 	start string,
 	opts options.XAutoClaimOptions,
 ) (models.XAutoClaimJustIdResponse, error) {
-	args := []string{key, group, consumer, utils.IntToString(minIdleTime), start}
+	args := []string{key, group, consumer, utils.IntToString(minIdleTime.Milliseconds()), start}
 	optArgs, err := opts.ToArgs()
 	if err != nil {
 		return models.XAutoClaimJustIdResponse{}, err
@@ -5319,16 +5321,16 @@ func (client *baseClient) ZScore(ctx context.Context, key string, member string)
 //
 // Return value:
 //
-//	The first return value is the `cursor` for the next iteration of results. `"0"` will be the `cursor`
-//	   returned on the last iteration of the sorted set.
-//	The second return value is always an array of the subset of the sorted set held in `key`.
+//	An object which holds the next cursor and the subset of the hash held by `key`.
+//	The cursor will return `false` from `IsFinished()` method on the last iteration of the subset.
+//	The data array in the result is always an array of the subset of the sorted set held in `key`.
 //	The array is a flattened series of `string` pairs, where the value is at even indices and the score is at odd indices.
 //
 // [valkey.io]: https://valkey.io/commands/zscan/
-func (client *baseClient) ZScan(ctx context.Context, key string, cursor string) (string, []string, error) {
-	result, err := client.executeCommand(ctx, C.ZScan, []string{key, cursor})
+func (client *baseClient) ZScan(ctx context.Context, key string, cursor models.Cursor) (models.ScanResult, error) {
+	result, err := client.executeCommand(ctx, C.ZScan, []string{key, cursor.String()})
 	if err != nil {
-		return models.DefaultStringResponse, nil, err
+		return models.ScanResult{}, err
 	}
 	return handleScanResponse(result)
 }
@@ -5342,33 +5344,30 @@ func (client *baseClient) ZScan(ctx context.Context, key string, cursor string) 
 //	ctx - The context for controlling the command execution.
 //	key - The key of the sorted set.
 //	cursor - The cursor that points to the next iteration of results.
-//	         A value of `"0"` indicates the start of the search.
-//	         For Valkey 8.0 and above, negative cursors are treated like the initial cursor("0").
 //	options - The options for the command. See [options.ZScanOptions] for details.
 //
 // Return value:
 //
-//	The first return value is the `cursor` for the next iteration of results. `"0"` will be the `cursor`
-//	   returned on the last iteration of the sorted set.
-//	The second return value is always an array of the subset of the sorted set held in `key`.
+//	An object which holds the next cursor and the subset of the hash held by `key`.
+//	The cursor will return `false` from `IsFinished()` method on the last iteration of the subset.
+//	The data array in the result is always an array of the subset of the sorted set held in `key`.
 //	The array is a flattened series of `string` pairs, where the value is at even indices and the score is at odd indices.
-//	If [ZScanOptions.noScores] is to `true`, the second return value will only contain the members without scores.
 //
 // [valkey.io]: https://valkey.io/commands/zscan/
 func (client *baseClient) ZScanWithOptions(
 	ctx context.Context,
 	key string,
-	cursor string,
+	cursor models.Cursor,
 	options options.ZScanOptions,
-) (string, []string, error) {
+) (models.ScanResult, error) {
 	optionArgs, err := options.ToArgs()
 	if err != nil {
-		return models.DefaultStringResponse, nil, err
+		return models.ScanResult{}, err
 	}
 
-	result, err := client.executeCommand(ctx, C.ZScan, append([]string{key, cursor}, optionArgs...))
+	result, err := client.executeCommand(ctx, C.ZScan, append([]string{key, cursor.String()}, optionArgs...))
 	if err != nil {
-		return models.DefaultStringResponse, nil, err
+		return models.ScanResult{}, err
 	}
 	return handleScanResponse(result)
 }
@@ -5497,13 +5496,13 @@ func (client *baseClient) XGroupCreateWithOptions(
 }
 
 // Creates a key associated with a value that is obtained by
-// deserializing the provided serialized value (obtained via [Dump]).
+// deserializing the provided serialized value (obtained via [Client.Dump] or [ClusterClient.Dump]).
 //
 // Parameters:
 //
 //	ctx - The context for controlling the command execution.
 //	key - The key to create.
-//	ttl - The expiry time (in milliseconds). If 0, the key will persist.
+//	ttl - The expiry time. If 0, the key will persist.
 //	value - The serialized value to deserialize and assign to key.
 //
 // Return value:
@@ -5511,18 +5510,18 @@ func (client *baseClient) XGroupCreateWithOptions(
 //	Return OK if successfully create a key with a value.
 //
 // [valkey.io]: https://valkey.io/commands/restore/
-func (client *baseClient) Restore(ctx context.Context, key string, ttl int64, value string) (string, error) {
+func (client *baseClient) Restore(ctx context.Context, key string, ttl time.Duration, value string) (string, error) {
 	return client.RestoreWithOptions(ctx, key, ttl, value, *options.NewRestoreOptions())
 }
 
 // Creates a key associated with a value that is obtained by
-// deserializing the provided serialized value (obtained via [Dump]).
+// deserializing the provided serialized value (obtained via [Client.Dump] or [ClusterClient.Dump]).
 //
 // Parameters:
 //
 //	ctx - The context for controlling the command execution.
 //	key - The key to create.
-//	ttl - The expiry time (in milliseconds). If 0, the key will persist.
+//	ttl - The expiry time. If 0, the key will persist.
 //	value - The serialized value to deserialize and assign to key.
 //	restoreOptions - Set restore options with replace and absolute TTL modifiers, object idletime and frequency.
 //
@@ -5531,7 +5530,7 @@ func (client *baseClient) Restore(ctx context.Context, key string, ttl int64, va
 //	Return OK if successfully create a key with a value.
 //
 // [valkey.io]: https://valkey.io/commands/restore/
-func (client *baseClient) RestoreWithOptions(ctx context.Context, key string, ttl int64,
+func (client *baseClient) RestoreWithOptions(ctx context.Context, key string, ttl time.Duration,
 	value string, options options.RestoreOptions,
 ) (string, error) {
 	optionArgs, err := options.ToArgs()
@@ -5540,7 +5539,7 @@ func (client *baseClient) RestoreWithOptions(ctx context.Context, key string, tt
 	}
 	result, err := client.executeCommand(ctx, C.Restore, append([]string{
 		key,
-		utils.IntToString(ttl), value,
+		utils.IntToString(ttl.Milliseconds()), value,
 	}, optionArgs...))
 	if err != nil {
 		return models.DefaultStringResponse, err
@@ -5945,7 +5944,7 @@ func (client *baseClient) ObjectRefCount(ctx context.Context, key string) (model
 // Sorts the elements in the list, set, or sorted set at key and returns the result.
 // The sort command can be used to sort elements based on different criteria and apply
 // transformations on sorted elements.
-// To store the result into a new key, see the [SortStore] function.
+// To store the result into a new key, see the [Client.SortStore] or [ClusterClient.SortStore] function.
 //
 // See [valkey.io] for details.
 //
@@ -5970,7 +5969,8 @@ func (client *baseClient) Sort(ctx context.Context, key string) ([]models.Result
 // Sorts the elements in the list, set, or sorted set at key and returns the result.
 // The sort command can be used to sort elements based on different criteria and apply
 // transformations on sorted elements.
-// To store the result into a new key, see the [SortStore] function.
+// To store the result into a new key, see the [Client.SortStoreWithOptions] or
+// [ClusterClient.SortStoreWithOptions] function.
 //
 // Note:
 //
@@ -6087,7 +6087,8 @@ func (client *baseClient) SortReadOnlyWithOptions(
 // different criteria, apply transformations on sorted elements, and store the result in a new key.
 // The SortStore command can be used to sort elements based on different criteria and apply
 // transformations on sorted elements.
-// To get the sort result without storing it into a key, see the [Sort] or [SortReadOnly] function.
+// To get the sort result without storing it into a key, see the [Client.Sort] and [ClusterClient.Sort]
+// or [Client.SortReadOnly] and [ClusterClient.SortReadOnly] function.
 //
 // Note:
 //
@@ -6124,7 +6125,8 @@ func (client *baseClient) SortStore(ctx context.Context, key string, destination
 // different criteria, apply transformations on sorted elements, and store the result in a new key.
 // The SortStore command can be used to sort elements based on different criteria and apply
 // transformations on sorted elements.
-// To get the sort result without storing it into a key, see the [Sort] or [SortReadOnly] function.
+// To get the sort result without storing it into a key, see the [Client.SortWithOptions] and [ClusterClient.SortWithOptions]
+// or [Client.SortReadOnlyWithOptions] and [ClusterClient.SortReadOnlyWithOptions] function.
 //
 // Note:
 //
@@ -6321,19 +6323,18 @@ func (client *baseClient) GetBit(ctx context.Context, key string, offset int64) 
 //
 //	ctx - The context for controlling the command execution.
 //	numberOfReplicas - The number of replicas to reach.
-//	timeout - The timeout value specified in milliseconds. A value of `0` will
-//	block indefinitely.
+//	timeout - The timeout value. A value of `0` will block indefinitely.
 //
 // Return value:
 //
 //	The number of replicas reached by all the writes performed in the context of the current connection.
 //
 // [valkey.io]: https://valkey.io/commands/wait/
-func (client *baseClient) Wait(ctx context.Context, numberOfReplicas int64, timeout int64) (int64, error) {
+func (client *baseClient) Wait(ctx context.Context, numberOfReplicas int64, timeout time.Duration) (int64, error) {
 	result, err := client.executeCommand(
 		ctx,
 		C.Wait,
-		[]string{utils.IntToString(numberOfReplicas), utils.IntToString(timeout)},
+		[]string{utils.IntToString(numberOfReplicas), utils.IntToString(timeout.Milliseconds())},
 	)
 	if err != nil {
 		return models.DefaultIntResponse, err
@@ -6448,7 +6449,7 @@ func (client *baseClient) BitCountWithOptions(ctx context.Context, key string, o
 //	key         - The key of the stream.
 //	group       - The name of the consumer group.
 //	consumer    - The name of the consumer.
-//	minIdleTime - The minimum idle time in milliseconds.
+//	minIdleTime - The minimum idle time.
 //	ids         - The ids of the entries to claim.
 //
 // Return value:
@@ -6456,7 +6457,7 @@ func (client *baseClient) BitCountWithOptions(ctx context.Context, key string, o
 //	A map[string]models.XClaimResponse where:
 //	- Each key is a message/entry ID
 //	- Each value is an XClaimResponse containing:
-//	  - Fields: map[string]string of field-value pairs for the claimed entry
+//	  - Fields: []FieldValue array of field-value pairs for the claimed entry
 //
 // [valkey.io]: https://valkey.io/commands/xclaim/
 func (client *baseClient) XClaim(
@@ -6464,7 +6465,7 @@ func (client *baseClient) XClaim(
 	key string,
 	group string,
 	consumer string,
-	minIdleTime int64,
+	minIdleTime time.Duration,
 	ids []string,
 ) (map[string]models.XClaimResponse, error) {
 	return client.XClaimWithOptions(ctx, key, group, consumer, minIdleTime, ids, *options.NewXClaimOptions())
@@ -6480,7 +6481,7 @@ func (client *baseClient) XClaim(
 //	key         - The key of the stream.
 //	group       - The name of the consumer group.
 //	consumer    - The name of the consumer.
-//	minIdleTime - The minimum idle time in milliseconds.
+//	minIdleTime - The minimum idle time.
 //	ids         - The ids of the entries to claim.
 //	options     - Stream claim options.
 //
@@ -6489,7 +6490,7 @@ func (client *baseClient) XClaim(
 //	A map[string]models.XClaimResponse where:
 //	- Each key is a message/entry ID
 //	- Each value is an XClaimResponse containing:
-//	  - Fields: map[string]string of field-value pairs for the claimed entry
+//	  - Fields: []FieldValue array of field-value pairs for the claimed entry
 //
 // [valkey.io]: https://valkey.io/commands/xclaim/
 func (client *baseClient) XClaimWithOptions(
@@ -6497,11 +6498,11 @@ func (client *baseClient) XClaimWithOptions(
 	key string,
 	group string,
 	consumer string,
-	minIdleTime int64,
+	minIdleTime time.Duration,
 	ids []string,
 	opts options.XClaimOptions,
 ) (map[string]models.XClaimResponse, error) {
-	args := append([]string{key, group, consumer, utils.IntToString(minIdleTime)}, ids...)
+	args := append([]string{key, group, consumer, utils.IntToString(minIdleTime.Milliseconds())}, ids...)
 	optionArgs, err := opts.ToArgs()
 	if err != nil {
 		return nil, err
@@ -6525,7 +6526,7 @@ func (client *baseClient) XClaimWithOptions(
 //	key         - The key of the stream.
 //	group       - The name of the consumer group.
 //	consumer    - The name of the consumer.
-//	minIdleTime - The minimum idle time in milliseconds.
+//	minIdleTime - The minimum idle time.
 //	ids         - The ids of the entries to claim.
 //	options     - Stream claim options.
 //
@@ -6539,7 +6540,7 @@ func (client *baseClient) XClaimJustId(
 	key string,
 	group string,
 	consumer string,
-	minIdleTime int64,
+	minIdleTime time.Duration,
 	ids []string,
 ) ([]string, error) {
 	return client.XClaimJustIdWithOptions(ctx, key, group, consumer, minIdleTime, ids, *options.NewXClaimOptions())
@@ -6556,7 +6557,7 @@ func (client *baseClient) XClaimJustId(
 //	key         - The key of the stream.
 //	group       - The name of the consumer group.
 //	consumer    - The name of the consumer.
-//	minIdleTime - The minimum idle time in milliseconds.
+//	minIdleTime - The minimum idle time.
 //	ids         - The ids of the entries to claim.
 //	options     - Stream claim options.
 //
@@ -6570,11 +6571,11 @@ func (client *baseClient) XClaimJustIdWithOptions(
 	key string,
 	group string,
 	consumer string,
-	minIdleTime int64,
+	minIdleTime time.Duration,
 	ids []string,
 	opts options.XClaimOptions,
 ) ([]string, error) {
-	args := append([]string{key, group, consumer, utils.IntToString(minIdleTime)}, ids...)
+	args := append([]string{key, group, consumer, utils.IntToString(minIdleTime.Milliseconds())}, ids...)
 	optionArgs, err := opts.ToArgs()
 	if err != nil {
 		return nil, err
@@ -6741,7 +6742,7 @@ func (client *baseClient) CopyWithOptions(
 //
 // Return value:
 //
-//	An `array` of stream entry data, where entry data is an array of
+//	An `array` of [models.StreamEntry], where entry data stores an array of
 //	pairings with format `[[field, entry], [field, entry], ...]`.
 //
 // [valkey.io]: https://valkey.io/commands/xrange/
@@ -6750,7 +6751,7 @@ func (client *baseClient) XRange(
 	key string,
 	start options.StreamBoundary,
 	end options.StreamBoundary,
-) ([]models.XRangeResponse, error) {
+) ([]models.StreamEntry, error) {
 	return client.XRangeWithOptions(ctx, key, start, end, *options.NewXRangeOptions())
 }
 
@@ -6772,7 +6773,7 @@ func (client *baseClient) XRange(
 //
 // Return value:
 //
-//	An `array` of stream entry data, where entry data is an array of
+//	An `array` of [models.StreamEntry], where entry data stores an array of
 //	pairings with format `[[field, entry], [field, entry], ...]`.
 //	Returns `nil` if `count` is non-positive.
 //
@@ -6783,7 +6784,7 @@ func (client *baseClient) XRangeWithOptions(
 	start options.StreamBoundary,
 	end options.StreamBoundary,
 	opts options.XRangeOptions,
-) ([]models.XRangeResponse, error) {
+) ([]models.StreamEntry, error) {
 	args := []string{key, string(start), string(end)}
 	optionArgs, err := opts.ToArgs()
 	if err != nil {
@@ -6794,7 +6795,7 @@ func (client *baseClient) XRangeWithOptions(
 	if err != nil {
 		return nil, err
 	}
-	return handleXRangeResponse(result)
+	return handleXRangeResponse(result, false)
 }
 
 // Returns stream entries matching a given range of IDs in reverse order.
@@ -6815,7 +6816,7 @@ func (client *baseClient) XRangeWithOptions(
 //
 // Return value:
 //
-//	An `array` of stream entry data, where entry data is an array of
+//	An `array` of [models.StreamEntry], where entry data stores an array of
 //	pairings with format `[[field, entry], [field, entry], ...]`.
 //
 // [valkey.io]: https://valkey.io/commands/xrevrange/
@@ -6824,7 +6825,7 @@ func (client *baseClient) XRevRange(
 	key string,
 	start options.StreamBoundary,
 	end options.StreamBoundary,
-) ([]models.XRangeResponse, error) {
+) ([]models.StreamEntry, error) {
 	return client.XRevRangeWithOptions(ctx, key, start, end, *options.NewXRangeOptions())
 }
 
@@ -6847,7 +6848,7 @@ func (client *baseClient) XRevRange(
 //
 // Return value:
 //
-//	An `array` of stream entry data, where entry data is an array of
+//	An `array` of [models.StreamEntry], where entry data stores an array of
 //	pairings with format `[[field, entry], [field, entry], ...]`.
 //	Returns `nil` if `count` is non-positive.
 //
@@ -6858,7 +6859,7 @@ func (client *baseClient) XRevRangeWithOptions(
 	start options.StreamBoundary,
 	end options.StreamBoundary,
 	opts options.XRangeOptions,
-) ([]models.XRangeResponse, error) {
+) ([]models.StreamEntry, error) {
 	args := []string{key, string(start), string(end)}
 	optionArgs, err := opts.ToArgs()
 	if err != nil {
@@ -6869,7 +6870,7 @@ func (client *baseClient) XRevRangeWithOptions(
 	if err != nil {
 		return nil, err
 	}
-	return handleXRevRangeResponse(result)
+	return handleXRangeResponse(result, true)
 }
 
 // Returns information about the stream stored at `key`.
@@ -6883,15 +6884,24 @@ func (client *baseClient) XRevRangeWithOptions(
 //
 // Return value:
 //
-//	A stream information for the given `key`. See the example for a sample response.
+//	A [models.XInfoStreamResponse] containing information about the stream stored at key:
+//	- Length: the number of entries in the stream
+//	- RadixTreeKeys: the number of keys in the underlying radix data structure
+//	- RadixTreeNodes: the number of nodes in the underlying radix data structure
+//	- Groups: the number of consumer groups defined for the stream
+//	- LastGeneratedID: the ID of the least-recently entry that was added to the stream
+//	- MaxDeletedEntryID: the maximal entry ID that was deleted from the stream
+//	- EntriesAdded: the count of all entries added to the stream during its lifetime
+//	- FirstEntry: the ID and field-value tuples of the first entry in the stream
+//	- LastEntry: the ID and field-value tuples of the last entry in the stream
 //
 // [valkey.io]: https://valkey.io/commands/xinfo-stream/
-func (client *baseClient) XInfoStream(ctx context.Context, key string) (map[string]any, error) {
+func (client *baseClient) XInfoStream(ctx context.Context, key string) (models.XInfoStreamResponse, error) {
 	result, err := client.executeCommand(ctx, C.XInfoStream, []string{key})
 	if err != nil {
-		return nil, err
+		return models.XInfoStreamResponse{}, err
 	}
-	return handleStringToAnyMapResponse(result)
+	return handleXInfoStreamResponse(result)
 }
 
 // Returns detailed information about the stream stored at `key`.
@@ -6912,21 +6922,19 @@ func (client *baseClient) XInfoStream(ctx context.Context, key string) (map[stri
 func (client *baseClient) XInfoStreamFullWithOptions(
 	ctx context.Context,
 	key string,
-	opts *options.XInfoStreamOptions,
-) (map[string]any, error) {
+	opts options.XInfoStreamOptions,
+) (models.XInfoStreamFullOptionsResponse, error) {
 	args := []string{key, constants.FullKeyword}
-	if opts != nil {
-		optionArgs, err := opts.ToArgs()
-		if err != nil {
-			return nil, err
-		}
-		args = append(args, optionArgs...)
+	optionArgs, err := opts.ToArgs()
+	if err != nil {
+		return models.XInfoStreamFullOptionsResponse{}, err
 	}
+	args = append(args, optionArgs...)
 	result, err := client.executeCommand(ctx, C.XInfoStream, args)
 	if err != nil {
-		return nil, err
+		return models.XInfoStreamFullOptionsResponse{}, err
 	}
-	return handleStringToAnyMapResponse(result)
+	return handleXInfoStreamFullOptionsResponse(result)
 }
 
 // Returns the list of all consumers and their attributes for the given consumer group of the
@@ -7097,7 +7105,7 @@ func (client *baseClient) Time(ctx context.Context) ([]string, error) {
 }
 
 // Returns the intersection of members from sorted sets specified by the given `keys`.
-// To get the elements with their scores, see [ZInterWithScores].
+// To get the elements with their scores, see [Client.ZInterWithScores] or [ClusterClient.ZInterWithScores].
 //
 // Note:
 //
@@ -7255,7 +7263,7 @@ func (client *baseClient) ZInterStoreWithOptions(
 }
 
 // Returns the difference between the first sorted set and all the successive sorted sets.
-// To get the elements with their scores, see [ZDiffWithScores].
+// To get the elements with their scores, see [Client.ZDiffWithScores] or [ClusterClient.ZDiffWithScores].
 //
 // Note:
 //
@@ -7359,7 +7367,7 @@ func (client *baseClient) ZDiffStore(ctx context.Context, destination string, ke
 }
 
 // Returns the union of members from sorted sets specified by the given `keys`.
-// To get the elements with their scores, see [ZUnionWithScores].
+// To get the elements with their scores, see [Client.ZUnionWithScores] or [ClusterClient.ZUnionWithScores].
 //
 // Since:
 //
@@ -7424,7 +7432,7 @@ func (client *baseClient) ZUnion(ctx context.Context, keys options.KeyArray) ([]
 func (client *baseClient) ZUnionWithScores(
 	ctx context.Context,
 	keysOrWeightedKeys options.KeysOrWeightedKeys,
-	zUnionOptions *options.ZUnionOptions,
+	zUnionOptions options.ZUnionOptions,
 ) ([]models.MemberAndScore, error) {
 	args, err := keysOrWeightedKeys.ToArgs()
 	if err != nil {
@@ -7471,7 +7479,7 @@ func (client *baseClient) ZUnionStore(
 	destination string,
 	keysOrWeightedKeys options.KeysOrWeightedKeys,
 ) (int64, error) {
-	return client.ZUnionStoreWithOptions(ctx, destination, keysOrWeightedKeys, nil)
+	return client.ZUnionStoreWithOptions(ctx, destination, keysOrWeightedKeys, *options.NewZUnionOptions())
 }
 
 // Computes the union of sorted sets given by the specified `KeysOrWeightedKeys`, and
@@ -7504,20 +7512,18 @@ func (client *baseClient) ZUnionStoreWithOptions(
 	ctx context.Context,
 	destination string,
 	keysOrWeightedKeys options.KeysOrWeightedKeys,
-	zUnionOptions *options.ZUnionOptions,
+	zUnionOptions options.ZUnionOptions,
 ) (int64, error) {
 	keysArgs, err := keysOrWeightedKeys.ToArgs()
 	if err != nil {
 		return models.DefaultIntResponse, err
 	}
 	args := append([]string{destination}, keysArgs...)
-	if zUnionOptions != nil {
-		optionsArgs, err := zUnionOptions.ToArgs()
-		if err != nil {
-			return models.DefaultIntResponse, err
-		}
-		args = append(args, optionsArgs...)
+	optionsArgs, err := zUnionOptions.ToArgs()
+	if err != nil {
+		return models.DefaultIntResponse, err
 	}
+	args = append(args, optionsArgs...)
 	result, err := client.executeCommand(ctx, C.ZUnionStore, args)
 	if err != nil {
 		return models.DefaultIntResponse, err
@@ -7548,7 +7554,7 @@ func (client *baseClient) ZUnionStoreWithOptions(
 //
 // [valkey.io]: https://valkey.io/commands/zintercard/
 func (client *baseClient) ZInterCard(ctx context.Context, keys []string) (int64, error) {
-	return client.ZInterCardWithOptions(ctx, keys, nil)
+	return client.ZInterCardWithOptions(ctx, keys, *options.NewZInterCardOptions())
 }
 
 // Returns the cardinality of the intersection of the sorted sets specified by `keys`.
@@ -7579,16 +7585,14 @@ func (client *baseClient) ZInterCard(ctx context.Context, keys []string) (int64,
 func (client *baseClient) ZInterCardWithOptions(
 	ctx context.Context,
 	keys []string,
-	options *options.ZInterCardOptions,
+	options options.ZInterCardOptions,
 ) (int64, error) {
 	args := append([]string{strconv.Itoa(len(keys))}, keys...)
-	if options != nil {
-		optionsArgs, err := options.ToArgs()
-		if err != nil {
-			return models.DefaultIntResponse, err
-		}
-		args = append(args, optionsArgs...)
+	optionsArgs, err := options.ToArgs()
+	if err != nil {
+		return models.DefaultIntResponse, err
 	}
+	args = append(args, optionsArgs...)
 	result, err := client.executeCommand(ctx, C.ZInterCard, args)
 	if err != nil {
 		return models.DefaultIntResponse, err
@@ -7611,7 +7615,7 @@ func (client *baseClient) ZInterCardWithOptions(
 //	The number of elements in the sorted set at key with a value between min and max.
 //
 // [valkey.io]: https://valkey.io/commands/zlexcount/
-func (client *baseClient) ZLexCount(ctx context.Context, key string, rangeQuery *options.RangeByLex) (int64, error) {
+func (client *baseClient) ZLexCount(ctx context.Context, key string, rangeQuery options.RangeByLex) (int64, error) {
 	args := []string{key}
 	args = append(args, rangeQuery.ToArgsLexCount()...)
 	result, err := client.executeCommand(ctx, C.ZLexCount, args)
@@ -7624,11 +7628,11 @@ func (client *baseClient) ZLexCount(ctx context.Context, key string, rangeQuery 
 // Blocks the connection until it pops and returns a member-score pair
 // with the highest score from the first non-empty sorted set.
 // The given `keys` being checked in the order they are provided.
-// BZPOPMIN is the blocking variant of [ZPOPMIN].
+// `BZPopMax` is the blocking variant of [Client.ZPopMax] and [ClusterClient.ZPopMax].
 //
 // Note:
 //   - When in cluster mode, all keys must map to the same hash slot.
-//   - BZPopMax is a client blocking command, see [Blocking Commands] for more details and best practices.
+//   - `BZPopMax` is a client blocking command, see [Blocking Commands] for more details and best practices.
 //
 // See [valkey.io] for details.
 //
@@ -7953,7 +7957,7 @@ func (client *baseClient) GeoDistWithUnit(
 	return handleFloatOrNilResponse(result)
 }
 
-// Returns the members of a sorted set populated with geospatial information using [GeoAdd],
+// Returns the members of a sorted set populated with geospatial information using [Client.GeoAdd] or [ClusterClient.GeoAdd],
 // which are within the borders of the area specified by a given shape.
 //
 // Since:
@@ -8020,7 +8024,7 @@ func (client *baseClient) GeoSearchWithFullOptions(
 	return handleLocationArrayResponse(result)
 }
 
-// Returns the members of a sorted set populated with geospatial information using [GeoAdd],
+// Returns the members of a sorted set populated with geospatial information using [Client.GeoAdd] or [ClusterClient.GeoAdd],
 // which are within the borders of the area specified by a given shape.
 //
 // Since:
@@ -8077,7 +8081,7 @@ func (client *baseClient) GeoSearchWithResultOptions(
 	return handleStringArrayResponse(result)
 }
 
-// Returns the members of a sorted set populated with geospatial information using [GeoAdd],
+// Returns the members of a sorted set populated with geospatial information using [Client.GeoAdd] or [ClusterClient.GeoAdd],
 // which are within the borders of the area specified by a given shape.
 //
 // Since:
@@ -8125,7 +8129,7 @@ func (client *baseClient) GeoSearchWithInfoOptions(
 	)
 }
 
-// Returns the members of a sorted set populated with geospatial information using [GeoAdd],
+// Returns the members of a sorted set populated with geospatial information using [Client.GeoAdd] or [ClusterClient.GeoAdd],
 // which are within the borders of the area specified by a given shape.
 //
 // Since:
@@ -8168,7 +8172,7 @@ func (client *baseClient) GeoSearch(
 // Searches for members in a sorted set stored at `sourceKey` representing geospatial data
 // within a circular or rectangular area and stores the result in `destinationKey`. If
 // `destinationKey` already exists, it is overwritten. Otherwise, a new sorted set will be
-// created. To get the result directly, see [GeoSearchWithFullOptions].
+// created. To get the result directly, see [Client.GeoSearchWithFullOptions] or [ClusterClient.GeoSearchWithFullOptions].
 //
 // Since:
 //
@@ -8240,7 +8244,7 @@ func (client *baseClient) GeoSearchStoreWithFullOptions(
 // Searches for members in a sorted set stored at `sourceKey` representing geospatial data
 // within a circular or rectangular area and stores the result in `destinationKey`. If
 // `destinationKey` already exists, it is overwritten. Otherwise, a new sorted set will be
-// created. To get the result directly, see [GeoSearchWithFullOptions].
+// created. To get the result directly, see [Client.GeoSearchWithFullOptions] or [ClusterClient.GeoSearchWithFullOptions].
 //
 // Since:
 //
@@ -8291,7 +8295,7 @@ func (client *baseClient) GeoSearchStore(
 // Searches for members in a sorted set stored at `sourceKey` representing geospatial data
 // within a circular or rectangular area and stores the result in `destinationKey`. If
 // `destinationKey` already exists, it is overwritten. Otherwise, a new sorted set will be
-// created. To get the result directly, see [GeoSearchWithFullOptions].
+// created. To get the result directly, see [Client.GeoSearchWithFullOptions] or [ClusterClient.GeoSearchWithFullOptions].
 //
 // Since:
 //
@@ -8344,7 +8348,7 @@ func (client *baseClient) GeoSearchStoreWithResultOptions(
 // Searches for members in a sorted set stored at `sourceKey` representing geospatial data
 // within a circular or rectangular area and stores the result in `destinationKey`. If
 // `destinationKey` already exists, it is overwritten. Otherwise, a new sorted set will be
-// created. To get the result directly, see [GeoSearchWithFullOptions].
+// created. To get the result directly, see [Client.GeoSearchWithFullOptions] or [ClusterClient.GeoSearchWithFullOptions].
 //
 // Since:
 //
@@ -8503,7 +8507,7 @@ func (client *baseClient) FunctionFlushAsync(ctx context.Context) (string, error
 
 // Invokes a previously loaded function.
 // The command will be routed to a primary random node.
-// To route to a replica please refer to [FCallReadOnly].
+// To route to a replica please refer to [Client.FCallReadOnly] or [ClusterClient.FCallReadOnly].
 //
 // Since:
 //
@@ -8558,7 +8562,7 @@ func (client *baseClient) FCallReadOnly(ctx context.Context, function string) (a
 
 // Invokes a previously loaded function.
 // This command is routed to primary nodes only.
-// To route to a replica please refer to [FCallReadOnly].
+// To route to a replica please refer to [Client.FCallReadOnly] or [ClusterClient.FCallReadOnly].
 //
 // Since:
 //
@@ -8814,8 +8818,8 @@ func (client *baseClient) InvokeScriptWithOptions(
 	script options.Script,
 	scriptOptions options.ScriptOptions,
 ) (any, error) {
-	keys := scriptOptions.GetKeys()
-	args := scriptOptions.GetArgs()
+	keys := scriptOptions.Keys
+	args := scriptOptions.Args
 
 	response, err := client.executeScriptWithRoute(ctx, script.GetHash(), keys, args, nil)
 	if err != nil {

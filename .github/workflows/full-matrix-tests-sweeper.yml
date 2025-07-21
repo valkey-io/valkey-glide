@@ -4,7 +4,11 @@ on:
     workflow_dispatch:
 
     schedule:
-        - cron: "0 0 * * *" # Runs daily at 00:00 UTC
+        - cron: "0 3 * * *"
+
+permissions:
+    contents: read
+    actions: write
 
 jobs:
     trigger-full-matrix-tests:
@@ -18,14 +22,13 @@ jobs:
             - name: Fetch relevant branches
               id: get-branches
               run: |
-                  # Currently run only for release-2.0 branch
-                  branches="release-2.0"
-                  echo "::set-output name=branches::$branches"
+                  branches="main"
+                  echo branches=$branches >> "$GITHUB_OUTPUT"
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Trigger full-matrix-tests workflow
-              uses: actions/github-script@v6
+              uses: actions/github-script@v7
               with:
                   script: |
                       const branches = "${{ steps.get-branches.outputs.branches }}".split(" ");

@@ -1,20 +1,28 @@
 ﻿// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+using System.Text;
+
 using Valkey.Glide.Pipeline;
 
 using static Valkey.Glide.Commands.Options.InfoOptions;
 using static Valkey.Glide.Errors;
 using static Valkey.Glide.Route;
 
-using gs = Valkey.Glide.GlideString;
 namespace Valkey.Glide.IntegrationTests;
 
-public class ClusterClientTests
+public class ClusterClientTests(TestConfiguration config)
 {
-    [Fact]
-    public async Task CustomCommand()
+    public TestConfiguration Config { get; } = config;
+
+#pragma warning disable xUnit1046 // Avoid using TheoryDataRow arguments that are not serializable
+    public static IEnumerable<TheoryDataRow<GlideClusterClient, bool>> ClusterClientWithAtomic =>
+        TestConfiguration.TestClusterClients.SelectMany(r => new TheoryDataRow<GlideClusterClient, bool>[] { new(r.Data, true), new(r.Data, false) });
+#pragma warning restore xUnit1046 // Avoid using TheoryDataRow arguments that are not serializable
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClusterClients), MemberType = typeof(TestConfiguration))]
+    public async Task CustomCommand(GlideClusterClient client)
     {
-        GlideClusterClient client = TestConfiguration.DefaultClusterClient();
         // command which returns always a single value
         long res = (long)(await client.CustomCommand(["dbsize"])).SingleValue!;
         Assert.True(res >= 0);
@@ -29,10 +37,10 @@ public class ClusterClientTests
         Assert.True((config.SingleValue as Dictionary<gs, object?>)!.Count > 0);
     }
 
-    [Fact]
-    public async Task CustomCommandWithRandomRoute()
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClusterClients), MemberType = typeof(TestConfiguration))]
+    public async Task CustomCommandWithRandomRoute(GlideClusterClient client)
     {
-        using GlideClusterClient client = TestConfiguration.DefaultClusterClient();
         // if a command isn't routed in 100 tries to different nodes, you are a lucker or have a bug
         SortedSet<string> ports = [];
         foreach (int i in Enumerable.Range(0, 100))
@@ -54,11 +62,10 @@ public class ClusterClientTests
         Assert.Fail($"All 100 commands were sent to: {ports.First()}");
     }
 
-    [Fact]
-    public async Task CustomCommandWithSingleNodeRoute()
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClusterClients), MemberType = typeof(TestConfiguration))]
+    public async Task CustomCommandWithSingleNodeRoute(GlideClusterClient client)
     {
-        using GlideClusterClient client = TestConfiguration.DefaultClusterClient();
-
         string res = ((await client.CustomCommand(["info", "replication"], new SlotKeyRoute("abc", SlotType.Primary))).SingleValue! as gs)!;
         Assert.Contains("role:master", res);
 
@@ -75,56 +82,49 @@ public class ClusterClientTests
         Assert.Contains("# Replication", res);
     }
 
-    [Fact]
-    public async Task CustomCommandWithMultiNodeRoute()
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClusterClients), MemberType = typeof(TestConfiguration))]
+    public async Task CustomCommandWithMultiNodeRoute(GlideClusterClient client)
     {
-        using GlideClusterClient client = TestConfiguration.DefaultClusterClient();
-        _ = await client.Set("abc", "abc");
-        _ = await client.Set("klm", "klm");
-        _ = await client.Set("xyz", "xyz");
+        _ = await client.StringSetAsync("abc", "abc");
+        _ = await client.StringSetAsync("klm", "klm");
+        _ = await client.StringSetAsync("xyz", "xyz");
 
         long res = (long)(await client.CustomCommand(["dbsize"], AllPrimaries)).SingleValue!;
         Assert.True(res >= 3);
     }
 
-    [Fact]
-    public async Task RetryStrategyIsNotSupportedForTransactions()
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClusterClients), MemberType = typeof(TestConfiguration))]
+    public async Task RetryStrategyIsNotSupportedForTransactions(GlideClusterClient client)
+        => _ = await Assert.ThrowsAsync<RequestException>(async () => _ = await client.Exec(new(true), true, new(retryStrategy: new())));
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(ClusterClientWithAtomic))]
+    public async Task BatchWithSingleNodeRoute(GlideClusterClient client, bool isAtomic)
     {
-        using GlideClusterClient client = TestConfiguration.DefaultClusterClient();
-
-        _ = await Assert.ThrowsAsync<RequestException>(async () => _ = await client.Exec(new(true), true, new(retryStrategy: new())));
-    }
-
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task BatchWithSingleNodeRoute(bool isAtomic)
-    {
-        using GlideClusterClient client = TestConfiguration.DefaultClusterClient();
-
         ClusterBatch batch = new ClusterBatch(isAtomic).Info([Section.REPLICATION]);
 
         object?[]? res = await client.Exec(batch, true, new(route: new SlotKeyRoute("abc", SlotType.Primary)));
-        Assert.Contains("role:master", res![0] as gs);
+        Assert.Contains("role:master", res![0] as string);
 
         res = await client.Exec(batch, true, new(route: new SlotKeyRoute("abc", SlotType.Replica)));
-        Assert.Contains("role:slave", res![0] as gs);
+        Assert.Contains("role:slave", res![0] as string);
 
         res = await client.Exec(batch, true, new(route: new SlotIdRoute(42, SlotType.Primary)));
-        Assert.Contains("role:master", res![0] as gs);
+        Assert.Contains("role:master", res![0] as string);
 
         res = await client.Exec(batch, true, new(route: new SlotIdRoute(42, SlotType.Replica)));
-        Assert.Contains("role:slave", res![0] as gs);
+        Assert.Contains("role:slave", res![0] as string);
 
         res = await client.Exec(batch, true, new(route: new ByAddressRoute(TestConfiguration.CLUSTER_HOSTS[0].host, TestConfiguration.CLUSTER_HOSTS[0].port)));
-        Assert.Contains("# Replication", res![0] as gs);
+        Assert.Contains("# Replication", res![0] as string);
     }
 
-    [Fact]
-    public async Task Info()
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClusterClients), MemberType = typeof(TestConfiguration))]
+    public async Task Info(GlideClusterClient client)
     {
-        GlideClusterClient client = TestConfiguration.DefaultClusterClient();
-
         Dictionary<string, string> info = await client.Info();
         foreach (string nodeInfo in info.Values)
         {
@@ -146,11 +146,10 @@ public class ClusterClientTests
         }
     }
 
-    [Fact]
-    public async Task InfoWithRoute()
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClusterClients), MemberType = typeof(TestConfiguration))]
+    public async Task InfoWithRoute(GlideClusterClient client)
     {
-        GlideClusterClient client = TestConfiguration.DefaultClusterClient();
-
         ClusterValue<string> info = await client.Info(Route.Random);
         Assert.Multiple([
             () => Assert.Contains("# Server", info.SingleValue),
@@ -176,6 +175,88 @@ public class ClusterClientTests
                 () => Assert.DoesNotContain("# Server", nodeInfo),
                 () => Assert.Contains("# Errorstats", nodeInfo),
             ]);
+        }
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClusterClients), MemberType = typeof(TestConfiguration))]
+    public async Task TestPing_NoMessage(GlideClusterClient client)
+    {
+        TimeSpan result = await client.PingAsync();
+        Assert.True(result >= TimeSpan.Zero);
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClusterClients), MemberType = typeof(TestConfiguration))]
+    public async Task TestPing_NoMessage_WithRoute(GlideClusterClient client)
+    {
+        TimeSpan result = await client.PingAsync(AllNodes);
+        Assert.True(result >= TimeSpan.Zero);
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClusterClients), MemberType = typeof(TestConfiguration))]
+    public async Task TestPing_WithMessage(GlideClusterClient client)
+    {
+        ValkeyValue message = "Hello, Valkey!";
+        TimeSpan result = await client.PingAsync(message);
+        Assert.True(result >= TimeSpan.Zero);
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClusterClients), MemberType = typeof(TestConfiguration))]
+    public async Task TestPing_WithMessage_WithRoute(GlideClusterClient client)
+    {
+        ValkeyValue message = "Hello, Valkey!";
+        TimeSpan result = await client.PingAsync(message, AllNodes);
+        Assert.True(result >= TimeSpan.Zero);
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClusterClients), MemberType = typeof(TestConfiguration))]
+    public async Task TestEcho_SimpleMessage(GlideClusterClient client)
+    {
+        ValkeyValue message = "Hello, Valkey!";
+        ValkeyValue result = await client.EchoAsync(message);
+        Assert.Equal(message, result);
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClusterClients), MemberType = typeof(TestConfiguration))]
+    public async Task TestEcho_SimpleMessage_WithRoute(GlideClusterClient client)
+    {
+        ValkeyValue message = "Hello, Valkey!";
+        ClusterValue<ValkeyValue> result = await client.EchoAsync(message, AllNodes);
+
+        Assert.True(result.HasMultiData);
+        foreach (ValkeyValue echo in result.MultiValue.Values)
+        {
+            Assert.Equal(message, echo);
+        }
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClusterClients), MemberType = typeof(TestConfiguration))]
+    public async Task TestEcho_BinaryData(GlideClusterClient client)
+    {
+        byte[] binaryData = [0x00, 0x01, 0x02, 0xFF, 0xFE];
+        ValkeyValue result = await client.EchoAsync(binaryData);
+        Assert.Equal(binaryData, (byte[]?)result);
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClusterClients), MemberType = typeof(TestConfiguration))]
+    public async Task TestEcho_BinaryData_WithRoute(GlideClusterClient client)
+    {
+        byte[] binaryData = [0x00, 0x01, 0x02, 0x03, 0x04];
+        ClusterValue<ValkeyValue> result = await client.EchoAsync(binaryData, AllNodes);
+
+        Assert.True(result.HasMultiData);
+        foreach (ValkeyValue ev in result.MultiValue.Values)
+        {
+            string echo = ev!.ToString();
+            byte[] bytes = Encoding.ASCII.GetBytes(echo);
+            Assert.Equivalent(binaryData, bytes);
         }
     }
 }
