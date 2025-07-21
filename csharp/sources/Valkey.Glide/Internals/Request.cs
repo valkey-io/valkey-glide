@@ -44,6 +44,7 @@ internal partial class Request
     /// <returns>A command that converts the response to a boolean value (true if response equals OK)</returns>
     private static Cmd<string, bool> OKToBool(RequestType request, GlideString[] args)
         => new(request, args, false, response => response == "OK");
+
     /// <summary>
     /// Create a Cmd which converts the response to a ValkeyValue.
     /// </summary>
