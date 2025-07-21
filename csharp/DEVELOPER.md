@@ -28,6 +28,7 @@ Please also install the following packages to build [GLIDE core rust library](..
 - rustup
 - GCC
 - pkg-config
+- cmake
 - openssl
 - openssl-dev
 - ziglang and zigbuild (for GNU Linux only)
@@ -73,7 +74,7 @@ See the [Valkey installation guide](https://valkey.io/topics/installation/) to i
 
 ```bash
 sudo apt-get update -y
-sudo apt-get install -y openssl openssl-dev gcc
+sudo apt-get install -y openssl openssl-dev gcc cmake
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 ```
@@ -82,7 +83,7 @@ source "$HOME/.cargo/env"
 
 ```bash
 brew update
-brew install git gcc pkgconfig openssl
+brew install git gcc pkgconfig openssl cmake
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 ```
@@ -132,6 +133,39 @@ A command line may contain all listed above parameters, for example:
 
 ```bash
 dotnet test --framework net8.0 --logger "html;LogFileName=TestReport.html" --logger "console;verbosity=detailed" --filter "FullyQualifiedName~GetReturnsNull" --results-directory .
+```
+
+To run IT tests against an existing cluster and/or standalone endpoint, set `cluster-endpoints` and/or `standalone-endpoints` environment variables.
+In bash:
+
+```bash
+cluster-endpoints=localhost:7000 standalone-endpoints=localhost:6379 dotnet test
+```
+
+In Windows CMD:
+
+```cmd
+set cluster-endpoints=localhost:7000 && set standalone-endpoints=localhost:6379 && dotnet test
+```
+
+In Powershell:
+
+```powershell
+[Environment]::SetEnvironmentVariable('cluster-endpoints', 'localhost:7000')
+[Environment]::SetEnvironmentVariable('standalone-endpoints', 'localhost:6379')
+dotnet test
+```
+
+If those endpoints use TLS, add `tls` variable to `true` (applied to both endpoints):
+
+```bash
+cluster-endpoints=localhost:7000 standalone-endpoints=localhost:6379 tls=true dotnet test
+```
+
+You can combine this with test filter as well:
+
+```bash
+cluster-endpoints=localhost:7000 standalone-endpoints=localhost:6379 tls=true dotnet test --logger "console;verbosity=detailed" --filter "FullyQualifiedName~GetReturnsNull"
 ```
 
 4. Run benchmark

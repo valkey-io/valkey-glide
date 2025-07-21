@@ -20,6 +20,7 @@ If your Nodejs version is below the supported version specified in the client's 
 - git
 - GCC
 - pkg-config
+- cmake
 - protoc (protobuf compiler)
 - openssl
 - openssl-dev
@@ -29,7 +30,7 @@ If your Nodejs version is below the supported version specified in the client's 
 
 ```bash
 sudo apt update -y
-sudo apt install -y nodejs npm git gcc pkg-config protobuf-compiler openssl libssl-dev
+sudo apt install -y nodejs npm git gcc pkg-config protobuf-compiler openssl libssl-dev cmake
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 # Check the installed node version
@@ -42,7 +43,7 @@ node -v
 
 ```bash
 sudo yum update -y
-sudo yum install -y nodejs git gcc pkgconfig protobuf-compiler openssl openssl-devel gettext
+sudo yum install -y nodejs git gcc pkgconfig protobuf-compiler openssl openssl-devel gettext cmake
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 ```
@@ -51,7 +52,7 @@ source "$HOME/.cargo/env"
 
 ```bash
 brew update
-brew install nodejs git gcc pkgconfig protobuf openssl
+brew install nodejs git gcc pkgconfig protobuf openssl cmake
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 ```
@@ -79,7 +80,6 @@ Before starting this step, make sure you've installed all software requirments.
     ```
 
 3. Build the Node wrapper (Choose a build option from the following and run it from the `node` folder):
-
     1. Build in release mode, stripped from all debug symbols (optimized and minimized binary size):
 
     ```bash
@@ -101,7 +101,6 @@ Before starting this step, make sure you've installed all software requirments.
     Once building completed, you'll find the compiled JavaScript code in the`./build-ts` folder.
 
 4. Run tests:
-
     1. Ensure that you have installed server and valkey-cli on your host. You can download Valkey at the following link: [Valkey Download page](https://valkey.io/download/).
     2. Execute the following commands from the node folder:
 

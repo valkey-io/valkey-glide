@@ -2,6 +2,8 @@ name: Full Matrix tests
 
 permissions:
     contents: read
+    actions: write
+    id-token: write
 
 on:
     workflow_dispatch: # note: if started manually, it won't run all matrix

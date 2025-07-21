@@ -7,7 +7,7 @@ plugins {
     id 'io.freefair.lombok' version '8.6'
     id 'com.github.spotbugs' version '6.0.18'
     id 'com.google.osdetector' version '1.7.3'
-    id 'com.gradleup.shadow' version '8.3.5'
+    id 'com.gradleup.shadow' version '8.3.8'
 }
 
 repositories {
@@ -31,15 +31,15 @@ dependencies {
     implementation group: 'io.netty', name: 'netty-transport-native-kqueue', version: '4.1.121.Final', classifier: 'osx-x86_64'
 
     // junit
-    testImplementation group: 'org.mockito', name: 'mockito-inline', version: '3.12.4'
-    testImplementation group: 'org.mockito', name: 'mockito-junit-jupiter', version: '3.12.4'
+    testImplementation group: 'org.mockito', name: 'mockito-inline', version: '5.2.0'
+    testImplementation group: 'org.mockito', name: 'mockito-junit-jupiter', version: '5.2.0'
     testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter', version: '5.10.2'
 
     //lombok
-    compileOnly 'org.projectlombok:lombok:1.18.32'
-    annotationProcessor 'org.projectlombok:lombok:1.18.32'
-    testCompileOnly 'org.projectlombok:lombok:1.18.32'
-    testAnnotationProcessor 'org.projectlombok:lombok:1.18.32'
+    compileOnly 'org.projectlombok:lombok:1.18.38'
+    annotationProcessor 'org.projectlombok:lombok:1.18.38'
+    testCompileOnly 'org.projectlombok:lombok:1.18.38'
+    testAnnotationProcessor 'org.projectlombok:lombok:1.18.38'
 }
 
 ext {

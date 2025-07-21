@@ -18,7 +18,6 @@ mod cluster_async {
     use futures::prelude::*;
     use futures_time::{future::FutureExt, task::sleep};
     use once_cell::sync::Lazy;
-    use serde_json;
     use std::ops::Add;
     use std::path::PathBuf;
     use std::sync::OnceLock;
@@ -46,6 +45,57 @@ mod cluster_async {
             std::io::ErrorKind::BrokenPipe,
             "mock-io-error",
         ))
+    }
+
+    #[derive(Debug, Clone, Copy)]
+    enum PublishCommand {
+        Publish,
+        SPublish,
+    }
+
+    async fn retry_publish_until_expected_subscribers(
+        command: PublishCommand,
+        connection: &mut redis::cluster_async::ClusterConnection,
+        channel: &str,
+        message: &str,
+        expected_count: i64,
+        max_retries: u32,
+    ) -> redis::RedisResult<redis::Value> {
+        use futures_time::time::Duration;
+        let mut delay_ms = 100u64;
+
+        for attempt in 0..max_retries {
+            let cmd_name = match command {
+                PublishCommand::Publish => "PUBLISH",
+                PublishCommand::SPublish => "SPUBLISH",
+            };
+
+            let result = redis::cmd(cmd_name)
+                .arg(channel)
+                .arg(message)
+                .query_async(connection)
+                .await;
+
+            match result {
+                Ok(redis::Value::Int(count)) if count == expected_count => {
+                    return Ok(redis::Value::Int(count));
+                }
+                Ok(redis::Value::Int(count)) => {
+                    // Got a different count than expected, retry after delay
+                    if attempt < max_retries - 1 {
+                        tokio::time::sleep(Duration::from_millis(delay_ms).into()).await;
+                        delay_ms *= 2; // exponential backoff
+                    } else {
+                        return Ok(redis::Value::Int(count)); // return the last result
+                    }
+                }
+                Ok(other) => return Ok(other),
+                Err(e) => return Err(e),
+            }
+        }
+
+        // This should not be reached due to the loop logic above
+        unreachable!()
     }
 
     fn validate_subscriptions(
@@ -122,7 +172,7 @@ mod cluster_async {
             )))
             .build();
         if let Err(e) = GlideOpenTelemetry::initialise(config) {
-            panic!("Failed to initialize OpenTelemetry: {}", e);
+            panic!("Failed to initialize OpenTelemetry: {e}");
         }
         Ok(())
     }
@@ -142,8 +192,8 @@ mod cluster_async {
         for _ in 0..1000 {
             let key = generate_random_string(10);
             let key2 = generate_random_string(10);
-            let slot = get_slot(key.as_str().as_bytes());
-            let slot2 = get_slot(key2.as_str().as_bytes());
+            let slot = get_slot(key.as_bytes());
+            let slot2 = get_slot(key2.as_bytes());
 
             if is_in_same_node(slot, slot2, nodes_and_slots.clone()) {
                 return (key, key2);
@@ -176,7 +226,7 @@ mod cluster_async {
 
         // Search for the specified error type.
         let mut error_count: Option<usize> = None;
-        let error_prefix = format!("errorstat_{}:count=", error_type);
+        let error_prefix = format!("errorstat_{error_type}:count=");
 
         for info in info_result.values() {
             for line in info.lines() {
@@ -199,10 +249,9 @@ mod cluster_async {
         match error_count {
             Some(count) => assert_eq!(
                 count, expected_count,
-                "Expected {} count {} but found {}",
-                error_type, expected_count, count
+                "Expected {error_type} count {expected_count} but found {count}"
             ),
-            None => panic!("{} not found in INFO errorstats output", error_type),
+            None => panic!("{error_type} not found in INFO errorstats output"),
         }
     }
 
@@ -231,7 +280,7 @@ mod cluster_async {
             .expect("Expected 'metrics' to be an array")
             .iter()
             .find(|m| m["name"] == metric_name)
-            .unwrap_or_else(|| panic!("Metric '{}' not found", metric_name))
+            .unwrap_or_else(|| panic!("Metric '{metric_name}' not found"))
     }
 
     fn get_start_value(metric_name: &str) -> u64 {
@@ -314,7 +363,7 @@ mod cluster_async {
                 .collect::<Vec<_>>();
 
             let (moved_key, key2) = generate_two_keys_in_the_same_node(nodes_and_slots);
-            let key_slot = get_slot(moved_key.as_str().as_bytes());
+            let key_slot = get_slot(moved_key.as_bytes());
 
             cluster
                 .move_specific_slot(key_slot, slot_distribution)
@@ -339,11 +388,10 @@ mod cluster_async {
             assert_eq!(
                 result, expected,
                 "Command result did not match expected output.\n\
-                     Keys chosen: ('{}', '{}')\n\
-                     key_slot: {}\n\
-                     Expected result: {:?}\n\
-                     Actual result: {:?}",
-                moved_key, key2, key_slot, expected, result
+                     Keys chosen: ('{moved_key}', '{key2}')\n\
+                     key_slot: {key_slot}\n\
+                     Expected result: {expected:?}\n\
+                     Actual result: {result:?}"
             );
 
             assert_error_occurred(&mut connection, "MOVED", 1).await;
@@ -396,7 +444,7 @@ mod cluster_async {
                 .collect::<Vec<_>>();
 
             let (moved_key, key2) = generate_two_keys_in_the_same_node(nodes_and_slots);
-            let key_slot = get_slot(moved_key.as_str().as_bytes());
+            let key_slot = get_slot(moved_key.as_bytes());
 
             cluster
                 .move_specific_slot(key_slot, slot_distribution)
@@ -430,10 +478,9 @@ mod cluster_async {
             assert_eq!(
                 result, expected,
                 "Pipeline result did not match expected output.\n\
-                     Keys chosen: ('{}', '{}')\n\
-                     key_slot: {}\n\
-                     Actual result: {:?}",
-                moved_key, key2, key_slot, result
+                     Keys chosen: ('{moved_key}', '{key2}')\n\
+                     key_slot: {key_slot}\n\
+                     Actual result: {result:?}"
             );
 
             assert_error_occurred(&mut connection, "MOVED", 2).await;
@@ -481,7 +528,7 @@ mod cluster_async {
                 .collect::<Vec<_>>();
 
             let (moved_key, key2) = generate_two_keys_in_the_same_node(nodes_and_slots);
-            let key_slot = get_slot(moved_key.as_str().as_bytes());
+            let key_slot = get_slot(moved_key.as_bytes());
 
             cluster
                 .move_specific_slot(key_slot, slot_distribution)
@@ -517,10 +564,9 @@ mod cluster_async {
             assert_eq!(
                 result, expected,
                 "Pipeline result did not match expected output.\n\
-                     Keys chosen: ('{}', '{}')\n\
-                     key_slot: {}\n\
-                     Actual result: {:?}",
-                moved_key, key2, key_slot, result
+                     Keys chosen: ('{moved_key}', '{key2}')\n\
+                     key_slot: {key_slot}\n\
+                     Actual result: {result:?}"
             );
 
             assert_error_occurred(&mut connection, "MOVED", 2).await;
@@ -568,7 +614,7 @@ mod cluster_async {
             let slot_distribution = cluster.get_slots_ranges_distribution(&cluster_nodes);
 
             let migrated_key = generate_random_string(10);
-            let key_slot = get_slot(migrated_key.as_str().as_bytes());
+            let key_slot = get_slot(migrated_key.as_bytes());
             let key = format!("{{{}}}:{}", migrated_key, generate_random_string(5));
             let des_node = cluster.migrate_slot(key_slot, slot_distribution).await;
 
@@ -622,13 +668,9 @@ mod cluster_async {
                 result[0..1],
                 expected,
                 "Pipeline result did not match expected output.\n\
-                 Keys chosen: ('{}', '{}')\n\
-                 key_slot: {}\n\
-                 Actual result: {:?}",
-                migrated_key,
-                key,
-                key_slot,
-                result
+                 Keys chosen: ('{migrated_key}', '{key}')\n\
+                 key_slot: {key_slot}\n\
+                 Actual result: {result:?}"
             );
 
             sleep(Duration::from_millis(PUBLISH_TIME + 100).into()).await;
@@ -669,7 +711,7 @@ mod cluster_async {
             let slot_distribution = cluster.get_slots_ranges_distribution(&cluster_nodes);
 
             let migrated_key = generate_random_string(10);
-            let key_slot = get_slot(migrated_key.as_str().as_bytes());
+            let key_slot = get_slot(migrated_key.as_bytes());
             let key = format!("{{{}}}:{}", migrated_key, generate_random_string(5));
             let des_node = cluster.migrate_slot(key_slot, slot_distribution).await;
 
@@ -721,13 +763,9 @@ mod cluster_async {
                 result[0..2],
                 expected,
                 "Pipeline result did not match expected output.\n\
-                 Keys chosen: ('{}', '{}')\n\
-                 key_slot: {}\n\
-                 Actual result: {:?}",
-                migrated_key,
-                key,
-                key_slot,
-                result
+                 Keys chosen: ('{migrated_key}', '{key}')\n\
+                 key_slot: {key_slot}\n\
+                 Actual result: {result:?}"
             );
 
             sleep(Duration::from_millis(PUBLISH_TIME + 100).into()).await;
@@ -831,8 +869,8 @@ mod cluster_async {
 
         let info_result = redis::from_owned_redis_value::<HashMap<String, String>>(info).unwrap();
         let get_cmdstat = "cmdstat_get:calls=".to_string();
-        let n_get_cmdstat = format!("cmdstat_get:calls={}", n);
-        let client_az = format!("availability_zone:{}", az);
+        let n_get_cmdstat = format!("cmdstat_get:calls={n}");
+        let client_az = format!("availability_zone:{az}");
 
         let mut matching_entries_count: usize = 0;
 
@@ -842,8 +880,7 @@ mod cluster_async {
                     matching_entries_count += 1;
                 } else {
                     panic!(
-                        "Invalid entry found: {}. Expected cmdstat_get:calls={} and availability_zone={}",
-                        value, n, az);
+                        "Invalid entry found: {value}. Expected cmdstat_get:calls={n} and availability_zone={az}");
                 }
             }
         }
@@ -851,11 +888,7 @@ mod cluster_async {
         assert_eq!(
             (matching_entries_count.try_into() as Result<u16, _>).unwrap(),
             replicas_num_in_client_az,
-            "Test failed: expected exactly '{}' entries with '{}' and '{}', found {}",
-            replicas_num_in_client_az,
-            get_cmdstat,
-            client_az,
-            matching_entries_count
+            "Test failed: expected exactly '{replicas_num_in_client_az}' entries with '{get_cmdstat}' and '{client_az}', found {matching_entries_count}"
         );
     }
 
@@ -939,8 +972,8 @@ mod cluster_async {
 
         let info_result = redis::from_owned_redis_value::<HashMap<String, String>>(info).unwrap();
         let get_cmdstat = "cmdstat_get:calls=".to_string();
-        let n_get_cmdstat = format!("cmdstat_get:calls={}", n);
-        let client_az = format!("availability_zone:{}", az);
+        let n_get_cmdstat = format!("cmdstat_get:calls={n}");
+        let client_az = format!("availability_zone:{az}");
 
         let mut matching_entries_count: usize = 0;
 
@@ -950,8 +983,7 @@ mod cluster_async {
                     matching_entries_count += 1;
                 } else {
                     panic!(
-                        "Invalid entry found: {}. Expected cmdstat_get:calls={} and availability_zone={}",
-                        value, n, az);
+                        "Invalid entry found: {value}. Expected cmdstat_get:calls={n} and availability_zone={az}");
                 }
             }
         }
@@ -959,11 +991,7 @@ mod cluster_async {
         assert_eq!(
             (matching_entries_count.try_into() as Result<u16, _>).unwrap(),
             replica_num,
-            "Test failed: expected exactly '{}' entries with '{}' and '{}', found {}",
-            replica_num,
-            get_cmdstat,
-            client_az,
-            matching_entries_count
+            "Test failed: expected exactly '{replica_num}' entries with '{get_cmdstat}' and '{client_az}', found {matching_entries_count}"
         );
     }
 
@@ -1051,8 +1079,8 @@ mod cluster_async {
         let info_result: HashMap<String, String> =
             redis::from_owned_redis_value::<HashMap<String, String>>(info).unwrap();
         let get_cmdstat = "cmdstat_get:calls=".to_string();
-        let n_get_cmdstat = format!("cmdstat_get:calls={}", n);
-        let client_az2 = format!("availability-zone:{}", client_az);
+        let n_get_cmdstat = format!("cmdstat_get:calls={n}");
+        let client_az2 = format!("availability-zone:{client_az}");
         let mut matching_entries_count: usize = 0;
 
         for value in info_result.values() {
@@ -1061,8 +1089,7 @@ mod cluster_async {
                     matching_entries_count += 1;
                 } else {
                     panic!(
-                        "Invalid entry found: {}. Expected cmdstat_get:calls={} and availability_zone={}",
-                        value, n, client_az2);
+                        "Invalid entry found: {value}. Expected cmdstat_get:calls={n} and availability_zone={client_az2}");
                 }
             }
         }
@@ -1070,11 +1097,7 @@ mod cluster_async {
         assert_eq!(
             (matching_entries_count.try_into() as Result<u16, _>).unwrap(),
             primary_in_same_az,
-            "Test failed: expected exactly '{}' entries with '{}' and '{}', found {}",
-            primary_in_same_az,
-            get_cmdstat,
-            client_az,
-            matching_entries_count
+            "Test failed: expected exactly '{primary_in_same_az}' entries with '{get_cmdstat}' and '{client_az}', found {matching_entries_count}"
         );
     }
 
@@ -1777,8 +1800,7 @@ mod cluster_async {
             .position(|&p| p == called_port)
             .unwrap_or_else(|| {
                 panic!(
-                    "CLUSTER SLOTS was called with unknown port: {called_port}; Known ports: {:?}",
-                    ports
+                    "CLUSTER SLOTS was called with unknown port: {called_port}; Known ports: {ports:?}"
                 )
             });
         // If we have less views than nodes, use the last view
@@ -2441,7 +2463,7 @@ mod cluster_async {
                     }
                 }
             }
-            _ => panic!("Unexpected CLUSTER SHARDS response type: {:?}", shards_info),
+            _ => panic!("Unexpected CLUSTER SHARDS response type: {shards_info:?}"),
         }
 
         if node_id_for_slot0.is_none() {
@@ -3333,7 +3355,7 @@ mod cluster_async {
                     Err(Ok(Value::BulkString(b"123".to_vec())))
                 }
                 _ => {
-                    panic!("Unexpected request: {:?}", cmd);
+                    panic!("Unexpected request: {cmd:?}");
                 }
             }
         });
@@ -4443,10 +4465,10 @@ mod cluster_async {
         match cluster_nodes_output {
             Value::BulkString(val) => match from_utf8(&val) {
                 Ok(str_res) => get_node_id(str_res),
-                Err(e) => panic!("failed to decode INFO response: {:?}", e),
+                Err(e) => panic!("failed to decode INFO response: {e:?}"),
             },
             Value::VerbatimString { format: _, text } => get_node_id(&text),
-            _ => panic!("Recieved unexpected response: {:?}", cluster_nodes_output),
+            _ => panic!("Recieved unexpected response: {cluster_nodes_output:?}"),
         }
     }
 
@@ -4528,7 +4550,7 @@ mod cluster_async {
                     match res {
                         Value::Int(id) => id,
                         _ => {
-                            panic!("Wrong return value for CLIENT ID command: {:?}", res);
+                            panic!("Wrong return value for CLIENT ID command: {res:?}");
                         }
                     }
                 };
@@ -4579,7 +4601,7 @@ mod cluster_async {
                         // RESP3
                         Value::VerbatimString { format: _, text } => text,
                         _ => {
-                            panic!("Wrong return type for CLIENT LIST command: {:?}", res);
+                            panic!("Wrong return type for CLIENT LIST command: {res:?}");
                         }
                     }
                 };
@@ -4695,7 +4717,7 @@ mod cluster_async {
                     Ok(_) => panic!("Unexpected success on SET to blocked shard; expected ConnectionNotFoundForRoute error"),
                     Err(e) => {
                         if !e.to_string().contains("ConnectionNotFoundForRoute") {
-                            panic!("Unexpected error on SET to blocked shard: {:?}", e);
+                            panic!("Unexpected error on SET to blocked shard: {e:?}");
                         }
                     }
                 }
@@ -4716,7 +4738,7 @@ mod cluster_async {
                             "Healthy shard (slot 12182) did not return OK as expected"
                         );
                     }
-                    Err(e) => panic!("Route command to healthy shard returned error: {:?}", e),
+                    Err(e) => panic!("Route command to healthy shard returned error: {e:?}"),
                 }
             }
 
@@ -4783,12 +4805,16 @@ mod cluster_async {
             // validate subscriptions
             validate_subscriptions(&client_subscriptions, &mut rx, false);
 
-            // validate PUBLISH
-            let result = cmd("PUBLISH")
-                .arg("test_channel")
-                .arg("test_message")
-                .query_async(&mut publishing_con)
-                .await;
+            // validate PUBLISH - retry until expected subscribers are available
+            let result = retry_publish_until_expected_subscribers(
+                PublishCommand::Publish,
+                &mut publishing_con,
+                "test_channel",
+                "test_message",
+                2,
+                10, // max retries
+            )
+            .await;
             assert_eq!(
                 result,
                 Ok(Value::Int(2)) // 2 connections with the same pubsub config
@@ -4810,12 +4836,16 @@ mod cluster_async {
             );
 
             if use_sharded {
-                // validate SPUBLISH
-                let result = cmd("SPUBLISH")
-                    .arg("test_channel_?")
-                    .arg("test_message")
-                    .query_async(&mut publishing_con)
-                    .await;
+                // validate SPUBLISH - retry until expected subscribers are available
+                let result = retry_publish_until_expected_subscribers(
+                    PublishCommand::SPublish,
+                    &mut publishing_con,
+                    "test_channel_?",
+                    "test_message",
+                    2,
+                    10, // max retries
+                )
+                .await;
                 assert_eq!(
                     result,
                     Ok(Value::Int(2)) // 2 connections with the same pubsub config
@@ -4850,12 +4880,16 @@ mod cluster_async {
             // new subscription notifications due to resubscriptions
             validate_subscriptions(&client_subscriptions, &mut rx, true);
 
-            // validate PUBLISH
-            let result = cmd("PUBLISH")
-                .arg("test_channel")
-                .arg("test_message")
-                .query_async(&mut publishing_con)
-                .await;
+            // validate PUBLISH - retry until expected subscribers are available
+            let result = retry_publish_until_expected_subscribers(
+                PublishCommand::Publish,
+                &mut publishing_con,
+                "test_channel",
+                "test_message",
+                2,
+                10, // max retries
+            )
+            .await;
             assert_eq!(
                 result,
                 Ok(Value::Int(2)) // 2 connections with the same pubsub config
@@ -4877,12 +4911,16 @@ mod cluster_async {
             );
 
             if use_sharded {
-                // validate SPUBLISH
-                let result = cmd("SPUBLISH")
-                    .arg("test_channel_?")
-                    .arg("test_message")
-                    .query_async(&mut publishing_con)
-                    .await;
+                // validate SPUBLISH - retry until expected subscribers are available
+                let result = retry_publish_until_expected_subscribers(
+                    PublishCommand::SPublish,
+                    &mut publishing_con,
+                    "test_channel_?",
+                    "test_message",
+                    2,
+                    10, // max retries
+                )
+                .await;
                 assert_eq!(
                     result,
                     Ok(Value::Int(2)) // 2 connections with the same pubsub config
@@ -4963,12 +5001,16 @@ mod cluster_async {
             // validate subscriptions
             validate_subscriptions(&client_subscriptions, &mut rx, false);
 
-            // validate PUBLISH
-            let result = cmd("PUBLISH")
-                .arg("test_channel_?")
-                .arg("test_message")
-                .query_async(&mut publishing_con)
-                .await;
+            // validate PUBLISH - retry until expected subscribers are available
+            let result = retry_publish_until_expected_subscribers(
+                PublishCommand::Publish,
+                &mut publishing_con,
+                "test_channel_?",
+                "test_message",
+                2,
+                10, // max retries
+            )
+            .await;
             assert_eq!(
                 result,
                 Ok(Value::Int(2)) // 2 connections with the same pubsub config
@@ -4990,12 +5032,16 @@ mod cluster_async {
             );
 
             if use_sharded {
-                // validate SPUBLISH
-                let result = cmd("SPUBLISH")
-                    .arg("test_channel_?")
-                    .arg("test_message")
-                    .query_async(&mut publishing_con)
-                    .await;
+                // validate SPUBLISH - retry until expected subscribers are available
+                let result = retry_publish_until_expected_subscribers(
+                    PublishCommand::SPublish,
+                    &mut publishing_con,
+                    "test_channel_?",
+                    "test_message",
+                    2,
+                    10, // max retries
+                )
+                .await;
                 assert_eq!(
                     result,
                     Ok(Value::Int(2)) // 2 connections with the same pubsub config
@@ -5036,7 +5082,7 @@ mod cluster_async {
                     } => port,
                     redis::ConnectionAddr::Tcp(_, port) => port,
                     _ => {
-                        panic!("Wrong server address type: {:?}", addr);
+                        panic!("Wrong server address type: {addr:?}");
                     }
                 }
             };
@@ -5064,13 +5110,13 @@ mod cluster_async {
                 {
                     match res {
                         Value::VerbatimString { format: _, text } => {
-                            if text.contains(format!("tcp_port:{}", last_server_port).as_str()) {
+                            if text.contains(format!("tcp_port:{last_server_port}").as_str()) {
                                 // new topology rediscovered
                                 break;
                             }
                         }
                         _ => {
-                            panic!("Wrong return type for INFO SERVER command: {:?}", res);
+                            panic!("Wrong return type for INFO SERVER command: {res:?}");
                         }
                     }
                     sleep(futures_time::time::Duration::from_secs(1)).await;
@@ -5080,12 +5126,16 @@ mod cluster_async {
             // sleep for one one cycle of topology refresh
             sleep(futures_time::time::Duration::from_secs(1)).await;
 
-            // validate PUBLISH
-            let result = redis::cmd("PUBLISH")
-                .arg("test_channel_?")
-                .arg("test_message")
-                .query_async(&mut publishing_con)
-                .await;
+            // validate PUBLISH - retry until expected subscribers are available
+            let result = retry_publish_until_expected_subscribers(
+                PublishCommand::Publish,
+                &mut publishing_con,
+                "test_channel_?",
+                "test_message",
+                2,
+                10, // max retries
+            )
+            .await;
             assert_eq!(
                 result,
                 Ok(Value::Int(2)) // 2 connections with the same pubsub config
@@ -5112,12 +5162,16 @@ mod cluster_async {
             }
 
             if use_sharded {
-                // validate SPUBLISH
-                let result = redis::cmd("SPUBLISH")
-                    .arg("test_channel_?")
-                    .arg("test_message")
-                    .query_async(&mut publishing_con)
-                    .await;
+                // validate SPUBLISH - retry until expected subscribers are available
+                let result = retry_publish_until_expected_subscribers(
+                    PublishCommand::SPublish,
+                    &mut publishing_con,
+                    "test_channel_?",
+                    "test_message",
+                    2,
+                    10, // max retries
+                )
+                .await;
                 assert_eq!(
                     result,
                     Ok(Value::Int(2)) // 2 connections with the same pubsub config
@@ -5843,7 +5897,7 @@ mod cluster_async {
             i += 1;
             let _ = sleep(futures_time::time::Duration::from_millis(10)).await;
         }
-        panic!("Couldn't find a management connection or the connection wasn't used to execute CLUSTER SLOTS {:?}", client_list);
+        panic!("Couldn't find a management connection or the connection wasn't used to execute CLUSTER SLOTS {client_list:?}");
     })
     .unwrap();
     }
@@ -5969,8 +6023,7 @@ mod cluster_async {
         }
         panic!(
             "No reconnection of the management connection found, or there was an unwantedly reconnection of the user connections.
-            \nprev_management_conn_id={:?},prev_user_conn_id={:?}\nclient list={:?}",
-            management_conn_id, user_conn_id, names_to_ids
+            \nprev_management_conn_id={management_conn_id:?},prev_user_conn_id={user_conn_id:?}\nclient list={names_to_ids:?}"
         );
     })
     .unwrap();
@@ -6032,8 +6085,7 @@ mod cluster_async {
                 assert_eq!(
                     res_err.kind(),
                     ErrorKind::ConnectionNotFoundForRoute,
-                    "{:?}",
-                    res_err
+                    "{res_err:?}"
                 );
                 assert_eq!(cloned_req_counter.load(Ordering::Relaxed), 0);
                 Ok::<_, RedisError>(())
@@ -6082,7 +6134,7 @@ mod cluster_async {
                         return Err(Ok(Value::SimpleString("bar".into())));
                     }
                 }
-                panic!("unexpected command {:?}", received_cmd);
+                panic!("unexpected command {received_cmd:?}");
             },
         );
 

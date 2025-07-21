@@ -1,40 +1,47 @@
 ﻿// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-using gs = Valkey.Glide.GlideString;
+using Valkey.Glide.Pipeline;
+
+using static Valkey.Glide.Commands.Options.InfoOptions;
+
 namespace Valkey.Glide.IntegrationTests;
 
-public class StandaloneClientTests
+public class StandaloneClientTests(TestConfiguration config)
 {
-    [Fact]
-    public void CustomCommand()
-    {
-        using GlideClient client = TestConfiguration.DefaultStandaloneClient();
+    public static TheoryData<bool> GetAtomic => [true, false];
+
+    public TestConfiguration Config { get; } = config;
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestStandaloneClients), MemberType = typeof(TestConfiguration))]
+    public void CustomCommand(GlideClient client) =>
         // Assert.Multiple doesn't work with async tasks https://github.com/xunit/xunit/issues/3209
         Assert.Multiple(
             () => Assert.Equal("PONG", client.CustomCommand(["ping"]).Result!.ToString()),
             () => Assert.Equal("piping", client.CustomCommand(["ping", "piping"]).Result!.ToString()),
             () => Assert.Contains("# Server", client.CustomCommand(["INFO"]).Result!.ToString())
         );
-    }
 
-    [Fact]
-    public async Task CustomCommandWithBinary()
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestStandaloneClients), MemberType = typeof(TestConfiguration))]
+    public async Task CustomCommandWithBinary(GlideClient client)
     {
-        using GlideClient client = TestConfiguration.DefaultStandaloneClient();
         string key1 = Guid.NewGuid().ToString();
         string key2 = Guid.NewGuid().ToString();
         string key3 = Guid.NewGuid().ToString();
         string value = Guid.NewGuid().ToString();
-        Assert.Equal("OK", await client.Set(key1, value));
+        Assert.True(await client.StringSetAsync(key1, value));
 
         gs dump = (await client.CustomCommand(["DUMP", key1]) as gs)!;
 
         Assert.Equal("OK", await client.CustomCommand(["RESTORE", key2, "0", dump!]));
-        Assert.Equal(value, (await client.Get(key2))!);
+        ValkeyValue retrievedValue = await client.StringGetAsync(key2);
+        Assert.Equal(value, retrievedValue.ToString());
 
         // Set and get a binary value
-        Assert.Equal("OK", await client.Set(key3, dump!));
-        Assert.Equal(dump, await client.Get(key3));
+        Assert.True(await client.StringSetAsync(key3, dump!));
+        ValkeyValue binaryValue = await client.StringGetAsync(key3);
+        Assert.Equal(dump, (GlideString)binaryValue);
     }
 
     [Fact]
@@ -47,10 +54,10 @@ public class StandaloneClientTests
             .WithTls(false).Build());
 
         _ = GlideClient.CreateClient(TestConfiguration.DefaultClientConfig()
-            .WithConnectionTimeout(2000).Build());
+            .WithConnectionTimeout(TimeSpan.FromSeconds(2)).Build());
 
         _ = GlideClient.CreateClient(TestConfiguration.DefaultClientConfig()
-            .WithRequestTimeout(2000).Build());
+            .WithRequestTimeout(TimeSpan.FromSeconds(2)).Build());
 
         _ = GlideClient.CreateClient(TestConfiguration.DefaultClientConfig()
             .WithDataBaseId(4).Build());
@@ -68,13 +75,12 @@ public class StandaloneClientTests
             .WithReadFrom(new ConnectionConfiguration.ReadFrom(ConnectionConfiguration.ReadFromStrategy.Primary)).Build());
     }
 
-    [Fact]
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestStandaloneClients), MemberType = typeof(TestConfiguration))]
     // Verify that client can handle complex return types, not just strings
     // TODO: remove this test once we add tests with these commands
-    public async Task CustomCommandWithDifferentReturnTypes()
+    public async Task CustomCommandWithDifferentReturnTypes(GlideClient client)
     {
-        using GlideClient client = TestConfiguration.DefaultStandaloneClient();
-
         string key1 = Guid.NewGuid().ToString();
         Assert.Equal(2, (long)(await client.CustomCommand(["hset", key1, "f1", "v1", "f2", "v2"]))!);
         Assert.Equal(
@@ -102,5 +108,108 @@ public class StandaloneClientTests
         _ = await client.CustomCommand(["xadd", key3, "0-2", "str-1-id-2-field-1", "str-1-id-2-value-1", "str-1-id-2-field-2", "str-1-id-2-value-2"]);
         _ = Assert.IsType<Dictionary<gs, object?>>((await client.CustomCommand(["xread", "streams", key3, "stream", "0-1", "0-2"]))!);
         _ = Assert.IsType<Dictionary<gs, object?>>((await client.CustomCommand(["xinfo", "stream", key3, "full"]))!);
+    }
+
+    [Fact]
+    public async Task Info()
+    {
+        GlideClient client = TestConfiguration.DefaultStandaloneClient();
+
+        string info = await client.Info();
+        Assert.Multiple([
+            () => Assert.Contains("# Server", info),
+            () => Assert.Contains("# Replication", info),
+            () => Assert.DoesNotContain("# Latencystats", info),
+        ]);
+
+        info = await client.Info([Section.REPLICATION]);
+        Assert.Multiple([
+            () => Assert.DoesNotContain("# Server", info),
+            () => Assert.Contains("# Replication", info),
+            () => Assert.DoesNotContain("# Latencystats", info),
+        ]);
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestStandaloneClients), MemberType = typeof(TestConfiguration))]
+    public async Task TestPing_NoMessage(GlideClient client)
+    {
+        TimeSpan result = await client.PingAsync();
+        Assert.True(result >= TimeSpan.Zero);
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestStandaloneClients), MemberType = typeof(TestConfiguration))]
+    public async Task TestPing_WithMessage(GlideClient client)
+    {
+        ValkeyValue message = "Hello, Valkey!";
+        TimeSpan result = await client.PingAsync(message);
+        Assert.True(result >= TimeSpan.Zero);
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestStandaloneClients), MemberType = typeof(TestConfiguration))]
+    public async Task TestEcho_SimpleMessage(GlideClient client)
+    {
+        ValkeyValue message = "Hello, Valkey!";
+        ValkeyValue result = await client.EchoAsync(message);
+        Assert.Equal(message, result);
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestStandaloneClients), MemberType = typeof(TestConfiguration))]
+    public async Task TestEcho_BinaryData(GlideClient client)
+    {
+        byte[] binaryData = [0x00, 0x01, 0x02, 0xFF, 0xFE];
+        ValkeyValue result = await client.EchoAsync(binaryData);
+        Assert.Equal(binaryData, (byte[]?)result);
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestStandaloneClients), MemberType = typeof(TestConfiguration))]
+    public async Task KeyCopy_Move(GlideClient client)
+    {
+        string key = Guid.NewGuid().ToString();
+        string key2 = Guid.NewGuid().ToString();
+
+        await client.StringSetAsync(key, "val");
+        Assert.True(await client.KeyCopyAsync(key, key2, 1));
+        Assert.True(await client.KeyMoveAsync(key, 2));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task BatchKeyCopyAndKeyMove(bool isAtomic)
+    {
+        GlideClient client = TestConfiguration.DefaultStandaloneClient();
+        string sourceKey = Guid.NewGuid().ToString();
+        string destKey = Guid.NewGuid().ToString();
+        string moveKey = Guid.NewGuid().ToString();
+        string value = "test-value";
+
+        Pipeline.IBatch batch = new Batch(isAtomic);
+
+        // Set up keys
+        _ = batch.StringSet(sourceKey, value);
+        _ = batch.StringSet(moveKey, value);
+
+        IBatchStandalone batch2 = new Batch(isAtomic);
+
+        // Test KeyCopy with database parameter
+        _ = batch2.KeyCopy(sourceKey, destKey, 1, false);
+
+        // Test KeyMove
+        _ = batch2.KeyMove(moveKey, 2);
+
+        object?[] results = (await client.Exec((Batch)batch, false))!;
+        object?[] results2 = (await client.Exec((Batch)batch2, false))!;
+
+        Assert.Multiple(
+            () => Assert.True((bool)results[0]!), // Set sourceKey
+            () => Assert.True((bool)results[1]!), // Set moveKey
+            () => Assert.True((bool)results2[0]!), // KeyCopy result
+            () => Assert.True((bool)results2[1]!)  // KeyMove result
+        );
     }
 }

@@ -13,7 +13,7 @@ Valkey General Language Independent Driver for the Enterprise (GLIDE) is the off
 - **Backed and Supported by AWS and GCP**: Ensuring robust support and continuous improvement of the project.
 
 ## Key Features
-- **[AZ Affinity](https://valkey.io/blog/az-affinity-strategy/)** – Ensures low-latency connections and minimal cross-zone costs by routing read traffic to replicas in the clients availability zone.
+- **[AZ Affinity](https://valkey.io/blog/az-affinity-strategy/)** – Ensures low-latency connections and minimal cross-zone costs by routing read traffic to replicas in the clients availability zone. **(Requires Valkey server version 8.0+ or AWS ElastiCache for Valkey 7.2+)**.
 - **[PubSub Auto-Reconnection](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#pubsub-support:~:text=PubSub%20Support,Receiving%2C%20and%20Unsubscribing.)** – Seamless background resubscription on topology updates or disconnection.
 - **[Sharded PubSub](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#pubsub-support:~:text=Receiving%2C%20and%20Unsubscribing.-,Subscribing,routed%20to%20the%20server%20holding%20the%20slot%20for%20the%20command%27s%20channel.,-Receiving)** – Native support for sharded PubSub across cluster slots.
 - **[Cluster-Aware MGET/MSET/DEL/FLUSHALL](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#multi-slot-command-handling:~:text=Multi%2DSlot%20Command%20Execution,JSON.MGET)** – Execute multi-key commands across cluster slots without manual key grouping.
@@ -88,8 +88,8 @@ Looking for more? Check out the [Valkey Glide Wiki](https://github.com/valkey-io
 
 Valkey GLIDE has a growing ecosystem of integrations and extensions that enhance its functionality across different frameworks and use cases:
 
-- **[node-flexible-rate-limiter](https://www.npmjs.com/package/node-flexible-rate-limiter)** - A flexible rate limiting library for Node.js with Valkey GLIDE backend support
-- **[fastify-valkey-glide](https://www.npmjs.com/package/fastify-valkey-glide)** - Fastify plugin for Valkey GLIDE integration, enabling seamless caching and session management
+- **[node-flexible-rate-limiter](https://www.npmjs.com/package/rate-limiter-flexible)** - A flexible rate limiting library for Node.js with Valkey GLIDE backend support
+- **[fastify-valkey-glide](https://www.npmjs.com/package/@fastify/valkey-glide)** - Fastify plugin for Valkey GLIDE integration, enabling seamless caching and session management
 - **[aiocache](https://pypi.org/project/aiocache/)** - Python async caching framework with Valkey GLIDE backend support for high-performance distributed caching
 - **[aws-lambda-powertools-typescript](https://github.com/aws-powertools/powertools-lambda-typescript)** - AWS Lambda Powertools for TypeScript with Valkey GLIDE integration in the idempotency feature (more integrations planned)
 - **[aws-lambda-powertools-python](https://github.com/aws-powertools/powertools-lambda-python)** - AWS Lambda Powertools for Python with Valkey GLIDE support in the idempotency feature (more integrations planned)
