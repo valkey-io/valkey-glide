@@ -69,7 +69,7 @@ mod cluster_async {
                 PublishCommand::Publish => "PUBLISH",
                 PublishCommand::SPublish => "SPUBLISH",
             };
-            
+
             let result = redis::cmd(cmd_name)
                 .arg(channel)
                 .arg(message)
