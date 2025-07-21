@@ -62,6 +62,6 @@ internal class ResponseConverters
         }
         return value is R val
             ? converter(val)
-            : throw new RequestException($"Unexpected return type from Glide: got {value?.GetType().GetRealTypeName()} expected {typeof(T).GetRealTypeName()}");
+            : throw new RequestException($"Unexpected return type from Glide: got {value?.GetType().GetRealTypeName()} expected {typeof(R).GetRealTypeName()}");
     }
 }
