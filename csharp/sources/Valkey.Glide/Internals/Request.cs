@@ -55,28 +55,21 @@ internal partial class Request
         => new(request, args, isNullable, response => (ValkeyValue)response);
 
     /// <summary>
-    /// Create a Cmd which converts a HashSet of objects to an array of ValkeyValues.
+    /// Create a Cmd which converts an array of objects to an array of ValkeyValues.
     /// </summary>
     /// <param name="request">The request type</param>
     /// <param name="args">The command arguments</param>
-    /// <returns>A command that converts a HashSet to a ValkeyValue array</returns>
+    /// <returns>A command that converts an array to a ValkeyValue array</returns>
     private static Cmd<object[], ValkeyValue[]> ObjectArrayToValkeyValueArray(RequestType request, GlideString[] args)
-        => new(request, args, false, set => [.. set.Select(obj => {
-            GlideString glideString = obj is GlideString gs ? gs : new GlideString((string)obj);
-            return (ValkeyValue)glideString;
-        })]);
+        => new(request, args, false, set => [.. set.Cast<GlideString>().Select(gs => gs)]);
 
     private static Cmd<object[], HashEntry[]> ObjectArrayToHashEntries(RequestType request, GlideString[] args, bool isNullable = false)
         => new(request, args, isNullable, objects => [.. objects.Select(he => {
             object[] arr = (object[])he;
-            GlideString key = arr[0] is GlideString gs0 ? gs0 : new GlideString((string)arr[0]);
-            GlideString value = arr[1] is GlideString gs1 ? gs1 : new GlideString((string)arr[1]);
-            return new HashEntry(key, value);
+            return new HashEntry((GlideString)arr[0], (GlideString)arr[1]);
         })]);
 
     private static Cmd<Dictionary<GlideString, object>, HashEntry[]> DictionaryToHashEntries(RequestType request, GlideString[] args, bool isNullable = false)
-        => new(request, args, isNullable, dict => [.. dict.Select(he => {
-            GlideString value = he.Value is GlideString gs ? gs : new GlideString((string)he.Value);
-            return new HashEntry(he.Key, value);
-        })]);
+        => new(request, args, isNullable, dict => [.. dict.Select(he =>
+            new HashEntry(he.Key, (GlideString)he.Value))]);
 }

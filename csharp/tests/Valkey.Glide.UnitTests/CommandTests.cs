@@ -320,24 +320,24 @@ public class CommandTests
 
         // Test for HashGetAllAsync and HashRandomFieldsWithValuesAsync
         Dictionary<GlideString, object> testKvpList = new Dictionary<GlideString, object> {
-            {"field1", "value1" },
-            {"field2", "value2" },
-            {"field3", "value3" },
+            {"field1", (gs)"value1" },
+            {"field2", (gs)"value2" },
+            {"field3", (gs)"value3" },
         };
 
         object[] testObjectNestedArray = new object[]
          {
-            new object[] {"field1", "value1" },
-            new object[] {"field2", "value2" },
-            new object[] {"field3", "value3" },
+            new object[] {(gs)"field1", (gs)"value1" },
+            new object[] {(gs)"field2", (gs)"value2" },
+            new object[] {(gs)"field3", (gs)"value3" },
          };
 
         // Test for HashValuesAsync and HashRandomFieldsAsync
         object[] testObjectArray = new object[]
         {
-            "value1",
-            "value2",
-            "value3"
+            (gs)"value1",
+            (gs)"value2",
+            (gs)"value3"
         };
 
         Assert.Multiple(
