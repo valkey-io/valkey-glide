@@ -80,7 +80,6 @@ Before starting this step, make sure you've installed all software requirments.
     ```
 
 3. Build the Node wrapper (Choose a build option from the following and run it from the `node` folder):
-
     1. Build in release mode, stripped from all debug symbols (optimized and minimized binary size):
 
     ```bash
@@ -102,7 +101,6 @@ Before starting this step, make sure you've installed all software requirments.
     Once building completed, you'll find the compiled JavaScript code in the`./build-ts` folder.
 
 4. Run tests:
-
     1. Ensure that you have installed server and valkey-cli on your host. You can download Valkey at the following link: [Valkey Download page](https://valkey.io/download/).
     2. Execute the following commands from the node folder:
 
