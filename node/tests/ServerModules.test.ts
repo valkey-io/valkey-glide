@@ -68,7 +68,11 @@ describe("Server Module Tests", () => {
             let client: GlideClusterClient;
 
             afterEach(async () => {
-                await flushAndCloseClient(true, cluster.getAddresses(), client);
+                await flushAndCloseClient(
+                    true,
+                    cluster?.getAddresses(),
+                    client,
+                );
             });
 
             it("check modules loaded", async () => {
@@ -2361,7 +2365,7 @@ describe("Server Module Tests", () => {
         let client: GlideClusterClient;
 
         afterEach(async () => {
-            await flushAndCloseClient(true, cluster.getAddresses(), client);
+            await flushAndCloseClient(true, cluster?.getAddresses(), client);
         });
 
         it("ServerModules check Vector Search module is loaded", async () => {
