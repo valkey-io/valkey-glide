@@ -322,7 +322,7 @@ public class StringCommandTests(TestConfiguration config)
         ValkeyValue value = await client.StringGetAsync(key);
         Assert.Equal(initialValue + appendValue, value.ToString());
 
-        // The Redis server returns the length in bytes, not characters
+        // The server returns the length in bytes, not characters
         // For Unicode characters, this will be different from the C# string length
         // So we don't test the exact length here
     }

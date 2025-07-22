@@ -14,7 +14,7 @@ using System.Threading.Tasks;
 
 namespace Valkey.Glide;
 /// <summary>
-/// Represents values that can be stored in redis.
+/// Represents values that can be stored.
 /// </summary>
 public readonly struct ValkeyValue : IEquatable<ValkeyValue>, IComparable<ValkeyValue>, IComparable, IConvertible
 {
@@ -610,7 +610,7 @@ public readonly struct ValkeyValue : IEquatable<ValkeyValue>, IComparable<Valkey
         value = value.Simplify();
         return value.Type switch
         {
-            StorageType.Null => 0, // in redis, an arithmetic zero is kinda the same thing as not-exists (think "incr")
+            StorageType.Null => 0, // an arithmetic zero is kinda the same thing as not-exists (think "incr")
             StorageType.Int64 => value.OverlappedValueInt64,
             StorageType.UInt64 => checked((long)value.OverlappedValueUInt64), // this will throw since unsigned is always 64-bit
             _ => throw new InvalidCastException($"Unable to cast from {value.Type} to long: '{value}'"),
@@ -626,7 +626,7 @@ public readonly struct ValkeyValue : IEquatable<ValkeyValue>, IComparable<Valkey
         value = value.Simplify();
         return value.Type switch
         {
-            StorageType.Null => 0, // in redis, an arithmetic zero is kinda the same thing as not-exists (think "incr")
+            StorageType.Null => 0, // an arithmetic zero is kinda the same thing as not-exists (think "incr")
             StorageType.Int64 => checked((uint)value.OverlappedValueInt64),
             StorageType.UInt64 => checked((uint)value.OverlappedValueUInt64),
             _ => throw new InvalidCastException($"Unable to cast from {value.Type} to uint: '{value}'"),
@@ -642,7 +642,7 @@ public readonly struct ValkeyValue : IEquatable<ValkeyValue>, IComparable<Valkey
         value = value.Simplify();
         return value.Type switch
         {
-            StorageType.Null => 0, // in redis, an arithmetic zero is kinda the same thing as not-exists (think "incr")
+            StorageType.Null => 0, // an arithmetic zero is kinda the same thing as not-exists (think "incr")
             StorageType.Int64 => checked((ulong)value.OverlappedValueInt64), // throw if negative
             StorageType.UInt64 => value.OverlappedValueUInt64,
             _ => throw new InvalidCastException($"Unable to cast from {value.Type} to ulong: '{value}'"),
@@ -658,7 +658,7 @@ public readonly struct ValkeyValue : IEquatable<ValkeyValue>, IComparable<Valkey
         value = value.Simplify();
         return value.Type switch
         {
-            StorageType.Null => 0, // in redis, an arithmetic zero is kinda the same thing as not-exists (think "incr")
+            StorageType.Null => 0, // an arithmetic zero is kinda the same thing as not-exists (think "incr")
             StorageType.Int64 => value.OverlappedValueInt64,
             StorageType.UInt64 => value.OverlappedValueUInt64,
             StorageType.Double => value.OverlappedValueDouble,
@@ -675,7 +675,7 @@ public readonly struct ValkeyValue : IEquatable<ValkeyValue>, IComparable<Valkey
         value = value.Simplify();
         return value.Type switch
         {
-            StorageType.Null => 0, // in redis, an arithmetic zero is kinda the same thing as not-exists (think "incr")
+            StorageType.Null => 0, // an arithmetic zero is kinda the same thing as not-exists (think "incr")
             StorageType.Int64 => value.OverlappedValueInt64,
             StorageType.UInt64 => value.OverlappedValueUInt64,
             StorageType.Double => (decimal)value.OverlappedValueDouble,
@@ -692,7 +692,7 @@ public readonly struct ValkeyValue : IEquatable<ValkeyValue>, IComparable<Valkey
         value = value.Simplify();
         return value.Type switch
         {
-            StorageType.Null => 0, // in redis, an arithmetic zero is kinda the same thing as not-exists (think "incr")
+            StorageType.Null => 0, // an arithmetic zero is kinda the same thing as not-exists (think "incr")
             StorageType.Int64 => value.OverlappedValueInt64,
             StorageType.UInt64 => value.OverlappedValueUInt64,
             StorageType.Double => (float)value.OverlappedValueDouble,
@@ -988,7 +988,7 @@ public readonly struct ValkeyValue : IEquatable<ValkeyValue>, IComparable<Valkey
                 }
                 return val == d;
             case StorageType.Null:
-                // in redis-land 0 approx. equal null; so roll with it
+                // 0 approx. equal null; so roll with it
                 val = 0;
                 return true;
         }
@@ -1036,7 +1036,7 @@ public readonly struct ValkeyValue : IEquatable<ValkeyValue>, IComparable<Valkey
             case StorageType.Raw:
                 return TryParseDouble(_memory.Span, out val);
             case StorageType.Null:
-                // in redis-land 0 approx. equal null; so roll with it
+                // 0 approx. equal null; so roll with it
                 val = 0;
                 return true;
         }

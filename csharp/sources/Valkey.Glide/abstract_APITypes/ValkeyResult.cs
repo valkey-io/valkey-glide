@@ -9,7 +9,7 @@ using System.Runtime.CompilerServices;
 namespace Valkey.Glide;
 
 /// <summary>
-/// Represents a general-purpose result from redis, that may be cast into various anticipated types.
+/// Represents a general-purpose result from server, that may be cast into various anticipated types.
 /// </summary>
 public abstract class ValkeyResult
 {
@@ -25,16 +25,16 @@ public abstract class ValkeyResult
     }
 
     /// <summary>
-    /// Create a new RedisResult representing a single value.
+    /// Create a new ValkeyResult representing a single value.
     /// </summary>
     /// <param name="value">The <see cref="ValkeyValue"/> to create a result from.</param>
     /// <param name="resultType">The type of result being represented.</param>
     /// <returns> new <see cref="ValkeyResult"/>.</returns>
     [SuppressMessage("ApiDesign", "RS0027:Public API with optional parameter(s) should have the most parameters amongst its public overloads", Justification = "Legacy compat.")]
-    public static ValkeyResult Create(ValkeyValue value, ResultType? resultType = null) => new SingleRedisResult(value, resultType);
+    public static ValkeyResult Create(ValkeyValue value, ResultType? resultType = null) => new SingleResult(value, resultType);
 
     /// <summary>
-    /// Create a new RedisResult representing an array of values.
+    /// Create a new ValkeyResult representing an array of values.
     /// </summary>
     /// <param name="values">The <see cref="ValkeyValue"/>s to create a result from.</param>
     /// <returns> new <see cref="ValkeyResult"/>.</returns>
@@ -42,17 +42,17 @@ public abstract class ValkeyResult
         => Create(values, ResultType.Array);
 
     /// <summary>
-    /// Create a new RedisResult representing an array of values.
+    /// Create a new ValkeyResult representing an array of values.
     /// </summary>
     /// <param name="values">The <see cref="ValkeyValue"/>s to create a result from.</param>
     /// <param name="resultType">The explicit data type.</param>
     /// <returns> new <see cref="ValkeyResult"/>.</returns>
     public static ValkeyResult Create(ValkeyValue[] values, ResultType resultType) =>
         values == null ? NullArray : values.Length == 0 ? EmptyArray(resultType) :
-            new ArrayRedisResult(Array.ConvertAll(values, value => new SingleRedisResult(value, null)), resultType);
+            new ArrayResult(Array.ConvertAll(values, value => new SingleResult(value, null)), resultType);
 
     /// <summary>
-    /// Create a new RedisResult representing an array of values.
+    /// Create a new ValkeyResult representing an array of values.
     /// </summary>
     /// <param name="values">The <see cref="ValkeyResult"/>s to create a result from.</param>
     /// <returns> new <see cref="ValkeyResult"/>.</returns>
@@ -60,13 +60,13 @@ public abstract class ValkeyResult
         => Create(values, ResultType.Array);
 
     /// <summary>
-    /// Create a new RedisResult representing an array of values.
+    /// Create a new ValkeyResult representing an array of values.
     /// </summary>
     /// <param name="values">The <see cref="ValkeyResult"/>s to create a result from.</param>
     /// <param name="resultType">The explicit data type.</param>
     /// <returns> new <see cref="ValkeyResult"/>.</returns>
     public static ValkeyResult Create(ValkeyResult[] values, ResultType resultType)
-        => values == null ? NullArray : values.Length == 0 ? EmptyArray(resultType) : new ArrayRedisResult(values, resultType);
+        => values == null ? NullArray : values.Length == 0 ? EmptyArray(resultType) : new ArrayResult(values, resultType);
 
     internal static ValkeyResult Create(object? obj) => obj switch
     {
@@ -80,10 +80,10 @@ public abstract class ValkeyResult
     /// </summary>
     internal static ValkeyResult EmptyArray(ResultType type) => type switch
     {
-        ResultType.Array => s_EmptyArray ??= new ArrayRedisResult(Array.Empty<ValkeyResult>(), type),
-        ResultType.Set => s_EmptySet ??= new ArrayRedisResult(Array.Empty<ValkeyResult>(), type),
-        ResultType.Map => s_EmptyMap ??= new ArrayRedisResult(Array.Empty<ValkeyResult>(), type),
-        _ => new ArrayRedisResult(Array.Empty<ValkeyResult>(), type),
+        ResultType.Array => s_EmptyArray ??= new ArrayResult(Array.Empty<ValkeyResult>(), type),
+        ResultType.Set => s_EmptySet ??= new ArrayResult(Array.Empty<ValkeyResult>(), type),
+        ResultType.Map => s_EmptyMap ??= new ArrayResult(Array.Empty<ValkeyResult>(), type),
+        _ => new ArrayResult(Array.Empty<ValkeyResult>(), type),
     };
 
     private static ValkeyResult? s_EmptyArray, s_EmptySet, s_EmptyMap;
@@ -91,12 +91,12 @@ public abstract class ValkeyResult
     /// <summary>
     /// A null array result.
     /// </summary>
-    internal static ValkeyResult NullArray { get; } = new ArrayRedisResult(null, ResultType.Null);
+    internal static ValkeyResult NullArray { get; } = new ArrayResult(null, ResultType.Null);
 
     /// <summary>
     /// A null single result, to use as a default for invalid returns.
     /// </summary>
-    internal static ValkeyResult NullSingle { get; } = new SingleRedisResult(ValkeyValue.Null, ResultType.Null);
+    internal static ValkeyResult NullSingle { get; } = new SingleResult(ValkeyValue.Null, ResultType.Null);
 
     /// <summary>
     /// Gets the number of elements in this item if it is a valid array, or <c>-1</c> otherwise.
@@ -114,19 +114,19 @@ public abstract class ValkeyResult
     public abstract string? ToString(out string? type);
 
     /// <summary>
-    /// Indicate the type of result that was received from redis, in RESP2 terms.
+    /// Indicate the type of result that was received from server, in RESP2 terms.
     /// </summary>
     [Obsolete($"Please use either {nameof(Resp2Type)} (simplified) or {nameof(Resp3Type)} (full)")]
     [Browsable(false), EditorBrowsable(EditorBrowsableState.Never)]
     public ResultType Type => Resp2Type;
 
     /// <summary>
-    /// Indicate the type of result that was received from redis, in RESP3 terms.
+    /// Indicate the type of result that was received from server, in RESP3 terms.
     /// </summary>
     public ResultType Resp3Type { get; }
 
     /// <summary>
-    /// Indicate the type of result that was received from redis, in RESP2 terms.
+    /// Indicate the type of result that was received from server, in RESP2 terms.
     /// </summary>
     public ResultType Resp2Type => Resp3Type == ResultType.Null ? Resp2NullType : Resp3Type.ToResp2();
 
@@ -276,9 +276,9 @@ public abstract class ValkeyResult
     public static explicit operator ValkeyKey[]?(ValkeyResult? result) => result?.AsValkeyKeyArray();
 
     /// <summary>
-    /// Interprets the result as a <see cref="T:RedisResult[]"/>.
+    /// Interprets the result as a <see cref="T:ValkeyResult[]"/>.
     /// </summary>
-    /// <param name="result">The result to convert to a <see cref="T:RedisResult[]"/>.</param>
+    /// <param name="result">The result to convert to a <see cref="T:ValkeyResult[]"/>.</param>
     public static explicit operator ValkeyResult[]?(ValkeyResult? result) => result?.AsValkeyResultArray();
 
     /// <summary>
@@ -331,14 +331,14 @@ public abstract class ValkeyResult
     internal abstract string? AsString();
     internal abstract string?[]? AsStringArray();
 
-    private sealed class ArrayRedisResult : ValkeyResult
+    private sealed class ArrayResult : ValkeyResult
     {
         public override bool IsNull => _value is null;
         private readonly ValkeyResult[]? _value;
 
         internal override ResultType Resp2NullType => ResultType.Array;
 
-        public ArrayRedisResult(ValkeyResult[]? value, ResultType resultType) : base(value is null ? ResultType.Null : resultType)
+        public ArrayResult(ValkeyResult[]? value, ResultType resultType) : base(value is null ? ResultType.Null : resultType)
         {
             _value = value;
         }
@@ -489,11 +489,11 @@ public abstract class ValkeyResult
     /// <param name="key">The <see cref="ValkeyKey"/> to create a <see cref="ValkeyResult"/> from.</param>
     public static ValkeyResult Create(ValkeyKey key) => Create(key.AsValkeyValue(), ResultType.BulkString);
 
-    private sealed class SingleRedisResult : ValkeyResult, IConvertible
+    private sealed class SingleResult : ValkeyResult, IConvertible
     {
         private readonly ValkeyValue _value;
 
-        public SingleRedisResult(ValkeyValue value, ResultType? resultType) : base(value.IsNull ? ResultType.Null : resultType ?? (value.IsInteger ? ResultType.Integer : ResultType.BulkString))
+        public SingleResult(ValkeyValue value, ResultType? resultType) : base(value.IsNull ? ResultType.Null : resultType ?? (value.IsInteger ? ResultType.Integer : ResultType.BulkString))
         {
             _value = value;
         }
@@ -611,6 +611,6 @@ public abstract class ValkeyResult
 
         [DoesNotReturn]
         private void ThrowNotSupported([CallerMemberName] string? caller = null)
-            => throw new NotSupportedException($"{typeof(SingleRedisResult).FullName} does not support {nameof(IConvertible)}.{caller} with value '{AsString()}'");
+            => throw new NotSupportedException($"{typeof(SingleResult).FullName} does not support {nameof(IConvertible)}.{caller} with value '{AsString()}'");
     }
 }

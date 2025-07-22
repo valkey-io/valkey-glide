@@ -7,7 +7,7 @@ namespace Valkey.Glide;
 /// <summary>
 /// Filter determining which Valkey clients to kill.
 /// </summary>
-/// <seealso href="https://redis.io/docs/latest/commands/client-kill/"/>
+/// <seealso href="https://valkey.io/commands/client-kill/" />
 public class ClientKillFilter
 {
     /// <summary>

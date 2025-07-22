@@ -275,7 +275,7 @@ public class TestConfiguration : IDisposable
             // Start standalone
             STANDALONE_HOSTS = StartServer(false, TLS);
         }
-        // Get redis version
+        // Get server version
         SERVER_VERSION = GetServerVersion();
 
         TestConsoleWriteLine($"Cluster hosts = {string.Join(", ", CLUSTER_HOSTS)}");
