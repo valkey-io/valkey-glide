@@ -40,4 +40,22 @@ internal partial class Request
 
     public static Cmd<long, long> StringLength(GlideString key)
         => Simple<long>(RequestType.Strlen, [key]);
+
+    public static Cmd<long, long> StringAppend(ValkeyKey key, ValkeyValue value)
+        => Simple<long>(RequestType.Append, [key.ToGlideString(), value.ToGlideString()]);
+
+    public static Cmd<long, long> StringDecr(ValkeyKey key)
+        => Simple<long>(RequestType.Decr, [key.ToGlideString()]);
+
+    public static Cmd<long, long> StringDecrBy(ValkeyKey key, long decrement)
+        => Simple<long>(RequestType.DecrBy, [key.ToGlideString(), decrement.ToGlideString()]);
+
+    public static Cmd<long, long> StringIncr(ValkeyKey key)
+        => Simple<long>(RequestType.Incr, [key.ToGlideString()]);
+
+    public static Cmd<long, long> StringIncrBy(ValkeyKey key, long increment)
+        => Simple<long>(RequestType.IncrBy, [key.ToGlideString(), increment.ToGlideString()]);
+
+    public static Cmd<double, double> StringIncrByFloat(ValkeyKey key, double increment)
+        => Simple<double>(RequestType.IncrByFloat, [key.ToGlideString(), increment.ToString(System.Globalization.CultureInfo.InvariantCulture).ToGlideString()]);
 }

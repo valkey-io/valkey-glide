@@ -33,6 +33,7 @@ import {
     InsertPosition,
     JsonBatch,
     ListDirection,
+    Logger,
     ProtocolVersion,
     ReturnTypeMap,
     ScoreFilter,
@@ -482,12 +483,27 @@ export async function testTeardown(
     cluster_mode: boolean,
     option: BaseClientConfiguration,
 ) {
-    const client = cluster_mode
-        ? await GlideClusterClient.createClient(option)
-        : await GlideClient.createClient(option);
+    let client: GlideClient | GlideClusterClient | undefined;
 
-    await client.customCommand(["FLUSHALL"]);
-    client.close();
+    try {
+        client = cluster_mode
+            ? await GlideClusterClient.createClient(option)
+            : await GlideClient.createClient(option);
+
+        await client.flushall();
+    } catch (error) {
+        // If teardown fails, log the error but don't throw to avoid masking the original test failure
+        Logger.log(
+            "warn",
+            "TestUtilities",
+            "Test teardown failed",
+            error as Error,
+        );
+    } finally {
+        if (client) {
+            client.close();
+        }
+    }
 }
 
 export const getClientConfigurationOption = (
@@ -509,18 +525,20 @@ export const getClientConfigurationOption = (
 
 export async function flushAndCloseClient(
     cluster_mode: boolean,
-    addresses: [string, number][],
+    addresses: [string, number][] | undefined,
     client?: BaseClient,
     tlsConfig?: TestTLSConfig,
 ) {
     try {
-        await testTeardown(
-            cluster_mode,
-            getClientConfigurationOption(addresses, ProtocolVersion.RESP3, {
-                ...tlsConfig,
-                requestTimeout: 2000,
-            }),
-        );
+        if (addresses) {
+            await testTeardown(
+                cluster_mode,
+                getClientConfigurationOption(addresses, ProtocolVersion.RESP3, {
+                    ...tlsConfig,
+                    requestTimeout: 2000,
+                }),
+            );
+        }
     } finally {
         // some tests don't initialize a client
         client?.close();
