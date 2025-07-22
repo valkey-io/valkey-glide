@@ -45,7 +45,7 @@ jobs:
               shell: bash
               run: |
                   # TODO move to a shared action
-                  jq -c "[.[] | select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains([\"nuget\"])))]" < build-matrix.json | awk '{ printf "PLATFORM_MATRIX=%s\n", $0 }' | tee -a $GITHUB_OUTPUT
+                  jq -c "[.[] | select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains([\"nuget\"])))]" < .github/json_matrices/build-matrix.json | awk '{ printf "PLATFORM_MATRIX=%s\n", $0 }' | tee -a $GITHUB_OUTPUT
 
     set-release-version:
         runs-on: ubuntu-latest
