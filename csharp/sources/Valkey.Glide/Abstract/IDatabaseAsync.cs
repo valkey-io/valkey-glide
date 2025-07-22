@@ -8,7 +8,7 @@ namespace Valkey.Glide;
 /// Describes functionality that is common to both standalone and cluster servers.<br />
 /// See also <see cref="GlideClient" /> and <see cref="GlideClusterClient" />.
 /// </summary>
-public interface IDatabaseAsync : IStringCommands, IListCommands, ISortedSetCommands, IGenericCommands, IServerManagementCommands
+public interface IDatabaseAsync : IConnectionManagementCommands, IGenericCommands, IGenericBaseCommands, IHashCommands, IListCommands, IServerManagementCommands, ISetCommands, ISortedSetCommands, IStringCommands
 {
     /// <summary>
     /// Execute an arbitrary command against the server; this is primarily intended for executing modules,

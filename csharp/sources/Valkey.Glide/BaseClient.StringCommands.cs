@@ -27,4 +27,22 @@ public abstract partial class BaseClient : IStringCommands
 
     public async Task<long> StringLengthAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None)
         => await Command(Request.StringLength(key));
+
+    public async Task<long> StringAppendAsync(ValkeyKey key, ValkeyValue value, CommandFlags flags = CommandFlags.None)
+        => await Command(Request.StringAppend(key, value));
+
+    public async Task<long> StringDecrementAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None)
+        => await Command(Request.StringDecr(key));
+
+    public async Task<long> StringDecrementAsync(ValkeyKey key, long decrement, CommandFlags flags = CommandFlags.None)
+        => await Command(Request.StringDecrBy(key, decrement));
+
+    public async Task<long> StringIncrementAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None)
+        => await Command(Request.StringIncr(key));
+
+    public async Task<long> StringIncrementAsync(ValkeyKey key, long increment, CommandFlags flags = CommandFlags.None)
+        => await Command(Request.StringIncrBy(key, increment));
+
+    public async Task<double> StringIncrementAsync(ValkeyKey key, double increment, CommandFlags flags = CommandFlags.None)
+        => await Command(Request.StringIncrByFloat(key, increment));
 }

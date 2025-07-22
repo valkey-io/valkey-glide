@@ -28,7 +28,7 @@ public interface IListCommands
     Task<ValkeyValue> ListLeftPopAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None);
 
     /// <summary>
-    /// Removes and returns up to <paramref name="count" /> elements of the list 
+    /// Removes and returns up to <paramref name="count" /> elements of the list
     /// stored at <paramref name="key" />, depending on the list's length.
     /// </summary>
     /// <seealso href="https://valkey.io/commands/lpop"/>

@@ -60,7 +60,7 @@ public interface ISortedSetCommands
     /// <remarks>
     /// <example>
     /// <code>
-    /// var entries = new SortedSetEntry[] 
+    /// var entries = new SortedSetEntry[]
     /// {
     ///     new SortedSetEntry("member1", 10.5),
     ///     new SortedSetEntry("member2", 8.2)
@@ -70,4 +70,40 @@ public interface ISortedSetCommands
     /// </example>
     /// </remarks>
     Task<long> SortedSetAddAsync(ValkeyKey key, SortedSetEntry[] values, SortedSetWhen when = SortedSetWhen.Always, CommandFlags flags = CommandFlags.None);
+
+    /// <summary>
+    /// Removes the specified member from the sorted set stored at key.
+    /// Non existing members are ignored.
+    /// </summary>
+    /// <seealso href="https://valkey.io/commands/zrem"/>
+    /// <param name="key">The key of the sorted set.</param>
+    /// <param name="member">The member to remove from the sorted set.</param>
+    /// <param name="flags">The flags to use for this operation. Currently flags are ignored.</param>
+    /// <returns><see langword="true"/> if the member was removed. <see langword="false"/> if the member was not a member of the sorted set.</returns>
+    /// <remarks>
+    /// <example>
+    /// <code>
+    /// bool result = await client.SortedSetRemoveAsync(key, "member1");
+    /// </code>
+    /// </example>
+    /// </remarks>
+    Task<bool> SortedSetRemoveAsync(ValkeyKey key, ValkeyValue member, CommandFlags flags = CommandFlags.None);
+
+    /// <summary>
+    /// Removes the specified members from the sorted set stored at key.
+    /// Non existing members are ignored.
+    /// </summary>
+    /// <seealso href="https://valkey.io/commands/zrem"/>
+    /// <param name="key">The key of the sorted set.</param>
+    /// <param name="members">An array of members to remove from the sorted set.</param>
+    /// <param name="flags">The flags to use for this operation. Currently flags are ignored.</param>
+    /// <returns>The number of members that were removed from the sorted set, not including non existing members.</returns>
+    /// <remarks>
+    /// <example>
+    /// <code>
+    /// long result = await client.SortedSetRemoveAsync(key, ["member1", "member2"]);
+    /// </code>
+    /// </example>
+    /// </remarks>
+    Task<long> SortedSetRemoveAsync(ValkeyKey key, ValkeyValue[] members, CommandFlags flags = CommandFlags.None);
 }
