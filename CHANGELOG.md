@@ -10,6 +10,12 @@
 
 #### Changes
 
+* Core/FFI/Go: Fix memory leak in FFI layer ([#4395](https://github.com/valkey-io/valkey-glide/pull/4395))
+
+## 2.0.1 (2025-07-19)
+
+#### Changes
+
 * Java: fix addReturnField method in FT module ([#4084]https://github.com/valkey-io/valkey-glide/pull/4084)
 * Python: Create openTelemetry span to measure command latency ([#3985](https://github.com/valkey-io/valkey-glide/pull/3985))
 * Go: Add client name and version identifiers ([#3903](https://github.com/valkey-io/valkey-glide/pull/3903))
