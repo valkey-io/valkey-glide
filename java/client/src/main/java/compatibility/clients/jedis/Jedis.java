@@ -331,7 +331,7 @@ public class Jedis implements Closeable {
     public Long del(String key) {
         checkNotClosed();
         try {
-            return glideClient.del(new String[]{key}).get();
+            return glideClient.del(new String[] {key}).get();
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("DEL operation failed", e);
         }
@@ -361,8 +361,8 @@ public class Jedis implements Closeable {
     public Set<String> keys(String pattern) {
         checkNotClosed();
         try {
-            Object result = glideClient.customCommand(new String[]{"KEYS", pattern}).get();
-            
+            Object result = glideClient.customCommand(new String[] {"KEYS", pattern}).get();
+
             // Handle different possible return types
             if (result instanceof String[]) {
                 return new HashSet<>(Arrays.asList((String[]) result));
