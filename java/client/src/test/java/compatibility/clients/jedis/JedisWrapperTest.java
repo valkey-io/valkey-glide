@@ -6,8 +6,8 @@ import static org.junit.jupiter.api.Assertions.*;
 import org.junit.jupiter.api.Test;
 
 /**
- * Unit tests for Jedis wrapper functionality.
- * Tests API contracts and constructor signatures without establishing actual connections.
+ * Unit tests for Jedis wrapper functionality. Tests API contracts and constructor signatures
+ * without establishing actual connections.
  */
 public class JedisWrapperTest {
 
@@ -15,26 +15,27 @@ public class JedisWrapperTest {
     public void testJedisConstructorSignatures() throws NoSuchMethodException {
         // Test that Jedis constructor signatures exist
         Class<Jedis> jedisClass = Jedis.class;
-        
+
         assertNotNull(jedisClass.getConstructor(String.class, int.class));
         assertNotNull(jedisClass.getConstructor(String.class, int.class, JedisClientConfig.class));
     }
 
     @Test
     public void testJedisConfigurationSignatures() throws NoSuchMethodException {
-        JedisClientConfig config = DefaultJedisClientConfig.builder()
-                .socketTimeoutMillis(5000)
-                .connectionTimeoutMillis(3000)
-                .clientName("test-client")
-                .database(1)
-                .build();
+        JedisClientConfig config =
+                DefaultJedisClientConfig.builder()
+                        .socketTimeoutMillis(5000)
+                        .connectionTimeoutMillis(3000)
+                        .clientName("test-client")
+                        .database(1)
+                        .build();
 
         // Test configuration properties
         assertEquals(5000, config.getSocketTimeoutMillis());
         assertEquals(3000, config.getConnectionTimeoutMillis());
         assertEquals("test-client", config.getClientName());
         assertEquals(1, config.getDatabase());
-        
+
         // Test that constructor with config exists
         Class<Jedis> jedisClass = Jedis.class;
         assertNotNull(jedisClass.getConstructor(String.class, int.class, JedisClientConfig.class));
@@ -43,30 +44,35 @@ public class JedisWrapperTest {
     @Test
     public void testJedisPoolConstructorSignatures() throws NoSuchMethodException {
         Class<JedisPool> poolClass = JedisPool.class;
-        
+
         assertNotNull(poolClass.getConstructor(String.class, int.class));
-        assertNotNull(poolClass.getConstructor(String.class, int.class, JedisClientConfig.class, int.class, long.class));
+        assertNotNull(
+                poolClass.getConstructor(
+                        String.class, int.class, JedisClientConfig.class, int.class, long.class));
     }
 
     @Test
     public void testJedisPoolConfigurationSignatures() throws NoSuchMethodException {
-        JedisClientConfig config = DefaultJedisClientConfig.builder()
-                .socketTimeoutMillis(2000)
-                .connectionTimeoutMillis(1000)
-                .build();
+        JedisClientConfig config =
+                DefaultJedisClientConfig.builder()
+                        .socketTimeoutMillis(2000)
+                        .connectionTimeoutMillis(1000)
+                        .build();
 
         assertEquals(2000, config.getSocketTimeoutMillis());
         assertEquals(1000, config.getConnectionTimeoutMillis());
 
         // Test that pool constructor with config exists
         Class<JedisPool> poolClass = JedisPool.class;
-        assertNotNull(poolClass.getConstructor(String.class, int.class, JedisClientConfig.class, int.class, long.class));
+        assertNotNull(
+                poolClass.getConstructor(
+                        String.class, int.class, JedisClientConfig.class, int.class, long.class));
     }
 
     @Test
     public void testJedisMethodSignatures() throws NoSuchMethodException {
         Class<Jedis> jedisClass = Jedis.class;
-        
+
         // Test that key methods exist
         assertNotNull(jedisClass.getMethod("isClosed"));
         assertNotNull(jedisClass.getMethod("getConfig"));
@@ -81,7 +87,7 @@ public class JedisWrapperTest {
     @Test
     public void testJedisPoolMethodSignatures() throws NoSuchMethodException {
         Class<JedisPool> poolClass = JedisPool.class;
-        
+
         // Test that pool methods exist
         assertNotNull(poolClass.getMethod("getResource"));
         assertNotNull(poolClass.getMethod("close"));
@@ -101,13 +107,14 @@ public class JedisWrapperTest {
     @Test
     public void testConfigurationBuilderPattern() {
         // Test that configuration builder works
-        JedisClientConfig config = DefaultJedisClientConfig.builder()
-                .socketTimeoutMillis(1000)
-                .connectionTimeoutMillis(500)
-                .clientName("test")
-                .database(2)
-                .ssl(true)
-                .build();
+        JedisClientConfig config =
+                DefaultJedisClientConfig.builder()
+                        .socketTimeoutMillis(1000)
+                        .connectionTimeoutMillis(500)
+                        .clientName("test")
+                        .database(2)
+                        .ssl(true)
+                        .build();
 
         assertEquals(1000, config.getSocketTimeoutMillis());
         assertEquals(500, config.getConnectionTimeoutMillis());

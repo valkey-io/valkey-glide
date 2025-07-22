@@ -16,14 +16,15 @@ public class ConfigurationTest {
 
     @Test
     public void testBasicConfiguration() {
-        JedisClientConfig config = DefaultJedisClientConfig.builder()
-                .socketTimeoutMillis(5000)
-                .connectionTimeoutMillis(3000)
-                .password("mypassword")
-                .clientName("test-client")
-                .database(1)
-                .protocol(RedisProtocol.RESP2)
-                .build();
+        JedisClientConfig config =
+                DefaultJedisClientConfig.builder()
+                        .socketTimeoutMillis(5000)
+                        .connectionTimeoutMillis(3000)
+                        .password("mypassword")
+                        .clientName("test-client")
+                        .database(1)
+                        .protocol(RedisProtocol.RESP2)
+                        .build();
 
         assertEquals(5000, config.getSocketTimeoutMillis());
         assertEquals(3000, config.getConnectionTimeoutMillis());
@@ -35,29 +36,32 @@ public class ConfigurationTest {
 
     @Test
     public void testJedisWithConfiguration() {
-        JedisClientConfig config = DefaultJedisClientConfig.builder()
-                .socketTimeoutMillis(5000)
-                .connectionTimeoutMillis(3000)
-                .clientName("test-client")
-                .database(1)
-                .build();
+        JedisClientConfig config =
+                DefaultJedisClientConfig.builder()
+                        .socketTimeoutMillis(5000)
+                        .connectionTimeoutMillis(3000)
+                        .clientName("test-client")
+                        .database(1)
+                        .build();
 
         // Test that constructor signature exists
-        assertDoesNotThrow(() -> {
-            Class<Jedis> jedisClass = Jedis.class;
-            jedisClass.getConstructor(String.class, int.class, JedisClientConfig.class);
-        });
+        assertDoesNotThrow(
+                () -> {
+                    Class<Jedis> jedisClass = Jedis.class;
+                    jedisClass.getConstructor(String.class, int.class, JedisClientConfig.class);
+                });
     }
 
     @Test
     public void testSslConfiguration() throws Exception {
         SSLContext sslContext = createTestSslContext();
 
-        JedisClientConfig sslConfig = DefaultJedisClientConfig.builder()
-                .ssl(true)
-                .sslSocketFactory(sslContext.getSocketFactory())
-                .socketTimeoutMillis(10000)
-                .build();
+        JedisClientConfig sslConfig =
+                DefaultJedisClientConfig.builder()
+                        .ssl(true)
+                        .sslSocketFactory(sslContext.getSocketFactory())
+                        .socketTimeoutMillis(10000)
+                        .build();
 
         assertTrue(sslConfig.isSsl());
         assertNotNull(sslConfig.getSslSocketFactory());
@@ -66,17 +70,20 @@ public class ConfigurationTest {
 
     @Test
     public void testAdvancedPoolConfiguration() {
-        JedisClientConfig poolConfig = DefaultJedisClientConfig.builder()
-                .socketTimeoutMillis(2000)
-                .connectionTimeoutMillis(1000)
-                .clientName("pool-client")
-                .build();
+        JedisClientConfig poolConfig =
+                DefaultJedisClientConfig.builder()
+                        .socketTimeoutMillis(2000)
+                        .connectionTimeoutMillis(1000)
+                        .clientName("pool-client")
+                        .build();
 
         // Test that constructor signature exists
-        assertDoesNotThrow(() -> {
-            Class<JedisPool> poolClass = JedisPool.class;
-            poolClass.getConstructor(String.class, int.class, JedisClientConfig.class, int.class, long.class);
-        });
+        assertDoesNotThrow(
+                () -> {
+                    Class<JedisPool> poolClass = JedisPool.class;
+                    poolClass.getConstructor(
+                            String.class, int.class, JedisClientConfig.class, int.class, long.class);
+                });
     }
 
     @Test
@@ -88,10 +95,11 @@ public class ConfigurationTest {
         assertTrue(initialCount >= 0);
 
         // Test that manager exists and can track resources (without creating actual pools)
-        assertDoesNotThrow(() -> {
-            Class<JedisPool> poolClass = JedisPool.class;
-            assertNotNull(poolClass);
-        });
+        assertDoesNotThrow(
+                () -> {
+                    Class<JedisPool> poolClass = JedisPool.class;
+                    assertNotNull(poolClass);
+                });
     }
 
     @Test
@@ -108,30 +116,33 @@ public class ConfigurationTest {
     @Test
     public void testConfigurationValidation() {
         // Test that configuration builder validates inputs
-        assertDoesNotThrow(() -> {
-            DefaultJedisClientConfig.builder()
-                    .socketTimeoutMillis(1000)
-                    .connectionTimeoutMillis(500)
-                    .database(0)
-                    .build();
-        });
+        assertDoesNotThrow(
+                () -> {
+                    DefaultJedisClientConfig.builder()
+                            .socketTimeoutMillis(1000)
+                            .connectionTimeoutMillis(500)
+                            .database(0)
+                            .build();
+                });
 
-        assertDoesNotThrow(() -> {
-            DefaultJedisClientConfig.builder()
-                    .socketTimeoutMillis(0) // Should handle zero timeout
-                    .build();
-        });
+        assertDoesNotThrow(
+                () -> {
+                    DefaultJedisClientConfig.builder()
+                            .socketTimeoutMillis(0) // Should handle zero timeout
+                            .build();
+                });
     }
 
     @Test
     public void testSslConfigurationOptions() throws Exception {
         SSLContext sslContext = createTestSslContext();
 
-        JedisClientConfig sslConfig = DefaultJedisClientConfig.builder()
-                .ssl(true)
-                .sslSocketFactory(sslContext.getSocketFactory())
-                .hostnameVerifier((hostname, session) -> true) // Test hostname verifier
-                .build();
+        JedisClientConfig sslConfig =
+                DefaultJedisClientConfig.builder()
+                        .ssl(true)
+                        .sslSocketFactory(sslContext.getSocketFactory())
+                        .hostnameVerifier((hostname, session) -> true) // Test hostname verifier
+                        .build();
 
         assertTrue(sslConfig.isSsl());
         assertNotNull(sslConfig.getSslSocketFactory());
@@ -140,48 +151,45 @@ public class ConfigurationTest {
 
     @Test
     public void testProtocolConfiguration() {
-        JedisClientConfig resp2Config = DefaultJedisClientConfig.builder()
-                .protocol(RedisProtocol.RESP2)
-                .build();
+        JedisClientConfig resp2Config =
+                DefaultJedisClientConfig.builder().protocol(RedisProtocol.RESP2).build();
         assertEquals(RedisProtocol.RESP2, resp2Config.getRedisProtocol());
 
-        JedisClientConfig resp3Config = DefaultJedisClientConfig.builder()
-                .protocol(RedisProtocol.RESP3)
-                .build();
+        JedisClientConfig resp3Config =
+                DefaultJedisClientConfig.builder().protocol(RedisProtocol.RESP3).build();
         assertEquals(RedisProtocol.RESP3, resp3Config.getRedisProtocol());
     }
 
     @Test
     public void testAuthenticationConfiguration() {
-        JedisClientConfig authConfig = DefaultJedisClientConfig.builder()
-                .password("secret123")
-                .user("testuser")
-                .build();
+        JedisClientConfig authConfig =
+                DefaultJedisClientConfig.builder().password("secret123").user("testuser").build();
 
         assertEquals("secret123", authConfig.getPassword());
         assertEquals("testuser", authConfig.getUser());
     }
 
     /**
-     * Create a test SSL context for configuration testing.
-     * WARNING: This is for testing only and should not be used in production.
+     * Create a test SSL context for configuration testing. WARNING: This is for testing only and
+     * should not be used in production.
      */
     private SSLContext createTestSslContext() throws Exception {
-        TrustManager[] trustAllCerts = new TrustManager[] {
-            new X509TrustManager() {
-                public X509Certificate[] getAcceptedIssuers() {
-                    return new X509Certificate[0];
-                }
+        TrustManager[] trustAllCerts =
+                new TrustManager[] {
+                    new X509TrustManager() {
+                        public X509Certificate[] getAcceptedIssuers() {
+                            return new X509Certificate[0];
+                        }
 
-                public void checkClientTrusted(X509Certificate[] certs, String authType) {
-                    // Test implementation - accept all
-                }
+                        public void checkClientTrusted(X509Certificate[] certs, String authType) {
+                            // Test implementation - accept all
+                        }
 
-                public void checkServerTrusted(X509Certificate[] certs, String authType) {
-                    // Test implementation - accept all
-                }
-            }
-        };
+                        public void checkServerTrusted(X509Certificate[] certs, String authType) {
+                            // Test implementation - accept all
+                        }
+                    }
+                };
 
         SSLContext sslContext = SSLContext.getInstance("TLS");
         sslContext.init(null, trustAllCerts, new java.security.SecureRandom());

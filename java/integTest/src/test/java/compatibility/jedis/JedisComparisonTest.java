@@ -9,7 +9,6 @@ import compatibility.clients.jedis.JedisPool;
 import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Map;
-
 import org.junit.jupiter.api.*;
 
 /**
@@ -48,8 +47,8 @@ public class JedisComparisonTest {
     }
 
     /**
-     * Resolve Redis/Valkey server address from CI environment properties.
-     * Falls back to localhost:6379 if no CI configuration is found.
+     * Resolve Redis/Valkey server address from CI environment properties. Falls back to
+     * localhost:6379 if no CI configuration is found.
      */
     private static void resolveServerAddress() {
         String standaloneHosts = System.getProperty("test.server.standalone");
@@ -93,10 +92,14 @@ public class JedisComparisonTest {
                 actualJedisClass = Class.forName("redis.clients.jedis.Jedis");
                 actualJedisPoolClass = Class.forName("redis.clients.jedis.JedisPool");
 
-                actualJedis = actualJedisClass.getConstructor(String.class, int.class)
-                        .newInstance(redisHost, redisPort);
-                actualJedisPool = actualJedisPoolClass.getConstructor(String.class, int.class)
-                        .newInstance(redisHost, redisPort);
+                actualJedis =
+                        actualJedisClass
+                                .getConstructor(String.class, int.class)
+                                .newInstance(redisHost, redisPort);
+                actualJedisPool =
+                        actualJedisPoolClass
+                                .getConstructor(String.class, int.class)
+                                .newInstance(redisHost, redisPort);
                 hasActualJedis = true;
             }
         } catch (Exception e) {
@@ -156,10 +159,14 @@ public class JedisComparisonTest {
                 String actualSetResult = (String) setMethod.invoke(actualJedis, testKey, testValue);
                 String actualGetResult = (String) getMethod.invoke(actualJedis, testKey);
 
-                assertEquals(actualSetResult, glideSetResult,
-                    "GLIDE and actual Jedis SET results should be identical");
-                assertEquals(actualGetResult, glideGetResult,
-                    "GLIDE and actual Jedis GET results should be identical");
+                assertEquals(
+                        actualSetResult,
+                        glideSetResult,
+                        "GLIDE and actual Jedis SET results should be identical");
+                assertEquals(
+                        actualGetResult,
+                        glideGetResult,
+                        "GLIDE and actual Jedis GET results should be identical");
             } catch (Exception e) {
                 fail("Failed to compare with actual Jedis: " + e.getMessage());
             }
@@ -172,11 +179,11 @@ public class JedisComparisonTest {
     void testMultipleGetSetOperations() {
         assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
 
-        Map<String, String> testData = Map.of(
-            TEST_KEY_PREFIX + "key1", "value1",
-            TEST_KEY_PREFIX + "key2", "value2",
-            TEST_KEY_PREFIX + "key3", "value3"
-        );
+        Map<String, String> testData =
+                Map.of(
+                        TEST_KEY_PREFIX + "key1", "value1",
+                        TEST_KEY_PREFIX + "key2", "value2",
+                        TEST_KEY_PREFIX + "key3", "value3");
 
         // Test GLIDE Jedis
         Map<String, String> glideSetResults = new HashMap<>();
@@ -190,7 +197,10 @@ public class JedisComparisonTest {
             glideGetResults.put(entry.getKey(), getResult);
 
             assertEquals("OK", setResult, "GLIDE Jedis SET should return OK for " + entry.getKey());
-            assertEquals(entry.getValue(), getResult, "GLIDE Jedis GET should return correct value for " + entry.getKey());
+            assertEquals(
+                    entry.getValue(),
+                    getResult,
+                    "GLIDE Jedis GET should return correct value for " + entry.getKey());
         }
 
         // Compare with actual Jedis if available
@@ -200,13 +210,18 @@ public class JedisComparisonTest {
                 Method getMethod = actualJedisClass.getMethod("get", String.class);
 
                 for (Map.Entry<String, String> entry : testData.entrySet()) {
-                    String actualSetResult = (String) setMethod.invoke(actualJedis, entry.getKey(), entry.getValue());
+                    String actualSetResult =
+                            (String) setMethod.invoke(actualJedis, entry.getKey(), entry.getValue());
                     String actualGetResult = (String) getMethod.invoke(actualJedis, entry.getKey());
 
-                    assertEquals(actualSetResult, glideSetResults.get(entry.getKey()),
-                        "GLIDE and actual Jedis SET results should be identical for " + entry.getKey());
-                    assertEquals(actualGetResult, glideGetResults.get(entry.getKey()),
-                        "GLIDE and actual Jedis GET results should be identical for " + entry.getKey());
+                    assertEquals(
+                            actualSetResult,
+                            glideSetResults.get(entry.getKey()),
+                            "GLIDE and actual Jedis SET results should be identical for " + entry.getKey());
+                    assertEquals(
+                            actualGetResult,
+                            glideGetResults.get(entry.getKey()),
+                            "GLIDE and actual Jedis GET results should be identical for " + entry.getKey());
                 }
             } catch (Exception e) {
                 fail("Failed to compare with actual Jedis: " + e.getMessage());
@@ -217,14 +232,12 @@ public class JedisComparisonTest {
     /**
      * Test connection pool operations.
      *
-     * This test is important because:
-     * 1. Connection pooling is a critical feature for production applications
-     * 2. Pool behavior differs significantly between GLIDE and actual Jedis:
-     *    - GLIDE uses internal connection management
-     *    - Actual Jedis uses Apache Commons Pool2
-     * 3. Validates that pool.getResource() returns working connections
-     * 4. Ensures proper resource lifecycle management (try-with-resources)
-     * 5. Tests that pooled connections produce identical results to direct connections
+     * <p>This test is important because: 1. Connection pooling is a critical feature for production
+     * applications 2. Pool behavior differs significantly between GLIDE and actual Jedis: - GLIDE
+     * uses internal connection management - Actual Jedis uses Apache Commons Pool2 3. Validates that
+     * pool.getResource() returns working connections 4. Ensures proper resource lifecycle management
+     * (try-with-resources) 5. Tests that pooled connections produce identical results to direct
+     * connections
      */
     @Test
     @Order(3)
@@ -261,19 +274,21 @@ public class JedisComparisonTest {
                 String actualGetResult = (String) getMethod.invoke(actualPooledJedis, testKey);
                 closeMethod.invoke(actualPooledJedis);
 
-                assertEquals(actualSetResult, glideSetResult,
-                    "GLIDE and actual Jedis pool SET results should be identical");
-                assertEquals(actualGetResult, glideGetResult,
-                    "GLIDE and actual Jedis pool GET results should be identical");
+                assertEquals(
+                        actualSetResult,
+                        glideSetResult,
+                        "GLIDE and actual Jedis pool SET results should be identical");
+                assertEquals(
+                        actualGetResult,
+                        glideGetResult,
+                        "GLIDE and actual Jedis pool GET results should be identical");
             } catch (Exception e) {
                 fail("Failed to compare with actual Jedis pool: " + e.getMessage());
             }
         }
     }
 
-    /**
-     * Clean up test keys to avoid interference between tests.
-     */
+    /** Clean up test keys to avoid interference between tests. */
     private void cleanupTestKeys(Object jedisInstance) {
         try {
             if (jedisInstance instanceof Jedis) {

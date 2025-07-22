@@ -15,7 +15,7 @@ public class PoolImportTest {
         // Test that we can create pool configuration
         GenericObjectPoolConfig<Object> poolConfig = new GenericObjectPoolConfig<>();
         assertNotNull(poolConfig);
-        
+
         // Test default values
         assertTrue(poolConfig.getMaxTotal() >= 0);
         assertTrue(poolConfig.getMaxIdle() >= 0);
@@ -38,16 +38,17 @@ public class PoolImportTest {
         poolConfig.setMinIdle(1);
 
         // Test that JedisPooled constructor signature exists
-        assertDoesNotThrow(() -> {
-            Class<JedisPooled> pooledClass = JedisPooled.class;
-            pooledClass.getConstructor(GenericObjectPoolConfig.class);
-        });
+        assertDoesNotThrow(
+                () -> {
+                    Class<JedisPooled> pooledClass = JedisPooled.class;
+                    pooledClass.getConstructor(GenericObjectPoolConfig.class);
+                });
     }
 
     @Test
     public void testPoolConfigurationSettings() {
         GenericObjectPoolConfig<Object> poolConfig = new GenericObjectPoolConfig<>();
-        
+
         // Test setting various pool parameters
         poolConfig.setMaxTotal(20);
         poolConfig.setMaxIdle(10);
@@ -55,7 +56,7 @@ public class PoolImportTest {
         poolConfig.setMaxWaitMillis(5000);
         poolConfig.setTestOnBorrow(true);
         poolConfig.setTestOnReturn(true);
-        
+
         assertEquals(20, poolConfig.getMaxTotal());
         assertEquals(10, poolConfig.getMaxIdle());
         assertEquals(2, poolConfig.getMinIdle());
@@ -66,15 +67,18 @@ public class PoolImportTest {
 
     @Test
     public void testJedisPoolWithConfiguration() {
-        JedisClientConfig clientConfig = DefaultJedisClientConfig.builder()
-                .socketTimeoutMillis(3000)
-                .connectionTimeoutMillis(2000)
-                .build();
+        JedisClientConfig clientConfig =
+                DefaultJedisClientConfig.builder()
+                        .socketTimeoutMillis(3000)
+                        .connectionTimeoutMillis(2000)
+                        .build();
 
         // Test that JedisPool constructor signature exists
-        assertDoesNotThrow(() -> {
-            Class<JedisPool> poolClass = JedisPool.class;
-            poolClass.getConstructor(String.class, int.class, JedisClientConfig.class, int.class, long.class);
-        });
+        assertDoesNotThrow(
+                () -> {
+                    Class<JedisPool> poolClass = JedisPool.class;
+                    poolClass.getConstructor(
+                            String.class, int.class, JedisClientConfig.class, int.class, long.class);
+                });
     }
 }
