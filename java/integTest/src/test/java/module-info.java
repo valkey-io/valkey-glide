@@ -12,5 +12,4 @@ module glide.integTest {
     requires org.apache.commons.lang3;
     requires org.junit.jupiter.params;
     requires org.semver4j;
-    requires org.apache.commons.pool2;
 }
