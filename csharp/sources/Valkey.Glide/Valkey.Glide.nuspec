@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
+  <metadata>
+    <id>Valkey.Glide</id>
+    <!-- TODO $PackageVersion$ use env var or version conf file
+         see https://learn.microsoft.com/en-us/nuget/reference/nuspec#replacement-tokens
+         doesn't work with 'dotnet pack'
+    -->
+    <version>1.0.0</version>
+    <authors>Valkey GLIDE Maintainers</authors>
+    <owners>Valkey GLIDE Maintainers</owners>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <description>General Language Independent Driver for the Enterprise (GLIDE) for Valkey</description>
+    <projectUrl>https://github.com/valkey-io/valkey-glide</projectUrl>
+    <license type="expression">Apache-2.0</license>
+    <!-- TODO other fields from schema: https://github.com/NuGet/NuGet.Client/blob/dev/src/NuGet.Core/NuGet.Packaging/compiler/resources/nuspec.xsd -->
+    <!-- iconUrl, releaseNotes -->
+    <readme>docs/README.md</readme> <!-- TODO readme isn't used or isn't renderred -->
+    <repository type="git" url="https://github.com/valkey-io/valkey-glide" /> <!-- TODO: commit="$GitCommitId$" -->
+    <tags>open-source performance database csharp key-value fault-tolerance cache reliability pubsub valkey valkey-client</tags>
+    <copyright>Copyright © 2025 Valkey GLIDE Maintainers</copyright>
+    <!-- TODO do we need empty dependency blocks? -->
+    <dependencies>
+      <group targetFramework="net6.0" />
+      <group targetFramework="net8.0" />
+    </dependencies>
+  </metadata>
+  <files>
+    <!-- TODO do we need to include pdb files (debug symbols) and sources? -->
+    <file src="bin/Release/net6.0/Valkey.Glide.dll" target="lib/net6.0/Valkey.Glide.dll" />
+    <file src="bin/Release/net6.0/Valkey.Glide.xml" target="lib/net6.0/Valkey.Glide.xml" />
+    <file src="bin/Release/net8.0/Valkey.Glide.dll" target="lib/net8.0/Valkey.Glide.dll" />
+    <file src="bin/Release/net8.0/Valkey.Glide.xml" target="lib/net8.0/Valkey.Glide.xml" />
+    <!-- TODO: make binaries optional/conditional, build fails on a dev's PC who doesn't have all files. Alternative: use different nuspec files -->
+    <!-- see RIDs in https://learn.microsoft.com/en-us/dotnet/core/rid-catalog -->
+    <file src="../../bin/linux-x64/libglide_rs.so" target="runtimes/linux-x64/native" />
+    <file src="../../bin/win-x64/libglide_rs.dll" target="runtimes/win-x64/native" />
+
+    <!-- TODO this takes readme from repo root, add readme to c# dir and update path -->
+    <file src="../../../README.md" target="docs/" />
+  </files>
+</package>

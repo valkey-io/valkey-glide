@@ -1,0 +1,168 @@
+name: C# CD
+
+on:
+    push:
+        branches: # TODO remove this line
+        tags:
+            - "v*.*"
+    workflow_dispatch:
+        inputs:
+            version:
+                description: "The release version of GLIDE, formatted as *.*.* or *.*.*-rc*"
+                required: true
+            nuget_publish:
+                description: "Publish to NuGet"
+                required: true
+                type: boolean
+
+permissions:
+    contents: read
+    id-token: write
+
+concurrency:
+    group: C#-CD-${{ github.head_ref || github.ref }}-${{ toJson(inputs) }}
+    cancel-in-progress: true
+
+run-name:
+    # Set custom name if job is started manually and name is given
+    ${{ github.event_name == 'workflow_dispatch' && (inputs.name == '' && format('{0} @ {1} {2}', github.ref_name, github.sha, toJson(inputs)) || inputs.name) || '' }}
+
+env:
+    CARGO_TERM_COLOR: always
+
+jobs:
+    get-matrices:
+        runs-on: ubuntu-latest
+        # environment: AWS_ACTIONS
+        outputs:
+            PLATFORM_MATRIX: ${{ steps.load-platform-matrix.outputs.PLATFORM_MATRIX }}
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: load-platform-matrix
+              id: load-platform-matrix
+              shell: bash
+              run: |
+                  # Filter entries with nuget in PACKAGE_MANAGERS and replace "ephemeral" with "persistent" in RUNNER
+                  export PLATFORM_MATRIX=$(jq 'map(
+                      select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains(["nuget"])))
+                      | .RUNNER = (
+                          if (.RUNNER | type == "array") 
+                          then (.RUNNER | map(if . == "ephemeral" then "persistent" else . end)) 
+                          else (if .RUNNER == "ephemeral" then "persistent" else .RUNNER end) 
+                          end
+                      )
+                  )' < .github/json_matrices/build-matrix.json | jq -c .)
+                  echo "PLATFORM_MATRIX=${PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
+
+    set-release-version:
+        runs-on: ubuntu-latest
+        outputs:
+            RELEASE_VERSION: ${{ steps.release-version.outputs.RELEASE_VERSION }}
+        steps:
+            - name: Set the release version
+              id: release-version
+              shell: bash
+              run: |
+                  if ${{ github.event_name == 'workflow_dispatch' }}; then
+                      R_VERSION="${{ env.INPUT_VERSION }}"
+                  else
+                      R_VERSION=${GITHUB_REF:11}
+                  fi
+                  echo "RELEASE_VERSION=${R_VERSION}" >> $GITHUB_ENV
+                  echo "Release version detected: $R_VERSION"
+                  echo "RELEASE_VERSION=$R_VERSION" >> $GITHUB_OUTPUT
+              env:
+                  INPUT_VERSION: ${{ github.event.inputs.version }}
+
+    create-binaries-to-publish:
+        needs: [set-release-version, load-platform-matrix]
+        if: github.repository_owner == 'valkey-io'
+        timeout-minutes: 35
+        env:
+            RELEASE_VERSION: ${{ needs.set-release-version.outputs.RELEASE_VERSION }}
+        strategy:
+            # Run all jobs
+            fail-fast: false
+            matrix:
+                host: ${{ fromJson(needs.load-platform-matrix.outputs.PLATFORM_MATRIX) }}
+        runs-on: ${{ matrix.host.RUNNER }}
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Output Matrix Parameters for this job
+              run: |
+                  echo "Job running with the following matrix configuration:"
+                  echo "${{ toJson(matrix) }}"
+
+            - name: Install shared software dependencies
+              uses: ./.github/workflows/install-shared-dependencies
+              with:
+                  os: ${{ matrix.host.OS }}
+                  target: ${{ matrix.host.TARGET }}
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  engine-version: ${{ matrix.engine.version }}
+
+            - uses: actions/cache@v4
+              with:
+                  path: csharp/rust/target
+                  key: ${{ matrix.host.TARGET }}-csharp
+                  restore-keys: |
+                      ${{ matrix.host.TARGET }}-glide-core
+                      ${{ matrix.host.TARGET }}
+
+            # TODO use zigbuild on linux runners for GLIBC compatibility
+            - name: Build native libs
+              working-directory: csharp/rust
+              run: cargo build --release
+
+            - name: Upload artifacts to publish
+              continue-on-error: true
+              uses: actions/upload-artifact@v4
+              with:
+                  name: dotnet-${{ matrix.host.TARGET }}
+                  path: |
+                      csharp/rust/target/release/*.{so,dylib,dll}
+
+    publish-to-nuget:
+        # if: ${{ inputs.nuget_publish == true || github.event_name == 'push' }}
+        needs: [set-release-version, create-binaries-to-publish]
+        runs-on: ubuntu-latest
+        env:
+            RELEASE_VERSION: ${{ needs.set-release-version.outputs.RELEASE_VERSION }}
+        steps:
+            - name: Download published artifacts
+              uses: actions/download-artifact@v4
+              with:
+                  path: csharp/bin/
+
+            - name: dbg
+              run: |
+                  tree csharp
+                  false
+
+            - uses: actions/checkout@v4
+
+            - name: Set up dotnet
+              uses: actions/setup-dotnet@v4
+              with:
+                  # install all supported versions + latest dotnet too to use language features
+                  dotnet-version: |
+                      6
+                      8
+                      9
+              env:
+                  DOTNET_INSTALL_DIR: ~/.dotnet
+
+            - name: Pack the client
+              run: dotnet pack sources/Valkey.Glide/Valkey.Glide.csproj --configuration Release
+              env:
+                  SkipCargo: true
+
+            - name: Upload artifacts to publish
+              continue-on-error: true
+              uses: actions/upload-artifact@v4
+              with:
+                  path: csharp/sources/Valkey.Glide/bin/Release/Valkey.Glide.*.nupkg

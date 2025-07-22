@@ -13,6 +13,10 @@
     <NuGetAudit>false</NuGetAudit>
     <WarningLevel>0</WarningLevel>
     <Configurations>Debug;Release;Lint</Configurations>
+    <NuspecFile>Valkey.Glide.nuspec</NuspecFile>
+    <IncludeBuildOutput>true</IncludeBuildOutput>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <GenerateManifests>true</GenerateManifests>
   </PropertyGroup>
 
   <!-- Enable analysis and un-suppress warnings only in `Lint` configuration -->
@@ -39,7 +43,7 @@
     <InternalsVisibleTo Include="Valkey.Glide.UnitTests" />
   </ItemGroup>
 
-  <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
+  <Target Name="PreBuild" BeforeTargets="PreBuildEvent" Condition="'$(SkipCargo)' != 'true'">
     <Exec Condition="'$(Configuration)' == 'Debug'" Command="cargo build" EnvironmentVariables="CARGO_TERM_COLOR=always" ConsoleToMSBuild="true" WorkingDirectory="$(MSBuildThisFileDirectory)../../rust">
       <Output TaskParameter="ConsoleOutput" PropertyName="OutputOfExec" />
     </Exec>
@@ -53,7 +57,7 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <Link>lib%(FileName)%(Extension)</Link>
     </Content>
-    <Content Include="$(MSBuildThisFileDirectory)../../rust/target/$(Configuration.ToLower())/libglide_rs.so" Condition="$([MSBuild]::IsOSPlatform('Linux'))">
+    <Content Include="$(MSBuildThisFileDirectory)../../rust/target/$(Configuration.ToLower())/libglide_rs.so" Condition="$([MSBuild]::IsOSPlatform('Linux'))" Pack="false">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <Link>%(FileName)%(Extension)</Link>
     </Content>
@@ -62,5 +66,21 @@
       <Link>%(FileName)%(Extension)</Link>
     </Content>
   </ItemGroup>
+
+  <!-- TODO copy files
+  <Target Name="CopyFiles" BeforeTargets="Pack">
+    <MakeDir Directories="$(MSBuildThisFileDirectory)../../bin/linux-x64/" />
+    <Copy
+        SourceFiles="$(OutDir)/libglide_rs.so"
+        DestinationFolder="$(MSBuildThisFileDirectory)../../bin/linux-x64/"
+        />
+  </Target>
+  -->
+
+  
+  <!-- <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)../../bin/linux-x64/libglide_rs.so" Pack="true" PackagePath="runtimes/linux-x64/native" />
+    <None Include="$(MSBuildThisFileDirectory)../../bin/win-x64/libglide_rs.dll" Pack="true" PackagePath="runtimes/win-x64/native" />
+  </ItemGroup> -->
 
 </Project>
