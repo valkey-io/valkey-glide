@@ -1492,6 +1492,23 @@ pub unsafe extern "C-unwind" fn request_cluster_scan(
     })
 }
 
+/// Remove a cluster scan cursor from the container.
+///
+/// `cursor_id` is the cursor ID returned by a previous cluster scan operation.
+///
+/// # Safety
+/// * `cursor_id` must point to a valid C string.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn remove_cluster_scan_cursor(cursor_id: *const c_char) {
+    if cursor_id.is_null() {
+        return;
+    }
+
+    if let Ok(cursor_str) = unsafe { CStr::from_ptr(cursor_id).to_str() } {
+        glide_core::cluster_scan_container::remove_scan_state_cursor(cursor_str.to_string());
+    }
+}
+
 /// Allows the client to request an update to the connection password.
 ///
 /// `client_adapter_ptr` is a pointer to a valid `GlideClusterClient` returned in the `ConnectionResponse` from [`create_client`].
