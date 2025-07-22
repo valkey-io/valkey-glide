@@ -103,7 +103,7 @@ jobs:
                       ${{ matrix.host.TARGET }}-glide-core
                       ${{ matrix.host.TARGET }}
 
-            # TODO use zigbuild on linux runners for GLIBC compatibility
+            # TODO use zigbuild on linux runners for GLIBC compatibility, note another path to artifact
             - name: Build native libs
               working-directory: csharp/rust
               run: cargo build --release
@@ -114,7 +114,9 @@ jobs:
               with:
                   name: dotnet-${{ matrix.host.TARGET }}
                   path: |
-                      csharp/rust/target/release/*.{so,dylib,dll}
+                      csharp/rust/target/release/*.so
+                      csharp/rust/target/release/*.dylib
+                      csharp/rust/target/release/*.dll
 
     publish-to-nuget:
         # if: ${{ inputs.nuget_publish == true || github.event_name == 'push' }}
