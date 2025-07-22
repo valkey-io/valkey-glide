@@ -314,6 +314,7 @@ shadowJar {
     excludes.remove("module-info.class")
     relocate('io.netty', 'glide.io.netty')
     relocate('com.google.protobuf', 'glide.com.google.protobuf')
+    relocate('org.apache.commons.pool2', 'glide.org.apache.commons.pool2')
     mergeServiceFiles()
 
     relocate 'META-INF/native/libnetty', 'META-INF/native/libglide_netty'

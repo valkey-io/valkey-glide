@@ -4,6 +4,9 @@ package compatibility.clients.jedis;
 import glide.api.GlideClient;
 import glide.api.models.configuration.GlideClientConfiguration;
 import java.io.Closeable;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.logging.Logger;
 import javax.net.ssl.HostnameVerifier;
@@ -316,6 +319,72 @@ public class Jedis implements Closeable {
     private void checkNotClosed() {
         if (closed) {
             throw new JedisException("Connection is closed");
+        }
+    }
+
+    /**
+     * Delete one or more keys.
+     *
+     * @param key the key to delete
+     * @return the number of keys that were removed
+     */
+    public Long del(String key) {
+        checkNotClosed();
+        try {
+            return glideClient.del(new String[]{key}).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("DEL operation failed", e);
+        }
+    }
+
+    /**
+     * Delete one or more keys.
+     *
+     * @param keys the keys to delete
+     * @return the number of keys that were removed
+     */
+    public Long del(String... keys) {
+        checkNotClosed();
+        try {
+            return glideClient.del(keys).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("DEL operation failed", e);
+        }
+    }
+
+    /**
+     * Find all keys matching the given pattern.
+     *
+     * @param pattern the pattern to match (e.g., "prefix:*")
+     * @return a set of keys matching the pattern
+     */
+    public Set<String> keys(String pattern) {
+        checkNotClosed();
+        try {
+            Object result = glideClient.customCommand(new String[]{"KEYS", pattern}).get();
+            
+            // Handle different possible return types
+            if (result instanceof String[]) {
+                return new HashSet<>(Arrays.asList((String[]) result));
+            } else if (result instanceof Object[]) {
+                // Convert Object[] to String[]
+                Object[] objArray = (Object[]) result;
+                Set<String> keySet = new HashSet<>();
+                for (Object obj : objArray) {
+                    if (obj != null) {
+                        keySet.add(obj.toString());
+                    }
+                }
+                return keySet;
+            } else if (result == null) {
+                return new HashSet<>();
+            } else {
+                // Fallback: try to convert to string and split if needed
+                logger.warning("Unexpected KEYS result type: " + result.getClass().getName());
+                return new HashSet<>();
+            }
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("KEYS operation failed", e);
         }
     }
 }

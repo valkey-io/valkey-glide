@@ -3,6 +3,7 @@ module glide.integTest {
     opens glide.cluster;
     opens glide.modules;
     opens glide.standalone;
+    opens compatibility.jedis;
 
     requires glide.api;
     requires com.google.gson;
