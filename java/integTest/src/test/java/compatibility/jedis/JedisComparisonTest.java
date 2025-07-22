@@ -2,31 +2,31 @@
 package compatibility.jedis;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import compatibility.clients.jedis.Jedis;
 import compatibility.clients.jedis.JedisPool;
-import java.util.*;
-import java.util.concurrent.*;
+import java.lang.reflect.Method;
+import java.util.HashMap;
+import java.util.Map;
+
 import org.junit.jupiter.api.*;
-import org.junit.jupiter.api.condition.EnabledIf;
 
 /**
  * Jedis compatibility test that compares GLIDE Jedis compatibility layer with actual Jedis
- * implementation for basic operations.
+ * implementation for basic GET/SET operations.
  *
- * <p>This test focuses on core GET/SET operations and Connection Pool functionality to validate the
- * essential compatibility between GLIDE and actual Jedis.
- *
- * <p>The test structure: 1. Initialize both GLIDE compatibility layer and actual Jedis (if
- * available) 2. Run identical operations on both implementations 3. Compare results for correctness
- * and consistency 4. Report differences and compatibility issues
+ * <p>This test validates that the GLIDE compatibility layer produces identical results to actual
+ * Jedis for core Redis operations, ensuring drop-in compatibility.
  */
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class JedisComparisonTest {
 
-    private static final String REDIS_HOST = "localhost";
-    private static final int REDIS_PORT = 6379;
     private static final String TEST_KEY_PREFIX = "jedis_comparison_test:";
+
+    // Server configuration - dynamically resolved from CI environment
+    private static String redisHost;
+    private static int redisPort;
 
     // GLIDE compatibility layer instances
     private Jedis glideJedis;
@@ -35,559 +35,269 @@ public class JedisComparisonTest {
     // Actual Jedis instances (loaded via reflection if available)
     private Object actualJedis;
     private Object actualJedisPool;
+    private Class<?> actualJedisClass;
+    private Class<?> actualJedisPoolClass;
 
     // Availability flags
     private boolean hasGlideJedis = false;
     private boolean hasActualJedis = false;
 
-    // Test counters and results
-    private int testCounter = 0;
-    private final List<ComparisonResult> comparisonResults = new ArrayList<>();
-
     @BeforeAll
     static void setupClass() {
-        System.out.println("=== Jedis Compatibility Test Suite ===");
-        System.out.println("Comparing GLIDE compatibility layer with actual Jedis implementation");
-        System.out.println("Focus: Basic GET/SET operations and Connection Pool functionality");
-        System.out.println();
+        resolveServerAddress();
+    }
+
+    /**
+     * Resolve Redis/Valkey server address from CI environment properties.
+     * Falls back to localhost:6379 if no CI configuration is found.
+     */
+    private static void resolveServerAddress() {
+        String standaloneHosts = System.getProperty("test.server.standalone");
+
+        if (standaloneHosts != null && !standaloneHosts.trim().isEmpty()) {
+            String firstHost = standaloneHosts.split(",")[0].trim();
+            String[] hostPort = firstHost.split(":");
+
+            if (hostPort.length == 2) {
+                redisHost = hostPort[0];
+                try {
+                    redisPort = Integer.parseInt(hostPort[1]);
+                    return;
+                } catch (NumberFormatException e) {
+                    // Fall through to default
+                }
+            }
+        }
+
+        // Fallback to localhost for local development
+        redisHost = "localhost";
+        redisPort = 6379;
     }
 
     @BeforeEach
-    void setup(TestInfo testInfo) {
-        testCounter++;
-        System.out.println("\n--- Test " + testCounter + ": " + testInfo.getDisplayName() + " ---");
-
+    void setup() {
         // Initialize GLIDE Jedis compatibility layer
         try {
-            glideJedis = new Jedis(REDIS_HOST, REDIS_PORT);
-            glideJedisPool = new JedisPool(REDIS_HOST, REDIS_PORT);
+            glideJedis = new Jedis(redisHost, redisPort);
+            glideJedisPool = new JedisPool(redisHost, redisPort);
             hasGlideJedis = true;
-            System.out.println("✓ GLIDE Jedis compatibility layer initialized");
         } catch (Exception e) {
             hasGlideJedis = false;
-            System.out.println("❌ GLIDE Jedis compatibility layer failed: " + e.getMessage());
         }
 
-        // Initialize actual Jedis (if available via external JAR)
+        // Try to load actual Jedis via reflection (optional)
         try {
             String jedisJarPath = System.getProperty("jedis.jar.path");
             if (jedisJarPath != null) {
-                // Load actual Jedis via custom class loader
-                actualJedis = loadActualJedis();
-                actualJedisPool = loadActualJedisPool();
+                // Load actual Jedis classes and create instances
+                actualJedisClass = Class.forName("redis.clients.jedis.Jedis");
+                actualJedisPoolClass = Class.forName("redis.clients.jedis.JedisPool");
+
+                actualJedis = actualJedisClass.getConstructor(String.class, int.class)
+                        .newInstance(redisHost, redisPort);
+                actualJedisPool = actualJedisPoolClass.getConstructor(String.class, int.class)
+                        .newInstance(redisHost, redisPort);
                 hasActualJedis = true;
-                System.out.println("✓ Actual Jedis implementation loaded");
-            } else {
-                hasActualJedis = false;
-                System.out.println(
-                        "ℹ️  Actual Jedis not available (set -Djedis.jar.path=<path> to enable)");
             }
         } catch (Exception e) {
             hasActualJedis = false;
-            System.out.println("❌ Actual Jedis loading failed: " + e.getMessage());
         }
     }
 
     @AfterEach
     void cleanup() {
-        // Cleanup GLIDE Jedis
-        if (hasGlideJedis) {
+        // Cleanup test keys
+        if (hasGlideJedis && glideJedis != null) {
+            cleanupTestKeys(glideJedis);
             try {
-                cleanupTestKeys(glideJedis);
                 glideJedis.close();
                 glideJedisPool.close();
             } catch (Exception e) {
-                System.err.println("Error cleaning up GLIDE Jedis: " + e.getMessage());
+                // Ignore cleanup errors
             }
         }
 
-        // Cleanup actual Jedis
-        if (hasActualJedis) {
+        if (hasActualJedis && actualJedis != null) {
             try {
-                cleanupTestKeysReflection(actualJedis);
-                closeClientReflection(actualJedis);
-                closeClientReflection(actualJedisPool);
+                cleanupTestKeys(actualJedis);
+                Method closeMethod = actualJedisClass.getMethod("close");
+                closeMethod.invoke(actualJedis);
+
+                Method poolCloseMethod = actualJedisPoolClass.getMethod("close");
+                poolCloseMethod.invoke(actualJedisPool);
             } catch (Exception e) {
-                System.err.println("Error cleaning up actual Jedis: " + e.getMessage());
+                // Ignore cleanup errors
             }
         }
     }
-
-    @AfterAll
-    static void printSummary() {
-        System.out.println("\n=== Test Summary ===");
-        System.out.println("Completed basic GET/SET and Connection Pool compatibility tests");
-    }
-
-    // Test availability helper - static method for @EnabledIf
-    static boolean hasGlideJedis() {
-        // Always return true since we want to test the GLIDE Jedis compatibility layer
-        // The actual availability will be checked in the test setup
-        return true;
-    }
-
-    boolean hasBothImplementations() {
-        return hasGlideJedis && hasActualJedis;
-    }
-
-    // ==================== BASIC GET/SET OPERATIONS ====================
 
     @Test
     @Order(1)
     @DisplayName("Basic GET/SET Operations")
-    @EnabledIf("hasGlideJedis")
     void testBasicGetSetOperations() {
-        System.out.println("Testing basic GET/SET operations...");
+        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
 
-        String key = TEST_KEY_PREFIX + "basic_string";
-        String value = "test_value_123";
+        String testKey = TEST_KEY_PREFIX + "basic";
+        String testValue = "test_value_123";
 
         // Test GLIDE Jedis
-        ComparisonResult glideResult = new ComparisonResult("GLIDE Jedis");
-        try {
-            String setResult = glideJedis.set(key, value);
-            String getValue = glideJedis.get(key);
+        String glideSetResult = glideJedis.set(testKey, testValue);
+        String glideGetResult = glideJedis.get(testKey);
 
-            glideResult.setResult = setResult;
-            glideResult.getValue = getValue;
-            glideResult.success = true;
+        assertEquals("OK", glideSetResult, "GLIDE Jedis SET should return OK");
+        assertEquals(testValue, glideGetResult, "GLIDE Jedis GET should return the set value");
 
-            assertEquals("OK", setResult, "SET should return OK");
-            assertEquals(value, getValue, "GET should return the set value");
-
-        } catch (Exception e) {
-            glideResult.exception = e;
-            glideResult.success = false;
-        }
-
-        // Test actual Jedis (if available)
-        ComparisonResult actualResult = new ComparisonResult("Actual Jedis");
+        // Compare with actual Jedis if available
         if (hasActualJedis) {
             try {
-                String setResult = (String) invokeMethod(actualJedis, "set", key + "_actual", value);
-                String getValue = (String) invokeMethod(actualJedis, "get", key + "_actual");
+                Method setMethod = actualJedisClass.getMethod("set", String.class, String.class);
+                Method getMethod = actualJedisClass.getMethod("get", String.class);
 
-                actualResult.setResult = setResult;
-                actualResult.getValue = getValue;
-                actualResult.success = true;
+                String actualSetResult = (String) setMethod.invoke(actualJedis, testKey, testValue);
+                String actualGetResult = (String) getMethod.invoke(actualJedis, testKey);
 
+                assertEquals(actualSetResult, glideSetResult,
+                    "GLIDE and actual Jedis SET results should be identical");
+                assertEquals(actualGetResult, glideGetResult,
+                    "GLIDE and actual Jedis GET results should be identical");
             } catch (Exception e) {
-                actualResult.exception = e;
-                actualResult.success = false;
+                fail("Failed to compare with actual Jedis: " + e.getMessage());
             }
         }
-
-        // Compare results
-        compareAndReport("Basic GET/SET", glideResult, actualResult);
     }
 
     @Test
     @Order(2)
     @DisplayName("Multiple GET/SET Operations")
-    @EnabledIf("hasGlideJedis")
     void testMultipleGetSetOperations() {
-        System.out.println("Testing multiple GET/SET operations...");
+        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
 
-        Map<String, String> keyValues = new HashMap<>();
-        keyValues.put(TEST_KEY_PREFIX + "key1", "value1");
-        keyValues.put(TEST_KEY_PREFIX + "key2", "value2");
-        keyValues.put(TEST_KEY_PREFIX + "key3", "value3");
+        Map<String, String> testData = Map.of(
+            TEST_KEY_PREFIX + "key1", "value1",
+            TEST_KEY_PREFIX + "key2", "value2",
+            TEST_KEY_PREFIX + "key3", "value3"
+        );
 
         // Test GLIDE Jedis
-        ComparisonResult glideResult = new ComparisonResult("GLIDE Jedis");
-        try {
-            List<String> setResults = new ArrayList<>();
-            List<String> getResults = new ArrayList<>();
+        Map<String, String> glideSetResults = new HashMap<>();
+        Map<String, String> glideGetResults = new HashMap<>();
 
-            // Perform multiple SET operations
-            for (Map.Entry<String, String> entry : keyValues.entrySet()) {
-                String setResult = glideJedis.set(entry.getKey(), entry.getValue());
-                setResults.add(setResult);
-            }
+        for (Map.Entry<String, String> entry : testData.entrySet()) {
+            String setResult = glideJedis.set(entry.getKey(), entry.getValue());
+            String getResult = glideJedis.get(entry.getKey());
 
-            // Perform multiple GET operations
-            for (String key : keyValues.keySet()) {
-                String getValue = glideJedis.get(key);
-                getResults.add(getValue);
-            }
+            glideSetResults.put(entry.getKey(), setResult);
+            glideGetResults.put(entry.getKey(), getResult);
 
-            glideResult.multipleSetResults = setResults;
-            glideResult.multipleGetResults = getResults;
-            glideResult.success = true;
-
-            // Verify all SET operations returned OK
-            for (String setResult : setResults) {
-                assertEquals("OK", setResult, "All SET operations should return OK");
-            }
-
-            // Verify all GET operations returned correct values
-            int i = 0;
-            for (String expectedValue : keyValues.values()) {
-                assertEquals(expectedValue, getResults.get(i), "GET should return the set value");
-                i++;
-            }
-
-        } catch (Exception e) {
-            glideResult.exception = e;
-            glideResult.success = false;
+            assertEquals("OK", setResult, "GLIDE Jedis SET should return OK for " + entry.getKey());
+            assertEquals(entry.getValue(), getResult, "GLIDE Jedis GET should return correct value for " + entry.getKey());
         }
 
-        // Test actual Jedis (if available)
-        ComparisonResult actualResult = new ComparisonResult("Actual Jedis");
+        // Compare with actual Jedis if available
         if (hasActualJedis) {
             try {
-                List<String> setResults = new ArrayList<>();
-                List<String> getResults = new ArrayList<>();
+                Method setMethod = actualJedisClass.getMethod("set", String.class, String.class);
+                Method getMethod = actualJedisClass.getMethod("get", String.class);
 
-                // Adjust keys for actual Jedis to avoid conflicts
-                Map<String, String> actualKeyValues = new HashMap<>();
-                for (Map.Entry<String, String> entry : keyValues.entrySet()) {
-                    actualKeyValues.put(entry.getKey() + "_actual", entry.getValue());
+                for (Map.Entry<String, String> entry : testData.entrySet()) {
+                    String actualSetResult = (String) setMethod.invoke(actualJedis, entry.getKey(), entry.getValue());
+                    String actualGetResult = (String) getMethod.invoke(actualJedis, entry.getKey());
+
+                    assertEquals(actualSetResult, glideSetResults.get(entry.getKey()),
+                        "GLIDE and actual Jedis SET results should be identical for " + entry.getKey());
+                    assertEquals(actualGetResult, glideGetResults.get(entry.getKey()),
+                        "GLIDE and actual Jedis GET results should be identical for " + entry.getKey());
                 }
-
-                // Perform multiple SET operations
-                for (Map.Entry<String, String> entry : actualKeyValues.entrySet()) {
-                    String setResult =
-                            (String) invokeMethod(actualJedis, "set", entry.getKey(), entry.getValue());
-                    setResults.add(setResult);
-                }
-
-                // Perform multiple GET operations
-                for (String key : actualKeyValues.keySet()) {
-                    String getValue = (String) invokeMethod(actualJedis, "get", key);
-                    getResults.add(getValue);
-                }
-
-                actualResult.multipleSetResults = setResults;
-                actualResult.multipleGetResults = getResults;
-                actualResult.success = true;
-
             } catch (Exception e) {
-                actualResult.exception = e;
-                actualResult.success = false;
+                fail("Failed to compare with actual Jedis: " + e.getMessage());
             }
         }
-
-        compareAndReport("Multiple GET/SET Operations", glideResult, actualResult);
     }
 
-    // ==================== CONNECTION POOL TESTS ====================
-
+    /**
+     * Test connection pool operations.
+     *
+     * This test is important because:
+     * 1. Connection pooling is a critical feature for production applications
+     * 2. Pool behavior differs significantly between GLIDE and actual Jedis:
+     *    - GLIDE uses internal connection management
+     *    - Actual Jedis uses Apache Commons Pool2
+     * 3. Validates that pool.getResource() returns working connections
+     * 4. Ensures proper resource lifecycle management (try-with-resources)
+     * 5. Tests that pooled connections produce identical results to direct connections
+     */
     @Test
     @Order(3)
     @DisplayName("Connection Pool Operations")
-    @EnabledIf("hasGlideJedis")
     void testConnectionPoolOperations() {
-        System.out.println("Testing connection pool operations...");
+        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
 
-        String key = TEST_KEY_PREFIX + "pool_test";
-        String value = "pool_test_value";
+        String testKey = TEST_KEY_PREFIX + "pool";
+        String testValue = "pool_test_value";
 
         // Test GLIDE JedisPool
-        ComparisonResult glideResult = new ComparisonResult("GLIDE JedisPool");
-        try {
-            try (Jedis pooledJedis = glideJedisPool.getResource()) {
-                String setResult = pooledJedis.set(key, value);
-                String getValue = pooledJedis.get(key);
+        String glideSetResult;
+        String glideGetResult;
 
-                glideResult.setResult = setResult;
-                glideResult.getValue = getValue;
-                glideResult.success = true;
-
-                assertEquals("OK", setResult, "Pool SET should return OK");
-                assertEquals(value, getValue, "Pool GET should return the set value");
-            }
-        } catch (Exception e) {
-            glideResult.exception = e;
-            glideResult.success = false;
+        try (Jedis pooledJedis = glideJedisPool.getResource()) {
+            glideSetResult = pooledJedis.set(testKey, testValue);
+            glideGetResult = pooledJedis.get(testKey);
         }
 
-        // Test actual JedisPool (if available)
-        ComparisonResult actualResult = new ComparisonResult("Actual JedisPool");
+        assertEquals("OK", glideSetResult, "GLIDE pooled Jedis SET should return OK");
+        assertEquals(testValue, glideGetResult, "GLIDE pooled Jedis GET should return the set value");
+
+        // Compare with actual Jedis pool if available
         if (hasActualJedis) {
             try {
-                Object pooledJedis = invokeMethod(actualJedisPool, "getResource");
-                String setResult = (String) invokeMethod(pooledJedis, "set", key + "_actual", value);
-                String getValue = (String) invokeMethod(pooledJedis, "get", key + "_actual");
-                invokeMethod(pooledJedis, "close");
+                Method getResourceMethod = actualJedisPoolClass.getMethod("getResource");
+                Object actualPooledJedis = getResourceMethod.invoke(actualJedisPool);
 
-                actualResult.setResult = setResult;
-                actualResult.getValue = getValue;
-                actualResult.success = true;
+                Method setMethod = actualJedisClass.getMethod("set", String.class, String.class);
+                Method getMethod = actualJedisClass.getMethod("get", String.class);
+                Method closeMethod = actualJedisClass.getMethod("close");
 
+                String actualSetResult = (String) setMethod.invoke(actualPooledJedis, testKey, testValue);
+                String actualGetResult = (String) getMethod.invoke(actualPooledJedis, testKey);
+                closeMethod.invoke(actualPooledJedis);
+
+                assertEquals(actualSetResult, glideSetResult,
+                    "GLIDE and actual Jedis pool SET results should be identical");
+                assertEquals(actualGetResult, glideGetResult,
+                    "GLIDE and actual Jedis pool GET results should be identical");
             } catch (Exception e) {
-                actualResult.exception = e;
-                actualResult.success = false;
+                fail("Failed to compare with actual Jedis pool: " + e.getMessage());
             }
         }
-
-        compareAndReport("Connection Pool", glideResult, actualResult);
     }
 
-    @Test
-    @Order(4)
-    @DisplayName("Concurrent Pool Operations")
-    @EnabledIf("hasGlideJedis")
-    void testConcurrentPoolOperations() {
-        System.out.println("Testing concurrent pool operations...");
-
-        int threadCount = 5;
-        int operationsPerThread = 10;
-        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
-
-        // Test GLIDE JedisPool concurrency
-        ComparisonResult glideResult = new ComparisonResult("GLIDE JedisPool Concurrent");
+    /**
+     * Clean up test keys to avoid interference between tests.
+     */
+    private void cleanupTestKeys(Object jedisInstance) {
         try {
-            List<Future<Boolean>> futures = new ArrayList<>();
-
-            for (int t = 0; t < threadCount; t++) {
-                final int threadId = t;
-                Future<Boolean> future =
-                        executor.submit(
-                                () -> {
-                                    try {
-                                        for (int i = 0; i < operationsPerThread; i++) {
-                                            try (Jedis pooledJedis = glideJedisPool.getResource()) {
-                                                String key = TEST_KEY_PREFIX + "concurrent_" + threadId + "_" + i;
-                                                String value = "thread_" + threadId + "_value_" + i;
-
-                                                String setResult = pooledJedis.set(key, value);
-                                                String getValue = pooledJedis.get(key);
-
-                                                if (!"OK".equals(setResult) || !value.equals(getValue)) {
-                                                    return false;
-                                                }
-                                            }
-                                        }
-                                        return true;
-                                    } catch (Exception e) {
-                                        System.err.println("Thread " + threadId + " failed: " + e.getMessage());
-                                        return false;
-                                    }
-                                });
-                futures.add(future);
-            }
-
-            // Wait for all threads to complete
-            int successCount = 0;
-            for (Future<Boolean> future : futures) {
-                if (future.get(30, TimeUnit.SECONDS)) {
-                    successCount++;
-                }
-            }
-
-            glideResult.concurrentSuccessCount = successCount;
-            glideResult.success = (successCount == threadCount);
-
-            assertEquals(threadCount, successCount, "All concurrent operations should succeed");
-
-        } catch (Exception e) {
-            glideResult.exception = e;
-            glideResult.success = false;
-        } finally {
-            executor.shutdown();
-        }
-
-        // For actual Jedis, we'd need similar concurrent testing
-        ComparisonResult actualResult = new ComparisonResult("Actual JedisPool Concurrent");
-        if (hasActualJedis) {
-            actualResult.success = true; // Placeholder - would implement similar test
-            actualResult.concurrentSuccessCount = threadCount; // Assumed
-        }
-
-        compareAndReport("Concurrent Pool Operations", glideResult, actualResult);
-    }
-
-    // ==================== HELPER METHODS ====================
-
-    private Object loadActualJedis() throws Exception {
-        // This would load actual Jedis via custom class loader
-        // For now, return null to indicate not available
-        return null;
-    }
-
-    private Object loadActualJedisPool() throws Exception {
-        // This would load actual JedisPool via custom class loader
-        // For now, return null to indicate not available
-        return null;
-    }
-
-    private Object invokeMethod(Object obj, String methodName, Object... args) throws Exception {
-        if (obj == null) return null;
-
-        Class<?>[] paramTypes = new Class[args.length];
-        for (int i = 0; i < args.length; i++) {
-            if (args[i] == null) {
-                paramTypes[i] = Object.class;
+            if (jedisInstance instanceof Jedis) {
+                // GLIDE Jedis cleanup
+                Jedis jedis = (Jedis) jedisInstance;
+                jedis.del(TEST_KEY_PREFIX + "basic");
+                jedis.del(TEST_KEY_PREFIX + "key1");
+                jedis.del(TEST_KEY_PREFIX + "key2");
+                jedis.del(TEST_KEY_PREFIX + "key3");
+                jedis.del(TEST_KEY_PREFIX + "pool");
             } else {
-                paramTypes[i] = args[i].getClass();
-                if (paramTypes[i] == Integer.class) paramTypes[i] = int.class;
-                if (paramTypes[i] == Long.class) paramTypes[i] = long.class;
-            }
-        }
-
-        return obj.getClass().getMethod(methodName, paramTypes).invoke(obj, args);
-    }
-
-    private void closeClientReflection(Object client) throws Exception {
-        if (client != null) {
-            invokeMethod(client, "close");
-        }
-    }
-
-    private void cleanupTestKeys(Jedis jedis) {
-        try {
-            // Clean up test keys
-            Set<String> keys = jedis.keys(TEST_KEY_PREFIX + "*");
-            if (!keys.isEmpty()) {
-                jedis.del(keys.toArray(new String[0]));
+                // Actual Jedis cleanup via reflection
+                Method delMethod = actualJedisClass.getMethod("del", String[].class);
+                String[] keysToDelete = {
+                    TEST_KEY_PREFIX + "basic",
+                    TEST_KEY_PREFIX + "key1",
+                    TEST_KEY_PREFIX + "key2",
+                    TEST_KEY_PREFIX + "key3",
+                    TEST_KEY_PREFIX + "pool"
+                };
+                delMethod.invoke(jedisInstance, (Object) keysToDelete);
             }
         } catch (Exception e) {
             // Ignore cleanup errors
-        }
-    }
-
-    private void cleanupTestKeysReflection(Object jedis) {
-        try {
-            if (jedis != null) {
-                @SuppressWarnings("unchecked")
-                Set<String> keys = (Set<String>) invokeMethod(jedis, "keys", TEST_KEY_PREFIX + "*");
-                if (!keys.isEmpty()) {
-                    invokeMethod(jedis, "del", (Object) keys.toArray(new String[0]));
-                }
-            }
-        } catch (Exception e) {
-            // Ignore cleanup errors
-        }
-    }
-
-    private void compareAndReport(
-            String testName, ComparisonResult glideResult, ComparisonResult actualResult) {
-        System.out.println("\n--- " + testName + " Comparison ---");
-
-        // Report GLIDE result
-        if (glideResult.success) {
-            System.out.println("✓ GLIDE Jedis: SUCCESS");
-            printResultDetails(glideResult);
-        } else {
-            System.out.println("❌ GLIDE Jedis: FAILED");
-            if (glideResult.exception != null) {
-                System.out.println("  Error: " + glideResult.exception.getMessage());
-            }
-        }
-
-        // Report actual Jedis result (if available)
-        if (hasActualJedis) {
-            if (actualResult.success) {
-                System.out.println("✓ Actual Jedis: SUCCESS");
-                printResultDetails(actualResult);
-            } else {
-                System.out.println("❌ Actual Jedis: FAILED");
-                if (actualResult.exception != null) {
-                    System.out.println("  Error: " + actualResult.exception.getMessage());
-                }
-            }
-
-            // Compare results
-            compareResults(testName, glideResult, actualResult);
-        } else {
-            System.out.println("ℹ️  Actual Jedis: NOT AVAILABLE");
-        }
-
-        comparisonResults.add(glideResult);
-        if (hasActualJedis) {
-            comparisonResults.add(actualResult);
-        }
-    }
-
-    private void printResultDetails(ComparisonResult result) {
-        if (result.setResult != null) {
-            System.out.println("  SET result: " + result.setResult);
-        }
-        if (result.getValue != null) {
-            System.out.println("  GET result: " + result.getValue);
-        }
-        if (result.multipleSetResults != null && !result.multipleSetResults.isEmpty()) {
-            System.out.println(
-                    "  Multiple SET results: " + result.multipleSetResults.size() + " operations");
-        }
-        if (result.multipleGetResults != null && !result.multipleGetResults.isEmpty()) {
-            System.out.println(
-                    "  Multiple GET results: " + result.multipleGetResults.size() + " operations");
-        }
-        if (result.concurrentSuccessCount > 0) {
-            System.out.println("  Concurrent success: " + result.concurrentSuccessCount);
-        }
-    }
-
-    private void compareResults(
-            String testName, ComparisonResult glideResult, ComparisonResult actualResult) {
-        boolean resultsMatch = true;
-        List<String> differences = new ArrayList<>();
-
-        // Compare SET results
-        if (!Objects.equals(glideResult.setResult, actualResult.setResult)) {
-            resultsMatch = false;
-            differences.add(
-                    "SET result differs: GLIDE="
-                            + glideResult.setResult
-                            + ", Actual="
-                            + actualResult.setResult);
-        }
-
-        // Compare GET results
-        if (!Objects.equals(glideResult.getValue, actualResult.getValue)) {
-            resultsMatch = false;
-            differences.add(
-                    "GET result differs: GLIDE="
-                            + glideResult.getValue
-                            + ", Actual="
-                            + actualResult.getValue);
-        }
-
-        // Compare multiple operation results
-        if (glideResult.multipleSetResults != null && actualResult.multipleSetResults != null) {
-            if (glideResult.multipleSetResults.size() != actualResult.multipleSetResults.size()) {
-                differences.add(
-                        "Multiple SET count differs: GLIDE="
-                                + glideResult.multipleSetResults.size()
-                                + ", Actual="
-                                + actualResult.multipleSetResults.size());
-            }
-        }
-
-        // Report comparison
-        if (resultsMatch && differences.isEmpty()) {
-            System.out.println("🎯 PERFECT MATCH: Results are identical");
-        } else if (differences.size() <= 1) {
-            System.out.println("✅ GOOD MATCH: Minor differences acceptable");
-            differences.forEach(diff -> System.out.println("  ⚠️  " + diff));
-        } else {
-            System.out.println("❌ POOR MATCH: Significant differences found");
-            differences.forEach(diff -> System.out.println("  ❌ " + diff));
-        }
-    }
-
-    // ==================== COMPARISON RESULT CLASS ====================
-
-    private static class ComparisonResult {
-        final String implementation;
-        boolean success = false;
-        Exception exception = null;
-
-        // Basic operation results
-        String setResult = null;
-        String getValue = null;
-
-        // Multiple operation results
-        List<String> multipleSetResults = null;
-        List<String> multipleGetResults = null;
-
-        // Concurrent operation results
-        int concurrentSuccessCount = 0;
-
-        ComparisonResult(String implementation) {
-            this.implementation = implementation;
         }
     }
 }
