@@ -1,6 +1,7 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import os
+import platform
 import sys
 from pathlib import Path
 from typing import List, Optional, Union
@@ -23,7 +24,31 @@ else:
 
 ENCODING = "utf-8"
 CURR_DIR = Path(__file__).resolve().parent
-LIB_FILE = CURR_DIR / "libglide_ffi.so"
+
+
+def find_libglide_ffi(lib_dir: Path) -> Path:
+    """
+    Searches for the correct shared library file depending on the OS.
+    """
+    possible_names = {
+        "Linux": "libglide_ffi.so",
+        "Darwin": "libglide_ffi.dylib",
+        "Windows": "glide_ffi.dll",
+    }
+
+    system = platform.system()
+    lib_name = possible_names.get(system)
+    if not lib_name:
+        raise RuntimeError(f"Unsupported platform: {system}")
+
+    lib_path = lib_dir / lib_name
+    if not lib_path.exists():
+        raise FileNotFoundError(f"Could not find {lib_name} in {lib_dir}")
+
+    return lib_path
+
+
+LIB_FILE = find_libglide_ffi(CURR_DIR)
 
 
 # Enum values must match the Rust definition
