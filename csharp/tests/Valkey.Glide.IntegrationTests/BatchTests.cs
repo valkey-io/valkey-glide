@@ -108,7 +108,7 @@ public class BatchTests(TestConfiguration config)
 
         RequestException ex = Assert.Throws<RequestException>(() => transaction.Execute());
         Assert.Contains("CrossSlot", ex.Message);
-        // in SER, commands' futures are never resolved if transactoin failed, so we do the same
+        // in SER, commands' futures are never resolved if transaction failed, so we do the same
         Assert.False(t1.Wait(100));
     }
 
@@ -179,7 +179,7 @@ public class BatchTests(TestConfiguration config)
     [MemberData(nameof(PermuteTestConnectionsAndBool), 1)]
     public void EmptyBatchIsntSubmitted(ConnectionMultiplexer conn, bool isBatch)
     {
-        // note: there is no an easy wayt to ensure that nothing was actually sent over the wire.
+        // note: there is no easy way to ensure that nothing was actually sent over the wire.
         IDatabase db = conn.GetDatabase();
 
         if (isBatch)

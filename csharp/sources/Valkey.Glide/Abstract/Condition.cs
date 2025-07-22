@@ -9,7 +9,7 @@ using static Valkey.Glide.Errors;
 namespace Valkey.Glide;
 
 /// <summary>
-/// Describes a precondition used in a redis transaction.
+/// Describes a precondition used in a Valkey transaction.
 /// </summary>
 public abstract class Condition
 {
