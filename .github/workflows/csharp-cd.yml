@@ -31,7 +31,7 @@ env:
     CARGO_TERM_COLOR: always
 
 jobs:
-    get-matrices:
+    load-platform-matrix:
         runs-on: ubuntu-latest
         # environment: AWS_ACTIONS
         outputs:
@@ -77,11 +77,9 @@ jobs:
                   INPUT_VERSION: ${{ github.event.inputs.version }}
 
     create-binaries-to-publish:
-        needs: [set-release-version, load-platform-matrix]
+        needs: [load-platform-matrix]
         if: github.repository_owner == 'valkey-io'
         timeout-minutes: 35
-        env:
-            RELEASE_VERSION: ${{ needs.set-release-version.outputs.RELEASE_VERSION }}
         strategy:
             # Run all jobs
             fail-fast: false
