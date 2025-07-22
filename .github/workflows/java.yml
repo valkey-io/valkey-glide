@@ -293,6 +293,9 @@ jobs:
 
             - name: Build java wrapper
               working-directory: java
+              env:
+                  GLIDE_CONTAINER_BUILD: true
+                  JAVA_HOME: /usr/lib/jvm/java-${{ matrix.java }}-amazon-corretto.x86_64
               run: ./gradlew --continue build -x javadoc
 
             - name: Upload test & spotbugs reports
