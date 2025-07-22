@@ -9,7 +9,7 @@ namespace Valkey.Glide.Commands;
 /// <br/>
 /// See more on <see href="https://valkey.io/commands/?group=sorted-set#sorted-set">valkey.io</see>.
 /// </summary>
-internal interface ISortedSetCommands
+public interface ISortedSetCommands
 {
     /// <inheritdoc cref="SortedSetAddAsync(ValkeyKey, ValkeyValue, double, SortedSetWhen, CommandFlags)" />
     [Browsable(false), EditorBrowsable(EditorBrowsableState.Never)]
@@ -60,7 +60,7 @@ internal interface ISortedSetCommands
     /// <remarks>
     /// <example>
     /// <code>
-    /// var entries = new SortedSetEntry[] 
+    /// var entries = new SortedSetEntry[]
     /// {
     ///     new SortedSetEntry("member1", 10.5),
     ///     new SortedSetEntry("member2", 8.2)
