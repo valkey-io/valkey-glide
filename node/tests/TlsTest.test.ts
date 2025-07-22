@@ -4,7 +4,12 @@
 
 import { afterAll, afterEach, beforeAll, describe } from "@jest/globals";
 import { ValkeyCluster } from "../../utils/TestUtils.js";
-import { GlideClient, GlideClusterClient, ProtocolVersion } from "../build-ts";
+import {
+    GlideClient,
+    GlideClusterClient,
+    Logger,
+    ProtocolVersion,
+} from "../build-ts";
 import {
     flushAndCloseClient,
     getClientConfigurationOption,
@@ -44,8 +49,18 @@ describe("tls GlideClusterClient", () => {
     });
 
     afterAll(async () => {
-        if (cluster) {
-            await cluster.close();
+        try {
+            if (cluster) {
+                await cluster.close();
+            }
+        } catch (error) {
+            // Log the error but don't throw to avoid masking test results
+            Logger.log(
+                "warn",
+                "TlsTest",
+                "Error closing cluster",
+                error as Error,
+            );
         }
     });
 
@@ -95,8 +110,18 @@ describe("tls GlideClient", () => {
     });
 
     afterAll(async () => {
-        if (cluster) {
-            await cluster.close();
+        try {
+            if (cluster) {
+                await cluster.close();
+            }
+        } catch (error) {
+            // Log the error but don't throw to avoid masking test results
+            Logger.log(
+                "warn",
+                "TlsTest",
+                "Error closing cluster",
+                error as Error,
+            );
         }
     });
 
