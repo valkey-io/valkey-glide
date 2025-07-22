@@ -139,7 +139,7 @@ from glide_sync import GlideClusterClientConfiguration, NodeAddress, GlideCluste
 
 addresses = [NodeAddress("address.example.com", 6379)]
 config = GlideClusterClientConfiguration(addresses)
-client = GlideClusterClient(config)
+client = GlideClusterClient.create(config)
 set_result = client.set("foo", "bar")
 print(f"Set response is {set_result}")
 get_result = client.get("foo")
@@ -156,7 +156,7 @@ addresses = [
     NodeAddress("server_replica.example.com", 6379)
 ]
 config = GlideClientConfiguration(addresses)
-client = GlideClient(config)
+client = GlideClient.create(config)
 set_result = client.set("foo", "bar")
 print(f"Set response is {set_result}")
 get_result = client.get("foo")
