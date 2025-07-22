@@ -1,14 +1,13 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package compatibility.clients.jedis;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.AfterEach;
 import static org.junit.jupiter.api.Assertions.*;
 
+import org.junit.jupiter.api.Test;
+
 /**
- * Basic compatibility tests for the 4 Jedis client wrappers.
- * These tests verify that basic GET/SET operations work.
+ * Basic compatibility tests for the 4 Jedis client wrappers. These tests verify that basic GET/SET
+ * operations work.
  */
 public class BasicCompatibilityTest {
 
@@ -94,7 +93,7 @@ public class BasicCompatibilityTest {
     //     try (JedisCluster cluster = new JedisCluster(nodes)) {
     //         String setResult = cluster.set(TEST_KEY, TEST_VALUE);
     //         assertEquals("OK", setResult);
-    //         
+    //
     //         String getValue = cluster.get(TEST_KEY);
     //         assertEquals(TEST_VALUE, getValue);
     //     }

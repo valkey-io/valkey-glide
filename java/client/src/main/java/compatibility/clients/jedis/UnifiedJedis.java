@@ -8,14 +8,12 @@ import java.net.URI;
 import java.time.Duration;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
-import javax.net.ssl.HostnameVerifier;
-import javax.net.ssl.SSLParameters;
-import javax.net.ssl.SSLSocketFactory;
-//import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
+
+// import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
 
 /**
- * UnifiedJedis compatibility wrapper for Valkey GLIDE client. This class provides the base
- * unified API that other Jedis clients extend from, while using Valkey GLIDE underneath.
+ * UnifiedJedis compatibility wrapper for Valkey GLIDE client. This class provides the base unified
+ * API that other Jedis clients extend from, while using Valkey GLIDE underneath.
  */
 public class UnifiedJedis implements Closeable {
 
@@ -42,7 +40,9 @@ public class UnifiedJedis implements Closeable {
     }
 
     public UnifiedJedis(final URI uri) {
-        this(extractHostAndPort(uri), buildConfigFromURI(uri, DefaultJedisClientConfig.builder().build()));
+        this(
+                extractHostAndPort(uri),
+                buildConfigFromURI(uri, DefaultJedisClientConfig.builder().build()));
     }
 
     public UnifiedJedis(final URI uri, JedisClientConfig config) {
@@ -56,8 +56,9 @@ public class UnifiedJedis implements Closeable {
         ConfigurationMapper.validateConfiguration(clientConfig);
 
         // Map Jedis config to GLIDE config
-        GlideClientConfiguration glideConfig = ConfigurationMapper.mapToGlideConfig(
-            hostAndPort.getHost(), hostAndPort.getPort(), clientConfig);
+        GlideClientConfiguration glideConfig =
+                ConfigurationMapper.mapToGlideConfig(
+                        hostAndPort.getHost(), hostAndPort.getPort(), clientConfig);
 
         try {
             this.glideClient = GlideClient.createClient(glideConfig).get();
@@ -67,48 +68,57 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
-//    // Experimental constructors (cache support - simplified for compatibility)
-//    public UnifiedJedis(HostAndPort hostAndPort, JedisClientConfig clientConfig, Object cacheConfig) {
-//        this(hostAndPort, clientConfig); // Cache not supported in GLIDE compatibility layer
-//    }
-//
-//    public UnifiedJedis(HostAndPort hostAndPort, JedisClientConfig clientConfig, Object cache) {
-//        this(hostAndPort, clientConfig); // Cache not supported in GLIDE compatibility layer
-//    }
-//
-//    // Constructor for custom socket factory (simplified)
-//    public UnifiedJedis(Object socketFactory) {
-//        this(); // Default connection for compatibility
-//    }
+    //    // Experimental constructors (cache support - simplified for compatibility)
+    //    public UnifiedJedis(HostAndPort hostAndPort, JedisClientConfig clientConfig, Object
+    // cacheConfig) {
+    //        this(hostAndPort, clientConfig); // Cache not supported in GLIDE compatibility layer
+    //    }
+    //
+    //    public UnifiedJedis(HostAndPort hostAndPort, JedisClientConfig clientConfig, Object cache) {
+    //        this(hostAndPort, clientConfig); // Cache not supported in GLIDE compatibility layer
+    //    }
+    //
+    //    // Constructor for custom socket factory (simplified)
+    //    public UnifiedJedis(Object socketFactory) {
+    //        this(); // Default connection for compatibility
+    //    }
 
     public UnifiedJedis(Object socketFactory, JedisClientConfig clientConfig) {
         this(new HostAndPort("localhost", 6379), clientConfig);
     }
 
-//    // Constructor for direct connection (simplified)
-//    public UnifiedJedis(Object connection) {
-//        this(); // Default connection for compatibility
-//    }
+    //    // Constructor for direct connection (simplified)
+    //    public UnifiedJedis(Object connection) {
+    //        this(); // Default connection for compatibility
+    //    }
 
     // Deprecated cluster constructors (for compatibility)
     @Deprecated
-    public UnifiedJedis(Set<HostAndPort> jedisClusterNodes, JedisClientConfig clientConfig, int maxAttempts) {
-        this(jedisClusterNodes, clientConfig, maxAttempts,
-            Duration.ofMillis(maxAttempts * clientConfig.getSocketTimeoutMillis()));
+    public UnifiedJedis(
+            Set<HostAndPort> jedisClusterNodes, JedisClientConfig clientConfig, int maxAttempts) {
+        this(
+                jedisClusterNodes,
+                clientConfig,
+                maxAttempts,
+                Duration.ofMillis(maxAttempts * clientConfig.getSocketTimeoutMillis()));
     }
 
     @Deprecated
-    public UnifiedJedis(Set<HostAndPort> jedisClusterNodes, JedisClientConfig clientConfig, int maxAttempts,
-        Duration maxTotalRetriesDuration) {
+    public UnifiedJedis(
+            Set<HostAndPort> jedisClusterNodes,
+            JedisClientConfig clientConfig,
+            int maxAttempts,
+            Duration maxTotalRetriesDuration) {
         // For compatibility, use first node as connection point
         this(jedisClusterNodes.iterator().next(), clientConfig);
     }
 
-//    @Deprecated
-//    public UnifiedJedis(Set<HostAndPort> jedisClusterNodes, JedisClientConfig clientConfig,
-//        GenericObjectPoolConfig<Object> poolConfig, int maxAttempts, Duration maxTotalRetriesDuration) {
-//        this(jedisClusterNodes.iterator().next(), clientConfig);
-//    }
+    //    @Deprecated
+    //    public UnifiedJedis(Set<HostAndPort> jedisClusterNodes, JedisClientConfig clientConfig,
+    //        GenericObjectPoolConfig<Object> poolConfig, int maxAttempts, Duration
+    // maxTotalRetriesDuration) {
+    //        this(jedisClusterNodes.iterator().next(), clientConfig);
+    //    }
 
     // Sharded constructors (deprecated - simplified for compatibility)
     @Deprecated
@@ -126,15 +136,15 @@ public class UnifiedJedis implements Closeable {
         this(); // Default connection for compatibility
     }
 
-//    // Multi-cluster constructor (experimental - simplified)
-//    public UnifiedJedis(Object multiClusterProvider) {
-//        this(); // Default connection for compatibility
-//    }
-//
-//    // Command executor constructor
-//    public UnifiedJedis(Object executor) {
-//        this(); // Default connection for compatibility
-//    }
+    //    // Multi-cluster constructor (experimental - simplified)
+    //    public UnifiedJedis(Object multiClusterProvider) {
+    //        this(); // Default connection for compatibility
+    //    }
+    //
+    //    // Command executor constructor
+    //    public UnifiedJedis(Object executor) {
+    //        this(); // Default connection for compatibility
+    //    }
 
     // Protected constructors for internal use
     protected UnifiedJedis(GlideClient glideClient, JedisClientConfig jedisConfig) {
@@ -221,9 +231,7 @@ public class UnifiedJedis implements Closeable {
         return config;
     }
 
-    /**
-     * Close the connection.
-     */
+    /** Close the connection. */
     @Override
     public void close() {
         if (closed) {
@@ -264,15 +272,16 @@ public class UnifiedJedis implements Closeable {
     }
 
     private static JedisClientConfig buildConfigFromURI(URI uri, JedisClientConfig baseConfig) {
-        DefaultJedisClientConfig.Builder builder = DefaultJedisClientConfig.builder()
-            .connectionTimeoutMillis(baseConfig.getConnectionTimeoutMillis())
-            .socketTimeoutMillis(baseConfig.getSocketTimeoutMillis())
-            .blockingSocketTimeoutMillis(baseConfig.getBlockingSocketTimeoutMillis())
-            .clientName(baseConfig.getClientName())
-            .ssl(baseConfig.isSsl())
-            .sslSocketFactory(baseConfig.getSslSocketFactory())
-            .sslParameters(baseConfig.getSslParameters())
-            .hostnameVerifier(baseConfig.getHostnameVerifier());
+        DefaultJedisClientConfig.Builder builder =
+                DefaultJedisClientConfig.builder()
+                        .connectionTimeoutMillis(baseConfig.getConnectionTimeoutMillis())
+                        .socketTimeoutMillis(baseConfig.getSocketTimeoutMillis())
+                        .blockingSocketTimeoutMillis(baseConfig.getBlockingSocketTimeoutMillis())
+                        .clientName(baseConfig.getClientName())
+                        .ssl(baseConfig.isSsl())
+                        .sslSocketFactory(baseConfig.getSslSocketFactory())
+                        .sslParameters(baseConfig.getSslParameters())
+                        .hostnameVerifier(baseConfig.getHostnameVerifier());
 
         // Extract user info from URI
         String userInfo = uri.getUserInfo();
