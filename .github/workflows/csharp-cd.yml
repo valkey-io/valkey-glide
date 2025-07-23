@@ -80,7 +80,6 @@ jobs:
             - name: Output Matrix Parameters for this job
               if: ${{ matrix.host.CD_RUNNER != 'macos-13' }}
               run: |
-                  echo ${{ needs.load-platform-matrix.outputs.PLATFORM_MATRIX }} # TODO remove
                   echo "Job running with the following matrix configuration:"
                   echo "${{ toJson(matrix) }}"
 
@@ -100,7 +99,6 @@ jobs:
                       ${{ matrix.host.TARGET }}-glide-core
                       ${{ matrix.host.TARGET }}
 
-            # TODO use zigbuild on linux runners for GLIBC compatibility, note another path to artifact
             # TODO strip debug symbols
             - name: Build native libs
               if: ${{ !contains(matrix.host.TARGET, 'linux-gnu') }}
@@ -232,11 +230,6 @@ jobs:
         if: ${{ always() }}
         runs-on: ubuntu-latest
         steps:
-            - run: |
-                echo ${{ toJson(needs.test) }}
-                echo =================
-                echo ${{ needs.test.result }}
-
             - name: Remove package from NuGet due to test failures
-              if: ${{ needs.test.result != 'success' && needs.test.result != '' }}
+              if: ${{ needs.test.result == 'failure' }}
               run: dotnet nuget delete Valkey.Glide ${{ env.RELEASE_VERSION }} --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
