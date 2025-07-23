@@ -100,9 +100,19 @@ jobs:
                       ${{ matrix.host.TARGET }}
 
             # TODO use zigbuild on linux runners for GLIBC compatibility, note another path to artifact
+            # TODO strip debug symbols
             - name: Build native libs
+              if: ${{ !contains(matrix.host.TARGET, 'linux-gnu') }}
               working-directory: csharp/rust
               run: cargo build --release
+
+            - name: Build native libs (linux)
+              if: ${{ contains(matrix.host.TARGET, 'linux-gnu') }}
+              working-directory: csharp/rust
+              run: |
+                  zigbuild --target ${{ matrix.host.TARGET }}.2.17
+                  mkdir -p target/release
+                  cp target/*/release/libglide_rs.so target/release/
 
             - name: Upload artifacts to publish
               continue-on-error: true
