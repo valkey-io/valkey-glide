@@ -79,6 +79,7 @@ jobs:
 
             - name: Output Matrix Parameters for this job
               if: ${{ matrix.host.CD_RUNNER != 'macos-13' }}
+              shell: bash
               run: |
                   echo "Job running with the following matrix configuration:"
                   echo "${{ toJson(matrix) }}"
