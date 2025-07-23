@@ -35,8 +35,8 @@
     <!-- see RIDs in https://learn.microsoft.com/en-us/dotnet/core/rid-catalog -->
     <file src="../../bin/x86_64-unknown-linux-gnu/libglide_rs.so" target="runtimes/linux-x64/native" />
     <file src="../../bin/aarch64-unknown-linux-gnu/libglide_rs.so" target="runtimes/linux-arm64/native" />
-    <file src="../../bin/x86_64-apple-darwin/libglide_rs.so" target="runtimes/osx-x64/native" />
-    <file src="../../bin/aarch64-apple-darwin/libglide_rs.so" target="runtimes/osx-arm64/native" />
+    <file src="../../bin/x86_64-apple-darwin/libglide_rs.dylib" target="runtimes/osx-x64/native" />
+    <file src="../../bin/aarch64-apple-darwin/libglide_rs.dylib" target="runtimes/osx-arm64/native" />
     <!-- <file src="../../bin/win-x64/libglide_rs.dll" target="runtimes/win-x64/native" /> -->
 
     <!-- TODO this takes readme from repo root, add readme to c# dir and update path -->
