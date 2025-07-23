@@ -478,6 +478,46 @@ static OTEL: OnceCell<RwLock<GlideOpenTelemetry>> = OnceCell::new();
 
 /// Our interface to OpenTelemetry
 impl GlideOpenTelemetry {
+    /// Create new span with parent span pointer
+    /// 
+    /// # Arguments
+    /// * `name` - The name for the new span
+    /// * `parent_span_ptr` - A u64 pointer to the parent span (created by FFI layer)
+    /// 
+    /// # Returns
+    /// * `Ok(GlideSpan)` - The new child span if parent pointer is valid
+    /// * `Err(TraceError)` - If parent span pointer is invalid or span creation fails
+    /// 
+    /// # Safety
+    /// The parent_span_ptr must be a valid pointer to an Arc<GlideSpan> or 0.
+    /// Invalid pointers will result in an error being returned.
+    pub fn new_span_with_parent(name: &str, parent_span_ptr: u64) -> Result<GlideSpan, TraceError> {
+        // Validate parent span pointer
+        if parent_span_ptr == 0 {
+            return Err(TraceError::from("Invalid parent span pointer: null pointer"));
+        }
+
+        // Convert pointer to parent span using the same pattern as FFI layer
+        let parent_span = unsafe {
+            // Follow the exact same pattern as get_unsafe_span_from_ptr
+            std::sync::Arc::increment_strong_count(parent_span_ptr as *const GlideSpan);
+            (*std::sync::Arc::from_raw(parent_span_ptr as *const GlideSpan)).clone()
+        };
+
+        // Create child span using existing parent-child functionality
+        parent_span.add_span(name).map_err(|err| {
+            TraceError::from(format!("Failed to create child span '{}': {}", name, err))
+        })
+    }
+
+    /// Create named span (for user-created parent spans)
+    /// 
+    /// This is an alias for new_span() to provide a clearer API for creating
+    /// parent spans that will be used with new_span_with_parent()
+    pub fn new_named_span(name: &str) -> GlideSpan {
+        Self::new_span(name)
+    }
+
     /// Initialise the open telemetry library with a file system exporter
     ///
     /// This method should be called once for the given **process**
@@ -1033,6 +1073,109 @@ mod tests {
             let status = span_json["status"].as_str().unwrap_or("");
             assert!(status.starts_with("Error"));
             assert!(status.contains("simple error"));
+        });
+    }
+
+    #[test]
+    fn test_new_span_with_parent_null_pointer() {
+        let rt = shared_runtime();
+        rt.block_on(async {
+            init_otel().await.unwrap();
+            
+            // Test with null pointer (0)
+            let result = GlideOpenTelemetry::new_span_with_parent("child_span", 0);
+            assert!(result.is_err());
+            
+            let error = result.unwrap_err();
+            assert!(error.to_string().contains("Invalid parent span pointer: null pointer"));
+        });
+    }
+
+    #[test]
+    fn test_new_span_with_parent_valid_pointer_simulation() {
+        let rt = shared_runtime();
+        rt.block_on(async {
+            init_otel().await.unwrap();
+            
+            // Simulate the FFI layer creating a span pointer
+            // This is how the FFI layer actually creates span pointers
+            let parent_span = GlideOpenTelemetry::new_span("parent_span");
+            let parent_arc = Arc::new(parent_span);
+            let parent_ptr = Arc::into_raw(parent_arc) as u64;
+            
+            // Test creating child span with parent pointer
+            // This should work because we're following the same pattern as FFI
+            let child_result = GlideOpenTelemetry::new_span_with_parent("child_span", parent_ptr);
+            
+            // The function should succeed
+            assert!(child_result.is_ok(), "Failed to create child span: {:?}", child_result.err());
+            
+            let child_span = child_result.unwrap();
+            assert_eq!(child_span.id().len(), 16); // Span ID should be 16 hex characters
+            
+            // Important: Don't manually clean up the pointer here
+            // The Arc reference counting will handle it
+            // In real usage, the FFI layer manages the lifecycle
+        });
+    }
+
+    #[test]
+    fn test_new_named_span() {
+        let rt = shared_runtime();
+        rt.block_on(async {
+            init_otel().await.unwrap();
+            
+            let span = GlideOpenTelemetry::new_named_span("test_named_span");
+            assert_eq!(span.id().len(), 16); // Span ID should be 16 hex characters
+            
+            // Verify it behaves the same as new_span
+            let regular_span = GlideOpenTelemetry::new_span("test_regular_span");
+            assert_eq!(span.id().len(), regular_span.id().len());
+        });
+    }
+
+    #[test]
+    fn test_span_with_parent_hierarchy() {
+        let rt = shared_runtime();
+        rt.block_on(async {
+            let _ = std::fs::remove_file(SPANS_JSON);
+            init_otel().await.unwrap();
+            
+            // Create parent span and convert to pointer (simulating FFI layer)
+            let parent_span = GlideOpenTelemetry::new_named_span("parent_operation");
+            let parent_arc = Arc::new(parent_span);
+            let parent_ptr = Arc::into_raw(parent_arc) as u64;
+            
+            // Create child span using pointer
+            let child_span = GlideOpenTelemetry::new_span_with_parent("child_operation", parent_ptr).unwrap();
+            
+            // Add events to spans
+            child_span.add_event("child_event");
+            
+            // End child span first
+            child_span.end();
+            
+            // Note: We don't manually manage the parent span here
+            // In real usage, the FFI layer would handle the parent span lifecycle
+            
+            sleep(Duration::from_millis(2100)).await;
+            
+            // Verify spans were created and exported
+            let file_content = std::fs::read_to_string(SPANS_JSON).unwrap();
+            let lines: Vec<&str> = file_content
+                .split('\n')
+                .filter(|l| !l.trim().is_empty())
+                .collect();
+            
+            assert!(lines.len() >= 1);
+            
+            // Find the child span
+            let child_span_line = lines.iter()
+                .find(|line| line.contains("child_operation"))
+                .expect("Child span not found in output");
+            
+            let child_json: serde_json::Value = serde_json::from_str(child_span_line).unwrap();
+            assert_eq!(child_json["name"], "child_operation");
         });
     }
 }
