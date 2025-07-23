@@ -112,7 +112,7 @@ jobs:
               continue-on-error: true
               uses: actions/upload-artifact@v4
               with:
-                  name: dotnet-${{ matrix.host.TARGET }}
+                  name: ${{ matrix.host.TARGET }}
                   path: |
                       csharp/rust/target/release/*.so
                       csharp/rust/target/release/*.dylib
@@ -130,12 +130,12 @@ jobs:
               with:
                   path: csharp/bin/
 
+            - uses: actions/checkout@v4
+
             - name: dbg
               run: |
                   tree csharp
-                  false
-
-            - uses: actions/checkout@v4
+                  tree
 
             - name: Set up dotnet
               uses: actions/setup-dotnet@v4
