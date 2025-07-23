@@ -157,9 +157,8 @@ jobs:
                   path: csharp/sources/Valkey.Glide/bin/Release/Valkey.Glide.*.nupkg
 
     publish:
-        # environment: AWS_ACTIONS
-        # if: ${{ (inputs.nuget_publish == true || github.event_name == 'push') }}
-        # if: ${{ (inputs.nuget_publish == true || github.event_name == 'push') && github.repository_owner == 'valkey-io' }}
+        environment: AWS_ACTIONS
+        if: ${{ (inputs.nuget_publish == true || github.event_name == 'push') && github.repository_owner == 'valkey-io' }}
         needs: [build-package-to-publish]
         runs-on: ubuntu-latest
         steps:
