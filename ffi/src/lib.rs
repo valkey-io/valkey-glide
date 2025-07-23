@@ -1943,23 +1943,47 @@ pub(crate) unsafe fn get_pipeline_options(
 ///
 #[unsafe(no_mangle)]
 pub extern "C" fn create_otel_span(request_type: RequestType) -> u64 {
+    // Validate request type and extract command
     let cmd = match request_type.get_command() {
         Some(cmd) => cmd,
-        None => return 0, // Return 0 if no command available
+        None => {
+            logger_core::log_error("ffi_otel", "create_otel_span: RequestType has no command available");
+            return 0;
+        }
     };
+    
+    // Validate command bytes
     let cmd_bytes = match cmd.command() {
         Some(bytes) => bytes,
-        None => return 0, // Return 0 if no command bytes available
+        None => {
+            logger_core::log_error("ffi_otel", "create_otel_span: Command has no bytes available");
+            return 0;
+        }
     };
+    
+    // Validate UTF-8 encoding
     let command_name = match std::str::from_utf8(cmd_bytes.as_slice()) {
         Ok(name) => name,
-        Err(_) => return 0, // Return 0 if command bytes are not valid UTF-8
+        Err(e) => {
+            logger_core::log_error("ffi_otel", &format!("create_otel_span: Command bytes are not valid UTF-8: {}", e));
+            return 0;
+        }
     };
 
+    // Validate command name length (reasonable limit to prevent abuse)
+    if command_name.len() > 256 {
+        logger_core::log_error("ffi_otel", &format!("create_otel_span: Command name too long ({} chars), max 256", command_name.len()));
+        return 0;
+    }
+
+    // Create span and convert to pointer
     let span = GlideOpenTelemetry::new_span(command_name);
     let arc = Arc::new(span);
     let ptr = Arc::into_raw(arc);
-    ptr as u64
+    let span_ptr = ptr as u64;
+    
+    logger_core::log_debug("ffi_otel", &format!("create_otel_span: Successfully created span '{}' with pointer 0x{:x}", command_name, span_ptr));
+    span_ptr
 }
 
 /// Creates an OpenTelemetry span with a fixed name "batch" and returns a pointer to the span as u64.
@@ -1968,10 +1992,14 @@ pub extern "C" fn create_otel_span(request_type: RequestType) -> u64 {
 pub extern "C" fn create_batch_otel_span() -> u64 {
     let command_name = "Batch";
 
+    // Create span and convert to pointer
     let span = GlideOpenTelemetry::new_span(command_name);
     let arc = Arc::new(span);
     let ptr = Arc::into_raw(arc);
-    ptr as u64
+    let span_ptr = ptr as u64;
+    
+    logger_core::log_debug("ffi_otel", &format!("create_batch_otel_span: Successfully created batch span with pointer 0x{:x}", span_ptr));
+    span_ptr
 }
 
 /// Creates an OpenTelemetry span with a custom name and returns a pointer to the span as u64.
@@ -1992,6 +2020,7 @@ pub extern "C" fn create_batch_otel_span() -> u64 {
 pub unsafe extern "C" fn create_named_otel_span(span_name: *const c_char) -> u64 {
     // Validate input pointer
     if span_name.is_null() {
+        logger_core::log_error("ffi_otel", "create_named_otel_span: span_name pointer is null");
         return 0;
     }
 
@@ -2002,11 +2031,22 @@ pub unsafe extern "C" fn create_named_otel_span(span_name: *const c_char) -> u64
     
     let name_str = match c_str.to_str() {
         Ok(s) => s,
-        Err(_) => return 0, // Return 0 if string is not valid UTF-8
+        Err(e) => {
+            logger_core::log_error("ffi_otel", &format!("create_named_otel_span: span_name is not valid UTF-8: {}", e));
+            return 0;
+        }
     };
 
     // Validate string length (reasonable limit to prevent abuse)
+    // Note: Empty names are allowed as per test expectations
     if name_str.len() > 256 {
+        logger_core::log_error("ffi_otel", &format!("create_named_otel_span: span_name too long ({} chars), max 256", name_str.len()));
+        return 0;
+    }
+
+    // Validate string content (basic sanity check for control characters)
+    if name_str.chars().any(|c| c.is_control() && c != '\t' && c != '\n' && c != '\r') {
+        logger_core::log_error("ffi_otel", "create_named_otel_span: span_name contains invalid control characters");
         return 0;
     }
 
@@ -2014,7 +2054,10 @@ pub unsafe extern "C" fn create_named_otel_span(span_name: *const c_char) -> u64
     let span = GlideOpenTelemetry::new_named_span(name_str);
     let arc = Arc::new(span);
     let ptr = Arc::into_raw(arc);
-    ptr as u64
+    let span_ptr = ptr as u64;
+    
+    logger_core::log_debug("ffi_otel", &format!("create_named_otel_span: Successfully created named span '{}' with pointer 0x{:x}", name_str, span_ptr));
+    span_ptr
 }
 
 /// Creates an OpenTelemetry span with the given request type as a child of the provided parent span.
@@ -2032,30 +2075,68 @@ pub unsafe extern "C" fn create_named_otel_span(span_name: *const c_char) -> u64
 /// * If `parent_span_ptr` is 0 or invalid, the function will create an independent span as fallback.
 #[unsafe(no_mangle)]
 pub extern "C" fn create_otel_span_with_parent(request_type: RequestType, parent_span_ptr: u64) -> u64 {
-    // Get command name from request type
+    // Validate request type and extract command first (this should fail hard)
     let cmd = match request_type.get_command() {
         Some(cmd) => cmd,
-        None => return 0, // Return 0 if no command available
+        None => {
+            logger_core::log_error("ffi_otel", "create_otel_span_with_parent: RequestType has no command available");
+            return 0;
+        }
     };
+    
+    // Validate command bytes
     let cmd_bytes = match cmd.command() {
         Some(bytes) => bytes,
-        None => return 0, // Return 0 if no command bytes available
+        None => {
+            logger_core::log_error("ffi_otel", "create_otel_span_with_parent: Command has no bytes available");
+            return 0;
+        }
     };
+    
+    // Validate UTF-8 encoding
     let command_name = match std::str::from_utf8(cmd_bytes.as_slice()) {
         Ok(name) => name,
-        Err(_) => return 0, // Return 0 if command bytes are not valid UTF-8
+        Err(e) => {
+            logger_core::log_error("ffi_otel", &format!("create_otel_span_with_parent: Command bytes are not valid UTF-8: {}", e));
+            return 0;
+        }
     };
 
-    // Create span with parent using the Rust core method
+    // Validate command name length (reasonable limit to prevent abuse)
+    if command_name.len() > 256 {
+        logger_core::log_error("ffi_otel", &format!("create_otel_span_with_parent: Command name too long ({} chars), max 256", command_name.len()));
+        return 0;
+    }
+
+    // Handle parent span pointer validation with graceful fallback
+    if parent_span_ptr == 0 {
+        logger_core::log_warn("ffi_otel", "create_otel_span_with_parent: parent_span_ptr is null (0), creating independent span as fallback");
+        // Graceful fallback: create independent span
+        let span = GlideOpenTelemetry::new_span(command_name);
+        let arc = Arc::new(span);
+        let ptr = Arc::into_raw(arc);
+        let span_ptr = ptr as u64;
+        logger_core::log_debug("ffi_otel", &format!("create_otel_span_with_parent: Created independent fallback span '{}' with pointer 0x{:x}", command_name, span_ptr));
+        return span_ptr;
+    }
+
+    // Create span with parent using the Rust core method (which handles validation internally)
     let span = match GlideOpenTelemetry::new_span_with_parent(command_name, parent_span_ptr) {
         Ok(span) => span,
-        Err(_) => return 0, // Return 0 on any error (graceful fallback is handled in Rust core)
+        Err(e) => {
+            logger_core::log_warn("ffi_otel", &format!("create_otel_span_with_parent: Failed to create child span '{}' with parent 0x{:x}: {}. Creating independent span as fallback.", command_name, parent_span_ptr, e));
+            // The Rust core already handles graceful fallback, but if it still fails, create independent span
+            GlideOpenTelemetry::new_span(command_name)
+        }
     };
 
     // Convert span to pointer and return
     let arc = Arc::new(span);
     let ptr = Arc::into_raw(arc);
-    ptr as u64
+    let span_ptr = ptr as u64;
+    
+    logger_core::log_debug("ffi_otel", &format!("create_otel_span_with_parent: Successfully created span '{}' with parent 0x{:x}, child pointer 0x{:x}", command_name, parent_span_ptr, span_ptr));
+    span_ptr
 }
 
 /// Drops an OpenTelemetry span given its pointer as u64.
@@ -2064,11 +2145,47 @@ pub extern "C" fn create_otel_span_with_parent(request_type: RequestType, parent
 /// * `span_ptr` must be a valid pointer to a [`Arc<GlideSpan>`] span created by [`create_otel_span`] or `0`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn drop_otel_span(span_ptr: u64) {
+    // Validate span pointer
     if span_ptr == 0 {
+        logger_core::log_debug("ffi_otel", "drop_otel_span: Ignoring null span pointer (0)");
         return;
     }
+
+    // Validate pointer alignment and bounds (basic safety checks)
+    if span_ptr % 8 != 0 {
+        logger_core::log_error("ffi_otel", &format!("drop_otel_span: Invalid span pointer - misaligned: 0x{:x}", span_ptr));
+        return;
+    }
+
+    // Check for obviously invalid pointer values
+    const MIN_VALID_ADDRESS: u64 = 0x1000; // 4KB, below this is likely invalid
+    const MAX_VALID_ADDRESS: u64 = 0x7FFF_FFFF_FFFF_FFF8; // Max user space on most 64-bit systems
+    
+    if span_ptr < MIN_VALID_ADDRESS {
+        logger_core::log_error("ffi_otel", &format!("drop_otel_span: Invalid span pointer - address too low: 0x{:x}", span_ptr));
+        return;
+    }
+    
+    if span_ptr > MAX_VALID_ADDRESS {
+        logger_core::log_error("ffi_otel", &format!("drop_otel_span: Invalid span pointer - address too high: 0x{:x}", span_ptr));
+        return;
+    }
+
+    // Attempt to safely drop the span
     unsafe {
-        Arc::from_raw(span_ptr as *const GlideSpan);
+        // Use std::panic::catch_unwind to handle potential panics during Arc::from_raw
+        let result = std::panic::catch_unwind(|| {
+            Arc::from_raw(span_ptr as *const GlideSpan);
+        });
+        
+        match result {
+            Ok(_) => {
+                logger_core::log_debug("ffi_otel", &format!("drop_otel_span: Successfully dropped span with pointer 0x{:x}", span_ptr));
+            },
+            Err(_) => {
+                logger_core::log_error("ffi_otel", &format!("drop_otel_span: Panic occurred while dropping span pointer 0x{:x} - likely invalid pointer", span_ptr));
+            }
+        }
     }
 }
 
