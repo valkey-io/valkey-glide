@@ -12,7 +12,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import glide.api.models.configuration.GlideClientConfiguration;
 import java.util.concurrent.ExecutionException;
 import java.util.logging.Logger;
 import javax.net.ssl.HostnameVerifier;
@@ -568,14 +567,20 @@ public class Jedis implements Closeable {
     public String getex(String key, String... options) {
         checkNotClosed();
         try {
-            // Build command arguments
-            String[] args = new String[options.length + 2];
-            args[0] = "GETEX";
-            args[1] = key;
-            System.arraycopy(options, 0, args, 2, options.length);
+            if (options.length == 0) {
+                // Simple GETEX without options
+                return glideClient.getex(key).get();
+            } else {
+                // For now, fall back to customCommand for complex options parsing
+                // TODO: Parse options and use GetExOptions for better type safety
+                String[] args = new String[options.length + 2];
+                args[0] = "GETEX";
+                args[1] = key;
+                System.arraycopy(options, 0, args, 2, options.length);
 
-            Object result = glideClient.customCommand(args).get();
-            return result != null ? result.toString() : null;
+                Object result = glideClient.customCommand(args).get();
+                return result != null ? result.toString() : null;
+            }
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("GETEX operation failed", e);
         }
@@ -761,8 +766,7 @@ public class Jedis implements Closeable {
     public String randomkey() {
         checkNotClosed();
         try {
-            Object result = glideClient.customCommand(new String[] {"RANDOMKEY"}).get();
-            return result != null ? result.toString() : null;
+            return glideClient.randomKey().get();
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("RANDOMKEY operation failed", e);
         }
