@@ -12,6 +12,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import glide.api.models.configuration.GlideClientConfiguration;
 import java.util.concurrent.ExecutionException;
 import java.util.logging.Logger;
 import javax.net.ssl.HostnameVerifier;

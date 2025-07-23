@@ -15,7 +15,7 @@ internal partial class Request
             throw new NotImplementedException("Command flags are not supported by GLIDE");
         }
         GlideString[] args = [key.ToGlideString(), value.ToGlideString()];
-        return new(RequestType.SAdd, args, false, response => response == 1);
+        return Boolean<long>(RequestType.SAdd, args);
     }
 
     public static Cmd<long, long> SetAddAsync(ValkeyKey key, ValkeyValue[] values, CommandFlags flags = CommandFlags.None)
@@ -35,7 +35,7 @@ internal partial class Request
             throw new NotImplementedException("Command flags are not supported by GLIDE");
         }
         GlideString[] args = [key.ToGlideString(), value.ToGlideString()];
-        return new(RequestType.SRem, args, false, response => response == 1);
+        return Boolean<long>(RequestType.SRem, args);
     }
 
     public static Cmd<long, long> SetRemoveAsync(ValkeyKey key, ValkeyValue[] values, CommandFlags flags = CommandFlags.None)
