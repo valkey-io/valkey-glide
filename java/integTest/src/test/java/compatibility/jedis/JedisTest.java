@@ -603,16 +603,15 @@ public class JedisTest {
         // Test XOR operation
         long result3 = glideJedis.bitop(Jedis.BitOP.XOR, destKey, key1, key2);
         assertEquals(1L, result3, "BITOP XOR should return length of result");
-        // XOR result: 00000001 (ASCII 1, which is a valid but non-printable character)
-        // Instead of checking the exact character, just verify the operation succeeded
-        assertNotNull(glideJedis.get(destKey), "BITOP XOR result should not be null");
+        // XOR result may not be valid UTF-8, so just verify the key exists
+        assertTrue(glideJedis.exists(destKey) > 0, "BITOP XOR result key should exist");
 
         // Test NOT operation (single key)
         long result4 = glideJedis.bitop(Jedis.BitOP.NOT, destKey, key1);
         assertEquals(1L, result4, "BITOP NOT should return length of result");
         // NOT result will be bitwise complement, which may not be valid UTF-8
-        // Just verify the operation succeeded
-        assertNotNull(glideJedis.get(destKey), "BITOP NOT result should not be null");
+        // Just verify the key exists
+        assertTrue(glideJedis.exists(destKey) > 0, "BITOP NOT result key should exist");
     }
 
     @Test
