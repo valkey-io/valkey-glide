@@ -219,7 +219,7 @@ jobs:
 
     remove-package-if-validation-fails:
         needs: [test, set-release-version]
-        if: ${{ needs.test.result == 'failure' }}
+        if: ${{ needs.test.result != 'success' }}
         runs-on: ubuntu-latest
         env:
             RELEASE_VERSION: ${{ needs.set-release-version.outputs.RELEASE_VERSION }}
