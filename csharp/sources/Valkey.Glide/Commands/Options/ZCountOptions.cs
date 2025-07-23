@@ -23,8 +23,5 @@ public readonly struct ZCountRange(ScoreBoundary min, ScoreBoundary max)
     /// Converts the range to command arguments.
     /// </summary>
     /// <returns>An array of string arguments for the command.</returns>
-    public string[] ToArgs()
-    {
-        return [Min.ToString(), Max.ToString()];
-    }
+    public string[] ToArgs() => [Min.ToString(), Max.ToString()];
 }

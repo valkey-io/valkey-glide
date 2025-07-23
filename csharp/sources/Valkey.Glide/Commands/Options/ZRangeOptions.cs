@@ -26,10 +26,14 @@ public readonly struct ScoreBoundary
     public static ScoreBoundary Inclusive(double score)
     {
         if (double.IsPositiveInfinity(score))
-            return new ScoreBoundary(PositiveInfinityScore);
+        {
+            return new(PositiveInfinityScore);
+        }
         if (double.IsNegativeInfinity(score))
-            return new ScoreBoundary(NegativeInfinityScore);
-        return new ScoreBoundary(score.ToString(CultureInfo.InvariantCulture));
+        {
+            return new(NegativeInfinityScore);
+        }
+        return new(score.ToString(CultureInfo.InvariantCulture));
     }
 
     /// <summary>
@@ -40,23 +44,27 @@ public readonly struct ScoreBoundary
     public static ScoreBoundary Exclusive(double score)
     {
         if (double.IsPositiveInfinity(score))
-            return new ScoreBoundary(PositiveInfinityScore);
+        {
+            return new(PositiveInfinityScore);
+        }
         if (double.IsNegativeInfinity(score))
-            return new ScoreBoundary(NegativeInfinityScore);
-        return new ScoreBoundary("(" + score.ToString(CultureInfo.InvariantCulture));
+        {
+            return new(NegativeInfinityScore);
+        }
+        return new("(" + score.ToString(CultureInfo.InvariantCulture));
     }
 
     /// <summary>
     /// Creates a positive infinity boundary.
     /// </summary>
     /// <returns>A positive infinity boundary.</returns>
-    public static ScoreBoundary PositiveInfinity() => new ScoreBoundary(PositiveInfinityScore);
+    public static ScoreBoundary PositiveInfinity() => new(PositiveInfinityScore);
 
     /// <summary>
     /// Creates a negative infinity boundary.
     /// </summary>
     /// <returns>A negative infinity boundary.</returns>
-    public static ScoreBoundary NegativeInfinity() => new ScoreBoundary(NegativeInfinityScore);
+    public static ScoreBoundary NegativeInfinity() => new(NegativeInfinityScore);
 
     /// <summary>
     /// Converts the score boundary to its string representation.
@@ -316,32 +324,26 @@ public readonly struct LexBoundary
     /// </summary>
     /// <param name="value">The lexicographical value.</param>
     /// <returns>An inclusive lexicographical boundary.</returns>
-    public static LexBoundary Inclusive(ValkeyValue value)
-    {
-        return new LexBoundary("[" + value.ToString());
-    }
+    public static LexBoundary Inclusive(ValkeyValue value) => new("[" + value.ToString());
 
     /// <summary>
     /// Creates an exclusive lexicographical boundary.
     /// </summary>
     /// <param name="value">The lexicographical value.</param>
     /// <returns>An exclusive lexicographical boundary.</returns>
-    public static LexBoundary Exclusive(ValkeyValue value)
-    {
-        return new LexBoundary("(" + value.ToString());
-    }
+    public static LexBoundary Exclusive(ValkeyValue value) => new("(" + value.ToString());
 
     /// <summary>
     /// Creates a negative infinity boundary.
     /// </summary>
     /// <returns>A negative infinity boundary.</returns>
-    public static LexBoundary NegativeInfinity() => new LexBoundary(Commands.Constants.Constants.NegativeInfinity);
+    public static LexBoundary NegativeInfinity() => new(Commands.Constants.Constants.NegativeInfinity);
 
     /// <summary>
     /// Creates a positive infinity boundary.
     /// </summary>
     /// <returns>A positive infinity boundary.</returns>
-    public static LexBoundary PositiveInfinity() => new LexBoundary(Commands.Constants.Constants.PositiveInfinity);
+    public static LexBoundary PositiveInfinity() => new(Commands.Constants.Constants.PositiveInfinity);
 
     /// <summary>
     /// Converts the lexicographical boundary to its string representation.

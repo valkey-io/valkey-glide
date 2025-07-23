@@ -107,7 +107,7 @@ internal partial class Request
             ? ScoreBoundary.Exclusive(max)
             : ScoreBoundary.Inclusive(max);
 
-        ZCountRange range = new ZCountRange(minBoundary, maxBoundary);
+        ZCountRange range = new(minBoundary, maxBoundary);
         string[] rangeArgs = range.ToArgs();
 
         List<GlideString> args = [key.ToGlideString()];
@@ -120,10 +120,10 @@ internal partial class Request
     {
         Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
 
-        RangeByIndex query = new RangeByIndex(start, stop);
+        RangeByIndex query = new(start, stop);
         if (order == Order.Descending)
         {
-            query.SetReverse();
+            _ = query.SetReverse();
         }
 
         string[] queryArgs = query.ToArgs();
@@ -137,10 +137,10 @@ internal partial class Request
     {
         Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
 
-        RangeByIndex query = new RangeByIndex(start, stop);
+        RangeByIndex query = new(start, stop);
         if (order == Order.Descending)
         {
-            query.SetReverse();
+            _ = query.SetReverse();
         }
 
         string[] queryArgs = query.ToArgs();
@@ -179,15 +179,15 @@ internal partial class Request
             ? ScoreBoundary.Exclusive(stop)
             : ScoreBoundary.Inclusive(stop);
 
-        RangeByScore query = new RangeByScore(startBoundary, stopBoundary);
+        RangeByScore query = new(startBoundary, stopBoundary);
         if (order == Order.Descending)
         {
-            query.SetReverse();
+            _ = query.SetReverse();
         }
 
         if (take != -1)
         {
-            query.SetLimit(skip, take);
+            _ = query.SetLimit(skip, take);
         }
 
         string[] queryArgs = query.ToArgs();
@@ -210,15 +210,15 @@ internal partial class Request
             ? ScoreBoundary.Exclusive(stop)
             : ScoreBoundary.Inclusive(stop);
 
-        RangeByScore query = new RangeByScore(startBoundary, stopBoundary);
+        RangeByScore query = new(startBoundary, stopBoundary);
         if (order == Order.Descending)
         {
-            query.SetReverse();
+            _ = query.SetReverse();
         }
 
         if (take != -1)
         {
-            query.SetLimit(skip, take);
+            _ = query.SetLimit(skip, take);
         }
 
         string[] queryArgs = query.ToArgs();
@@ -257,11 +257,11 @@ internal partial class Request
             ? LexBoundary.Exclusive(max)
             : LexBoundary.Inclusive(max);
 
-        RangeByLex query = new RangeByLex(minBoundary, maxBoundary);
+        RangeByLex query = new(minBoundary, maxBoundary);
 
         if (take != -1)
         {
-            query.SetLimit(skip, take);
+            _ = query.SetLimit(skip, take);
         }
 
         string[] queryArgs = query.ToArgs();
@@ -281,49 +281,31 @@ internal partial class Request
 
         // Create lexicographical boundaries based on exclude flags
         // Handle double infinity values and default infinity symbols by converting them to lexicographical infinity symbols
-        LexBoundary minBoundary;
         string minStr = actualMin.ToString();
-        if (minStr == NegativeInfinityScore || minStr == NegativeInfinity)
+        LexBoundary minBoundary = minStr switch
         {
-            minBoundary = LexBoundary.NegativeInfinity();
-        }
-        else if (minStr == PositiveInfinityScore || minStr == PositiveInfinity)
-        {
-            minBoundary = LexBoundary.PositiveInfinity();
-        }
-        else
-        {
-            minBoundary = exclude.HasFlag(Exclude.Start)
-                ? LexBoundary.Exclusive(actualMin)
-                : LexBoundary.Inclusive(actualMin);
-        }
+            string s when s == NegativeInfinityScore || s == NegativeInfinity => LexBoundary.NegativeInfinity(),
+            string s when s == PositiveInfinityScore || s == PositiveInfinity => LexBoundary.PositiveInfinity(),
+            _ => exclude.HasFlag(Exclude.Start) ? LexBoundary.Exclusive(actualMin) : LexBoundary.Inclusive(actualMin)
+        };
 
-        LexBoundary maxBoundary;
         string maxStr = actualMax.ToString();
-        if (maxStr == NegativeInfinityScore || maxStr == NegativeInfinity)
+        LexBoundary maxBoundary = maxStr switch
         {
-            maxBoundary = LexBoundary.NegativeInfinity();
-        }
-        else if (maxStr == PositiveInfinityScore || maxStr == PositiveInfinity)
-        {
-            maxBoundary = LexBoundary.PositiveInfinity();
-        }
-        else
-        {
-            maxBoundary = exclude.HasFlag(Exclude.Stop)
-                ? LexBoundary.Exclusive(actualMax)
-                : LexBoundary.Inclusive(actualMax);
-        }
+            string s when s == NegativeInfinityScore || s == NegativeInfinity => LexBoundary.NegativeInfinity(),
+            string s when s == PositiveInfinityScore || s == PositiveInfinity => LexBoundary.PositiveInfinity(),
+            _ => exclude.HasFlag(Exclude.Stop) ? LexBoundary.Exclusive(actualMax) : LexBoundary.Inclusive(actualMax)
+        };
 
-        RangeByLex query = new RangeByLex(minBoundary, maxBoundary);
+        RangeByLex query = new(minBoundary, maxBoundary);
         if (order == Order.Descending)
         {
-            query.SetReverse();
+            _ = query.SetReverse();
         }
 
         if (take != -1)
         {
-            query.SetLimit(skip, take);
+            _ = query.SetLimit(skip, take);
         }
 
         string[] queryArgs = query.ToArgs();
