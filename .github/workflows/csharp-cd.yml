@@ -2,7 +2,6 @@ name: C# CD
 
 on:
     push:
-        branches: # TODO remove this line
         tags:
             - "v*.*"
     workflow_dispatch:
@@ -33,7 +32,6 @@ env:
 jobs:
     load-platform-matrix:
         runs-on: ubuntu-latest
-        # environment: AWS_ACTIONS
         outputs:
             PLATFORM_MATRIX: ${{ steps.load-platform-matrix.outputs.PLATFORM_MATRIX }}
         steps:
@@ -67,9 +65,8 @@ jobs:
               env:
                   INPUT_VERSION: ${{ github.event.inputs.version }}
 
-    create-binaries-to-publish:
+    create-binaries:
         needs: [load-platform-matrix]
-        # if: github.repository_owner == 'valkey-io'
         timeout-minutes: 35
         strategy:
             # Run all jobs
@@ -118,8 +115,7 @@ jobs:
                       csharp/rust/target/release/*.dylib
                       csharp/rust/target/release/*.dll
 
-    publish-to-nuget:
-        # if: ${{ inputs.nuget_publish == true || github.event_name == 'push' }}
+    build-package-to-publish:
         needs: [set-release-version, create-binaries-to-publish]
         runs-on: ubuntu-latest
         env:
@@ -149,7 +145,7 @@ jobs:
                   DOTNET_INSTALL_DIR: ~/.dotnet
 
             - name: Pack the client
-              run: dotnet pack sources/Valkey.Glide/Valkey.Glide.csproj --configuration Release
+              run: dotnet pack csharp/sources/Valkey.Glide/Valkey.Glide.csproj --configuration Release
               env:
                   SkipCargo: true
 
@@ -157,4 +153,22 @@ jobs:
               continue-on-error: true
               uses: actions/upload-artifact@v4
               with:
+                  name: package
                   path: csharp/sources/Valkey.Glide/bin/Release/Valkey.Glide.*.nupkg
+
+    publish:
+        # environment: AWS_ACTIONS
+        if: ${{ (inputs.nuget_publish == true || github.event_name == 'push') && github.repository_owner == 'valkey-io' }}
+        needs: [build-package-to-publish]
+        runs-on: ubuntu-latest
+        steps:
+            - name: Download package
+              uses: actions/download-artifact@v4
+              with:
+                  name: package
+
+            - name: Publish
+              run: tree
+              #dotnet nuget push Valkey.Glide.*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
+
+# nuget delete Valkey.Glide 1.0 --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
