@@ -26,7 +26,7 @@
     </dependencies>
   </metadata>
   <files>
-    <!-- TODO do we need to include pdb files (debug symbols) and sources? -->
+    <!-- TODO include pdb files (debug symbols) and sources -->
     <file src="bin/Release/net6.0/Valkey.Glide.dll" target="lib/net6.0/Valkey.Glide.dll" />
     <file src="bin/Release/net6.0/Valkey.Glide.xml" target="lib/net6.0/Valkey.Glide.xml" />
     <file src="bin/Release/net8.0/Valkey.Glide.dll" target="lib/net8.0/Valkey.Glide.dll" />
@@ -37,7 +37,8 @@
     <file src="../../bin/aarch64-unknown-linux-gnu/libglide_rs.so" target="runtimes/linux-arm64/native" />
     <file src="../../bin/x86_64-apple-darwin/libglide_rs.dylib" target="runtimes/osx-x64/native" />
     <file src="../../bin/aarch64-apple-darwin/libglide_rs.dylib" target="runtimes/osx-arm64/native" />
-    <!-- <file src="../../bin/win-x64/libglide_rs.dll" target="runtimes/win-x64/native" /> -->
+    <file src="../../bin/x86_64-pc-windows-msvc/libglide_rs.dll" target="runtimes/win-x64/native" />
+    <file src="../../bin/aarch64-pc-windows-msvc/libglide_rs.dll" target="runtimes/win-arm64/native" />
 
     <!-- TODO this takes readme from repo root, add readme to c# dir and update path -->
     <file src="../../../README.md" target="docs/" />
