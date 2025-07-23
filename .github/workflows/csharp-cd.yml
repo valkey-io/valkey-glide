@@ -42,7 +42,6 @@ jobs:
               id: load-platform-matrix
               shell: bash
               run: |
-                  # TODO move to a shared action
                   jq -c "[.[] | select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains([\"nuget\"])))]" < .github/json_matrices/build-matrix.json | awk '{ printf "PLATFORM_MATRIX=%s\n", $0 }' | tee -a $GITHUB_OUTPUT
 
     set-release-version:
@@ -114,6 +113,7 @@ jobs:
                       csharp/rust/target/release/*.so
                       csharp/rust/target/release/*.dylib
                       csharp/rust/target/release/*.dll
+                  # note: rename lib for windows
 
     build-package-to-publish:
         needs: [set-release-version, create-binaries]
@@ -130,7 +130,7 @@ jobs:
 
             - name: dbg
               run: |
-                  tree csharp
+                  tree csharp/bin
 
             - name: Set up dotnet
               uses: actions/setup-dotnet@v4
@@ -144,9 +144,7 @@ jobs:
                   DOTNET_INSTALL_DIR: ~/.dotnet
 
             - name: Pack the client
-              run: |
-                  dotnet build csharp/sources/Valkey.Glide/Valkey.Glide.csproj --configuration Release
-                  dotnet pack csharp/sources/Valkey.Glide/Valkey.Glide.csproj --configuration Release
+              run: dotnet pack csharp/sources/Valkey.Glide/Valkey.Glide.csproj --configuration Release
               env:
                   SkipCargo: true
 
@@ -171,7 +169,7 @@ jobs:
 
             - name: Publish
               run: tree
-              #dotnet nuget push Valkey.Glide.*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
+              # dotnet nuget push Valkey.Glide.*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
 
     test:
         needs: [publish]

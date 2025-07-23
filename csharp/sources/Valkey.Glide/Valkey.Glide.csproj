@@ -52,7 +52,7 @@
     </Exec>
   </Target>
 
-  <ItemGroup Condition="'$(Configuration)' != 'Lint'">
+  <ItemGroup Condition="'$(Configuration)' != 'Lint' And '$(SkipCargo)' != 'true'">
     <Content Include="$(MSBuildThisFileDirectory)../../rust/target/$(Configuration.ToLower())/glide_rs.dll" Condition="$([MSBuild]::IsOSPlatform('Windows'))">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <Link>lib%(FileName)%(Extension)</Link>
