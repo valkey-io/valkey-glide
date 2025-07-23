@@ -144,7 +144,9 @@ jobs:
                   DOTNET_INSTALL_DIR: ~/.dotnet
 
             - name: Pack the client
-              run: dotnet pack csharp/sources/Valkey.Glide/Valkey.Glide.csproj --configuration Release
+              run: |
+                  dotnet build csharp/sources/Valkey.Glide/Valkey.Glide.csproj --configuration Release
+                  dotnet pack csharp/sources/Valkey.Glide/Valkey.Glide.csproj --configuration Release
               env:
                   SkipCargo: true
 
@@ -171,4 +173,56 @@ jobs:
               run: tree
               #dotnet nuget push Valkey.Glide.*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
 
-# nuget delete Valkey.Glide 1.0 --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
+    test:
+        needs: [publish]
+        runs-on: ubuntu-latest
+        env:
+            RELEASE_VERSION: ${{ needs.set-release-version.outputs.RELEASE_VERSION }}
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Set up dotnet
+              uses: actions/setup-dotnet@v4
+              with:
+                  # install latest dotnet too to use language features
+                  dotnet-version: |
+                      8
+                      9
+
+            - name: Patch IT suite to run tests using freshly published version
+              working-directory: csharp/tests/Valkey.Glide.IntegrationTests
+              run: |
+                  dotnet remove reference $(dotnet list reference | tail -n +3)
+                  dotnet add package Valkey.Glide --version ${{ env.RELEASE_VERSION }}
+                  git diff
+
+            - name: Install engine
+              uses: ./.github/workflows/install-engine
+              with:
+                  engine-version: 8.1
+                  target: x86_64-unknown-linux-gnu
+
+            - name: Run tests
+              working-directory: csharp/tests/Valkey.Glide.IntegrationTests
+              run: |
+                  dotnet test --framework net8.0 --logger "console;verbosity=detailed" --logger "html;LogFileName=TestReport.html" --results-directory . --filter "FullyQualifiedName~CommandTests"
+
+            - name: Upload test reports
+              if: always()
+              continue-on-error: true
+              uses: actions/upload-artifact@v4
+              with:
+                  name: test-reports
+                  path: |
+                      csharp/TestReport.html
+                      utils/clusters/**
+
+    remove-package-if-validation-fails:
+        if: ${{ failure() }}
+        needs: [test]
+        runs-on: ubuntu-latest
+        env:
+            RELEASE_VERSION: ${{ needs.set-release-version.outputs.RELEASE_VERSION }}
+        steps:
+            - name: Remove package from NuGet due to test failures
+              run: nuget delete Valkey.Glide ${{ env.RELEASE_VERSION }} --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
