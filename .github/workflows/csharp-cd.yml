@@ -170,13 +170,11 @@ jobs:
 
             - name: Publish
               run: |
-                tree
-                dotnet nuget push --help
-                dotnet nuget delete --help
+                ls -l
               # dotnet nuget push Valkey.Glide.*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
 
     test:
-        needs: [publish]
+        needs: [publish, set-release-version]
         runs-on: ubuntu-latest
         env:
             RELEASE_VERSION: ${{ needs.set-release-version.outputs.RELEASE_VERSION }}
@@ -220,7 +218,7 @@ jobs:
                       utils/clusters/**
 
     remove-package-if-validation-fails:
-        needs: [test]
+        needs: [test, set-release-version]
         if: ${{ needs.test.result == 'failure' }}
         runs-on: ubuntu-latest
         env:
