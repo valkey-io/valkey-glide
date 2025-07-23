@@ -121,17 +121,16 @@ jobs:
         env:
             RELEASE_VERSION: ${{ needs.set-release-version.outputs.RELEASE_VERSION }}
         steps:
+            - uses: actions/checkout@v4
+
             - name: Download published artifacts
               uses: actions/download-artifact@v4
               with:
                   path: csharp/bin/
 
-            - uses: actions/checkout@v4
-
             - name: dbg
               run: |
                   tree csharp
-                  tree
 
             - name: Set up dotnet
               uses: actions/setup-dotnet@v4
