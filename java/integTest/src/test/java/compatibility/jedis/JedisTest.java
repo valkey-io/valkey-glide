@@ -455,6 +455,213 @@ public class JedisTest {
         assertEquals(11L, result2, "STRLEN should return correct length");
     }
 
+    // ===== BITMAP OPERATIONS =====
+
+    @Test
+    @Order(90)
+    @DisplayName("SETBIT Command")
+    void testSetbitCommand() {
+        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
+
+        String testKey = TEST_KEY_PREFIX + "setbit";
+
+        // Test SETBIT on new key
+        boolean result1 = glideJedis.setbit(testKey, 0, true);
+        assertFalse(result1, "SETBIT should return false for new bit");
+
+        // Test SETBIT on existing bit
+        boolean result2 = glideJedis.setbit(testKey, 0, false);
+        assertTrue(result2, "SETBIT should return true for previously set bit");
+
+        // Test SETBIT at different offsets
+        boolean result3 = glideJedis.setbit(testKey, 7, true);
+        assertFalse(result3, "SETBIT should return false for new bit at offset 7");
+
+        boolean result4 = glideJedis.setbit(testKey, 15, true);
+        assertFalse(result4, "SETBIT should return false for new bit at offset 15");
+    }
+
+    @Test
+    @Order(91)
+    @DisplayName("GETBIT Command")
+    void testGetbitCommand() {
+        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
+
+        String testKey = TEST_KEY_PREFIX + "getbit";
+
+        // Test GETBIT on non-existent key
+        boolean result1 = glideJedis.getbit(testKey, 0);
+        assertFalse(result1, "GETBIT should return false for non-existent key");
+
+        // Set some bits and test GETBIT
+        glideJedis.setbit(testKey, 0, true);
+        glideJedis.setbit(testKey, 7, true);
+
+        boolean result2 = glideJedis.getbit(testKey, 0);
+        assertTrue(result2, "GETBIT should return true for set bit at offset 0");
+
+        boolean result3 = glideJedis.getbit(testKey, 7);
+        assertTrue(result3, "GETBIT should return true for set bit at offset 7");
+
+        boolean result4 = glideJedis.getbit(testKey, 1);
+        assertFalse(result4, "GETBIT should return false for unset bit at offset 1");
+
+        boolean result5 = glideJedis.getbit(testKey, 100);
+        assertFalse(result5, "GETBIT should return false for offset beyond string length");
+    }
+
+    @Test
+    @Order(92)
+    @DisplayName("BITCOUNT Command")
+    void testBitcountCommand() {
+        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
+
+        String testKey = TEST_KEY_PREFIX + "bitcount";
+
+        // Test BITCOUNT on non-existent key
+        long result1 = glideJedis.bitcount(testKey);
+        assertEquals(0L, result1, "BITCOUNT should return 0 for non-existent key");
+
+        // Set some bits and test BITCOUNT
+        glideJedis.setbit(testKey, 0, true);
+        glideJedis.setbit(testKey, 1, true);
+        glideJedis.setbit(testKey, 7, true);
+        glideJedis.setbit(testKey, 8, true);
+
+        long result2 = glideJedis.bitcount(testKey);
+        assertEquals(4L, result2, "BITCOUNT should return 4 for 4 set bits");
+
+        // Test BITCOUNT with range
+        long result3 = glideJedis.bitcount(testKey, 0, 0);
+        assertEquals(3L, result3, "BITCOUNT should return 3 for first byte (3 set bits)");
+
+        long result4 = glideJedis.bitcount(testKey, 1, 1);
+        assertEquals(1L, result4, "BITCOUNT should return 1 for second byte (1 set bit)");
+    }
+
+    @Test
+    @Order(93)
+    @DisplayName("BITPOS Command")
+    void testBitposCommand() {
+        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
+
+        String testKey = TEST_KEY_PREFIX + "bitpos";
+
+        // Test BITPOS on non-existent key
+        long result1 = glideJedis.bitpos(testKey, true);
+        assertEquals(-1L, result1, "BITPOS should return -1 for non-existent key searching for 1");
+
+        long result2 = glideJedis.bitpos(testKey, false);
+        assertEquals(-1L, result2, "BITPOS should return -1 for non-existent key searching for 0");
+
+        // Set some bits and test BITPOS
+        glideJedis.setbit(testKey, 2, true);
+        glideJedis.setbit(testKey, 5, true);
+
+        long result3 = glideJedis.bitpos(testKey, true);
+        assertEquals(2L, result3, "BITPOS should return 2 for first set bit");
+
+        long result4 = glideJedis.bitpos(testKey, false);
+        assertEquals(0L, result4, "BITPOS should return 0 for first unset bit");
+
+        // Test BITPOS with range
+        long result5 = glideJedis.bitpos(testKey, true, 0, 0);
+        assertEquals(2L, result5, "BITPOS should return 2 for first set bit in first byte");
+    }
+
+    @Test
+    @Order(94)
+    @DisplayName("BITOP Command")
+    void testBitopCommand() {
+        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
+
+        String key1 = TEST_KEY_PREFIX + "bitop1";
+        String key2 = TEST_KEY_PREFIX + "bitop2";
+        String destKey = TEST_KEY_PREFIX + "bitop_dest";
+
+        // Set up test data
+        // key1: 01000001 (ASCII 'A' = 65)
+        glideJedis.set(key1, "A");
+        // key2: 01000010 (ASCII 'B' = 66)
+        glideJedis.set(key2, "B");
+
+        // Test AND operation
+        long result1 = glideJedis.bitop(Jedis.BitOP.AND, destKey, key1, key2);
+        assertEquals(1L, result1, "BITOP AND should return length of result");
+        // AND result: 01000000 (ASCII '@' = 64)
+        assertEquals("@", glideJedis.get(destKey), "BITOP AND result should be '@'");
+
+        // Test OR operation
+        long result2 = glideJedis.bitop(Jedis.BitOP.OR, destKey, key1, key2);
+        assertEquals(1L, result2, "BITOP OR should return length of result");
+        // OR result: 01000011 (ASCII 'C' = 67)
+        assertEquals("C", glideJedis.get(destKey), "BITOP OR result should be 'C'");
+
+        // Test XOR operation
+        long result3 = glideJedis.bitop(Jedis.BitOP.XOR, destKey, key1, key2);
+        assertEquals(1L, result3, "BITOP XOR should return length of result");
+        // XOR result: 00000011 (ASCII 3)
+        assertEquals("\u0003", glideJedis.get(destKey), "BITOP XOR result should be correct");
+
+        // Test NOT operation (single key)
+        long result4 = glideJedis.bitop(Jedis.BitOP.NOT, destKey, key1);
+        assertEquals(1L, result4, "BITOP NOT should return length of result");
+        // NOT result: 10111110 (bitwise NOT of 'A')
+        assertNotNull(glideJedis.get(destKey), "BITOP NOT result should not be null");
+    }
+
+    @Test
+    @Order(95)
+    @DisplayName("BITFIELD Command")
+    void testBitfieldCommand() {
+        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
+
+        String testKey = TEST_KEY_PREFIX + "bitfield";
+
+        // Test BITFIELD SET and GET operations
+        List<Long> result1 = glideJedis.bitfield(testKey, "SET", "u8", "0", "255");
+        assertNotNull(result1, "BITFIELD should return a result list");
+        assertEquals(1, result1.size(), "BITFIELD SET should return one result");
+        assertEquals(0L, result1.get(0), "BITFIELD SET should return previous value (0)");
+
+        List<Long> result2 = glideJedis.bitfield(testKey, "GET", "u8", "0");
+        assertNotNull(result2, "BITFIELD GET should return a result list");
+        assertEquals(1, result2.size(), "BITFIELD GET should return one result");
+        assertEquals(255L, result2.get(0), "BITFIELD GET should return set value (255)");
+
+        // Test BITFIELD INCRBY operation
+        List<Long> result3 = glideJedis.bitfield(testKey, "INCRBY", "u8", "0", "1");
+        assertNotNull(result3, "BITFIELD INCRBY should return a result list");
+        assertEquals(1, result3.size(), "BITFIELD INCRBY should return one result");
+        // Note: This might wrap around due to overflow, depending on implementation
+        assertNotNull(result3.get(0), "BITFIELD INCRBY should return a value");
+    }
+
+    @Test
+    @Order(96)
+    @DisplayName("BITFIELD_RO Command")
+    void testBitfieldReadonlyCommand() {
+        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
+
+        String testKey = TEST_KEY_PREFIX + "bitfield_ro";
+
+        // Set up test data using regular BITFIELD
+        glideJedis.bitfield(testKey, "SET", "u8", "0", "170"); // 10101010 in binary
+
+        // Test BITFIELD_RO GET operations
+        List<Long> result1 = glideJedis.bitfieldReadonly(testKey, "GET", "u8", "0");
+        assertNotNull(result1, "BITFIELD_RO should return a result list");
+        assertEquals(1, result1.size(), "BITFIELD_RO GET should return one result");
+        assertEquals(170L, result1.get(0), "BITFIELD_RO GET should return correct value");
+
+        // Test BITFIELD_RO with multiple GET operations
+        List<Long> result2 = glideJedis.bitfieldReadonly(testKey, "GET", "u4", "0", "GET", "u4", "4");
+        assertNotNull(result2, "BITFIELD_RO should return a result list");
+        assertEquals(2, result2.size(), "BITFIELD_RO should return two results");
+        assertEquals(10L, result2.get(0), "First nibble should be 10 (1010)");
+        assertEquals(10L, result2.get(1), "Second nibble should be 10 (1010)");
+    }
+
     // ===== NUMERIC OPERATIONS =====
 
     @Test
@@ -1327,6 +1534,17 @@ public class JedisTest {
                 jedis.del(TEST_KEY_PREFIX + "copy_target");
                 jedis.del(TEST_KEY_PREFIX + "copy_existing");
                 jedis.del(TEST_KEY_PREFIX + "target2");
+
+                // Bitmap operation keys
+                jedis.del(TEST_KEY_PREFIX + "setbit");
+                jedis.del(TEST_KEY_PREFIX + "getbit");
+                jedis.del(TEST_KEY_PREFIX + "bitcount");
+                jedis.del(TEST_KEY_PREFIX + "bitpos");
+                jedis.del(TEST_KEY_PREFIX + "bitop1");
+                jedis.del(TEST_KEY_PREFIX + "bitop2");
+                jedis.del(TEST_KEY_PREFIX + "bitop_dest");
+                jedis.del(TEST_KEY_PREFIX + "bitfield");
+                jedis.del(TEST_KEY_PREFIX + "bitfield_ro");
             } else {
                 // Actual Jedis cleanup via reflection
                 Method delMethod = actualJedisClass.getMethod("del", String[].class);
@@ -1417,7 +1635,18 @@ public class JedisTest {
                     TEST_KEY_PREFIX + "copy_source",
                     TEST_KEY_PREFIX + "copy_target",
                     TEST_KEY_PREFIX + "copy_existing",
-                    TEST_KEY_PREFIX + "target2"
+                    TEST_KEY_PREFIX + "target2",
+
+                    // Bitmap operation keys
+                    TEST_KEY_PREFIX + "setbit",
+                    TEST_KEY_PREFIX + "getbit",
+                    TEST_KEY_PREFIX + "bitcount",
+                    TEST_KEY_PREFIX + "bitpos",
+                    TEST_KEY_PREFIX + "bitop1",
+                    TEST_KEY_PREFIX + "bitop2",
+                    TEST_KEY_PREFIX + "bitop_dest",
+                    TEST_KEY_PREFIX + "bitfield",
+                    TEST_KEY_PREFIX + "bitfield_ro"
                 };
                 delMethod.invoke(jedisInstance, (Object) keysToDelete);
             }

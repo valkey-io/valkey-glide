@@ -2,6 +2,7 @@
 package compatibility.clients.jedis;
 
 import glide.api.GlideClient;
+import glide.api.models.commands.bitmap.BitwiseOperation;
 import glide.api.models.configuration.GlideClientConfiguration;
 import java.io.Closeable;
 import java.nio.charset.StandardCharsets;
@@ -1227,5 +1228,234 @@ public class Jedis implements Closeable {
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("COPY operation failed", e);
         }
+    }
+
+    // ===== BITMAP COMMANDS =====
+
+    /**
+     * Sets or clears the bit at offset in the string value stored at key.
+     *
+     * @param key the key
+     * @param offset the bit offset
+     * @param value the bit value (true for 1, false for 0)
+     * @return the original bit value stored at offset
+     */
+    public boolean setbit(String key, long offset, boolean value) {
+        checkNotClosed();
+        try {
+            Long result = glideClient.setbit(key, offset, value ? 1L : 0L).get();
+            return result == 1L;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("SETBIT operation failed", e);
+        }
+    }
+
+    /**
+     * Returns the bit value at offset in the string value stored at key.
+     *
+     * @param key the key
+     * @param offset the bit offset
+     * @return the bit value stored at offset
+     */
+    public boolean getbit(String key, long offset) {
+        checkNotClosed();
+        try {
+            Long result = glideClient.getbit(key, offset).get();
+            return result == 1L;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("GETBIT operation failed", e);
+        }
+    }
+
+    /**
+     * Count the number of set bits in a string.
+     *
+     * @param key the key
+     * @return the number of bits set to 1
+     */
+    public long bitcount(String key) {
+        checkNotClosed();
+        try {
+            return glideClient.bitcount(key).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("BITCOUNT operation failed", e);
+        }
+    }
+
+    /**
+     * Count the number of set bits in a string between start and end offsets.
+     *
+     * @param key the key
+     * @param start the start offset (byte index)
+     * @param end the end offset (byte index)
+     * @return the number of bits set to 1
+     */
+    public long bitcount(String key, long start, long end) {
+        checkNotClosed();
+        try {
+            return glideClient.bitcount(key, start, end).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("BITCOUNT operation failed", e);
+        }
+    }
+
+    /**
+     * Return the position of the first bit set to 1 or 0 in a string.
+     *
+     * @param key the key
+     * @param value the bit value to search for (true for 1, false for 0)
+     * @return the position of the first bit set to the specified value, or -1 if not found
+     */
+    public long bitpos(String key, boolean value) {
+        checkNotClosed();
+        try {
+            return glideClient.bitpos(key, value ? 1L : 0L).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("BITPOS operation failed", e);
+        }
+    }
+
+    /**
+     * Return the position of the first bit set to 1 or 0 in a string within a range.
+     *
+     * @param key the key
+     * @param value the bit value to search for (true for 1, false for 0)
+     * @param start the start offset (byte index)
+     * @param end the end offset (byte index)
+     * @return the position of the first bit set to the specified value, or -1 if not found
+     */
+    public long bitpos(String key, boolean value, long start, long end) {
+        checkNotClosed();
+        try {
+            return glideClient.bitpos(key, value ? 1L : 0L, start, end).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("BITPOS operation failed", e);
+        }
+    }
+
+    /**
+     * Perform bitwise operations between strings.
+     *
+     * @param op the bitwise operation (AND, OR, XOR, NOT)
+     * @param destkey the destination key
+     * @param srckeys the source keys
+     * @return the size of the string stored in the destination key
+     */
+    public long bitop(BitOP op, String destkey, String... srckeys) {
+        checkNotClosed();
+        try {
+            BitwiseOperation operation;
+            switch (op) {
+                case AND:
+                    operation = BitwiseOperation.AND;
+                    break;
+                case OR:
+                    operation = BitwiseOperation.OR;
+                    break;
+                case XOR:
+                    operation = BitwiseOperation.XOR;
+                    break;
+                case NOT:
+                    operation = BitwiseOperation.NOT;
+                    break;
+                default:
+                    throw new IllegalArgumentException("Unsupported bitwise operation: " + op);
+            }
+            return glideClient.bitop(operation, destkey, srckeys).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("BITOP operation failed", e);
+        }
+    }
+
+    /**
+     * Perform multiple bitfield operations on a string.
+     *
+     * @param key the key
+     * @param arguments the bitfield arguments
+     * @return list of results from the bitfield operations
+     */
+    public List<Long> bitfield(String key, String... arguments) {
+        checkNotClosed();
+        try {
+            // Convert arguments to the format expected by GLIDE
+            // This is a simplified implementation - in practice, you might want to parse
+            // the arguments more carefully to construct proper BitFieldSubCommands
+            Object result =
+                    glideClient
+                            .customCommand(concatenateArrays(new String[] {"BITFIELD", key}, arguments))
+                            .get();
+
+            if (result instanceof Object[]) {
+                Object[] resultArray = (Object[]) result;
+                Long[] longArray = new Long[resultArray.length];
+                for (int i = 0; i < resultArray.length; i++) {
+                    if (resultArray[i] instanceof Long) {
+                        longArray[i] = (Long) resultArray[i];
+                    } else if (resultArray[i] != null) {
+                        longArray[i] = Long.parseLong(resultArray[i].toString());
+                    } else {
+                        longArray[i] = null;
+                    }
+                }
+                return Arrays.asList(longArray);
+            } else {
+                return Arrays.asList();
+            }
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("BITFIELD operation failed", e);
+        }
+    }
+
+    /**
+     * Perform read-only bitfield operations on a string.
+     *
+     * @param key the key
+     * @param arguments the bitfield arguments
+     * @return list of results from the bitfield operations
+     */
+    public List<Long> bitfieldReadonly(String key, String... arguments) {
+        checkNotClosed();
+        try {
+            // Convert arguments to the format expected by GLIDE
+            Object result =
+                    glideClient
+                            .customCommand(concatenateArrays(new String[] {"BITFIELD_RO", key}, arguments))
+                            .get();
+
+            if (result instanceof Object[]) {
+                Object[] resultArray = (Object[]) result;
+                Long[] longArray = new Long[resultArray.length];
+                for (int i = 0; i < resultArray.length; i++) {
+                    if (resultArray[i] instanceof Long) {
+                        longArray[i] = (Long) resultArray[i];
+                    } else if (resultArray[i] != null) {
+                        longArray[i] = Long.parseLong(resultArray[i].toString());
+                    } else {
+                        longArray[i] = null;
+                    }
+                }
+                return Arrays.asList(longArray);
+            } else {
+                return Arrays.asList();
+            }
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("BITFIELD_RO operation failed", e);
+        }
+    }
+
+    /** Helper method to concatenate string arrays. */
+    private String[] concatenateArrays(String[] array1, String[] array2) {
+        String[] result = new String[array1.length + array2.length];
+        System.arraycopy(array1, 0, result, 0, array1.length);
+        System.arraycopy(array2, 0, result, array1.length, array2.length);
+        return result;
+    }
+
+    /** Enum for bitwise operations to match Jedis BitOP enum. */
+    public enum BitOP {
+        AND,
+        OR,
+        XOR,
+        NOT
     }
 }
