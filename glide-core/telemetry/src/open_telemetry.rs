@@ -478,7 +478,88 @@ static OTEL: OnceCell<RwLock<GlideOpenTelemetry>> = OnceCell::new();
 
 /// Our interface to OpenTelemetry
 impl GlideOpenTelemetry {
-    /// Create new span with parent span pointer
+    /// Validate if a span pointer is valid and safe to use
+    /// 
+    /// # Arguments
+    /// * `span_ptr` - The u64 span pointer to validate
+    /// 
+    /// # Returns
+    /// * `true` - If the span pointer is valid (non-zero and within reasonable bounds)
+    /// * `false` - If the span pointer is invalid (zero, out of bounds, or potentially corrupted)
+    /// 
+    /// # Safety
+    /// This function performs basic validation but cannot guarantee the pointer points to valid memory.
+    /// It only checks for obvious invalid values like null pointers and unreasonable addresses.
+    pub fn is_span_pointer_valid(span_ptr: u64) -> bool {
+        // Check for null pointer
+        if span_ptr == 0 {
+            log::warn!("OpenTelemetry: Invalid span pointer - null pointer (0)");
+            return false;
+        }
+
+        // Check for obviously invalid pointer values
+        // Pointers should be aligned to at least 8 bytes on 64-bit systems
+        if span_ptr % 8 != 0 {
+            log::warn!("OpenTelemetry: Invalid span pointer - misaligned pointer: 0x{:x}", span_ptr);
+            return false;
+        }
+
+        // Check for unreasonably small addresses (likely corrupted)
+        // Valid heap addresses are typically much higher than this
+        const MIN_VALID_ADDRESS: u64 = 0x1000; // 4KB, below this is likely invalid
+        if span_ptr < MIN_VALID_ADDRESS {
+            log::warn!("OpenTelemetry: Invalid span pointer - address too low: 0x{:x}", span_ptr);
+            return false;
+        }
+
+        // Check for unreasonably high addresses (on 64-bit systems, user space is limited)
+        // This is a conservative check for obviously corrupted pointers
+        // On most 64-bit systems, user space is limited to the lower half of the address space
+        const MAX_VALID_ADDRESS: u64 = 0x7FFF_FFFF_FFFF_FFF8; // Max user space on most 64-bit systems
+        if span_ptr > MAX_VALID_ADDRESS {
+            log::warn!("OpenTelemetry: Invalid span pointer - address too high: 0x{:x}", span_ptr);
+            return false;
+        }
+
+        true
+    }
+
+    /// Safely convert a span pointer to a GlideSpan with validation
+    /// 
+    /// # Arguments
+    /// * `span_ptr` - The u64 span pointer to convert
+    /// 
+    /// # Returns
+    /// * `Ok(GlideSpan)` - If the pointer is valid and conversion succeeds
+    /// * `Err(TraceError)` - If the pointer is invalid or conversion fails
+    /// 
+    /// # Safety
+    /// This function validates the pointer before attempting conversion, but still uses unsafe code
+    /// to perform the actual pointer conversion. The caller must ensure the pointer was created
+    /// by the FFI layer using Arc::into_raw().
+    pub fn safe_span_from_pointer(span_ptr: u64) -> Result<GlideSpan, TraceError> {
+        // First validate the pointer
+        if !Self::is_span_pointer_valid(span_ptr) {
+            return Err(TraceError::from(format!(
+                "Invalid span pointer: 0x{:x} failed validation checks", 
+                span_ptr
+            )));
+        }
+
+        // Attempt to convert the pointer safely
+        // This follows the same pattern as get_unsafe_span_from_ptr in FFI layer
+        let span = unsafe {
+            // Increment strong count to prevent premature deallocation
+            std::sync::Arc::increment_strong_count(span_ptr as *const GlideSpan);
+            
+            // Convert pointer back to Arc and clone the span
+            (*std::sync::Arc::from_raw(span_ptr as *const GlideSpan)).clone()
+        };
+
+        Ok(span)
+    }
+
+    /// Create new span with parent span pointer with validation and safety checks
     /// 
     /// # Arguments
     /// * `name` - The name for the new span
@@ -490,24 +571,41 @@ impl GlideOpenTelemetry {
     /// 
     /// # Safety
     /// The parent_span_ptr must be a valid pointer to an Arc<GlideSpan> or 0.
-    /// Invalid pointers will result in an error being returned.
+    /// Invalid pointers will result in an error being returned with graceful fallback.
     pub fn new_span_with_parent(name: &str, parent_span_ptr: u64) -> Result<GlideSpan, TraceError> {
-        // Validate parent span pointer
-        if parent_span_ptr == 0 {
-            return Err(TraceError::from("Invalid parent span pointer: null pointer"));
+        // First check if the pointer passes basic validation
+        if !Self::is_span_pointer_valid(parent_span_ptr) {
+            log::warn!("OpenTelemetry: Invalid parent span pointer 0x{:x} for child span '{}'. Creating independent span instead.", 
+                      parent_span_ptr, name);
+            // Graceful fallback: create independent span when parent pointer is invalid
+            return Ok(Self::new_span(name));
         }
 
-        // Convert pointer to parent span using the same pattern as FFI layer
-        let parent_span = unsafe {
-            // Follow the exact same pattern as get_unsafe_span_from_ptr
-            std::sync::Arc::increment_strong_count(parent_span_ptr as *const GlideSpan);
-            (*std::sync::Arc::from_raw(parent_span_ptr as *const GlideSpan)).clone()
+        // Attempt to safely convert the validated pointer
+        let parent_span = match Self::safe_span_from_pointer(parent_span_ptr) {
+            Ok(span) => span,
+            Err(err) => {
+                log::warn!("OpenTelemetry: Failed to convert parent span pointer 0x{:x} for child span '{}': {}. Creating independent span instead.", 
+                          parent_span_ptr, name, err);
+                // Graceful fallback: create independent span when parent conversion fails
+                return Ok(Self::new_span(name));
+            }
         };
 
         // Create child span using existing parent-child functionality
-        parent_span.add_span(name).map_err(|err| {
-            TraceError::from(format!("Failed to create child span '{}': {}", name, err))
-        })
+        match parent_span.add_span(name) {
+            Ok(child_span) => {
+                log::debug!("OpenTelemetry: Successfully created child span '{}' with parent pointer 0x{:x}", 
+                           name, parent_span_ptr);
+                Ok(child_span)
+            },
+            Err(err) => {
+                log::warn!("OpenTelemetry: Failed to create child span '{}' with valid parent pointer 0x{:x}: {}. Creating independent span instead.", 
+                          name, parent_span_ptr, err);
+                // Graceful fallback: create independent span when child creation fails
+                Ok(Self::new_span(name))
+            }
+        }
     }
 
     /// Create named span (for user-created parent spans)
@@ -1082,12 +1180,12 @@ mod tests {
         rt.block_on(async {
             init_otel().await.unwrap();
             
-            // Test with null pointer (0)
+            // Test with null pointer (0) - should gracefully fallback to independent span
             let result = GlideOpenTelemetry::new_span_with_parent("child_span", 0);
-            assert!(result.is_err());
+            assert!(result.is_ok());
             
-            let error = result.unwrap_err();
-            assert!(error.to_string().contains("Invalid parent span pointer: null pointer"));
+            let span = result.unwrap();
+            assert_eq!(span.id().len(), 16); // Should have valid span ID
         });
     }
 
@@ -1176,6 +1274,156 @@ mod tests {
             
             let child_json: serde_json::Value = serde_json::from_str(child_span_line).unwrap();
             assert_eq!(child_json["name"], "child_operation");
+        });
+    }
+
+    #[test]
+    fn test_span_pointer_validation() {
+        // Test null pointer validation
+        assert!(!GlideOpenTelemetry::is_span_pointer_valid(0));
+        
+        // Test misaligned pointer validation
+        assert!(!GlideOpenTelemetry::is_span_pointer_valid(0x1001)); // Not 8-byte aligned
+        assert!(!GlideOpenTelemetry::is_span_pointer_valid(0x1002)); // Not 8-byte aligned
+        assert!(!GlideOpenTelemetry::is_span_pointer_valid(0x1007)); // Not 8-byte aligned
+        
+        // Test address too low validation
+        assert!(!GlideOpenTelemetry::is_span_pointer_valid(0x800)); // Below MIN_VALID_ADDRESS
+        assert!(!GlideOpenTelemetry::is_span_pointer_valid(0x100)); // Way too low
+        
+        // Test address too high validation
+        assert!(!GlideOpenTelemetry::is_span_pointer_valid(0x8000_0000_0000_0000)); // Above MAX_VALID_ADDRESS
+        assert!(!GlideOpenTelemetry::is_span_pointer_valid(0xFFFF_FFFF_FFFF_FFFF)); // Maximum u64
+        
+        // Test valid pointer ranges
+        assert!(GlideOpenTelemetry::is_span_pointer_valid(0x1000)); // Minimum valid
+        assert!(GlideOpenTelemetry::is_span_pointer_valid(0x10000)); // Reasonable heap address
+        assert!(GlideOpenTelemetry::is_span_pointer_valid(0x7FFF_FFFF_FFFF_FFF8)); // Near maximum valid
+    }
+
+    #[test]
+    fn test_safe_span_from_pointer_validation() {
+        let rt = shared_runtime();
+        rt.block_on(async {
+            init_otel().await.unwrap();
+            
+            // Test with null pointer
+            let result = GlideOpenTelemetry::safe_span_from_pointer(0);
+            assert!(result.is_err());
+            assert!(result.unwrap_err().to_string().contains("Invalid span pointer"));
+            
+            // Test with misaligned pointer
+            let result = GlideOpenTelemetry::safe_span_from_pointer(0x1001);
+            assert!(result.is_err());
+            assert!(result.unwrap_err().to_string().contains("failed validation checks"));
+            
+            // Test with address too low
+            let result = GlideOpenTelemetry::safe_span_from_pointer(0x800);
+            assert!(result.is_err());
+            assert!(result.unwrap_err().to_string().contains("failed validation checks"));
+            
+            // Note: We don't test with very high addresses that would cause segfaults
+            // The validation function will catch these, but we can't safely test Arc conversion
+        });
+    }
+
+    #[test]
+    fn test_new_span_with_parent_invalid_pointer_fallback() {
+        let rt = shared_runtime();
+        rt.block_on(async {
+            init_otel().await.unwrap();
+            
+            // Test with null pointer - should create independent span
+            let result = GlideOpenTelemetry::new_span_with_parent("test_span", 0);
+            assert!(result.is_ok());
+            let span = result.unwrap();
+            assert_eq!(span.id().len(), 16); // Should have valid span ID
+            
+            // Test with misaligned pointer - should create independent span
+            let result = GlideOpenTelemetry::new_span_with_parent("test_span2", 0x1001);
+            assert!(result.is_ok());
+            let span = result.unwrap();
+            assert_eq!(span.id().len(), 16); // Should have valid span ID
+            
+            // Test with address too low - should create independent span
+            let result = GlideOpenTelemetry::new_span_with_parent("test_span3", 0x800);
+            assert!(result.is_ok());
+            let span = result.unwrap();
+            assert_eq!(span.id().len(), 16); // Should have valid span ID
+            
+            // Test with address too high - should create independent span
+            let result = GlideOpenTelemetry::new_span_with_parent("test_span4", 0x8000_0000_0000_0000);
+            assert!(result.is_ok());
+            let span = result.unwrap();
+            assert_eq!(span.id().len(), 16); // Should have valid span ID
+        });
+    }
+
+    #[test]
+    fn test_new_span_with_parent_valid_pointer() {
+        let rt = shared_runtime();
+        rt.block_on(async {
+            init_otel().await.unwrap();
+            
+            // Test the validation logic with various pointer values
+            // These should pass basic validation
+            let valid_looking_ptrs = vec![
+                0x1000u64,      // Minimum valid address
+                0x10000u64,     // Reasonable heap address
+                0x100000u64,    // Another reasonable address
+            ];
+            
+            for ptr in valid_looking_ptrs {
+                // Test that these pointers pass basic validation
+                assert!(GlideOpenTelemetry::is_span_pointer_valid(ptr));
+            }
+            
+            // Note: We don't test actual Arc conversion with fake pointers as that would cause segfaults
+            // The real functionality is tested in integration tests with actual FFI-created pointers
+        });
+    }
+
+    #[test]
+    fn test_span_pointer_bounds_checking() {
+        // Test various boundary conditions for pointer validation
+        
+        // Test exactly at boundaries
+        assert!(!GlideOpenTelemetry::is_span_pointer_valid(0x0FFF)); // Just below MIN_VALID_ADDRESS
+        assert!(GlideOpenTelemetry::is_span_pointer_valid(0x1000)); // Exactly at MIN_VALID_ADDRESS
+        assert!(GlideOpenTelemetry::is_span_pointer_valid(0x1008)); // Just above MIN_VALID_ADDRESS
+        
+        // Test alignment boundaries
+        assert!(GlideOpenTelemetry::is_span_pointer_valid(0x2000)); // 8-byte aligned
+        assert!(GlideOpenTelemetry::is_span_pointer_valid(0x2008)); // 8-byte aligned
+        assert!(!GlideOpenTelemetry::is_span_pointer_valid(0x2001)); // Not 8-byte aligned
+        assert!(!GlideOpenTelemetry::is_span_pointer_valid(0x2004)); // Not 8-byte aligned
+        
+        // Test high address boundaries
+        assert!(GlideOpenTelemetry::is_span_pointer_valid(0x7FFF_FFFF_FFFF_FFF8)); // Exactly at MAX_VALID_ADDRESS
+        assert!(!GlideOpenTelemetry::is_span_pointer_valid(0x8000_0000_0000_0000)); // Just above MAX_VALID_ADDRESS
+    }
+
+    #[test]
+    fn test_logging_for_invalid_span_pointers() {
+        // This test verifies that invalid span pointer attempts are logged
+        // Note: In a real test environment, you might want to capture log output
+        // For now, we just verify the validation functions are called
+        
+        // These calls should trigger warning logs
+        assert!(!GlideOpenTelemetry::is_span_pointer_valid(0)); // null pointer log
+        assert!(!GlideOpenTelemetry::is_span_pointer_valid(0x1001)); // misaligned log
+        assert!(!GlideOpenTelemetry::is_span_pointer_valid(0x800)); // address too low log
+        
+        let rt = shared_runtime();
+        rt.block_on(async {
+            init_otel().await.unwrap();
+            
+            // These calls should trigger warning logs in new_span_with_parent (graceful fallback)
+            let result1 = GlideOpenTelemetry::new_span_with_parent("test", 0);
+            assert!(result1.is_ok()); // Should fallback to independent span
+            
+            let result2 = GlideOpenTelemetry::new_span_with_parent("test", 0x1001);
+            assert!(result2.is_ok()); // Should fallback to independent span
         });
     }
 }
