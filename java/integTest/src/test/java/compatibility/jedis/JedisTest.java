@@ -1457,6 +1457,132 @@ public class JedisTest {
         assertEquals(0L, result4, "COPY should return 0 for non-existent source key");
     }
 
+    @Test
+    @Order(87)
+    @DisplayName("PFADD Command")
+    void testPfaddCommand() {
+        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
+
+        String key = TEST_KEY_PREFIX + "pfadd";
+
+        // Test adding elements to a new HyperLogLog
+        long result1 = glideJedis.pfadd(key, "element1", "element2", "element3");
+        assertEquals(1L, result1, "PFADD should return 1 when HyperLogLog is created or modified");
+
+        // Test adding duplicate elements (should not modify the HLL)
+        long result2 = glideJedis.pfadd(key, "element1", "element2");
+        assertEquals(0L, result2, "PFADD should return 0 when no new elements are added");
+
+        // Test adding new elements to existing HyperLogLog
+        long result3 = glideJedis.pfadd(key, "element4", "element5");
+        assertEquals(1L, result3, "PFADD should return 1 when new elements are added");
+
+        // Test adding no elements to existing HyperLogLog
+        long result4 = glideJedis.pfadd(key);
+        assertEquals(
+                0L, result4, "PFADD should return 0 when no elements are provided to existing HLL");
+
+        // Test adding no elements to non-existent HyperLogLog (creates empty HLL)
+        String newKey = TEST_KEY_PREFIX + "pfadd_empty";
+        long result5 = glideJedis.pfadd(newKey);
+        assertEquals(1L, result5, "PFADD should return 1 when creating empty HyperLogLog");
+    }
+
+    @Test
+    @Order(88)
+    @DisplayName("PFCOUNT Command")
+    void testPfcountCommand() {
+        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
+
+        String key1 = TEST_KEY_PREFIX + "pfcount1";
+        String key2 = TEST_KEY_PREFIX + "pfcount2";
+        String key3 = TEST_KEY_PREFIX + "pfcount3";
+
+        // Test PFCOUNT on non-existent key
+        long result1 = glideJedis.pfcount(key1);
+        assertEquals(0L, result1, "PFCOUNT should return 0 for non-existent key");
+
+        // Add elements to first HyperLogLog
+        glideJedis.pfadd(key1, "a", "b", "c", "d", "e");
+        long count1 = glideJedis.pfcount(key1);
+        assertTrue(
+                count1 >= 4 && count1 <= 6, "PFCOUNT should return approximate cardinality around 5");
+
+        // Add elements to second HyperLogLog
+        glideJedis.pfadd(key2, "c", "d", "e", "f", "g");
+        long count2 = glideJedis.pfcount(key2);
+        assertTrue(
+                count2 >= 4 && count2 <= 6, "PFCOUNT should return approximate cardinality around 5");
+
+        // Test PFCOUNT with multiple keys
+        long combinedCount = glideJedis.pfcount(key1, key2);
+        assertTrue(
+                combinedCount >= 6 && combinedCount <= 8,
+                "PFCOUNT with multiple keys should return combined cardinality around 7");
+
+        // Test PFCOUNT with mix of existing and non-existent keys
+        long mixedCount = glideJedis.pfcount(key1, key3);
+        assertTrue(
+                mixedCount >= 4 && mixedCount <= 6,
+                "PFCOUNT with non-existent key should ignore the non-existent key");
+    }
+
+    @Test
+    @Order(89)
+    @DisplayName("PFMERGE Command")
+    void testPfmergeCommand() {
+        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
+
+        String source1 = TEST_KEY_PREFIX + "pfmerge_src1";
+        String source2 = TEST_KEY_PREFIX + "pfmerge_src2";
+        String source3 = TEST_KEY_PREFIX + "pfmerge_src3";
+        String dest = TEST_KEY_PREFIX + "pfmerge_dest";
+
+        // Set up source HyperLogLogs
+        glideJedis.pfadd(source1, "a", "b", "c");
+        glideJedis.pfadd(source2, "c", "d", "e");
+        glideJedis.pfadd(source3, "e", "f", "g");
+
+        // Test merging into new destination
+        String result1 = glideJedis.pfmerge(dest, source1, source2);
+        assertEquals("OK", result1, "PFMERGE should return OK");
+
+        // Verify the merged result
+        long mergedCount = glideJedis.pfcount(dest);
+        assertTrue(
+                mergedCount >= 4 && mergedCount <= 6,
+                "Merged HyperLogLog should have approximate cardinality around 5");
+
+        // Test merging into existing destination
+        String result2 = glideJedis.pfmerge(dest, source3);
+        assertEquals("OK", result2, "PFMERGE into existing destination should return OK");
+
+        // Verify the updated merged result
+        long updatedCount = glideJedis.pfcount(dest);
+        assertTrue(
+                updatedCount >= 6 && updatedCount <= 8,
+                "Updated merged HyperLogLog should have approximate cardinality around 7");
+
+        // Test merging with non-existent source (should not affect result)
+        String nonExistentKey = TEST_KEY_PREFIX + "pfmerge_nonexistent";
+        String result3 = glideJedis.pfmerge(dest, nonExistentKey);
+        assertEquals("OK", result3, "PFMERGE with non-existent source should return OK");
+
+        long finalCount = glideJedis.pfcount(dest);
+        assertEquals(
+                updatedCount, finalCount, "PFMERGE with non-existent source should not change cardinality");
+
+        // Test merging into non-existent destination
+        String newDest = TEST_KEY_PREFIX + "pfmerge_new_dest";
+        String result4 = glideJedis.pfmerge(newDest, source1, source2, source3);
+        assertEquals("OK", result4, "PFMERGE into new destination should return OK");
+
+        long newDestCount = glideJedis.pfcount(newDest);
+        assertTrue(
+                newDestCount >= 6 && newDestCount <= 8,
+                "New destination should have approximate cardinality around 7");
+    }
+
     /** Clean up test keys to avoid interference between tests. */
     private void cleanupTestKeys(Object jedisInstance) {
         try {
@@ -1561,6 +1687,19 @@ public class JedisTest {
                 jedis.del(TEST_KEY_PREFIX + "bitop_dest");
                 jedis.del(TEST_KEY_PREFIX + "bitfield");
                 jedis.del(TEST_KEY_PREFIX + "bitfield_ro");
+
+                // HyperLogLog operation keys
+                jedis.del(TEST_KEY_PREFIX + "pfadd");
+                jedis.del(TEST_KEY_PREFIX + "pfadd_empty");
+                jedis.del(TEST_KEY_PREFIX + "pfcount1");
+                jedis.del(TEST_KEY_PREFIX + "pfcount2");
+                jedis.del(TEST_KEY_PREFIX + "pfcount3");
+                jedis.del(TEST_KEY_PREFIX + "pfmerge_src1");
+                jedis.del(TEST_KEY_PREFIX + "pfmerge_src2");
+                jedis.del(TEST_KEY_PREFIX + "pfmerge_src3");
+                jedis.del(TEST_KEY_PREFIX + "pfmerge_dest");
+                jedis.del(TEST_KEY_PREFIX + "pfmerge_nonexistent");
+                jedis.del(TEST_KEY_PREFIX + "pfmerge_new_dest");
             } else {
                 // Actual Jedis cleanup via reflection
                 Method delMethod = actualJedisClass.getMethod("del", String[].class);
@@ -1662,7 +1801,20 @@ public class JedisTest {
                     TEST_KEY_PREFIX + "bitop2",
                     TEST_KEY_PREFIX + "bitop_dest",
                     TEST_KEY_PREFIX + "bitfield",
-                    TEST_KEY_PREFIX + "bitfield_ro"
+                    TEST_KEY_PREFIX + "bitfield_ro",
+
+                    // HyperLogLog operation keys
+                    TEST_KEY_PREFIX + "pfadd",
+                    TEST_KEY_PREFIX + "pfadd_empty",
+                    TEST_KEY_PREFIX + "pfcount1",
+                    TEST_KEY_PREFIX + "pfcount2",
+                    TEST_KEY_PREFIX + "pfcount3",
+                    TEST_KEY_PREFIX + "pfmerge_src1",
+                    TEST_KEY_PREFIX + "pfmerge_src2",
+                    TEST_KEY_PREFIX + "pfmerge_src3",
+                    TEST_KEY_PREFIX + "pfmerge_dest",
+                    TEST_KEY_PREFIX + "pfmerge_nonexistent",
+                    TEST_KEY_PREFIX + "pfmerge_new_dest"
                 };
                 delMethod.invoke(jedisInstance, (Object) keysToDelete);
             }

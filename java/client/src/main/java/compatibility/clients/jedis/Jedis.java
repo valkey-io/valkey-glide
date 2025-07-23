@@ -1458,4 +1458,72 @@ public class Jedis implements Closeable {
         XOR,
         NOT
     }
+
+    // ===== HYPERLOGLOG COMMANDS =====
+
+    /**
+     * Adds all elements to the HyperLogLog data structure stored at the specified key. Creates a new
+     * structure if the key does not exist.
+     *
+     * @param key the key of the HyperLogLog data structure
+     * @param elements the elements to add to the HyperLogLog
+     * @return 1 if the HyperLogLog is newly created or modified, 0 otherwise
+     */
+    public long pfadd(String key, String... elements) {
+        checkNotClosed();
+        try {
+            Boolean result = glideClient.pfadd(key, elements).get();
+            return result ? 1L : 0L;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("PFADD operation failed", e);
+        }
+    }
+
+    /**
+     * Estimates the cardinality of the data stored in a HyperLogLog structure for a single key.
+     *
+     * @param key the key of the HyperLogLog data structure
+     * @return the approximated cardinality of the HyperLogLog data structure
+     */
+    public long pfcount(String key) {
+        checkNotClosed();
+        try {
+            return glideClient.pfcount(new String[] {key}).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("PFCOUNT operation failed", e);
+        }
+    }
+
+    /**
+     * Estimates the cardinality of the data stored in multiple HyperLogLog structures by calculating
+     * the combined cardinality of multiple keys.
+     *
+     * @param keys the keys of the HyperLogLog data structures to be analyzed
+     * @return the approximated cardinality of the combined HyperLogLog data structures
+     */
+    public long pfcount(String... keys) {
+        checkNotClosed();
+        try {
+            return glideClient.pfcount(keys).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("PFCOUNT operation failed", e);
+        }
+    }
+
+    /**
+     * Merges multiple HyperLogLog values into a unique value. If the destination variable exists, it
+     * is treated as one of the source HyperLogLog data sets, otherwise a new HyperLogLog is created.
+     *
+     * @param destkey the key of the destination HyperLogLog where the merged data sets will be stored
+     * @param sourcekeys the keys of the HyperLogLog structures to be merged
+     * @return "OK" if successful
+     */
+    public String pfmerge(String destkey, String... sourcekeys) {
+        checkNotClosed();
+        try {
+            return glideClient.pfmerge(destkey, sourcekeys).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("PFMERGE operation failed", e);
+        }
+    }
 }
