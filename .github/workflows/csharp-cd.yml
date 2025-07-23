@@ -219,10 +219,9 @@ jobs:
 
     remove-package-if-validation-fails:
         needs: [test, set-release-version]
-        if: ${{ needs.test.result != 'success' }}
+        if: ${{ always() }}
         runs-on: ubuntu-latest
-        env:
-            RELEASE_VERSION: ${{ needs.set-release-version.outputs.RELEASE_VERSION }}
         steps:
-            - name: Remove package from NuGet due to test failures
-              run: dotnet nuget delete Valkey.Glide ${{ env.RELEASE_VERSION }} --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
+          - name: Remove package from NuGet due to test failures
+            if: ${{ needs.test.result != 'success' && needs.test.result != '' }}
+            run: dotnet nuget delete Valkey.Glide ${{ env.RELEASE_VERSION }} --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
