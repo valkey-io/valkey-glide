@@ -310,3 +310,33 @@ fn test_ffi_client_command_execution(#[values(false, true)] async_client: bool) 
         close_client(client_ptr);
     }
 }
+#[test]
+fn test_create_otel_span_with_parent() {
+    // Test creating a parent span
+    let parent_span_ptr = create_otel_span(RequestType::Set);
+    assert_ne!(parent_span_ptr, 0, "Parent span creation should succeed");
+
+    // Test creating a child span with valid parent
+    let child_span_ptr = create_otel_span_with_parent(RequestType::Get, parent_span_ptr);
+    assert_ne!(child_span_ptr, 0, "Child span creation with valid parent should succeed");
+
+    // Test creating a child span with invalid parent (0)
+    let child_span_ptr_invalid = create_otel_span_with_parent(RequestType::Get, 0);
+    assert_ne!(child_span_ptr_invalid, 0, "Child span creation with invalid parent should fallback to independent span");
+
+    // Test creating a child span with invalid parent (garbage pointer)
+    let child_span_ptr_garbage = create_otel_span_with_parent(RequestType::Get, 0xDEADBEEF);
+    assert_ne!(child_span_ptr_garbage, 0, "Child span creation with garbage parent should fallback to independent span");
+
+    // Test with invalid request type
+    let child_span_ptr_invalid_req = create_otel_span_with_parent(RequestType::InvalidRequest, parent_span_ptr);
+    assert_eq!(child_span_ptr_invalid_req, 0, "Child span creation with invalid request type should return 0");
+
+    // Clean up spans
+    unsafe {
+        drop_otel_span(parent_span_ptr);
+        drop_otel_span(child_span_ptr);
+        drop_otel_span(child_span_ptr_invalid);
+        drop_otel_span(child_span_ptr_garbage);
+    }
+}

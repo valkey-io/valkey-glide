@@ -1974,6 +1974,47 @@ pub extern "C" fn create_batch_otel_span() -> u64 {
     ptr as u64
 }
 
+/// Creates an OpenTelemetry span with the given request type as a child of the provided parent span.
+/// Returns a pointer to the child span as u64, or 0 on failure.
+///
+/// # Parameters
+/// * `request_type`: The type of request to create a span for
+/// * `parent_span_ptr`: A pointer to the parent span (created by create_otel_span or create_named_otel_span)
+///
+/// # Returns
+/// * A u64 pointer to the created child span, or 0 if creation fails
+///
+/// # Safety
+/// * `parent_span_ptr` must be a valid pointer to a [`Arc<GlideSpan>`] span created by [`create_otel_span`], [`create_named_otel_span`], or [`create_batch_otel_span`], or 0.
+/// * If `parent_span_ptr` is 0 or invalid, the function will create an independent span as fallback.
+#[unsafe(no_mangle)]
+pub extern "C" fn create_otel_span_with_parent(request_type: RequestType, parent_span_ptr: u64) -> u64 {
+    // Get command name from request type
+    let cmd = match request_type.get_command() {
+        Some(cmd) => cmd,
+        None => return 0, // Return 0 if no command available
+    };
+    let cmd_bytes = match cmd.command() {
+        Some(bytes) => bytes,
+        None => return 0, // Return 0 if no command bytes available
+    };
+    let command_name = match std::str::from_utf8(cmd_bytes.as_slice()) {
+        Ok(name) => name,
+        Err(_) => return 0, // Return 0 if command bytes are not valid UTF-8
+    };
+
+    // Create span with parent using the Rust core method
+    let span = match GlideOpenTelemetry::new_span_with_parent(command_name, parent_span_ptr) {
+        Ok(span) => span,
+        Err(_) => return 0, // Return 0 on any error (graceful fallback is handled in Rust core)
+    };
+
+    // Convert span to pointer and return
+    let arc = Arc::new(span);
+    let ptr = Arc::into_raw(arc);
+    ptr as u64
+}
+
 /// Drops an OpenTelemetry span given its pointer as u64.
 ///
 /// # Safety
