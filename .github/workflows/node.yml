@@ -102,11 +102,6 @@ jobs:
               if: runner.os == 'Linux'
               run: sudo sysctl -w net.ipv4.ip_local_port_range="1024 65535"
 
-            # Expand ephemeral port range to prevent socket exhaustion
-            - name: Expand ephemeral port range
-              if: runner.os == 'Linux'
-              run: sudo sysctl -w net.ipv4.ip_local_port_range="1024 65535"
-
             # Install software dependencies
             - name: Install shared dependencies
               uses: ./.github/workflows/install-shared-dependencies

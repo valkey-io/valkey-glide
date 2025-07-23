@@ -541,7 +541,11 @@ export async function flushAndCloseClient(
         }
     } finally {
         // some tests don't initialize a client
-        client?.close();
+        if (client) {
+            client.close();
+            // Wait briefly to ensure closure is completed and resources are released
+            await new Promise((resolve) => setTimeout(resolve, 100));
+        }
     }
 }
 
