@@ -2,6 +2,8 @@
 package compatibility.clients.jedis;
 
 import glide.api.GlideClient;
+import glide.api.models.commands.SortBaseOptions;
+import glide.api.models.commands.SortOptions;
 import glide.api.models.commands.bitmap.BitwiseOperation;
 import glide.api.models.configuration.GlideClientConfiguration;
 import java.io.Closeable;
@@ -977,27 +979,77 @@ public class Jedis implements Closeable {
     public List<String> sort(String key, String... sortingParameters) {
         checkNotClosed();
         try {
-            String[] args = new String[sortingParameters.length + 2];
-            args[0] = "SORT";
-            args[1] = key;
-            System.arraycopy(sortingParameters, 0, args, 2, sortingParameters.length);
-
-            Object result = glideClient.customCommand(args).get();
-            if (result instanceof String[]) {
-                return Arrays.asList((String[]) result);
-            } else if (result instanceof Object[]) {
-                Object[] objArray = (Object[]) result;
-                String[] strArray = new String[objArray.length];
-                for (int i = 0; i < objArray.length; i++) {
-                    strArray[i] = objArray[i] != null ? objArray[i].toString() : null;
-                }
-                return Arrays.asList(strArray);
+            if (sortingParameters.length == 0) {
+                // Simple sort without options
+                String[] result = glideClient.sort(key).get();
+                return Arrays.asList(result);
             } else {
-                return Arrays.asList();
+                // Parse Jedis-style parameters into SortOptions
+                SortOptions sortOptions = parseSortParameters(sortingParameters);
+                String[] result = glideClient.sort(key, sortOptions).get();
+                return Arrays.asList(result);
             }
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("SORT operation failed", e);
         }
+    }
+
+    /**
+     * Parse Jedis-style sort parameters into GLIDE SortOptions.
+     *
+     * @param params the Jedis-style parameters (BY, LIMIT, GET, ASC/DESC, ALPHA)
+     * @return SortOptions object
+     */
+    private SortOptions parseSortParameters(String[] params) {
+        SortOptions.SortOptionsBuilder builder = SortOptions.builder();
+
+        for (int i = 0; i < params.length; i++) {
+            String param = params[i].toUpperCase();
+
+            switch (param) {
+                case "BY":
+                    if (i + 1 < params.length) {
+                        builder.byPattern(params[++i]);
+                    }
+                    break;
+
+                case "LIMIT":
+                    if (i + 2 < params.length) {
+                        try {
+                            long offset = Long.parseLong(params[++i]);
+                            long count = Long.parseLong(params[++i]);
+                            builder.limit(new SortBaseOptions.Limit(offset, count));
+                        } catch (NumberFormatException e) {
+                            // Skip invalid limit parameters
+                        }
+                    }
+                    break;
+
+                case "GET":
+                    if (i + 1 < params.length) {
+                        builder.getPattern(params[++i]);
+                    }
+                    break;
+
+                case "ASC":
+                    builder.orderBy(SortBaseOptions.OrderBy.ASC);
+                    break;
+
+                case "DESC":
+                    builder.orderBy(SortBaseOptions.OrderBy.DESC);
+                    break;
+
+                case "ALPHA":
+                    builder.alpha();
+                    break;
+
+                default:
+                    // Unknown parameter, skip it
+                    break;
+            }
+        }
+
+        return builder.build();
     }
 
     /**
