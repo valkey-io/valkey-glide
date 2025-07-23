@@ -4,6 +4,7 @@ package compatibility.clients.jedis;
 import glide.api.GlideClient;
 import glide.api.models.configuration.GlideClientConfiguration;
 import java.io.Closeable;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -1005,10 +1006,14 @@ public class Jedis implements Closeable {
             Object result = glideClient.customCommand(new String[] {"DUMP", key}).get();
             if (result instanceof byte[]) {
                 return (byte[]) result;
-            } else if (result instanceof String) {
-                return ((String) result).getBytes();
-            } else {
+            } else if (result == null) {
                 return null;
+            } else {
+                // Handle the case where result is returned as a different type
+                // Convert to string first, then to bytes
+                String resultStr = result.toString();
+                // For DUMP, we need to handle this as binary data, not UTF-8 text
+                return resultStr.getBytes(StandardCharsets.ISO_8859_1);
             }
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("DUMP operation failed", e);
@@ -1029,7 +1034,12 @@ public class Jedis implements Closeable {
             Object result =
                     glideClient
                             .customCommand(
-                                    new String[] {"RESTORE", key, String.valueOf(ttl), new String(serializedValue)})
+                                    new String[] {
+                                        "RESTORE",
+                                        key,
+                                        String.valueOf(ttl),
+                                        new String(serializedValue, StandardCharsets.ISO_8859_1)
+                                    })
                             .get();
             return result != null ? result.toString() : "OK";
         } catch (InterruptedException | ExecutionException e) {
