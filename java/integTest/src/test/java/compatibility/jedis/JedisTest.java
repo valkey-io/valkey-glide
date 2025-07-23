@@ -1,6 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package compatibility.jedis;
 
+import static glide.TestConfiguration.SERVER_VERSION;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.*;
 
@@ -1018,9 +1019,11 @@ public class JedisTest {
         Long result1 = glideJedis.expireat(testKey, futureTimestamp);
         assertEquals(1L, result1, "EXPIREAT should return 1 for existing key");
 
-        // Verify expiration is set
-        Long expiretime = glideJedis.expiretime(testKey);
-        assertTrue(expiretime > 0, "EXPIRETIME should return positive timestamp");
+        // Verify expiration is set (only available in 7.0.0+)
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            Long expiretime = glideJedis.expiretime(testKey);
+            assertTrue(expiretime > 0, "EXPIRETIME should return positive timestamp");
+        }
 
         // Test EXPIREAT on non-existent key
         Long result2 = glideJedis.expireat(TEST_KEY_PREFIX + "nonexistent", futureTimestamp);
@@ -1069,9 +1072,11 @@ public class JedisTest {
         Long result1 = glideJedis.pexpireat(testKey, futureTimestamp);
         assertEquals(1L, result1, "PEXPIREAT should return 1 for existing key");
 
-        // Verify expiration is set
-        Long pexpiretime = glideJedis.pexpiretime(testKey);
-        assertTrue(pexpiretime > 0, "PEXPIRETIME should return positive timestamp");
+        // Verify expiration is set (only available in 7.0.0+)
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            Long pexpiretime = glideJedis.pexpiretime(testKey);
+            assertTrue(pexpiretime > 0, "PEXPIRETIME should return positive timestamp");
+        }
 
         // Test PEXPIREAT on non-existent key
         Long result2 = glideJedis.pexpireat(TEST_KEY_PREFIX + "nonexistent", futureTimestamp);
@@ -1132,6 +1137,9 @@ public class JedisTest {
     @DisplayName("EXPIRETIME Command")
     void testExpiretimeCommand() {
         assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"),
+                "EXPIRETIME command added in version 7.0.0");
 
         String testKey = TEST_KEY_PREFIX + "expiretime";
         String testValue = "test_value";
@@ -1157,6 +1165,9 @@ public class JedisTest {
     @DisplayName("PEXPIRETIME Command")
     void testPexpiretimeCommand() {
         assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"),
+                "PEXPIRETIME command added in version 7.0.0");
 
         String testKey = TEST_KEY_PREFIX + "pexpiretime";
         String testValue = "test_value";
