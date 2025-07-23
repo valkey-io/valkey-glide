@@ -14,9 +14,17 @@ internal interface IBatchListCommands
     /// <returns>Command Response - <inheritdoc cref="IListBaseCommands.ListLeftPopAsync(ValkeyKey, long, CommandFlags)" /></returns>
     IBatch ListLeftPop(ValkeyKey key, long count);
 
+    /// <inheritdoc cref="IListBaseCommands.ListLeftPushAsync(ValkeyKey, ValkeyValue, When, CommandFlags)" path="/*[not(self::remarks) and not(self::returns)]" />
+    /// <returns>Command Response - <inheritdoc cref="IListBaseCommands.ListLeftPushAsync(ValkeyKey, ValkeyValue, When, CommandFlags)" /></returns>
+    IBatch ListLeftPush(ValkeyKey key, ValkeyValue value);
+
     /// <inheritdoc cref="IListBaseCommands.ListLeftPushAsync(ValkeyKey, ValkeyValue[], When, CommandFlags)" path="/*[not(self::remarks) and not(self::returns)]" />
     /// <returns>Command Response - <inheritdoc cref="IListBaseCommands.ListLeftPushAsync(ValkeyKey, ValkeyValue[], When, CommandFlags)" /></returns>
     IBatch ListLeftPush(ValkeyKey key, ValkeyValue[] values);
+
+    /// <inheritdoc cref="IListBaseCommands.ListLeftPushAsync(ValkeyKey, ValkeyValue[], CommandFlags)" path="/*[not(self::remarks) and not(self::returns)]" />
+    /// <returns>Command Response - <inheritdoc cref="IListBaseCommands.ListLeftPushAsync(ValkeyKey, ValkeyValue[], CommandFlags)" /></returns>
+    IBatch ListLeftPush(ValkeyKey key, ValkeyValue[] values, CommandFlags flags);
 
     /// <inheritdoc cref="IListBaseCommands.ListRightPopAsync(ValkeyKey, CommandFlags)" path="/*[not(self::remarks) and not(self::returns)]" />
     /// <returns>Command Response - <inheritdoc cref="IListBaseCommands.ListRightPopAsync(ValkeyKey, CommandFlags)" /></returns>
@@ -26,9 +34,17 @@ internal interface IBatchListCommands
     /// <returns>Command Response - <inheritdoc cref="IListBaseCommands.ListRightPopAsync(ValkeyKey, long, CommandFlags)" /></returns>
     IBatch ListRightPop(ValkeyKey key, long count);
 
+    /// <inheritdoc cref="IListBaseCommands.ListRightPushAsync(ValkeyKey, ValkeyValue, When, CommandFlags)" path="/*[not(self::remarks) and not(self::returns)]" />
+    /// <returns>Command Response - <inheritdoc cref="IListBaseCommands.ListRightPushAsync(ValkeyKey, ValkeyValue, When, CommandFlags)" /></returns>
+    IBatch ListRightPush(ValkeyKey key, ValkeyValue value);
+
     /// <inheritdoc cref="IListBaseCommands.ListRightPushAsync(ValkeyKey, ValkeyValue[], When, CommandFlags)" path="/*[not(self::remarks) and not(self::returns)]" />
     /// <returns>Command Response - <inheritdoc cref="IListBaseCommands.ListRightPushAsync(ValkeyKey, ValkeyValue[], When, CommandFlags)" /></returns>
     IBatch ListRightPush(ValkeyKey key, ValkeyValue[] values);
+
+    /// <inheritdoc cref="IListBaseCommands.ListRightPushAsync(ValkeyKey, ValkeyValue[], CommandFlags)" path="/*[not(self::remarks) and not(self::returns)]" />
+    /// <returns>Command Response - <inheritdoc cref="IListBaseCommands.ListRightPushAsync(ValkeyKey, ValkeyValue[], CommandFlags)" /></returns>
+    IBatch ListRightPush(ValkeyKey key, ValkeyValue[] values, CommandFlags flags);
 
     /// <inheritdoc cref="IListBaseCommands.ListLengthAsync(ValkeyKey, CommandFlags)" path="/*[not(self::remarks) and not(self::returns)]" />
     /// <returns>Command Response - <inheritdoc cref="IListBaseCommands.ListLengthAsync(ValkeyKey, CommandFlags)" /></returns>

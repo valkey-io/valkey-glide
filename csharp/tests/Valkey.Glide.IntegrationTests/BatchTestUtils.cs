@@ -419,14 +419,20 @@ internal class BatchTestUtils
         _ = batch.ListLeftPush(key1, [value1, value2]);
         testData.Add(new(2L, "ListLeftPush(key1, [value1, value2])"));
 
-        _ = batch.ListLeftPush(key1, [value3]);
-        testData.Add(new(3L, "ListLeftPush(key1, [value3])"));
+        _ = batch.ListLeftPush(key1, value3);
+        testData.Add(new(3L, "ListLeftPush(key1, value3)"));
+
+        _ = batch.ListLeftPush(key1, [value4]);
+        testData.Add(new(4L, "ListLeftPush(key1, [value4])"));
 
         _ = batch.ListLeftPop(key1);
-        testData.Add(new(new ValkeyValue(value3), "ListLeftPop(key1)"));
+        testData.Add(new(new ValkeyValue(value4), "ListLeftPop(key1)"));
 
         _ = batch.ListLeftPop(key1);
-        testData.Add(new(new ValkeyValue(value2), "ListLeftPop(key1) second"));
+        testData.Add(new(new ValkeyValue(value3), "ListLeftPop(key1) second"));
+
+        _ = batch.ListLeftPop(key1);
+        testData.Add(new(new ValkeyValue(value2), "ListLeftPop(key1) third"));
 
         _ = batch.ListLeftPush(key2, [value1, value2, value3, value4]);
         testData.Add(new(4L, "ListLeftPush(key2, [value1, value2, value3, value4])"));

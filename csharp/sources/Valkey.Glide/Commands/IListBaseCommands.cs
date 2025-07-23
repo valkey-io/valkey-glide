@@ -45,43 +45,118 @@ public interface IListBaseCommands
     /// </code>
     /// </example>
     /// </remarks>
-    Task<ValkeyValue[]> ListLeftPopAsync(ValkeyKey key, long count, CommandFlags flags = CommandFlags.None);
+    Task<ValkeyValue[]?> ListLeftPopAsync(ValkeyKey key, long count, CommandFlags flags = CommandFlags.None);
 
     /// <summary>
-    /// Inserts all the specified values at the head of the list stored at <paramref name="key" />.
+    /// Inserts the specified value at the head of the list stored at key.
+    /// If key does not exist, it is created as an empty list before performing the push operation.
     /// </summary>
     /// <seealso href="https://valkey.io/commands/lpush"/>
     /// <param name="key">The key of the list.</param>
-    /// <param name="values">The elements to insert at the head of the list stored at <paramref name="key" />.</param>
-    /// <param name="when">When is not supported by GLIDE.</param>
+    /// <param name="value">The value to add to the head of the list.</param>
+    /// <param name="when">Not supported. LPUSHX has not been implemented yet.</param>
     /// <param name="flags">Command flags are not supported by GLIDE.</param>
     /// <returns>The length of the list after the push operation.</returns>
     /// <remarks>
     /// <example>
     /// <code>
-    /// long result = await client.ListLeftPushAsync(key, values);
+    /// long result = await client.ListLeftPushAsync(key, value);
+    /// </code>
+    /// </example>
+    /// </remarks>
+    Task<long> ListLeftPushAsync(ValkeyKey key, ValkeyValue value, When when = When.Always, CommandFlags flags = CommandFlags.None);
+
+    /// <summary>
+    /// Inserts all the specified values at the head of the list stored at <paramref name="key" />. Elements are inserted one
+    /// after the other to the head of the list, from the leftmost element to the rightmost element. If key does not exist, it
+    /// is created as an empty list before performing the push operation.
+    /// </summary>
+    /// <seealso href="https://valkey.io/commands/lpush"/>
+    /// <param name="key">The key of the list.</param>
+    /// <param name="values">The elements to insert at the head of the list stored at <paramref name="key" />.</param>
+    /// <param name="when">Not supported. LPUSHX has not been implemented yet.</param>
+    /// <param name="flags">Command flags are not supported by GLIDE.</param>
+    /// <returns>The length of the list after the push operation.</returns>
+    /// <remarks>
+    /// <example>
+    /// <code>
+    /// long result = await client.ListLeftPushAsync(key, values, When.Always);
     /// </code>
     /// </example>
     /// </remarks>
     Task<long> ListLeftPushAsync(ValkeyKey key, ValkeyValue[] values, When when = When.Always, CommandFlags flags = CommandFlags.None);
 
     /// <summary>
-    /// Inserts all the specified values at the tail of the list stored at <paramref name="key" />.
+    /// Inserts all the specified values at the head of the list stored at <paramref name="key" />. Elements are inserted one
+    /// after the other to the head of the list, from the leftmost element to the rightmost element. If key does not exist, it
+    /// is created as an empty list before performing the push operation.
     /// </summary>
-    /// <seealso href="https://valkey.io/commands/rpush"/>
+    /// <seealso href="https://valkey.io/commands/lpush"/>
     /// <param name="key">The key of the list.</param>
-    /// <param name="values">The elements to insert at the tail of the list stored at <paramref name="key" />.</param>
-    /// <param name="when">When is not supported by GLIDE.</param>
+    /// <param name="values">The elements to insert at the head of the list stored at <paramref name="key" />.</param>
     /// <param name="flags">Command flags are not supported by GLIDE.</param>
     /// <returns>The length of the list after the push operation.</returns>
     /// <remarks>
     /// <example>
     /// <code>
-    /// long result = await client.ListRightPushAsync(key, values);
+    /// long result = await client.ListLeftPushAsync(key, values, CommandFlags.None);
+    /// </code>
+    /// </example>
+    /// </remarks>
+    Task<long> ListLeftPushAsync(ValkeyKey key, ValkeyValue[] values, CommandFlags flags);
+
+    /// <summary>
+    /// Inserts the specified value at the tail of the list stored at key.
+    /// If key does not exist, it is created as an empty list before performing the push operation.
+    /// </summary>
+    /// <param name="key">The key of the list.</param>
+    /// <param name="value">The value to add to the tail of the list.</param>
+    /// <param name="when">Not supported. RPUSHX has not been implemented yet.</param>
+    /// <param name="flags">Command flags are not supported by GLIDE.</param>
+    /// <returns>The length of the list after the push operation.</returns>
+    /// <remarks>
+    /// <seealso href="https://valkey.io/commands/rpush"/>
+    /// </remarks>
+    Task<long> ListRightPushAsync(ValkeyKey key, ValkeyValue value, When when = When.Always, CommandFlags flags = CommandFlags.None);
+
+    /// <summary>
+    /// Inserts all the specified values at the tail of the list stored at key.
+    /// elements are inserted one after the other to the tail of the list, from the leftmost element to the rightmost element.
+    /// If key does not exist, it is created as an empty list before performing the push operation.
+    /// </summary>
+    /// <seealso href="https://valkey.io/commands/rpush"/>
+    /// <param name="key">The key of the list.</param>
+    /// <param name="values">The elements to insert at the tail of the list stored at <paramref name="key" />.</param>
+    /// <param name="when">Not supported. RPUSHX has not been implemented yet.</param>
+    /// <param name="flags">Command flags are not supported by GLIDE.</param>
+    /// <returns>The length of the list after the push operation.</returns>
+    /// <remarks>
+    /// <example>
+    /// <code>
+    /// long result = await client.ListRightPushAsync(key, values, When.Always);
     /// </code>
     /// </example>
     /// </remarks>
     Task<long> ListRightPushAsync(ValkeyKey key, ValkeyValue[] values, When when = When.Always, CommandFlags flags = CommandFlags.None);
+
+    /// <summary>
+    /// Inserts all the specified values at the tail of the list stored at key.
+    /// elements are inserted one after the other to the tail of the list, from the leftmost element to the rightmost element.
+    /// If key does not exist, it is created as an empty list before performing the push operation.
+    /// </summary>
+    /// <seealso href="https://valkey.io/commands/rpush"/>
+    /// <param name="key">The key of the list.</param>
+    /// <param name="values">The elements to insert at the tail of the list stored at <paramref name="key" />.</param>
+    /// <param name="flags">Command flags are not supported by GLIDE.</param>
+    /// <returns>The length of the list after the push operation.</returns>
+    /// <remarks>
+    /// <example>
+    /// <code>
+    /// long result = await client.ListRightPushAsync(key, values, CommandFlags.None);
+    /// </code>
+    /// </example>
+    /// </remarks>
+    Task<long> ListRightPushAsync(ValkeyKey key, ValkeyValue[] values, CommandFlags flags);
 
     /// <summary>
     /// Removes and returns the last elements of the list stored at <paramref name="key" />.
@@ -119,7 +194,7 @@ public interface IListBaseCommands
     /// </code>
     /// </example>
     /// </remarks>
-    Task<ValkeyValue[]> ListRightPopAsync(ValkeyKey key, long count, CommandFlags flags = CommandFlags.None);
+    Task<ValkeyValue[]?> ListRightPopAsync(ValkeyKey key, long count, CommandFlags flags = CommandFlags.None);
 
     /// <summary>
     /// Returns the length of the list stored at <paramref name="key" />.
