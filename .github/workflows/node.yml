@@ -129,89 +129,14 @@ jobs:
                   npm install
                   npm run build:release
 
-            - name: Start Valkey cluster for testing
-              shell: bash
-              run: |
-                  # Start a Valkey cluster for testing
-                  cd utils
-                  CLUSTER_OUTPUT=$(python3 cluster_manager.py start --cluster-mode -n 3 -r 1)
-                  echo "Cluster startup output:"
-                  echo "$CLUSTER_OUTPUT"
-                  
-                  # Extract cluster nodes from output
-                  CLUSTER_NODES=$(echo "$CLUSTER_OUTPUT" | grep "CLUSTER_NODES=" | cut -d'=' -f2)
-                  CLUSTER_FOLDER=$(echo "$CLUSTER_OUTPUT" | grep "CLUSTER_FOLDER=" | cut -d'=' -f2)
-                  
-                  if [ -z "$CLUSTER_NODES" ]; then
-                      echo "Failed to start cluster - no CLUSTER_NODES found in output"
-                      exit 1
-                  fi
-                  
-                  echo "CLUSTER_ENDPOINTS=$CLUSTER_NODES" >> $GITHUB_ENV
-                  echo "CLUSTER_FOLDER=$CLUSTER_FOLDER" >> $GITHUB_ENV
-                  echo "Cluster started successfully with nodes: $CLUSTER_NODES"
-                  echo "Cluster folder: $CLUSTER_FOLDER"
-                  
-                  # Start a standalone server for tests that need it
-                  STANDALONE_OUTPUT=$(python3 cluster_manager.py start -n 1 -r 0)
-                  echo "Standalone startup output:"
-                  echo "$STANDALONE_OUTPUT"
-                  
-                  STANDALONE_NODES=$(echo "$STANDALONE_OUTPUT" | grep "CLUSTER_NODES=" | cut -d'=' -f2)
-                  STANDALONE_FOLDER=$(echo "$STANDALONE_OUTPUT" | grep "CLUSTER_FOLDER=" | cut -d'=' -f2)
-                  
-                  if [ -z "$STANDALONE_NODES" ]; then
-                      echo "Failed to start standalone server - no CLUSTER_NODES found in output"
-                      exit 1
-                  fi
-                  
-                  echo "STANDALONE_ENDPOINTS=$STANDALONE_NODES" >> $GITHUB_ENV
-                  echo "STANDALONE_FOLDER=$STANDALONE_FOLDER" >> $GITHUB_ENV
-                  echo "Standalone server started successfully: $STANDALONE_NODES"
-                  echo "Standalone folder: $STANDALONE_FOLDER"
-                  
-                  # Wait for all ports to be available
-                  ALL_PORTS="${CLUSTER_NODES},${STANDALONE_NODES}"
-                  for port in $(echo "$ALL_PORTS" | tr ',' '\n' | cut -d':' -f2); do
-                      for i in {1..30}; do
-                          if timeout 1 bash -c "</dev/tcp/127.0.0.1/$port" 2>/dev/null; then
-                              echo "Port $port is available"
-                              break
-                          fi
-                          if [ $i -eq 30 ]; then
-                              echo "Port $port is not available after 30 attempts"
-                              exit 1
-                          fi
-                          sleep 1
-                      done
-                  done
-
             - name: Test
               shell: bash
               run: |
                   npm run build
-                  npm run test -- --cluster-endpoints="$CLUSTER_ENDPOINTS" --standalone-endpoints="$STANDALONE_ENDPOINTS"
+                  npm run test
               working-directory: ./node
               env:
                   JEST_HTML_REPORTER_OUTPUT_PATH: test-report-node.html
-
-            - name: Stop Valkey cluster
-              if: always()
-              shell: bash
-              run: |
-                  # Stop both cluster and standalone server
-                  cd utils
-                  if [ ! -z "$CLUSTER_FOLDER" ] && [ -d "$CLUSTER_FOLDER" ]; then
-                      echo "Stopping cluster in folder: $CLUSTER_FOLDER"
-                      python3 cluster_manager.py stop --cluster-folder "$CLUSTER_FOLDER" || true
-                  fi
-                  if [ ! -z "$STANDALONE_FOLDER" ] && [ -d "$STANDALONE_FOLDER" ]; then
-                      echo "Stopping standalone server in folder: $STANDALONE_FOLDER"
-                      python3 cluster_manager.py stop --cluster-folder "$STANDALONE_FOLDER" || true
-                  fi
-                  # Fallback to stopping all clusters with prefix
-                  echo "Stopping all clusters with prefix 'cluster'"
-                  python3 cluster_manager.py stop --prefix cluster || true
 
             - name: Upload test reports
               if: always()
@@ -268,63 +193,6 @@ jobs:
                   npm install
                   npm run build:release
 
-            - name: Start Valkey cluster for testing
-              shell: bash
-              run: |
-                  # Start a Valkey cluster for testing
-                  cd utils
-                  CLUSTER_OUTPUT=$(python3 cluster_manager.py start --cluster-mode -n 3 -r 1)
-                  echo "Cluster startup output:"
-                  echo "$CLUSTER_OUTPUT"
-                  
-                  # Extract cluster nodes from output
-                  CLUSTER_NODES=$(echo "$CLUSTER_OUTPUT" | grep "CLUSTER_NODES=" | cut -d'=' -f2)
-                  CLUSTER_FOLDER=$(echo "$CLUSTER_OUTPUT" | grep "CLUSTER_FOLDER=" | cut -d'=' -f2)
-                  
-                  if [ -z "$CLUSTER_NODES" ]; then
-                      echo "Failed to start cluster - no CLUSTER_NODES found in output"
-                      exit 1
-                  fi
-                  
-                  echo "CLUSTER_ENDPOINTS=$CLUSTER_NODES" >> $GITHUB_ENV
-                  echo "CLUSTER_FOLDER=$CLUSTER_FOLDER" >> $GITHUB_ENV
-                  echo "Cluster started successfully with nodes: $CLUSTER_NODES"
-                  echo "Cluster folder: $CLUSTER_FOLDER"
-                  
-                  # Start a standalone server for tests that need it
-                  STANDALONE_OUTPUT=$(python3 cluster_manager.py start -n 1 -r 0)
-                  echo "Standalone startup output:"
-                  echo "$STANDALONE_OUTPUT"
-                  
-                  STANDALONE_NODES=$(echo "$STANDALONE_OUTPUT" | grep "CLUSTER_NODES=" | cut -d'=' -f2)
-                  STANDALONE_FOLDER=$(echo "$STANDALONE_OUTPUT" | grep "CLUSTER_FOLDER=" | cut -d'=' -f2)
-                  
-                  if [ -z "$STANDALONE_NODES" ]; then
-                      echo "Failed to start standalone server - no CLUSTER_NODES found in output"
-                      exit 1
-                  fi
-                  
-                  echo "STANDALONE_ENDPOINTS=$STANDALONE_NODES" >> $GITHUB_ENV
-                  echo "STANDALONE_FOLDER=$STANDALONE_FOLDER" >> $GITHUB_ENV
-                  echo "Standalone server started successfully: $STANDALONE_NODES"
-                  echo "Standalone folder: $STANDALONE_FOLDER"
-                  
-                  # Wait for all ports to be available
-                  ALL_PORTS="${CLUSTER_NODES},${STANDALONE_NODES}"
-                  for port in $(echo "$ALL_PORTS" | tr ',' '\n' | cut -d':' -f2); do
-                      for i in {1..30}; do
-                          if timeout 1 bash -c "</dev/tcp/127.0.0.1/$port" 2>/dev/null; then
-                              echo "Port $port is available"
-                              break
-                          fi
-                          if [ $i -eq 30 ]; then
-                              echo "Port $port is not available after 30 attempts"
-                              exit 1
-                          fi
-                          sleep 1
-                      done
-                  done
-
             - name: Install Yarn
               id: install-yarn
               shell: bash
@@ -356,7 +224,7 @@ jobs:
             - name: Test hybrid node modules - commonjs
               run: |
                   npm install
-                  npm run test -- --cluster-endpoints="$CLUSTER_ENDPOINTS" --standalone-endpoints="$STANDALONE_ENDPOINTS"
+                  npm run test
               working-directory: ./node/hybrid-node-tests/commonjs-test
               env:
                   JEST_HTML_REPORTER_OUTPUT_PATH: test-report-commonjs.html
@@ -364,7 +232,7 @@ jobs:
             - name: Test hybrid node modules - ecma
               run: |
                   npm install
-                  npm run test -- --cluster-endpoints="$CLUSTER_ENDPOINTS" --standalone-endpoints="$STANDALONE_ENDPOINTS"
+                  npm run test
               working-directory: ./node/hybrid-node-tests/ecmascript-test
               env:
                   JEST_HTML_REPORTER_OUTPUT_PATH: test-report-ecma.html
@@ -373,24 +241,6 @@ jobs:
               uses: ./.github/workflows/test-benchmark
               with:
                   language-flag: -node
-
-            - name: Stop Valkey cluster
-              if: always()
-              shell: bash
-              run: |
-                  # Stop both cluster and standalone server
-                  cd utils
-                  if [ ! -z "$CLUSTER_FOLDER" ] && [ -d "$CLUSTER_FOLDER" ]; then
-                      echo "Stopping cluster in folder: $CLUSTER_FOLDER"
-                      python3 cluster_manager.py stop --cluster-folder "$CLUSTER_FOLDER" || true
-                  fi
-                  if [ ! -z "$STANDALONE_FOLDER" ] && [ -d "$STANDALONE_FOLDER" ]; then
-                      echo "Stopping standalone server in folder: $STANDALONE_FOLDER"
-                      python3 cluster_manager.py stop --cluster-folder "$STANDALONE_FOLDER" || true
-                  fi
-                  # Fallback to stopping all clusters with prefix
-                  echo "Stopping all clusters with prefix 'cluster'"
-                  python3 cluster_manager.py stop --prefix cluster || true
 
             - name: Upload test reports
               if: always()
@@ -524,74 +374,7 @@ jobs:
                   rustc --version || echo "rustc command failed"
 
                   npm run build
-                  
-                  # Start a Valkey cluster for testing
-                  cd ../utils
-                  CLUSTER_OUTPUT=$(python3 cluster_manager.py start --cluster-mode -n 3 -r 1)
-                  echo "Cluster startup output:"
-                  echo "$CLUSTER_OUTPUT"
-                  
-                  # Extract cluster nodes from output
-                  CLUSTER_NODES=$(echo "$CLUSTER_OUTPUT" | grep "CLUSTER_NODES=" | cut -d'=' -f2)
-                  CLUSTER_FOLDER=$(echo "$CLUSTER_OUTPUT" | grep "CLUSTER_FOLDER=" | cut -d'=' -f2)
-                  
-                  if [ -z "$CLUSTER_NODES" ]; then
-                      echo "Failed to start cluster - no CLUSTER_NODES found in output"
-                      exit 1
-                  fi
-                  
-                  echo "Cluster started successfully with nodes: $CLUSTER_NODES"
-                  echo "Cluster folder: $CLUSTER_FOLDER"
-                  
-                  # Start a standalone server for tests that need it
-                  STANDALONE_OUTPUT=$(python3 cluster_manager.py start -n 1 -r 0)
-                  echo "Standalone startup output:"
-                  echo "$STANDALONE_OUTPUT"
-                  
-                  STANDALONE_NODES=$(echo "$STANDALONE_OUTPUT" | grep "CLUSTER_NODES=" | cut -d'=' -f2)
-                  STANDALONE_FOLDER=$(echo "$STANDALONE_OUTPUT" | grep "CLUSTER_FOLDER=" | cut -d'=' -f2)
-                  
-                  if [ -z "$STANDALONE_NODES" ]; then
-                      echo "Failed to start standalone server - no CLUSTER_NODES found in output"
-                      exit 1
-                  fi
-                  
-                  echo "Standalone server started successfully: $STANDALONE_NODES"
-                  echo "Standalone folder: $STANDALONE_FOLDER"
-                  
-                  # Wait for all ports to be available
-                  ALL_PORTS="${CLUSTER_NODES},${STANDALONE_NODES}"
-                  for port in $(echo "$ALL_PORTS" | tr ',' '\n' | cut -d':' -f2); do
-                      for i in {1..30}; do
-                          if timeout 1 bash -c "</dev/tcp/127.0.0.1/$port" 2>/dev/null; then
-                              echo "Port $port is available"
-                              break
-                          fi
-                          if [ $i -eq 30 ]; then
-                              echo "Port $port is not available after 30 attempts"
-                              exit 1
-                          fi
-                          sleep 1
-                      done
-                  done
-                  
-                  # Run tests with cluster and standalone endpoints
-                  cd ../node
-                  npm run test -- --cluster-endpoints="$CLUSTER_NODES" --standalone-endpoints="$STANDALONE_NODES"
-                  
-                  # Stop both cluster and standalone server
-                  cd ../utils
-                  if [ ! -z "$CLUSTER_FOLDER" ] && [ -d "$CLUSTER_FOLDER" ]; then
-                      echo "Stopping cluster in folder: $CLUSTER_FOLDER"
-                      python3 cluster_manager.py stop --cluster-folder "$CLUSTER_FOLDER" || true
-                  fi
-                  if [ ! -z "$STANDALONE_FOLDER" ] && [ -d "$STANDALONE_FOLDER" ]; then
-                      echo "Stopping standalone server in folder: $STANDALONE_FOLDER"
-                      python3 cluster_manager.py stop --cluster-folder "$STANDALONE_FOLDER" || true
-                  fi
-                  # Fallback to stopping all clusters with prefix
-                  echo "Stopping all clusters with prefix 'cluster'"
-                  python3 cluster_manager.py stop --prefix cluster || true
+                  npm run test
 
             - name: Sanitize IMAGE variable
               if: ${{ matrix.host.TARGET == 'x86_64-unknown-linux-musl' }}
