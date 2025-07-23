@@ -15,8 +15,6 @@
     <Configurations>Debug;Release;Lint</Configurations>
     <NuspecFile>Valkey.Glide.nuspec</NuspecFile>
     <IncludeBuildOutput>true</IncludeBuildOutput>
-    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <GenerateManifests>true</GenerateManifests>
   </PropertyGroup>
 
   <!-- Enable analysis and un-suppress warnings only in `Lint` configuration -->
@@ -66,21 +64,4 @@
       <Link>%(FileName)%(Extension)</Link>
     </Content>
   </ItemGroup>
-
-  <!-- TODO copy files
-  <Target Name="CopyFiles" BeforeTargets="Pack">
-    <MakeDir Directories="$(MSBuildThisFileDirectory)../../bin/linux-x64/" />
-    <Copy
-        SourceFiles="$(OutDir)/libglide_rs.so"
-        DestinationFolder="$(MSBuildThisFileDirectory)../../bin/linux-x64/"
-        />
-  </Target>
-  -->
-
-  
-  <!-- <ItemGroup>
-    <None Include="$(MSBuildThisFileDirectory)../../bin/linux-x64/libglide_rs.so" Pack="true" PackagePath="runtimes/linux-x64/native" />
-    <None Include="$(MSBuildThisFileDirectory)../../bin/win-x64/libglide_rs.dll" Pack="true" PackagePath="runtimes/win-x64/native" />
-  </ItemGroup> -->
-
 </Project>

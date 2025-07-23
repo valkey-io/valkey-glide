@@ -171,7 +171,7 @@ jobs:
             - name: Publish
               run: |
                 ls -l
-              # dotnet nuget push Valkey.Glide.*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
+                dotnet nuget push Valkey.Glide.*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
 
     test:
         needs: [publish, set-release-version]
