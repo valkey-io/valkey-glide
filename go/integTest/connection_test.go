@@ -23,12 +23,7 @@ func newDedicatedValkey(suite *GlideTestSuite, clusterMode bool) (string, error)
 		args = append(args, "--cluster-mode")
 	}
 
-	// shardCount := 1
-	// if clusterMode {
-	// 	shardCount = 3
-	// }
-	// args = append(args, fmt.Sprintf("-n %d", shardCount))
-	args = append(args, fmt.Sprintf("-r %d", 1))
+	args = append(args, fmt.Sprintf("-r %d", 0))
 
 	// Execute cluster manager script
 	output := runClusterManager(suite, args, false)
@@ -83,15 +78,7 @@ func getClientListOutputCount(output interface{}) int {
 		return 0
 	}
 
-	var text string
-	switch v := output.(type) {
-	case []byte:
-		text = string(v)
-	case string:
-		text = v
-	default:
-		return 0
-	}
+	text := output.(string)
 
 	if text = strings.TrimSpace(text); text == "" {
 		return 0
@@ -135,15 +122,7 @@ func getExpectedNewConnections(ctx context.Context, client interfaces.BaseClient
 			return 0, err
 		}
 
-		var nodesInfo string
-		switch v := result.SingleValue().(type) {
-		case []byte:
-			nodesInfo = string(v)
-		case string:
-			nodesInfo = v
-		default:
-			nodesInfo = ""
-		}
+		nodesInfo := result.SingleValue().(string)
 
 		if nodesInfo = strings.TrimSpace(nodesInfo); nodesInfo == "" {
 			return 0, nil
