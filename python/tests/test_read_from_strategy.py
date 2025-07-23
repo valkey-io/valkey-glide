@@ -9,6 +9,8 @@ from glide.async_commands.core import InfoSection
 from glide.config import ProtocolVersion, ReadFrom
 from glide.constants import OK
 from glide.glide_client import GlideClusterClient
+from glide.logger import Level as logLevel
+from glide.logger import Logger
 from glide.routes import AllNodes, SlotIdRoute, SlotType
 from tests.conftest import create_client
 from tests.utils.utils import get_first_result
@@ -94,17 +96,22 @@ class TestAZAffinity:
             if get_cmdstat in value.decode() and az in value.decode()
         )
 
-        # Print diagnostic info for easier CI debugging
-        print(f"Replica nodes found: {list(info_result.keys())}")
-        print(
+        # Log diagnostic info for easier CI debugging
+        Logger.log(
+            logLevel.INFO,
+            "test_routing_with_az_affinity_strategy_to_1_replica",
+            f"Replica nodes found: {list(info_result.keys())}"
+        )
+        Logger.log(
+            logLevel.INFO,
+            "test_routing_with_az_affinity_strategy_to_1_replica",
             f"Total replicas: {n_replicas}, Matching entries in AZ '{az}': {matching_entries_count}"
         )
 
-        # Backend routing may not be strictly enforced across different async backends.
-        # Allow for at least 1 matching entry since some backends (asyncio, trio) may
-        # route differently than expected but should still route to at least one replica in the target AZ.
-        assert matching_entries_count >= 1, (
-            f"Expected at least 1 replica in AZ '{az}' to handle GET calls, "
+        # This test sets up only ONE replica in the target AZ, so we expect exactly 1 replica
+        # to handle all GET calls. This should be deterministic across all backends.
+        assert matching_entries_count == 1, (
+            f"Expected exactly 1 replica in AZ '{az}' to handle GET calls, "
             f"found {matching_entries_count}. Total replica count: {n_replicas}."
         )
 
@@ -184,20 +191,28 @@ class TestAZAffinity:
             if get_cmdstat in value.decode() and az in value.decode()
         )
 
-        # Print diagnostic info for easier CI debugging
-        print(f"Replica nodes found: {list(info_result.keys())}")
-        print(
+        # Log diagnostic info for easier CI debugging
+        Logger.log(
+            logLevel.INFO,
+            "test_routing_by_slot_to_replica_with_az_affinity_strategy_to_all_replicas",
+            f"Replica nodes found: {list(info_result.keys())}"
+        )
+        Logger.log(
+            logLevel.INFO,
+            "test_routing_by_slot_to_replica_with_az_affinity_strategy_to_all_replicas",
             f"Expected replicas: {n_replicas}, Matching entries in AZ '{az}': {matching_entries_count}"
         )
-        print(
+        Logger.log(
+            logLevel.INFO,
+            "test_routing_by_slot_to_replica_with_az_affinity_strategy_to_all_replicas",
             f"GET calls per replica: {GET_CALLS // n_replicas}, Total GET calls: {GET_CALLS}"
         )
 
-        # Backend routing should be consistent when all replicas are in the same AZ.
-        # However, allow for some tolerance in case routing is not perfectly distributed.
-        assert matching_entries_count >= 1, (
-            f"Expected at least 1 replica in AZ '{az}' to handle GET calls, "
-            f"found {matching_entries_count}. Expected replicas: {n_replicas}."
+        # All replicas are in the same AZ, so calls should be distributed among all.
+        # We expect each replica to get GET_CALLS // n_replicas calls (4 calls each).
+        assert matching_entries_count == n_replicas, (
+            f"Expected all {n_replicas} replicas in AZ '{az}' to handle GET calls, "
+            f"found {matching_entries_count}."
         )
 
         await client_for_config_set.close()
@@ -246,20 +261,28 @@ class TestAZAffinity:
             1 for value in info_result.values() if get_cmdstat in value.decode()
         )
 
-        # Print diagnostic info for easier CI debugging
-        print(f"Replica nodes found: {list(info_result.keys())}")
-        print(
+        # Log diagnostic info for easier CI debugging
+        Logger.log(
+            logLevel.INFO,
+            "test_az_affinity_non_existing_az",
+            f"Replica nodes found: {list(info_result.keys())}"
+        )
+        Logger.log(
+            logLevel.INFO,
+            "test_az_affinity_non_existing_az",
             f"Expected replicas: {n_replicas}, Matching entries: {matching_entries_count}"
         )
-        print(
+        Logger.log(
+            logLevel.INFO,
+            "test_az_affinity_non_existing_az",
             f"GET calls per replica: {GET_CALLS // n_replicas}, Total GET calls: {GET_CALLS}"
         )
 
-        # When using a non-existing AZ, calls should be distributed among available replicas.
-        # Backend routing behavior may vary, so allow for at least 1 replica to handle calls.
-        assert matching_entries_count >= 1, (
-            f"Expected at least 1 replica to handle GET calls when using non-existing AZ, "
-            f"found {matching_entries_count}. Expected replicas: {n_replicas}."
+        # When using a non-existing AZ, calls should fall back to normal distribution.
+        # All replicas should receive GET_CALLS // n_replicas calls each.
+        assert matching_entries_count == n_replicas, (
+            f"Expected all {n_replicas} replicas to handle GET calls when using non-existing AZ, "
+            f"found {matching_entries_count}."
         )
 
         await client_for_testing_az.close()
