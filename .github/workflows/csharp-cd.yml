@@ -144,12 +144,13 @@ jobs:
                   DOTNET_INSTALL_DIR: ~/.dotnet
 
             - name: Pack the client
-              run: dotnet pack csharp/sources/Valkey.Glide/Valkey.Glide.csproj --configuration Release
+              run: |
+                  dotnet build csharp/sources/Valkey.Glide/Valkey.Glide.csproj --configuration Release
+                  dotnet pack csharp/sources/Valkey.Glide/Valkey.Glide.csproj --configuration Release
               env:
                   SkipCargo: true
 
             - name: Upload artifacts to publish
-              continue-on-error: true
               uses: actions/upload-artifact@v4
               with:
                   name: package
@@ -157,8 +158,7 @@ jobs:
 
     publish:
         # environment: AWS_ACTIONS
-        # if: ${{ (inputs.nuget_publish == true || github.event_name == 'push') && github.repository_owner == 'valkey-io' }}
-        if: ${{ (inputs.nuget_publish == true) && github.repository_owner == 'valkey-io' }}
+        if: ${{ (inputs.nuget_publish == true || github.event_name == 'push') && github.repository_owner == 'valkey-io' }}
         needs: [build-package-to-publish]
         runs-on: ubuntu-latest
         steps:
@@ -220,7 +220,7 @@ jobs:
 
     remove-package-if-validation-fails:
         needs: [test]
-        if: ${{ failure() }}
+        if: ${{ needs.test.result == 'failure' }}
         runs-on: ubuntu-latest
         env:
             RELEASE_VERSION: ${{ needs.set-release-version.outputs.RELEASE_VERSION }}
