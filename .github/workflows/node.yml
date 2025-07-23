@@ -129,14 +129,66 @@ jobs:
                   npm install
                   npm run build:release
 
+            - name: Start Valkey cluster for testing
+              shell: bash
+              run: |
+                  # Start a Valkey cluster for testing
+                  cd utils
+                  CLUSTER_OUTPUT=$(python3 cluster_manager.py start --cluster-mode -n 3 -r 1)
+                  echo "Cluster startup output:"
+                  echo "$CLUSTER_OUTPUT"
+                  
+                  # Extract cluster nodes from output
+                  CLUSTER_NODES=$(echo "$CLUSTER_OUTPUT" | grep "CLUSTER_NODES=" | cut -d'=' -f2)
+                  CLUSTER_FOLDER=$(echo "$CLUSTER_OUTPUT" | grep "CLUSTER_FOLDER=" | cut -d'=' -f2)
+                  
+                  if [ -z "$CLUSTER_NODES" ]; then
+                      echo "Failed to start cluster - no CLUSTER_NODES found in output"
+                      exit 1
+                  fi
+                  
+                  echo "CLUSTER_ENDPOINTS=$CLUSTER_NODES" >> $GITHUB_ENV
+                  echo "CLUSTER_FOLDER=$CLUSTER_FOLDER" >> $GITHUB_ENV
+                  echo "Cluster started successfully with nodes: $CLUSTER_NODES"
+                  echo "Cluster folder: $CLUSTER_FOLDER"
+                  
+                  # Wait for cluster ports to be available
+                  for port in $(echo "$CLUSTER_NODES" | tr ',' '\n' | cut -d':' -f2); do
+                      for i in {1..30}; do
+                          if timeout 1 bash -c "</dev/tcp/127.0.0.1/$port" 2>/dev/null; then
+                              echo "Port $port is available"
+                              break
+                          fi
+                          if [ $i -eq 30 ]; then
+                              echo "Port $port is not available after 30 attempts"
+                              exit 1
+                          fi
+                          sleep 1
+                      done
+                  done
+
             - name: Test
               shell: bash
               run: |
                   npm run build
-                  npm run test
+                  npm run test -- --cluster-endpoints="$CLUSTER_ENDPOINTS" --standalone-endpoints="$STANDALONE_ENDPOINTS"
               working-directory: ./node
               env:
                   JEST_HTML_REPORTER_OUTPUT_PATH: test-report-node.html
+
+            - name: Stop Valkey cluster
+              if: always()
+              shell: bash
+              run: |
+                  # Stop the cluster using the cluster folder
+                  cd utils
+                  if [ ! -z "$CLUSTER_FOLDER" ] && [ -d "$CLUSTER_FOLDER" ]; then
+                      echo "Stopping cluster in folder: $CLUSTER_FOLDER"
+                      python3 cluster_manager.py stop --cluster-folder "$CLUSTER_FOLDER" || true
+                  else
+                      echo "Stopping all clusters with prefix 'cluster'"
+                      python3 cluster_manager.py stop --prefix cluster || true
+                  fi
 
             - name: Upload test reports
               if: always()
@@ -193,6 +245,44 @@ jobs:
                   npm install
                   npm run build:release
 
+            - name: Start Valkey cluster for testing
+              shell: bash
+              run: |
+                  # Start a Valkey cluster for testing
+                  cd utils
+                  CLUSTER_OUTPUT=$(python3 cluster_manager.py start --cluster-mode -n 3 -r 1)
+                  echo "Cluster startup output:"
+                  echo "$CLUSTER_OUTPUT"
+                  
+                  # Extract cluster nodes from output
+                  CLUSTER_NODES=$(echo "$CLUSTER_OUTPUT" | grep "CLUSTER_NODES=" | cut -d'=' -f2)
+                  CLUSTER_FOLDER=$(echo "$CLUSTER_OUTPUT" | grep "CLUSTER_FOLDER=" | cut -d'=' -f2)
+                  
+                  if [ -z "$CLUSTER_NODES" ]; then
+                      echo "Failed to start cluster - no CLUSTER_NODES found in output"
+                      exit 1
+                  fi
+                  
+                  echo "CLUSTER_ENDPOINTS=$CLUSTER_NODES" >> $GITHUB_ENV
+                  echo "CLUSTER_FOLDER=$CLUSTER_FOLDER" >> $GITHUB_ENV
+                  echo "Cluster started successfully with nodes: $CLUSTER_NODES"
+                  echo "Cluster folder: $CLUSTER_FOLDER"
+                  
+                  # Wait for cluster ports to be available
+                  for port in $(echo "$CLUSTER_NODES" | tr ',' '\n' | cut -d':' -f2); do
+                      for i in {1..30}; do
+                          if timeout 1 bash -c "</dev/tcp/127.0.0.1/$port" 2>/dev/null; then
+                              echo "Port $port is available"
+                              break
+                          fi
+                          if [ $i -eq 30 ]; then
+                              echo "Port $port is not available after 30 attempts"
+                              exit 1
+                          fi
+                          sleep 1
+                      done
+                  done
+
             - name: Install Yarn
               id: install-yarn
               shell: bash
@@ -224,7 +314,7 @@ jobs:
             - name: Test hybrid node modules - commonjs
               run: |
                   npm install
-                  npm run test
+                  npm run test -- --cluster-endpoints="$CLUSTER_ENDPOINTS"
               working-directory: ./node/hybrid-node-tests/commonjs-test
               env:
                   JEST_HTML_REPORTER_OUTPUT_PATH: test-report-commonjs.html
@@ -232,7 +322,7 @@ jobs:
             - name: Test hybrid node modules - ecma
               run: |
                   npm install
-                  npm run test
+                  npm run test -- --cluster-endpoints="$CLUSTER_ENDPOINTS"
               working-directory: ./node/hybrid-node-tests/ecmascript-test
               env:
                   JEST_HTML_REPORTER_OUTPUT_PATH: test-report-ecma.html
@@ -241,6 +331,20 @@ jobs:
               uses: ./.github/workflows/test-benchmark
               with:
                   language-flag: -node
+
+            - name: Stop Valkey cluster
+              if: always()
+              shell: bash
+              run: |
+                  # Stop the cluster using the cluster folder
+                  cd utils
+                  if [ ! -z "$CLUSTER_FOLDER" ] && [ -d "$CLUSTER_FOLDER" ]; then
+                      echo "Stopping cluster in folder: $CLUSTER_FOLDER"
+                      python3 cluster_manager.py stop --cluster-folder "$CLUSTER_FOLDER" || true
+                  else
+                      echo "Stopping all clusters with prefix 'cluster'"
+                      python3 cluster_manager.py stop --prefix cluster || true
+                  fi
 
             - name: Upload test reports
               if: always()
@@ -374,7 +478,53 @@ jobs:
                   rustc --version || echo "rustc command failed"
 
                   npm run build
-                  npm run test
+                  
+                  # Start a Valkey cluster for testing
+                  cd ../utils
+                  CLUSTER_OUTPUT=$(python3 cluster_manager.py start --cluster-mode -n 3 -r 1)
+                  echo "Cluster startup output:"
+                  echo "$CLUSTER_OUTPUT"
+                  
+                  # Extract cluster nodes from output
+                  CLUSTER_NODES=$(echo "$CLUSTER_OUTPUT" | grep "CLUSTER_NODES=" | cut -d'=' -f2)
+                  CLUSTER_FOLDER=$(echo "$CLUSTER_OUTPUT" | grep "CLUSTER_FOLDER=" | cut -d'=' -f2)
+                  
+                  if [ -z "$CLUSTER_NODES" ]; then
+                      echo "Failed to start cluster - no CLUSTER_NODES found in output"
+                      exit 1
+                  fi
+                  
+                  echo "Cluster started successfully with nodes: $CLUSTER_NODES"
+                  echo "Cluster folder: $CLUSTER_FOLDER"
+                  
+                  # Wait for cluster ports to be available
+                  for port in $(echo "$CLUSTER_NODES" | tr ',' '\n' | cut -d':' -f2); do
+                      for i in {1..30}; do
+                          if timeout 1 bash -c "</dev/tcp/127.0.0.1/$port" 2>/dev/null; then
+                              echo "Port $port is available"
+                              break
+                          fi
+                          if [ $i -eq 30 ]; then
+                              echo "Port $port is not available after 30 attempts"
+                              exit 1
+                          fi
+                          sleep 1
+                      done
+                  done
+                  
+                  # Run tests with cluster endpoints
+                  cd ../node
+                  npm run test -- --cluster-endpoints="$CLUSTER_NODES"
+                  
+                  # Stop the cluster
+                  cd ../utils
+                  if [ ! -z "$CLUSTER_FOLDER" ] && [ -d "$CLUSTER_FOLDER" ]; then
+                      echo "Stopping cluster in folder: $CLUSTER_FOLDER"
+                      python3 cluster_manager.py stop --cluster-folder "$CLUSTER_FOLDER" || true
+                  else
+                      echo "Stopping all clusters with prefix 'cluster'"
+                      python3 cluster_manager.py stop --prefix cluster || true
+                  fi
 
             - name: Sanitize IMAGE variable
               if: ${{ matrix.host.TARGET == 'x86_64-unknown-linux-musl' }}

@@ -501,7 +501,18 @@ export async function testTeardown(
         );
     } finally {
         if (client) {
-            client.close();
+            try {
+                client.close();
+                // Give the client a moment to properly disconnect
+                await new Promise(resolve => setTimeout(resolve, 100));
+            } catch (closeError) {
+                Logger.log(
+                    "warn",
+                    "TestUtilities",
+                    "Client close failed during teardown",
+                    closeError as Error,
+                );
+            }
         }
     }
 }
@@ -541,7 +552,20 @@ export async function flushAndCloseClient(
         }
     } finally {
         // some tests don't initialize a client
-        client?.close();
+        if (client) {
+            try {
+                client.close();
+                // Give the client a moment to properly disconnect
+                await new Promise(resolve => setTimeout(resolve, 100));
+            } catch (closeError) {
+                Logger.log(
+                    "warn",
+                    "TestUtilities",
+                    "Primary client close failed during teardown",
+                    closeError as Error,
+                );
+            }
+        }
     }
 }
 
