@@ -2,6 +2,8 @@
 package compatibility.clients.jedis;
 
 import glide.api.GlideClient;
+import glide.api.models.GlideString;
+import glide.api.models.commands.GetExOptions;
 import glide.api.models.commands.SortBaseOptions;
 import glide.api.models.commands.SortOptions;
 import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldGet;
@@ -19,7 +21,6 @@ import glide.api.models.commands.bitmap.BitwiseOperation;
 import glide.api.models.commands.scan.ScanOptions;
 import glide.api.models.configuration.GlideClientConfiguration;
 import java.io.Closeable;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -586,18 +587,49 @@ public class Jedis implements Closeable {
                 // Simple GETEX without options
                 return glideClient.getex(key).get();
             } else {
-                // For now, fall back to customCommand for complex options parsing
-                // TODO: Parse options and use GetExOptions for better type safety
-                String[] args = new String[options.length + 2];
-                args[0] = "GETEX";
-                args[1] = key;
-                System.arraycopy(options, 0, args, 2, options.length);
-
-                Object result = glideClient.customCommand(args).get();
-                return result != null ? result.toString() : null;
+                // Parse options and use GLIDE native method with GetExOptions
+                GetExOptions getExOptions = parseGetExOptions(options);
+                return glideClient.getex(key, getExOptions).get();
             }
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("GETEX operation failed", e);
+        }
+    }
+
+    /**
+     * Parse Jedis-style GETEX options into GLIDE GetExOptions.
+     *
+     * @param options the string options array
+     * @return parsed GetExOptions
+     * @throws IllegalArgumentException if options are invalid
+     */
+    private GetExOptions parseGetExOptions(String[] options) {
+        if (options.length == 1 && "PERSIST".equalsIgnoreCase(options[0])) {
+            return GetExOptions.Persist();
+        } else if (options.length == 2) {
+            String command = options[0].toUpperCase();
+            try {
+                Long value = Long.parseLong(options[1]);
+
+                switch (command) {
+                    case "EX":
+                        return GetExOptions.Seconds(value);
+                    case "PX":
+                        return GetExOptions.Milliseconds(value);
+                    case "EXAT":
+                        return GetExOptions.UnixSeconds(value);
+                    case "PXAT":
+                        return GetExOptions.UnixMilliseconds(value);
+                    default:
+                        throw new IllegalArgumentException("Unknown GETEX option: " + command);
+                }
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException(
+                        "Invalid numeric value for GETEX option: " + options[1], e);
+            }
+        } else {
+            throw new IllegalArgumentException(
+                    "Invalid GETEX options. Expected: [EX|PX|EXAT|PXAT] <value> or PERSIST");
         }
     }
 
@@ -1074,18 +1106,7 @@ public class Jedis implements Closeable {
     public byte[] dump(String key) {
         checkNotClosed();
         try {
-            Object result = glideClient.customCommand(new String[] {"DUMP", key}).get();
-            if (result instanceof byte[]) {
-                return (byte[]) result;
-            } else if (result == null) {
-                return null;
-            } else {
-                // Handle the case where result is returned as a different type
-                // Convert to string first, then to bytes
-                String resultStr = result.toString();
-                // For DUMP, we need to handle this as binary data, not UTF-8 text
-                return resultStr.getBytes(StandardCharsets.ISO_8859_1);
-            }
+            return glideClient.dump(GlideString.of(key)).get();
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("DUMP operation failed", e);
         }
@@ -1102,17 +1123,7 @@ public class Jedis implements Closeable {
     public String restore(String key, long ttl, byte[] serializedValue) {
         checkNotClosed();
         try {
-            Object result =
-                    glideClient
-                            .customCommand(
-                                    new String[] {
-                                        "RESTORE",
-                                        key,
-                                        String.valueOf(ttl),
-                                        new String(serializedValue, StandardCharsets.ISO_8859_1)
-                                    })
-                            .get();
-            return result != null ? result.toString() : "OK";
+            return glideClient.restore(GlideString.of(key), ttl, serializedValue).get();
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("RESTORE operation failed", e);
         }
@@ -1159,15 +1170,8 @@ public class Jedis implements Closeable {
     public Long move(String key, int dbIndex) {
         checkNotClosed();
         try {
-            Object result =
-                    glideClient.customCommand(new String[] {"MOVE", key, String.valueOf(dbIndex)}).get();
-            if (result instanceof Long) {
-                return (Long) result;
-            } else if (result instanceof Boolean) {
-                return ((Boolean) result) ? 1L : 0L;
-            } else {
-                return Long.parseLong(result.toString());
-            }
+            Boolean result = glideClient.move(key, dbIndex).get();
+            return result ? 1L : 0L;
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("MOVE operation failed", e);
         }
