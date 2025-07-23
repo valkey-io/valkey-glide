@@ -4,10 +4,23 @@ package compatibility.clients.jedis;
 import glide.api.GlideClient;
 import glide.api.models.commands.SortBaseOptions;
 import glide.api.models.commands.SortOptions;
+import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldGet;
+import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldIncrby;
+import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldOverflow;
+import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldOverflow.BitOverflowControl;
+import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldReadOnlySubCommands;
+import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldSet;
+import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldSubCommands;
+import glide.api.models.commands.bitmap.BitFieldOptions.Offset;
+import glide.api.models.commands.bitmap.BitFieldOptions.OffsetMultiplier;
+import glide.api.models.commands.bitmap.BitFieldOptions.SignedEncoding;
+import glide.api.models.commands.bitmap.BitFieldOptions.UnsignedEncoding;
 import glide.api.models.commands.bitmap.BitwiseOperation;
+import glide.api.models.commands.scan.ScanOptions;
 import glide.api.models.configuration.GlideClientConfiguration;
 import java.io.Closeable;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -1169,30 +1182,8 @@ public class Jedis implements Closeable {
     public String[] scan(String cursor) {
         checkNotClosed();
         try {
-            Object result = glideClient.customCommand(new String[] {"SCAN", cursor}).get();
-            if (result instanceof Object[]) {
-                Object[] resultArray = (Object[]) result;
-                if (resultArray.length >= 2) {
-                    // First element is cursor, second is array of keys
-                    String newCursor = resultArray[0].toString();
-                    Object keysObj = resultArray[1];
-
-                    if (keysObj instanceof Object[]) {
-                        Object[] keysArray = (Object[]) keysObj;
-                        String[] keys = new String[keysArray.length];
-                        for (int i = 0; i < keysArray.length; i++) {
-                            keys[i] = keysArray[i] != null ? keysArray[i].toString() : null;
-                        }
-
-                        // Return cursor + keys
-                        String[] scanResult = new String[keys.length + 1];
-                        scanResult[0] = newCursor;
-                        System.arraycopy(keys, 0, scanResult, 1, keys.length);
-                        return scanResult;
-                    }
-                }
-            }
-            return new String[] {"0"};
+            Object[] result = glideClient.scan(cursor).get();
+            return convertScanResult(result);
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("SCAN operation failed", e);
         }
@@ -1208,32 +1199,42 @@ public class Jedis implements Closeable {
     public String[] scan(String cursor, String pattern) {
         checkNotClosed();
         try {
-            Object result =
-                    glideClient.customCommand(new String[] {"SCAN", cursor, "MATCH", pattern}).get();
-            if (result instanceof Object[]) {
-                Object[] resultArray = (Object[]) result;
-                if (resultArray.length >= 2) {
-                    String newCursor = resultArray[0].toString();
-                    Object keysObj = resultArray[1];
-
-                    if (keysObj instanceof Object[]) {
-                        Object[] keysArray = (Object[]) keysObj;
-                        String[] keys = new String[keysArray.length];
-                        for (int i = 0; i < keysArray.length; i++) {
-                            keys[i] = keysArray[i] != null ? keysArray[i].toString() : null;
-                        }
-
-                        String[] scanResult = new String[keys.length + 1];
-                        scanResult[0] = newCursor;
-                        System.arraycopy(keys, 0, scanResult, 1, keys.length);
-                        return scanResult;
-                    }
-                }
-            }
-            return new String[] {"0"};
+            ScanOptions options = ScanOptions.builder().matchPattern(pattern).build();
+            Object[] result = glideClient.scan(cursor, options).get();
+            return convertScanResult(result);
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("SCAN operation failed", e);
         }
+    }
+
+    /**
+     * Helper method to convert GLIDE scan result to Jedis format. GLIDE returns Object[] with
+     * [cursor, keys_array], Jedis expects String[] with [cursor, key1, key2, ...]
+     *
+     * @param result the GLIDE scan result
+     * @return Jedis-formatted scan result
+     */
+    private String[] convertScanResult(Object[] result) {
+        if (result != null && result.length >= 2) {
+            // First element is cursor, second is array of keys
+            String newCursor = result[0].toString();
+            Object keysObj = result[1];
+
+            if (keysObj instanceof Object[]) {
+                Object[] keysArray = (Object[]) keysObj;
+                String[] keys = new String[keysArray.length];
+                for (int i = 0; i < keysArray.length; i++) {
+                    keys[i] = keysArray[i] != null ? keysArray[i].toString() : null;
+                }
+
+                // Return cursor + keys in Jedis format
+                String[] scanResult = new String[keys.length + 1];
+                scanResult[0] = newCursor;
+                System.arraycopy(keys, 0, scanResult, 1, keys.length);
+                return scanResult;
+            }
+        }
+        return new String[] {"0"};
     }
 
     /**
@@ -1434,30 +1435,15 @@ public class Jedis implements Closeable {
     public List<Long> bitfield(String key, String... arguments) {
         checkNotClosed();
         try {
-            // Convert arguments to the format expected by GLIDE
-            // This is a simplified implementation - in practice, you might want to parse
-            // the arguments more carefully to construct proper BitFieldSubCommands
-            Object result =
-                    glideClient
-                            .customCommand(concatenateArrays(new String[] {"BITFIELD", key}, arguments))
-                            .get();
-
-            if (result instanceof Object[]) {
-                Object[] resultArray = (Object[]) result;
-                Long[] longArray = new Long[resultArray.length];
-                for (int i = 0; i < resultArray.length; i++) {
-                    if (resultArray[i] instanceof Long) {
-                        longArray[i] = (Long) resultArray[i];
-                    } else if (resultArray[i] != null) {
-                        longArray[i] = Long.parseLong(resultArray[i].toString());
-                    } else {
-                        longArray[i] = null;
-                    }
-                }
-                return Arrays.asList(longArray);
-            } else {
+            if (arguments.length == 0) {
+                // Empty arguments return empty array
                 return Arrays.asList();
             }
+
+            // Parse Jedis-style arguments into GLIDE BitFieldSubCommands
+            BitFieldSubCommands[] subCommands = parseBitFieldArguments(arguments);
+            Long[] result = glideClient.bitfield(key, subCommands).get();
+            return Arrays.asList(result);
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("BITFIELD operation failed", e);
         }
@@ -1473,30 +1459,255 @@ public class Jedis implements Closeable {
     public List<Long> bitfieldReadonly(String key, String... arguments) {
         checkNotClosed();
         try {
-            // Convert arguments to the format expected by GLIDE
-            Object result =
-                    glideClient
-                            .customCommand(concatenateArrays(new String[] {"BITFIELD_RO", key}, arguments))
-                            .get();
-
-            if (result instanceof Object[]) {
-                Object[] resultArray = (Object[]) result;
-                Long[] longArray = new Long[resultArray.length];
-                for (int i = 0; i < resultArray.length; i++) {
-                    if (resultArray[i] instanceof Long) {
-                        longArray[i] = (Long) resultArray[i];
-                    } else if (resultArray[i] != null) {
-                        longArray[i] = Long.parseLong(resultArray[i].toString());
-                    } else {
-                        longArray[i] = null;
-                    }
-                }
-                return Arrays.asList(longArray);
-            } else {
+            if (arguments.length == 0) {
+                // Empty arguments return empty array
                 return Arrays.asList();
             }
+
+            // Parse Jedis-style arguments into GLIDE BitFieldReadOnlySubCommands (only GET operations)
+            BitFieldReadOnlySubCommands[] subCommands = parseBitFieldReadOnlyArguments(arguments);
+            Long[] result = glideClient.bitfieldReadOnly(key, subCommands).get();
+            return Arrays.asList(result);
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("BITFIELD_RO operation failed", e);
+        }
+    }
+
+    /**
+     * Parse Jedis-style bitfield arguments into GLIDE BitFieldSubCommands.
+     *
+     * @param args the Jedis-style arguments (GET/SET/INCRBY/OVERFLOW followed by parameters)
+     * @return array of BitFieldSubCommands
+     */
+    private BitFieldSubCommands[] parseBitFieldArguments(String[] args) {
+        List<BitFieldSubCommands> commands = new ArrayList<>();
+
+        for (int i = 0; i < args.length; ) {
+            String command = args[i].toUpperCase();
+
+            switch (command) {
+                case "GET":
+                    if (i + 2 < args.length) {
+                        commands.add(createBitFieldGet(args[i + 1], args[i + 2]));
+                        i += 3;
+                    } else {
+                        throw new IllegalArgumentException(
+                                "GET command requires encoding and offset parameters");
+                    }
+                    break;
+
+                case "SET":
+                    if (i + 3 < args.length) {
+                        long value = Long.parseLong(args[i + 3]);
+                        commands.add(createBitFieldSet(args[i + 1], args[i + 2], value));
+                        i += 4;
+                    } else {
+                        throw new IllegalArgumentException(
+                                "SET command requires encoding, offset, and value parameters");
+                    }
+                    break;
+
+                case "INCRBY":
+                    if (i + 3 < args.length) {
+                        long increment = Long.parseLong(args[i + 3]);
+                        commands.add(createBitFieldIncrby(args[i + 1], args[i + 2], increment));
+                        i += 4;
+                    } else {
+                        throw new IllegalArgumentException(
+                                "INCRBY command requires encoding, offset, and increment parameters");
+                    }
+                    break;
+
+                case "OVERFLOW":
+                    if (i + 1 < args.length) {
+                        BitOverflowControl control = parseOverflowControl(args[i + 1]);
+                        commands.add(new BitFieldOverflow(control));
+                        i += 2;
+                    } else {
+                        throw new IllegalArgumentException("OVERFLOW command requires control parameter");
+                    }
+                    break;
+
+                default:
+                    throw new IllegalArgumentException("Unknown bitfield command: " + command);
+            }
+        }
+
+        return commands.toArray(new BitFieldSubCommands[0]);
+    }
+
+    /**
+     * Parse Jedis-style bitfield arguments into GLIDE BitFieldReadOnlySubCommands (only GET
+     * operations).
+     *
+     * @param args the Jedis-style arguments (only GET operations allowed)
+     * @return array of BitFieldReadOnlySubCommands
+     */
+    private BitFieldReadOnlySubCommands[] parseBitFieldReadOnlyArguments(String[] args) {
+        List<BitFieldReadOnlySubCommands> commands = new ArrayList<>();
+
+        for (int i = 0; i < args.length; ) {
+            String command = args[i].toUpperCase();
+
+            if ("GET".equals(command)) {
+                if (i + 2 < args.length) {
+                    commands.add(createBitFieldGet(args[i + 1], args[i + 2]));
+                    i += 3;
+                } else {
+                    throw new IllegalArgumentException("GET command requires encoding and offset parameters");
+                }
+            } else {
+                throw new IllegalArgumentException(
+                        "BITFIELD_RO only supports GET operations, found: " + command);
+            }
+        }
+
+        return commands.toArray(new BitFieldReadOnlySubCommands[0]);
+    }
+
+    /**
+     * Parse encoding string into BitEncoding object.
+     *
+     * @param encodingStr encoding string (e.g., "u4", "i8")
+     * @return BitEncoding object (UnsignedEncoding or SignedEncoding)
+     */
+    private Object parseEncoding(String encodingStr) {
+        if (encodingStr.startsWith("u")) {
+            long bits = Long.parseLong(encodingStr.substring(1));
+            return new UnsignedEncoding(bits);
+        } else if (encodingStr.startsWith("i")) {
+            long bits = Long.parseLong(encodingStr.substring(1));
+            return new SignedEncoding(bits);
+        } else {
+            throw new IllegalArgumentException(
+                    "Invalid encoding format: " + encodingStr + ". Must start with 'u' or 'i'");
+        }
+    }
+
+    /**
+     * Parse offset string into BitOffset object.
+     *
+     * @param offsetStr offset string (e.g., "0", "#1")
+     * @return BitOffset object (Offset or OffsetMultiplier)
+     */
+    private Object parseOffset(String offsetStr) {
+        if (offsetStr.startsWith("#")) {
+            long offset = Long.parseLong(offsetStr.substring(1));
+            return new OffsetMultiplier(offset);
+        } else {
+            long offset = Long.parseLong(offsetStr);
+            return new Offset(offset);
+        }
+    }
+
+    /** Create BitFieldGet with proper interface types. */
+    private BitFieldGet createBitFieldGet(String encodingStr, String offsetStr) {
+        if (encodingStr.startsWith("u")) {
+            long bits = Long.parseLong(encodingStr.substring(1));
+            UnsignedEncoding encoding = new UnsignedEncoding(bits);
+
+            if (offsetStr.startsWith("#")) {
+                long offset = Long.parseLong(offsetStr.substring(1));
+                return new BitFieldGet(encoding, new OffsetMultiplier(offset));
+            } else {
+                long offset = Long.parseLong(offsetStr);
+                return new BitFieldGet(encoding, new Offset(offset));
+            }
+        } else if (encodingStr.startsWith("i")) {
+            long bits = Long.parseLong(encodingStr.substring(1));
+            SignedEncoding encoding = new SignedEncoding(bits);
+
+            if (offsetStr.startsWith("#")) {
+                long offset = Long.parseLong(offsetStr.substring(1));
+                return new BitFieldGet(encoding, new OffsetMultiplier(offset));
+            } else {
+                long offset = Long.parseLong(offsetStr);
+                return new BitFieldGet(encoding, new Offset(offset));
+            }
+        } else {
+            throw new IllegalArgumentException(
+                    "Invalid encoding format: " + encodingStr + ". Must start with 'u' or 'i'");
+        }
+    }
+
+    /** Create BitFieldSet with proper interface types. */
+    private BitFieldSet createBitFieldSet(String encodingStr, String offsetStr, long value) {
+        if (encodingStr.startsWith("u")) {
+            long bits = Long.parseLong(encodingStr.substring(1));
+            UnsignedEncoding encoding = new UnsignedEncoding(bits);
+
+            if (offsetStr.startsWith("#")) {
+                long offset = Long.parseLong(offsetStr.substring(1));
+                return new BitFieldSet(encoding, new OffsetMultiplier(offset), value);
+            } else {
+                long offset = Long.parseLong(offsetStr);
+                return new BitFieldSet(encoding, new Offset(offset), value);
+            }
+        } else if (encodingStr.startsWith("i")) {
+            long bits = Long.parseLong(encodingStr.substring(1));
+            SignedEncoding encoding = new SignedEncoding(bits);
+
+            if (offsetStr.startsWith("#")) {
+                long offset = Long.parseLong(offsetStr.substring(1));
+                return new BitFieldSet(encoding, new OffsetMultiplier(offset), value);
+            } else {
+                long offset = Long.parseLong(offsetStr);
+                return new BitFieldSet(encoding, new Offset(offset), value);
+            }
+        } else {
+            throw new IllegalArgumentException(
+                    "Invalid encoding format: " + encodingStr + ". Must start with 'u' or 'i'");
+        }
+    }
+
+    /** Create BitFieldIncrby with proper interface types. */
+    private BitFieldIncrby createBitFieldIncrby(
+            String encodingStr, String offsetStr, long increment) {
+        if (encodingStr.startsWith("u")) {
+            long bits = Long.parseLong(encodingStr.substring(1));
+            UnsignedEncoding encoding = new UnsignedEncoding(bits);
+
+            if (offsetStr.startsWith("#")) {
+                long offset = Long.parseLong(offsetStr.substring(1));
+                return new BitFieldIncrby(encoding, new OffsetMultiplier(offset), increment);
+            } else {
+                long offset = Long.parseLong(offsetStr);
+                return new BitFieldIncrby(encoding, new Offset(offset), increment);
+            }
+        } else if (encodingStr.startsWith("i")) {
+            long bits = Long.parseLong(encodingStr.substring(1));
+            SignedEncoding encoding = new SignedEncoding(bits);
+
+            if (offsetStr.startsWith("#")) {
+                long offset = Long.parseLong(offsetStr.substring(1));
+                return new BitFieldIncrby(encoding, new OffsetMultiplier(offset), increment);
+            } else {
+                long offset = Long.parseLong(offsetStr);
+                return new BitFieldIncrby(encoding, new Offset(offset), increment);
+            }
+        } else {
+            throw new IllegalArgumentException(
+                    "Invalid encoding format: " + encodingStr + ". Must start with 'u' or 'i'");
+        }
+    }
+
+    /**
+     * Parse overflow control string into BitOverflowControl enum.
+     *
+     * @param controlStr control string (e.g., "WRAP", "SAT", "FAIL")
+     * @return BitOverflowControl enum
+     */
+    private BitOverflowControl parseOverflowControl(String controlStr) {
+        switch (controlStr.toUpperCase()) {
+            case "WRAP":
+                return BitOverflowControl.WRAP;
+            case "SAT":
+                return BitOverflowControl.SAT;
+            case "FAIL":
+                return BitOverflowControl.FAIL;
+            default:
+                throw new IllegalArgumentException(
+                        "Invalid overflow control: " + controlStr + ". Must be WRAP, SAT, or FAIL");
         }
     }
 
