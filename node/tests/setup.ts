@@ -3,6 +3,9 @@ import { afterEach, beforeAll } from "@jest/globals";
 import minimist from "minimist";
 import { Logger } from "../build-ts";
 
+// Set Jest timeout to prevent socket timeouts and allow proper cleanup
+jest.setTimeout(20000);
+
 beforeAll(() => {
     Logger.init("error", "log.log");
     // Logger.setLoggerConfig("off");

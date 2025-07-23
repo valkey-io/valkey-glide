@@ -16,6 +16,9 @@ const config: Config = {
     moduleFileExtensions: ["ts", "js", "json", "node"],
     modulePathIgnorePatterns: ["rust-client/", "build-js/"],
 
+    // Increase timeout to prevent socket errors and allow proper cleanup
+    testTimeout: 20000,
+
     // Reporters: default + HTML report
     reporters: [
         "default",

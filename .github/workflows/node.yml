@@ -97,6 +97,16 @@ jobs:
                   echo "Job running with the following matrix configuration:"
                   echo "${{ toJson(matrix) }}"
 
+            # Expand ephemeral port range to prevent socket exhaustion
+            - name: Expand ephemeral port range
+              if: runner.os == 'Linux'
+              run: sudo sysctl -w net.ipv4.ip_local_port_range="1024 65535"
+
+            # Expand ephemeral port range to prevent socket exhaustion
+            - name: Expand ephemeral port range
+              if: runner.os == 'Linux'
+              run: sudo sysctl -w net.ipv4.ip_local_port_range="1024 65535"
+
             # Install software dependencies
             - name: Install shared dependencies
               uses: ./.github/workflows/install-shared-dependencies
@@ -160,6 +170,10 @@ jobs:
                   echo "Target: x86_64-unknown-linux-gnu"
                   echo "Node: 23.x"
                   echo "Engine: 8.0"
+
+            # Expand ephemeral port range to prevent socket exhaustion
+            - name: Expand ephemeral port range
+              run: sudo sysctl -w net.ipv4.ip_local_port_range="1024 65535"
 
             # Install software dependencies
             - name: Install shared dependencies
@@ -319,6 +333,13 @@ jobs:
             - name: Set permissions after checkout
               run: chown -R $(id -u):$(id -g) $GITHUB_WORKSPACE
 
+            # Expand ephemeral port range to prevent socket exhaustion
+            - name: Expand ephemeral port range
+              run: |
+                  if [[ "${{ matrix.host.OS }}" != "amazon-linux" ]] && [[ "${{ matrix.host.TARGET }}" != "x86_64-unknown-linux-musl" ]]; then
+                    sysctl -w net.ipv4.ip_local_port_range="1024 65535" || echo "Could not expand port range in container"
+                  fi
+
             # Install shared dependencies including Rust and Protocol Buffers
             - name: Install shared dependencies
               uses: ./.github/workflows/install-shared-dependencies
@@ -403,6 +424,10 @@ jobs:
               run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
 
             - uses: actions/checkout@v4
+
+            # Expand ephemeral port range to prevent socket exhaustion
+            - name: Expand ephemeral port range
+              run: sudo sysctl -w net.ipv4.ip_local_port_range="1024 65535"
 
             - name: Install Node.js
               uses: actions/setup-node@v4
