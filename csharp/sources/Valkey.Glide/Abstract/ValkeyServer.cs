@@ -21,6 +21,12 @@ internal class ValkeyServer(DatabaseImpl conn, EndPoint endpoint) : IServer
     private Dictionary<GlideString, object> Hello()
         => (Dictionary<GlideString, object>)_conn.CustomCommand(["hello"]).GetAwaiter().GetResult()!;
 
+    private Route MakeRoute()
+    {
+        (string host, ushort port) = Utils.SplitEndpoint(EndPoint);
+        return new ByAddressRoute(host, port);
+    }
+
     public EndPoint EndPoint { get; } = endpoint;
 
     public bool IsConnected => true;
@@ -38,7 +44,7 @@ internal class ValkeyServer(DatabaseImpl conn, EndPoint endpoint) : IServer
             [Enum.Parse<InfoOptions.Section>(section.ToString(), true)];
 
         return _conn
-            .Command(Request.Info(sections), new ByAddressRoute(EndPoint.ToString()!))
+            .Command(Request.Info(sections), MakeRoute())
             .ContinueWith(task => (string?)task.Result);
     }
 
@@ -53,11 +59,11 @@ internal class ValkeyServer(DatabaseImpl conn, EndPoint endpoint) : IServer
         => InfoAsync(section, flags).GetAwaiter().GetResult();
 
     public async Task<TimeSpan> PingAsync(CommandFlags flags = CommandFlags.None)
-        => await _conn.Command(Request.Ping(flags), new ByAddressRoute(EndPoint.ToString()!));
+        => await _conn.Command(Request.Ping(flags), MakeRoute());
 
     public async Task<TimeSpan> PingAsync(ValkeyValue message, CommandFlags flags = CommandFlags.None)
-        => await _conn.Command(Request.Ping(message, flags), new ByAddressRoute(EndPoint.ToString()!));
+        => await _conn.Command(Request.Ping(message, flags), MakeRoute());
 
     public async Task<ValkeyValue> EchoAsync(ValkeyValue message, CommandFlags flags = CommandFlags.None)
-        => await _conn.Command(Request.Echo(message, flags), new ByAddressRoute(EndPoint.ToString()!));
+        => await _conn.Command(Request.Echo(message, flags), MakeRoute());
 }
