@@ -397,6 +397,8 @@ public class JedisTest {
     @DisplayName("GETEX Command")
     void testGetexCommand() {
         assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "GETEX command added in version 6.2.0");
 
         String testKey = TEST_KEY_PREFIX + "getex";
         String testValue = "test_value";
@@ -1421,6 +1423,8 @@ public class JedisTest {
     @DisplayName("COPY Command")
     void testCopyCommand() {
         assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "COPY command added in version 6.2.0");
 
         String sourceKey = TEST_KEY_PREFIX + "copy_source";
         String targetKey = TEST_KEY_PREFIX + "copy_target";
