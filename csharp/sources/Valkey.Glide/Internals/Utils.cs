@@ -5,24 +5,13 @@ using System.Net;
 
 internal class Utils
 {
-    public static EndPoint ParseEndPoint(string host, int port)
-        => IPAddress.TryParse(host, out IPAddress? ip)
-            ? new IPEndPoint(ip, port)
-            : new DnsEndPoint(host, port);
-
-    public static bool TryParseEndPoint(string hostAndPort, out IPEndPoint result)
-    {
-        if (!Uri.TryCreate($"tcp://{hostAndPort}", UriKind.Absolute, out Uri? uri) ||
-            !IPAddress.TryParse(uri.Host, out IPAddress? ipAddress) ||
-            uri.Port < 0 || uri.Port > 65535)
+    public static (string host, ushort port) SplitEndpoint(EndPoint ep)
+        => ep switch
         {
-            result = new(0, 0);
-            return false;
-        }
-
-        result = new IPEndPoint(ipAddress, uri.Port);
-        return true;
-    }
+            DnsEndPoint dns => (dns.Host, (ushort)dns.Port),
+            IPEndPoint ip => (ip.Address.ToString(), (ushort)ip.Port),
+            _ => throw new ArgumentException($"Unsupported endpoint type: {ep.GetType()}"),
+        };
 
     public static void Requires<TException>(bool predicate, string message)
         where TException : Exception, new()
