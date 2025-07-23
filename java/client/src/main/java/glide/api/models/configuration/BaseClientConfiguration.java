@@ -47,7 +47,7 @@ public abstract class BaseClientConfiguration {
     /**
      * The duration in milliseconds that the client should wait for a request to complete. This
      * duration encompasses sending the request, awaiting for a response from the server, and any
-     * required reconnections or retries. If the specified timeout is exceeded for a pending request,
+     * required reconnection or retries. If the specified timeout is exceeded for a pending request,
      * it will result in a timeout error. If not explicitly set, a default value of 250 milliseconds
      * will be used.
      */
@@ -81,4 +81,31 @@ public abstract class BaseClientConfiguration {
      * within the specified AZ if exits.
      */
     private final String clientAZ;
+
+    /** Strategy used to determine how and when to reconnect, in case of connection failures. */
+    private final BackoffStrategy reconnectStrategy;
+
+    /**
+     * Enables lazy connection mode, where physical connections to the server(s) are deferred until
+     * the first command is sent. This can reduce startup latency and allow for client creation in
+     * disconnected environments.
+     *
+     * <p>When set to {@code true}, the client will not attempt to connect to the specified nodes
+     * during initialization. Instead, connections will be established only when a command is actually
+     * executed.
+     *
+     * <p>Note that the first command executed with lazy connections may experience additional latency
+     * as it needs to establish the connection first. During this initial connection, the standard
+     * request timeout does not apply yet - instead, the connection establishment is governed by
+     * {@code connectionTimeout}. The request timeout ({@code requestTimeout}) only begins counting
+     * after the connection has been successfully established. This behavior can effectively increase
+     * the total time needed for the first command to complete.
+     *
+     * <p>This setting applies to both standalone and cluster modes. Note that if an operation is
+     * attempted and connection fails (e.g., unreachable nodes), errors will surface at that point.
+     *
+     * <p>If not set, connections are established immediately during client creation (equivalent to
+     * {@code false}).
+     */
+    @Builder.Default private final boolean lazyConnect = false;
 }

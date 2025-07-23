@@ -15,6 +15,11 @@ from glide_shared.commands.batch import (
     ClusterTransaction,
     Transaction,
 )
+from glide_shared.commands.batch_options import (
+    BatchOptions,
+    BatchRetryStrategy,
+    ClusterBatchOptions,
+)
 from glide_shared.commands.bitmap import (
     BitFieldGet,
     BitFieldSet,
@@ -664,7 +669,7 @@ async def helper4(
     args.append(3)
 
     transaction.pfadd(key10, ["a", "b", "c"])
-    args.append(1)
+    args.append(True)
     transaction.pfmerge(key10, [])
     args.append(OK)
     transaction.pfcount([key10])
@@ -988,15 +993,19 @@ async def exec_batch(
     raise_on_error: bool = False,
 ) -> Optional[List[TResult]]:
     if isinstance(glide_client, GlideClient):
+        batch_options = BatchOptions(timeout=timeout)
         return await cast(GlideClient, glide_client).exec(
-            cast(Batch, batch), raise_on_error, timeout
+            cast(Batch, batch), raise_on_error, batch_options
         )
     else:
+        cluster_options = ClusterBatchOptions(
+            route=route,
+            timeout=timeout,
+        )
         return await cast(GlideClusterClient, glide_client).exec(
             cast(ClusterBatch, batch),
             raise_on_error,
-            route,
-            timeout,
+            cluster_options,
         )
 
 
@@ -1632,9 +1641,8 @@ class TestBatch:
         batch.get(key)
 
         route = SlotKeyRoute(slot_type=SlotType.PRIMARY, slot_key=key)
-        results = await glide_client.exec(
-            batch, raise_on_error=True, route=route, timeout=2000
-        )
+        options = ClusterBatchOptions(route=route, timeout=2000)
+        results = await glide_client.exec(batch, raise_on_error=True, options=options)
 
         assert results == [OK, value_bytes]
 
@@ -1651,3 +1659,20 @@ class TestBatch:
             assert (
                 node_info.strip() == b"# Errorstats"
             ), f"Node {node_address.decode()} reported errors: {node_info.decode()}"
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_batch_retry_strategy_with_atomic_batch_raises_error(
+        self, glide_client: GlideClusterClient
+    ):
+        """Test that using retry strategies with atomic batches raises RequestError."""
+        batch = ClusterBatch(is_atomic=True)
+        batch.set("key", "value")
+
+        retry_strategy = BatchRetryStrategy(retry_server_error=True)
+        options = ClusterBatchOptions(retry_strategy=retry_strategy)
+
+        with pytest.raises(
+            RequestError, match="Retry strategies are not supported for atomic batches"
+        ):
+            await glide_client.exec(batch, raise_on_error=True, options=options)

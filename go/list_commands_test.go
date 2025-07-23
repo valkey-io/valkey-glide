@@ -4,7 +4,9 @@ package glide
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
 
@@ -529,7 +531,7 @@ func ExampleClient_BLPop() {
 	var client *Client = getExampleClient() // example helper function
 	result, err := client.RPush(context.Background(), "list_a", []string{"a", "b", "c", "d", "e"})
 	result1, err := client.RPush(context.Background(), "list_b", []string{"f", "g", "h", "i", "j"})
-	result2, err := client.BLPop(context.Background(), []string{"list_a", "list_b"}, 0.5)
+	result2, err := client.BLPop(context.Background(), []string{"list_a", "list_b"}, 500*time.Millisecond)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -547,7 +549,7 @@ func ExampleClusterClient_BLPop() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 	result, err := client.RPush(context.Background(), "{list}-a", []string{"a", "b", "c", "d", "e"})
 	result1, err := client.RPush(context.Background(), "{list}-b", []string{"f", "g", "h", "i", "j"})
-	result2, err := client.BLPop(context.Background(), []string{"{list}-a", "{list}-b"}, 0.5)
+	result2, err := client.BLPop(context.Background(), []string{"{list}-a", "{list}-b"}, 500*time.Millisecond)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -566,7 +568,7 @@ func ExampleClient_BRPop() {
 	client.Del(context.Background(), []string{"my_list", "list_a", "list_b"})
 	result, err := client.RPush(context.Background(), "list_a", []string{"a", "b", "c", "d", "e"})
 	result1, err := client.RPush(context.Background(), "list_b", []string{"f", "g", "h", "i", "j"})
-	result2, err := client.BRPop(context.Background(), []string{"list_a", "list_b"}, 0.5)
+	result2, err := client.BRPop(context.Background(), []string{"list_a", "list_b"}, 500*time.Millisecond)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -585,7 +587,7 @@ func ExampleClusterClient_BRPop() {
 	client.Del(context.Background(), []string{"my_list", "{list}-a", "{list}-b"})
 	result, err := client.RPush(context.Background(), "{list}-a", []string{"a", "b", "c", "d", "e"})
 	result1, err := client.RPush(context.Background(), "{list}-b", []string{"f", "g", "h", "i", "j"})
-	result2, err := client.BRPop(context.Background(), []string{"{list}-a", "{list}-b"}, 0.5)
+	result2, err := client.BRPop(context.Background(), []string{"{list}-a", "{list}-b"}, 500*time.Millisecond)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -679,11 +681,13 @@ func ExampleClient_LMPop() {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(result)
-	fmt.Println(result1)
+
+	jsonResult1, err := json.Marshal(result1)
+	fmt.Println(string(jsonResult1))
 
 	// Output:
 	// 3
-	// map[my_list:[three]]
+	// [{"Key":"my_list","Values":["three"]}]
 }
 
 func ExampleClusterClient_LMPop() {
@@ -694,11 +698,13 @@ func ExampleClusterClient_LMPop() {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(result)
-	fmt.Println(result1)
+
+	jsonResult1, err := json.Marshal(result1)
+	fmt.Println(string(jsonResult1))
 
 	// Output:
 	// 3
-	// map[my_list:[three]]
+	// [{"Key":"my_list","Values":["three"]}]
 }
 
 func ExampleClient_LMPopCount() {
@@ -709,11 +715,13 @@ func ExampleClient_LMPopCount() {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(result)
-	fmt.Println(result1)
+
+	jsonResult1, err := json.Marshal(result1)
+	fmt.Println(string(jsonResult1))
 
 	// Output:
 	// 3
-	// map[my_list:[three two]]
+	// [{"Key":"my_list","Values":["three","two"]}]
 }
 
 func ExampleClusterClient_LMPopCount() {
@@ -724,71 +732,81 @@ func ExampleClusterClient_LMPopCount() {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(result)
-	fmt.Println(result1)
+
+	jsonResult1, err := json.Marshal(result1)
+	fmt.Println(string(jsonResult1))
 
 	// Output:
 	// 3
-	// map[my_list:[three two]]
+	// [{"Key":"my_list","Values":["three","two"]}]
 }
 
 func ExampleClient_BLMPop() {
 	var client *Client = getExampleClient() // example helper function
 	result, err := client.LPush(context.Background(), "my_list", []string{"one", "two", "three"})
-	result1, err := client.BLMPop(context.Background(), []string{"my_list"}, constants.Left, 0.1)
+	result1, err := client.BLMPop(context.Background(), []string{"my_list"}, constants.Left, 100*time.Millisecond)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(result)
-	fmt.Println(result1)
+
+	jsonResult1, err := json.Marshal(result1)
+	fmt.Println(string(jsonResult1))
 
 	// Output:
 	// 3
-	// map[my_list:[three]]
+	// [{"Key":"my_list","Values":["three"]}]
 }
 
 func ExampleClusterClient_BLMPop() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 	result, err := client.LPush(context.Background(), "my_list", []string{"one", "two", "three"})
-	result1, err := client.BLMPop(context.Background(), []string{"my_list"}, constants.Left, 0.1)
+	result1, err := client.BLMPop(context.Background(), []string{"my_list"}, constants.Left, 100*time.Millisecond)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(result)
-	fmt.Println(result1)
+
+	jsonResult1, err := json.Marshal(result1)
+	fmt.Println(string(jsonResult1))
 
 	// Output:
 	// 3
-	// map[my_list:[three]]
+	// [{"Key":"my_list","Values":["three"]}]
 }
 
 func ExampleClient_BLMPopCount() {
 	var client *Client = getExampleClient() // example helper function
 	result, err := client.LPush(context.Background(), "my_list", []string{"one", "two", "three"})
-	result1, err := client.BLMPopCount(context.Background(), []string{"my_list"}, constants.Left, 2, 0.1)
+	result1, err := client.BLMPopCount(context.Background(), []string{"my_list"}, constants.Left, 2, 100*time.Millisecond)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(result)
-	fmt.Println(result1)
+
+	jsonResult1, err := json.Marshal(result1)
+	fmt.Println(string(jsonResult1))
 
 	// Output:
 	// 3
-	// map[my_list:[three two]]
+	// [{"Key":"my_list","Values":["three","two"]}]
 }
 
 func ExampleClusterClient_BLMPopCount() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 	result, err := client.LPush(context.Background(), "my_list", []string{"one", "two", "three"})
-	result1, err := client.BLMPopCount(context.Background(), []string{"my_list"}, constants.Left, 2, 0.1)
+	result1, err := client.BLMPopCount(context.Background(), []string{"my_list"}, constants.Left, 2, 100*time.Millisecond)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(result)
-	fmt.Println(result1)
+
+	jsonResult1, err := json.Marshal(result1)
+	fmt.Println(string(jsonResult1))
 
 	// Output:
 	// 3
-	// map[my_list:[three two]]
+	// [{"Key":"my_list","Values":["three","two"]}]
 }
 
 func ExampleClient_LSet() {
@@ -881,7 +899,14 @@ func ExampleClient_BLMove() {
 	var client *Client = getExampleClient() // example helper function
 	result, err := client.LPush(context.Background(), "my_list1", []string{"two", "one"})
 	result1, err := client.LPush(context.Background(), "my_list2", []string{"four", "three"})
-	result2, err := client.BLMove(context.Background(), "my_list1", "my_list2", constants.Left, constants.Left, 0.1)
+	result2, err := client.BLMove(
+		context.Background(),
+		"my_list1",
+		"my_list2",
+		constants.Left,
+		constants.Left,
+		100*time.Millisecond,
+	)
 	result3, err := client.LRange(context.Background(), "my_list1", 0, -1)
 	result4, err := client.LRange(context.Background(), "my_list2", 0, -1)
 	if err != nil {
@@ -905,7 +930,14 @@ func ExampleClusterClient_BLMove() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 	result, err := client.LPush(context.Background(), "{list}-1", []string{"two", "one"})
 	result1, err := client.LPush(context.Background(), "{list}-2", []string{"four", "three"})
-	result2, err := client.BLMove(context.Background(), "{list}-1", "{list}-2", constants.Left, constants.Left, 0.1)
+	result2, err := client.BLMove(
+		context.Background(),
+		"{list}-1",
+		"{list}-2",
+		constants.Left,
+		constants.Left,
+		100*time.Millisecond,
+	)
 	result3, err := client.LRange(context.Background(), "{list}-1", 0, -1)
 	result4, err := client.LRange(context.Background(), "{list}-2", 0, -1)
 	if err != nil {

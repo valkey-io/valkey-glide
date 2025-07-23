@@ -22,12 +22,14 @@ import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
+import glide.cluster.ValkeyCluster;
 import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
@@ -43,6 +45,62 @@ public class TestUtilities {
     private static final String VALKEY_VERSION_KEY = "valkey_version";
 
     private static final String REDIS_VERSION_KEY = "redis_version";
+
+    /**
+     * Creates a Glide client for testing purposes
+     *
+     * @param addresses Optional list of node addresses
+     * @param valkeyCluster Optional ValkeyCluster instance
+     * @param lazyConnect Whether to connect lazily
+     * @return A BaseClient that resolves to either a GlideClient or GlideClusterClient
+     */
+    @SneakyThrows
+    public static BaseClient createDedicatedClient(
+            boolean clusterMode,
+            List<NodeAddress> addresses,
+            ValkeyCluster valkeyCluster,
+            Boolean lazyConnect) {
+
+        if (valkeyCluster == null) {
+            throw new IllegalArgumentException(
+                    "ValkeyCluster instance is required for create dedicated client");
+        }
+
+        // For cluster mode, select k random seed nodes (k = min(3, total nodes))
+        if (clusterMode) {
+            List<NodeAddress> seedNodes = addresses;
+            if (seedNodes == null) {
+                List<NodeAddress> allNodes = valkeyCluster.getNodesAddr();
+                int k = Math.min(3, allNodes.size());
+                seedNodes =
+                        new Random()
+                                .ints(0, allNodes.size())
+                                .distinct()
+                                .limit(k)
+                                .mapToObj(allNodes::get)
+                                .collect(Collectors.toList());
+            }
+
+            return GlideClusterClient.createClient(
+                            GlideClusterClientConfiguration.builder()
+                                    .addresses(seedNodes)
+                                    .requestTimeout(2000)
+                                    .lazyConnect(lazyConnect)
+                                    .build())
+                    .get();
+        } else {
+            List<NodeAddress> nodeAddresses =
+                    addresses != null ? addresses : valkeyCluster.getNodesAddr();
+
+            return GlideClient.createClient(
+                            GlideClientConfiguration.builder()
+                                    .addresses(nodeAddresses)
+                                    .requestTimeout(2000)
+                                    .lazyConnect(lazyConnect)
+                                    .build())
+                    .get();
+        }
+    }
 
     /** Extract integer parameter value from INFO command output */
     public static long getValueFromInfo(String data, String value) {

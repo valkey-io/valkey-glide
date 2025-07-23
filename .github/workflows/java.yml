@@ -1,5 +1,8 @@
 name: Java CI
 
+permissions:
+    contents: read
+
 on:
     push:
         branches:
@@ -43,6 +46,10 @@ on:
                 required: false
                 type: string
                 description: "(Optional) Test run name"
+            run-modules-tests:
+                description: "Run modules tests"
+                type: boolean
+                default: false
 
     workflow_call:
 
@@ -90,7 +97,7 @@ jobs:
                   echo "Job running with the following matrix configuration:"
                   echo "${{ toJson(matrix) }}"
 
-            - uses: gradle/actions/wrapper-validation@v3
+            - uses: gradle/actions/wrapper-validation@v4
 
             - name: Set up JDK ${{ matrix.java }}
               uses: actions/setup-java@v4
@@ -243,10 +250,19 @@ jobs:
             image: ${{ matrix.host.IMAGE }}
             options: ${{ join(' -q ', matrix.host.CONTAINER_OPTIONS) }} # adding `-q` to bypass empty options
         steps:
-            - name: Install git
+            - name: Install git and Java
               run: |
-                  yum update
+                  yum update -y
                   yum install -y git tar java-${{ matrix.java }}-amazon-corretto-devel.x86_64
+                  # Set JAVA_HOME to use the installed JDK
+                  export JAVA_HOME=/usr/lib/jvm/java-${{ matrix.java }}-amazon-corretto.x86_64
+                  echo "JAVA_HOME=/usr/lib/jvm/java-${{ matrix.java }}-amazon-corretto.x86_64" >> $GITHUB_ENV
+                  echo "/usr/lib/jvm/java-${{ matrix.java }}-amazon-corretto.x86_64/bin" >> $GITHUB_PATH
+                  # Set environment variable to indicate container environment for Gradle
+                  echo "GLIDE_CONTAINER_BUILD=true" >> $GITHUB_ENV
+                  # Create gradle user home and disable auto-download
+                  mkdir -p ~/.gradle
+                  echo "org.gradle.java.installations.auto-download=false" >> ~/.gradle/gradle.properties
                   echo IMAGE=amazonlinux:latest | sed -r 's/:/-/g' >> $GITHUB_ENV
             # Replace `:` in the variable otherwise it can't be used in `upload-artifact`
             - uses: actions/checkout@v4
@@ -277,6 +293,9 @@ jobs:
 
             - name: Build java wrapper
               working-directory: java
+              env:
+                  GLIDE_CONTAINER_BUILD: true
+                  JAVA_HOME: /usr/lib/jvm/java-${{ matrix.java }}-amazon-corretto.x86_64
               run: ./gradlew --continue build -x javadoc
 
             - name: Upload test & spotbugs reports
@@ -303,7 +322,7 @@ jobs:
               name: lint java rust
 
     test-modules:
-        if: (github.repository_owner == 'valkey-io' && github.event_name == 'workflow_dispatch') || github.event.pull_request.head.repo.owner.login == 'valkey-io'
+        if: ((github.repository_owner == 'valkey-io' && github.event_name == 'workflow_dispatch' && github.event.inputs.run-modules-tests == 'true') || github.event.pull_request.head.repo.owner.login == 'valkey-io')
         environment: AWS_ACTIONS
         name: Modules Tests
         runs-on: [self-hosted, linux, ARM64, persistent]

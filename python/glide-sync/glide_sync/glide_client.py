@@ -203,9 +203,8 @@ class BaseClient(CoreCommands):
             CommandResult* command(
                 const void* client_adapter_ptr, uintptr_t channel, int command_type,
                 unsigned long arg_count, const size_t *args, const unsigned long* args_len,
-                const unsigned char* route_bytes, size_t route_bytes_len
+                const unsigned char* route_bytes, size_t route_bytes_len, uint64_t span_ptr
             );
-
         """
         )
 
@@ -385,6 +384,7 @@ class BaseClient(CoreCommands):
             c_lengths,  # Array of argument lengths
             route_ptr,
             len(route_bytes),
+            0,  # Span pointer (0 for no tracing)
         )
         return self._handle_cmd_result(result)
 

@@ -48,6 +48,9 @@ use pipeline_routing::{
     collect_and_send_pending_requests, map_pipeline_to_nodes, process_and_retry_pipeline_responses,
     route_for_pipeline, PipelineResponses, ResponsePoliciesMap,
 };
+
+use logger_core::log_error;
+
 use std::{
     collections::{HashMap, HashSet},
     fmt, io, mem,
@@ -66,7 +69,7 @@ use tokio::task::JoinHandle;
 
 #[cfg(feature = "tokio-comp")]
 use crate::aio::DisconnectNotifier;
-use telemetrylib::Telemetry;
+use telemetrylib::{GlideOpenTelemetry, Telemetry};
 
 use crate::{
     aio::{get_socket_addrs, ConnectionLike, MultiplexedConnection, Runtime},
@@ -706,7 +709,8 @@ struct Message<C: Sized> {
 }
 
 enum RecoverFuture {
-    RecoverSlots(BoxFuture<'static, RedisResult<()>>),
+    RefreshingSlots(JoinHandle<RedisResult<()>>),
+    ReconnectToInitialNodes(BoxFuture<'static, ()>),
     Reconnect(BoxFuture<'static, ()>),
 }
 
@@ -904,9 +908,8 @@ impl<C> Future for Request<C> {
                 }
                 if let Some(request) = self.project().request.take() {
                     return Next::Retry { request }.into();
-                } else {
-                    return Next::Done.into();
                 }
+                return Next::Done.into();
             }
             _ => panic!("Request future must be Some"),
         };
@@ -951,6 +954,13 @@ impl<C> Future for Request<C> {
                     return next;
                 }
                 request.retry = request.retry.saturating_add(1);
+                // Record retry attempts metric if telemetry is initialized
+                if let Err(e) = GlideOpenTelemetry::record_retry_attempt() {
+                    log_error(
+                        "OpenTelemetry:retry_error",
+                        format!("Failed to record retry attempt: {e}"),
+                    );
+                }
 
                 if err.kind() == ErrorKind::AllConnectionsUnavailable {
                     return Next::ReconnectToInitialNodes {
@@ -1570,27 +1580,60 @@ where
         notifiers
     }
 
-    async fn aggregate_results(
+    fn spawn_refresh_slots_task(
+        inner: Arc<InnerCore<C>>,
+        policy: &RefreshPolicy,
+    ) -> JoinHandle<RedisResult<()>> {
+        // Clone references for task
+        let inner_clone = inner.clone();
+        let policy_clone = policy.clone();
+
+        // Spawn the background task and return its handle
+        tokio::spawn(async move {
+            Self::refresh_slots_and_subscriptions_with_retries(inner_clone, &policy_clone).await
+        })
+    }
+
+    /// Asynchronously collects and aggregates responses from multiple cluster nodes according to a specified policy.
+    ///
+    /// This function drives the fan‐out of a multi‐node command, awaiting individual node replies
+    /// and combining or selecting results based on `response_policy`. It covers these high‐level steps:
+    ///
+    /// # Arguments
+    ///
+    /// * `receivers`: A list of `(node_address, oneshot::Receiver<RedisResult<Response>>)` pairs.
+    ///   Each receiver will yield exactly one `Response` (or error) from its node.
+    /// * `routing` – The routing information of the command (e.g., multi‐slot, `AllNodes`, `AllPrimaries`).
+    /// * `response_policy` – An `Option<ResponsePolicy>` that dictates how to aggregate the results from the different nodes.
+    ///
+    /// # Returns
+    ///
+    /// A `RedisResult<Value>` representing the aggregated result.
+    pub async fn aggregate_results(
         receivers: Vec<(Option<String>, oneshot::Receiver<RedisResult<Response>>)>,
         routing: &MultipleNodeRoutingInfo,
         response_policy: Option<ResponsePolicy>,
     ) -> RedisResult<Value> {
+        // Helper: extract a single Value from a Response::Single
         let extract_result = |response| match response {
-            Response::Single(value) => value.extract_error(),
-            Response::Multiple(_) => unreachable!(),
-            Response::ClusterScanResult(_, _) => unreachable!(),
+            Response::Single(value) => value,
+            Response::Multiple(_) | Response::ClusterScanResult(_, _) => unreachable!(
+                "aggregate_results only handles `Response::Single` for multi-node commands"
+            ),
         };
 
+        // Converts a Result<RedisResult<Response>, _> into RedisResult<Value>
         let convert_result = |res: Result<RedisResult<Response>, _>| {
-            res.map_err(|_| RedisError::from((ErrorKind::ResponseError, "request wasn't handled due to internal failure"))) // this happens only if the result sender is dropped before usage.
-            .and_then(|res| res.map(extract_result)?)
+            res.map_err(|_| RedisError::from((ErrorKind::ResponseError, "Internal failure: receiver was dropped before delivering a response"))) // this happens only if the result sender is dropped before usage.
+            .and_then(|res| res.map(extract_result))
         };
 
+        // Helper: await a (addr, receiver) and return (addr, RedisResult<Value>)
         let get_receiver = |(_, receiver): (_, oneshot::Receiver<RedisResult<Response>>)| async {
             convert_result(receiver.await)
         };
 
-        // Sanity
+        // Sanity check: if there are no receivers at all, this is a client‐error
         if receivers.is_empty() {
             return Err(RedisError::from((
                 ErrorKind::ClientError,
@@ -1600,28 +1643,49 @@ where
             )));
         }
 
-        // TODO - once Value::Error will be merged, these will need to be updated to handle this new value.
         match response_policy {
-            Some(ResponsePolicy::AllSucceeded) => {
-                future::try_join_all(receivers.into_iter().map(get_receiver))
-                    .await
-                    .map(|mut results| {
-                        results.pop().unwrap() // unwrap is safe, since at least one function succeeded
-                    })
+            // ────────────────────────────────────────────────────────────────
+            // ResponsePolicy::OneSucceeded:
+            // Waits for the *first* successful response and returns it.
+            // Any other in-flight responses are dropped.
+            // ────────────────────────────────────────────────────────────────
+            Some(ResponsePolicy::OneSucceeded) => {
+                return future::select_ok(receivers.into_iter().map(|tuple| {
+                    Box::pin(get_receiver(tuple).map(|res| {
+                        res.map(|val| {
+                            // Each future in `receivers` represents a single response from a node.
+                            // If an error occurs, the value will be a `ServerError` directly, not a structure
+                            // like `Value::Array`  or `Value::Map` containing a `ServerError` inside.
+                            // Therefore, checking that val is a `ServerError` is sufficient—we do not need to check for nested errors within
+                            // composite values.
+                            if let Value::ServerError(err) = val {
+                                return Err(err.into());
+                            }
+                            Ok(val)
+                        })
+                    }))
+                }))
+                .await
+                .map(|(result, _)| result)?;
             }
-            Some(ResponsePolicy::OneSucceeded) => future::select_ok(
-                receivers
-                    .into_iter()
-                    .map(|tuple| Box::pin(get_receiver(tuple))),
-            )
-            .await
-            .map(|(result, _)| result),
+            // ────────────────────────────────────────────────────────────────
+            // ResponsePolicy::FirstSucceededNonEmptyOrAllEmpty:
+            // Waits for each response:
+            //   - Returns the first non-Nil success immediately.
+            //   - If all are Ok(Nil), returns Value::Nil.
+            //   - If any error occurs (and no success is returned), returns the last error.
+            // ────────────────────────────────────────────────────────────────
             Some(ResponsePolicy::FirstSucceededNonEmptyOrAllEmpty) => {
-                // Attempt to return the first result that isn't `Nil` or an error.
-                // If no such response is found and all servers returned `Nil`, it indicates that all shards are empty, so return `Nil`.
-                // If we received only errors, return the last received error.
-                // If we received a mix of errors and `Nil`s, we can't determine if all shards are empty,
-                // thus we return the last received error instead of `Nil`.
+                // We want to see each response as it arrives, and:
+                //  • If we see `Ok(Value::Nil)`, increment a counter.
+                //  • If we see `Ok(other_value)`, return it immediately.
+                //  • If we see `Err(e)` or `Ok(Value::ServerError)`, remember it as `last_err`.
+                //
+                // Once the stream is exhausted:
+                //  – if all successes were Nil → return Value::Nil (indicates that all shards are empty).
+                //  – else → return the last error we saw (or a generic “all‐unavailable” error).
+                //
+                // If we received a mix of errors and `Nil`s, we can't determine if all shards are empty, thus we return the last received error instead of `Nil`.
                 let num_of_results: usize = receivers.len();
                 let mut futures = receivers
                     .into_iter()
@@ -1632,7 +1696,12 @@ where
                 while let Some(result) = futures.next().await {
                     match result {
                         Ok(Value::Nil) => nil_counter += 1,
+                        // If the value is a `ServerError` → the command failed for this node.
+                        Ok(Value::ServerError(err)) => {
+                            last_err = Some(err.into());
+                        }
                         Ok(val) => return Ok(val),
+                        // If we received a RedisError, it means that this receiver returned a RecvError
                         Err(e) => last_err = Some(e),
                     }
                 }
@@ -1650,45 +1719,227 @@ where
                     }))
                 }
             }
+
+            // ────────────────────────────────────────────────────────────────
+            // All other policies (e.g., AllSucceeded, Aggregate, CombineArrays, etc):
+            // Waits for all responses, collects them, and delegates to
+            // `aggregate_resolved_results` for interpretation.
+            // ────────────────────────────────────────────────────────────────
+            Some(ResponsePolicy::AllSucceeded)
+            | Some(ResponsePolicy::Aggregate(_))
+            | Some(ResponsePolicy::AggregateLogical(_))
+            | Some(ResponsePolicy::CombineArrays)
+            | Some(ResponsePolicy::CombineMaps)
+            | Some(ResponsePolicy::Special)
+            | None => {
+                let collected = future::try_join_all(receivers.into_iter().map(
+                    |(addr, receiver)| async move {
+                        let res = convert_result(receiver.await)?;
+                        Ok::<(Option<String>, Value), RedisError>((addr, res))
+                    },
+                ))
+                .await?;
+                Self::aggregate_resolved_results(collected, routing, response_policy)
+            }
+        }
+    }
+
+    /// Synchronously folds a fully‐collected `Vec<(Option<String>, Value)>` according to `response_policy`.
+    ///
+    /// This helper is called after all node replies have been received and converted to `(addr, Value)`.
+    /// Each policy’s logic is applied to that vector of resolved results, returning a single `Value` or error.
+    ///
+    /// This function is used to handle the results of multi‐node commands, where the replies from multiple nodes are not collected using receivers,
+    /// but rather already collected into a vector of `(Option<String>, Value)` pairs (e.g. within a pipeline).
+    ///
+    /// # Arguments
+    ///
+    /// * `resolved` – A vector of `(Option<String>, Value)` pairs, where:
+    ///     - `Option<String>` is the node address (used for map/policy keys).
+    ///     - `Value` is the node’s reply.
+    /// * `routing` – The routing information of the command (e.g., multi‐slot, `AllNodes`, `AllPrimaries`).
+    /// * `response_policy` – An `Option<ResponsePolicy>` that dictates how to aggregate the results from the different nodes.
+    ///
+    /// # Returns
+    ///
+    /// A `RedisResult<Value>` representing the aggregated result.
+    fn aggregate_resolved_results(
+        resolved: Vec<(Option<String>, Value)>,
+        routing: &MultipleNodeRoutingInfo,
+        response_policy: Option<ResponsePolicy>,
+    ) -> RedisResult<Value> {
+        // TODO: add support for returning partial results
+        let should_check_errors = match response_policy {
+            Some(ResponsePolicy::CombineArrays)
+            | Some(ResponsePolicy::Special)
+            | Some(ResponsePolicy::AllSucceeded)
+            | Some(ResponsePolicy::Aggregate(_))
+            | Some(ResponsePolicy::AggregateLogical(_))
+            | Some(ResponsePolicy::CombineMaps)
+            | None => true,
+            Some(ResponsePolicy::OneSucceeded)
+            | Some(ResponsePolicy::FirstSucceededNonEmptyOrAllEmpty) => false,
+        };
+
+        // If we should check for errors, we iterate through the resolved values
+        // and return the first error we find.
+        if should_check_errors {
+            for (_addr, val) in resolved.iter() {
+                if let Value::ServerError(err) = val {
+                    return Err(err.clone().into());
+                }
+            }
+        }
+
+        let total = resolved.len();
+
+        match response_policy {
+            // ——————————————————————————————————————————
+            // AllSucceeded: fail if any Err, otherwise return the last Ok value.
+            // ——————————————————————————————————————————
+            Some(ResponsePolicy::AllSucceeded) => resolved
+                .into_iter()
+                .next_back()
+                .map(|(_, val)| val)
+                .ok_or_else(|| {
+                    RedisError::from((
+                        ErrorKind::ResponseError,
+                        "No responses to aggregate for AllSucceeded",
+                    ))
+                }),
+
+            // ——————————————————————————————————————————
+            // Aggregate(op): fail on any Err, otherwise call cluster_routing::aggregate
+            // ——————————————————————————————————————————
             Some(ResponsePolicy::Aggregate(op)) => {
-                future::try_join_all(receivers.into_iter().map(get_receiver))
-                    .await
-                    .and_then(|results| crate::cluster_routing::aggregate(results, op))
+                let all_vals: Vec<Value> = resolved.into_iter().map(|(_addr, val)| val).collect();
+                crate::cluster_routing::aggregate(all_vals, op)
             }
+
+            // ——————————————————————————————————————————
+            // AggregateLogical(op): fail on any Err, otherwise call cluster_routing::logical_aggregate
+            // ——————————————————————————————————————————
             Some(ResponsePolicy::AggregateLogical(op)) => {
-                future::try_join_all(receivers.into_iter().map(get_receiver))
-                    .await
-                    .and_then(|results| crate::cluster_routing::logical_aggregate(results, op))
+                let all_vals: Vec<Value> = resolved.into_iter().map(|(_addr, val)| val).collect();
+                crate::cluster_routing::logical_aggregate(all_vals, op)
             }
+
+            // ——————————————————————————————————————————
+            // CombineArrays: collect all values, then call combine_array_results
+            // (or combine_and_sort_array_results if `routing` is MultiSlot)
+            // ——————————————————————————————————————————
             Some(ResponsePolicy::CombineArrays) => {
-                future::try_join_all(receivers.into_iter().map(get_receiver))
-                    .await
-                    .and_then(|results| match routing {
-                        MultipleNodeRoutingInfo::MultiSlot((vec, args_pattern)) => {
-                            crate::cluster_routing::combine_and_sort_array_results(
-                                results,
-                                vec,
-                                args_pattern,
-                            )
-                        }
-                        _ => crate::cluster_routing::combine_array_results(results),
-                    })
+                let all_vals: Vec<Value> = resolved.into_iter().map(|(_addr, val)| val).collect();
+                match routing {
+                    MultipleNodeRoutingInfo::MultiSlot((keys_vec, args_pattern)) => {
+                        crate::cluster_routing::combine_and_sort_array_results(
+                            all_vals,
+                            keys_vec,
+                            args_pattern,
+                        )
+                    }
+                    _ => crate::cluster_routing::combine_array_results(all_vals),
+                }
             }
+
+            // ——————————————————————————————————————————
+            // CombineMaps: fail on any Err, otherwise call cluster_routing:combine_map_results
+            // ——————————————————————————————————————————
             Some(ResponsePolicy::CombineMaps) => {
-                future::try_join_all(receivers.into_iter().map(get_receiver))
-                    .await
-                    .and_then(crate::cluster_routing::combine_map_results)
+                let all_vals: Vec<Value> = resolved.into_iter().map(|(_addr, val)| val).collect();
+                crate::cluster_routing::combine_map_results(all_vals)
             }
+
+            // ——————————————————————————————————————————
+            // Special or None:
+            // ——————————————————————————————————————————
             Some(ResponsePolicy::Special) | None => {
-                // This is our assumption - if there's no coherent way to aggregate the responses, we just map each response to the sender, and pass it to the user.
-                // TODO - once Value::Error is merged, we can use join_all and report separate errors and also pass successes.
-                future::try_join_all(receivers.into_iter().map(|(addr, receiver)| async move {
-                    let result = convert_result(receiver.await)?;
-                    // The unwrap here is possible, because if `addr` is None, an error should have been sent on the receiver.
-                    Ok((Value::BulkString(addr.unwrap().as_bytes().to_vec()), result))
+                let mut pairs: Vec<(Value, Value)> = Vec::with_capacity(total);
+                for (addr_opt, value) in resolved {
+                    let key_bytes = match addr_opt {
+                        Some(addr) => addr.into_bytes(),
+                        None => return Err(RedisError::from((
+                            ErrorKind::ResponseError,
+                            "No address provided for response in Special or None response policy",
+                        ))),
+                    };
+                    pairs.push((Value::BulkString(key_bytes), value));
+                }
+                Ok(Value::Map(pairs))
+            }
+
+            // ——————————————————————————————————————————
+            // If we reach here, it means that the replies from multiple nodes are not collected using `oneshot::Receiver`,
+            // but rather already collected into a vector of `(Option<String>, Value)` pairs (e.g. within a pipeline).
+            // ——————————————————————————————————————————
+
+            // ────────────────────────────────────────────────────────────────
+            // ResponsePolicy::OneSucceeded:
+            // Waits for the *first* successful response and returns it.
+            // Any other in-flight responses are dropped.
+            // ────────────────────────────────────────────────────────────────
+            Some(ResponsePolicy::OneSucceeded) => {
+                // Return the first successful (non-error) response, or the last error if all failed.
+                let mut last_err = None;
+                for (_addr, val) in resolved {
+                    match val {
+                        Value::ServerError(err) => {
+                            last_err = Some(err.into());
+                        }
+                        val => return Ok(val),
+                    }
+                }
+                Err(last_err.unwrap_or_else(|| {
+                    (
+                        ErrorKind::AllConnectionsUnavailable,
+                        "Couldn't find any connection",
+                    )
+                        .into()
                 }))
-                .await
-                .map(Value::Map)
+            }
+            // ────────────────────────────────────────────────────────────────
+            // ResponsePolicy::FirstSucceededNonEmptyOrAllEmpty:
+            // Waits for each response:
+            //   - Returns the first non-Nil success immediately.
+            //   - If all are Ok(Nil), returns Value::Nil.
+            //   - If any error occurs (and no success is returned), returns the last error.
+            // ────────────────────────────────────────────────────────────────
+            Some(ResponsePolicy::FirstSucceededNonEmptyOrAllEmpty) => {
+                // We want to see each response as it arrives, and:
+                //  • If we see `Value::Nil`, increment a counter.
+                //  • If we see `Value::ServerError`, remember it as `last_err`.
+                //  • If we see `other_value`, return it immediately.
+                //
+                // Once the stream is exhausted:
+                //  – if all successes were Nil → return Value::Nil (indicates that all shards are empty).
+                //  – else → return the last error we saw (or a generic “all‐unavailable” error).
+                //
+                // If we received a mix of errors and `Nil`s, we can't determine if all shards are empty, thus we return the last received error instead of `Nil`.
+                let mut nil_counter = 0;
+                let mut last_err = None;
+                let num_results = resolved.len();
+
+                for (_addr, val) in resolved {
+                    match val {
+                        Value::Nil => nil_counter += 1,
+                        Value::ServerError(err) => {
+                            last_err = Some(err.into());
+                        }
+                        val => return Ok(val),
+                    }
+                }
+
+                if nil_counter == num_results {
+                    Ok(Value::Nil)
+                } else {
+                    Err(last_err.unwrap_or_else(|| {
+                        (
+                            ErrorKind::AllConnectionsUnavailable,
+                            "Couldn't find any connection",
+                        )
+                            .into()
+                    }))
+                }
             }
         }
     }
@@ -2465,26 +2716,20 @@ where
         for (index, mut responses) in pipeline_responses.into_iter().enumerate() {
             // If the first policy in the sorted vector matches the current command index, use it.
             if let Some(&(ref routing_info, response_policy)) = response_policies.get(&index) {
-                // Use routing_info and response_policy for aggregation.
-                let receivers = responses
-                    .into_iter()
-                    .map(|(value, address)| {
-                        let (sender, receiver) = oneshot::channel();
-                        let _ = sender.send(Ok(Response::Single(value)));
-                        (Some(address), receiver)
-                    })
-                    .collect::<Vec<_>>();
-                let aggregated_response =
-                // TODO: Change aggregate_results function to accept vec of (result, address) instead of receivers
-                match Self::aggregate_results(receivers, routing_info, response_policy).await {
+                let aggregated_response = match Self::aggregate_resolved_results(
+                    responses,
+                    routing_info,
+                    response_policy,
+                ) {
                     Ok(value) => value,
-                    Err(err) => Value::ServerError(err.into())
+                    Err(err) => Value::ServerError(err.into()),
                 };
+
                 final_responses.push(aggregated_response);
             } else {
                 // If there's no policy for this index, use the first response if available.
                 if responses.len() == 1 {
-                    final_responses.push(responses.pop().unwrap().0);
+                    final_responses.push(responses.pop().unwrap().1);
                 } else {
                     final_responses.push(Value::ServerError(ServerError::ExtensionError {
                         code: "PipelineResponseError".to_string(),
@@ -2713,36 +2958,93 @@ where
     }
 
     fn poll_recover(&mut self, cx: &mut task::Context<'_>) -> Poll<Result<(), RedisError>> {
-        trace!("entered poll_recovere");
+        trace!("entered poll_recover");
+
         let recover_future = match &mut self.state {
             ConnectionState::PollComplete => return Poll::Ready(Ok(())),
             ConnectionState::Recover(future) => future,
         };
+
         match recover_future {
-            RecoverFuture::RecoverSlots(ref mut future) => match ready!(future.as_mut().poll(cx)) {
-                Ok(_) => {
-                    trace!("Recovered!");
-                    self.state = ConnectionState::PollComplete;
-                    Poll::Ready(Ok(()))
-                }
-                Err(err) => {
-                    trace!("Recover slots failed!");
-                    let next_state = if err.kind() == ErrorKind::AllConnectionsUnavailable {
-                        ConnectionState::Recover(RecoverFuture::Reconnect(Box::pin(
-                            ClusterConnInner::reconnect_to_initial_nodes(self.inner.clone()),
-                        )))
-                    } else {
-                        ConnectionState::Recover(RecoverFuture::RecoverSlots(Box::pin(
-                            Self::refresh_slots_and_subscriptions_with_retries(
+            RecoverFuture::RefreshingSlots(handle) => {
+                // Check if the task has completed
+                match handle.now_or_never() {
+                    Some(Ok(Ok(()))) => {
+                        // Task succeeded
+                        trace!("Slot refresh completed successfully!");
+                        self.state = ConnectionState::PollComplete;
+                        return Poll::Ready(Ok(()));
+                    }
+                    Some(Ok(Err(e))) => {
+                        // Task completed but returned an engine error
+                        trace!("Slot refresh failed: {:?}", e);
+
+                        if e.kind() == ErrorKind::AllConnectionsUnavailable {
+                            // If all connections unavailable, try reconnect
+                            self.state =
+                                ConnectionState::Recover(RecoverFuture::ReconnectToInitialNodes(
+                                    Box::pin(ClusterConnInner::reconnect_to_initial_nodes(
+                                        self.inner.clone(),
+                                    )),
+                                ));
+                            return Poll::Ready(Err(e));
+                        } else {
+                            // Retry refresh
+                            let new_handle = Self::spawn_refresh_slots_task(
                                 self.inner.clone(),
                                 &RefreshPolicy::Throttable,
-                            ),
-                        )))
-                    };
-                    self.state = next_state;
-                    Poll::Ready(Err(err))
+                            );
+                            self.state = ConnectionState::Recover(RecoverFuture::RefreshingSlots(
+                                new_handle,
+                            ));
+                            return Poll::Ready(Ok(()));
+                        }
+                    }
+                    Some(Err(join_err)) => {
+                        if join_err.is_cancelled() {
+                            // Task was intentionally aborted - don't treat as an error
+                            trace!("Slot refresh task was aborted");
+                            self.state = ConnectionState::PollComplete;
+                            return Poll::Ready(Ok(()));
+                        } else {
+                            // Task panicked - try reconnecting to initial nodes as a recovery strategy
+                            warn!("Slot refresh task panicked: {:?} - attempting recovery by reconnecting to initial nodes", join_err);
+
+                            // TODO - consider a gracefully closing of the client
+                            // Since a panic indicates a bug in the refresh logic,
+                            // it might be safer to close the client entirely
+                            self.state =
+                                ConnectionState::Recover(RecoverFuture::ReconnectToInitialNodes(
+                                    Box::pin(ClusterConnInner::reconnect_to_initial_nodes(
+                                        self.inner.clone(),
+                                    )),
+                                ));
+
+                            // Report this critical error to clients
+                            let err = RedisError::from((
+                                ErrorKind::ClientError,
+                                "Slot refresh task panicked",
+                                format!("{join_err:?}"),
+                            ));
+                            return Poll::Ready(Err(err));
+                        }
+                    }
+                    None => {
+                        // Task is still running
+                        // Just continue and return Ok to not block poll_flush
+                    }
                 }
-            },
+
+                // Always return Ready to not block poll_flush
+                Poll::Ready(Ok(()))
+            }
+            // Other cases remain unchanged
+            RecoverFuture::ReconnectToInitialNodes(ref mut future) => {
+                ready!(future.as_mut().poll(cx));
+                trace!("Reconnected to initial nodes");
+                self.state = ConnectionState::PollComplete;
+                Poll::Ready(Ok(()))
+            }
             RecoverFuture::Reconnect(ref mut future) => {
                 ready!(future.as_mut().poll(cx));
                 trace!("Reconnected connections");
@@ -3016,12 +3318,21 @@ where
             match ready!(self.poll_complete(cx)) {
                 PollFlushAction::None => return Poll::Ready(Ok(())),
                 PollFlushAction::RebuildSlots => {
-                    self.state = ConnectionState::Recover(RecoverFuture::RecoverSlots(Box::pin(
-                        ClusterConnInner::refresh_slots_and_subscriptions_with_retries(
-                            self.inner.clone(),
-                            &RefreshPolicy::Throttable,
-                        ),
-                    )));
+                    // Spawn refresh task
+                    let task_handle = ClusterConnInner::spawn_refresh_slots_task(
+                        self.inner.clone(),
+                        &RefreshPolicy::Throttable,
+                    );
+
+                    // Update state
+                    self.state =
+                        ConnectionState::Recover(RecoverFuture::RefreshingSlots(task_handle));
+                }
+                PollFlushAction::ReconnectFromInitialConnections => {
+                    self.state =
+                        ConnectionState::Recover(RecoverFuture::ReconnectToInitialNodes(Box::pin(
+                            ClusterConnInner::reconnect_to_initial_nodes(self.inner.clone()),
+                        )));
                 }
                 PollFlushAction::Reconnect(addresses) => {
                     self.state = ConnectionState::Recover(RecoverFuture::Reconnect(Box::pin(
@@ -3032,11 +3343,6 @@ where
                             true,
                         )
                         .map(|_| ()), // Convert Vec<Arc<Notify>> to () as it's not needed here
-                    )));
-                }
-                PollFlushAction::ReconnectFromInitialConnections => {
-                    self.state = ConnectionState::Recover(RecoverFuture::Reconnect(Box::pin(
-                        ClusterConnInner::reconnect_to_initial_nodes(self.inner.clone()),
                     )));
                 }
             }
@@ -3262,17 +3568,17 @@ mod pipeline_routing_tests {
     fn test_numerical_response_aggregation_logic() {
         let pipeline_responses: PipelineResponses = vec![
             vec![
-                (Value::Int(3), "node1".to_string()),
-                (Value::Int(7), "node2".to_string()),
-                (Value::Int(0), "node3".to_string()),
+                (Some("node1".to_string()), Value::Int(3)),
+                (Some("node2".to_string()), Value::Int(7)),
+                (Some("node3".to_string()), Value::Int(0)),
             ],
             vec![(
+                Some("node3".to_string()),
                 Value::BulkString(b"unchanged".to_vec()),
-                "node3".to_string(),
             )],
             vec![
-                (Value::Int(5), "node1".to_string()),
-                (Value::Int(11), "node2".to_string()),
+                (Some("node1".to_string()), Value::Int(5)),
+                (Some("node2".to_string()), Value::Int(11)),
             ],
         ];
         let response_policies = HashMap::from([
@@ -3315,23 +3621,23 @@ mod pipeline_routing_tests {
     fn test_combine_arrays_response_aggregation_logic() {
         let pipeline_responses: PipelineResponses = vec![
             vec![
-                (Value::Array(vec![Value::Int(1)]), "node1".to_string()),
-                (Value::Array(vec![Value::Int(2)]), "node2".to_string()),
+                (Some("node1".to_string()), Value::Array(vec![Value::Int(1)])),
+                (Some("node2".to_string()), Value::Array(vec![Value::Int(2)])),
             ],
             vec![
                 (
+                    Some("node2".to_string()),
                     Value::Array(vec![
                         Value::BulkString("key1".into()),
                         Value::BulkString("key3".into()),
                     ]),
-                    "node2".to_string(),
                 ),
                 (
+                    Some("node1".to_string()),
                     Value::Array(vec![
                         Value::BulkString("key2".into()),
                         Value::BulkString("key4".into()),
                     ]),
-                    "node1".to_string(),
                 ),
             ],
         ];
@@ -3386,19 +3692,19 @@ mod pipeline_routing_tests {
     fn test_aggregate_pipeline_multi_node_commands_with_error_response() {
         let pipeline_responses: PipelineResponses = vec![
             vec![
-                (Value::Int(3), "node1".to_string()),
-                (Value::Int(7), "node2".to_string()),
+                (Some("node1".to_string()), Value::Int(3)),
+                (Some("node2".to_string()), Value::Int(7)),
                 (
+                    Some("node3".to_string()),
                     Value::ServerError(ServerError::KnownError {
                         kind: ServerErrorKind::Moved,
                         detail: Some("127.0.0.1".to_string()),
                     }),
-                    "node3".to_string(),
                 ),
             ],
             vec![(
+                Some("node3".to_string()),
                 Value::BulkString(b"unchanged".to_vec()),
-                "node3".to_string(),
             )],
         ];
         let mut response_policies = HashMap::new();
@@ -3432,7 +3738,7 @@ mod pipeline_routing_tests {
     #[test]
     fn test_aggregate_pipeline_multi_node_commands_with_no_response_for_command() {
         let pipeline_responses: PipelineResponses =
-            vec![vec![(Value::Int(1), "node1".to_string())], vec![]];
+            vec![vec![(Some("node1".to_string()), Value::Int(1))], vec![]];
         let response_policies = HashMap::new();
 
         let responses = block_on(
@@ -3457,10 +3763,10 @@ mod pipeline_routing_tests {
     #[test]
     fn test_aggregate_pipeline_responses_with_multiple_responses_for_command() {
         let pipeline_responses: PipelineResponses = vec![
-            vec![(Value::Int(1), "node1".to_string())],
+            vec![(Some("node1".to_string()), Value::Int(1))],
             vec![
-                (Value::Int(2), "node2".to_string()),
-                (Value::Int(3), "node3".to_string()),
+                (Some("node2".to_string()), Value::Int(2)),
+                (Some("node3".to_string()), Value::Int(3)),
             ],
         ];
         let response_policies = HashMap::new();

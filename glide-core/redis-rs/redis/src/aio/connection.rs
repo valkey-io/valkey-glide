@@ -412,7 +412,7 @@ where
 {
     tracing::debug!(
         "Creating {conn_type} connection for node: {node:?}{}",
-        ip.map(|ip| format!(", IP: {:?}", ip)).unwrap_or_default()
+        ip.map(|ip| format!(", IP: {ip:?}")).unwrap_or_default()
     );
 }
 
@@ -442,7 +442,6 @@ pub(crate) async fn connect_simple<T: RedisRuntime>(
             .0
         }
 
-        #[cfg(any(feature = "tls-native-tls", feature = "tls-rustls"))]
         ConnectionAddr::TcpTls {
             ref host,
             port,
@@ -471,14 +470,6 @@ pub(crate) async fn connect_simple<T: RedisRuntime>(
             }))
             .await?
             .0
-        }
-
-        #[cfg(not(any(feature = "tls-native-tls", feature = "tls-rustls")))]
-        ConnectionAddr::TcpTls { .. } => {
-            fail!((
-                ErrorKind::InvalidClientConfig,
-                "Cannot connect to TCP with TLS without the tls feature"
-            ));
         }
 
         #[cfg(unix)]

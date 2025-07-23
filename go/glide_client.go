@@ -15,6 +15,7 @@ import (
 	"github.com/valkey-io/valkey-glide/go/v2/internal/utils"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
+	"github.com/valkey-io/valkey-glide/go/v2/pipeline"
 )
 
 // Client interface compliance check.
@@ -27,10 +28,10 @@ var _ interfaces.GlideClientCommands = (*Client)(nil)
 //
 // [Valkey Glide Wiki]: https://github.com/valkey-io/valkey-glide/wiki/Golang-wrapper#standalone
 type Client struct {
-	*baseClient
+	baseClient
 }
 
-// Creates a new `Client` instance and establishes a connection to a standalone Valkey server.
+// Creates a new [Client] instance and establishes a connection to a standalone Valkey server.
 //
 // Parameters:
 //
@@ -40,7 +41,7 @@ type Client struct {
 //
 // Return value:
 //
-//	A connected `Client` instance.
+//	A connected [Client] instance.
 //
 // Remarks:
 //
@@ -52,6 +53,7 @@ type Client struct {
 //	  - **TLS**: If `UseTLS` is set to `true`, the client will establish a secure connection using TLS.
 //	  - **Reconnection Strategy**: The `BackoffStrategy` settings define how the client will attempt to reconnect
 //	      in case of disconnections.
+//	  - **Pub/Sub Subscriptions**: Predefine Pub/Sub channels and patterns to subscribe to upon connection establishment.
 func NewClient(config *config.ClientConfiguration) (*Client, error) {
 	client, err := createClient(config)
 	if err != nil {
@@ -62,7 +64,68 @@ func NewClient(config *config.ClientConfiguration) (*Client, error) {
 		client.setMessageHandler(NewMessageHandler(subConfig.GetCallback(), subConfig.GetContext()))
 	}
 
-	return &Client{client}, nil
+	return &Client{*client}, nil
+}
+
+// Executes a batch by processing the queued commands.
+//
+// See [Valkey Transactions (Atomic Batches)] and [Valkey Pipelines (Non-Atomic Batches)] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution
+//	batch - A `ClusterBatch` object containing a list of commands to be executed.
+//	raiseOnError - Determines how errors are handled within the batch response. When set to
+//	  `true`, the first encountered error in the batch will be raised as an error
+//	  after all retries and reconnections have been executed. When set to `false`,
+//	  errors will be included as part of the batch response array, allowing the caller to process both
+//	  successful and failed commands together. In this case, error details will be provided as
+//	  instances of error.
+//
+// Return value:
+//
+// A list of results corresponding to the execution of each command in the batch.
+// If a command returns a value, it will be included in the list. If a command doesn't return a value,
+// the list entry will be `nil`. If the batch failed due to a `WATCH` command, `Exec` will return `nil`.
+//
+// [Valkey Transactions (Atomic Batches)]: https://valkey.io/docs/topics/transactions/
+// [Valkey Pipelines (Non-Atomic Batches)]: https://valkey.io/docs/topics/pipelining/
+func (client *Client) Exec(ctx context.Context, batch pipeline.StandaloneBatch, raiseOnError bool) ([]any, error) {
+	return client.executeBatch(ctx, batch.Batch, raiseOnError, nil)
+}
+
+// Executes a batch by processing the queued commands.
+//
+// See [Valkey Transactions (Atomic Batches)] and [Valkey Pipelines (Non-Atomic Batches)] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution
+//	batch - A `ClusterBatch` object containing a list of commands to be executed.
+//	raiseOnError - Determines how errors are handled within the batch response. When set to
+//	  `true`, the first encountered error in the batch will be raised as an error
+//	  after all retries and reconnections have been executed. When set to `false`,
+//	  errors will be included as part of the batch response array, allowing the caller to process both
+//	  successful and failed commands together. In this case, error details will be provided as
+//	  instances of `RequestError`.
+//	options - A [StandaloneBatchOptions] object containing execution options.
+//
+// Return value:
+//
+// A list of results corresponding to the execution of each command in the batch.
+// If a command returns a value, it will be included in the list. If a command doesn't return a value,
+// the list entry will be `nil`. If the batch failed due to a `WATCH` command, `ExecWithOptions` will return `nil`.
+//
+// [Valkey Transactions (Atomic Batches)]: https://valkey.io/docs/topics/transactions/
+// [Valkey Pipelines (Non-Atomic Batches)]: https://valkey.io/docs/topics/pipelining/
+func (client *Client) ExecWithOptions(
+	ctx context.Context,
+	batch pipeline.StandaloneBatch,
+	raiseOnError bool,
+	options pipeline.StandaloneBatchOptions,
+) ([]any, error) {
+	converted := options.Convert()
+	return client.executeBatch(ctx, batch.Batch, raiseOnError, &converted)
 }
 
 // CustomCommand executes a single command, specified by args, without checking inputs. Every part of the command,
@@ -90,12 +153,14 @@ func (client *Client) CustomCommand(ctx context.Context, args []string) (any, er
 	if err != nil {
 		return nil, err
 	}
-	return HandleInterfaceResponse(res)
+	return handleInterfaceResponse(res)
 }
 
 // Sets configuration parameters to the specified values.
 //
-// Note: Prior to Version 7.0.0, only one parameter can be send.
+// Note:
+//
+// Prior to Version 7.0.0, only one parameter can be send.
 //
 // See [valkey.io] for details.
 //
@@ -119,7 +184,9 @@ func (client *Client) ConfigSet(ctx context.Context, parameters map[string]strin
 
 // Gets the values of configuration parameters.
 //
-// Note: Prior to Version 7.0.0, only one parameter can be send.
+// Note:
+//
+// Prior to Version 7.0.0, only one parameter can be send.
 //
 // See [valkey.io] for details.
 //
@@ -130,7 +197,7 @@ func (client *Client) ConfigSet(ctx context.Context, parameters map[string]strin
 //
 // Return value:
 //
-//	A map of models.Result[string] corresponding to the configuration parameters.
+//	A map of values corresponding to the configuration parameters.
 //
 // [valkey.io]: https://valkey.io/commands/config-get/
 func (client *Client) ConfigGet(ctx context.Context, args []string) (map[string]string, error) {
@@ -182,6 +249,8 @@ func (client *Client) Info(ctx context.Context) (string, error) {
 }
 
 // Gets information and statistics about the server.
+//
+// Note:
 //
 // Starting from server version 7, command supports multiple section arguments.
 //
@@ -498,15 +567,16 @@ func (client *Client) ConfigResetStat(ctx context.Context) (string, error) {
 //
 // Return value:
 //
-//	The name of the client connection as a string if a name is set, or nil if  no name is assigned.
+//	If a name is set, returns the name of the client connection as a models.Result[string].
+//	Otherwise, returns [models.CreateNilStringResult()] if no name is assigned.
 //
 // [valkey.io]: https://valkey.io/commands/client-getname/
-func (client *Client) ClientGetName(ctx context.Context) (string, error) {
+func (client *Client) ClientGetName(ctx context.Context) (models.Result[string], error) {
 	result, err := client.executeCommand(ctx, C.ClientGetName, []string{})
 	if err != nil {
-		return models.DefaultStringResponse, err
+		return models.CreateNilStringResult(), err
 	}
-	return handleStringResponse(result)
+	return handleStringOrNilResponse(result)
 }
 
 // Set the name of the current connection.
@@ -531,7 +601,7 @@ func (client *Client) ClientSetName(ctx context.Context, connectionName string) 
 	return handleOkResponse(result)
 }
 
-// Move key from the currently selected database to the database specified by dbIndex.
+// Move key from the currently selected database to the database specified by `dbIndex`.
 //
 // See [valkey.io] for details.
 //
@@ -539,11 +609,12 @@ func (client *Client) ClientSetName(ctx context.Context, connectionName string) 
 //
 //	ctx - The context for controlling the command execution.
 //	key - The key to move.
-//	dbIndex -  The index of the database to move key to.
+//	dbIndex - The index of the database to move key to.
 //
 // Return value:
 //
-//	Returns "OK".
+//	`true` if `key` was moved, or `false` if the `key` already exists in the destination
+//	database or does not exist in the source database.
 //
 // [valkey.io]: https://valkey.io/commands/move/
 func (client *Client) Move(ctx context.Context, key string, dbIndex int64) (bool, error) {
@@ -562,20 +633,19 @@ func (client *Client) Move(ctx context.Context, key string, dbIndex int64) (bool
 // Parameters:
 //
 //	ctx - The context for controlling the command execution.
-//	cursor - The cursor that points to the next iteration of results. A value of 0
-//			 indicates the start of the search.
+//	cursor - The cursor that points to the next iteration of results.
 //
 // Return value:
 //
-//	An Array of Objects. The first element is always the cursor for the next
-//	iteration of results. "0" will be the cursor returned on the last iteration
-//	of the scan. The second element is always an Array of matched keys from the database.
+//	An object which holds the next cursor and the subset of the hash held by `key`.
+//	The cursor will return `false` from `IsFinished()` method on the last iteration of the subset.
+//	The data array in the result is always an array of matched keys from the database.
 //
 // [valkey.io]: https://valkey.io/commands/scan/
-func (client *Client) Scan(ctx context.Context, cursor int64) (string, []string, error) {
-	res, err := client.executeCommand(ctx, C.Scan, []string{utils.IntToString(cursor)})
+func (client *Client) Scan(ctx context.Context, cursor models.Cursor) (models.ScanResult, error) {
+	res, err := client.executeCommand(ctx, C.Scan, []string{cursor.String()})
 	if err != nil {
-		return models.DefaultStringResponse, nil, err
+		return models.ScanResult{}, err
 	}
 	return handleScanResponse(res)
 }
@@ -587,29 +657,28 @@ func (client *Client) Scan(ctx context.Context, cursor int64) (string, []string,
 // Parameters:
 //
 //	ctx - The context for controlling the command execution.
-//	 cursor - The cursor that points to the next iteration of results. A value of 0
-//				 indicates the start of the search.
-//	 scanOptions - Additional command parameters, see [ScanOptions] for more details.
+//	cursor - The cursor that points to the next iteration of results.
+//	scanOptions - Additional command parameters, see [ScanOptions] for more details.
 //
 // Return value:
 //
-//	An Array of Objects. The first element is always the cursor for the next
-//	iteration of results. "0" will be the cursor returned on the last iteration
-//	of the scan. The second element is always an Array of matched keys from the database.
+//	An object which holds the next cursor and the subset of the hash held by `key`.
+//	The cursor will return `false` from `IsFinished()` method on the last iteration of the subset.
+//	The data array in the result is always an array of matched keys from the database.
 //
 // [valkey.io]: https://valkey.io/commands/scan/
 func (client *Client) ScanWithOptions(
 	ctx context.Context,
-	cursor int64,
+	cursor models.Cursor,
 	scanOptions options.ScanOptions,
-) (string, []string, error) {
+) (models.ScanResult, error) {
 	optionArgs, err := scanOptions.ToArgs()
 	if err != nil {
-		return models.DefaultStringResponse, nil, err
+		return models.ScanResult{}, err
 	}
-	res, err := client.executeCommand(ctx, C.Scan, append([]string{utils.IntToString(cursor)}, optionArgs...))
+	res, err := client.executeCommand(ctx, C.Scan, append([]string{cursor.String()}, optionArgs...))
 	if err != nil {
-		return models.DefaultStringResponse, nil, err
+		return models.ScanResult{}, err
 	}
 	return handleScanResponse(res)
 }
@@ -705,7 +774,7 @@ func (client *Client) FunctionKill(ctx context.Context) (string, error) {
 // Return value:
 //
 //	A map of node addresses to their function statistics represented by
-//	[FunctionStatsResult] object containing the following information:
+//	[models.FunctionStatsResult] object containing the following information:
 //	running_script - Information about the running script.
 //	engines - Information about available engines and their stats.
 //
@@ -795,7 +864,7 @@ func (client *Client) FunctionDump(ctx context.Context) (string, error) {
 	return handleStringResponse(result)
 }
 
-// Restores libraries from the serialized payload returned by `FunctionDump`.
+// Restores libraries from the serialized payload returned by [Client.FunctionDump].
 //
 // Since:
 //
@@ -806,7 +875,7 @@ func (client *Client) FunctionDump(ctx context.Context) (string, error) {
 // Parameters:
 //
 //	ctx - The context for controlling the command execution.
-//	payload - The serialized data from `FunctionDump`.
+//	payload - The serialized data from [FunctionDump].
 //
 // Return value:
 //
@@ -821,7 +890,7 @@ func (client *Client) FunctionRestore(ctx context.Context, payload string) (stri
 	return handleOkResponse(result)
 }
 
-// Restores libraries from the serialized payload returned by `FunctionDump`.
+// Restores libraries from the serialized payload returned by [Client.FunctionDump].
 //
 // Since:
 //
@@ -832,7 +901,7 @@ func (client *Client) FunctionRestore(ctx context.Context, payload string) (stri
 // Parameters:
 //
 //	ctx - The context for controlling the command execution.
-//	payload - The serialized data from `FunctionDump`.
+//	payload - The serialized data from [FunctionDump].
 //	policy - A policy for handling existing libraries.
 //
 // Return value:
@@ -878,4 +947,27 @@ func (client *Client) Publish(ctx context.Context, channel string, message strin
 	}
 
 	return handleIntResponse(result)
+}
+
+// Flushes all the previously watched keys for a transaction. Executing a transaction will
+// automatically flush all previously watched keys.
+//
+// See [valkey.io] and [Valkey Glide Wiki] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	A simple "OK" response.
+//
+// [valkey.io]: https://valkey.io/commands/unwatch
+// [Valkey Glide Wiki]: https://valkey.io/topics/transactions/#cas
+func (client *Client) Unwatch(ctx context.Context) (string, error) {
+	result, err := client.executeCommand(ctx, C.UnWatch, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
 }

@@ -142,6 +142,20 @@ def create_clusters(tls, load_module, cluster_endpoints, standalone_endpoints):
             addresses=standalone_endpoints,
         )
 
+    pytest.valkey_tls_cluster = ValkeyCluster(
+        tls=True,
+        cluster_mode=True,
+        load_module=load_module,
+        replica_count=2,
+    )
+    pytest.standalone_tls_cluster = ValkeyCluster(
+        tls=True,
+        cluster_mode=False,
+        shard_count=1,
+        replica_count=1,
+        load_module=load_module,
+    )
+
 
 @pytest.fixture(autouse=True, scope="session")
 def call_before_all_pytests(request):
@@ -177,6 +191,18 @@ def pytest_sessionfinish(session, exitstatus):
         del pytest.standalone_cluster
     except AttributeError:
         # standalone_cluster was not set, skip deletion
+        pass
+
+    try:
+        del pytest.valkey_tls_cluster
+    except AttributeError:
+        # valkey_tls_cluster was not set, skip deletion
+        pass
+
+    try:
+        del pytest.standalone_tls_cluster
+    except AttributeError:
+        # standalone_tls_cluster was not set, skip deletion
         pass
 
 

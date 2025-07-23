@@ -3,6 +3,7 @@
 package options
 
 import (
+	"errors"
 	"sync"
 	"unsafe"
 )
@@ -12,61 +13,46 @@ import "C"
 
 // ScriptOptions represents options for script execution
 type ScriptOptions struct {
-	keys []string
-	args []string
+	Keys []string
+	Args []string
 }
 
 // NewScriptOptions creates a new ScriptOptions with default values
 func NewScriptOptions() *ScriptOptions {
 	return &ScriptOptions{
-		keys: []string{},
-		args: []string{},
+		Keys: []string{},
+		Args: []string{},
 	}
 }
 
 // WithKeys sets the keys for the script
 func (o *ScriptOptions) WithKeys(keys []string) *ScriptOptions {
-	o.keys = keys
+	o.Keys = keys
 	return o
 }
 
 // WithArgs sets the arguments for the script
 func (o *ScriptOptions) WithArgs(args []string) *ScriptOptions {
-	o.args = args
+	o.Args = args
 	return o
-}
-
-// GetKeys returns the keys for the script
-func (o *ScriptOptions) GetKeys() []string {
-	return o.keys
-}
-
-// GetArgs returns the arguments for the script
-func (o *ScriptOptions) GetArgs() []string {
-	return o.args
 }
 
 // ScriptArgOptions represents options for script execution with only arguments
 type ScriptArgOptions struct {
-	args []string
+	Args []string
 }
 
 // NewScriptArgOptions creates a new ScriptArgOptions with default values
 func NewScriptArgOptions() *ScriptArgOptions {
 	return &ScriptArgOptions{
-		args: []string{},
+		Args: []string{},
 	}
 }
 
 // WithArgs sets the arguments for the script
 func (o *ScriptArgOptions) WithArgs(args []string) *ScriptArgOptions {
-	o.args = args
+	o.Args = args
 	return o
-}
-
-// GetArgs returns the arguments for the script
-func (o *ScriptArgOptions) GetArgs() []string {
-	return o.args
 }
 
 type ClusterScriptOptions struct {
@@ -141,39 +127,48 @@ func storeScript(script []byte) string {
 		return ""
 	}
 
-	cHash := C.store_script(
+	cHash := (*C.struct_ScriptHashBuffer)(C.store_script(
 		(*C.uint8_t)(unsafe.Pointer(&script[0])),
 		C.uintptr_t(len(script)),
-	)
-	defer C.free(unsafe.Pointer(cHash))
+	))
+	defer C.free_script_hash_buffer(cHash)
 
-	return C.GoString(cHash)
+	len := C.int(cHash.len)
+	hash := string(C.GoBytes(unsafe.Pointer(cHash.ptr), len))
+
+	return hash
 }
 
 // dropScript removes a script from the script cache
 // This function interfaces with the Rust implementation through FFI
-func dropScript(hash string) {
+func dropScript(hash string) error {
 	if hash == "" {
-		return
+		return nil
 	}
 
-	cHash := C.CString(hash)
-	defer C.free(unsafe.Pointer(cHash))
+	buffer := []byte(hash)
+	len := C.uintptr_t(len(buffer))
+	cHash := (*C.uint8_t)(unsafe.Pointer(&buffer[0]))
 
-	C.drop_script(cHash)
+	err := C.drop_script(cHash, len)
+	defer C.free_drop_script_error(err)
+	if err == nil {
+		return nil
+	}
+	return errors.New(C.GoString(err))
 }
 
 // ScriptFlushOptions represents options for script flush operations
 type ScriptFlushOptions struct {
-	Mode  FlushMode
-	Route *RouteOption
+	Mode FlushMode
+	*RouteOption
 }
 
 // NewScriptFlushOptions creates a new ScriptFlushOptions with default values
 func NewScriptFlushOptions() *ScriptFlushOptions {
 	return &ScriptFlushOptions{
-		Mode:  "",
-		Route: &RouteOption{},
+		Mode:        "",
+		RouteOption: &RouteOption{},
 	}
 }
 
@@ -185,6 +180,6 @@ func (o *ScriptFlushOptions) WithMode(mode FlushMode) *ScriptFlushOptions {
 
 // WithRoute sets the route option for the script flush operation
 func (o *ScriptFlushOptions) WithRoute(route *RouteOption) *ScriptFlushOptions {
-	o.Route = route
+	o.RouteOption = route
 	return o
 }

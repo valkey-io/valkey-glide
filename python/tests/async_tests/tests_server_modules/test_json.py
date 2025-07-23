@@ -21,7 +21,7 @@ from glide_shared.config import ProtocolVersion
 from glide_shared.constants import OK
 from glide_shared.exceptions import RequestError
 
-from tests.async_tests.test_async_client import get_random_string
+from tests.utils.utils import get_random_string
 
 
 def get_random_value(value_type="str"):

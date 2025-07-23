@@ -145,6 +145,23 @@ public class ConnectionManager {
             connectionRequestBuilder.setProtocolValue(configuration.getProtocol().ordinal());
         }
 
+        if (configuration.getReconnectStrategy() != null) {
+            var reconnectionStrategyBuilder =
+                    ConnectionRequestOuterClass.ConnectionRetryStrategy.newBuilder()
+                            .setNumberOfRetries(configuration.getReconnectStrategy().getNumOfRetries())
+                            .setExponentBase(configuration.getReconnectStrategy().getExponentBase())
+                            .setFactor(configuration.getReconnectStrategy().getFactor());
+            if (configuration.getReconnectStrategy().getJitterPercent() != null) {
+                reconnectionStrategyBuilder.setJitterPercent(
+                        configuration.getReconnectStrategy().getJitterPercent());
+            }
+            connectionRequestBuilder.setConnectionRetryStrategy(reconnectionStrategyBuilder.build());
+        }
+
+        if (configuration.isLazyConnect()) {
+            connectionRequestBuilder.setLazyConnect(configuration.isLazyConnect());
+        }
+
         return connectionRequestBuilder;
     }
 
@@ -158,14 +175,6 @@ public class ConnectionManager {
         ConnectionRequest.Builder connectionRequestBuilder =
                 setupConnectionRequestBuilderBaseConfiguration(configuration);
         connectionRequestBuilder.setClusterModeEnabled(false);
-        if (configuration.getReconnectStrategy() != null) {
-            connectionRequestBuilder.setConnectionRetryStrategy(
-                    ConnectionRequestOuterClass.ConnectionRetryStrategy.newBuilder()
-                            .setNumberOfRetries(configuration.getReconnectStrategy().getNumOfRetries())
-                            .setFactor(configuration.getReconnectStrategy().getFactor())
-                            .setExponentBase(configuration.getReconnectStrategy().getExponentBase())
-                            .build());
-        }
 
         if (configuration.getDatabaseId() != null) {
             connectionRequestBuilder.setDatabaseId(configuration.getDatabaseId());
@@ -188,11 +197,9 @@ public class ConnectionManager {
             connectionRequestBuilder.setPubsubSubscriptions(subscriptionsBuilder.build());
         }
 
-        if (configuration.getAdvancedConfiguration() != null) {
-            connectionRequestBuilder =
-                    setupConnectionRequestBuilderAdvancedBaseConfiguration(
-                            connectionRequestBuilder, configuration.getAdvancedConfiguration());
-        }
+        connectionRequestBuilder =
+                setupConnectionRequestBuilderAdvancedBaseConfiguration(
+                        connectionRequestBuilder, configuration.getAdvancedConfiguration());
 
         return connectionRequestBuilder;
     }
@@ -202,14 +209,24 @@ public class ConnectionManager {
      * AdvancedBaseClientConfiguration}.
      *
      * @param connectionRequestBuilder The builder for the {@link ConnectionRequest}.
-     * @param configuration The advanced configuration settings.
+     * @param advancedConfiguration The advanced configuration settings.
      * @return The updated {@link ConnectionRequest.Builder}.
      */
     private ConnectionRequest.Builder setupConnectionRequestBuilderAdvancedBaseConfiguration(
             ConnectionRequest.Builder connectionRequestBuilder,
-            AdvancedBaseClientConfiguration configuration) {
-        if (configuration.getConnectionTimeout() != null) {
-            connectionRequestBuilder.setConnectionTimeout(configuration.getConnectionTimeout());
+            AdvancedBaseClientConfiguration advancedConfiguration) {
+
+        if (advancedConfiguration.getConnectionTimeout() != null) {
+            connectionRequestBuilder.setConnectionTimeout(advancedConfiguration.getConnectionTimeout());
+        }
+
+        if (advancedConfiguration.getTlsAdvancedConfiguration().isUseInsecureTLS()) {
+            if (connectionRequestBuilder.getTlsMode() == TlsMode.NoTls) {
+                throw new ConfigurationError(
+                        "`useInsecureTlS` cannot be enabled when  `useTLS` is disabled.");
+            } else {
+                connectionRequestBuilder.setTlsMode(TlsMode.InsecureTls);
+            }
         }
 
         return connectionRequestBuilder;
@@ -243,11 +260,9 @@ public class ConnectionManager {
             connectionRequestBuilder.setPubsubSubscriptions(subscriptionsBuilder.build());
         }
 
-        if (configuration.getAdvancedConfiguration() != null) {
-            connectionRequestBuilder =
-                    setupConnectionRequestBuilderAdvancedBaseConfiguration(
-                            connectionRequestBuilder, configuration.getAdvancedConfiguration());
-        }
+        connectionRequestBuilder =
+                setupConnectionRequestBuilderAdvancedBaseConfiguration(
+                        connectionRequestBuilder, configuration.getAdvancedConfiguration());
 
         return connectionRequestBuilder;
     }

@@ -446,79 +446,6 @@ mod basic_async {
         .unwrap();
     }
 
-    #[test]
-    #[cfg(feature = "script")]
-    fn test_script() {
-        use redis::RedisError;
-
-        // Note this test runs both scripts twice to test when they have already been loaded
-        // into Redis and when they need to be loaded in
-        let script1 = redis::Script::new("return redis.call('SET', KEYS[1], ARGV[1])");
-        let script2 = redis::Script::new("return redis.call('GET', KEYS[1])");
-        let script3 = redis::Script::new("return redis.call('KEYS', '*')");
-
-        let ctx = TestContext::new();
-
-        block_on_all(async move {
-            let mut con = ctx.multiplexed_async_connection().await?;
-            script1
-                .key("key1")
-                .arg("foo")
-                .invoke_async(&mut con)
-                .await?;
-            let val: String = script2.key("key1").invoke_async(&mut con).await?;
-            assert_eq!(val, "foo");
-            let keys: Vec<String> = script3.invoke_async(&mut con).await?;
-            assert_eq!(keys, ["key1"]);
-            script1
-                .key("key1")
-                .arg("bar")
-                .invoke_async(&mut con)
-                .await?;
-            let val: String = script2.key("key1").invoke_async(&mut con).await?;
-            assert_eq!(val, "bar");
-            let keys: Vec<String> = script3.invoke_async(&mut con).await?;
-            assert_eq!(keys, ["key1"]);
-            Ok::<_, RedisError>(())
-        })
-        .unwrap();
-    }
-
-    #[test]
-    #[cfg(feature = "script")]
-    fn test_script_load() {
-        let ctx = TestContext::new();
-        let script = redis::Script::new("return 'Hello World'");
-
-        block_on_all(async move {
-            let mut con = ctx.multiplexed_async_connection().await.unwrap();
-
-            let hash = script.prepare_invoke().load_async(&mut con).await.unwrap();
-            assert_eq!(hash, script.get_hash().to_string());
-            Ok(())
-        })
-        .unwrap();
-    }
-
-    #[test]
-    #[cfg(feature = "script")]
-    fn test_script_returning_complex_type() {
-        let ctx = TestContext::new();
-        block_on_all(async {
-            let mut con = ctx.multiplexed_async_connection().await?;
-            redis::Script::new("return {1, ARGV[1], true}")
-                .arg("hello")
-                .invoke_async(&mut con)
-                .map_ok(|(i, s, b): (i32, String, bool)| {
-                    assert_eq!(i, 1);
-                    assert_eq!(s, "hello");
-                    assert!(b);
-                })
-                .await
-        })
-        .unwrap();
-    }
-
     // Allowing `nth(0)` for similarity with the following `nth(1)`.
     // Allowing `let ()` as `query_async` requries the type it converts the result to.
     #[allow(clippy::let_unit_value, clippy::iter_nth_zero)]
@@ -579,6 +506,7 @@ mod basic_async {
             addr: ctx.server.client_addr().clone(),
             redis: redis::RedisConnectionInfo {
                 password: Some("asdcasc".to_string()),
+                protocol: redis::ProtocolVersion::RESP2,
                 ..Default::default()
             },
         };
@@ -842,7 +770,7 @@ mod basic_async {
                 sub_conn.subscribe(channel_name.clone()).await?;
 
                 let rcv_msg = rx.recv().await.unwrap();
-                println!("Received PushInfo: {:?}", rcv_msg);
+                println!("Received PushInfo: {rcv_msg:?}");
 
                 Ok::<_, RedisError>(())
             })
@@ -979,7 +907,6 @@ mod basic_async {
         .unwrap();
     }
 
-    #[cfg(feature = "tls-rustls")]
     mod mtls_test {
         use super::*;
 

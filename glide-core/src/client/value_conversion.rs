@@ -1458,6 +1458,7 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
         | b"SISMEMBER"
         | b"PERSIST"
         | b"SMOVE"
+        | b"PFADD"
         | b"RENAMENX"
         | b"MOVE"
         | b"COPY"
@@ -2298,7 +2299,7 @@ mod tests {
         let converted_map = if let Value::Map(map) = converted_map {
             map
         } else {
-            panic!("Expected a Map, but got {:?}", converted_map);
+            panic!("Expected a Map, but got {converted_map:?}");
         };
 
         assert_eq!(converted_map.len(), 3);
@@ -2381,7 +2382,7 @@ mod tests {
         let converted_map = if let Value::Map(map) = converted_map {
             map
         } else {
-            panic!("Expected a Map, but got {:?}", converted_map);
+            panic!("Expected a Map, but got {converted_map:?}");
         };
         // expect 2 keys
         assert_eq!(converted_map.len(), 2);
@@ -2493,7 +2494,7 @@ mod tests {
         let converted_map = if let Value::Map(map) = converted_map {
             map
         } else {
-            panic!("Expected a Map, but got {:?}", converted_map);
+            panic!("Expected a Map, but got {converted_map:?}");
         };
 
         assert_eq!(converted_map.len(), 2);
@@ -3169,6 +3170,14 @@ mod tests {
     }
 
     #[test]
+    fn convert_pfadd_to_bool() {
+        assert!(matches!(
+            expected_type_for_cmd(redis::cmd("PFADD").arg("key1").arg("a").arg("b")),
+            Some(ExpectedReturnType::Boolean)
+        ));
+    }
+
+    #[test]
     fn test_convert_to_map_of_string_to_double() {
         assert_eq!(
             convert_to_expected_type(Value::Nil, Some(ExpectedReturnType::MapOfStringToDouble)),
@@ -3195,7 +3204,7 @@ mod tests {
         let converted_map = if let Value::Map(map) = converted_map {
             map
         } else {
-            panic!("Expected a Map, but got {:?}", converted_map);
+            panic!("Expected a Map, but got {converted_map:?}");
         };
 
         assert_eq!(converted_map.len(), 3);
@@ -3232,7 +3241,7 @@ mod tests {
         let converted_map = if let Value::Map(map) = converted_map {
             map
         } else {
-            panic!("Expected a Map, but got {:?}", converted_map);
+            panic!("Expected a Map, but got {converted_map:?}");
         };
 
         assert_eq!(converted_map.len(), 2);
@@ -3281,7 +3290,7 @@ mod tests {
         let array_result = if let Value::Array(array) = array_result {
             array
         } else {
-            panic!("Expected an Array, but got {:?}", array_result);
+            panic!("Expected an Array, but got {array_result:?}");
         };
         assert_eq!(array_result.len(), 2);
 
@@ -3319,7 +3328,7 @@ mod tests {
         let array_result = if let Value::Array(array) = array_result {
             array
         } else {
-            panic!("Expected an Array, but got {:?}", array_result);
+            panic!("Expected an Array, but got {array_result:?}");
         };
         assert_eq!(array_result.len(), 3);
 

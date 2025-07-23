@@ -23,7 +23,7 @@ type ConnectionManagementCommands interface {
 
 	ClientId(ctx context.Context) (int64, error)
 
-	ClientGetName(ctx context.Context) (string, error)
+	ClientGetName(ctx context.Context) (models.Result[string], error)
 
 	ClientSetName(ctx context.Context, connectionName string) (string, error)
 }

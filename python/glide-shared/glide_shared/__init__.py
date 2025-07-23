@@ -1,6 +1,11 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 from .commands.batch import Batch, ClusterBatch, ClusterTransaction, TBatch, Transaction
+from .commands.batch_options import (
+    BatchOptions,
+    BatchRetryStrategy,
+    ClusterBatchOptions,
+)
 from .commands.bitmap import (
     BitEncoding,
     BitFieldGet,
@@ -119,6 +124,7 @@ from .config import (
     ProtocolVersion,
     ReadFrom,
     ServerCredentials,
+    TlsAdvancedConfiguration,
 )
 from .constants import (
     OK,
@@ -166,6 +172,10 @@ __all__ = [
     "ClusterTransaction",
     "Transaction",
     "TBatch",
+    # Batch Options
+    "BatchOptions",
+    "BatchRetryStrategy",
+    "ClusterBatchOptions",
     # Config
     "AdvancedGlideClientConfiguration",
     "AdvancedGlideClusterClientConfiguration",
@@ -189,6 +199,7 @@ __all__ = [
     "TJsonUniversalResponse",
     "TOK",
     "TResult",
+    "TlsAdvancedConfiguration",
     "TXInfoStreamFullResponse",
     "TXInfoStreamResponse",
     "FtAggregateResponse",

@@ -3,11 +3,12 @@
 package options
 
 import (
+	"errors"
 	"strconv"
+	"time"
 
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
 
-	"github.com/valkey-io/valkey-glide/go/v2/internal/errors"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/utils"
 )
 
@@ -105,18 +106,18 @@ func (opts *SetOptions) ToArgs() ([]string, error) {
 	if opts.Expiry != nil {
 		switch opts.Expiry.Type {
 		case constants.Seconds, constants.Milliseconds, constants.UnixSeconds, constants.UnixMilliseconds:
-			args = append(args, string(opts.Expiry.Type), strconv.FormatUint(opts.Expiry.Count, 10))
+			args = append(args, string(opts.Expiry.Type), strconv.FormatUint(opts.Expiry.GetTime(), 10))
 		case constants.KeepExisting:
 			args = append(args, string(opts.Expiry.Type))
 		default:
-			err = &errors.RequestError{Msg: "Invalid expiry type"}
+			err = errors.New("invalid expiry type")
 		}
 	}
 
 	return args, err
 }
 
-// GetExOptions represents optional arguments for the [api.StringCommands.GetExWithOptions] command.
+// GetExOptions represents optional arguments for the [GetExWithOptions] command.
 //
 // See [valkey.io]
 //
@@ -143,11 +144,11 @@ func (opts *GetExOptions) ToArgs() ([]string, error) {
 	if opts.Expiry != nil {
 		switch opts.Expiry.Type {
 		case constants.Seconds, constants.Milliseconds, constants.UnixSeconds, constants.UnixMilliseconds:
-			args = append(args, string(opts.Expiry.Type), strconv.FormatUint(opts.Expiry.Count, 10))
+			args = append(args, string(opts.Expiry.Type), strconv.FormatUint(opts.Expiry.GetTime(), 10))
 		case constants.Persist:
 			args = append(args, string(opts.Expiry.Type))
 		default:
-			err = &errors.RequestError{Msg: "Invalid expiry type"}
+			err = errors.New("invalid expiry type")
 		}
 	}
 
@@ -156,22 +157,70 @@ func (opts *GetExOptions) ToArgs() ([]string, error) {
 
 // Expiry is used to configure the lifetime of a value.
 type Expiry struct {
-	Type  constants.ExpiryType
-	Count uint64
+	Type      constants.ExpiryType
+	Duration  uint64
+	Timestamp time.Time
 }
 
-func NewExpiry() *Expiry {
-	return &Expiry{}
+// isExpiryTypeSeconds checks if the expiry type should be in seconds
+func isExpiryTypeSeconds(duration time.Duration) bool {
+	return duration%time.Second == 0
 }
 
+// NewExpiryIn creates a new Expiry with a duration from now
+func NewExpiryIn(duration time.Duration) *Expiry {
+	dur := int(duration.Milliseconds())
+	expiryType := constants.Milliseconds
+	if isExpiryTypeSeconds(duration) {
+		expiryType = constants.Seconds
+		dur = int(duration.Seconds())
+	}
+	return &Expiry{
+		Type:     expiryType,
+		Duration: uint64(dur),
+	}
+}
+
+// NewExpiryAt creates a new Expiry with a specific timestamp
+func NewExpiryAt(timestamp time.Time) *Expiry {
+	expiryType := constants.UnixMilliseconds
+	if isExpiryTypeSeconds(time.Until(timestamp)) {
+		expiryType = constants.UnixSeconds
+	}
+	return &Expiry{
+		Type:      expiryType,
+		Timestamp: timestamp,
+	}
+}
+
+// NewExpiryKeepExisting creates a new Expiry with the existing expiry
+func NewExpiryKeepExisting() *Expiry {
+	return &Expiry{
+		Type: constants.KeepExisting,
+	}
+}
+
+// NewExpiryPersist creates a new Expiry with the persist expiry
+func NewExpiryPersist() *Expiry {
+	return &Expiry{
+		Type: constants.Persist,
+	}
+}
+
+// SetType sets the expiry type (seconds or milliseconds)
 func (ex *Expiry) SetType(expiryType constants.ExpiryType) *Expiry {
 	ex.Type = expiryType
 	return ex
 }
 
-func (ex *Expiry) SetCount(count uint64) *Expiry {
-	ex.Count = count
-	return ex
+// GetTime returns the time in the appropriate unit (seconds or milliseconds)
+func (ex *Expiry) GetTime() uint64 {
+	if ex.Type == constants.UnixSeconds {
+		return uint64(ex.Timestamp.Unix())
+	} else if ex.Type == constants.UnixMilliseconds {
+		return uint64(ex.Timestamp.UnixMilli())
+	}
+	return ex.Duration
 }
 
 // LPosOptions represents optional arguments for the [api.ListCommands.LPosWithOptions] and
@@ -226,27 +275,28 @@ func (opts *LPosOptions) ToArgs() ([]string, error) {
 //
 // [valkey.io]: https://valkey.io/commands/restore/
 type RestoreOptions struct {
-	// Subcommand string to replace existing key.
-	replace string
-	// Subcommand string to represent absolute timestamp (in milliseconds) for TTL.
-	absTTL string
+	// Replace existing key.
+	Replace bool
+	// Set to `true` to specify that `ttl` argument of `Restore` command represents an absolute Unix timestamp (in
+	// milliseconds).
+	AbsTTL bool
 	// It represents the idletime/frequency of object.
-	eviction Eviction
+	Eviction Eviction
 }
 
 func NewRestoreOptions() *RestoreOptions {
 	return &RestoreOptions{}
 }
 
-// Custom setter methods to replace existing key.
+// Replace existing key.
 func (restoreOption *RestoreOptions) SetReplace() *RestoreOptions {
-	restoreOption.replace = constants.ReplaceKeyword
+	restoreOption.Replace = true
 	return restoreOption
 }
 
-// Custom setter methods to represent absolute timestamp (in milliseconds) for TTL.
+// Specify that `ttl` argument of `Restore` command represents an absolute Unix timestamp (in milliseconds).
 func (restoreOption *RestoreOptions) SetABSTTL() *RestoreOptions {
-	restoreOption.absTTL = constants.ABSTTLKeyword
+	restoreOption.AbsTTL = true
 	return restoreOption
 }
 
@@ -260,22 +310,22 @@ type Eviction struct {
 
 // Custom setter methods set the idletime/frequency of object.
 func (restoreOption *RestoreOptions) SetEviction(evictionType constants.EvictionType, count int64) *RestoreOptions {
-	restoreOption.eviction.Type = evictionType
-	restoreOption.eviction.Count = count
+	restoreOption.Eviction.Type = evictionType
+	restoreOption.Eviction.Count = count
 	return restoreOption
 }
 
 func (opts *RestoreOptions) ToArgs() ([]string, error) {
 	args := []string{}
 	var err error
-	if opts.replace != "" {
-		args = append(args, string(opts.replace))
+	if opts.Replace {
+		args = append(args, string(constants.ReplaceKeyword))
 	}
-	if opts.absTTL != "" {
-		args = append(args, string(opts.absTTL))
+	if opts.AbsTTL {
+		args = append(args, string(constants.ABSTTLKeyword))
 	}
-	if (opts.eviction != Eviction{}) {
-		args = append(args, string(opts.eviction.Type), utils.IntToString(opts.eviction.Count))
+	if (opts.Eviction != Eviction{}) {
+		args = append(args, string(opts.Eviction.Type), utils.IntToString(opts.Eviction.Count))
 	}
 	return args, err
 }
@@ -310,42 +360,42 @@ func (opts *InfoOptions) ToArgs() ([]string, error) {
 // [valkey.io]: https://valkey.io/commands/Copy/
 type CopyOptions struct {
 	// The REPLACE option removes the destination key before copying the value to it.
-	replace bool
+	Replace bool
 	// Option allows specifying an alternative logical database index for the destination key
-	dbDestination int64
+	DbDestination int64
 }
 
 func NewCopyOptions() *CopyOptions {
-	return &CopyOptions{replace: false}
+	return &CopyOptions{Replace: false}
 }
 
 // Custom setter methods to removes the destination key before copying the value to it.
 func (restoreOption *CopyOptions) SetReplace() *CopyOptions {
-	restoreOption.replace = true
+	restoreOption.Replace = true
 	return restoreOption
 }
 
 // Custom setter methods to allows specifying an alternative logical database index for the destination key.
 func (copyOption *CopyOptions) SetDBDestination(destinationDB int64) *CopyOptions {
-	copyOption.dbDestination = destinationDB
+	copyOption.DbDestination = destinationDB
 	return copyOption
 }
 
 func (opts *CopyOptions) ToArgs() ([]string, error) {
 	args := []string{}
 	var err error
-	if opts.replace {
+	if opts.Replace {
 		args = append(args, string(constants.ReplaceKeyword))
 	}
-	if opts.dbDestination >= 0 {
-		args = append(args, "DB", utils.IntToString(opts.dbDestination))
+	if opts.DbDestination >= 0 {
+		args = append(args, "DB", utils.IntToString(opts.DbDestination))
 	}
 	return args, err
 }
 
 // Optional arguments for `ZPopMin` and `ZPopMax` commands.
 type ZPopOptions struct {
-	count int64
+	Count int64
 }
 
 func NewZPopOptions() *ZPopOptions {
@@ -354,17 +404,17 @@ func NewZPopOptions() *ZPopOptions {
 
 // The maximum number of popped elements. If not specified, pops one member.
 func (opts *ZPopOptions) SetCount(count int64) *ZPopOptions {
-	opts.count = count
+	opts.Count = count
 	return opts
 }
 
 // `ZPopMax/Min` don't use the COUNT keyword, only ZMPop will use .
 func (opts *ZPopOptions) ToArgs(withKeyword bool) ([]string, error) {
-	if opts.count <= 0 {
+	if opts.Count <= 0 {
 		return []string{}, nil
 	}
 	if withKeyword {
-		return []string{"COUNT", strconv.FormatInt(opts.count, 10)}, nil
+		return []string{"COUNT", strconv.FormatInt(opts.Count, 10)}, nil
 	}
-	return []string{strconv.FormatInt(opts.count, 10)}, nil
+	return []string{strconv.FormatInt(opts.Count, 10)}, nil
 }

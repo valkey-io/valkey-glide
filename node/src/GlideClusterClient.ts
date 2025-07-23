@@ -208,6 +208,9 @@ export type GlideClusterClientConfiguration = BaseClientConfiguration & {
  * ```typescript
  * const config: AdvancedGlideClusterClientConfiguration = {
  *   connectionTimeout: 500, // Set the connection timeout to 500ms
+ *   tlsAdvancedConfiguration: {
+ *     insecure: true, // Skip TLS certificate verification (use only in development)
+ *   },
  * };
  * ```
  */
@@ -575,6 +578,12 @@ export class GlideClusterClient extends BaseClient {
      *       console.log(`Received message: ${msg.payload}`);
      *     },
      *   },
+     *   connectionBackoff: {
+     *     numberOfRetries: 5,
+     *     factor: 1000,
+     *     exponentBase: 2,
+     *     jitter: 20,
+     *   },
      * });
      * ```
      *
@@ -582,6 +591,8 @@ export class GlideClusterClient extends BaseClient {
      * - **Cluster Topology Discovery**: The client will automatically discover the cluster topology based on the seed addresses provided.
      * - **Authentication**: If `credentials` are provided, the client will attempt to authenticate using the specified username and password.
      * - **TLS**: If `useTLS` is set to `true`, the client will establish secure connections using TLS.
+     *      Should match the TLS configuration of the server/cluster, otherwise the connection attempt will fail.
+     *      For advanced tls configuration, please use the {@link AdvancedGlideClusterClientConfiguration} option.
      * - **Periodic Checks**: The `periodicChecks` setting allows you to configure how often the client checks for cluster topology changes.
      * - **Pub/Sub Subscriptions**: Any channels or patterns specified in `pubsubSubscriptions` will be subscribed to upon connection.
      */
@@ -722,19 +733,21 @@ export class GlideClusterClient extends BaseClient {
      * await client.mset([{key: "key1", value: "value1"}, {key: "key2", value: "value2"}, {key: "notMyKey", value: "value3"}, {key: "somethingElse", value: "value4"}]);
      * let cursor = new ClusterScanCursor();
      * const matchedKeys: GlideString[] = [];
+     * let keys: GlideString[] = [];
      * while (!cursor.isFinished()) {
-     *   const [cursor, keys] = await client.scan(cursor, { match: "*key*", count: 10 });
+     *    [cursor, keys] = await client.scan(cursor, { match: "*key*", count: 10 });
      *   matchedKeys.push(...keys);
      * }
-     * console.log(matchedKeys); // ["key1", "key2", "notMyKey"]
+     * console.log(matchedKeys); // ["key1", "key2"]
      *
      * // Iterate over keys of a specific type
      * await client.mset([{key: "key1", value: "value1"}, {key: "key2", value: "value2"}, {key: "key3", value: "value3"}]);
      * await client.sadd("thisIsASet", ["value4"]);
      * let cursor = new ClusterScanCursor();
      * const stringKeys: GlideString[] = [];
+     * let keys: GlideString[];
      * while (!cursor.isFinished()) {
-     *   const [cursor, keys] = await client.scan(cursor, { type: object.STRING });
+     *   [cursor, keys] = await client.scan(cursor, { type: ObjectType.STRING });
      *   stringKeys.push(...keys);
      * }
      * console.log(stringKeys); // ["key1", "key2", "key3"]
@@ -1809,9 +1822,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * @example
      * ```typescript
-     * let response = await client.watch(["sampleKey"]);
-     * console.log(response); // Output: "OK"
-     * response = await client.unwatch();
+     * let response = await client.unwatch();
      * console.log(response); // Output: "OK"
      * ```
      */

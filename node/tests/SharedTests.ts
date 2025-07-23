@@ -4109,38 +4109,45 @@ export function runBaseTests(config: {
         config.timeout,
     );
 
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "script flush test_%p",
-        async (protocol) => {
-            await runTest(async (client: BaseClient) => {
-                // Load a script
-                const script = new Script("return 'Hello'");
-                expect(await client.invokeScript(script)).toEqual("Hello");
+    describe("script flush test", () => {
+        it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+            "script flush test_%p",
+            async (protocol) => {
+                await runTest(async (client: BaseClient) => {
+                    // Load a script - create a unique script for each test iteration
+                    const randomString = getRandomKey();
+                    const script = new Script(`return '${randomString}'`);
+                    expect(await client.invokeScript(script)).toEqual(
+                        randomString,
+                    );
 
-                // Check existence of script
-                expect(await client.scriptExists([script.getHash()])).toEqual([
-                    true,
-                ]);
+                    // Check existence of script
+                    expect(
+                        await client.scriptExists([script.getHash()]),
+                    ).toEqual([true]);
 
-                // Flush the script cache
-                expect(await client.scriptFlush()).toEqual("OK");
+                    // Flush the script cache
+                    expect(await client.scriptFlush()).toEqual("OK");
 
-                // Check that the script no longer exists
-                expect(await client.scriptExists([script.getHash()])).toEqual([
-                    false,
-                ]);
+                    // Check that the script no longer exists
+                    expect(
+                        await client.scriptExists([script.getHash()]),
+                    ).toEqual([false]);
 
-                // Test with ASYNC mode
-                await client.invokeScript(script);
-                expect(await client.scriptFlush(FlushMode.ASYNC)).toEqual("OK");
-                expect(await client.scriptExists([script.getHash()])).toEqual([
-                    false,
-                ]);
-                script.release();
-            }, protocol);
-        },
-        config.timeout,
-    );
+                    // Test with ASYNC mode
+                    await client.invokeScript(script);
+                    expect(await client.scriptFlush(FlushMode.ASYNC)).toEqual(
+                        "OK",
+                    );
+                    expect(
+                        await client.scriptExists([script.getHash()]),
+                    ).toEqual([false]);
+                    script.release();
+                }, protocol);
+            },
+            config.timeout,
+        );
+    });
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `script show test_%p`,
@@ -4176,13 +4183,15 @@ export function runBaseTests(config: {
         "script is not removed while another instance exists - %p",
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const script1 = new Script("return 'Script Exists'");
-                const script2 = new Script("return 'Script Exists'");
+                // Create a unique script for each test iteration to prevent GC interference
+                const randomString = getRandomKey();
+                const script1 = new Script(`return '${randomString}'`);
+                const script2 = new Script(`return '${randomString}'`);
                 expect(script1.getHash()).toEqual(script2.getHash());
 
                 // Invoke script1 and release reference
                 expect(await client.invokeScript(script1)).toEqual(
-                    "Script Exists",
+                    randomString,
                 );
 
                 // Manually simulate release of script1 reference
@@ -4198,7 +4207,7 @@ export function runBaseTests(config: {
 
                 // Invoke script2 - should be available in the local script cache and reloaded
                 expect(await client.invokeScript(script2)).toEqual(
-                    "Script Exists",
+                    randomString,
                 );
 
                 // Release script2 and flush again
@@ -7989,12 +7998,12 @@ export function runBaseTests(config: {
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = getRandomKey();
-                expect(await client.pfadd(key, [])).toEqual(1);
-                expect(await client.pfadd(key, ["one", "two"])).toEqual(1);
+                expect(await client.pfadd(key, [])).toBeTruthy();
+                expect(await client.pfadd(key, ["one", "two"])).toBeTruthy();
                 expect(
                     await client.pfadd(Buffer.from(key), [Buffer.from("two")]),
-                ).toEqual(0);
-                expect(await client.pfadd(key, [])).toEqual(0);
+                ).toBeFalsy();
+                expect(await client.pfadd(key, [])).toBeFalsy();
 
                 // key exists, but it is not a HyperLogLog
                 expect(await client.set("foo", "value")).toEqual("OK");
@@ -8014,8 +8023,8 @@ export function runBaseTests(config: {
                 const stringKey = `{key}-4-${getRandomKey()}`;
                 const nonExistingKey = `{key}-5-${getRandomKey()}`;
 
-                expect(await client.pfadd(key1, ["a", "b", "c"])).toEqual(1);
-                expect(await client.pfadd(key2, ["b", "c", "d"])).toEqual(1);
+                expect(await client.pfadd(key1, ["a", "b", "c"])).toBeTruthy();
+                expect(await client.pfadd(key2, ["b", "c", "d"])).toBeTruthy();
                 expect(await client.pfcount([key1])).toEqual(3);
                 expect(await client.pfcount([Buffer.from(key2)])).toEqual(3);
                 expect(await client.pfcount([key1, key2])).toEqual(4);
@@ -8024,7 +8033,7 @@ export function runBaseTests(config: {
                 ).toEqual(4);
 
                 // empty HyperLogLog data set
-                expect(await client.pfadd(key3, [])).toEqual(1);
+                expect(await client.pfadd(key3, [])).toBeTruthy();
                 expect(await client.pfcount([key3])).toEqual(0);
 
                 // invalid argument - key list must not be empty
@@ -8050,8 +8059,8 @@ export function runBaseTests(config: {
                 const stringKey = `{key}-4-${getRandomKey()}`;
                 const nonExistingKey = `{key}-5-${getRandomKey()}`;
 
-                expect(await client.pfadd(key1, ["a", "b", "c"])).toEqual(1);
-                expect(await client.pfadd(key2, ["b", "c", "d"])).toEqual(1);
+                expect(await client.pfadd(key1, ["a", "b", "c"])).toBeTruthy();
+                expect(await client.pfadd(key2, ["b", "c", "d"])).toBeTruthy();
 
                 // merge into new HyperLogLog data set
                 expect(

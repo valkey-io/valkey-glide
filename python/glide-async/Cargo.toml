@@ -11,7 +11,7 @@ crate-type = ["cdylib"]
 path = "src/lib.rs"
 
 [dependencies]
-pyo3 = { version = "^0.24", features = ["extension-module", "num-bigint"] }
+pyo3 = { version = "^0.25", features = ["extension-module", "num-bigint"] }
 bytes = { version = "^1.8" }
 redis = { path = "../../glide-core/redis-rs/redis", features = [
     "aio",

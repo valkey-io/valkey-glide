@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	glide "github.com/valkey-io/valkey-glide/go/v2"
 	"github.com/valkey-io/valkey-glide/go/v2/config"
-	"github.com/valkey-io/valkey-glide/go/v2/internal/errors"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/interfaces"
 )
 
@@ -20,7 +19,7 @@ func (suite *GlideTestSuite) TestStandaloneConnect() {
 		WithAddress(&suite.standaloneHosts[0])
 	client, err := glide.NewClient(config)
 
-	assert.Nil(suite.T(), err)
+	suite.NoError(err)
 	assert.NotNil(suite.T(), client)
 
 	client.Close()
@@ -34,7 +33,7 @@ func (suite *GlideTestSuite) TestClusterConnect() {
 
 	client, err := glide.NewClusterClient(config)
 
-	assert.Nil(suite.T(), err)
+	suite.NoError(err)
 	assert.NotNil(suite.T(), client)
 
 	client.Close()
@@ -46,7 +45,7 @@ func (suite *GlideTestSuite) TestClusterConnect_singlePort() {
 
 	client, err := glide.NewClusterClient(config)
 
-	assert.Nil(suite.T(), err)
+	suite.NoError(err)
 	assert.NotNil(suite.T(), client)
 
 	client.Close()
@@ -57,9 +56,10 @@ func (suite *GlideTestSuite) TestConnectWithInvalidAddress() {
 		WithAddress(&config.NodeAddress{Host: "invalid-host"})
 	client, err := glide.NewClient(config)
 
-	assert.Nil(suite.T(), client)
-	assert.NotNil(suite.T(), err)
-	assert.IsType(suite.T(), &errors.ConnectionError{}, err)
+	suite.Nil(client)
+	suite.Error(err)
+	var connErr *glide.ConnectionError
+	suite.ErrorAs(err, &connErr)
 }
 
 func (suite *GlideTestSuite) TestConnectionTimeout() {
@@ -120,9 +120,9 @@ func (suite *GlideTestSuite) TestConnectionTimeout() {
 			var timeoutClient interfaces.BaseClientCommands
 			var err error
 			if clusterMode {
-				timeoutClient, err = suite.createConnectionTimeoutClusterClient(10000, 250)
+				timeoutClient, err = suite.createConnectionTimeoutClusterClient(10*time.Second, 250*time.Millisecond)
 			} else {
-				timeoutClient, err = suite.createConnectionTimeoutClient(10000, 250, backoffStrategy)
+				timeoutClient, err = suite.createConnectionTimeoutClient(10*time.Second, 250*time.Millisecond, backoffStrategy)
 			}
 			assert.NoError(suite.T(), err)
 			if timeoutClient != nil {

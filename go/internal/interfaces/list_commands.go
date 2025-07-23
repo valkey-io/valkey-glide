@@ -4,6 +4,7 @@ package interfaces
 
 import (
 	"context"
+	"time"
 
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
@@ -60,37 +61,37 @@ type ListCommands interface {
 		element string,
 	) (int64, error)
 
-	BLPop(ctx context.Context, keys []string, timeoutSecs float64) ([]string, error)
+	BLPop(ctx context.Context, keys []string, timeout time.Duration) ([]string, error)
 
-	BRPop(ctx context.Context, keys []string, timeoutSecs float64) ([]string, error)
+	BRPop(ctx context.Context, keys []string, timeout time.Duration) ([]string, error)
 
 	RPushX(ctx context.Context, key string, elements []string) (int64, error)
 
 	LPushX(ctx context.Context, key string, elements []string) (int64, error)
 
-	LMPop(ctx context.Context, keys []string, listDirection constants.ListDirection) (map[string][]string, error)
+	LMPop(ctx context.Context, keys []string, listDirection constants.ListDirection) ([]models.KeyValues, error)
 
 	LMPopCount(
 		ctx context.Context,
 		keys []string,
 		listDirection constants.ListDirection,
 		count int64,
-	) (map[string][]string, error)
+	) ([]models.KeyValues, error)
 
 	BLMPop(
 		ctx context.Context,
 		keys []string,
 		listDirection constants.ListDirection,
-		timeoutSecs float64,
-	) (map[string][]string, error)
+		timeout time.Duration,
+	) ([]models.KeyValues, error)
 
 	BLMPopCount(
 		ctx context.Context,
 		keys []string,
 		listDirection constants.ListDirection,
 		count int64,
-		timeoutSecs float64,
-	) (map[string][]string, error)
+		timeout time.Duration,
+	) ([]models.KeyValues, error)
 
 	LSet(ctx context.Context, key string, index int64, element string) (string, error)
 
@@ -108,6 +109,6 @@ type ListCommands interface {
 		destination string,
 		whereFrom constants.ListDirection,
 		whereTo constants.ListDirection,
-		timeoutSecs float64,
+		timeout time.Duration,
 	) (models.Result[string], error)
 }

@@ -1,6 +1,12 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-from glide.glide import ClusterScanCursor, Script
+from glide.glide import (
+    ClusterScanCursor,
+    OpenTelemetryConfig,
+    OpenTelemetryMetricsConfig,
+    OpenTelemetryTracesConfig,
+    Script,
+)
 from glide_shared import (
     OK,
     TOK,
@@ -297,4 +303,7 @@ __all__ = [
     "Script",
     "glide_json",
     "ft",
+    "OpenTelemetryConfig",
+    "OpenTelemetryMetricsConfig",
+    "OpenTelemetryTracesConfig",
 ]

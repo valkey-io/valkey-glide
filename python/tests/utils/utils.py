@@ -29,6 +29,7 @@ from glide_shared.config import (
     ProtocolVersion,
     ReadFrom,
     ServerCredentials,
+    TlsAdvancedConfiguration,
 )
 from glide_shared.constants import (
     TClusterResponse,
@@ -52,6 +53,7 @@ USERNAME = "username"
 INITIAL_PASSWORD = "initial_password"
 NEW_PASSWORD = "new_secure_password"
 WRONG_PASSWORD = "wrong_password"
+
 
 version_str = ""
 
@@ -472,15 +474,22 @@ def create_client_config(
     client_az: Optional[str] = None,
     reconnect_strategy: Optional[BackoffStrategy] = None,
     valkey_cluster: Optional[ValkeyCluster] = None,
+    use_tls: Optional[bool] = None,
+    tls_insecure: Optional[bool] = None,
+    lazy_connect: Optional[bool] = False,
 ) -> Union[GlideClusterClientConfiguration, GlideClientConfiguration]:
-    use_tls = request.config.getoption("--tls")
+    if use_tls is not None:
+        use_tls = use_tls
+    else:
+        use_tls = request.config.getoption("--tls")
+    tls_adv_conf = TlsAdvancedConfiguration(use_insecure_tls=tls_insecure)
     if cluster_mode:
         valkey_cluster = valkey_cluster or pytest.valkey_cluster  # type: ignore
         assert type(valkey_cluster) is ValkeyCluster
         assert database_id == 0
         k = min(3, len(valkey_cluster.nodes_addr))
         seed_nodes = random.sample(valkey_cluster.nodes_addr, k=k)
-        config = GlideClusterClientConfiguration(
+        return GlideClusterClientConfiguration(
             addresses=seed_nodes if addresses is None else addresses,
             use_tls=use_tls,
             credentials=credentials,
@@ -491,14 +500,16 @@ def create_client_config(
             inflight_requests_limit=inflight_requests_limit,
             read_from=read_from,
             client_az=client_az,
-            advanced_config=AdvancedGlideClusterClientConfiguration(connection_timeout),
+            advanced_config=AdvancedGlideClusterClientConfiguration(
+                connection_timeout, tls_config=tls_adv_conf
+            ),
+            lazy_connect=lazy_connect,
         )
     else:
-        assert type(pytest.standalone_cluster) is ValkeyCluster  # type: ignore
-        config = GlideClientConfiguration(
-            addresses=(
-                pytest.standalone_cluster.nodes_addr if addresses is None else addresses  # type: ignore
-            ),
+        valkey_cluster = valkey_cluster or pytest.standalone_cluster  # type: ignore
+        assert type(valkey_cluster) is ValkeyCluster
+        return GlideClientConfiguration(
+            addresses=(valkey_cluster.nodes_addr if addresses is None else addresses),
             use_tls=use_tls,
             credentials=credentials,
             database_id=database_id,
@@ -509,10 +520,12 @@ def create_client_config(
             inflight_requests_limit=inflight_requests_limit,
             read_from=read_from,
             client_az=client_az,
+            advanced_config=AdvancedGlideClientConfiguration(
+                connection_timeout, tls_config=tls_adv_conf
+            ),
             reconnect_strategy=reconnect_strategy,
-            advanced_config=AdvancedGlideClientConfiguration(connection_timeout),
+            lazy_connect=lazy_connect,
         )
-    return config
 
 
 def run_sync_func_with_timeout_in_thread(
@@ -569,8 +582,8 @@ def config_set_new_password(client: TAnyGlideClient, password):
 def kill_connections(client: TAnyGlideClient):
     """
     Kills all connections to the given TGlideClient server connected.
-    When passing a sync client, this returns the reuslt of the CLIENT KILL command.
-    When passing an async client, this returns a coroutine that should be awaited.
+        When passing a sync client, this returns the reuslt of the CLIENT KILL command.
+        When passing an async client, this returns a coroutine that should be awaited.
     """
     if isinstance(client, (GlideClient, SyncGlideClient)):
         return client.custom_command(["CLIENT", "KILL", "TYPE", "normal"])

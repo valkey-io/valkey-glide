@@ -3,6 +3,8 @@
 package options
 
 import (
+	"time"
+
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/utils"
 )
@@ -18,9 +20,9 @@ const (
 
 // Optional arguments to `XAdd` in [StreamCommands]
 type XAddOptions struct {
-	id          string
-	makeStream  triStateBool
-	trimOptions *XTrimOptions
+	Id          string
+	MakeStream  triStateBool
+	TrimOptions *XTrimOptions
 }
 
 // Create new empty `XAddOptions`
@@ -30,36 +32,36 @@ func NewXAddOptions() *XAddOptions {
 
 // New entry will be added with this `id`.
 func (xao *XAddOptions) SetId(id string) *XAddOptions {
-	xao.id = id
+	xao.Id = id
 	return xao
 }
 
 // If set, a new stream won't be created if no stream matches the given key.
 func (xao *XAddOptions) SetDontMakeNewStream() *XAddOptions {
-	xao.makeStream = triStateBoolFalse
+	xao.MakeStream = triStateBoolFalse
 	return xao
 }
 
 // If set, add operation will also trim the older entries in the stream.
 func (xao *XAddOptions) SetTrimOptions(options *XTrimOptions) *XAddOptions {
-	xao.trimOptions = options
+	xao.TrimOptions = options
 	return xao
 }
 
 func (xao *XAddOptions) ToArgs() ([]string, error) {
 	args := []string{}
-	if xao.makeStream == triStateBoolFalse {
+	if xao.MakeStream == triStateBoolFalse {
 		args = append(args, constants.NoMakeStreamKeyword)
 	}
-	if xao.trimOptions != nil {
-		moreArgs, err := xao.trimOptions.ToArgs()
+	if xao.TrimOptions != nil {
+		moreArgs, err := xao.TrimOptions.ToArgs()
 		if err != nil {
 			return args, err
 		}
 		args = append(args, moreArgs...)
 	}
-	if xao.id != "" {
-		args = append(args, xao.id)
+	if xao.Id != "" {
+		args = append(args, xao.Id)
 	} else {
 		args = append(args, "*")
 	}
@@ -68,80 +70,81 @@ func (xao *XAddOptions) ToArgs() ([]string, error) {
 
 // Optional arguments for `XTrim` and `XAdd` in [StreamCommands]
 type XTrimOptions struct {
-	exact     triStateBool
-	limit     int64
-	method    string
-	threshold string
+	Exact     triStateBool
+	Limit     int64
+	Method    string
+	Threshold string
 }
 
 // Option to trim the stream according to minimum ID.
 func NewXTrimOptionsWithMinId(threshold string) *XTrimOptions {
-	return &XTrimOptions{threshold: threshold, method: constants.MinIdKeyword}
+	return &XTrimOptions{Threshold: threshold, Method: constants.MinIdKeyword}
 }
 
 // Option to trim the stream according to maximum stream length.
 func NewXTrimOptionsWithMaxLen(threshold int64) *XTrimOptions {
-	return &XTrimOptions{threshold: utils.IntToString(threshold), method: constants.MaxLenKeyword}
+	return &XTrimOptions{Threshold: utils.IntToString(threshold), Method: constants.MaxLenKeyword}
 }
 
 // Match exactly on the threshold.
 func (xTrimOptions *XTrimOptions) SetExactTrimming() *XTrimOptions {
-	xTrimOptions.exact = triStateBoolTrue
+	xTrimOptions.Exact = triStateBoolTrue
 	return xTrimOptions
 }
 
 // Trim in a near-exact manner, which is more efficient.
 func (xTrimOptions *XTrimOptions) SetNearlyExactTrimming() *XTrimOptions {
-	xTrimOptions.exact = triStateBoolFalse
+	xTrimOptions.Exact = triStateBoolFalse
 	return xTrimOptions
 }
 
 // Max number of stream entries to be trimmed for non-exact match.
 func (xTrimOptions *XTrimOptions) SetNearlyExactTrimmingAndLimit(limit int64) *XTrimOptions {
-	xTrimOptions.exact = triStateBoolFalse
-	xTrimOptions.limit = limit
+	xTrimOptions.Exact = triStateBoolFalse
+	xTrimOptions.Limit = limit
 	return xTrimOptions
 }
 
 func (xTrimOptions *XTrimOptions) ToArgs() ([]string, error) {
-	args := []string{xTrimOptions.method}
-	if xTrimOptions.exact == triStateBoolTrue {
+	args := []string{xTrimOptions.Method}
+	if xTrimOptions.Exact == triStateBoolTrue {
 		args = append(args, "=")
-	} else if xTrimOptions.exact == triStateBoolFalse {
+	} else if xTrimOptions.Exact == triStateBoolFalse {
 		args = append(args, "~")
 	}
-	args = append(args, xTrimOptions.threshold)
-	if xTrimOptions.limit > 0 {
-		args = append(args, constants.LimitKeyword, utils.IntToString(xTrimOptions.limit))
+	args = append(args, xTrimOptions.Threshold)
+	if xTrimOptions.Limit > 0 {
+		args = append(args, constants.LimitKeyword, utils.IntToString(xTrimOptions.Limit))
 	}
 	return args, nil
 }
 
 // Optional arguments for `XAutoClaim` in [StreamCommands]
 type XAutoClaimOptions struct {
-	count *int64
+	Count int64
 }
 
 func NewXAutoClaimOptions() *XAutoClaimOptions {
-	return &XAutoClaimOptions{nil}
+	return &XAutoClaimOptions{-1}
 }
 
 // Set the number of claimed entries.
 func (xacp *XAutoClaimOptions) SetCount(count int64) *XAutoClaimOptions {
-	xacp.count = &count
+	xacp.Count = count
 	return xacp
 }
 
 func (xacp *XAutoClaimOptions) ToArgs() ([]string, error) {
-	if xacp.count == nil {
+	if xacp.Count < 0 {
 		return []string{}, nil
 	}
-	return []string{constants.CountKeyword, utils.IntToString(*xacp.count)}, nil
+	return []string{constants.CountKeyword, utils.IntToString(xacp.Count)}, nil
 }
 
 // Optional arguments for `XRead` in [StreamCommands]
 type XReadOptions struct {
-	count, block int64
+	Count int64
+	Block time.Duration
 }
 
 // Create new empty `XReadOptions`
@@ -151,32 +154,33 @@ func NewXReadOptions() *XReadOptions {
 
 // The maximal number of elements requested. Equivalent to `COUNT` in the Valkey API.
 func (xro *XReadOptions) SetCount(count int64) *XReadOptions {
-	xro.count = count
+	xro.Count = count
 	return xro
 }
 
 // If set, the request will be blocked for the set amount of milliseconds or until the server has
 // the required number of entries. A value of `0` will block indefinitely. Equivalent to `BLOCK` in the Valkey API.
-func (xro *XReadOptions) SetBlock(block int64) *XReadOptions {
-	xro.block = block
+func (xro *XReadOptions) SetBlock(block time.Duration) *XReadOptions {
+	xro.Block = block
 	return xro
 }
 
 func (xro *XReadOptions) ToArgs() ([]string, error) {
 	args := []string{}
-	if xro.count >= 0 {
-		args = append(args, constants.CountKeyword, utils.IntToString(xro.count))
+	if xro.Count >= 0 {
+		args = append(args, constants.CountKeyword, utils.IntToString(xro.Count))
 	}
-	if xro.block >= 0 {
-		args = append(args, constants.BlockKeyword, utils.IntToString(xro.block))
+	if xro.Block >= 0 {
+		args = append(args, constants.BlockKeyword, utils.IntToString(xro.Block.Milliseconds()))
 	}
 	return args, nil
 }
 
 // Optional arguments for `XReadGroup` in [StreamCommands]
 type XReadGroupOptions struct {
-	count, block int64
-	noAck        bool
+	Count int64
+	Block time.Duration
+	NoAck bool
 }
 
 // Create new empty `XReadOptions`
@@ -186,33 +190,33 @@ func NewXReadGroupOptions() *XReadGroupOptions {
 
 // The maximal number of elements requested. Equivalent to `COUNT` in the Valkey API.
 func (xrgo *XReadGroupOptions) SetCount(count int64) *XReadGroupOptions {
-	xrgo.count = count
+	xrgo.Count = count
 	return xrgo
 }
 
 // If set, the request will be blocked for the set amount of milliseconds or until the server has
 // the required number of entries. A value of `0` will block indefinitely. Equivalent to `BLOCK` in the Valkey API.
-func (xrgo *XReadGroupOptions) SetBlock(block int64) *XReadGroupOptions {
-	xrgo.block = block
+func (xrgo *XReadGroupOptions) SetBlock(block time.Duration) *XReadGroupOptions {
+	xrgo.Block = block
 	return xrgo
 }
 
 // If set, messages are not added to the Pending Entries List (PEL). This is equivalent to
 // acknowledging the message when it is read.
 func (xrgo *XReadGroupOptions) SetNoAck() *XReadGroupOptions {
-	xrgo.noAck = true
+	xrgo.NoAck = true
 	return xrgo
 }
 
 func (xrgo *XReadGroupOptions) ToArgs() ([]string, error) {
 	args := []string{}
-	if xrgo.count >= 0 {
-		args = append(args, constants.CountKeyword, utils.IntToString(xrgo.count))
+	if xrgo.Count >= 0 {
+		args = append(args, constants.CountKeyword, utils.IntToString(xrgo.Count))
 	}
-	if xrgo.block >= 0 {
-		args = append(args, constants.BlockKeyword, utils.IntToString(xrgo.block))
+	if xrgo.Block >= 0 {
+		args = append(args, constants.BlockKeyword, utils.IntToString(xrgo.Block.Milliseconds()))
 	}
-	if xrgo.noAck {
+	if xrgo.NoAck {
 		args = append(args, constants.NoAckKeyword)
 	}
 	return args, nil
@@ -220,19 +224,19 @@ func (xrgo *XReadGroupOptions) ToArgs() ([]string, error) {
 
 // Optional arguments for `XPending` in [StreamCommands]
 type XPendingOptions struct {
-	minIdleTime int64
-	start       string
-	end         string
-	count       int64
-	consumer    string
+	MinIdleTime int64
+	Start       string
+	End         string
+	Count       int64
+	Consumer    string
 }
 
 // Create new empty `XPendingOptions`. The `start`, `end` and `count` arguments are required.
 func NewXPendingOptions(start string, end string, count int64) *XPendingOptions {
 	options := XPendingOptions{}
-	options.start = start
-	options.end = end
-	options.count = count
+	options.Start = start
+	options.End = end
+	options.Count = count
 	return &options
 }
 
@@ -240,7 +244,7 @@ func NewXPendingOptions(start string, end string, count int64) *XPendingOptions 
 // minIdleTime is the amount of time (in milliseconds) that a message must be idle to be considered.
 // It returns the updated XPendingOptions.
 func (xpo *XPendingOptions) SetMinIdleTime(minIdleTime int64) *XPendingOptions {
-	xpo.minIdleTime = minIdleTime
+	xpo.MinIdleTime = minIdleTime
 	return xpo
 }
 
@@ -248,24 +252,24 @@ func (xpo *XPendingOptions) SetMinIdleTime(minIdleTime int64) *XPendingOptions {
 // consumer is the name of the consumer to filter the pending messages.
 // It returns the updated XPendingOptions.
 func (xpo *XPendingOptions) SetConsumer(consumer string) *XPendingOptions {
-	xpo.consumer = consumer
+	xpo.Consumer = consumer
 	return xpo
 }
 
 func (xpo *XPendingOptions) ToArgs() ([]string, error) {
 	args := []string{}
 
-	if xpo.minIdleTime > 0 {
+	if xpo.MinIdleTime > 0 {
 		args = append(args, constants.IdleKeyword)
-		args = append(args, utils.IntToString(xpo.minIdleTime))
+		args = append(args, utils.IntToString(xpo.MinIdleTime))
 	}
 
-	args = append(args, xpo.start)
-	args = append(args, xpo.end)
-	args = append(args, utils.IntToString(xpo.count))
+	args = append(args, xpo.Start)
+	args = append(args, xpo.End)
+	args = append(args, utils.IntToString(xpo.Count))
 
-	if xpo.consumer != "" {
-		args = append(args, xpo.consumer)
+	if xpo.Consumer != "" {
+		args = append(args, xpo.Consumer)
 	}
 
 	return args, nil
@@ -273,23 +277,23 @@ func (xpo *XPendingOptions) ToArgs() ([]string, error) {
 
 // Optional arguments for `XGroupCreate` in [StreamCommands]
 type XGroupCreateOptions struct {
-	mkStream    bool
-	entriesRead *int64
+	MkStream    bool
+	EntriesRead int64
 }
 
 // Create new empty `XGroupCreateOptions`
 func NewXGroupCreateOptions() *XGroupCreateOptions {
-	return &XGroupCreateOptions{false, nil}
+	return &XGroupCreateOptions{false, 0}
 }
 
 // Once set and if the stream doesn't exist, creates a new stream with a length of `0`.
 func (xgco *XGroupCreateOptions) SetMakeStream() *XGroupCreateOptions {
-	xgco.mkStream = true
+	xgco.MkStream = true
 	return xgco
 }
 
 func (xgco *XGroupCreateOptions) SetEntriesRead(entriesRead int64) *XGroupCreateOptions {
-	xgco.entriesRead = &entriesRead
+	xgco.EntriesRead = entriesRead
 	return xgco
 }
 
@@ -297,12 +301,12 @@ func (xgco *XGroupCreateOptions) ToArgs() ([]string, error) {
 	var args []string
 
 	// if minIdleTime is set, we need to add an `IDLE` argument along with the minIdleTime
-	if xgco.mkStream {
+	if xgco.MkStream {
 		args = append(args, constants.MakeStreamKeyword)
 	}
 
-	if xgco.entriesRead != nil {
-		args = append(args, constants.EntriesReadKeyword, utils.IntToString(*xgco.entriesRead))
+	if xgco.EntriesRead != 0 {
+		args = append(args, constants.EntriesReadKeyword, utils.IntToString(xgco.EntriesRead))
 	}
 
 	return args, nil
@@ -310,7 +314,7 @@ func (xgco *XGroupCreateOptions) ToArgs() ([]string, error) {
 
 // Optional arguments for `XGroupSetId` in [StreamCommands]
 type XGroupSetIdOptions struct {
-	entriesRead int64
+	EntriesRead int64
 }
 
 // Create new empty `XGroupSetIdOptions`
@@ -322,15 +326,15 @@ func NewXGroupSetIdOptionsOptions() *XGroupSetIdOptions {
 //
 // Since Valkey version 7.0.0.
 func (xgsio *XGroupSetIdOptions) SetEntriesRead(entriesRead int64) *XGroupSetIdOptions {
-	xgsio.entriesRead = entriesRead
+	xgsio.EntriesRead = entriesRead
 	return xgsio
 }
 
 func (xgsio *XGroupSetIdOptions) ToArgs() ([]string, error) {
 	var args []string
 
-	if xgsio.entriesRead > -1 {
-		args = append(args, constants.EntriesReadKeyword, utils.IntToString(xgsio.entriesRead))
+	if xgsio.EntriesRead > -1 {
+		args = append(args, constants.EntriesReadKeyword, utils.IntToString(xgsio.EntriesRead))
 	}
 
 	return args, nil
@@ -338,10 +342,10 @@ func (xgsio *XGroupSetIdOptions) ToArgs() ([]string, error) {
 
 // Optional arguments for `XClaim` in [StreamCommands]
 type XClaimOptions struct {
-	idleTime     int64
-	idleUnixTime int64
-	retryCount   int64
-	isForce      bool
+	IdleTime     int64
+	IdleUnixTime int64
+	RetryCount   int64
+	IsForce      bool
 }
 
 func NewXClaimOptions() *XClaimOptions {
@@ -350,44 +354,44 @@ func NewXClaimOptions() *XClaimOptions {
 
 // Set the idle time in milliseconds.
 func (xco *XClaimOptions) SetIdleTime(idleTime int64) *XClaimOptions {
-	xco.idleTime = idleTime
+	xco.IdleTime = idleTime
 	return xco
 }
 
 // Set the idle time in unix-milliseconds.
 func (xco *XClaimOptions) SetIdleUnixTime(idleUnixTime int64) *XClaimOptions {
-	xco.idleUnixTime = idleUnixTime
+	xco.IdleUnixTime = idleUnixTime
 	return xco
 }
 
 // Set the retry count.
 func (xco *XClaimOptions) SetRetryCount(retryCount int64) *XClaimOptions {
-	xco.retryCount = retryCount
+	xco.RetryCount = retryCount
 	return xco
 }
 
 // Set the force flag.
 func (xco *XClaimOptions) SetForce() *XClaimOptions {
-	xco.isForce = true
+	xco.IsForce = true
 	return xco
 }
 
 func (sco *XClaimOptions) ToArgs() ([]string, error) {
 	optionArgs := []string{}
 
-	if sco.idleTime > 0 {
-		optionArgs = append(optionArgs, constants.IdleKeyword, utils.IntToString(sco.idleTime))
+	if sco.IdleTime > 0 {
+		optionArgs = append(optionArgs, constants.IdleKeyword, utils.IntToString(sco.IdleTime))
 	}
 
-	if sco.idleUnixTime > 0 {
-		optionArgs = append(optionArgs, constants.TimeKeyword, utils.IntToString(sco.idleUnixTime))
+	if sco.IdleUnixTime > 0 {
+		optionArgs = append(optionArgs, constants.TimeKeyword, utils.IntToString(sco.IdleUnixTime))
 	}
 
-	if sco.retryCount > 0 {
-		optionArgs = append(optionArgs, constants.RetryCountKeyword, utils.IntToString(sco.retryCount))
+	if sco.RetryCount > 0 {
+		optionArgs = append(optionArgs, constants.RetryCountKeyword, utils.IntToString(sco.RetryCount))
 	}
 
-	if sco.isForce {
+	if sco.IsForce {
 		optionArgs = append(optionArgs, constants.ForceKeyword)
 	}
 
@@ -396,26 +400,26 @@ func (sco *XClaimOptions) ToArgs() ([]string, error) {
 
 // Optional arguments for `XInfoStream` in [StreamCommands]
 type XInfoStreamOptions struct {
-	count int64
+	Count int64
 }
 
 // Create new empty `XInfoStreamOptions`
-func NewXInfoStreamOptionsOptions() *XInfoStreamOptions {
+func NewXInfoStreamOptions() *XInfoStreamOptions {
 	return &XInfoStreamOptions{-1}
 }
 
 // Request verbose information limiting the returned PEL entries.
 // If `0` is specified, returns verbose information with no limit.
 func (xiso *XInfoStreamOptions) SetCount(count int64) *XInfoStreamOptions {
-	xiso.count = count
+	xiso.Count = count
 	return xiso
 }
 
 func (xiso *XInfoStreamOptions) ToArgs() ([]string, error) {
 	var args []string
 
-	if xiso.count > -1 {
-		args = append(args, "COUNT", utils.IntToString(xiso.count))
+	if xiso.Count > -1 {
+		args = append(args, "COUNT", utils.IntToString(xiso.Count))
 	}
 
 	return args, nil
@@ -440,24 +444,24 @@ func NewInfiniteStreamBoundary(bound constants.InfBoundary) StreamBoundary {
 
 // Optional arguments for `XRange` and `XRevRange` in [StreamCommands]
 type XRangeOptions struct {
-	count *int64
+	Count int64
 }
 
 func NewXRangeOptions() *XRangeOptions {
-	return &XRangeOptions{}
+	return &XRangeOptions{-1}
 }
 
 // Set the count.
 func (sro *XRangeOptions) SetCount(count int64) *XRangeOptions {
-	sro.count = &count
+	sro.Count = count
 	return sro
 }
 
 func (sro *XRangeOptions) ToArgs() ([]string, error) {
 	var args []string
 
-	if sro.count != nil {
-		args = append(args, constants.CountKeyword, utils.IntToString(*sro.count))
+	if sro.Count >= 0 {
+		args = append(args, constants.CountKeyword, utils.IntToString(sro.Count))
 	}
 
 	return args, nil

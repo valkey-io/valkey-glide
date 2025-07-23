@@ -49,7 +49,7 @@ def get_command(commands: List[str]) -> str:
                 return command
         except Exception as e:
             logging.error(f"Error checking {command}: {e}")
-    raise Exception(f"Neither ${'nor'.join(command)} found in the system.")
+    raise Exception(f"Neither {' nor '.join(commands)} found in the system.")
 
 
 # Determine which server to use by checking `valkey-server` and `redis-server`
@@ -121,7 +121,8 @@ def generate_tls_certs():
             stderr=subprocess.PIPE,
             text=True,
         )
-        output, err = p.communicate(timeout=10)
+        # ARM64 runners take longer to generate TLS certificates, and sometimes fail if the timeout shorter (10 seconds).
+        output, err = p.communicate(timeout=20)
         if p.returncode != 0:
             raise Exception(
                 f"Failed to make key for {name}. Executed: {str(p.args)}:\n{err}"

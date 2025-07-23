@@ -2,9 +2,7 @@
 package glide;
 
 import static glide.TestConfiguration.SERVER_VERSION;
-import static glide.TestUtilities.azClusterClientConfig;
-import static glide.TestUtilities.commonClientConfig;
-import static glide.TestUtilities.commonClusterClientConfig;
+import static glide.TestUtilities.*;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_NODES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SlotType.PRIMARY;
@@ -20,13 +18,9 @@ import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
 import glide.api.models.ClusterValue;
 import glide.api.models.commands.InfoOptions;
-import glide.api.models.configuration.AdvancedGlideClientConfiguration;
-import glide.api.models.configuration.AdvancedGlideClusterClientConfiguration;
-import glide.api.models.configuration.BackoffStrategy;
-import glide.api.models.configuration.ProtocolVersion;
-import glide.api.models.configuration.ReadFrom;
-import glide.api.models.configuration.RequestRoutingConfiguration;
+import glide.api.models.configuration.*;
 import glide.api.models.exceptions.ClosingException;
+import glide.cluster.ValkeyCluster;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
@@ -37,6 +31,7 @@ import lombok.SneakyThrows;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -74,6 +69,11 @@ public class ConnectionTests {
     }
 
     @SneakyThrows
+    private ValkeyCluster createDedicatedCluster(boolean clusterMode) {
+        return new ValkeyCluster(false, clusterMode, clusterMode ? 3 : 1, 0, null, null);
+    }
+
+    @SneakyThrows
     public BaseClient createConnectionTimeoutClient(
             Boolean clusterMode,
             int connectionTimeout,
@@ -99,6 +99,28 @@ public class ConnectionTests {
                                 .requestTimeout(requestTimeout)
                                 .reconnectStrategy(backoffStrategy)
                                 .build())
+                .get();
+    }
+
+    @SneakyThrows
+    public BaseClient createClientWithTLSMode(boolean isCluster, boolean useInsecureTLS) {
+        if (isCluster) {
+            var advancedConfiguration =
+                    AdvancedGlideClusterClientConfiguration.builder()
+                            .tlsAdvancedConfiguration(
+                                    TlsAdvancedConfiguration.builder().useInsecureTLS(useInsecureTLS).build())
+                            .build();
+            return GlideClusterClient.createClient(
+                            commonClusterClientConfig().advancedConfiguration(advancedConfiguration).build())
+                    .get();
+        }
+        var advancedConfiguration =
+                AdvancedGlideClientConfiguration.builder()
+                        .tlsAdvancedConfiguration(
+                                TlsAdvancedConfiguration.builder().useInsecureTLS(useInsecureTLS).build())
+                        .build();
+        return GlideClient.createClient(
+                        commonClientConfig().advancedConfiguration(advancedConfiguration).build())
                 .get();
     }
 
@@ -409,5 +431,140 @@ public class ConnectionTests {
         assertEquals(nGetCalls, totalGetCalls, "Total GET calls mismatch");
 
         azTestClient.close();
+    }
+
+    /**
+     * Test that the client can connect using both secure and insecure TLS modes, meaning the client
+     * bypasses the SSL certificate validation.
+     */
+    @SneakyThrows
+    @ParameterizedTest
+    @CsvSource(value = {"true, true", "true, false", "false, true", "false, false"})
+    public void test_connection_tls_mode(String clusterMode, String insecureTls) {
+        try (BaseClient client =
+                createClientWithTLSMode(Boolean.getBoolean(clusterMode), Boolean.getBoolean(insecureTls))) {
+            assertEquals("OK", client.set("key", "val").get());
+            assertEquals("val", client.get("key").get());
+            assertEquals(1, client.del(new String[] {"key"}).get());
+        }
+    }
+
+    /** Helper method to get client connection count for either standalone or cluster client. */
+    private int getClientCount(BaseClient client) throws ExecutionException, InterruptedException {
+        if (client instanceof GlideClusterClient) {
+            // For cluster client, execute CLIENT LIST on all nodes
+            ClusterValue<Object> result =
+                    ((GlideClusterClient) client)
+                            .customCommand(new String[] {"CLIENT", "LIST"}, ALL_NODES)
+                            .get();
+
+            // Result will be a dict with node addresses as keys and CLIENT LIST output as values
+            int totalCount = 0;
+            for (Object nodeOutput : ((Map<String, Object>) result.getMultiValue()).values()) {
+                totalCount += getClientListOutputCount((String) nodeOutput);
+            }
+
+            return totalCount;
+        } else {
+            // For standalone client, execute CLIENT LIST directly
+            String result =
+                    (String) ((GlideClient) client).customCommand(new String[] {"CLIENT", "LIST"}).get();
+            return getClientListOutputCount(result);
+        }
+    }
+
+    /** Helper method to parse CLIENT LIST output and return the number of clients. */
+    private int getClientListOutputCount(String output) {
+        if (output == null || output.trim().isEmpty()) {
+            return 0;
+        }
+        return output.trim().split("\n").length;
+    }
+
+    /**
+     * Helper method to get the expected number of new connections when a lazy client is initialized.
+     */
+    private int getExpectedNewConnections(BaseClient client)
+            throws ExecutionException, InterruptedException {
+        if (client instanceof GlideClusterClient) {
+            // For cluster, get node count and multiply by 2 (2 connections per node)
+            ClusterValue<Object> result =
+                    ((GlideClusterClient) client).customCommand(new String[] {"CLUSTER", "NODES"}).get();
+            String[] nodesInfo = ((String) result.getSingleValue()).trim().split("\n");
+            return nodesInfo.length * 2;
+        } else {
+            // For standalone, always expect 1 new connection
+            return 1;
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void test_lazy_connection_establishes_on_first_command(boolean clusterMode)
+            throws Exception {
+        BaseClient monitoringClient = null;
+        BaseClient lazyGlideClient = null;
+        String modeString = clusterMode ? "Cluster" : "Standalone";
+        try (ValkeyCluster dedicatedCluster = createDedicatedCluster(clusterMode)) {
+            // 1. Create a monitoring client (eagerly connected)
+            monitoringClient = createDedicatedClient(clusterMode, null, dedicatedCluster, false);
+            if (clusterMode) {
+                assertInstanceOf(GlideClusterClient.class, monitoringClient);
+                assertEquals("PONG", ((GlideClusterClient) monitoringClient).ping().get());
+            } else {
+                assertInstanceOf(GlideClient.class, monitoringClient);
+                assertEquals("PONG", ((GlideClient) monitoringClient).ping().get());
+            }
+
+            // 2. Get initial client count
+            int clientsBeforeLazyInit = getClientCount(monitoringClient);
+
+            // 3. Create the "lazy" client
+            lazyGlideClient = createDedicatedClient(clusterMode, null, dedicatedCluster, true);
+
+            // 4. Check count (should not change)
+            int clientsAfterLazyInit = getClientCount(monitoringClient);
+            assertEquals(
+                    clientsBeforeLazyInit,
+                    clientsAfterLazyInit,
+                    String.format(
+                            "Lazy client (%s) should not connect before the first command. "
+                                    + "Before: %d, After: %d",
+                            modeString.toLowerCase(), clientsBeforeLazyInit, clientsAfterLazyInit));
+
+            // 5. Send the first command using the lazy client
+            Object pingResponse = null;
+            if (clusterMode) {
+                pingResponse = ((GlideClusterClient) lazyGlideClient).ping().get();
+            } else {
+                pingResponse = ((GlideClient) lazyGlideClient).ping().get();
+            }
+
+            // Assert PING success for both modes
+            assertEquals("PONG", pingResponse, "PING response was not 'PONG': " + pingResponse);
+
+            // 6. Check client count after the first command
+            int clientsAfterFirstCommand = getClientCount(monitoringClient);
+            int expectedNewConnections = getExpectedNewConnections(monitoringClient);
+
+            assertEquals(
+                    clientsBeforeLazyInit + expectedNewConnections,
+                    clientsAfterFirstCommand,
+                    String.format(
+                            "Lazy client (%s) should establish %d new connection(s) after the first command. "
+                                    + "Before: %d, After first command: %d",
+                            modeString.toLowerCase(),
+                            expectedNewConnections,
+                            clientsBeforeLazyInit,
+                            clientsAfterFirstCommand));
+
+        } finally {
+            if (monitoringClient != null) {
+                monitoringClient.close();
+            }
+            if (lazyGlideClient != null) {
+                lazyGlideClient.close();
+            }
+        }
     }
 }

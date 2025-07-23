@@ -5,7 +5,9 @@ package glide
 import (
 	"context"
 	"fmt"
+	"sort"
 
+	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
 
@@ -377,6 +379,38 @@ func ExampleClusterClient_SRandMember() {
 	// Output: false
 }
 
+func ExampleClient_SRandMemberCount() {
+	var client *Client = getExampleClient() // example helper function
+	key := "my_set"
+
+	client.SAdd(context.Background(), key, []string{"member1", "member2", "member3"})
+
+	// Get 2 unique random members
+	result, err := client.SRandMemberCount(context.Background(), key, 2)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(len(result)) // Cannot test exact values as they are random
+
+	// Output: 2
+}
+
+func ExampleClusterClient_SRandMemberCount() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
+	key := "my_set"
+
+	client.SAdd(context.Background(), key, []string{"member1", "member2", "member3"})
+
+	// Get 2 unique random members
+	result, err := client.SRandMemberCount(context.Background(), key, 2)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(len(result)) // Cannot test exact values as they are random
+
+	// Output: 2
+}
+
 func ExampleClient_SPop() {
 	var client *Client = getExampleClient() // example helper function
 	key := "my_set"
@@ -403,6 +437,34 @@ func ExampleClusterClient_SPop() {
 	}
 	fmt.Println(result.IsNil())
 	// Output: false
+}
+
+func ExampleClient_SPopCount() {
+	var client *Client = getExampleClient() // example helper function
+	key := "my_set"
+
+	client.SAdd(context.Background(), key, []string{"member1", "member2", "member3", "member4"})
+
+	result, err := client.SPopCount(context.Background(), key, 2)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(len(result))
+	// Output: 2
+}
+
+func ExampleClusterClient_SPopCount() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
+	key := "my_set"
+
+	client.SAdd(context.Background(), key, []string{"member1", "member2", "member3", "member4"})
+
+	result, err := client.SPopCount(context.Background(), key, 2)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(len(result))
+	// Output: 2
 }
 
 func ExampleClient_SMIsMember() {
@@ -507,54 +569,70 @@ func ExampleClient_SScan() {
 	var client *Client = getExampleClient() // example helper function
 	key := "my_set"
 	client.SAdd(context.Background(), key, []string{"member1", "member2"})
-	cursor := "0"
-	nextCursor, result, err := client.SScan(context.Background(), key, cursor)
+	result, err := client.SScan(context.Background(), key, models.NewCursor())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println(nextCursor, len(result)) // [member1 member2]
-	// Output: 0 2
+	sort.Strings(result.Data) // Sort for consistent comparison
+	fmt.Println("Cursor:", result.Cursor)
+	fmt.Println("Collection:", result.Data)
+
+	// Output:
+	// Cursor: 0
+	// Collection: [member1 member2]
 }
 
 func ExampleClusterClient_SScan() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := "my_set"
 	client.SAdd(context.Background(), key, []string{"member1", "member2"})
-	cursor := "0"
-	nextCursor, result, err := client.SScan(context.Background(), key, cursor)
+	result, err := client.SScan(context.Background(), key, models.NewCursor())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println(nextCursor, len(result)) // [member1 member2]
-	// Output: 0 2
+	sort.Strings(result.Data) // Sort for consistent comparison
+	fmt.Println("Cursor:", result.Cursor)
+	fmt.Println("Collection:", result.Data)
+
+	// Output:
+	// Cursor: 0
+	// Collection: [member1 member2]
 }
 
 func ExampleClient_SScanWithOptions() {
 	var client *Client = getExampleClient() // example helper function
 	key := "my_set"
 	client.SAdd(context.Background(), key, []string{"member1", "member2", "item3"})
-	cursor := "0"
 	options := options.NewBaseScanOptions().SetMatch("mem*")
-	nextCursor, result, err := client.SScanWithOptions(context.Background(), key, cursor, *options)
+	result, err := client.SScanWithOptions(context.Background(), key, models.NewCursor(), *options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println(nextCursor, len(result)) // [member1 member2]
-	// Output: 0 2
+	sort.Strings(result.Data) // Sort for consistent comparison
+	fmt.Println("Cursor:", result.Cursor)
+	fmt.Println("Collection:", result.Data)
+
+	// Output:
+	// Cursor: 0
+	// Collection: [member1 member2]
 }
 
 func ExampleClusterClient_SScanWithOptions() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 	key := "my_set"
 	client.SAdd(context.Background(), key, []string{"member1", "member2", "item3"})
-	cursor := "0"
 	options := options.NewBaseScanOptions().SetMatch("mem*")
-	nextCursor, result, err := client.SScanWithOptions(context.Background(), key, cursor, *options)
+	result, err := client.SScanWithOptions(context.Background(), key, models.NewCursor(), *options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println(nextCursor, len(result)) // [member1 member2]
-	// Output: 0 2
+	sort.Strings(result.Data) // Sort for consistent comparison
+	fmt.Println("Cursor:", result.Cursor)
+	fmt.Println("Collection:", result.Data)
+
+	// Output:
+	// Cursor: 0
+	// Collection: [member1 member2]
 }
 
 func ExampleClient_SMove() {

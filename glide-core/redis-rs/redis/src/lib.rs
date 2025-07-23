@@ -54,7 +54,6 @@
 //!
 //! * `acl`: enables acl support (enabled by default)
 //! * `aio`: enables async IO support (enabled by default)
-//! * `geospatial`: enables geospatial support (enabled by default)
 //! * `script`: enables script support (enabled by default)
 //! * `r2d2`: enables r2d2 connection pool support (optional)
 //! * `ahash`: enables ahash map/set support & uses ahash internally (+7-10% performance) (optional)
@@ -63,7 +62,6 @@
 //! * `tokio-comp`: enables support for tokio (optional)
 //! * `connection-manager`: enables support for automatic reconnection (optional)
 //! * `keep-alive`: enables keep-alive option on socket by means of `socket2` crate (optional)
-//!
 //! ## Connection Parameters
 //!
 //! redis-rs knows different ways to define where a connection should
@@ -294,31 +292,6 @@
 //! ```
 //!
 #![cfg_attr(
-    feature = "script",
-    doc = r##"
-# Scripts
-
-Lua scripts are supported through the `Script` type in a convenient
-way (it does not support pipelining currently).  It will automatically
-load the script if it does not exist and invoke it.
-
-Example:
-
-```rust,no_run
-# fn do_something() -> redis::RedisResult<()> {
-# let client = redis::Client::open("redis://127.0.0.1/").unwrap();
-# let mut con = client.get_connection(None).unwrap();
-let script = redis::Script::new(r"
-    return tonumber(ARGV[1]) + tonumber(ARGV[2]);
-");
-let result : isize = script.arg(1).arg(2).invoke(&mut con)?;
-assert_eq!(result, 3);
-# Ok(()) }
-```
-"##
-)]
-//!
-#![cfg_attr(
     feature = "aio",
     doc = r##"
 # Async
@@ -379,10 +352,6 @@ pub use crate::pipeline::{Pipeline, PipelineRetryStrategy};
 pub use push_manager::{PushInfo, PushManager};
 pub use retry_strategies::RetryStrategy;
 
-#[cfg(feature = "script")]
-#[cfg_attr(docsrs, doc(cfg(feature = "script")))]
-pub use crate::script::{Script, ScriptInvocation};
-
 // preserve grouping and order
 #[rustfmt::skip]
 pub use crate::types::{
@@ -425,23 +394,9 @@ pub use crate::{
 mod macros;
 mod pipeline;
 
-#[cfg(feature = "acl")]
-#[cfg_attr(docsrs, doc(cfg(feature = "acl")))]
-pub mod acl;
-
 #[cfg(feature = "aio")]
 #[cfg_attr(docsrs, doc(cfg(feature = "aio")))]
 pub mod aio;
-
-#[cfg(feature = "json")]
-pub use crate::commands::JsonCommands;
-
-#[cfg(all(feature = "json", feature = "aio"))]
-pub use crate::commands::JsonAsyncCommands;
-
-#[cfg(feature = "geospatial")]
-#[cfg_attr(docsrs, doc(cfg(feature = "geospatial")))]
-pub mod geo;
 
 #[cfg(feature = "cluster")]
 #[cfg_attr(docsrs, doc(cfg(feature = "cluster")))]
@@ -481,24 +436,14 @@ pub mod cluster_routing;
 #[cfg_attr(docsrs, doc(cfg(feature = "cluster")))]
 pub mod cluster_topology;
 
-#[cfg(feature = "r2d2")]
-#[cfg_attr(docsrs, doc(cfg(feature = "r2d2")))]
-mod r2d2;
-
-#[cfg(feature = "streams")]
-#[cfg_attr(docsrs, doc(cfg(feature = "streams")))]
-pub mod streams;
-
 #[cfg(feature = "cluster-async")]
 pub mod cluster_async;
 
 #[cfg(feature = "sentinel")]
 pub mod sentinel;
 
-#[cfg(feature = "tls-rustls")]
 mod tls;
 
-#[cfg(feature = "tls-rustls")]
 pub use crate::tls::{ClientTlsConfig, TlsCertificates};
 
 mod client;
@@ -508,5 +453,4 @@ mod connection;
 mod parser;
 mod push_manager;
 mod retry_strategies;
-mod script;
 mod types;

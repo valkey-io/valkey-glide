@@ -23,6 +23,8 @@ from glide.glide import (
     MAX_REQUEST_ARGS_LEN,
     ClusterScanCursor,
     create_leaked_bytes_vec,
+    create_otel_span,
+    drop_otel_span,
     get_statistics,
     start_socket_listener_external,
     value_from_pointer,
@@ -58,6 +60,7 @@ from .async_commands.core import CoreCommands
 from .async_commands.standalone_commands import StandaloneCommands
 from .logger import Level as LogLevel
 from .logger import Logger as ClientLogger
+from .opentelemetry import OpenTelemetry
 
 if sys.version_info >= (3, 11):
     from typing import Self
@@ -403,6 +406,13 @@ class BaseClient(CoreCommands):
             raise ClosingError(
                 "Unable to execute requests; the client is closed. Please create a new client."
             )
+
+        # Create span if OpenTelemetry is configured and sampling indicates we should trace
+        span = None
+        if OpenTelemetry.should_sample():
+            command_name = RequestType.Name(request_type)
+            span = create_otel_span(command_name)
+
         request = CommandRequest()
         request.callback_idx = self._get_callback_index()
         request.single_command.request_type = request_type
@@ -417,6 +427,11 @@ class BaseClient(CoreCommands):
             request.single_command.args_vec_pointer = create_leaked_bytes_vec(
                 encoded_args
             )
+
+        # Add span pointer to request if span was created
+        if span:
+            request.root_span_ptr = span
+
         set_protobuf_route(request, route)
         return await self._write_request_await_response(request)
 
@@ -434,6 +449,14 @@ class BaseClient(CoreCommands):
             raise ClosingError(
                 "Unable to execute requests; the client is closed. Please create a new client."
             )
+
+        # Create span if OpenTelemetry is configured and sampling indicates we should trace
+        span = None
+
+        if OpenTelemetry.should_sample():
+            # Use "Batch" as span name for batches
+            span = create_otel_span("Batch")
+
         request = CommandRequest()
         request.callback_idx = self._get_callback_index()
         batch_commands = []
@@ -455,6 +478,11 @@ class BaseClient(CoreCommands):
             request.batch.timeout = timeout
         request.batch.retry_server_error = retry_server_error
         request.batch.retry_connection_error = retry_connection_error
+
+        # Add span pointer to request if span was created
+        if span:
+            request.root_span_ptr = span
+
         set_protobuf_route(request, route)
         return await self._write_request_await_response(request)
 
@@ -648,6 +676,10 @@ class BaseClient(CoreCommands):
                 res_future.set_result(OK)
             else:
                 res_future.set_result(None)
+
+        # Clean up span if it was created
+        if response.HasField("root_span_ptr"):
+            drop_otel_span(response.root_span_ptr)
 
     async def _process_push(self, response: Response) -> None:
         if response.HasField("closing_error") or not response.HasField("resp_pointer"):

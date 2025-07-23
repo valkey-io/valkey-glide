@@ -74,7 +74,7 @@ func ExampleClient_GeoHash() {
 	fmt.Println(geoHashResults)
 
 	// Output:
-	// [sqc8b49rny0 sqdtr74hyu0]
+	// [{sqc8b49rny0 false} {sqdtr74hyu0 false}]
 }
 
 func ExampleClusterClient_GeoHash() {
@@ -99,7 +99,7 @@ func ExampleClusterClient_GeoHash() {
 	fmt.Println(geoHashResults)
 
 	// Output:
-	// [sqc8b49rny0 sqdtr74hyu0]
+	// [{sqc8b49rny0 false} {sqdtr74hyu0 false}]
 }
 
 func ExampleClient_GeoPos() {

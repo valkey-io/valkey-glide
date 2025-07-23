@@ -1,5 +1,10 @@
 name: The OSS Review Toolkit (ORT)
 
+permissions:
+    contents: read
+    pull-requests: write
+    actions: read
+
 on:
     pull_request:
 
@@ -97,7 +102,7 @@ jobs:
                     analyzer:
                       skip_excluded: true
                       allowDynamicVersions: true
-                      enabledPackageManagers: [Cargo, NPM, PIP, GradleInspector]
+                      enabledPackageManagers: [Cargo, GoMod, NPM, PIP, GradleInspector]
                   EOF
                   cat ~/.ort/config/config.yml
 
@@ -138,6 +143,12 @@ jobs:
               with:
                   folder_path: "${{ github.workspace }}/glide-core"
 
+              ### Rust FFI ###
+            - name: Run ORT tools for FFI
+              uses: ./.github/workflows/run-ort-tools
+              with:
+                  folder_path: "${{ github.workspace }}/ffi"
+
               ### Java ###
             - name: Set up JDK 11
               uses: actions/setup-java@v4
@@ -160,6 +171,18 @@ jobs:
               uses: ./.github/workflows/run-ort-tools
               with:
                   folder_path: "${{ github.workspace }}/java"
+
+              ### GO ###
+            - name: Set up GO
+              uses: actions/setup-go@v5
+              with:
+                  go-version: 1.22
+
+            - name: Generate protobuf for GO
+              working-directory: ./go
+              run: |
+                  go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.33.0
+                  make generate-protobuf
 
             - name: Run ORT tools for Go
               uses: ./.github/workflows/run-ort-tools
@@ -220,14 +243,18 @@ jobs:
                     echo "No unapproved packages found."
                   fi
 
-              ### Check for attributions diff ###
+              ### Check for attributions diff ### (FFI attributions merged to FFI clients' attributions)
             - name: Check for diff
               run: |
                   cp python/glide-async/ort_results/NOTICE_DEFAULT $PYTHON_ASYNC_ATTRIBUTIONS
                   cp node/ort_results/NOTICE_DEFAULT $NODE_ATTRIBUTIONS
                   cp glide-core/ort_results/NOTICE_DEFAULT $RUST_ATTRIBUTIONS
                   cp java/ort_results/NOTICE_DEFAULT $JAVA_ATTRIBUTIONS
-                  cp go/ort_results/NOTICE_DEFAULT $GO_ATTRIBUTIONS
+                  : Workaround for empty attributions for go packages. See discussions in https://github.com/valkey-io/valkey-glide/pull/3469 and in https://github.com/oss-review-toolkit/ort/issues/10454
+                  curl https://raw.githubusercontent.com/valkey-io/valkey-glide/9c9ef0ae2c2ee865c7867f6ac0d3f9aac054bac8/go/THIRD_PARTY_LICENSES_GO -o $GO_ATTRIBUTIONS
+                  cat go/ort_results/NOTICE_DEFAULT >> $GO_ATTRIBUTIONS
+                  : Merge FFI attributions into GO attributions
+                  cat ffi/ort_results/NOTICE_DEFAULT >> $GO_ATTRIBUTIONS
                   GIT_DIFF=`git diff $PYTHON_ASYNC_ATTRIBUTIONS $NODE_ATTRIBUTIONS $RUST_ATTRIBUTIONS $JAVA_ATTRIBUTIONS $GO_ATTRIBUTIONS`
                   if [ -n "$GIT_DIFF" ]; then
                     echo "FOUND_DIFF=true" >> $GITHUB_ENV

@@ -4,6 +4,7 @@ package interfaces
 
 import (
 	"context"
+	"time"
 
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
@@ -15,12 +16,12 @@ import (
 //
 // [valkey.io]: https://valkey.io/commands/#stream
 type StreamCommands interface {
-	XAdd(ctx context.Context, key string, values [][]string) (models.Result[string], error)
+	XAdd(ctx context.Context, key string, values []models.FieldValue) (string, error)
 
 	XAddWithOptions(
 		ctx context.Context,
 		key string,
-		values [][]string,
+		values []models.FieldValue,
 		options options.XAddOptions,
 	) (models.Result[string], error)
 
@@ -33,7 +34,7 @@ type StreamCommands interface {
 		key string,
 		group string,
 		consumer string,
-		minIdleTime int64,
+		minIdleTime time.Duration,
 		start string,
 	) (models.XAutoClaimResponse, error)
 
@@ -42,7 +43,7 @@ type StreamCommands interface {
 		key string,
 		group string,
 		consumer string,
-		minIdleTime int64,
+		minIdleTime time.Duration,
 		start string,
 		options options.XAutoClaimOptions,
 	) (models.XAutoClaimResponse, error)
@@ -52,7 +53,7 @@ type StreamCommands interface {
 		key string,
 		group string,
 		consumer string,
-		minIdleTime int64,
+		minIdleTime time.Duration,
 		start string,
 	) (models.XAutoClaimJustIdResponse, error)
 
@@ -61,7 +62,7 @@ type StreamCommands interface {
 		key string,
 		group string,
 		consumer string,
-		minIdleTime int64,
+		minIdleTime time.Duration,
 		start string,
 		options options.XAutoClaimOptions,
 	) (models.XAutoClaimJustIdResponse, error)
@@ -71,7 +72,7 @@ type StreamCommands interface {
 		group string,
 		consumer string,
 		keysAndIds map[string]string,
-	) (map[string]map[string][][]string, error)
+	) (map[string]models.StreamResponse, error)
 
 	XReadGroupWithOptions(
 		ctx context.Context,
@@ -79,15 +80,15 @@ type StreamCommands interface {
 		consumer string,
 		keysAndIds map[string]string,
 		options options.XReadGroupOptions,
-	) (map[string]map[string][][]string, error)
+	) (map[string]models.StreamResponse, error)
 
-	XRead(ctx context.Context, keysAndIds map[string]string) (map[string]map[string][][]string, error)
+	XRead(ctx context.Context, keysAndIds map[string]string) (map[string]models.StreamResponse, error)
 
 	XReadWithOptions(
 		ctx context.Context,
 		keysAndIds map[string]string,
 		options options.XReadOptions,
-	) (map[string]map[string][][]string, error)
+	) (map[string]models.StreamResponse, error)
 
 	XDel(ctx context.Context, key string, ids []string) (int64, error)
 
@@ -133,26 +134,26 @@ type StreamCommands interface {
 		key string,
 		group string,
 		consumer string,
-		minIdleTime int64,
+		minIdleTime time.Duration,
 		ids []string,
-	) (map[string][][]string, error)
+	) (map[string]models.XClaimResponse, error)
 
 	XClaimWithOptions(
 		ctx context.Context,
 		key string,
 		group string,
 		consumer string,
-		minIdleTime int64,
+		minIdleTime time.Duration,
 		ids []string,
 		options options.XClaimOptions,
-	) (map[string][][]string, error)
+	) (map[string]models.XClaimResponse, error)
 
 	XClaimJustId(
 		ctx context.Context,
 		key string,
 		group string,
 		consumer string,
-		minIdleTime int64,
+		minIdleTime time.Duration,
 		ids []string,
 	) ([]string, error)
 
@@ -161,14 +162,17 @@ type StreamCommands interface {
 		key string,
 		group string,
 		consumer string,
-		minIdleTime int64,
+		minIdleTime time.Duration,
 		ids []string,
 		options options.XClaimOptions,
 	) ([]string, error)
 
-	XInfoStream(ctx context.Context, key string) (map[string]any, error)
+	XInfoStream(ctx context.Context, key string) (models.XInfoStreamResponse, error)
 
-	XInfoStreamFullWithOptions(ctx context.Context, key string, options *options.XInfoStreamOptions) (map[string]any, error)
+	XInfoStreamFullWithOptions(
+		ctx context.Context,
+		key string,
+		options options.XInfoStreamOptions) (models.XInfoStreamFullOptionsResponse, error)
 
 	XInfoConsumers(ctx context.Context, key string, group string) ([]models.XInfoConsumerInfo, error)
 
@@ -179,7 +183,7 @@ type StreamCommands interface {
 		key string,
 		start options.StreamBoundary,
 		end options.StreamBoundary,
-	) ([]models.XRangeResponse, error)
+	) ([]models.StreamEntry, error)
 
 	XRangeWithOptions(
 		ctx context.Context,
@@ -187,14 +191,14 @@ type StreamCommands interface {
 		start options.StreamBoundary,
 		end options.StreamBoundary,
 		options options.XRangeOptions,
-	) ([]models.XRangeResponse, error)
+	) ([]models.StreamEntry, error)
 
 	XRevRange(
 		ctx context.Context,
 		key string,
 		start options.StreamBoundary,
 		end options.StreamBoundary,
-	) ([]models.XRangeResponse, error)
+	) ([]models.StreamEntry, error)
 
 	XRevRangeWithOptions(
 		ctx context.Context,
@@ -202,5 +206,5 @@ type StreamCommands interface {
 		start options.StreamBoundary,
 		end options.StreamBoundary,
 		options options.XRangeOptions,
-	) ([]models.XRangeResponse, error)
+	) ([]models.StreamEntry, error)
 }

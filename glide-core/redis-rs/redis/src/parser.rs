@@ -8,6 +8,9 @@ use crate::types::{
     VerbatimFormat,
 };
 
+use logger_core::log_error;
+use telemetrylib::GlideOpenTelemetry;
+
 use combine::{
     any,
     error::StreamError,
@@ -31,7 +34,16 @@ fn err_parser(line: &str) -> ServerError {
         "EXECABORT" => ServerErrorKind::ExecAbortError,
         "LOADING" => ServerErrorKind::BusyLoadingError,
         "NOSCRIPT" => ServerErrorKind::NoScriptError,
-        "MOVED" => ServerErrorKind::Moved,
+        "MOVED" => {
+            // record moved error metric if telemetry is initialized
+            if let Err(e) = GlideOpenTelemetry::record_moved_error() {
+                log_error(
+                    "OpenTelemetry:moved_error",
+                    format!("Failed to record moved error: {e}"),
+                );
+            }
+            ServerErrorKind::Moved
+        }
         "ASK" => ServerErrorKind::Ask,
         "TRYAGAIN" => ServerErrorKind::TryAgain,
         "CLUSTERDOWN" => ServerErrorKind::ClusterDown,

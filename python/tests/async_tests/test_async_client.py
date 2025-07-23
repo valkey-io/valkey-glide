@@ -13,6 +13,7 @@ import pytest
 from glide import GlideClient, GlideClusterClient, Script, TGlideClient
 from glide_shared import ClosingError, RequestError
 from glide_shared.commands.batch import Batch, ClusterBatch
+from glide_shared.commands.batch_options import ClusterBatchOptions
 from glide_shared.commands.bitmap import (
     BitFieldGet,
     BitFieldIncrBy,
@@ -8690,7 +8691,9 @@ class TestCommands:
         batch.fcall_ro(func_name, keys=keys, arguments=[])
 
         # check response from a routed batch request
-        result = await glide_client.exec(batch, raise_on_error=True, route=route)
+        result = await glide_client.exec(
+            batch, options=ClusterBatchOptions(route=route), raise_on_error=True
+        )
         assert result is not None
         assert result[0] == key1.encode()
         assert result[1] == key1.encode()

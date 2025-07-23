@@ -354,8 +354,8 @@ class TestFt:
         vector_prefix = "vector-search:"
         vector_key1 = vector_prefix + str(uuid.uuid4())
         vector_key2 = vector_prefix + str(uuid.uuid4())
-        vector1 = array.array("f", [0.0, 0.0])
-        vector2 = array.array("f", [1.0, 1.0])
+        vector1 = array.array("f", [1.0, 0.0])
+        vector2 = array.array("f", [0.0, 1.0])
         vector_value1 = vector1.tobytes()
         vector_value2 = vector2.tobytes()
         vector_index = vector_prefix + str(uuid.uuid4())
@@ -406,24 +406,39 @@ class TestFt:
             ],
         )
 
-        knn_result = await ft.search(
-            client=glide_client,
-            index_name=vector_index,
-            query=knn_query,
-            options=knn_query_options,
-        )
+        max_retries = 3
+        last_exception = None
 
-        assert len(knn_result) == 2
-        assert knn_result[0] == 1  # first index is number of results
-        expected_result = {
-            vector_key1.encode(): {
-                vector_field_name.encode(): vector_value1,
-                f"__{vector_field_name}_score".encode(): str(
-                    1  # <- cos score of 1 means identical vectors
-                ).encode(),
-            }
-        }
-        assert knn_result[1] == expected_result
+        for attempt in range(max_retries):
+            try:
+                knn_result = await ft.search(
+                    client=glide_client,
+                    index_name=vector_index,
+                    query=knn_query,
+                    options=knn_query_options,
+                )
+
+                assert len(knn_result) == 2
+                assert knn_result[0] == 1  # first index is number of results
+
+                expected_result = {
+                    vector_key1.encode(): {
+                        vector_field_name.encode(): vector_value1,
+                        f"__{vector_field_name}_score".encode(): str(
+                            0  # cosine distance of 0 means identical vectors
+                        ).encode(),
+                    }
+                }
+                assert knn_result[1] == expected_result
+                break
+
+            except AssertionError as e:
+                last_exception = e
+                if attempt < max_retries - 1:
+                    time.sleep(self.sleep_wait_time)
+                    continue
+                else:
+                    raise last_exception
 
         assert await ft.dropindex(glide_client, json_index) == OK
         assert await ft.dropindex(glide_client, vector_index) == OK

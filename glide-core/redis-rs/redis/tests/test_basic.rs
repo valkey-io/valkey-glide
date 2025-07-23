@@ -773,7 +773,7 @@ mod basic {
         assert_eq!(
             *received_clone.lock().unwrap(),
             (0..10)
-                .map(|index| format!("foo:{}", index))
+                .map(|index| format!("foo:{index}"))
                 .chain(std::iter::once("bar:-1".to_string()))
                 .collect::<Vec<_>>()
         );
@@ -889,43 +889,6 @@ mod basic {
         let _: redis::Value = pubsub_con.set("foo", "bar").unwrap();
         let value: String = pubsub_con.get("foo").unwrap();
         assert_eq!(&value[..], "bar");
-    }
-
-    #[test]
-    #[serial_test::serial]
-    #[cfg(feature = "script")]
-    fn test_script() {
-        let ctx = TestContext::new();
-        let mut con = ctx.connection();
-
-        let script = redis::Script::new(
-            r"
-       return {redis.call('GET', KEYS[1]), ARGV[1]}
-    ",
-        );
-
-        let _: () = redis::cmd("SET")
-            .arg("my_key")
-            .arg("foo")
-            .query(&mut con)
-            .unwrap();
-        let response = script.key("my_key").arg(42).invoke(&mut con);
-
-        assert_eq!(response, Ok(("foo".to_string(), 42)));
-    }
-
-    #[test]
-    #[serial_test::serial]
-    #[cfg(feature = "script")]
-    fn test_script_load() {
-        let ctx = TestContext::new();
-        let mut con = ctx.connection();
-
-        let script = redis::Script::new("return 'Hello World'");
-
-        let hash = script.prepare_invoke().load(&mut con);
-
-        assert_eq!(hash, Ok(script.get_hash().to_string()));
     }
 
     #[test]

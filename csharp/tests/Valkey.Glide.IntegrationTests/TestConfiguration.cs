@@ -15,20 +15,35 @@ public class TestConfiguration : IDisposable
     public static List<(string host, ushort port)> STANDALONE_HOSTS { get; internal set; } = [];
     public static List<(string host, ushort port)> CLUSTER_HOSTS { get; internal set; } = [];
     public static Version SERVER_VERSION { get; internal set; } = new();
+    public static bool TLS { get; internal set; } = false;
 
     public static StandaloneClientConfigurationBuilder DefaultClientConfig() =>
         new StandaloneClientConfigurationBuilder()
-            .WithAddress(STANDALONE_HOSTS[0].host, STANDALONE_HOSTS[0].port);
+            .WithAddress(STANDALONE_HOSTS[0].host, STANDALONE_HOSTS[0].port)
+            .WithProtocolVersion(ConnectionConfiguration.Protocol.RESP3)
+            .WithTls(TLS);
 
     public static ClusterClientConfigurationBuilder DefaultClusterClientConfig() =>
         new ClusterClientConfigurationBuilder()
-            .WithAddress(CLUSTER_HOSTS[0].host, CLUSTER_HOSTS[0].port);
+            .WithAddress(CLUSTER_HOSTS[0].host, CLUSTER_HOSTS[0].port)
+            .WithProtocolVersion(ConnectionConfiguration.Protocol.RESP3)
+            .WithTls(TLS);
 
     public static GlideClient DefaultStandaloneClientWithExtraTimeout()
-    => GlideClient.CreateClient(DefaultClientConfig().WithRequestTimeout(1000).Build()).GetAwaiter().GetResult();
+        => GlideClient.CreateClient(
+                DefaultClientConfig()
+                .WithRequestTimeout(TimeSpan.FromSeconds(1))
+                .Build())
+            .GetAwaiter()
+            .GetResult();
 
     public static GlideClusterClient DefaultClusterClientWithExtraTimeout()
-        => GlideClusterClient.CreateClient(DefaultClusterClientConfig().WithRequestTimeout(1000).Build()).GetAwaiter().GetResult();
+        => GlideClusterClient.CreateClient(
+                DefaultClusterClientConfig()
+                .WithRequestTimeout(TimeSpan.FromSeconds(1))
+                .Build())
+            .GetAwaiter()
+            .GetResult();
 
     public static GlideClient DefaultStandaloneClient()
         => GlideClient.CreateClient(DefaultClientConfig().Build()).GetAwaiter().GetResult();
@@ -42,7 +57,63 @@ public class TestConfiguration : IDisposable
         {
             if (field.Count == 0)
             {
-                field = [(BaseClient)DefaultStandaloneClientWithExtraTimeout(), (BaseClient)DefaultClusterClientWithExtraTimeout()];
+                field = [.. TestStandaloneClients.Select(d => (BaseClient)d.Data), .. TestClusterClients.Select(d => (BaseClient)d.Data)];
+            }
+            return field;
+        }
+
+        private set;
+    } = [];
+
+    public static TheoryData<GlideClient> TestStandaloneClients
+    {
+        get
+        {
+            if (field.Count == 0)
+            {
+                GlideClient resp2client = GlideClient.CreateClient(
+                    DefaultClientConfig()
+                    .WithRequestTimeout(TimeSpan.FromSeconds(1))
+                    .WithProtocolVersion(ConnectionConfiguration.Protocol.RESP2)
+                    .Build()
+                ).GetAwaiter().GetResult();
+                resp2client.SetInfo("RESP2");
+                GlideClient resp3client = GlideClient.CreateClient(
+                    DefaultClientConfig()
+                    .WithRequestTimeout(TimeSpan.FromSeconds(1))
+                    .WithProtocolVersion(ConnectionConfiguration.Protocol.RESP3)
+                    .Build()
+                ).GetAwaiter().GetResult();
+                resp3client.SetInfo("RESP3");
+                field = [resp2client, resp3client];
+            }
+            return field;
+        }
+
+        private set;
+    } = [];
+
+    public static TheoryData<GlideClusterClient> TestClusterClients
+    {
+        get
+        {
+            if (field.Count == 0)
+            {
+                GlideClusterClient resp2client = GlideClusterClient.CreateClient(
+                    DefaultClusterClientConfig()
+                    .WithRequestTimeout(TimeSpan.FromSeconds(1))
+                    .WithProtocolVersion(ConnectionConfiguration.Protocol.RESP2)
+                    .Build()
+                ).GetAwaiter().GetResult();
+                resp2client.SetInfo("RESP2");
+                GlideClusterClient resp3client = GlideClusterClient.CreateClient(
+                    DefaultClusterClientConfig()
+                    .WithRequestTimeout(TimeSpan.FromSeconds(1))
+                    .WithProtocolVersion(ConnectionConfiguration.Protocol.RESP3)
+                    .Build()
+                ).GetAwaiter().GetResult();
+                resp3client.SetInfo("RESP3");
+                field = [resp2client, resp3client];
             }
             return field;
         }
@@ -57,7 +128,107 @@ public class TestConfiguration : IDisposable
             data.Data.Dispose();
         }
         TestClients = [];
+        TestClusterClients = [];
+        TestStandaloneClients = [];
     }
+
+    #region SER COMPAT
+    public static ConfigurationOptions DefaultCompatibleConfig()
+    {
+        ConfigurationOptions config = new();
+        config.EndPoints.Add(STANDALONE_HOSTS[0].host, STANDALONE_HOSTS[0].port);
+        config.Ssl = TLS;
+        config.ResponseTimeout = 1000;
+        return config;
+    }
+
+    public static ConfigurationOptions DefaultCompatibleClusterConfig()
+    {
+        ConfigurationOptions config = new();
+        config.EndPoints.Add(CLUSTER_HOSTS[0].host, CLUSTER_HOSTS[0].port);
+        config.Ssl = TLS;
+        config.ResponseTimeout = 1000;
+        return config;
+    }
+
+    public static ConnectionMultiplexer DefaultCompatibleConnection()
+        => ConnectionMultiplexer.Connect(DefaultCompatibleConfig());
+
+    public static ConnectionMultiplexer DefaultCompatibleClusterConnection()
+        => ConnectionMultiplexer.Connect(DefaultCompatibleClusterConfig());
+
+    public static TheoryData<ConnectionMultiplexer> TestStandaloneConnections
+    {
+        get
+        {
+            if (field.Count == 0)
+            {
+                ConfigurationOptions resp2conf = DefaultCompatibleConfig();
+                resp2conf.Protocol = Protocol.Resp2;
+                ConnectionMultiplexer resp2Conn = ConnectionMultiplexer.Connect(resp2conf);
+                (resp2Conn.GetDatabase() as DatabaseImpl)!.SetInfo("RESP2");
+                ConfigurationOptions resp3conf = DefaultCompatibleConfig();
+                resp3conf.Protocol = Protocol.Resp3;
+                ConnectionMultiplexer resp3Conn = ConnectionMultiplexer.Connect(resp3conf);
+                (resp3Conn.GetDatabase() as DatabaseImpl)!.SetInfo("RESP3");
+
+                field = [resp2Conn, resp3Conn];
+            }
+            return field;
+        }
+
+        private set;
+    } = [];
+
+    public static TheoryData<ConnectionMultiplexer> TestClusterConnections
+    {
+        get
+        {
+            if (field.Count == 0)
+            {
+                ConfigurationOptions resp2conf = DefaultCompatibleClusterConfig();
+                resp2conf.Protocol = Protocol.Resp2;
+                ConnectionMultiplexer resp2Conn = ConnectionMultiplexer.Connect(resp2conf);
+                (resp2Conn.GetDatabase() as DatabaseImpl)!.SetInfo("RESP2");
+                ConfigurationOptions resp3conf = DefaultCompatibleClusterConfig();
+                resp3conf.Protocol = Protocol.Resp3;
+                ConnectionMultiplexer resp3Conn = ConnectionMultiplexer.Connect(resp3conf);
+                (resp3Conn.GetDatabase() as DatabaseImpl)!.SetInfo("RESP3");
+
+                field = [resp2Conn, resp3Conn];
+            }
+            return field;
+        }
+
+        private set;
+    } = [];
+
+    public static List<TheoryDataRow<ConnectionMultiplexer, bool>> TestConnections
+    {
+        get
+        {
+            if (field.Count == 0)
+            {
+#pragma warning disable xUnit1046 // Avoid using TheoryDataRow arguments that are not serializable
+                field = [
+                    .. TestStandaloneConnections.Select(d => new TheoryDataRow<ConnectionMultiplexer, bool>(d.Data, false)),
+                    .. TestClusterConnections.Select(d => new TheoryDataRow<ConnectionMultiplexer, bool>(d.Data, true))];
+#pragma warning restore xUnit1046 // Avoid using TheoryDataRow arguments that are not serializable
+            }
+            return field;
+        }
+
+        private set;
+    } = [];
+
+    public static void ResetTestConnections()
+    {
+        TestConnections.ForEach(test => test.Data.Item1.Dispose());
+        TestConnections = [];
+        TestClusterConnections = [];
+        TestStandaloneConnections = [];
+    }
+    #endregion
 
     public TestConfiguration()
     {
@@ -74,22 +245,36 @@ public class TestConfiguration : IDisposable
 
         _scriptDir = Path.Combine(projectDir, "..", "utils");
 
-        // Stop all if weren't stopped on previous test run
-        StopServer(false);
+        TLS = Environment.GetEnvironmentVariable("tls") == "true";
 
-        // Delete dirs if stop failed due to https://github.com/valkey-io/valkey-glide/issues/849
-        // Not using `Directory.Exists` before deleting, because another process may delete the dir while IT is running.
-        string clusterLogsDir = Path.Combine(_scriptDir, "clusters");
-        try
+        if (Environment.GetEnvironmentVariable("cluster-endpoints") is { } || Environment.GetEnvironmentVariable("standalone-endpoints") is { })
         {
-            Directory.Delete(clusterLogsDir, true);
+            string? clusterEndpoints = Environment.GetEnvironmentVariable("cluster-endpoints");
+            CLUSTER_HOSTS = clusterEndpoints is null ? [] : ParseHostsString(clusterEndpoints);
+            string? standaloneEndpoints = Environment.GetEnvironmentVariable("standalone-endpoints");
+            STANDALONE_HOSTS = standaloneEndpoints is null ? [] : ParseHostsString(standaloneEndpoints);
+            _startedServer = false;
         }
-        catch (DirectoryNotFoundException) { }
+        else
+        {
+            _startedServer = true;
+            // Stop all if weren't stopped on previous test run
+            StopServer(false);
 
-        // Start cluster
-        CLUSTER_HOSTS = StartServer(true);
-        // Start standalone
-        STANDALONE_HOSTS = StartServer(false);
+            // Delete dirs if stop failed due to https://github.com/valkey-io/valkey-glide/issues/849
+            // Not using `Directory.Exists` before deleting, because another process may delete the dir while IT is running.
+            string clusterLogsDir = Path.Combine(_scriptDir, "clusters");
+            try
+            {
+                Directory.Delete(clusterLogsDir, true);
+            }
+            catch (DirectoryNotFoundException) { }
+
+            // Start cluster
+            CLUSTER_HOSTS = StartServer(true, TLS);
+            // Start standalone
+            STANDALONE_HOSTS = StartServer(false, TLS);
+        }
         // Get redis version
         SERVER_VERSION = GetServerVersion();
 
@@ -103,11 +288,16 @@ public class TestConfiguration : IDisposable
     public void Dispose()
     {
         ResetTestClients();
-        // Stop all
-        StopServer(true);
+        ResetTestConnections();
+        if (_startedServer)
+        {
+            // Stop all
+            StopServer(true);
+        }
     }
 
     private readonly string _scriptDir;
+    private readonly bool _startedServer;
 
     private static void TestConsoleWriteLine(string message) =>
         TestContext.Current.SendDiagnosticMessage(message);
@@ -215,4 +405,7 @@ public class TestConfiguration : IDisposable
         string line = lines.FirstOrDefault(l => l.Contains("valkey_version")) ?? lines.First(l => l.Contains("redis_version"));
         return new(line.Split(':')[1]);
     }
+
+    private static List<(string host, ushort port)> ParseHostsString(string @string)
+        => [.. @string.Split(',').Select(s => s.Split(':')).Select(s => (host: s[0], port: ushort.Parse(s[1])))];
 }

@@ -52,6 +52,8 @@ excluded_symbol_list = [
     "PartialMessageException",  # Exception
     # python/python/glide/async_commands/batch.py
     "BaseBatch",  # ClassDef
+    # python/python/glide/async_commands/batch_options.py
+    "BaseBatchOptions",  # ClassDef
     # python/python/glide/async_commands/standalone_commands.py
     "StandaloneCommands",  # ClassDef
     # python/python/glide/commands/async_commands/cluster_commands.py

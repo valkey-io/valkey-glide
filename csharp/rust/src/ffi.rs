@@ -151,6 +151,7 @@ pub(crate) unsafe fn create_connection_request(
         periodic_checks: None,
         pubsub_subscriptions: None,
         inflight_requests_limit: None,
+        lazy_connect: false,
     }
 }
 
@@ -556,7 +557,7 @@ pub(crate) unsafe fn create_pipeline(ptr: *const BatchInfo) -> Result<Pipeline, 
     for (i, cmd_ptr) in cmd_pointers.iter().enumerate() {
         match unsafe { create_cmd(*cmd_ptr) } {
             Ok(cmd) => pipeline.add_command(cmd),
-            Err(err) => return Err(format!("Coudln't create {:?}'th command: {:?}", i, err)),
+            Err(err) => return Err(format!("Coudln't create {i:?}'th command: {err:?}")),
         };
     }
     if info.is_atomic {

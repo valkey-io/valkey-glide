@@ -4,9 +4,9 @@ package glide
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-
-	"github.com/valkey-io/valkey-glide/go/v2/constants"
+	"time"
 
 	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
@@ -39,9 +39,7 @@ func ExampleClient_SetWithOptions() {
 	var client *Client = getExampleClient() // example helper function
 
 	options := options.NewSetOptions().
-		SetExpiry(options.NewExpiry().
-			SetType(constants.Seconds).
-			SetCount(5))
+		SetExpiry(options.NewExpiryIn(5 * time.Second))
 	result, err := client.SetWithOptions(context.Background(), "my_key", "my_value", *options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -55,9 +53,7 @@ func ExampleClusterClient_SetWithOptions() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	options := options.NewSetOptions().
-		SetExpiry(options.NewExpiry().
-			SetType(constants.Seconds).
-			SetCount(uint64(5)))
+		SetExpiry(options.NewExpiryIn(5 * time.Second))
 	result, err := client.SetWithOptions(context.Background(), "my_key", "my_value", *options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -156,9 +152,7 @@ func ExampleClient_GetExWithOptions() {
 
 	client.Set(context.Background(), "my_key", "my_value")
 	options := options.NewGetExOptions().
-		SetExpiry(options.NewExpiry().
-			SetType(constants.Seconds).
-			SetCount(5))
+		SetExpiry(options.NewExpiryIn(5 * time.Second))
 	result, err := client.GetExWithOptions(context.Background(), "my_key", *options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -177,9 +171,7 @@ func ExampleClusterClient_GetExWithOptions() {
 
 	client.Set(context.Background(), "my_key", "my_value")
 	options := options.NewGetExOptions().
-		SetExpiry(options.NewExpiry().
-			SetType(constants.Seconds).
-			SetCount(uint64(5)))
+		SetExpiry(options.NewExpiryIn(5 * time.Second))
 	result, err := client.GetExWithOptions(context.Background(), "my_key", *options)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -611,34 +603,6 @@ func ExampleClusterClient_Append() {
 	// my_value
 }
 
-func ExampleClient_LCS() {
-	var client *Client = getExampleClient() // example helper function
-
-	client.MSet(context.Background(), map[string]string{"my_key1": "oh my gosh", "my_key2": "hello world"})
-	result, err := client.LCS(context.Background(), "my_key1", "my_key2")
-	if err != nil {
-		fmt.Println("Glide example failed with an error: ", err)
-	}
-	fmt.Println(result)
-
-	// LCS is only available in 7.0 and above. It will fail in any server < 7.0
-	// Output: h o
-}
-
-func ExampleClusterClient_LCS() {
-	var client *ClusterClient = getExampleClusterClient() // example helper function
-
-	client.MSet(context.Background(), map[string]string{"{my_key}1": "oh my gosh", "{my_key}2": "hello world"})
-	result, err := client.LCS(context.Background(), "{my_key}1", "{my_key}2")
-	if err != nil {
-		fmt.Println("Glide example failed with an error: ", err)
-	}
-	fmt.Println(result)
-
-	// LCS is only available in 7.0 and above. It will fail in any release < 7.0
-	// Output: h o
-}
-
 func ExampleClient_GetDel() {
 	var client *Client = getExampleClient() // example helper function
 
@@ -673,6 +637,36 @@ func ExampleClusterClient_GetDel() {
 	// true
 }
 
+func ExampleClient_LCS() {
+	var client *Client = getExampleClient() // example helper function
+
+	client.MSet(context.Background(), map[string]string{"my_key1": "oh my gosh", "my_key2": "hello world"})
+	result, err := client.LCS(context.Background(), "my_key1", "my_key2")
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result.MatchString)
+
+	// LCS is only available in 7.0 and above. It will fail in any server < 7.0
+
+	// Output: h o
+}
+
+func ExampleClusterClient_LCS() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
+
+	client.MSet(context.Background(), map[string]string{"{my_key}1": "oh my gosh", "{my_key}2": "hello world"})
+	result, err := client.LCS(context.Background(), "{my_key}1", "{my_key}2")
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result.MatchString)
+
+	// LCS is only available in 7.0 and above. It will fail in any release < 7.0
+
+	// Output: h o
+}
+
 func ExampleClient_LCSLen() {
 	var client *Client = getExampleClient() // example helper function
 
@@ -683,10 +677,11 @@ func ExampleClient_LCSLen() {
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println(result)
+	fmt.Println(result.Len)
 
 	// LCS is only available in 7.0 and above. It will fail in any server < 7.0
-	// Output: 3
+
+	// Output: 6
 }
 
 func ExampleClusterClient_LCSLen() {
@@ -699,13 +694,14 @@ func ExampleClusterClient_LCSLen() {
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println(result)
+	fmt.Println(result.Len)
 
 	// LCS is only available in 7.0 and above. It will fail in any release < 7.0
-	// Output: 3
+
+	// Output: 6
 }
 
-func ExampleClient_LCSWithOptions() {
+func ExampleClient_LCSWithOptions_basic() {
 	var client *Client = getExampleClient() // example helper function
 
 	client.Set(context.Background(), "my_key1", "ohmytext")
@@ -713,11 +709,101 @@ func ExampleClient_LCSWithOptions() {
 
 	// Basic LCS IDX without additional options
 	opts := options.NewLCSIdxOptions()
-	result1, err := client.LCSWithOptions(context.Background(), "my_key1", "my_key2", *opts)
+	result, err := client.LCSWithOptions(context.Background(), "my_key1", "my_key2", *opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println("Basic LCS result:", result1)
+	jsonRes, _ := json.MarshalIndent(result, "", "  ")
+	fmt.Println("Basic LCS result:\n", string(jsonRes))
+
+	// LCS is only available in 7.0 and above. It will fail in any server < 7.0
+
+	// Output:
+	// Basic LCS result:
+	//  {
+	//   "MatchString": "",
+	//   "Matches": [
+	//     {
+	//       "Key1": {
+	//         "Start": 4,
+	//         "End": 7
+	//       },
+	//       "Key2": {
+	//         "Start": 5,
+	//         "End": 8
+	//       },
+	//       "MatchLen": 0
+	//     },
+	//     {
+	//       "Key1": {
+	//         "Start": 2,
+	//         "End": 3
+	//       },
+	//       "Key2": {
+	//         "Start": 0,
+	//         "End": 1
+	//       },
+	//       "MatchLen": 0
+	//     }
+	//   ],
+	//   "Len": 6
+	// }
+}
+
+func ExampleClusterClient_LCSWithOptions_basic() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
+
+	client.Set(context.Background(), "{key}1", "ohmytext")
+	client.Set(context.Background(), "{key}2", "mynewtext")
+
+	// Basic LCS IDX without additional options
+	opts := options.NewLCSIdxOptions()
+	result, err := client.LCSWithOptions(context.Background(), "{key}1", "{key}2", *opts)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	jsonRes, _ := json.MarshalIndent(result, "", "  ")
+	fmt.Println("Basic LCS result:\n", string(jsonRes))
+
+	// LCS is only available in 7.0 and above. It will fail in any server < 7.0
+
+	// Output:
+	// Basic LCS result:
+	//  {
+	//   "MatchString": "",
+	//   "Matches": [
+	//     {
+	//       "Key1": {
+	//         "Start": 4,
+	//         "End": 7
+	//       },
+	//       "Key2": {
+	//         "Start": 5,
+	//         "End": 8
+	//       },
+	//       "MatchLen": 0
+	//     },
+	//     {
+	//       "Key1": {
+	//         "Start": 2,
+	//         "End": 3
+	//       },
+	//       "Key2": {
+	//         "Start": 0,
+	//         "End": 1
+	//       },
+	//       "MatchLen": 0
+	//     }
+	//   ],
+	//   "Len": 6
+	// }
+}
+
+func ExampleClient_LCSWithOptions_minmatchlen() {
+	var client *Client = getExampleClient() // example helper function
+
+	client.Set(context.Background(), "my_key1", "ohmytext")
+	client.Set(context.Background(), "my_key2", "mynewtext")
 
 	// LCS IDX with MINMATCHLEN = 4
 	optsWithMin := options.NewLCSIdxOptions()
@@ -726,32 +812,67 @@ func ExampleClient_LCSWithOptions() {
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
-	fmt.Println("With MinMatchLen 4:", result2)
+	jsonRes2, _ := json.MarshalIndent(result2, "", "  ")
+	fmt.Println("With MinMatchLen 4:\n", string(jsonRes2))
 
 	// LCS is only available in 7.0 and above. It will fail in any server < 7.0
+
 	// Output:
-	// Basic LCS result: map[len:3 matches:[[0 1 0 1] [6 7 4 5]]]
-	// With MinMatchLen 4: map[len:0 matches:[]]
+	// With MinMatchLen 4:
+	//  {
+	//   "MatchString": "",
+	//   "Matches": [
+	//     {
+	//       "Key1": {
+	//         "Start": 4,
+	//         "End": 7
+	//       },
+	//       "Key2": {
+	//         "Start": 5,
+	//         "End": 8
+	//       },
+	//       "MatchLen": 0
+	//     }
+	//   ],
+	//   "Len": 6
+	// }
 }
 
-func ExampleClusterClient_LCSWithOptions() {
+func ExampleClusterClient_LCSWithOptions_minmatchlen() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 
-	client.Set(context.Background(), "{my_key}1", "ohmytext")
-	client.Set(context.Background(), "{my_key}2", "mynewtext")
+	client.Set(context.Background(), "{key}1", "ohmytext")
+	client.Set(context.Background(), "{key}2", "mynewtext")
 
-	// LCS IDX with MINMATCHLEN and WITHMATCHLEN
-	opts := options.NewLCSIdxOptions()
-	opts.SetMinMatchLen(2)
-	opts.SetWithMatchLen(true)
-	result, err := client.LCSWithOptions(context.Background(), "{my_key}1", "{my_key}2", *opts)
+	// LCS IDX with MINMATCHLEN = 4
+	optsWithMin := options.NewLCSIdxOptions()
+	optsWithMin.SetMinMatchLen(4)
+	result2, err := client.LCSWithOptions(context.Background(), "{key}1", "{key}2", *optsWithMin)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
+	jsonRes2, _ := json.MarshalIndent(result2, "", "  ")
+	fmt.Println("With MinMatchLen 4:\n", string(jsonRes2))
 
-	fmt.Println("Full result with both options:", result)
+	// LCS is only available in 7.0 and above. It will fail in any server < 7.0
 
-	// LCS is only available in 7.0 and above. It will fail in any release < 7.0
 	// Output:
-	// Full result with both options: map[len:3 matches:[[0 1 0 1 2] [6 7 4 5 2]]]
+	// With MinMatchLen 4:
+	//  {
+	//   "MatchString": "",
+	//   "Matches": [
+	//     {
+	//       "Key1": {
+	//         "Start": 4,
+	//         "End": 7
+	//       },
+	//       "Key2": {
+	//         "Start": 5,
+	//         "End": 8
+	//       },
+	//       "MatchLen": 0
+	//     }
+	//   ],
+	//   "Len": 6
+	// }
 }
