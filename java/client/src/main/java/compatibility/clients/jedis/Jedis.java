@@ -479,7 +479,10 @@ public class Jedis implements Closeable {
     public String setex(String key, long seconds, String value) {
         checkNotClosed();
         try {
-            Object result = glideClient.customCommand(new String[] {"SETEX", key, String.valueOf(seconds), value}).get();
+            Object result =
+                    glideClient
+                            .customCommand(new String[] {"SETEX", key, String.valueOf(seconds), value})
+                            .get();
             return result != null ? result.toString() : null;
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("SETEX operation failed", e);
@@ -497,7 +500,10 @@ public class Jedis implements Closeable {
     public String psetex(String key, long milliseconds, String value) {
         checkNotClosed();
         try {
-            Object result = glideClient.customCommand(new String[] {"PSETEX", key, String.valueOf(milliseconds), value}).get();
+            Object result =
+                    glideClient
+                            .customCommand(new String[] {"PSETEX", key, String.valueOf(milliseconds), value})
+                            .get();
             return result != null ? result.toString() : null;
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("PSETEX operation failed", e);
@@ -564,7 +570,7 @@ public class Jedis implements Closeable {
             args[0] = "GETEX";
             args[1] = key;
             System.arraycopy(options, 0, args, 2, options.length);
-            
+
             Object result = glideClient.customCommand(args).get();
             return result != null ? result.toString() : null;
         } catch (InterruptedException | ExecutionException e) {
@@ -864,7 +870,8 @@ public class Jedis implements Closeable {
      * Get the expiration timestamp of a key in seconds.
      *
      * @param key the key
-     * @return expiration timestamp in seconds, or -1 if key has no expiration, -2 if key does not exist
+     * @return expiration timestamp in seconds, or -1 if key has no expiration, -2 if key does not
+     *     exist
      */
     public Long expiretime(String key) {
         checkNotClosed();
@@ -879,7 +886,8 @@ public class Jedis implements Closeable {
      * Get the expiration timestamp of a key in milliseconds.
      *
      * @param key the key
-     * @return expiration timestamp in milliseconds, or -1 if key has no expiration, -2 if key does not exist
+     * @return expiration timestamp in milliseconds, or -1 if key has no expiration, -2 if key does
+     *     not exist
      */
     public Long pexpiretime(String key) {
         checkNotClosed();
@@ -966,7 +974,7 @@ public class Jedis implements Closeable {
             args[0] = "SORT";
             args[1] = key;
             System.arraycopy(sortingParameters, 0, args, 2, sortingParameters.length);
-            
+
             Object result = glideClient.customCommand(args).get();
             if (result instanceof String[]) {
                 return Arrays.asList((String[]) result);
@@ -1018,7 +1026,11 @@ public class Jedis implements Closeable {
     public String restore(String key, long ttl, byte[] serializedValue) {
         checkNotClosed();
         try {
-            Object result = glideClient.customCommand(new String[] {"RESTORE", key, String.valueOf(ttl), new String(serializedValue)}).get();
+            Object result =
+                    glideClient
+                            .customCommand(
+                                    new String[] {"RESTORE", key, String.valueOf(ttl), new String(serializedValue)})
+                            .get();
             return result != null ? result.toString() : "OK";
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("RESTORE operation failed", e);
@@ -1038,9 +1050,18 @@ public class Jedis implements Closeable {
     public String migrate(String host, int port, String key, int destinationDb, int timeout) {
         checkNotClosed();
         try {
-            Object result = glideClient.customCommand(new String[] {
-                "MIGRATE", host, String.valueOf(port), key, String.valueOf(destinationDb), String.valueOf(timeout)
-            }).get();
+            Object result =
+                    glideClient
+                            .customCommand(
+                                    new String[] {
+                                        "MIGRATE",
+                                        host,
+                                        String.valueOf(port),
+                                        key,
+                                        String.valueOf(destinationDb),
+                                        String.valueOf(timeout)
+                                    })
+                            .get();
             return result != null ? result.toString() : "OK";
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("MIGRATE operation failed", e);
@@ -1057,7 +1078,8 @@ public class Jedis implements Closeable {
     public Long move(String key, int dbIndex) {
         checkNotClosed();
         try {
-            Object result = glideClient.customCommand(new String[] {"MOVE", key, String.valueOf(dbIndex)}).get();
+            Object result =
+                    glideClient.customCommand(new String[] {"MOVE", key, String.valueOf(dbIndex)}).get();
             if (result instanceof Long) {
                 return (Long) result;
             } else if (result instanceof Boolean) {
@@ -1086,14 +1108,14 @@ public class Jedis implements Closeable {
                     // First element is cursor, second is array of keys
                     String newCursor = resultArray[0].toString();
                     Object keysObj = resultArray[1];
-                    
+
                     if (keysObj instanceof Object[]) {
                         Object[] keysArray = (Object[]) keysObj;
                         String[] keys = new String[keysArray.length];
                         for (int i = 0; i < keysArray.length; i++) {
                             keys[i] = keysArray[i] != null ? keysArray[i].toString() : null;
                         }
-                        
+
                         // Return cursor + keys
                         String[] scanResult = new String[keys.length + 1];
                         scanResult[0] = newCursor;
@@ -1118,20 +1140,21 @@ public class Jedis implements Closeable {
     public String[] scan(String cursor, String pattern) {
         checkNotClosed();
         try {
-            Object result = glideClient.customCommand(new String[] {"SCAN", cursor, "MATCH", pattern}).get();
+            Object result =
+                    glideClient.customCommand(new String[] {"SCAN", cursor, "MATCH", pattern}).get();
             if (result instanceof Object[]) {
                 Object[] resultArray = (Object[]) result;
                 if (resultArray.length >= 2) {
                     String newCursor = resultArray[0].toString();
                     Object keysObj = resultArray[1];
-                    
+
                     if (keysObj instanceof Object[]) {
                         Object[] keysArray = (Object[]) keysObj;
                         String[] keys = new String[keysArray.length];
                         for (int i = 0; i < keysArray.length; i++) {
                             keys[i] = keysArray[i] != null ? keysArray[i].toString() : null;
                         }
-                        
+
                         String[] scanResult = new String[keys.length + 1];
                         scanResult[0] = newCursor;
                         System.arraycopy(keys, 0, scanResult, 1, keys.length);
@@ -1183,7 +1206,8 @@ public class Jedis implements Closeable {
      * @param srcKey source key
      * @param dstKey destination key
      * @param replace whether to replace the destination key if it exists
-     * @return 1 if key was copied, 0 if source key does not exist or destination exists and replace is false
+     * @return 1 if key was copied, 0 if source key does not exist or destination exists and replace
+     *     is false
      */
     public Long copy(String srcKey, String dstKey, boolean replace) {
         checkNotClosed();

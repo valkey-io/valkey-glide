@@ -4,7 +4,6 @@ package compatibility.jedis;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.*;
 
-// TO DO: After implementation of del, remove all occurrences of Jedis from this file.
 import compatibility.clients.jedis.Jedis;
 import compatibility.clients.jedis.JedisPool;
 import java.lang.reflect.Method;
@@ -44,8 +43,8 @@ public class JedisPoolTest {
     }
 
     /**
-     * Resolve Redis/Valkey server address from CI environment properties.
-     * Falls back to localhost:6379 if no CI configuration is found.
+     * Resolve Redis/Valkey server address from CI environment properties. Falls back to
+     * localhost:6379 if no CI configuration is found.
      */
     private static void resolveServerAddress() {
         String standaloneHosts = System.getProperty("test.server.standalone");
@@ -88,8 +87,10 @@ public class JedisPoolTest {
                 actualJedisClass = Class.forName("redis.clients.jedis.Jedis");
                 actualJedisPoolClass = Class.forName("redis.clients.jedis.JedisPool");
 
-                actualJedisPool = actualJedisPoolClass.getConstructor(String.class, int.class)
-                        .newInstance(redisHost, redisPort);
+                actualJedisPool =
+                        actualJedisPoolClass
+                                .getConstructor(String.class, int.class)
+                                .newInstance(redisHost, redisPort);
                 hasActualJedisPool = true;
             }
         } catch (Exception e) {
@@ -136,17 +137,17 @@ public class JedisPoolTest {
      * Test connection pool operations.
      *
      * <p>This test is important because:
+     *
      * <ul>
-     * <li>Connection pooling is a critical feature for production applications</li>
-     * <li>Pool behavior differs significantly between GLIDE and actual Jedis:
-     *     <ul>
-     *     <li>GLIDE uses internal connection management</li>
-     *     <li>Actual Jedis uses Apache Commons Pool2</li>
-     *     </ul>
-     * </li>
-     * <li>Validates that pool.getResource() returns working connections</li>
-     * <li>Ensures proper resource lifecycle management (try-with-resources)</li>
-     * <li>Tests that pooled connections produce identical results to direct connections</li>
+     *   <li>Connection pooling is a critical feature for production applications
+     *   <li>Pool behavior differs significantly between GLIDE and actual Jedis:
+     *       <ul>
+     *         <li>GLIDE uses internal connection management
+     *         <li>Actual Jedis uses Apache Commons Pool2
+     *       </ul>
+     *   <li>Validates that pool.getResource() returns working connections
+     *   <li>Ensures proper resource lifecycle management (try-with-resources)
+     *   <li>Tests that pooled connections produce identical results to direct connections
      * </ul>
      */
     @Test
@@ -214,7 +215,8 @@ public class JedisPoolTest {
                 String getResult = pooledJedis.get(testKey + i);
 
                 assertEquals("OK", setResult, "SET should succeed for iteration " + i);
-                assertEquals(testValue + i, getResult, "GET should return correct value for iteration " + i);
+                assertEquals(
+                        testValue + i, getResult, "GET should return correct value for iteration " + i);
             }
         }
 
@@ -246,9 +248,7 @@ public class JedisPoolTest {
         assertNotNull(glideJedisPool.getConfig(), "Pool config should not be null");
     }
 
-    /**
-     * Clean up test keys to avoid interference between tests.
-     */
+    /** Clean up test keys to avoid interference between tests. */
     private void cleanupTestKeys(Object jedisInstance) {
         try {
             if (jedisInstance instanceof Jedis) {
