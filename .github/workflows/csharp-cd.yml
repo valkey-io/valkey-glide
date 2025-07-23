@@ -80,6 +80,7 @@ jobs:
             - name: Output Matrix Parameters for this job
               if: ${{ matrix.host.CD_RUNNER != 'macos-13' }}
               run: |
+                  echo ${{ needs.load-platform-matrix.outputs.PLATFORM_MATRIX }} # TODO remove
                   echo "Job running with the following matrix configuration:"
                   echo "${{ toJson(matrix) }}"
 
@@ -111,6 +112,8 @@ jobs:
               working-directory: csharp/rust
               run: |
                   cargo zigbuild -r --target ${{ matrix.host.TARGET }}.2.17
+                  mkdir -p target/release
+                  cp target/*/release/libglide_rs.so target/release/
 
             - name: Upload artifacts to publish
               continue-on-error: true
@@ -119,7 +122,6 @@ jobs:
                   name: ${{ matrix.host.TARGET }}
                   path: |
                       csharp/rust/target/release/*.so
-                      csharp/rust/target/*/release/*.so
                       csharp/rust/target/release/*.dylib
                       csharp/rust/target/release/*.dll
                   # note: rename lib for windows
@@ -179,7 +181,7 @@ jobs:
             - name: Publish
               run: |
                   ls -l
-                  dotnet nuget push Valkey.Glide.*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
+                  : dotnet nuget push Valkey.Glide.*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
 
     test:
         needs: [publish, set-release-version]
