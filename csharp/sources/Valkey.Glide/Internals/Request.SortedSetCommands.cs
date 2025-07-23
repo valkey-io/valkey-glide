@@ -284,16 +284,16 @@ internal partial class Request
         string minStr = actualMin.ToString();
         LexBoundary minBoundary = minStr switch
         {
-            string s when s == NegativeInfinityScore || s == NegativeInfinity => LexBoundary.NegativeInfinity(),
-            string s when s == PositiveInfinityScore || s == PositiveInfinity => LexBoundary.PositiveInfinity(),
+            NegativeInfinityScore or NegativeInfinity => LexBoundary.NegativeInfinity(),
+            PositiveInfinityScore or PositiveInfinity => LexBoundary.PositiveInfinity(),
             _ => exclude.HasFlag(Exclude.Start) ? LexBoundary.Exclusive(actualMin) : LexBoundary.Inclusive(actualMin)
         };
 
         string maxStr = actualMax.ToString();
         LexBoundary maxBoundary = maxStr switch
         {
-            string s when s == NegativeInfinityScore || s == NegativeInfinity => LexBoundary.NegativeInfinity(),
-            string s when s == PositiveInfinityScore || s == PositiveInfinity => LexBoundary.PositiveInfinity(),
+            NegativeInfinityScore or NegativeInfinity => LexBoundary.NegativeInfinity(),
+            PositiveInfinityScore or PositiveInfinity => LexBoundary.PositiveInfinity(),
             _ => exclude.HasFlag(Exclude.Stop) ? LexBoundary.Exclusive(actualMax) : LexBoundary.Inclusive(actualMax)
         };
 

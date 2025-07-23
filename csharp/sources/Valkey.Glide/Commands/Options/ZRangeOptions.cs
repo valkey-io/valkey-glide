@@ -23,36 +23,20 @@ public readonly struct ScoreBoundary
     /// </summary>
     /// <param name="score">The score value.</param>
     /// <returns>An inclusive score boundary.</returns>
-    public static ScoreBoundary Inclusive(double score)
-    {
-        if (double.IsPositiveInfinity(score))
-        {
-            return new(PositiveInfinityScore);
-        }
-        if (double.IsNegativeInfinity(score))
-        {
-            return new(NegativeInfinityScore);
-        }
-        return new(score.ToString(CultureInfo.InvariantCulture));
-    }
+    public static ScoreBoundary Inclusive(double score) =>
+        double.IsPositiveInfinity(score) ? new(PositiveInfinityScore) :
+        double.IsNegativeInfinity(score) ? new(NegativeInfinityScore) :
+        new(score.ToString(CultureInfo.InvariantCulture));
 
     /// <summary>
     /// Creates an exclusive score boundary.
     /// </summary>
     /// <param name="score">The score value.</param>
     /// <returns>An exclusive score boundary.</returns>
-    public static ScoreBoundary Exclusive(double score)
-    {
-        if (double.IsPositiveInfinity(score))
-        {
-            return new(PositiveInfinityScore);
-        }
-        if (double.IsNegativeInfinity(score))
-        {
-            return new(NegativeInfinityScore);
-        }
-        return new("(" + score.ToString(CultureInfo.InvariantCulture));
-    }
+    public static ScoreBoundary Exclusive(double score) =>
+        double.IsPositiveInfinity(score) ? new(PositiveInfinityScore) :
+        double.IsNegativeInfinity(score) ? new(NegativeInfinityScore) :
+        new("(" + score.ToString(CultureInfo.InvariantCulture));
 
     /// <summary>
     /// Creates a positive infinity boundary.
