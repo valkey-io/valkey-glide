@@ -129,14 +129,98 @@ jobs:
                   npm install
                   npm run build:release
 
+            - name: Start Valkey cluster if needed
+              shell: bash
+              run: |
+                  # Check if valkey-server or redis-server is available
+                  if command -v valkey-server >/dev/null 2>&1 || command -v redis-server >/dev/null 2>&1; then
+                      echo "Server binaries found, tests will create clusters internally"
+                  else
+                      echo "No server binaries found, starting external clusters"
+                      cd utils
+                      CLUSTER_OUTPUT=$(python3 cluster_manager.py start --cluster-mode -n 3 -r 1)
+                      echo "Cluster startup output:"
+                      echo "$CLUSTER_OUTPUT"
+                      
+                      # Extract cluster nodes from output
+                      CLUSTER_NODES=$(echo "$CLUSTER_OUTPUT" | grep "CLUSTER_NODES=" | cut -d'=' -f2)
+                      CLUSTER_FOLDER=$(echo "$CLUSTER_OUTPUT" | grep "CLUSTER_FOLDER=" | cut -d'=' -f2)
+                      
+                      if [ -z "$CLUSTER_NODES" ]; then
+                          echo "Failed to start cluster - no CLUSTER_NODES found in output"
+                          exit 1
+                      fi
+                      
+                      echo "CLUSTER_ENDPOINTS=$CLUSTER_NODES" >> $GITHUB_ENV
+                      echo "CLUSTER_FOLDER=$CLUSTER_FOLDER" >> $GITHUB_ENV
+                      echo "Cluster started successfully with nodes: $CLUSTER_NODES"
+                      echo "Cluster folder: $CLUSTER_FOLDER"
+                      
+                      # Start a standalone server for tests that need it
+                      STANDALONE_OUTPUT=$(python3 cluster_manager.py start -n 1 -r 0)
+                      echo "Standalone startup output:"
+                      echo "$STANDALONE_OUTPUT"
+                      
+                      STANDALONE_NODES=$(echo "$STANDALONE_OUTPUT" | grep "CLUSTER_NODES=" | cut -d'=' -f2)
+                      STANDALONE_FOLDER=$(echo "$STANDALONE_OUTPUT" | grep "CLUSTER_FOLDER=" | cut -d'=' -f2)
+                      
+                      if [ -z "$STANDALONE_NODES" ]; then
+                          echo "Failed to start standalone server - no CLUSTER_NODES found in output"
+                          exit 1
+                      fi
+                      
+                      echo "STANDALONE_ENDPOINTS=$STANDALONE_NODES" >> $GITHUB_ENV
+                      echo "STANDALONE_FOLDER=$STANDALONE_FOLDER" >> $GITHUB_ENV
+                      echo "Standalone server started successfully: $STANDALONE_NODES"
+                      echo "Standalone folder: $STANDALONE_FOLDER"
+                      
+                      # Wait for all ports to be available
+                      ALL_PORTS="${CLUSTER_NODES},${STANDALONE_NODES}"
+                      for port in $(echo "$ALL_PORTS" | tr ',' '\n' | cut -d':' -f2); do
+                          for i in {1..30}; do
+                              if timeout 1 bash -c "</dev/tcp/127.0.0.1/$port" 2>/dev/null; then
+                                  echo "Port $port is available"
+                                  break
+                              fi
+                              if [ $i -eq 30 ]; then
+                                  echo "Port $port is not available after 30 attempts"
+                                  exit 1
+                              fi
+                              sleep 1
+                          done
+                      done
+                  fi
+
             - name: Test
               shell: bash
               run: |
                   npm run build
-                  npm run test
+                  if [ -n "$CLUSTER_ENDPOINTS" ]; then
+                      npm run test -- --cluster-endpoints="$CLUSTER_ENDPOINTS" --standalone-endpoints="$STANDALONE_ENDPOINTS"
+                  else
+                      npm run test
+                  fi
               working-directory: ./node
               env:
                   JEST_HTML_REPORTER_OUTPUT_PATH: test-report-node.html
+
+            - name: Stop Valkey cluster
+              if: always()
+              shell: bash
+              run: |
+                  if [ -n "$CLUSTER_FOLDER" ]; then
+                      echo "Stopping cluster in folder: $CLUSTER_FOLDER"
+                      cd utils
+                      python3 cluster_manager.py stop --cluster-folder "$CLUSTER_FOLDER" || echo "Failed to stop cluster gracefully"
+                  fi
+                  if [ -n "$STANDALONE_FOLDER" ]; then
+                      echo "Stopping standalone server in folder: $STANDALONE_FOLDER"
+                      cd utils
+                      python3 cluster_manager.py stop --cluster-folder "$STANDALONE_FOLDER" || echo "Failed to stop standalone server gracefully"
+                  fi
+                  # Fallback cleanup using prefix if folders are unknown
+                  cd utils
+                  python3 cluster_manager.py stop --cluster-prefix "valkey-glide-CI" 2>/dev/null || echo "No clusters with prefix found"
 
             - name: Upload test reports
               if: always()
@@ -220,22 +304,112 @@ jobs:
                   yarn install
                   yarn run build
 
+            - name: Start Valkey cluster if needed
+              shell: bash
+              run: |
+                  # Check if valkey-server or redis-server is available
+                  if command -v valkey-server >/dev/null 2>&1 || command -v redis-server >/dev/null 2>&1; then
+                      echo "Server binaries found, tests will create clusters internally"
+                  else
+                      echo "No server binaries found, starting external clusters"
+                      cd utils
+                      CLUSTER_OUTPUT=$(python3 cluster_manager.py start --cluster-mode -n 3 -r 1)
+                      echo "Cluster startup output:"
+                      echo "$CLUSTER_OUTPUT"
+                      
+                      # Extract cluster nodes from output
+                      CLUSTER_NODES=$(echo "$CLUSTER_OUTPUT" | grep "CLUSTER_NODES=" | cut -d'=' -f2)
+                      CLUSTER_FOLDER=$(echo "$CLUSTER_OUTPUT" | grep "CLUSTER_FOLDER=" | cut -d'=' -f2)
+                      
+                      if [ -z "$CLUSTER_NODES" ]; then
+                          echo "Failed to start cluster - no CLUSTER_NODES found in output"
+                          exit 1
+                      fi
+                      
+                      echo "CLUSTER_ENDPOINTS=$CLUSTER_NODES" >> $GITHUB_ENV
+                      echo "CLUSTER_FOLDER=$CLUSTER_FOLDER" >> $GITHUB_ENV
+                      echo "Cluster started successfully with nodes: $CLUSTER_NODES"
+                      echo "Cluster folder: $CLUSTER_FOLDER"
+                      
+                      # Start a standalone server for tests that need it
+                      STANDALONE_OUTPUT=$(python3 cluster_manager.py start -n 1 -r 0)
+                      echo "Standalone startup output:"
+                      echo "$STANDALONE_OUTPUT"
+                      
+                      STANDALONE_NODES=$(echo "$STANDALONE_OUTPUT" | grep "CLUSTER_NODES=" | cut -d'=' -f2)
+                      STANDALONE_FOLDER=$(echo "$STANDALONE_OUTPUT" | grep "CLUSTER_FOLDER=" | cut -d'=' -f2)
+                      
+                      if [ -z "$STANDALONE_NODES" ]; then
+                          echo "Failed to start standalone server - no CLUSTER_NODES found in output"
+                          exit 1
+                      fi
+                      
+                      echo "STANDALONE_ENDPOINTS=$STANDALONE_NODES" >> $GITHUB_ENV
+                      echo "STANDALONE_FOLDER=$STANDALONE_FOLDER" >> $GITHUB_ENV
+                      echo "Standalone server started successfully: $STANDALONE_NODES"
+                      echo "Standalone folder: $STANDALONE_FOLDER"
+                      
+                      # Wait for all ports to be available
+                      ALL_PORTS="${CLUSTER_NODES},${STANDALONE_NODES}"
+                      for port in $(echo "$ALL_PORTS" | tr ',' '\n' | cut -d':' -f2); do
+                          for i in {1..30}; do
+                              if timeout 1 bash -c "</dev/tcp/127.0.0.1/$port" 2>/dev/null; then
+                                  echo "Port $port is available"
+                                  break
+                              fi
+                              if [ $i -eq 30 ]; then
+                                  echo "Port $port is not available after 30 attempts"
+                                  exit 1
+                              fi
+                              sleep 1
+                          done
+                      done
+                  fi
+
             # Test hybrid node modules - commonjs
             - name: Test hybrid node modules - commonjs
+              shell: bash
               run: |
                   npm install
-                  npm run test
+                  if [ -n "$CLUSTER_ENDPOINTS" ]; then
+                      npm run test -- --cluster-endpoints="$CLUSTER_ENDPOINTS" --standalone-endpoints="$STANDALONE_ENDPOINTS"
+                  else
+                      npm run test
+                  fi
               working-directory: ./node/hybrid-node-tests/commonjs-test
               env:
                   JEST_HTML_REPORTER_OUTPUT_PATH: test-report-commonjs.html
 
             - name: Test hybrid node modules - ecma
+              shell: bash
               run: |
                   npm install
-                  npm run test
+                  if [ -n "$CLUSTER_ENDPOINTS" ]; then
+                      npm run test -- --cluster-endpoints="$CLUSTER_ENDPOINTS" --standalone-endpoints="$STANDALONE_ENDPOINTS"
+                  else
+                      npm run test
+                  fi
               working-directory: ./node/hybrid-node-tests/ecmascript-test
               env:
                   JEST_HTML_REPORTER_OUTPUT_PATH: test-report-ecma.html
+
+            - name: Stop Valkey cluster
+              if: always()
+              shell: bash
+              run: |
+                  if [ -n "$CLUSTER_FOLDER" ]; then
+                      echo "Stopping cluster in folder: $CLUSTER_FOLDER"
+                      cd utils
+                      python3 cluster_manager.py stop --cluster-folder "$CLUSTER_FOLDER" || echo "Failed to stop cluster gracefully"
+                  fi
+                  if [ -n "$STANDALONE_FOLDER" ]; then
+                      echo "Stopping standalone server in folder: $STANDALONE_FOLDER"
+                      cd utils
+                      python3 cluster_manager.py stop --cluster-folder "$STANDALONE_FOLDER" || echo "Failed to stop standalone server gracefully"
+                  fi
+                  # Fallback cleanup using prefix if folders are unknown
+                  cd utils
+                  python3 cluster_manager.py stop --cluster-prefix "valkey-glide-CI" 2>/dev/null || echo "No clusters with prefix found"
 
             - name: Run benchmarks
               uses: ./.github/workflows/test-benchmark
@@ -352,6 +526,67 @@ jobs:
                   key: ${{ matrix.host.IMAGE }}-node
                   restore-keys: ${{ matrix.host.IMAGE }}
 
+            - name: Start Valkey cluster if needed
+              run: |
+                  # Check if valkey-server or redis-server is available
+                  if command -v valkey-server >/dev/null 2>&1 || command -v redis-server >/dev/null 2>&1; then
+                      echo "Server binaries found, tests will create clusters internally"
+                  else
+                      echo "No server binaries found, starting external clusters"
+                      cd utils
+                      CLUSTER_OUTPUT=$(python3 cluster_manager.py start --cluster-mode -n 3 -r 1)
+                      echo "Cluster startup output:"
+                      echo "$CLUSTER_OUTPUT"
+                      
+                      # Extract cluster nodes from output
+                      CLUSTER_NODES=$(echo "$CLUSTER_OUTPUT" | grep "CLUSTER_NODES=" | cut -d'=' -f2)
+                      CLUSTER_FOLDER=$(echo "$CLUSTER_OUTPUT" | grep "CLUSTER_FOLDER=" | cut -d'=' -f2)
+                      
+                      if [ -z "$CLUSTER_NODES" ]; then
+                          echo "Failed to start cluster - no CLUSTER_NODES found in output"
+                          exit 1
+                      fi
+                      
+                      echo "CLUSTER_ENDPOINTS=$CLUSTER_NODES" >> $GITHUB_ENV
+                      echo "CLUSTER_FOLDER=$CLUSTER_FOLDER" >> $GITHUB_ENV
+                      echo "Cluster started successfully with nodes: $CLUSTER_NODES"
+                      echo "Cluster folder: $CLUSTER_FOLDER"
+                      
+                      # Start a standalone server for tests that need it
+                      STANDALONE_OUTPUT=$(python3 cluster_manager.py start -n 1 -r 0)
+                      echo "Standalone startup output:"
+                      echo "$STANDALONE_OUTPUT"
+                      
+                      STANDALONE_NODES=$(echo "$STANDALONE_OUTPUT" | grep "CLUSTER_NODES=" | cut -d'=' -f2)
+                      STANDALONE_FOLDER=$(echo "$STANDALONE_OUTPUT" | grep "CLUSTER_FOLDER=" | cut -d'=' -f2)
+                      
+                      if [ -z "$STANDALONE_NODES" ]; then
+                          echo "Failed to start standalone server - no CLUSTER_NODES found in output"
+                          exit 1
+                      fi
+                      
+                      echo "STANDALONE_ENDPOINTS=$STANDALONE_NODES" >> $GITHUB_ENV
+                      echo "STANDALONE_FOLDER=$STANDALONE_FOLDER" >> $GITHUB_ENV
+                      echo "Standalone server started successfully: $STANDALONE_NODES"
+                      echo "Standalone folder: $STANDALONE_FOLDER"
+                      
+                      # Wait for all ports to be available
+                      ALL_PORTS="${CLUSTER_NODES},${STANDALONE_NODES}"
+                      for port in $(echo "$ALL_PORTS" | tr ',' '\n' | cut -d':' -f2); do
+                          for i in {1..30}; do
+                              if timeout 1 bash -c "</dev/tcp/127.0.0.1/$port" 2>/dev/null; then
+                                  echo "Port $port is available"
+                                  break
+                              fi
+                              if [ $i -eq 30 ]; then
+                                  echo "Port $port is not available after 30 attempts"
+                                  exit 1
+                              fi
+                              sleep 1
+                          done
+                      done
+                  fi
+
             - name: Build and Test
               working-directory: ./node
               env:
@@ -374,7 +609,28 @@ jobs:
                   rustc --version || echo "rustc command failed"
 
                   npm run build
-                  npm run test
+                  if [ -n "$CLUSTER_ENDPOINTS" ]; then
+                      npm run test -- --cluster-endpoints="$CLUSTER_ENDPOINTS" --standalone-endpoints="$STANDALONE_ENDPOINTS"
+                  else
+                      npm run test
+                  fi
+
+            - name: Stop Valkey cluster
+              if: always()
+              run: |
+                  if [ -n "$CLUSTER_FOLDER" ]; then
+                      echo "Stopping cluster in folder: $CLUSTER_FOLDER"
+                      cd utils
+                      python3 cluster_manager.py stop --cluster-folder "$CLUSTER_FOLDER" || echo "Failed to stop cluster gracefully"
+                  fi
+                  if [ -n "$STANDALONE_FOLDER" ]; then
+                      echo "Stopping standalone server in folder: $STANDALONE_FOLDER"
+                      cd utils
+                      python3 cluster_manager.py stop --cluster-folder "$STANDALONE_FOLDER" || echo "Failed to stop standalone server gracefully"
+                  fi
+                  # Fallback cleanup using prefix if folders are unknown
+                  cd utils
+                  python3 cluster_manager.py stop --cluster-prefix "valkey-glide-CI" 2>/dev/null || echo "No clusters with prefix found"
 
             - name: Sanitize IMAGE variable
               if: ${{ matrix.host.TARGET == 'x86_64-unknown-linux-musl' }}
