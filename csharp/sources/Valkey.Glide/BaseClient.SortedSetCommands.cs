@@ -30,4 +30,36 @@ public abstract partial class BaseClient : ISortedSetCommands
 
     public async Task<long> SortedSetRemoveAsync(ValkeyKey key, ValkeyValue[] members, CommandFlags flags = CommandFlags.None)
         => await Command(Request.SortedSetRemoveAsync(key, members, flags));
+
+    public async Task<long> SortedSetLengthAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None)
+        => await Command(Request.SortedSetLengthAsync(key, flags));
+
+    public async Task<long> SortedSetCountAsync(ValkeyKey key, double min = double.NegativeInfinity, double max = double.PositiveInfinity, Exclude exclude = Exclude.None, CommandFlags flags = CommandFlags.None)
+        => await Command(Request.SortedSetCountAsync(key, min, max, exclude, flags));
+
+    public async Task<ValkeyValue[]> SortedSetRangeByRankAsync(ValkeyKey key, long start = 0, long stop = -1, Order order = Order.Ascending, CommandFlags flags = CommandFlags.None)
+        => await Command(Request.SortedSetRangeByRankAsync(key, start, stop, order, flags));
+
+    public async Task<SortedSetEntry[]> SortedSetRangeByRankWithScoresAsync(ValkeyKey key, long start = 0, long stop = -1, Order order = Order.Ascending, CommandFlags flags = CommandFlags.None)
+        => await Command(Request.SortedSetRangeByRankWithScoresAsync(key, start, stop, order, flags));
+
+    public async Task<ValkeyValue[]> SortedSetRangeByScoreAsync(ValkeyKey key, double start = double.NegativeInfinity, double stop = double.PositiveInfinity, Exclude exclude = Exclude.None, Order order = Order.Ascending, long skip = 0, long take = -1, CommandFlags flags = CommandFlags.None)
+        => await Command(Request.SortedSetRangeByScoreAsync(key, start, stop, exclude, order, skip, take, flags));
+
+    public async Task<SortedSetEntry[]> SortedSetRangeByScoreWithScoresAsync(ValkeyKey key, double start = double.NegativeInfinity, double stop = double.PositiveInfinity, Exclude exclude = Exclude.None, Order order = Order.Ascending, long skip = 0, long take = -1, CommandFlags flags = CommandFlags.None)
+        => await Command(Request.SortedSetRangeByScoreWithScoresAsync(key, start, stop, exclude, order, skip, take, flags));
+
+    public async Task<ValkeyValue[]> SortedSetRangeByValueAsync(ValkeyKey key, ValkeyValue min, ValkeyValue max, Exclude exclude, long skip, long take, CommandFlags flags = CommandFlags.None)
+        => await SortedSetRangeByValueAsync(key, min, max, exclude, Order.Ascending, skip, take, flags);
+
+    public async Task<ValkeyValue[]> SortedSetRangeByValueAsync(
+        ValkeyKey key,
+        ValkeyValue min = default,
+        ValkeyValue max = default,
+        Exclude exclude = Exclude.None,
+        Order order = Order.Ascending,
+        long skip = 0,
+        long take = -1,
+        CommandFlags flags = CommandFlags.None)
+        => await Command(Request.SortedSetRangeByValueAsync(key, min, max, exclude, order, skip, take, flags));
 }
