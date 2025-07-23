@@ -116,7 +116,7 @@ jobs:
                       csharp/rust/target/release/*.dll
 
     build-package-to-publish:
-        needs: [set-release-version, create-binaries-to-publish]
+        needs: [set-release-version, create-binaries]
         runs-on: ubuntu-latest
         env:
             RELEASE_VERSION: ${{ needs.set-release-version.outputs.RELEASE_VERSION }}
@@ -158,7 +158,8 @@ jobs:
 
     publish:
         # environment: AWS_ACTIONS
-        if: ${{ (inputs.nuget_publish == true || github.event_name == 'push') && github.repository_owner == 'valkey-io' }}
+        # if: ${{ (inputs.nuget_publish == true || github.event_name == 'push') && github.repository_owner == 'valkey-io' }}
+        if: ${{ (inputs.nuget_publish == true) && github.repository_owner == 'valkey-io' }}
         needs: [build-package-to-publish]
         runs-on: ubuntu-latest
         steps:
