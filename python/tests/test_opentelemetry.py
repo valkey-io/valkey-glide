@@ -3,7 +3,8 @@
 import gc
 import json
 import os
-from typing import Dict, List, Tuple
+import time
+from typing import Dict, List, Optional, Tuple
 
 import anyio
 import psutil  # type: ignore[import-untyped]
@@ -33,7 +34,8 @@ def read_and_parse_span_file(path: str) -> Tuple[str, List[Dict], List[str]]:
         path: The path to the span file
 
     Returns:
-        A tuple containing the raw span data, array of spans, and array of span names
+        A tuple containing the raw span data, array of spans, and array of
+        span names
 
     Raises:
         Exception: If the file cannot be read or parsed
@@ -62,6 +64,113 @@ def read_and_parse_span_file(path: str) -> Tuple[str, List[Dict], List[str]]:
             continue
 
     return span_data, span_objects, [name for name in span_names if name]
+
+
+def _check_span_counts(
+    span_names: List[str], expected_span_counts: Dict[str, int]
+) -> List[str]:
+    """Check if span counts meet expectations."""
+    insufficient_counts = []
+    for span_name, expected_count in expected_span_counts.items():
+        actual_count = span_names.count(span_name)
+        if actual_count < expected_count:
+            insufficient_counts.append(
+                f"{span_name} (expected: {expected_count}, actual: {actual_count})"
+            )
+    return insufficient_counts
+
+
+def _check_spans_ready(
+    span_names: List[str],
+    expected_span_names: List[str],
+    expected_span_counts: Optional[Dict[str, int]] = None,
+) -> bool:
+    """Check if all expected spans are ready."""
+    missing_spans = [name for name in expected_span_names if name not in span_names]
+
+    if expected_span_counts:
+        insufficient_counts = _check_span_counts(span_names, expected_span_counts)
+        return not missing_spans and not insufficient_counts
+    else:
+        return not missing_spans
+
+
+def _build_timeout_error(
+    span_file_path: str,
+    expected_span_names: List[str],
+    expected_span_counts: Optional[Dict[str, int]] = None,
+) -> Exception:
+    """Build appropriate timeout error message."""
+    if not os.path.exists(span_file_path):
+        return Exception(
+            f"Timeout waiting for spans. Span file {span_file_path} does not exist"
+        )
+
+    try:
+        _, _, span_names = read_and_parse_span_file(span_file_path)
+        if expected_span_counts:
+            count_info = {}
+            for span_name in expected_span_names:
+                count_info[span_name] = span_names.count(span_name)
+            return Exception(
+                f"Timeout waiting for spans. Expected {expected_span_names} "
+                f"with counts {expected_span_counts}, but found {count_info}"
+            )
+        else:
+            return Exception(
+                f"Timeout waiting for spans. Expected {expected_span_names}, "
+                f"but found {span_names}"
+            )
+    except Exception as e:
+        return Exception(
+            f"Timeout waiting for spans. File exists but couldn't be read: {str(e)}"
+        )
+
+
+async def wait_for_spans_to_be_flushed(
+    span_file_path: str,
+    expected_span_names: List[str],
+    expected_span_counts: Optional[Dict[str, int]] = None,
+    timeout: float = 15.0,
+    check_interval: float = 0.5,
+) -> None:
+    """
+    Wait for spans to be flushed to the span file with retry mechanism.
+
+    Args:
+        span_file_path: Path to the span file
+        expected_span_names: List of expected span names to wait for
+        expected_span_counts: Optional dict mapping span names to expected
+            counts
+        timeout: Maximum time to wait in seconds
+        check_interval: Interval between checks in seconds
+
+    Raises:
+        Exception: If timeout is reached or spans are not found
+    """
+    start_time = time.time()
+
+    while time.time() - start_time < timeout:
+        # Check if file exists and is readable
+        if os.path.exists(span_file_path) and os.path.getsize(span_file_path) > 0:
+            try:
+                _, _, span_names = read_and_parse_span_file(span_file_path)
+
+                if _check_spans_ready(
+                    span_names, expected_span_names, expected_span_counts
+                ):
+                    return  # All expected spans found
+
+            except Exception:
+                # File might be in the process of being written, continue waiting
+                pass
+
+        await anyio.sleep(check_interval)
+
+    # Timeout reached
+    raise _build_timeout_error(
+        span_file_path, expected_span_names, expected_span_counts
+    )
 
 
 def test_wrong_opentelemetry_config():
@@ -207,9 +316,13 @@ class TestOpenTelemetryGlide:
 
         # Initialize OpenTelemetry
         OpenTelemetry.init(opentelemetry_config)
-        # Clean up before each test
+
+        # Clean up before each test - ensure file is completely removed
         if os.path.exists(VALID_ENDPOINT_TRACES):
             os.unlink(VALID_ENDPOINT_TRACES)
+
+        # Give a small delay to ensure OpenTelemetry is fully initialized
+        await anyio.sleep(0.1)
 
         yield
 
@@ -427,7 +540,11 @@ class TestOpenTelemetryGlide:
             await client.get(key)
 
         # Wait for spans to be flushed
-        await anyio.sleep(5)
+        await wait_for_spans_to_be_flushed(
+            VALID_ENDPOINT_TRACES,
+            expected_span_names=["Get"],
+            expected_span_counts={"Get": 10},
+        )
 
         # Read the span file and check span names
         _, _, span_names = read_and_parse_span_file(VALID_ENDPOINT_TRACES)
@@ -514,7 +631,9 @@ class TestOpenTelemetryGlide:
             assert response[1] >= 1  # batch.object_refcount("test_key")
 
         # Wait for spans to be flushed
-        await anyio.sleep(5)
+        await wait_for_spans_to_be_flushed(
+            VALID_ENDPOINT_TRACES, expected_span_names=["Batch", "send_batch"]
+        )
 
         # Read the span file and check span names
         _, _, span_names = read_and_parse_span_file(VALID_ENDPOINT_TRACES)
@@ -562,8 +681,10 @@ class TestOpenTelemetryGlide:
         await client1.set("test_key", "value")
         await client2.get("test_key")
 
-        # Wait for spans to be flushed
-        await anyio.sleep(5)
+        # Wait for spans to be flushed with retry mechanism
+        await wait_for_spans_to_be_flushed(
+            VALID_ENDPOINT_TRACES, expected_span_names=["Set", "Get"]
+        )
 
         # Read the span file and check span names
         _, _, span_names = read_and_parse_span_file(VALID_ENDPOINT_TRACES)

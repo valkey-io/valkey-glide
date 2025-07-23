@@ -9,8 +9,8 @@ repositories {
 }
 
 dependencies {
-    // client
-    implementation group: 'io.valkey', name: 'valkey-glide', version: project.ext.defaultReleaseVersion, classifier: osdetector.classifier
+    // client - use local project dependency to access compatibility layer
+    implementation project(':client')
 
     implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.13.0'
     implementation 'com.google.code.gson:gson:2.10.1'
@@ -23,8 +23,8 @@ dependencies {
     implementation group: 'org.semver4j', name: 'semver4j', version: '5.6.0'
 
     //lombok
-    testCompileOnly 'org.projectlombok:lombok:1.18.32'
-    testAnnotationProcessor 'org.projectlombok:lombok:1.18.32'
+    testCompileOnly 'org.projectlombok:lombok:1.18.38'
+    testAnnotationProcessor 'org.projectlombok:lombok:1.18.38'
 }
 
 def standaloneHosts = ''
