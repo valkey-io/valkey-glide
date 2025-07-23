@@ -1974,6 +1974,49 @@ pub extern "C" fn create_batch_otel_span() -> u64 {
     ptr as u64
 }
 
+/// Creates an OpenTelemetry span with a custom name and returns a pointer to the span as u64.
+/// This function is intended for creating parent spans that can be used with create_otel_span_with_parent.
+/// Returns 0 on failure.
+///
+/// # Parameters
+/// * `span_name`: A null-terminated C string containing the name for the span
+///
+/// # Returns
+/// * A u64 pointer to the created span, or 0 if creation fails
+///
+/// # Safety
+/// * `span_name` must be a valid pointer to a null-terminated C string
+/// * The string must be valid UTF-8
+/// * The caller is responsible for eventually calling drop_otel_span with the returned pointer
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn create_named_otel_span(span_name: *const c_char) -> u64 {
+    // Validate input pointer
+    if span_name.is_null() {
+        return 0;
+    }
+
+    // Convert C string to Rust string with safe error handling
+    let c_str = match unsafe { CStr::from_ptr(span_name) } {
+        c_str => c_str,
+    };
+    
+    let name_str = match c_str.to_str() {
+        Ok(s) => s,
+        Err(_) => return 0, // Return 0 if string is not valid UTF-8
+    };
+
+    // Validate string length (reasonable limit to prevent abuse)
+    if name_str.len() > 256 {
+        return 0;
+    }
+
+    // Create the named span using Rust core method
+    let span = GlideOpenTelemetry::new_named_span(name_str);
+    let arc = Arc::new(span);
+    let ptr = Arc::into_raw(arc);
+    ptr as u64
+}
+
 /// Creates an OpenTelemetry span with the given request type as a child of the provided parent span.
 /// Returns a pointer to the child span as u64, or 0 on failure.
 ///
