@@ -55,7 +55,7 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <Link>lib%(FileName)%(Extension)</Link>
     </Content>
-    <Content Include="$(MSBuildThisFileDirectory)../../rust/target/$(Configuration.ToLower())/libglide_rs.so" Condition="$([MSBuild]::IsOSPlatform('Linux'))" Pack="false">
+    <Content Include="$(MSBuildThisFileDirectory)../../rust/target/$(Configuration.ToLower())/libglide_rs.so" Condition="$([MSBuild]::IsOSPlatform('Linux'))">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <Link>%(FileName)%(Extension)</Link>
     </Content>
