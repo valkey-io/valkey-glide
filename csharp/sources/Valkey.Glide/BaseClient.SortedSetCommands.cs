@@ -38,7 +38,7 @@ public abstract partial class BaseClient : ISortedSetCommands
         {
             return await SortedSetCardAsync(key, flags);
         }
-        
+
         // Otherwise use ZCOUNT with the specified range
         return await SortedSetCountAsync(key, min, max, exclude, flags);
     }

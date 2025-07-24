@@ -29,7 +29,7 @@ public abstract partial class BaseBatch<T>
         {
             return SortedSetCard(key);
         }
-        
+
         // Otherwise use ZCOUNT with the specified range
         return SortedSetCount(key, min, max, exclude);
     }
