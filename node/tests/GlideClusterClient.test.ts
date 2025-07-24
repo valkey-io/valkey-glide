@@ -78,6 +78,9 @@ describe("GlideClusterClient", () => {
                 getServerVersion,
             );
 
+            // Add small delay between cluster initializations to prevent socket contention
+            await new Promise((resolve) => setTimeout(resolve, 100));
+
             // Initialize cluster from existing addresses for AzAffinity test
             azCluster = await ValkeyCluster.initFromExistingCluster(
                 true,
@@ -91,6 +94,9 @@ describe("GlideClusterClient", () => {
                 1,
                 getServerVersion,
             );
+
+            // Add small delay between cluster creations to prevent socket contention
+            await new Promise((resolve) => setTimeout(resolve, 100));
 
             azCluster = await ValkeyCluster.createCluster(
                 true,
@@ -111,9 +117,13 @@ describe("GlideClusterClient", () => {
     afterAll(async () => {
         if (testsFailed === 0) {
             if (cluster) await cluster.close();
+            // Add small delay between cluster closures to prevent socket contention
+            await new Promise((resolve) => setTimeout(resolve, 50));
             if (azCluster) await azCluster.close();
         } else {
             if (cluster) await cluster.close(true);
+            // Add small delay between cluster closures to prevent socket contention
+            await new Promise((resolve) => setTimeout(resolve, 50));
             if (azCluster) await azCluster.close(true);
         }
     });

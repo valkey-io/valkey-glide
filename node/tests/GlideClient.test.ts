@@ -68,6 +68,9 @@ describe("GlideClient", () => {
               )
             : await ValkeyCluster.createCluster(false, 1, 1, getServerVersion);
 
+        // Add small delay between cluster initializations to prevent socket contention
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
         azCluster = standaloneAddresses
             ? await ValkeyCluster.initFromExistingCluster(
                   false,
@@ -87,9 +90,13 @@ describe("GlideClient", () => {
     afterAll(async () => {
         if (testsFailed === 0) {
             await cluster.close();
+            // Add small delay between cluster closures to prevent socket contention
+            await new Promise((resolve) => setTimeout(resolve, 50));
             await azCluster.close();
         } else {
             await cluster.close(true);
+            // Add small delay between cluster closures to prevent socket contention
+            await new Promise((resolve) => setTimeout(resolve, 50));
             await azCluster.close();
         }
     }, TIMEOUT);
