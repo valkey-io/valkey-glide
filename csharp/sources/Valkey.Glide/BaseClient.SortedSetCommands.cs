@@ -31,8 +31,20 @@ public abstract partial class BaseClient : ISortedSetCommands
     public async Task<long> SortedSetRemoveAsync(ValkeyKey key, ValkeyValue[] members, CommandFlags flags = CommandFlags.None)
         => await Command(Request.SortedSetRemoveAsync(key, members, flags));
 
-    public async Task<long> SortedSetLengthAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None)
-        => await Command(Request.SortedSetLengthAsync(key, flags));
+    public async Task<long> SortedSetLengthAsync(ValkeyKey key, double min = double.NegativeInfinity, double max = double.PositiveInfinity, Exclude exclude = Exclude.None, CommandFlags flags = CommandFlags.None)
+    {
+        // If both min and max are infinity (default values), use ZCARD
+        if (double.IsNegativeInfinity(min) && double.IsPositiveInfinity(max))
+        {
+            return await Command(Request.SortedSetCardAsync(key, flags));
+        }
+        
+        // Otherwise use ZCOUNT with the specified range
+        return await Command(Request.SortedSetCountAsync(key, min, max, exclude, flags));
+    }
+
+    public async Task<long> SortedSetCardAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None)
+        => await Command(Request.SortedSetCardAsync(key, flags));
 
     public async Task<long> SortedSetCountAsync(ValkeyKey key, double min = double.NegativeInfinity, double max = double.PositiveInfinity, Exclude exclude = Exclude.None, CommandFlags flags = CommandFlags.None)
         => await Command(Request.SortedSetCountAsync(key, min, max, exclude, flags));

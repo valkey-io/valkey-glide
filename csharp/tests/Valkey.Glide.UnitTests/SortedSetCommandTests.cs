@@ -74,7 +74,13 @@ public class SortedSetCommandTests
 
             // SortedSetRemove exceptions
             () => Assert.Throws<NotImplementedException>(() => Request.SortedSetRemoveAsync("key", "member", CommandFlags.DemandReplica)),
-            () => Assert.Throws<NotImplementedException>(() => Request.SortedSetRemoveAsync("key", ["member1", "member2"], CommandFlags.DemandReplica))
+            () => Assert.Throws<NotImplementedException>(() => Request.SortedSetRemoveAsync("key", ["member1", "member2"], CommandFlags.DemandReplica)),
+
+            // SortedSetCard exceptions
+            () => Assert.Throws<NotImplementedException>(() => Request.SortedSetCardAsync("key", CommandFlags.DemandReplica)),
+
+            // SortedSetCount exceptions
+            () => Assert.Throws<NotImplementedException>(() => Request.SortedSetCountAsync("key", 1.0, 10.0, Exclude.None, CommandFlags.DemandReplica))
         );
     }
 
@@ -133,16 +139,16 @@ public class SortedSetCommandTests
     }
 
     [Fact]
-    public void SortedSetLengthAsync_ValidatesArguments()
+    public void SortedSetCardAsync_ValidatesArguments()
     {
         Assert.Multiple(
             // Basic ZCARD command
-            () => Assert.Equal(["ZCARD", "key"], Request.SortedSetLengthAsync("key").GetArgs()),
-            () => Assert.Equal(["ZCARD", "mykey"], Request.SortedSetLengthAsync("mykey").GetArgs()),
-            () => Assert.Equal(["ZCARD", "test:sorted:set"], Request.SortedSetLengthAsync("test:sorted:set").GetArgs()),
+            () => Assert.Equal(["ZCARD", "key"], Request.SortedSetCardAsync("key").GetArgs()),
+            () => Assert.Equal(["ZCARD", "mykey"], Request.SortedSetCardAsync("mykey").GetArgs()),
+            () => Assert.Equal(["ZCARD", "test:sorted:set"], Request.SortedSetCardAsync("test:sorted:set").GetArgs()),
 
             // Empty key should work
-            () => Assert.Equal(["ZCARD", ""], Request.SortedSetLengthAsync("").GetArgs())
+            () => Assert.Equal(["ZCARD", ""], Request.SortedSetCardAsync("").GetArgs())
         );
     }
 

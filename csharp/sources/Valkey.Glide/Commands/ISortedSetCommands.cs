@@ -108,6 +108,30 @@ public interface ISortedSetCommands
     Task<long> SortedSetRemoveAsync(ValkeyKey key, ValkeyValue[] members, CommandFlags flags = CommandFlags.None);
 
     /// <summary>
+    /// Returns the sorted set cardinality (number of elements) of the sorted set stored at key.
+    /// </summary>
+    /// <seealso href="https://valkey.io/commands/zcard"/>
+    /// <seealso href="https://valkey.io/commands/zcount"/>
+    /// <param name="key">The key of the sorted set.</param>
+    /// <param name="min">The min score to filter by (defaults to negative infinity).</param>
+    /// <param name="max">The max score to filter by (defaults to positive infinity).</param>
+    /// <param name="exclude">Whether to exclude <paramref name="min"/> and <paramref name="max"/> from the range check (defaults to both inclusive).</param>
+    /// <param name="flags">The flags to use for this operation. Currently flags are ignored.</param>
+    /// <returns>The cardinality (number of elements) of the sorted set, or 0 if key does not exist.</returns>
+    /// <remarks>
+    /// <example>
+    /// <code>
+    /// // Get total cardinality
+    /// long totalCount = await client.SortedSetLengthAsync(key);
+    /// 
+    /// // Count elements in score range
+    /// long rangeCount = await client.SortedSetLengthAsync(key, 1.0, 10.0);
+    /// </code>
+    /// </example>
+    /// </remarks>
+    Task<long> SortedSetLengthAsync(ValkeyKey key, double min = double.NegativeInfinity, double max = double.PositiveInfinity, Exclude exclude = Exclude.None, CommandFlags flags = CommandFlags.None);
+
+    /// <summary>
     /// Returns the cardinality (number of elements) of the sorted set stored at key.
     /// </summary>
     /// <seealso href="https://valkey.io/commands/zcard"/>
@@ -121,11 +145,11 @@ public interface ISortedSetCommands
     /// <remarks>
     /// <example>
     /// <code>
-    /// long result = await client.SortedSetLengthAsync(key);
+    /// long result = await client.SortedSetCardAsync(key);
     /// </code>
     /// </example>
     /// </remarks>
-    Task<long> SortedSetLengthAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None);
+    Task<long> SortedSetCardAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None);
 
     /// <summary>
     /// Returns the number of members in the sorted set stored at key with scores between min and max score.

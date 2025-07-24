@@ -407,12 +407,23 @@ internal class BatchTestUtils
         _ = batch.SortedSetAdd(key1, "testMember3", 3.0);
         testData.Add(new(true, "SortedSetAdd(key1, testMember3, 3.0)"));
 
-        // Test SortedSetLength
+        // Test SortedSetLength (uses ZCARD)
         _ = batch.SortedSetLength(key1);
         testData.Add(new(3L, "SortedSetLength(key1)"));
 
         _ = batch.SortedSetLength(key2);
         testData.Add(new(1L, "SortedSetLength(key2)"));
+
+        // Test SortedSetLength with range (uses ZCOUNT)
+        _ = batch.SortedSetLength(key1, 1.5, 2.5);
+        testData.Add(new(1L, "SortedSetLength(key1, 1.5, 2.5)"));
+
+        // Test SortedSetCard (ZCARD)
+        _ = batch.SortedSetCard(key1);
+        testData.Add(new(3L, "SortedSetCard(key1)"));
+
+        _ = batch.SortedSetCard(key2);
+        testData.Add(new(1L, "SortedSetCard(key2)"));
 
         // Test SortedSetCount
         _ = batch.SortedSetCount(key1);

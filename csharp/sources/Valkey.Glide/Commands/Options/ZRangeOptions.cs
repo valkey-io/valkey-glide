@@ -99,7 +99,7 @@ public class RangeByIndex(long start, long stop)
     /// Converts the query to command arguments.
     /// </summary>
     /// <returns>An array of string arguments for the command.</returns>
-    public string[] ToArgs()
+    internal string[] ToArgs()
     {
         List<string> args = [
             Start.ToString(CultureInfo.InvariantCulture),
@@ -168,7 +168,7 @@ public class RangeByScore(ScoreBoundary start, ScoreBoundary end)
     /// Converts the query to command arguments.
     /// </summary>
     /// <returns>An array of string arguments for the command.</returns>
-    public string[] ToArgs()
+    internal string[] ToArgs()
     {
         List<string> args = [];
 
@@ -256,7 +256,7 @@ public class RangeByLex(LexBoundary start, LexBoundary end)
     /// Converts the query to command arguments.
     /// </summary>
     /// <returns>An array of string arguments for the command.</returns>
-    public string[] ToArgs()
+    internal string[] ToArgs()
     {
         List<string> args = [];
 

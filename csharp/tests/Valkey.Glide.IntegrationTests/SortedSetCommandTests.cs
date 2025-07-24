@@ -317,17 +317,52 @@ public class SortedSetCommandTests(TestConfiguration config)
 
         // Test on non-existent key
         Assert.Equal(0, await client.SortedSetLengthAsync(key));
+        Assert.Equal(0, await client.SortedSetLengthAsync(key, 1.0, 10.0));
 
-        // Add members and test length
+        // Add members with different scores
+        Assert.True(await client.SortedSetAddAsync(key, "member1", 1.0));
+        Assert.True(await client.SortedSetAddAsync(key, "member2", 2.5));
+        Assert.True(await client.SortedSetAddAsync(key, "member3", 5.0));
+        Assert.True(await client.SortedSetAddAsync(key, "member4", 8.0));
+
+        // Test cardinality (default infinity parameters use ZCARD)
+        Assert.Equal(4, await client.SortedSetLengthAsync(key));
+        Assert.Equal(4, await client.SortedSetLengthAsync(key, double.NegativeInfinity, double.PositiveInfinity));
+
+        // Test count with range parameters (uses ZCOUNT)
+        Assert.Equal(2, await client.SortedSetLengthAsync(key, 2.0, 6.0));
+        Assert.Equal(1, await client.SortedSetLengthAsync(key, 2.5, 5.0, Exclude.Start));
+        Assert.Equal(1, await client.SortedSetLengthAsync(key, 2.5, 5.0, Exclude.Stop));
+        Assert.Equal(0, await client.SortedSetLengthAsync(key, 2.5, 5.0, Exclude.Both));
+
+        // Test with no matches
+        Assert.Equal(0, await client.SortedSetLengthAsync(key, 15.0, 20.0));
+
+        // Remove a member and test both modes
+        Assert.True(await client.SortedSetRemoveAsync(key, "member2"));
+        Assert.Equal(3, await client.SortedSetLengthAsync(key));
+        Assert.Equal(1, await client.SortedSetLengthAsync(key, 2.0, 6.0));
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
+    public async Task TestSortedSetCardAsync(BaseClient client)
+    {
+        string key = Guid.NewGuid().ToString();
+
+        // Test on non-existent key
+        Assert.Equal(0, await client.SortedSetCardAsync(key));
+
+        // Add members and test cardinality
         Assert.True(await client.SortedSetAddAsync(key, "member1", 1.0));
         Assert.True(await client.SortedSetAddAsync(key, "member2", 2.0));
         Assert.True(await client.SortedSetAddAsync(key, "member3", 3.0));
 
-        Assert.Equal(3, await client.SortedSetLengthAsync(key));
+        Assert.Equal(3, await client.SortedSetCardAsync(key));
 
-        // Remove a member and test length
+        // Remove a member and test cardinality
         Assert.True(await client.SortedSetRemoveAsync(key, "member2"));
-        Assert.Equal(2, await client.SortedSetLengthAsync(key));
+        Assert.Equal(2, await client.SortedSetCardAsync(key));
     }
 
     [Theory(DisableDiscoveryEnumeration = true)]

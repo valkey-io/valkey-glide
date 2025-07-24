@@ -86,7 +86,7 @@ internal partial class Request
         return Simple<long>(RequestType.ZRem, [.. args]);
     }
 
-    public static Cmd<long, long> SortedSetLengthAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None)
+    public static Cmd<long, long> SortedSetCardAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None)
     {
         Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
 

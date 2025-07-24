@@ -238,7 +238,7 @@ public class CommandTests
             () => Assert.True(Request.SortedSetRemoveAsync("key", "member").Converter(1L)),
             () => Assert.False(Request.SortedSetRemoveAsync("key", "member").Converter(0L)),
             () => Assert.Equal(2L, Request.SortedSetRemoveAsync("key", ["member1", "member2"]).Converter(2L)),
-            () => Assert.Equal(5L, Request.SortedSetLengthAsync("key").Converter(5L)),
+            () => Assert.Equal(5L, Request.SortedSetCardAsync("key").Converter(5L)),
             () => Assert.Equal(3L, Request.SortedSetCountAsync("key", 1.0, 10.0).Converter(3L)),
             () => Assert.Equal(0L, Request.SortedSetCountAsync("key").Converter(0L))
         );

@@ -21,8 +21,21 @@ public abstract partial class BaseBatch<T>
     /// <inheritdoc cref="IBatchSortedSetCommands.SortedSetRemove(ValkeyKey, ValkeyValue[])" />
     public T SortedSetRemove(ValkeyKey key, ValkeyValue[] members) => AddCmd(SortedSetRemoveAsync(key, members));
 
-    /// <inheritdoc cref="IBatchSortedSetCommands.SortedSetLength(ValkeyKey)" />
-    public T SortedSetLength(ValkeyKey key) => AddCmd(SortedSetLengthAsync(key));
+    /// <inheritdoc cref="IBatchSortedSetCommands.SortedSetLength(ValkeyKey, double, double, Exclude)" />
+    public T SortedSetLength(ValkeyKey key, double min = double.NegativeInfinity, double max = double.PositiveInfinity, Exclude exclude = Exclude.None)
+    {
+        // If both min and max are infinity (default values), use ZCARD
+        if (double.IsNegativeInfinity(min) && double.IsPositiveInfinity(max))
+        {
+            return AddCmd(SortedSetCardAsync(key));
+        }
+        
+        // Otherwise use ZCOUNT with the specified range
+        return AddCmd(SortedSetCountAsync(key, min, max, exclude));
+    }
+
+    /// <inheritdoc cref="IBatchSortedSetCommands.SortedSetCard(ValkeyKey)" />
+    public T SortedSetCard(ValkeyKey key) => AddCmd(SortedSetCardAsync(key));
 
     /// <inheritdoc cref="IBatchSortedSetCommands.SortedSetCount(ValkeyKey, double, double, Exclude)" />
     public T SortedSetCount(ValkeyKey key, double min = double.NegativeInfinity, double max = double.PositiveInfinity, Exclude exclude = Exclude.None) => AddCmd(SortedSetCountAsync(key, min, max, exclude));
@@ -50,7 +63,8 @@ public abstract partial class BaseBatch<T>
     IBatch IBatchSortedSetCommands.SortedSetAdd(ValkeyKey key, SortedSetEntry[] values, SortedSetWhen when) => SortedSetAdd(key, values, when);
     IBatch IBatchSortedSetCommands.SortedSetRemove(ValkeyKey key, ValkeyValue member) => SortedSetRemove(key, member);
     IBatch IBatchSortedSetCommands.SortedSetRemove(ValkeyKey key, ValkeyValue[] members) => SortedSetRemove(key, members);
-    IBatch IBatchSortedSetCommands.SortedSetLength(ValkeyKey key) => SortedSetLength(key);
+    IBatch IBatchSortedSetCommands.SortedSetLength(ValkeyKey key, double min, double max, Exclude exclude) => SortedSetLength(key, min, max, exclude);
+    IBatch IBatchSortedSetCommands.SortedSetCard(ValkeyKey key) => SortedSetCard(key);
     IBatch IBatchSortedSetCommands.SortedSetCount(ValkeyKey key, double min, double max, Exclude exclude) => SortedSetCount(key, min, max, exclude);
     IBatch IBatchSortedSetCommands.SortedSetRangeByRank(ValkeyKey key, long start, long stop, Order order) => SortedSetRangeByRank(key, start, stop, order);
     IBatch IBatchSortedSetCommands.SortedSetRangeByRankWithScores(ValkeyKey key, long start, long stop, Order order) => SortedSetRangeByRankWithScores(key, start, stop, order);
