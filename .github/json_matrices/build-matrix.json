@@ -90,7 +90,7 @@
         "OS": "windows",
         "NAMED_OS": "windows",
         "RUNNER": "windows-11-arm",
-        "CD_RUNNER": "windows-2025",
+        "CD_RUNNER": "windows-11-arm",
         "ARCH": "arm64",
         "TARGET": "aarch64-pc-windows-msvc",
         "PACKAGE_MANAGERS": ["nuget"],
