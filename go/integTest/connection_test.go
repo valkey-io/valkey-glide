@@ -15,7 +15,7 @@ import (
 	"github.com/valkey-io/valkey-glide/go/v2/internal/interfaces"
 )
 
-func newDedicatedValkey(suite *GlideTestSuite, clusterMode bool) (string, error) {
+func startDedicatedValkeyServer(suite *GlideTestSuite, clusterMode bool) (string, error) {
 	// Build command arguments
 	args := []string{}
 	args = append(args, "start")
@@ -31,7 +31,7 @@ func newDedicatedValkey(suite *GlideTestSuite, clusterMode bool) (string, error)
 	return output, nil
 }
 
-func stopDedicatedValkey(suite *GlideTestSuite, clusterFolder string) {
+func stopDedicatedValkeyServer(suite *GlideTestSuite, clusterFolder string) {
 	args := []string{}
 	args = append(args, "stop", "--cluster-folder", clusterFolder)
 
@@ -285,11 +285,11 @@ func (suite *GlideTestSuite) TestLazyConnectionEstablishesOnFirstCommand() {
 		_, isCluster := client.(interfaces.GlideClusterClientCommands)
 
 		// Create a monitoring client (eagerly connected)
-		output, err := newDedicatedValkey(suite, isCluster)
+		output, err := startDedicatedValkeyServer(suite, isCluster)
 		suite.NoError(err)
 		clusterFolder := extractClusterFolder(suite, output)
 		addresses := extractAddresses(suite, output)
-		defer stopDedicatedValkey(suite, clusterFolder)
+		defer stopDedicatedValkeyServer(suite, clusterFolder)
 		monitoringClient, err := createDedicatedClient(addresses, isCluster, false)
 		suite.NoError(err)
 		defer monitoringClient.Close()
