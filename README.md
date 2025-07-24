@@ -54,14 +54,19 @@ The client currently supports Python, Java, Node.js, and Go. Active development 
 
 ## Getting Started
 
-**Documentation** 
-GLIDE's [documentation site](https://valkey.io/valkey-glide/) currently offers documentation for the Python and Node wrappers. 
+**Documentation**
+GLIDE's [documentation site](https://valkey.io/valkey-glide/) currently offers documentation for the Python and Node wrappers.
 
 **SDKs**
 - [Java](./java/README.md)
 - [Python](./python/README.md)
 - [Node](./node/README.md)
 - [Go](./go/README.md)
+
+**Under Development SDKs**
+- [C#](./csharp/README.md)
+- [C++](./cpp/README.md)
+- [Ruby](https://github.com/valkey-io/valkey-glide-ruby)
 
 **General Concepts:**
 - [Custom Command](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command)
