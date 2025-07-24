@@ -6,6 +6,10 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.*;
 
 import compatibility.clients.jedis.Jedis;
+import compatibility.clients.jedis.params.BitPosParams;
+import compatibility.clients.jedis.params.GetExParams;
+import compatibility.clients.jedis.params.ScanParams;
+import compatibility.clients.jedis.resps.ScanResult;
 import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.List;
@@ -341,12 +345,12 @@ public class JedisTest {
         String testKey = TEST_KEY_PREFIX + "getset";
 
         // Test GETSET on non-existent key
-        String result1 = glideJedis.getset(testKey, "new_value");
+        String result1 = glideJedis.getSet(testKey, "new_value");
         assertNull(result1, "GETSET should return null for non-existent key");
         assertEquals("new_value", glideJedis.get(testKey), "New value should be set");
 
         // Test GETSET on existing key
-        String result2 = glideJedis.getset(testKey, "newer_value");
+        String result2 = glideJedis.getSet(testKey, "newer_value");
         assertEquals("new_value", result2, "GETSET should return old value");
         assertEquals("newer_value", glideJedis.get(testKey), "Newer value should be set");
     }
@@ -360,12 +364,12 @@ public class JedisTest {
         String testKey = TEST_KEY_PREFIX + "setget";
 
         // Test SETGET on non-existent key
-        String result1 = glideJedis.setget(testKey, "new_value");
+        String result1 = glideJedis.setGet(testKey, "new_value");
         assertNull(result1, "SETGET should return null for non-existent key");
         assertEquals("new_value", glideJedis.get(testKey), "New value should be set");
 
         // Test SETGET on existing key
-        String result2 = glideJedis.setget(testKey, "newer_value");
+        String result2 = glideJedis.setGet(testKey, "newer_value");
         assertEquals("new_value", result2, "SETGET should return old value");
         assertEquals("newer_value", glideJedis.get(testKey), "Newer value should be set");
     }
@@ -383,12 +387,12 @@ public class JedisTest {
         glideJedis.set(testKey, testValue);
 
         // Test GETDEL
-        String result = glideJedis.getdel(testKey);
+        String result = glideJedis.getDel(testKey);
         assertEquals(testValue, result, "GETDEL should return the value");
         assertNull(glideJedis.get(testKey), "Key should be deleted after GETDEL");
 
         // Test GETDEL on non-existent key
-        String result2 = glideJedis.getdel(testKey + "_nonexistent");
+        String result2 = glideJedis.getDel(testKey + "_nonexistent");
         assertNull(result2, "GETDEL should return null for non-existent key");
     }
 
@@ -406,17 +410,21 @@ public class JedisTest {
         // Set up test data
         glideJedis.set(testKey, testValue);
 
-        // Test GETEX without options
-        String result1 = glideJedis.getex(testKey);
-        assertEquals(testValue, result1, "GETEX should return the value");
+        // Test GETEX with GetExParams - EX option
+        String result1 = glideJedis.getEx(testKey, GetExParams.getExParams().ex(60));
+        assertEquals(testValue, result1, "GETEX with EX should return the value");
 
-        // Test GETEX with EX option
-        String result2 = glideJedis.getex(testKey, "EX", "60");
-        assertEquals(testValue, result2, "GETEX with EX should return the value");
+        // Test GETEX with GetExParams - PX option
+        String result2 = glideJedis.getEx(testKey, GetExParams.getExParams().px(60000));
+        assertEquals(testValue, result2, "GETEX with PX should return the value");
+
+        // Test GETEX with GetExParams - PERSIST option
+        String result3 = glideJedis.getEx(testKey, GetExParams.getExParams().persist());
+        assertEquals(testValue, result3, "GETEX with PERSIST should return the value");
 
         // Test GETEX on non-existent key
-        String result3 = glideJedis.getex(testKey + "_nonexistent");
-        assertNull(result3, "GETEX should return null for non-existent key");
+        String result4 = glideJedis.getEx(testKey + "_nonexistent", GetExParams.getExParams().ex(60));
+        assertNull(result4, "GETEX should return null for non-existent key");
     }
 
     // ===== STRING MANIPULATION OPERATIONS =====
@@ -567,8 +575,9 @@ public class JedisTest {
         long result4 = glideJedis.bitpos(testKey, false);
         assertEquals(0L, result4, "BITPOS should return 0 for first unset bit");
 
-        // Test BITPOS with range
-        long result5 = glideJedis.bitpos(testKey, true, 0, 0);
+        // Test BITPOS with BitPosParams for range
+        BitPosParams params = new BitPosParams(0, 0);
+        long result5 = glideJedis.bitpos(testKey, true, params);
         assertEquals(2L, result5, "BITPOS should return 2 for first set bit in first byte");
     }
 
@@ -604,14 +613,14 @@ public class JedisTest {
         long result3 = glideJedis.bitop(Jedis.BitOP.XOR, destKey, key1, key2);
         assertEquals(1L, result3, "BITOP XOR should return length of result");
         // XOR result may not be valid UTF-8, so just verify the key exists
-        assertTrue(glideJedis.exists(destKey) > 0, "BITOP XOR result key should exist");
+        assertTrue(glideJedis.exists(destKey), "BITOP XOR result key should exist");
 
         // Test NOT operation (single key)
         long result4 = glideJedis.bitop(Jedis.BitOP.NOT, destKey, key1);
         assertEquals(1L, result4, "BITOP NOT should return length of result");
         // NOT result will be bitwise complement, which may not be valid UTF-8
         // Just verify the key exists
-        assertTrue(glideJedis.exists(destKey) > 0, "BITOP NOT result key should exist");
+        assertTrue(glideJedis.exists(destKey), "BITOP NOT result key should exist");
     }
 
     @Test
@@ -697,15 +706,15 @@ public class JedisTest {
         String testKey = TEST_KEY_PREFIX + "incrby";
 
         // Test INCRBY on non-existent key
-        Long result1 = glideJedis.incrby(testKey, 5);
+        Long result1 = glideJedis.incrBy(testKey, 5);
         assertEquals(5L, result1, "INCRBY should return 5 for non-existent key");
 
         // Test INCRBY on existing key
-        Long result2 = glideJedis.incrby(testKey, 10);
+        Long result2 = glideJedis.incrBy(testKey, 10);
         assertEquals(15L, result2, "INCRBY should increment by 10");
 
         // Test INCRBY with negative value
-        Long result3 = glideJedis.incrby(testKey, -3);
+        Long result3 = glideJedis.incrBy(testKey, -3);
         assertEquals(12L, result3, "INCRBY should handle negative increment");
     }
 
@@ -718,15 +727,15 @@ public class JedisTest {
         String testKey = TEST_KEY_PREFIX + "incrbyfloat";
 
         // Test INCRBYFLOAT on non-existent key
-        Double result1 = glideJedis.incrbyfloat(testKey, 2.5);
+        Double result1 = glideJedis.incrByFloat(testKey, 2.5);
         assertEquals(2.5, result1, 0.001, "INCRBYFLOAT should return 2.5 for non-existent key");
 
         // Test INCRBYFLOAT on existing key
-        Double result2 = glideJedis.incrbyfloat(testKey, 1.5);
+        Double result2 = glideJedis.incrByFloat(testKey, 1.5);
         assertEquals(4.0, result2, 0.001, "INCRBYFLOAT should increment by 1.5");
 
         // Test INCRBYFLOAT with negative value
-        Double result3 = glideJedis.incrbyfloat(testKey, -0.5);
+        Double result3 = glideJedis.incrByFloat(testKey, -0.5);
         assertEquals(3.5, result3, 0.001, "INCRBYFLOAT should handle negative increment");
     }
 
@@ -765,15 +774,15 @@ public class JedisTest {
         glideJedis.set(testKey, "20");
 
         // Test DECRBY
-        Long result1 = glideJedis.decrby(testKey, 5);
+        Long result1 = glideJedis.decrBy(testKey, 5);
         assertEquals(15L, result1, "DECRBY should decrement by 5");
 
         // Test DECRBY with larger value
-        Long result2 = glideJedis.decrby(testKey, 10);
+        Long result2 = glideJedis.decrBy(testKey, 10);
         assertEquals(5L, result2, "DECRBY should decrement by 10");
 
         // Test DECRBY with negative value (should increment)
-        Long result3 = glideJedis.decrby(testKey, -3);
+        Long result3 = glideJedis.decrBy(testKey, -3);
         assertEquals(8L, result3, "DECRBY should handle negative decrement");
     }
 
@@ -852,8 +861,8 @@ public class JedisTest {
         assertEquals(2L, result2, "EXISTS should return 2 for two existing keys out of three");
 
         // Test EXISTS on single key
-        Long result3 = glideJedis.exists(testKey1);
-        assertEquals(1L, result3, "EXISTS should return 1 for existing key");
+        boolean result3 = glideJedis.exists(testKey1);
+        assertTrue(result3, "EXISTS should return true for existing key");
     }
 
     @Test
@@ -918,7 +927,7 @@ public class JedisTest {
         glideJedis.set(testKey, "value");
 
         // Test RANDOMKEY
-        String result = glideJedis.randomkey();
+        String result = glideJedis.randomKey();
         assertNotNull(result, "RANDOMKEY should return a key when database is not empty");
 
         // Clean up and test empty database behavior
@@ -1019,17 +1028,17 @@ public class JedisTest {
 
         // Test EXPIREAT (set expiration to 1 hour from now)
         long futureTimestamp = System.currentTimeMillis() / 1000 + 3600;
-        Long result1 = glideJedis.expireat(testKey, futureTimestamp);
+        Long result1 = glideJedis.expireAt(testKey, futureTimestamp);
         assertEquals(1L, result1, "EXPIREAT should return 1 for existing key");
 
         // Verify expiration is set (only available in 7.0.0+)
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
-            Long expiretime = glideJedis.expiretime(testKey);
+            Long expiretime = glideJedis.expireTime(testKey);
             assertTrue(expiretime > 0, "EXPIRETIME should return positive timestamp");
         }
 
         // Test EXPIREAT on non-existent key
-        Long result2 = glideJedis.expireat(TEST_KEY_PREFIX + "nonexistent", futureTimestamp);
+        Long result2 = glideJedis.expireAt(TEST_KEY_PREFIX + "nonexistent", futureTimestamp);
         assertEquals(0L, result2, "EXPIREAT should return 0 for non-existent key");
     }
 
@@ -1072,17 +1081,17 @@ public class JedisTest {
 
         // Test PEXPIREAT (set expiration to 1 hour from now in milliseconds)
         long futureTimestamp = System.currentTimeMillis() + 3600000;
-        Long result1 = glideJedis.pexpireat(testKey, futureTimestamp);
+        Long result1 = glideJedis.pexpireAt(testKey, futureTimestamp);
         assertEquals(1L, result1, "PEXPIREAT should return 1 for existing key");
 
         // Verify expiration is set (only available in 7.0.0+)
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
-            Long pexpiretime = glideJedis.pexpiretime(testKey);
+            Long pexpiretime = glideJedis.pexpireTime(testKey);
             assertTrue(pexpiretime > 0, "PEXPIRETIME should return positive timestamp");
         }
 
         // Test PEXPIREAT on non-existent key
-        Long result2 = glideJedis.pexpireat(TEST_KEY_PREFIX + "nonexistent", futureTimestamp);
+        Long result2 = glideJedis.pexpireAt(TEST_KEY_PREFIX + "nonexistent", futureTimestamp);
         assertEquals(0L, result2, "PEXPIREAT should return 0 for non-existent key");
     }
 
@@ -1148,18 +1157,18 @@ public class JedisTest {
         String testValue = "test_value";
 
         // Test EXPIRETIME on non-existent key
-        Long result1 = glideJedis.expiretime(TEST_KEY_PREFIX + "nonexistent");
+        Long result1 = glideJedis.expireTime(TEST_KEY_PREFIX + "nonexistent");
         assertEquals(-2L, result1, "EXPIRETIME should return -2 for non-existent key");
 
         // Set up test data without expiration
         glideJedis.set(testKey, testValue);
-        Long result2 = glideJedis.expiretime(testKey);
+        Long result2 = glideJedis.expireTime(testKey);
         assertEquals(-1L, result2, "EXPIRETIME should return -1 for key without expiration");
 
         // Set expiration and test EXPIRETIME
         long futureTimestamp = System.currentTimeMillis() / 1000 + 3600;
-        glideJedis.expireat(testKey, futureTimestamp);
-        Long result3 = glideJedis.expiretime(testKey);
+        glideJedis.expireAt(testKey, futureTimestamp);
+        Long result3 = glideJedis.expireTime(testKey);
         assertTrue(result3 > 0, "EXPIRETIME should return positive timestamp");
     }
 
@@ -1176,18 +1185,18 @@ public class JedisTest {
         String testValue = "test_value";
 
         // Test PEXPIRETIME on non-existent key
-        Long result1 = glideJedis.pexpiretime(TEST_KEY_PREFIX + "nonexistent");
+        Long result1 = glideJedis.pexpireTime(TEST_KEY_PREFIX + "nonexistent");
         assertEquals(-2L, result1, "PEXPIRETIME should return -2 for non-existent key");
 
         // Set up test data without expiration
         glideJedis.set(testKey, testValue);
-        Long result2 = glideJedis.pexpiretime(testKey);
+        Long result2 = glideJedis.pexpireTime(testKey);
         assertEquals(-1L, result2, "PEXPIRETIME should return -1 for key without expiration");
 
         // Set expiration and test PEXPIRETIME
         long futureTimestamp = System.currentTimeMillis() + 3600000;
-        glideJedis.pexpireat(testKey, futureTimestamp);
-        Long result3 = glideJedis.pexpiretime(testKey);
+        glideJedis.pexpireAt(testKey, futureTimestamp);
+        Long result3 = glideJedis.pexpireTime(testKey);
         assertTrue(result3 > 0, "PEXPIRETIME should return positive timestamp");
     }
 
@@ -1369,22 +1378,25 @@ public class JedisTest {
         glideJedis.set(key3, "value3");
 
         // Test SCAN without pattern
-        String[] result1 = glideJedis.scan("0");
-        assertNotNull(result1, "SCAN should return result array");
-        assertTrue(result1.length >= 1, "SCAN should return at least cursor");
+        ScanResult<String> result1 = glideJedis.scan("0");
+        assertNotNull(result1, "SCAN should return ScanResult");
+        assertNotNull(result1.getCursor(), "SCAN should return cursor");
+        assertNotNull(result1.getResult(), "SCAN should return result list");
 
-        String cursor = result1[0];
+        String cursor = result1.getCursor();
         assertNotNull(cursor, "SCAN should return cursor");
 
-        // Test SCAN with pattern
-        String[] result2 = glideJedis.scan("0", prefix + "*");
-        assertNotNull(result2, "SCAN with pattern should return result array");
-        assertTrue(result2.length >= 1, "SCAN with pattern should return at least cursor");
+        // Test SCAN with pattern using ScanParams
+        ScanParams scanParams = new ScanParams().match(prefix + "*");
+        ScanResult<String> result2 = glideJedis.scan("0", scanParams);
+        assertNotNull(result2, "SCAN with pattern should return ScanResult");
+        assertNotNull(result2.getCursor(), "SCAN with pattern should return cursor");
+        assertNotNull(result2.getResult(), "SCAN with pattern should return result list");
 
         // Check if our test keys are in the results (they might be in subsequent scans)
         boolean foundTestKey = false;
-        for (int i = 1; i < result2.length; i++) {
-            if (result2[i] != null && result2[i].startsWith(prefix)) {
+        for (String key : result2.getResult()) {
+            if (key != null && key.startsWith(prefix)) {
                 foundTestKey = true;
                 break;
             }
@@ -1436,25 +1448,26 @@ public class JedisTest {
         glideJedis.set(sourceKey, testValue);
 
         // Test COPY to non-existent key
-        Long result1 = glideJedis.copy(sourceKey, targetKey);
-        assertEquals(1L, result1, "COPY should return 1 for successful copy");
+        boolean result1 = glideJedis.copy(sourceKey, targetKey, false);
+        assertTrue(result1, "COPY should return true for successful copy");
         assertEquals(testValue, glideJedis.get(sourceKey), "Source key should still exist");
         assertEquals(testValue, glideJedis.get(targetKey), "Target key should have copied value");
 
         // Test COPY to existing key without replace
         glideJedis.set(existingKey, "existing_value");
-        Long result2 = glideJedis.copy(sourceKey, existingKey);
-        assertEquals(0L, result2, "COPY should return 0 when target exists and replace=false");
+        boolean result2 = glideJedis.copy(sourceKey, existingKey, false);
+        assertFalse(result2, "COPY should return false when target exists and replace=false");
         assertEquals("existing_value", glideJedis.get(existingKey), "Existing key should be unchanged");
 
         // Test COPY to existing key with replace=true
-        Long result3 = glideJedis.copy(sourceKey, existingKey, true);
-        assertEquals(1L, result3, "COPY with replace=true should return 1");
+        boolean result3 = glideJedis.copy(sourceKey, existingKey, true);
+        assertTrue(result3, "COPY with replace=true should return true");
         assertEquals(testValue, glideJedis.get(existingKey), "Existing key should be replaced");
 
         // Test COPY from non-existent key
-        Long result4 = glideJedis.copy(TEST_KEY_PREFIX + "nonexistent", TEST_KEY_PREFIX + "target2");
-        assertEquals(0L, result4, "COPY should return 0 for non-existent source key");
+        boolean result4 =
+                glideJedis.copy(TEST_KEY_PREFIX + "nonexistent", TEST_KEY_PREFIX + "target2", false);
+        assertFalse(result4, "COPY should return false for non-existent source key");
     }
 
     @Test
