@@ -27,11 +27,11 @@ public abstract partial class BaseBatch<T>
         // If both min and max are infinity (default values), use ZCARD
         if (double.IsNegativeInfinity(min) && double.IsPositiveInfinity(max))
         {
-            return AddCmd(SortedSetCardAsync(key));
+            return SortedSetCard(key);
         }
         
         // Otherwise use ZCOUNT with the specified range
-        return AddCmd(SortedSetCountAsync(key, min, max, exclude));
+        return SortedSetCount(key, min, max, exclude);
     }
 
     /// <inheritdoc cref="IBatchSortedSetCommands.SortedSetCard(ValkeyKey)" />

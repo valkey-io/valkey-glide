@@ -36,11 +36,11 @@ public abstract partial class BaseClient : ISortedSetCommands
         // If both min and max are infinity (default values), use ZCARD
         if (double.IsNegativeInfinity(min) && double.IsPositiveInfinity(max))
         {
-            return await Command(Request.SortedSetCardAsync(key, flags));
+            return await SortedSetCardAsync(key, flags);
         }
         
         // Otherwise use ZCOUNT with the specified range
-        return await Command(Request.SortedSetCountAsync(key, min, max, exclude, flags));
+        return await SortedSetCountAsync(key, min, max, exclude, flags);
     }
 
     public async Task<long> SortedSetCardAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None)
