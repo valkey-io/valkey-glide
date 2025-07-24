@@ -211,15 +211,15 @@ jobs:
               uses: actions/download-artifact@v4
               with:
                   name: package
-                  path: ~/.nuget/NuGet/nuget.local
+                  path: nuget.local
 
             - name: Set up a local nuget
               if: ${{ needs.publish.result == 'skipped' }}
               shell: bash
               run: |
                   echo ~
-                  ls -l ~/.nuget/NuGet/nuget.local
-                  dotnet nuget add source ~/.nuget/NuGet/nuget.local
+                  ls -l $GITHUB_WORKSPACE/nuget.local
+                  dotnet nuget add source $GITHUB_WORKSPACE/nuget.local
                   if [[ "$OS" != "Windows_NT" ]]; then
                     dotnet nuget config paths
                     dotnet nuget config paths | xargs cat
