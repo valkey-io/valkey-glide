@@ -211,11 +211,11 @@ jobs:
               uses: actions/download-artifact@v4
               with:
                   name: package
-                  path: csharp/tests/Valkey.Glide.IntegrationTests/nuget.local
+                  path: ~/.nuget/NuGet/nuget.local
 
             - name: Set up a local nuget
               if: ${{ needs.publish.result == 'skipped' }}
-              working-directory: csharp/tests/Valkey.Glide.IntegrationTests
+              shell: bash
               run: |
                   dotnet nuget config paths
                   dotnet nuget config paths | xargs cat
@@ -223,10 +223,11 @@ jobs:
                   dotnet nuget config paths
                   dotnet nuget config paths | xargs cat
                   echo 
-                  ls -l nuget.local
+                  ls -l ~/.nuget/NuGet/nuget.local
 
             - name: Patch IT suite to run tests using freshly published version
               working-directory: csharp/tests/Valkey.Glide.IntegrationTests
+              shell: bash
               run: |
                   dotnet remove reference $(dotnet list reference | tail -n +3)
                   dotnet add package Valkey.Glide --version ${{ env.RELEASE_VERSION }}
