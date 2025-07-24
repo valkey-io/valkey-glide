@@ -79,7 +79,7 @@ import javax.net.ssl.SSLSocketFactory;
  * @see GlideClient
  * @see JedisClientConfig
  */
-public class Jedis implements Closeable {
+public final class Jedis implements Closeable {
 
     private static final Logger logger = Logger.getLogger(Jedis.class.getName());
 
