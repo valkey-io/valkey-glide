@@ -15,7 +15,7 @@ internal partial class Request
     public static Cmd<object[], ValkeyValue[]?> ListLeftPopAsync(ValkeyKey key, long count, CommandFlags flags = CommandFlags.None)
     {
         Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
-        return new(RequestType.LPop, [key, count.ToString()], true, array =>
+        return new(RequestType.LPop, [key, count.ToGlideString()], true, array =>
             array is null ? null : [.. array.Cast<GlideString>().Select(gs => (ValkeyValue)gs)]);
     }
 
@@ -42,7 +42,7 @@ internal partial class Request
     public static Cmd<object[], ValkeyValue[]?> ListRightPopAsync(ValkeyKey key, long count, CommandFlags flags = CommandFlags.None)
     {
         Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
-        return new(RequestType.RPop, [key, count.ToString()], true, array =>
+        return new(RequestType.RPop, [key, count.ToGlideString()], true, array =>
             array is null ? null : [.. array.Cast<GlideString>().Select(gs => (ValkeyValue)gs)]);
     }
 
@@ -69,19 +69,19 @@ internal partial class Request
     public static Cmd<long, long> ListRemoveAsync(ValkeyKey key, ValkeyValue value, long count = 0, CommandFlags flags = CommandFlags.None)
     {
         Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
-        return Simple<long>(RequestType.LRem, [key, count.ToString(), value]);
+        return Simple<long>(RequestType.LRem, [key, count.ToGlideString(), value]);
     }
 
     public static Cmd<string, string> ListTrimAsync(ValkeyKey key, long start, long stop, CommandFlags flags = CommandFlags.None)
     {
         Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
-        return Simple<string>(RequestType.LTrim, [key, start.ToString(), stop.ToString()]);
+        return Simple<string>(RequestType.LTrim, [key, start.ToGlideString(), stop.ToGlideString()]);
     }
 
     public static Cmd<object[], ValkeyValue[]> ListRangeAsync(ValkeyKey key, long start = 0, long stop = -1, CommandFlags flags = CommandFlags.None)
     {
         Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
-        return new(RequestType.LRange, [key, start.ToString(), stop.ToString()], false, array =>
+        return new(RequestType.LRange, [key, start.ToGlideString(), stop.ToGlideString()], false, array =>
             [.. array.Cast<GlideString>().Select(gs => (ValkeyValue)gs)]);
     }
 }
