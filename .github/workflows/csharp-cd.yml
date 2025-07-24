@@ -42,7 +42,8 @@ jobs:
               id: load-platform-matrix
               shell: bash
               run: |
-                  jq -c "[.[] | select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains([\"nuget\"])))]" < .github/json_matrices/build-matrix.json | awk '{ printf "PLATFORM_MATRIX=%s\n", $0 }' | tee -a $GITHUB_OUTPUT
+                  jq -c "[.[] | select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains([\"nuget\"])))]" \
+                    < .github/json_matrices/build-matrix.json | awk '{ printf "PLATFORM_MATRIX=%s\n", $0 }' | tee -a $GITHUB_OUTPUT
 
     set-release-version:
         runs-on: ubuntu-latest
@@ -100,16 +101,6 @@ jobs:
                       ${{ matrix.host.TARGET }}-glide-core
                       ${{ matrix.host.TARGET }}
 
-            # TODO strip debug symbols
-            - name: Build native libs (mac)
-              if: ${{ matrix.host.OS == 'macos' }}
-              working-directory: csharp/rust
-              run: |
-                  cargo build --release
-                  ls -lh target/release/libglide_rs.dylib
-                  strip -S -x -X target/release/libglide_rs.dylib
-                  ls -lh target/release/libglide_rs.dylib
-
             - name: Build native libs (linux gnu)
               if: ${{ contains(matrix.host.TARGET, 'linux-gnu') }}
               working-directory: csharp/rust
@@ -117,15 +108,11 @@ jobs:
                   cargo zigbuild -r --target ${{ matrix.host.TARGET }}.2.17
                   mkdir -p target/release
                   cp target/*/release/libglide_rs.so target/release/
-                  ls -lh target/release/libglide_rs.so
-                  strip -s -x -X -S target/release/libglide_rs.so
-                  ls -lh target/release/libglide_rs.so
 
-            - name: Build native libs (win)
-              if: ${{ matrix.host.OS == 'windows' }}
+            - name: Build native libs
+              if: ${{ !contains(matrix.host.TARGET, 'linux-gnu') }}
               working-directory: csharp/rust
-              run: |
-                  cargo build --release
+              run: cargo build --release
 
             - name: Upload artifacts to publish
               continue-on-error: true
@@ -168,9 +155,11 @@ jobs:
                   DOTNET_INSTALL_DIR: ~/.dotnet
 
             - name: Pack the client
+              working-directory: csharp/sources/Valkey.Glide
               run: |
-                  dotnet build csharp/sources/Valkey.Glide/Valkey.Glide.csproj --configuration Release
-                  dotnet pack csharp/sources/Valkey.Glide/Valkey.Glide.csproj --configuration Release
+                  dotnet build Valkey.Glide.csproj --configuration Release
+                  dotnet pack Valkey.Glide.csproj --configuration Release
+                  ls -lh bin/Release
               env:
                   SkipCargo: true
 
