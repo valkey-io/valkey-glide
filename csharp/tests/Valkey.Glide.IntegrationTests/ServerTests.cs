@@ -19,10 +19,10 @@ public class ServerTests(TestConfiguration config)
             ? TestConfiguration.CLUSTER_HOSTS[0]
             : TestConfiguration.STANDALONE_HOSTS[0];
 
-        Assert.Equal($"{host}:{port}", conn.GetServer(host, port).EndPoint.ToString());
-        Assert.Equal($"{host}:{port}", conn.GetServer($"{host}:{port}").EndPoint.ToString());
-        Assert.Equal($"{host}:{port}", conn.GetServer(IPAddress.Parse(host), port).EndPoint.ToString());
-        Assert.Equal($"{host}:{port}", conn.GetServer(new IPEndPoint(IPAddress.Parse(host), port)).EndPoint.ToString());
+        Assert.Equal($"{host}:{port}", Format.ToString(conn.GetServer(host, port).EndPoint));
+        Assert.Equal($"{host}:{port}", Format.ToString(conn.GetServer($"{host}:{port}").EndPoint));
+        Assert.Equal($"{host}:{port}", Format.ToString(conn.GetServer(IPAddress.Parse(host), port).EndPoint));
+        Assert.Equal($"{host}:{port}", Format.ToString(conn.GetServer(new IPEndPoint(IPAddress.Parse(host), port)).EndPoint));
 
         // TODO currently this returns only primary node on standalone
         // https://github.com/valkey-io/valkey-glide/issues/4293
@@ -45,7 +45,7 @@ public class ServerTests(TestConfiguration config)
             {
                 if (line.Contains("tcp_port:"))
                 {
-                    Assert.Contains(server.EndPoint.ToString()!.Split(':')[1], line);
+                    Assert.Contains(Format.ToString(server.EndPoint).Split(':')[1], line);
                     break;
                 }
             }
@@ -70,7 +70,7 @@ public class ServerTests(TestConfiguration config)
                     {
                         if (pair.Key == "tcp_port")
                         {
-                            Assert.Equal(pair.Value, server.EndPoint.ToString()!.Split(':')[1]);
+                            Assert.Equal(pair.Value, Format.ToString(server.EndPoint).Split(':')[1]);
                             portFound = true;
                             break;
                         }

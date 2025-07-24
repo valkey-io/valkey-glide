@@ -1,4 +1,4 @@
-﻿// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 using System.Net;
 
@@ -35,6 +35,12 @@ internal class ValkeyServer(Database conn, EndPoint endpoint) : IServer
         return ValkeyResult.Create(res);
     }
 
+    private Route MakeRoute()
+    {
+        (string host, ushort port) = Utils.SplitEndpoint(EndPoint);
+        return new ByAddressRoute(host, port);
+    }
+
     public EndPoint EndPoint { get; } = endpoint;
 
     public bool IsConnected => true;
@@ -52,7 +58,7 @@ internal class ValkeyServer(Database conn, EndPoint endpoint) : IServer
             [Enum.Parse<InfoOptions.Section>(section.ToString(), true)];
 
         return _conn
-            .Command(Request.Info(sections), new ByAddressRoute(EndPoint.ToString()!))
+            .Command(Request.Info(sections), MakeRoute())
             .ContinueWith(task => (string?)task.Result);
     }
 

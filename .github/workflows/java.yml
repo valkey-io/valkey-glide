@@ -129,13 +129,23 @@ jobs:
                       ${{ matrix.host.TARGET }}-glide-core
                       ${{ matrix.host.TARGET }}
 
+            - name: Cache Gradle dependencies
+              uses: actions/cache@v4
+              with:
+                  path: |
+                      ~/.gradle/caches
+                      ~/.gradle/wrapper
+                  key: ${{ runner.os }}-gradle-${{ hashFiles('java/**/*.gradle*', 'java/**/gradle-wrapper.properties') }}
+                  restore-keys: |
+                      ${{ runner.os }}-gradle-
+
             - name: Build java client
               working-directory: java
-              run: ./gradlew --continue build -x javadoc
+              run: ./gradlew --build-cache --continue build -x javadoc
 
             - name: Ensure no skipped files by linter
               working-directory: java
-              run: ./gradlew spotlessDiagnose | grep 'All formatters are well behaved for all files'
+              run: ./gradlew --build-cache spotlessDiagnose | grep 'All formatters are well behaved for all files'
 
             - uses: ./.github/workflows/test-benchmark
               if: ${{ matrix.engine.version == '8.0' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.java == '17' }}
@@ -205,9 +215,19 @@ jobs:
                       ${{ matrix.host.TARGET }}-glide-core
                       ${{ matrix.host.TARGET }}
 
+            - name: Cache Gradle dependencies
+              uses: actions/cache@v4
+              with:
+                  path: |
+                      ~/.gradle/caches
+                      ~/.gradle/wrapper
+                  key: ${{ runner.os }}-gradle-${{ hashFiles('java/**/*.gradle*', 'java/**/gradle-wrapper.properties') }}
+                  restore-keys: |
+                      ${{ runner.os }}-gradle-
+
             - name: Test pubsub
               working-directory: java
-              run: ./gradlew :integTest:pubsubTest
+              run: ./gradlew --build-cache :integTest:pubsubTest
 
             - name: Upload test & spotbugs reports
               if: always()
@@ -250,10 +270,19 @@ jobs:
             image: ${{ matrix.host.IMAGE }}
             options: ${{ join(' -q ', matrix.host.CONTAINER_OPTIONS) }} # adding `-q` to bypass empty options
         steps:
-            - name: Install git
+            - name: Install git and Java
               run: |
-                  yum update
+                  yum update -y
                   yum install -y git tar java-${{ matrix.java }}-amazon-corretto-devel.x86_64
+                  # Set JAVA_HOME to use the installed JDK
+                  export JAVA_HOME=/usr/lib/jvm/java-${{ matrix.java }}-amazon-corretto.x86_64
+                  echo "JAVA_HOME=/usr/lib/jvm/java-${{ matrix.java }}-amazon-corretto.x86_64" >> $GITHUB_ENV
+                  echo "/usr/lib/jvm/java-${{ matrix.java }}-amazon-corretto.x86_64/bin" >> $GITHUB_PATH
+                  # Set environment variable to indicate container environment for Gradle
+                  echo "GLIDE_CONTAINER_BUILD=true" >> $GITHUB_ENV
+                  # Create gradle user home and disable auto-download
+                  mkdir -p ~/.gradle
+                  echo "org.gradle.java.installations.auto-download=false" >> ~/.gradle/gradle.properties
                   echo IMAGE=amazonlinux:latest | sed -r 's/:/-/g' >> $GITHUB_ENV
             # Replace `:` in the variable otherwise it can't be used in `upload-artifact`
             - uses: actions/checkout@v4
@@ -282,9 +311,23 @@ jobs:
                   key: ${{ matrix.host.IMAGE }}-java
                   restore-keys: ${{ matrix.host.IMAGE }}
 
+            - name: Cache Gradle dependencies
+              uses: actions/cache@v4
+              with:
+                  path: |
+                      ~/.gradle/caches
+                      ~/.gradle/wrapper
+                  key: ${{ runner.os }}-gradle-container-${{ hashFiles('java/**/*.gradle*', 'java/**/gradle-wrapper.properties') }}
+                  restore-keys: |
+                      ${{ runner.os }}-gradle-container-
+                      ${{ runner.os }}-gradle-
+
             - name: Build java wrapper
               working-directory: java
-              run: ./gradlew --continue build -x javadoc
+              env:
+                  GLIDE_CONTAINER_BUILD: true
+                  JAVA_HOME: /usr/lib/jvm/java-${{ matrix.java }}-amazon-corretto.x86_64
+              run: ./gradlew --build-cache --continue build -x javadoc
 
             - name: Upload test & spotbugs reports
               if: always()
