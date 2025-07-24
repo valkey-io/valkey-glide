@@ -217,11 +217,14 @@ jobs:
               if: ${{ needs.publish.result == 'skipped' }}
               shell: bash
               run: |
+                  echo ~
                   ls -l ~/.nuget/NuGet/nuget.local
-                  dotnet nuget add source nuget.local
+                  dotnet nuget add source ~/.nuget/NuGet/nuget.local
                   if [[ "$OS" != "Windows_NT" ]]; then
                     dotnet nuget config paths
                     dotnet nuget config paths | xargs cat
+                  else
+                    cat "C:\\Users\\runneradmin\\AppData\\Roaming\\NuGet\\NuGet.Config"
                   fi
 
             - name: Patch IT suite to run tests using freshly published version
