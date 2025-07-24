@@ -21,7 +21,7 @@ public interface ITransaction : IBatch
     /// Adds a precondition for this transaction.
     /// </summary>
     /// <param name="condition">The condition to add to the transaction.</param>
-    //ConditionResult AddCondition(Condition condition);
+    ConditionResult AddCondition(Condition condition);
 
     /// <summary>
     /// Execute the batch operation, sending all queued commands to the server.
