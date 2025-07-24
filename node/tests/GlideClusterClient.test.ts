@@ -60,6 +60,7 @@ import {
 } from "./TestUtilities";
 
 const TIMEOUT = 50000;
+const CLEANUP_TIMEOUT = 10000; // 10 seconds for cleanup operations
 
 describe("GlideClusterClient", () => {
     let testsFailed = 0;
@@ -126,7 +127,7 @@ describe("GlideClusterClient", () => {
             await new Promise((resolve) => setTimeout(resolve, 50));
             if (azCluster) await azCluster.close(true);
         }
-    }, TIMEOUT);
+    }, CLEANUP_TIMEOUT);
 
     runBaseTests({
         init: async (protocol, configOverrides) => {
