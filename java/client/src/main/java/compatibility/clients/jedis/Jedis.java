@@ -55,7 +55,7 @@ import javax.net.ssl.SSLSocketFactory;
  *   <li>Improved connection management and pooling
  *   <li>Better error handling and retry mechanisms
  *   <li>Enhanced performance optimizations
- *   <li>Support for the latest Redis/Valkey features
+ *   <li>Support for the latest Valkey features
  * </ul>
  *
  * <p>The class implements the same method signatures as the original Jedis client, ensuring drop-in
@@ -95,8 +95,8 @@ public class Jedis implements Closeable {
     /**
      * Create a new Jedis instance with specified host and port.
      *
-     * @param host the Redis/Valkey server host
-     * @param port the Redis/Valkey server port
+     * @param host the Valkey server host
+     * @param port the Valkey server port
      */
     public Jedis(String host, int port) {
         this(host, port, DefaultJedisClientConfig.builder().build());
@@ -105,8 +105,8 @@ public class Jedis implements Closeable {
     /**
      * Create a new Jedis instance with specified host, port and SSL configuration.
      *
-     * @param host the Redis/Valkey server host
-     * @param port the Redis/Valkey server port
+     * @param host the Valkey server host
+     * @param port the Valkey server port
      * @param useSsl whether to use SSL/TLS
      */
     public Jedis(String host, int port, boolean useSsl) {
@@ -116,8 +116,8 @@ public class Jedis implements Closeable {
     /**
      * Create a new Jedis instance with full configuration.
      *
-     * @param host the Redis/Valkey server host
-     * @param port the Redis/Valkey server port
+     * @param host the Valkey server host
+     * @param port the Valkey server port
      * @param config the jedis client configuration
      */
     public Jedis(String host, int port, JedisClientConfig config) {
@@ -143,8 +143,8 @@ public class Jedis implements Closeable {
      * Create a new Jedis instance with comprehensive SSL/TLS configuration. This constructor provides
      * full control over SSL settings including custom socket factories and hostname verification.
      *
-     * @param host the Redis/Valkey server host (must not be null)
-     * @param port the Redis/Valkey server port (must be positive)
+     * @param host the Valkey server host (must not be null)
+     * @param port the Valkey server port (must be positive)
      * @param ssl whether to use SSL/TLS encryption for the connection
      * @param sslSocketFactory custom SSL socket factory for advanced SSL configuration (can be null
      *     for default)
@@ -205,13 +205,13 @@ public class Jedis implements Closeable {
 
     /**
      * Set the string value of a key. If the key already exists, its value will be overwritten. This
-     * is the most basic Redis SET operation.
+     * is the most basic Valkey SET operation.
      *
      * @param key the key to set (must not be null)
      * @param value the value to set (must not be null)
      * @return "OK" if successful
      * @throws JedisException if the operation fails
-     * @since Redis 1.0.0
+     * @since Valkey 1.0.0
      */
     public String set(String key, String value) {
         checkNotClosed();
@@ -427,7 +427,25 @@ public class Jedis implements Closeable {
         }
     }
 
-    /** Convert GetExParams to GLIDE GetExOptions. */
+    /**
+     * Convert Jedis GetExParams to GLIDE GetExOptions. This helper method translates between the
+     * Jedis parameter format and the GLIDE native options format for GETEX operations.
+     *
+     * <p>Supported conversions:
+     *
+     * <ul>
+     *   <li>EX → GetExOptions.Seconds()
+     *   <li>PX → GetExOptions.Milliseconds()
+     *   <li>EXAT → GetExOptions.UnixSeconds()
+     *   <li>PXAT → GetExOptions.UnixMilliseconds()
+     *   <li>PERSIST → GetExOptions.Persist()
+     * </ul>
+     *
+     * @param params the Jedis GetExParams to convert (must not be null and must have expiration type
+     *     set)
+     * @return the equivalent GLIDE GetExOptions
+     * @throws IllegalArgumentException if params is invalid or no expiration type is specified
+     */
     private GetExOptions convertGetExParamsToGetExOptions(GetExParams params) {
         if (params.getExpirationType() != null) {
             switch (params.getExpirationType()) {
@@ -449,12 +467,12 @@ public class Jedis implements Closeable {
     }
 
     /**
-     * Get the string value of a key. This is the most basic Redis GET operation.
+     * Get the string value of a key. This is the most basic Valkey GET operation.
      *
      * @param key the key to retrieve the value from (must not be null)
      * @return the value stored at the key, or null if the key does not exist
      * @throws JedisException if the operation fails
-     * @since Redis 1.0.0
+     * @since Valkey 1.0.0
      */
     public String get(final String key) {
         checkNotClosed();
@@ -487,7 +505,7 @@ public class Jedis implements Closeable {
      *
      * @return "PONG" if the server is responding
      * @throws JedisException if the operation fails or connection is lost
-     * @since Redis 1.0.0
+     * @since Valkey 1.0.0
      */
     public String ping() {
         checkNotClosed();
@@ -506,7 +524,7 @@ public class Jedis implements Closeable {
      * @param message the message to echo back (must not be null)
      * @return the echoed message exactly as sent
      * @throws JedisException if the operation fails or connection is lost
-     * @since Redis 2.8.0
+     * @since Valkey 2.8.0
      */
     public String ping(String message) {
         checkNotClosed();
@@ -1102,7 +1120,7 @@ public class Jedis implements Closeable {
      * @param value the new value to set
      * @return the old value stored at the key, or null if the key did not exist
      * @throws JedisException if the operation fails
-     * @since Redis 6.2.0
+     * @since Valkey 6.2.0
      */
     public String setGet(String key, String value) {
         checkNotClosed();
@@ -1124,7 +1142,7 @@ public class Jedis implements Closeable {
      * @param value the new binary value to set
      * @return the old binary value stored at the key, or null if the key did not exist
      * @throws JedisException if the operation fails
-     * @since Redis 6.2.0
+     * @since Valkey 6.2.0
      */
     public byte[] setGet(final byte[] key, final byte[] value) {
         checkNotClosed();
@@ -1235,12 +1253,22 @@ public class Jedis implements Closeable {
      * Get the value of a key and optionally set its expiration. This command is similar to GET but
      * allows setting expiration parameters atomically with the retrieval operation.
      *
-     * @param key the key to retrieve the value from
-     * @param params expiration parameters (EX for seconds, PX for milliseconds, EXAT for timestamp,
-     *     PXAT for millisecond timestamp, PERSIST to remove expiration)
+     * <p>The expiration can be set using various time units and formats:
+     *
+     * <ul>
+     *   <li>EX seconds - Set expiration in seconds
+     *   <li>PX milliseconds - Set expiration in milliseconds
+     *   <li>EXAT timestamp - Set expiration as Unix timestamp in seconds
+     *   <li>PXAT timestamp - Set expiration as Unix timestamp in milliseconds
+     *   <li>PERSIST - Remove existing expiration
+     * </ul>
+     *
+     * @param key the key to retrieve the value from (must not be null)
+     * @param params expiration parameters specifying how to set the key's expiration
      * @return the value of the key, or null if the key does not exist
      * @throws JedisException if the operation fails
-     * @since Redis 6.2.0
+     * @since Valkey 6.2.0
+     * @see GetExParams
      */
     public String getEx(final String key, final GetExParams params) {
         checkNotClosed();
@@ -1256,12 +1284,22 @@ public class Jedis implements Closeable {
      * Get the binary value of a key and optionally set its expiration. This command is similar to GET
      * but allows setting expiration parameters atomically with the retrieval operation.
      *
-     * @param key the key to retrieve the value from
-     * @param params expiration parameters (EX for seconds, PX for milliseconds, EXAT for timestamp,
-     *     PXAT for millisecond timestamp, PERSIST to remove expiration)
+     * <p>The expiration can be set using various time units and formats:
+     *
+     * <ul>
+     *   <li>EX seconds - Set expiration in seconds
+     *   <li>PX milliseconds - Set expiration in milliseconds
+     *   <li>EXAT timestamp - Set expiration as Unix timestamp in seconds
+     *   <li>PXAT timestamp - Set expiration as Unix timestamp in milliseconds
+     *   <li>PERSIST - Remove existing expiration
+     * </ul>
+     *
+     * @param key the key to retrieve the value from (must not be null)
+     * @param params expiration parameters specifying how to set the key's expiration
      * @return the binary value of the key, or null if the key does not exist
      * @throws JedisException if the operation fails
-     * @since Redis 6.2.0
+     * @since Valkey 6.2.0
+     * @see GetExParams
      */
     public byte[] getEx(final byte[] key, final GetExParams params) {
         checkNotClosed();
@@ -1275,18 +1313,24 @@ public class Jedis implements Closeable {
     }
 
     /**
-     * Parse Jedis-style GETEX options into GLIDE GetExOptions.
+     * Append a value to the end of the string stored at the specified key. If the key does not exist,
+     * it is created and set as an empty string before performing the append operation. This operation
+     * is atomic and efficient for building strings incrementally.
      *
-     * @param options the string options array
-     * @return parsed GetExOptions
-     * @throws IllegalArgumentException if options are invalid
-     */
-    /**
-     * Append value to key.
+     * <p>This command is useful for:
      *
-     * @param key the key
-     * @param value the value to append
-     * @return the length of the string after the append operation
+     * <ul>
+     *   <li>Building log entries or messages incrementally
+     *   <li>Concatenating strings without retrieving the current value
+     *   <li>Implementing counters or accumulators in string format
+     * </ul>
+     *
+     * @param key the key where the string is stored (must not be null)
+     * @param value the value to append to the existing string (must not be null)
+     * @return the length of the string after the append operation (includes both original and
+     *     appended content)
+     * @throws JedisException if the operation fails or if the key contains a non-string value
+     * @since Valkey 2.0.0
      */
     public long append(final String key, final String value) {
         checkNotClosed();
@@ -1298,11 +1342,24 @@ public class Jedis implements Closeable {
     }
 
     /**
-     * Append value to key.
+     * Append a binary value to the end of the string stored at the specified key. If the key does not
+     * exist, it is created and set as an empty string before performing the append operation. This
+     * operation is atomic and efficient for building binary strings incrementally.
      *
-     * @param key the key
-     * @param value the value to append
-     * @return the length of the string after the append operation
+     * <p>This command is useful for:
+     *
+     * <ul>
+     *   <li>Building binary log entries or data incrementally
+     *   <li>Concatenating binary data without retrieving the current value
+     *   <li>Implementing binary accumulators or buffers
+     * </ul>
+     *
+     * @param key the key where the binary string is stored (must not be null)
+     * @param value the binary value to append to the existing string (must not be null)
+     * @return the length of the string after the append operation (includes both original and
+     *     appended content)
+     * @throws JedisException if the operation fails or if the key contains a non-string value
+     * @since Valkey 2.0.0
      */
     public long append(final byte[] key, final byte[] value) {
         checkNotClosed();
@@ -1696,7 +1753,7 @@ public class Jedis implements Closeable {
      *
      * @return a random key from the database, or null if the database is empty
      * @throws JedisException if the operation fails
-     * @since Redis 1.0.0
+     * @since Valkey 1.0.0
      */
     public String randomKey() {
         checkNotClosed();
@@ -1853,7 +1910,7 @@ public class Jedis implements Closeable {
      * @param unixTime expiration timestamp in seconds since Unix epoch
      * @return 1 if the expiration was set successfully, 0 if the key does not exist
      * @throws JedisException if the operation fails
-     * @since Redis 1.2.0
+     * @since Valkey 1.2.0
      */
     public long expireAt(String key, long unixTime) {
         checkNotClosed();
@@ -2385,7 +2442,7 @@ public class Jedis implements Closeable {
     }
 
     /**
-     * Move a key to another Redis instance.
+     * Move a key to another Valkey instance.
      *
      * @param host destination host
      * @param port destination port
@@ -2921,7 +2978,7 @@ public class Jedis implements Closeable {
      * @param key the key containing the string value to analyze
      * @return the number of bits set to 1 (0 if key doesn't exist)
      * @throws JedisException if the operation fails
-     * @since Redis 2.6.0
+     * @since Valkey 2.6.0
      */
     public long bitcount(final String key) {
         checkNotClosed();
@@ -2941,7 +2998,7 @@ public class Jedis implements Closeable {
      * @param end the end offset (byte index, can be negative for end-relative indexing)
      * @return the number of bits set to 1 within the specified range
      * @throws JedisException if the operation fails
-     * @since Redis 2.6.0
+     * @since Valkey 2.6.0
      */
     public long bitcount(final String key, final long start, final long end) {
         checkNotClosed();
@@ -3132,7 +3189,7 @@ public class Jedis implements Closeable {
      * @param srcKeys the source keys for the bitwise operation
      * @return the size of the string stored in the destination key
      * @throws JedisException if the operation fails
-     * @since Redis 2.6.0
+     * @since Valkey 2.6.0
      */
     public long bitop(final BitOP op, final String destKey, final String... srcKeys) {
         checkNotClosed();
@@ -3168,7 +3225,7 @@ public class Jedis implements Closeable {
      * @param srcKeys the source keys for the bitwise operation
      * @return the size of the string stored in the destination key
      * @throws JedisException if the operation fails
-     * @since Redis 2.6.0
+     * @since Valkey 2.6.0
      */
     public long bitop(final BitOP op, final byte[] destKey, final byte[]... srcKeys) {
         checkNotClosed();
@@ -3573,7 +3630,7 @@ public class Jedis implements Closeable {
      * @param elements the elements to add to the HyperLogLog (must not be null)
      * @return 1 if the HyperLogLog is newly created or modified, 0 otherwise
      * @throws JedisException if the operation fails
-     * @since Redis 2.8.9
+     * @since Valkey 2.8.9
      */
     public long pfadd(String key, String... elements) {
         checkNotClosed();
@@ -3594,7 +3651,7 @@ public class Jedis implements Closeable {
      * @param elements the elements to add to the HyperLogLog (must not be null)
      * @return 1 if the HyperLogLog is newly created or modified, 0 otherwise
      * @throws JedisException if the operation fails
-     * @since Redis 2.8.9
+     * @since Valkey 2.8.9
      */
     public long pfadd(final byte[] key, final byte[]... elements) {
         checkNotClosed();
@@ -3617,7 +3674,7 @@ public class Jedis implements Closeable {
      * @param key the key of the HyperLogLog data structure
      * @return the approximated cardinality of the HyperLogLog data structure (0 if key doesn't exist)
      * @throws JedisException if the operation fails
-     * @since Redis 2.8.9
+     * @since Valkey 2.8.9
      */
     public long pfcount(String key) {
         checkNotClosed();
@@ -3636,7 +3693,7 @@ public class Jedis implements Closeable {
      * @param keys the keys of the HyperLogLog data structures to be analyzed (must not be empty)
      * @return the approximated cardinality of the combined HyperLogLog data structures
      * @throws JedisException if the operation fails
-     * @since Redis 2.8.9
+     * @since Valkey 2.8.9
      */
     public long pfcount(String... keys) {
         checkNotClosed();
@@ -3655,7 +3712,7 @@ public class Jedis implements Closeable {
      * @param sourceKeys the keys of the HyperLogLog structures to be merged
      * @return "OK" if successful
      * @throws JedisException if the operation fails
-     * @since Redis 2.8.9
+     * @since Valkey 2.8.9
      */
     public String pfmerge(String destKey, String... sourceKeys) {
         checkNotClosed();
@@ -3708,7 +3765,7 @@ public class Jedis implements Closeable {
      * @param sourceKeys the keys of the HyperLogLog structures to be merged
      * @return "OK" if successful
      * @throws JedisException if the operation fails
-     * @since Redis 2.8.9
+     * @since Valkey 2.8.9
      */
     public String pfmerge(final byte[] destKey, final byte[]... sourceKeys) {
         checkNotClosed();
