@@ -41,7 +41,7 @@ public class StandaloneClientTests(TestConfiguration config)
         // Set and get a binary value
         Assert.True(await client.StringSetAsync(key3, dump!));
         ValkeyValue binaryValue = await client.StringGetAsync(key3);
-        Assert.Equal(dump, (GlideString)binaryValue);
+        Assert.Equal(dump, (gs)binaryValue);
     }
 
     [Fact]
@@ -82,7 +82,7 @@ public class StandaloneClientTests(TestConfiguration config)
     public async Task CustomCommandWithDifferentReturnTypes(GlideClient client)
     {
         string key1 = Guid.NewGuid().ToString();
-        Assert.Equal(2, (long)(await client.CustomCommand(["hset", key1, "f1", "v1", "f2", "v2"]))!);
+        Assert.Equal(2L, await client.CustomCommand(["hset", key1, "f1", "v1", "f2", "v2"]));
         Assert.Equal(
             new Dictionary<gs, gs> { { "f1", "v1" }, { "f2", "v2" } },
             await client.CustomCommand(["hgetall", key1])
@@ -93,7 +93,7 @@ public class StandaloneClientTests(TestConfiguration config)
         );
 
         string key2 = Guid.NewGuid().ToString();
-        Assert.Equal(3, (long)(await client.CustomCommand(["sadd", key2, "a", "b", "c"]))!);
+        Assert.Equal(3L, (await client.CustomCommand(["sadd", key2, "a", "b", "c"]))!);
         Assert.Equal(
             [new gs("a"), new gs("b"), new gs("c")],
             (await client.CustomCommand(["smembers", key2]) as HashSet<object>)!
@@ -108,6 +108,34 @@ public class StandaloneClientTests(TestConfiguration config)
         _ = await client.CustomCommand(["xadd", key3, "0-2", "str-1-id-2-field-1", "str-1-id-2-value-1", "str-1-id-2-field-2", "str-1-id-2-value-2"]);
         _ = Assert.IsType<Dictionary<gs, object?>>((await client.CustomCommand(["xread", "streams", key3, "stream", "0-1", "0-2"]))!);
         _ = Assert.IsType<Dictionary<gs, object?>>((await client.CustomCommand(["xinfo", "stream", key3, "full"]))!);
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestStandaloneConnections), MemberType = typeof(TestConfiguration))]
+    public async Task ExecuteWithDifferentReturnTypes(ConnectionMultiplexer conn)
+    {
+        IDatabase db = conn.GetDatabase();
+        string key1 = Guid.NewGuid().ToString();
+        Assert.Equal(2L, (await db.ExecuteAsync("hset", [key1, "f1", "v1", "f2", "v2"])).AsInt64());
+        Assert.Equal(
+            new Dictionary<string, string> { { "f1", "v1" }, { "f2", "v2" } },
+            (await db.ExecuteAsync("hgetall", [key1])).ToDictionary().ToDictionary(k => k.Key, v => v.Value.AsString()!)
+        );
+        Assert.Equal(
+            new string?[] { "v1", "v2", null },
+            db.Execute("hmget", [key1, "f1", "f2", "f3"]).AsStringArray()!
+        );
+
+        string key2 = Guid.NewGuid().ToString();
+        Assert.Equal(3L, db.Execute("sadd", [key2, "a", "b", "c"]).AsInt64());
+        Assert.False(db.Execute("smembers", [key2]).AsStringArray()!.Except(["a", "b", "c"]).Any());
+        Assert.Equal([true, true, false], db.Execute("smismember", [key2, "a", "b", "d"]).AsBooleanArray()!);
+
+        string key3 = Guid.NewGuid().ToString();
+        _ = await db.ExecuteAsync("xadd", [key3, "0-1", "str-1-id-1-field-1", "str-1-id-1-value-1", "str-1-id-1-field-2", "str-1-id-1-value-2"]);
+        _ = await db.ExecuteAsync("xadd", [key3, "0-2", "str-1-id-2-field-1", "str-1-id-2-value-1", "str-1-id-2-field-2", "str-1-id-2-value-2"]);
+        _ = await db.ExecuteAsync("xread", ["streams", key3, "stream", "0-1", "0-2"]);
+        _ = await db.ExecuteAsync("xinfo", ["stream", key3, "full"]);
     }
 
     [Fact]
@@ -172,7 +200,7 @@ public class StandaloneClientTests(TestConfiguration config)
         string key = Guid.NewGuid().ToString();
         string key2 = Guid.NewGuid().ToString();
 
-        await client.StringSetAsync(key, "val");
+        _ = await client.StringSetAsync(key, "val");
         Assert.True(await client.KeyCopyAsync(key, key2, 1));
         Assert.True(await client.KeyMoveAsync(key, 2));
     }

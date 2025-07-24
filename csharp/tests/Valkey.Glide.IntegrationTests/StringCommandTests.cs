@@ -41,8 +41,8 @@ public class StringCommandTests(TestConfiguration config)
         string value2 = Guid.NewGuid().ToString();
 
         // Set key1 and key2, leave key3 unset
-        await client.StringSetAsync(key1, value1);
-        await client.StringSetAsync(key2, value2);
+        _ = await client.StringSetAsync(key1, value1);
+        _ = await client.StringSetAsync(key2, value2);
 
         ValkeyKey[] keys = [key1, key2, key3];
         ValkeyValue[] values = await client.StringGetAsync(keys);
@@ -152,8 +152,8 @@ public class StringCommandTests(TestConfiguration config)
         string newValue2 = "new2";
 
         // Set initial values
-        await client.StringSetAsync(key1, initialValue1);
-        await client.StringSetAsync(key2, initialValue2);
+        _ = await client.StringSetAsync(key1, initialValue1);
+        _ = await client.StringSetAsync(key2, initialValue2);
 
         // Overwrite with StringSetAsync
         KeyValuePair<ValkeyKey, ValkeyValue>[] values = [
@@ -180,7 +180,7 @@ public class StringCommandTests(TestConfiguration config)
         string key = Guid.NewGuid().ToString();
         string value = "Hello World";
 
-        await client.StringSetAsync(key, value);
+        _ = await client.StringSetAsync(key, value);
         long length = await client.StringLengthAsync(key);
         Assert.Equal(value.Length, length);
     }
@@ -201,7 +201,7 @@ public class StringCommandTests(TestConfiguration config)
         string key = Guid.NewGuid().ToString();
         string value = "Hello World";
 
-        await client.StringSetAsync(key, value);
+        _ = await client.StringSetAsync(key, value);
         ValkeyValue result = await client.StringGetRangeAsync(key, 0, 4);
         Assert.Equal("Hello", result.ToString());
     }
@@ -222,7 +222,7 @@ public class StringCommandTests(TestConfiguration config)
         string key = Guid.NewGuid().ToString();
         string initialValue = "Hello World";
 
-        await client.StringSetAsync(key, initialValue);
+        _ = await client.StringSetAsync(key, initialValue);
         ValkeyValue newLength = await client.StringSetRangeAsync(key, 6, "Valkey");
         Assert.Equal(12, (long)newLength);
 
@@ -251,7 +251,7 @@ public class StringCommandTests(TestConfiguration config)
         string appendValue = " World";
 
         // Set initial value
-        await client.StringSetAsync(key, initialValue);
+        _ = await client.StringSetAsync(key, initialValue);
 
         // Append to the key
         long newLength = await client.StringAppendAsync(key, appendValue);
@@ -291,7 +291,7 @@ public class StringCommandTests(TestConfiguration config)
         string appendValue = "";
 
         // Set initial value
-        await client.StringSetAsync(key, initialValue);
+        _ = await client.StringSetAsync(key, initialValue);
 
         // Append empty string
         long newLength = await client.StringAppendAsync(key, appendValue);
@@ -313,16 +313,16 @@ public class StringCommandTests(TestConfiguration config)
         string appendValue = " 世界";
 
         // Set initial value
-        await client.StringSetAsync(key, initialValue);
+        _ = await client.StringSetAsync(key, initialValue);
 
         // Append Unicode string
-        long newLength = await client.StringAppendAsync(key, appendValue);
+        _ = await client.StringAppendAsync(key, appendValue);
 
         // Verify the value was appended correctly
         ValkeyValue value = await client.StringGetAsync(key);
         Assert.Equal(initialValue + appendValue, value.ToString());
 
-        // The Redis server returns the length in bytes, not characters
+        // The server returns the length in bytes, not characters
         // For Unicode characters, this will be different from the C# string length
         // So we don't test the exact length here
     }
@@ -352,7 +352,7 @@ public class StringCommandTests(TestConfiguration config)
         string key = Guid.NewGuid().ToString();
 
         // Set initial value
-        await client.StringSetAsync(key, "10");
+        _ = await client.StringSetAsync(key, "10");
 
         // Decrement by 1
         long result = await client.StringDecrementAsync(key);
@@ -385,7 +385,7 @@ public class StringCommandTests(TestConfiguration config)
         string key = Guid.NewGuid().ToString();
 
         // Set initial value
-        await client.StringSetAsync(key, "10");
+        _ = await client.StringSetAsync(key, "10");
 
         // Decrement by 5
         long result = await client.StringDecrementAsync(key, 5);
@@ -418,7 +418,7 @@ public class StringCommandTests(TestConfiguration config)
         string key = Guid.NewGuid().ToString();
 
         // Set initial value
-        await client.StringSetAsync(key, "10");
+        _ = await client.StringSetAsync(key, "10");
 
         // Decrement by -5 (effectively incrementing by 5)
         long result = await client.StringDecrementAsync(key, -5);
@@ -436,7 +436,7 @@ public class StringCommandTests(TestConfiguration config)
         string key = Guid.NewGuid().ToString();
 
         // Set initial value
-        await client.StringSetAsync(key, "10");
+        _ = await client.StringSetAsync(key, "10");
 
         // Increment by 1
         long result = await client.StringIncrementAsync(key);
@@ -469,7 +469,7 @@ public class StringCommandTests(TestConfiguration config)
         string key = Guid.NewGuid().ToString();
 
         // Set initial value
-        await client.StringSetAsync(key, "10");
+        _ = await client.StringSetAsync(key, "10");
 
         // Increment by 5
         long result = await client.StringIncrementAsync(key, 5);
@@ -502,7 +502,7 @@ public class StringCommandTests(TestConfiguration config)
         string key = Guid.NewGuid().ToString();
 
         // Set initial value
-        await client.StringSetAsync(key, "10");
+        _ = await client.StringSetAsync(key, "10");
 
         // Increment by -5 (effectively decrementing by 5)
         long result = await client.StringIncrementAsync(key, -5);
@@ -520,7 +520,7 @@ public class StringCommandTests(TestConfiguration config)
         string key = Guid.NewGuid().ToString();
 
         // Set initial value
-        await client.StringSetAsync(key, "10.5");
+        _ = await client.StringSetAsync(key, "10.5");
 
         // Increment by 0.5
         double result = await client.StringIncrementAsync(key, 0.5);
@@ -553,7 +553,7 @@ public class StringCommandTests(TestConfiguration config)
         string key = Guid.NewGuid().ToString();
 
         // Set initial value
-        await client.StringSetAsync(key, "10.5");
+        _ = await client.StringSetAsync(key, "10.5");
 
         // Increment by -0.5 (effectively decrementing by 0.5)
         double result = await client.StringIncrementAsync(key, -0.5);

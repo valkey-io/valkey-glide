@@ -8,14 +8,26 @@ namespace Valkey.Glide;
 public abstract partial class BaseClient : IConnectionManagementCommands
 {
     public async Task<TimeSpan> PingAsync(CommandFlags flags = CommandFlags.None)
-        => await Command(Request.Ping(flags));
+    {
+        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
+        return await Command(Request.Ping());
+    }
 
     public async Task<TimeSpan> PingAsync(ValkeyValue message, CommandFlags flags = CommandFlags.None)
-        => await Command(Request.Ping(message, flags));
+    {
+        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
+        return await Command(Request.Ping(message));
+    }
 
     public async Task<TimeSpan> PingAsync(Route route, CommandFlags flags = CommandFlags.None)
-        => await Command(Request.Ping(flags), route);
+    {
+        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
+        return await Command(Request.Ping(), route);
+    }
 
     public async Task<TimeSpan> PingAsync(ValkeyValue message, Route route, CommandFlags flags = CommandFlags.None)
-        => await Command(Request.Ping(message, flags), route);
+    {
+        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
+        return await Command(Request.Ping(message), route);
+    }
 }

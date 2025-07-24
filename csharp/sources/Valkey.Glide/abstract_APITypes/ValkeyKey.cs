@@ -12,7 +12,7 @@ using System.Threading.Tasks;
 namespace Valkey.Glide;
 
 /// <summary>
-/// Represents a key that can be stored in redis.
+/// Represents a key that can be stored.
 /// </summary>
 public readonly struct ValkeyKey : IEquatable<ValkeyKey>
 {

@@ -1,12 +1,12 @@
 ﻿namespace Valkey.Glide;
 
 /// <summary>
-/// Specifies the proxy that is being used to communicate to redis.
+/// Specifies the proxy that is being used to communicate to server.
 /// </summary>
 public enum Proxy
 {
     /// <summary>
-    /// Direct communication to the redis server(s).
+    /// Direct communication to the server(s).
     /// </summary>
     None,
 

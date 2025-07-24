@@ -51,7 +51,7 @@ public enum ConnectionFailureType
     Loading,
 
     /// <summary>
-    /// It has not been possible to create an initial connection to the redis server(s).
+    /// It has not been possible to create an initial connection to the server(s).
     /// </summary>
     UnableToConnect,
 

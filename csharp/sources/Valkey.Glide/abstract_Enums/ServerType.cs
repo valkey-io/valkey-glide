@@ -1,27 +1,27 @@
 ﻿namespace Valkey.Glide;
 
 /// <summary>
-/// Indicates the flavor of a particular redis server.
+/// Indicates the flavor of a particular server.
 /// </summary>
 public enum ServerType
 {
     /// <summary>
-    /// Classic redis-server server.
+    /// Classic server.
     /// </summary>
     Standalone,
 
     /// <summary>
-    /// Monitoring/configuration redis-sentinel server.
+    /// Monitoring/configuration sentinel server.
     /// </summary>
     Sentinel,
 
     /// <summary>
-    /// Distributed redis-cluster server.
+    /// Distributed cluster server.
     /// </summary>
     Cluster,
 
     /// <summary>
-    /// Distributed redis installation via <a href="https://github.com/twitter/twemproxy">twemproxy</a>.
+    /// Distributed installation via <a href="https://github.com/twitter/twemproxy">twemproxy</a>.
     /// </summary>
     Twemproxy,
 

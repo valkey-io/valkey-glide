@@ -3,7 +3,7 @@
 namespace Valkey.Glide;
 
 /// <summary>
-/// A contiguous portion of a redis list.
+/// A contiguous portion of a list.
 /// </summary>
 public readonly struct ListPopResult
 {

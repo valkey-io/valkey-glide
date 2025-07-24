@@ -8,6 +8,12 @@ namespace Valkey.Glide;
 /// </summary>
 public interface IDatabase : IDatabaseAsync
 {
+    /// <inheritdoc cref="IDatabaseAsync.ExecuteAsync(string, object[])"/>
+    ValkeyResult Execute(string command, params object[] args);
+
+    /// <inheritdoc cref="IDatabaseAsync.ExecuteAsync(string, ICollection{object}, CommandFlags)"/>
+    ValkeyResult Execute(string command, ICollection<object> args, CommandFlags flags = CommandFlags.None);
+
     /// <summary>
     /// Allows creation of a group of operations that will be sent to the server as a single unit,
     /// but which may or may not be processed on the server contiguously.

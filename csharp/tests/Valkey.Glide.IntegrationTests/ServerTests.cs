@@ -50,6 +50,16 @@ public class ServerTests(TestConfiguration config)
                 }
             }
 
+            ValkeyResult res = await server.ExecuteAsync("info", ["server"]);
+            foreach (string line in res.AsString()!.Split("\r\n"))
+            {
+                if (line.Contains("tcp_port:"))
+                {
+                    Assert.Contains(server.EndPoint.ToString()!.Split(':')[1], line);
+                    break;
+                }
+            }
+
             IGrouping<string, KeyValuePair<string, string>>[] infoParsed = server.Info();
             foreach (IGrouping<string, KeyValuePair<string, string>> data in infoParsed)
             {

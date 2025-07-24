@@ -32,10 +32,10 @@ public sealed class ConfigurationOptions : ICloneable
             return tmp;
         }
 
-        internal static Protocol ParseRedisProtocol(string key, string value)
+        internal static Protocol ParseProtocol(string key, string value)
         {
-            if (TryParseRedisProtocol(value, out Protocol protocol)) return protocol;
-            throw new ArgumentOutOfRangeException(key, $"Keyword '{key}' requires a RedisProtocol value or a known protocol version number; the value '{value}' is not recognised.");
+            if (TryParseProtocol(value, out Protocol protocol)) return protocol;
+            throw new ArgumentOutOfRangeException(key, $"Keyword '{key}' requires a Protocol value or a known protocol version number; the value '{value}' is not recognised.");
         }
 
         internal const string
@@ -328,7 +328,7 @@ public sealed class ConfigurationOptions : ICloneable
     public void SetDefaultPorts() => EndPoints.SetDefaultPorts(Ssl);
 
     /// <summary>
-    /// Returns the effective configuration string for this configuration, including Redis credentials.
+    /// Returns the effective configuration string for this configuration, including server credentials.
     /// </summary>
     /// <remarks>
     /// Includes password to allow generation of configuration strings used for connecting multiplexer.
@@ -458,7 +458,7 @@ public sealed class ConfigurationOptions : ICloneable
                         Ssl = OptionKeys.ParseBoolean(key, value);
                         break;
                     case OptionKeys.Protocol:
-                        Protocol = OptionKeys.ParseRedisProtocol(key, value);
+                        Protocol = OptionKeys.ParseProtocol(key, value);
                         break;
                     case OptionKeys.ResponseTimeout:
                         ResponseTimeout = OptionKeys.ParseInt32(key, value);
@@ -484,7 +484,7 @@ public sealed class ConfigurationOptions : ICloneable
     /// </summary>
     public Protocol? Protocol { get; set; }
 
-    internal static bool TryParseRedisProtocol(string? value, out Protocol protocol)
+    internal static bool TryParseProtocol(string? value, out Protocol protocol)
     {
         // accept raw integers too, but only trust them if we recognize them
         // (note we need to do this before enums, because Enum.TryParse will

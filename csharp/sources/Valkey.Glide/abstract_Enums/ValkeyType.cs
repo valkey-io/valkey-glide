@@ -1,9 +1,9 @@
 ﻿namespace Valkey.Glide;
 
 /// <summary>
-/// The intrinsic data-types supported by redis.
+/// The intrinsic data-types supported by server.
 /// </summary>
-/// <remarks><seealso href="https://redis.io/topics/data-types"/></remarks>
+/// <remarks><seealso href="https://valkey.io/topics/data-types"/></remarks>
 public enum ValkeyType
 {
     /// <summary>
@@ -16,7 +16,7 @@ public enum ValkeyType
     /// a Valkey string can contain any kind of data, for instance a JPEG image or a serialized Ruby object.
     /// A String value can be at max 512 Megabytes in length.
     /// </summary>
-    /// <remarks><seealso href="https://redis.io/commands#string"/></remarks>
+    /// <remarks><seealso href="https://valkey.io/commands#string"/></remarks>
     String,
 
     /// <summary>
@@ -24,7 +24,7 @@ public enum ValkeyType
     /// It is possible to add elements to a Valkey List pushing new elements on the head (on the left) or
     /// on the tail (on the right) of the list.
     /// </summary>
-    /// <remarks><seealso href="https://redis.io/commands#list"/></remarks>
+    /// <remarks><seealso href="https://valkey.io/commands#list"/></remarks>
     List,
 
     /// <summary>
@@ -34,7 +34,7 @@ public enum ValkeyType
     /// Adding the same element multiple times will result in a set having a single copy of this element.
     /// Practically speaking this means that adding a member does not require a check if exists then add operation.
     /// </summary>
-    /// <remarks><seealso href="https://redis.io/commands#set"/></remarks>
+    /// <remarks><seealso href="https://valkey.io/commands#set"/></remarks>
     Set,
 
     /// <summary>
@@ -43,14 +43,14 @@ public enum ValkeyType
     /// in order to take the sorted set ordered, from the smallest to the greatest score.
     /// While members are unique, scores may be repeated.
     /// </summary>
-    /// <remarks><seealso href="https://redis.io/commands#sorted_set"/></remarks>
+    /// <remarks><seealso href="https://valkey.io/commands#sorted-set"/></remarks>
     SortedSet,
 
     /// <summary>
     /// Valkey Hashes are maps between string fields and string values, so they are the perfect data type
     /// to represent objects (e.g. A User with a number of fields like name, surname, age, and so forth).
     /// </summary>
-    /// <remarks><seealso href="https://redis.io/commands#hash"/></remarks>
+    /// <remarks><seealso href="https://valkey.io/commands#hash"/></remarks>
     Hash,
 
     /// <summary>
@@ -58,7 +58,7 @@ public enum ValkeyType
     /// advanced features for manipulating the data contained within the stream. Each entry in a
     /// stream contains a unique message ID and a list of name/value pairs containing the entry's data.
     /// </summary>
-    /// <remarks><seealso href="https://redis.io/commands#stream"/></remarks>
+    /// <remarks><seealso href="https://valkey.io/commands#stream"/></remarks>
     Stream,
 
     /// <summary>

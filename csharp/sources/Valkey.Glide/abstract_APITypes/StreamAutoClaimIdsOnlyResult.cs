@@ -3,7 +3,7 @@
 namespace Valkey.Glide;
 
 /// <summary>
-/// Result of the <see href="https://redis.io/commands/xautoclaim/">XAUTOCLAIM</see> command with the <c>JUSTID</c> option.
+/// Result of the <see href="https://valkey.io/commands/xautoclaim/">XAUTOCLAIM</see> command with the <c>JUSTID</c> option.
 /// </summary>
 public readonly struct StreamAutoClaimIdsOnlyResult
 {
