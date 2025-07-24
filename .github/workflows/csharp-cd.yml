@@ -159,7 +159,7 @@ jobs:
               run: |
                   dotnet build Valkey.Glide.csproj --configuration Release
                   dotnet pack Valkey.Glide.csproj --configuration Release
-                  ls -lh bin/Release
+                  tree -h bin/Release
               env:
                   SkipCargo: true
 
