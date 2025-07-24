@@ -46,7 +46,35 @@ import javax.net.ssl.SSLSocketFactory;
 
 /**
  * Jedis compatibility wrapper for Valkey GLIDE client. This class provides a Jedis-like API while
- * using Valkey GLIDE underneath.
+ * using Valkey GLIDE underneath for improved performance, reliability, and feature support.
+ *
+ * <p>This compatibility layer allows existing Jedis applications to migrate to Valkey GLIDE with
+ * minimal code changes while benefiting from GLIDE's advanced features such as:
+ *
+ * <ul>
+ *   <li>Improved connection management and pooling
+ *   <li>Better error handling and retry mechanisms
+ *   <li>Enhanced performance optimizations
+ *   <li>Support for the latest Redis/Valkey features
+ * </ul>
+ *
+ * <p>The class implements the same method signatures as the original Jedis client, ensuring drop-in
+ * compatibility for most use cases. Some advanced features may require migration to native GLIDE
+ * APIs for optimal performance.
+ *
+ * <p>Example usage:
+ *
+ * <pre>{@code
+ * try (Jedis jedis = new Jedis("localhost", 6379)) {
+ *     jedis.set("key", "value");
+ *     String value = jedis.get("key");
+ * }
+ * }</pre>
+ *
+ * @author Valkey GLIDE Project Contributors
+ * @since 1.0.0
+ * @see GlideClient
+ * @see JedisClientConfig
  */
 public class Jedis implements Closeable {
 
@@ -112,14 +140,18 @@ public class Jedis implements Closeable {
     }
 
     /**
-     * Create Jedis with SSL configuration.
+     * Create a new Jedis instance with comprehensive SSL/TLS configuration. This constructor provides
+     * full control over SSL settings including custom socket factories and hostname verification.
      *
-     * @param host the server host
-     * @param port the server port
-     * @param ssl whether to use SSL
-     * @param sslSocketFactory SSL socket factory
-     * @param sslParameters SSL parameters
-     * @param hostnameVerifier hostname verifier
+     * @param host the Redis/Valkey server host (must not be null)
+     * @param port the Redis/Valkey server port (must be positive)
+     * @param ssl whether to use SSL/TLS encryption for the connection
+     * @param sslSocketFactory custom SSL socket factory for advanced SSL configuration (can be null
+     *     for default)
+     * @param sslParameters SSL parameters for fine-tuning SSL behavior (can be null for default)
+     * @param hostnameVerifier hostname verifier for SSL certificate validation (can be null for
+     *     default)
+     * @throws JedisException if the connection cannot be established
      */
     public Jedis(
             String host,
@@ -172,11 +204,14 @@ public class Jedis implements Closeable {
     }
 
     /**
-     * Set the string value of a key.
+     * Set the string value of a key. If the key already exists, its value will be overwritten. This
+     * is the most basic Redis SET operation.
      *
-     * @param key the key
-     * @param value the value
+     * @param key the key to set (must not be null)
+     * @param value the value to set (must not be null)
      * @return "OK" if successful
+     * @throws JedisException if the operation fails
+     * @since Redis 1.0.0
      */
     public String set(String key, String value) {
         checkNotClosed();
@@ -414,10 +449,12 @@ public class Jedis implements Closeable {
     }
 
     /**
-     * Get the value of a key.
+     * Get the string value of a key. This is the most basic Redis GET operation.
      *
-     * @param key the key
-     * @return the value of the key, or null if the key does not exist
+     * @param key the key to retrieve the value from (must not be null)
+     * @return the value stored at the key, or null if the key does not exist
+     * @throws JedisException if the operation fails
+     * @since Redis 1.0.0
      */
     public String get(final String key) {
         checkNotClosed();
@@ -445,9 +482,12 @@ public class Jedis implements Closeable {
     }
 
     /**
-     * Test if the server is alive.
+     * Test if the server is alive and responding. This command is often used for health checks and
+     * connection testing. The server will respond with "PONG" if it's functioning correctly.
      *
-     * @return "PONG"
+     * @return "PONG" if the server is responding
+     * @throws JedisException if the operation fails or connection is lost
+     * @since Redis 1.0.0
      */
     public String ping() {
         checkNotClosed();
@@ -459,10 +499,14 @@ public class Jedis implements Closeable {
     }
 
     /**
-     * Test if the server is alive with a custom message.
+     * Test if the server is alive and echo back a custom message. This variant of PING allows you to
+     * send a custom message that will be echoed back by the server, useful for testing message
+     * integrity and round-trip functionality.
      *
-     * @param message the message to echo back
-     * @return the echoed message
+     * @param message the message to echo back (must not be null)
+     * @return the echoed message exactly as sent
+     * @throws JedisException if the operation fails or connection is lost
+     * @since Redis 2.8.0
      */
     public String ping(String message) {
         checkNotClosed();
@@ -766,6 +810,9 @@ public class Jedis implements Closeable {
     public String mset(String... keysvalues) {
         checkNotClosed();
         try {
+            if (keysvalues.length % 2 == 1) {
+                throw new IllegalArgumentException("keyvalues must be of even length");
+            }
             Map<String, String> keyValueMap = new HashMap<>();
             for (int i = 0; i < keysvalues.length; i += 2) {
                 if (i + 1 < keysvalues.length) {
@@ -1047,11 +1094,15 @@ public class Jedis implements Closeable {
     }
 
     /**
-     * Set new value and return old value.
+     * Set the string value of a key and return its old value. This is an atomic operation that
+     * combines SET and GET operations. If the key does not exist, it will be created with the new
+     * value and null will be returned.
      *
-     * @param key the key
-     * @param value the new value
-     * @return the old value, or null if key did not exist
+     * @param key the key to set
+     * @param value the new value to set
+     * @return the old value stored at the key, or null if the key did not exist
+     * @throws JedisException if the operation fails
+     * @since Redis 6.2.0
      */
     public String setGet(String key, String value) {
         checkNotClosed();
@@ -1065,11 +1116,15 @@ public class Jedis implements Closeable {
     }
 
     /**
-     * Get old value and set new value.
+     * Set the binary value of a key and return its old value. This is an atomic operation that
+     * combines SET and GET operations. If the key does not exist, it will be created with the new
+     * value and null will be returned.
      *
-     * @param key the key
-     * @param value the new value
-     * @return the old value, or null if key did not exist
+     * @param key the key to set
+     * @param value the new binary value to set
+     * @return the old binary value stored at the key, or null if the key did not exist
+     * @throws JedisException if the operation fails
+     * @since Redis 6.2.0
      */
     public byte[] setGet(final byte[] key, final byte[] value) {
         checkNotClosed();
@@ -1177,11 +1232,15 @@ public class Jedis implements Closeable {
     }
 
     /**
-     * Get the value of key and optionally set its expiration.
+     * Get the value of a key and optionally set its expiration. This command is similar to GET but
+     * allows setting expiration parameters atomically with the retrieval operation.
      *
-     * @param key the key
-     * @param params expiration parameters
-     * @return the value of key, or null if key does not exist
+     * @param key the key to retrieve the value from
+     * @param params expiration parameters (EX for seconds, PX for milliseconds, EXAT for timestamp,
+     *     PXAT for millisecond timestamp, PERSIST to remove expiration)
+     * @return the value of the key, or null if the key does not exist
+     * @throws JedisException if the operation fails
+     * @since Redis 6.2.0
      */
     public String getEx(final String key, final GetExParams params) {
         checkNotClosed();
@@ -1194,11 +1253,15 @@ public class Jedis implements Closeable {
     }
 
     /**
-     * Get the value of key and optionally set its expiration.
+     * Get the binary value of a key and optionally set its expiration. This command is similar to GET
+     * but allows setting expiration parameters atomically with the retrieval operation.
      *
-     * @param key the key
-     * @param params expiration parameters
-     * @return the value of key, or null if key does not exist
+     * @param key the key to retrieve the value from
+     * @param params expiration parameters (EX for seconds, PX for milliseconds, EXAT for timestamp,
+     *     PXAT for millisecond timestamp, PERSIST to remove expiration)
+     * @return the binary value of the key, or null if the key does not exist
+     * @throws JedisException if the operation fails
+     * @since Redis 6.2.0
      */
     public byte[] getEx(final byte[] key, final GetExParams params) {
         checkNotClosed();
@@ -1628,9 +1691,12 @@ public class Jedis implements Closeable {
     // keys method already exists above
 
     /**
-     * Get a random key from the database.
+     * Get a random key from the currently selected database. This command is useful for sampling keys
+     * from the database. The key is selected uniformly at random.
      *
-     * @return a random key, or null if the database is empty
+     * @return a random key from the database, or null if the database is empty
+     * @throws JedisException if the operation fails
+     * @since Redis 1.0.0
      */
     public String randomKey() {
         checkNotClosed();
@@ -1780,11 +1846,14 @@ public class Jedis implements Closeable {
     }
 
     /**
-     * Set expiration time at a specific timestamp.
+     * Set the expiration time of a key as a Unix timestamp (seconds since January 1, 1970). The key
+     * will be automatically deleted when the specified time is reached.
      *
-     * @param key the key
-     * @param unixTime expiration timestamp in seconds
-     * @return 1 if expiration was set, 0 if key does not exist
+     * @param key the key to set expiration for (must not be null)
+     * @param unixTime expiration timestamp in seconds since Unix epoch
+     * @return 1 if the expiration was set successfully, 0 if the key does not exist
+     * @throws JedisException if the operation fails
+     * @since Redis 1.2.0
      */
     public long expireAt(String key, long unixTime) {
         checkNotClosed();
@@ -2846,10 +2915,13 @@ public class Jedis implements Closeable {
     }
 
     /**
-     * Count the number of set bits in a string.
+     * Count the number of set bits (population counting) in a string. This operation counts all bits
+     * set to 1 in the entire string value stored at the specified key.
      *
-     * @param key the key
-     * @return the number of bits set to 1
+     * @param key the key containing the string value to analyze
+     * @return the number of bits set to 1 (0 if key doesn't exist)
+     * @throws JedisException if the operation fails
+     * @since Redis 2.6.0
      */
     public long bitcount(final String key) {
         checkNotClosed();
@@ -2861,12 +2933,15 @@ public class Jedis implements Closeable {
     }
 
     /**
-     * Count the number of set bits in a string between start and end offsets.
+     * Count the number of set bits (population counting) in a string within a specified byte range.
+     * The range is specified by start and end byte offsets (inclusive).
      *
-     * @param key the key
-     * @param start the start offset (byte index)
-     * @param end the end offset (byte index)
-     * @return the number of bits set to 1
+     * @param key the key containing the string value to analyze
+     * @param start the start offset (byte index, can be negative for end-relative indexing)
+     * @param end the end offset (byte index, can be negative for end-relative indexing)
+     * @return the number of bits set to 1 within the specified range
+     * @throws JedisException if the operation fails
+     * @since Redis 2.6.0
      */
     public long bitcount(final String key, final long start, final long end) {
         checkNotClosed();
@@ -3053,9 +3128,11 @@ public class Jedis implements Closeable {
      * Perform bitwise operations between strings.
      *
      * @param op the bitwise operation (AND, OR, XOR, NOT)
-     * @param destkey the destination key
-     * @param srckeys the source keys
+     * @param destKey the destination key where the result will be stored
+     * @param srcKeys the source keys for the bitwise operation
      * @return the size of the string stored in the destination key
+     * @throws JedisException if the operation fails
+     * @since Redis 2.6.0
      */
     public long bitop(final BitOP op, final String destKey, final String... srcKeys) {
         checkNotClosed();
@@ -3087,9 +3164,11 @@ public class Jedis implements Closeable {
      * Perform bitwise operations between strings.
      *
      * @param op the bitwise operation (AND, OR, XOR, NOT)
-     * @param destkey the destination key
-     * @param srckeys the source keys
+     * @param destKey the destination key where the result will be stored
+     * @param srcKeys the source keys for the bitwise operation
      * @return the size of the string stored in the destination key
+     * @throws JedisException if the operation fails
+     * @since Redis 2.6.0
      */
     public long bitop(final BitOP op, final byte[] destKey, final byte[]... srcKeys) {
         checkNotClosed();
@@ -3487,11 +3566,14 @@ public class Jedis implements Closeable {
 
     /**
      * Adds all elements to the HyperLogLog data structure stored at the specified key. Creates a new
-     * structure if the key does not exist.
+     * structure if the key does not exist. HyperLogLog is a probabilistic data structure used for
+     * estimating the cardinality of large datasets.
      *
      * @param key the key of the HyperLogLog data structure
-     * @param elements the elements to add to the HyperLogLog
+     * @param elements the elements to add to the HyperLogLog (must not be null)
      * @return 1 if the HyperLogLog is newly created or modified, 0 otherwise
+     * @throws JedisException if the operation fails
+     * @since Redis 2.8.9
      */
     public long pfadd(String key, String... elements) {
         checkNotClosed();
@@ -3505,11 +3587,14 @@ public class Jedis implements Closeable {
 
     /**
      * Adds all elements to the HyperLogLog data structure stored at the specified key. Creates a new
-     * structure if the key does not exist.
+     * structure if the key does not exist. HyperLogLog is a probabilistic data structure used for
+     * estimating the cardinality of large datasets.
      *
      * @param key the key of the HyperLogLog data structure
-     * @param elements the elements to add to the HyperLogLog
+     * @param elements the elements to add to the HyperLogLog (must not be null)
      * @return 1 if the HyperLogLog is newly created or modified, 0 otherwise
+     * @throws JedisException if the operation fails
+     * @since Redis 2.8.9
      */
     public long pfadd(final byte[] key, final byte[]... elements) {
         checkNotClosed();
@@ -3526,10 +3611,13 @@ public class Jedis implements Closeable {
     }
 
     /**
-     * Estimates the cardinality of the data stored in a HyperLogLog structure for a single key.
+     * Estimates the cardinality of the data stored in a HyperLogLog structure for a single key. The
+     * cardinality is the approximate number of unique elements that have been added to the set.
      *
      * @param key the key of the HyperLogLog data structure
-     * @return the approximated cardinality of the HyperLogLog data structure
+     * @return the approximated cardinality of the HyperLogLog data structure (0 if key doesn't exist)
+     * @throws JedisException if the operation fails
+     * @since Redis 2.8.9
      */
     public long pfcount(String key) {
         checkNotClosed();
@@ -3542,10 +3630,13 @@ public class Jedis implements Closeable {
 
     /**
      * Estimates the cardinality of the data stored in multiple HyperLogLog structures by calculating
-     * the combined cardinality of multiple keys.
+     * the combined cardinality of multiple keys. This operation is equivalent to performing a union
+     * of the HyperLogLog structures and then counting the cardinality.
      *
-     * @param keys the keys of the HyperLogLog data structures to be analyzed
+     * @param keys the keys of the HyperLogLog data structures to be analyzed (must not be empty)
      * @return the approximated cardinality of the combined HyperLogLog data structures
+     * @throws JedisException if the operation fails
+     * @since Redis 2.8.9
      */
     public long pfcount(String... keys) {
         checkNotClosed();
@@ -3560,14 +3651,16 @@ public class Jedis implements Closeable {
      * Merges multiple HyperLogLog values into a unique value. If the destination variable exists, it
      * is treated as one of the source HyperLogLog data sets, otherwise a new HyperLogLog is created.
      *
-     * @param destkey the key of the destination HyperLogLog where the merged data sets will be stored
-     * @param sourcekeys the keys of the HyperLogLog structures to be merged
+     * @param destKey the key of the destination HyperLogLog where the merged data sets will be stored
+     * @param sourceKeys the keys of the HyperLogLog structures to be merged
      * @return "OK" if successful
+     * @throws JedisException if the operation fails
+     * @since Redis 2.8.9
      */
-    public String pfmerge(String destkey, String... sourcekeys) {
+    public String pfmerge(String destKey, String... sourceKeys) {
         checkNotClosed();
         try {
-            return glideClient.pfmerge(destkey, sourcekeys).get();
+            return glideClient.pfmerge(destKey, sourceKeys).get();
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("PFMERGE operation failed", e);
         }
@@ -3611,18 +3704,20 @@ public class Jedis implements Closeable {
      * Merges multiple HyperLogLog values into a unique value. If the destination variable exists, it
      * is treated as one of the source HyperLogLog data sets, otherwise a new HyperLogLog is created.
      *
-     * @param destkey the key of the destination HyperLogLog where the merged data sets will be stored
-     * @param sourcekeys the keys of the HyperLogLog structures to be merged
+     * @param destKey the key of the destination HyperLogLog where the merged data sets will be stored
+     * @param sourceKeys the keys of the HyperLogLog structures to be merged
      * @return "OK" if successful
+     * @throws JedisException if the operation fails
+     * @since Redis 2.8.9
      */
-    public String pfmerge(final byte[] destkey, final byte[]... sourcekeys) {
+    public String pfmerge(final byte[] destKey, final byte[]... sourceKeys) {
         checkNotClosed();
         try {
-            String[] stringSourceKeys = new String[sourcekeys.length];
-            for (int i = 0; i < sourcekeys.length; i++) {
-                stringSourceKeys[i] = new String(sourcekeys[i]);
+            String[] stringSourceKeys = new String[sourceKeys.length];
+            for (int i = 0; i < sourceKeys.length; i++) {
+                stringSourceKeys[i] = new String(sourceKeys[i]);
             }
-            return glideClient.pfmerge(new String(destkey), stringSourceKeys).get();
+            return glideClient.pfmerge(new String(destKey), stringSourceKeys).get();
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("PFMERGE operation failed", e);
         }
