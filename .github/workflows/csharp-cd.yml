@@ -198,6 +198,14 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
+            - name: Set up dotnet
+              uses: actions/setup-dotnet@v4
+              with:
+                  # install latest dotnet too to use language features
+                  dotnet-version: |
+                      8
+                      9
+
             - name: Download package
               if: ${{ needs.publish.result == 'skipped' }}
               uses: actions/download-artifact@v4
@@ -215,14 +223,6 @@ jobs:
                   dotnet nuget config paths
                   dotnet nuget config paths | xargs cat
                   ls -l nuget.local
-
-            - name: Set up dotnet
-              uses: actions/setup-dotnet@v4
-              with:
-                  # install latest dotnet too to use language features
-                  dotnet-version: |
-                      8
-                      9
 
             - name: Patch IT suite to run tests using freshly published version
               working-directory: csharp/tests/Valkey.Glide.IntegrationTests
