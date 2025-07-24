@@ -2393,14 +2393,14 @@ public class Jedis implements Closeable {
 
             if (keysObj instanceof Object[]) {
                 Object[] keysArray = (Object[]) keysObj;
-                java.util.List<String> keys = new java.util.ArrayList<>();
+                List<String> keys = new ArrayList<>();
                 for (Object key : keysArray) {
                     keys.add(key != null ? key.toString() : null);
                 }
                 return new ScanResult<>(newCursor, keys);
             }
         }
-        return new ScanResult<>("0", new java.util.ArrayList<>());
+        return new ScanResult<>("0", new ArrayList<>());
     }
 
     /** Convert ScanParams to GLIDE ScanOptions. */
@@ -2467,14 +2467,14 @@ public class Jedis implements Closeable {
 
                 if (keysObj instanceof Object[]) {
                     Object[] keysArray = (Object[]) keysObj;
-                    java.util.List<byte[]> keys = new java.util.ArrayList<>();
+                    List<byte[]> keys = new ArrayList<>();
                     for (Object key : keysArray) {
                         keys.add(key != null ? key.toString().getBytes() : null);
                     }
                     return new ScanResult<>(newCursor.getBytes(), keys);
                 }
             }
-            return new ScanResult<>("0".getBytes(), new java.util.ArrayList<>());
+            return new ScanResult<>("0".getBytes(), new ArrayList<>());
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("SCAN operation failed", e);
         }
@@ -2498,14 +2498,14 @@ public class Jedis implements Closeable {
 
                 if (keysObj instanceof Object[]) {
                     Object[] keysArray = (Object[]) keysObj;
-                    java.util.List<byte[]> keys = new java.util.ArrayList<>();
+                    List<byte[]> keys = new ArrayList<>();
                     for (Object key : keysArray) {
                         keys.add(key != null ? key.toString().getBytes() : null);
                     }
                     return new ScanResult<>(newCursor.getBytes(), keys);
                 }
             }
-            return new ScanResult<>("0".getBytes(), new java.util.ArrayList<>());
+            return new ScanResult<>("0".getBytes(), new ArrayList<>());
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("SCAN operation failed", e);
         }
@@ -2596,14 +2596,14 @@ public class Jedis implements Closeable {
 
                 if (keysObj instanceof Object[]) {
                     Object[] keysArray = (Object[]) keysObj;
-                    java.util.List<byte[]> keys = new java.util.ArrayList<>();
+                    List<byte[]> keys = new ArrayList<>();
                     for (Object key : keysArray) {
                         keys.add(key != null ? key.toString().getBytes() : null);
                     }
                     return new ScanResult<>(newCursor.getBytes(), keys);
                 }
             }
-            return new ScanResult<>("0".getBytes(), new java.util.ArrayList<>());
+            return new ScanResult<>("0".getBytes(), new ArrayList<>());
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("SCAN operation failed", e);
         }
