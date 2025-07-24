@@ -83,7 +83,7 @@
         "TARGET": "x86_64-pc-windows-msvc",
         "PACKAGE_MANAGERS": ["nuget"],
         "languages": [],
-		"comment": "No tests/CI is running there yet, but CD runs"
+        "comment": "No tests/CI is running there yet, but CD runs"
     },
     {
         "OS": "windows",
@@ -94,6 +94,6 @@
         "TARGET": "aarch64-pc-windows-msvc",
         "PACKAGE_MANAGERS": ["nuget"],
         "languages": [],
-		"comment": "No tests/CI is running there yet, but CD runs"
+        "comment": "No tests/CI is running there yet, but CD runs"
     }
 ]
