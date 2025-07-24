@@ -5,7 +5,7 @@ using Valkey.Glide.Internals;
 
 namespace Valkey.Glide;
 
-public abstract partial class BaseClient : IListBaseCommands
+public abstract partial class BaseClient : IListCommands
 {
     public async Task<ValkeyValue> ListLeftPopAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None)
         => await Command(Request.ListLeftPopAsync(key));

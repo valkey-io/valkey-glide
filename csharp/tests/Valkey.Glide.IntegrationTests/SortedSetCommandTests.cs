@@ -158,7 +158,7 @@ public class SortedSetCommandTests(TestConfiguration config)
     {
         string key = Guid.NewGuid().ToString();
 
-        // Test with special double values that Redis/Valkey supports
+        // Test with special double values that server supports
         Assert.True(await client.SortedSetAddAsync(key, "inf", double.PositiveInfinity));
         Assert.True(await client.SortedSetAddAsync(key, "neginf", double.NegativeInfinity));
         Assert.True(await client.SortedSetAddAsync(key, "zero", 0.0));
