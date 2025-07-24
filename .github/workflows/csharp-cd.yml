@@ -185,6 +185,7 @@ jobs:
 
     test:
         needs: [publish, set-release-version, load-platform-matrix]
+        if: ${{ always() }}
         timeout-minutes: 35
         strategy:
             # Run all jobs
@@ -213,6 +214,7 @@ jobs:
                   dotnet nuget add source nuget.local
                   dotnet nuget config paths
                   dotnet nuget config paths | xargs cat
+                  ls -l nuget.local
 
             - name: Set up dotnet
               uses: actions/setup-dotnet@v4
