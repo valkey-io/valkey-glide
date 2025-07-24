@@ -58,7 +58,7 @@ import (
 //			FlushIntervalMs: &interval, // Optional, defaults to 5000, e.g. interval := int64(1000)
 //			SpanFromContext: func(ctx context.Context) (uint64, bool) {
 //				// Extract span pointer from context for parent-child span relationships
-//				if spanPtr, ok := ctx.Value("glide-span").(uint64); ok && spanPtr != 0 {
+//				if spanPtr, ok := ctx.Value(glide.SpanContextKey).(uint64); ok && spanPtr != 0 {
 //					return spanPtr, true
 //				}
 //				return 0, false
@@ -90,7 +90,7 @@ type OpenTelemetryConfig struct {
 	//
 	// Example implementation:
 	//   SpanFromContext: func(ctx context.Context) (uint64, bool) {
-	//       if spanPtr, ok := ctx.Value("glide-span").(uint64); ok && spanPtr != 0 {
+	//       if spanPtr, ok := ctx.Value(glide.SpanContextKey).(uint64); ok && spanPtr != 0 {
 	//           return spanPtr, true
 	//       }
 	//       return 0, false
@@ -127,6 +127,13 @@ type OpenTelemetryTracesConfig struct {
 type OpenTelemetryMetricsConfig struct {
 	Endpoint string
 }
+
+// Context key constants for consistent span storage
+const (
+	// SpanContextKey is the default context key used to store Glide span pointers in context.Context.
+	// This key is used by WithSpan() and DefaultSpanFromContext() functions.
+	SpanContextKey = "glide-span"
+)
 
 var (
 	otelInstance    *OpenTelemetry
@@ -416,7 +423,7 @@ func (o *OpenTelemetry) EndSpan(spanPtr uint64) {
 //	// Now all Glide operations with this context will be child spans
 //	result, err := client.Get(ctx, "key")
 func WithSpan(ctx context.Context, spanPtr uint64) context.Context {
-	return context.WithValue(ctx, "glide-span", spanPtr)
+	return context.WithValue(ctx, SpanContextKey, spanPtr)
 }
 
 // DefaultSpanFromContext is a default implementation of the SpanFromContext function
@@ -442,7 +449,7 @@ func WithSpan(ctx context.Context, spanPtr uint64) context.Context {
 //		SpanFromContext: glide.DefaultSpanFromContext,
 //	}
 func DefaultSpanFromContext(ctx context.Context) (uint64, bool) {
-	if spanPtr, ok := ctx.Value("glide-span").(uint64); ok && spanPtr != 0 {
+	if spanPtr, ok := ctx.Value(SpanContextKey).(uint64); ok && spanPtr != 0 {
 		return spanPtr, true
 	}
 	return 0, false
@@ -627,7 +634,7 @@ Example 4: Error Handling and Fallback Behavior
 		}()
 		
 		// Multiple extraction strategies
-		if spanPtr, ok := ctx.Value("glide-span").(uint64); ok && spanPtr != 0 {
+		if spanPtr, ok := ctx.Value(glide.SpanContextKey).(uint64); ok && spanPtr != 0 {
 			return spanPtr, true
 		}
 		
