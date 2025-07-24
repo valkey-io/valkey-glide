@@ -217,13 +217,12 @@ jobs:
               if: ${{ needs.publish.result == 'skipped' }}
               shell: bash
               run: |
-                  dotnet nuget config paths
-                  dotnet nuget config paths | xargs cat
-                  dotnet nuget add source nuget.local
-                  dotnet nuget config paths
-                  dotnet nuget config paths | xargs cat
-                  echo 
                   ls -l ~/.nuget/NuGet/nuget.local
+                  dotnet nuget add source nuget.local
+                  if [[ "$OS" != "Windows_NT" ]]; then
+                    dotnet nuget config paths
+                    dotnet nuget config paths | xargs cat
+                  fi
 
             - name: Patch IT suite to run tests using freshly published version
               working-directory: csharp/tests/Valkey.Glide.IntegrationTests
