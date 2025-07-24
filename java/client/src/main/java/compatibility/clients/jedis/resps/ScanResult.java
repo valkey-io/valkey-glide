@@ -1,6 +1,9 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package compatibility.clients.jedis.resps;
 
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /** Result of a SCAN command in Jedis compatibility layer. */
@@ -10,12 +13,12 @@ public class ScanResult<T> {
 
     public ScanResult(String cursor, List<T> results) {
         this.cursor = cursor;
-        this.results = results;
+        this.results = results != null ? new ArrayList<>(results) : new ArrayList<>();
     }
 
     public ScanResult(byte[] cursor, List<T> results) {
-        this.cursor = new String(cursor);
-        this.results = results;
+        this.cursor = new String(cursor, StandardCharsets.UTF_8);
+        this.results = results != null ? new ArrayList<>(results) : new ArrayList<>();
     }
 
     /**
@@ -33,16 +36,16 @@ public class ScanResult<T> {
      * @return the cursor as bytes
      */
     public byte[] getCursorAsBytes() {
-        return cursor.getBytes();
+        return cursor.getBytes(StandardCharsets.UTF_8);
     }
 
     /**
      * Returns the scan results.
      *
-     * @return the scan results
+     * @return an unmodifiable view of the scan results
      */
     public List<T> getResult() {
-        return results;
+        return Collections.unmodifiableList(results);
     }
 
     /**

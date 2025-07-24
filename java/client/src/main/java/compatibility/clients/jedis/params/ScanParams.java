@@ -1,6 +1,8 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package compatibility.clients.jedis.params;
 
+import java.nio.charset.StandardCharsets;
+
 /** Parameters for SCAN command in Jedis compatibility layer. */
 public class ScanParams {
     public static final String SCAN_POINTER_START = "0";
@@ -27,7 +29,7 @@ public class ScanParams {
      * @return this ScanParams instance
      */
     public ScanParams match(byte[] pattern) {
-        this.matchPattern = new String(pattern);
+        this.matchPattern = new String(pattern, StandardCharsets.UTF_8);
         return this;
     }
 
