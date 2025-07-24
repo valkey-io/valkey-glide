@@ -271,10 +271,90 @@ func (o *OpenTelemetry) createBatchSpan() uint64 {
 	return uint64(C.create_batch_otel_span())
 }
 
+// createSpanWithParent creates a new OpenTelemetry span with the given request type and parent span pointer.
+// This is an internal method used by command execution to create child spans.
+func (o *OpenTelemetry) createSpanWithParent(requestType C.RequestType, parentSpanPtr uint64) uint64 {
+	if !o.IsInitialized() {
+		return 0
+	}
+	return uint64(C.create_otel_span_with_parent(C.enum_RequestType(requestType), C.uint64_t(parentSpanPtr)))
+}
+
 // DropSpan drops an OpenTelemetry span given its pointer.
 func (o *OpenTelemetry) dropSpan(spanPtr uint64) {
 	if spanPtr == 0 {
 		return
 	}
 	C.drop_otel_span(C.uint64_t(spanPtr))
+}
+
+// CreateSpan creates a new OpenTelemetry span with the given name and returns a pointer to the span.
+// This is a PUBLIC API for users to create parent spans that can be used with command execution.
+//
+// Parameters:
+//   - name: The name of the span to create
+//
+// Returns:
+//   - uint64: A pointer to the created span (0 on failure)
+//   - error: An error if the span creation fails or OpenTelemetry is not initialized
+//
+// Example usage:
+//
+//	spanPtr, err := glide.GetOtelInstance().CreateSpan("user-operation")
+//	if err != nil {
+//		log.Printf("Failed to create span: %v", err)
+//		return
+//	}
+//	defer glide.GetOtelInstance().EndSpan(spanPtr)
+//
+// Note: The caller is responsible for calling EndSpan() to properly clean up the span.
+func (o *OpenTelemetry) CreateSpan(name string) (uint64, error) {
+	// Thread-safe check for initialization
+	if !o.IsInitialized() {
+		return 0, fmt.Errorf("openTelemetry not initialized")
+	}
+
+	// Validate input parameters
+	if name == "" {
+		return 0, fmt.Errorf("span name cannot be empty")
+	}
+
+	// Validate name length (reasonable limit to prevent abuse)
+	if len(name) > 256 {
+		return 0, fmt.Errorf("span name too long (%d chars), maximum 256 characters allowed", len(name))
+	}
+
+	// Convert Go string to C string
+	cName := C.CString(name)
+	defer C.free(unsafe.Pointer(cName))
+
+	// Call FFI function to create named span
+	spanPtr := uint64(C.create_named_otel_span(cName))
+	if spanPtr == 0 {
+		return 0, fmt.Errorf("failed to create span '%s'", name)
+	}
+
+	return spanPtr, nil
+}
+
+// EndSpan ends and drops an OpenTelemetry span given its pointer.
+// This is a PUBLIC API for users to properly clean up spans created with CreateSpan().
+//
+// Parameters:
+//   - spanPtr: A pointer to the span to end (obtained from CreateSpan)
+//
+// Note: This method is safe to call with a zero pointer (no-op).
+// It is the caller's responsibility to ensure the span pointer is valid.
+//
+// Example usage:
+//
+//	spanPtr, err := glide.GetOtelInstance().CreateSpan("user-operation")
+//	if err != nil {
+//		log.Printf("Failed to create span: %v", err)
+//		return
+//	}
+//	defer glide.GetOtelInstance().EndSpan(spanPtr)
+func (o *OpenTelemetry) EndSpan(spanPtr uint64) {
+	// Safe to call with zero pointer - dropSpan handles this case
+	o.dropSpan(spanPtr)
 }

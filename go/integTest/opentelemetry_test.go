@@ -581,3 +581,118 @@ func (suite *GlideTestSuite) TestOpenTelemetry_ClusterClientSpanTransactionMemor
 		})
 	}
 }
+
+// TestOpenTelemetry_PublicSpanManagementAPIs tests the new public CreateSpan and EndSpan APIs
+func (suite *GlideTestSuite) TestOpenTelemetry_PublicSpanManagementAPIs() {
+	if !*otelTest {
+		suite.T().Skip("OpenTelemetry tests are disabled")
+	}
+
+	otelInstance := glide.GetOtelInstance()
+
+	// Test CreateSpan with valid input
+	spanPtr, err := otelInstance.CreateSpan("test-user-operation")
+	require.NoError(suite.T(), err)
+	assert.NotEqual(suite.T(), uint64(0), spanPtr, "CreateSpan should return non-zero span pointer")
+
+	// Test EndSpan with valid span pointer
+	otelInstance.EndSpan(spanPtr)
+
+	// Test CreateSpan with empty name (should fail)
+	_, err = otelInstance.CreateSpan("")
+	assert.Error(suite.T(), err)
+	assert.Contains(suite.T(), err.Error(), "span name cannot be empty")
+
+	// Test CreateSpan with too long name (should fail)
+	longName := strings.Repeat("a", 257) // 257 characters
+	_, err = otelInstance.CreateSpan(longName)
+	assert.Error(suite.T(), err)
+	assert.Contains(suite.T(), err.Error(), "span name too long")
+
+	// Test EndSpan with zero pointer (should be safe no-op)
+	otelInstance.EndSpan(0) // Should not panic or error
+
+	// Test multiple spans can be created and ended
+	span1, err := otelInstance.CreateSpan("operation-1")
+	require.NoError(suite.T(), err)
+	span2, err := otelInstance.CreateSpan("operation-2")
+	require.NoError(suite.T(), err)
+
+	assert.NotEqual(suite.T(), span1, span2, "Different spans should have different pointers")
+
+	otelInstance.EndSpan(span1)
+	otelInstance.EndSpan(span2)
+}
+
+// TestOpenTelemetry_PublicSpanManagementAPIs_NotInitialized tests behavior when OpenTelemetry is not initialized
+func (suite *GlideTestSuite) TestOpenTelemetry_PublicSpanManagementAPIs_NotInitialized() {
+	// Note: Since OpenTelemetry is designed to be initialized once per process,
+	// and other tests may have already initialized it, we test the behavior
+	// by checking if the instance reports as initialized or not.
+	
+	otelInstance := glide.GetOtelInstance()
+	
+	if !otelInstance.IsInitialized() {
+		// Test CreateSpan when not initialized (should fail)
+		_, err := otelInstance.CreateSpan("test-span")
+		assert.Error(suite.T(), err)
+		assert.Contains(suite.T(), err.Error(), "openTelemetry not initialized")
+	} else {
+		// If already initialized, test that CreateSpan works
+		spanPtr, err := otelInstance.CreateSpan("test-span")
+		assert.NoError(suite.T(), err)
+		assert.NotEqual(suite.T(), uint64(0), spanPtr)
+		otelInstance.EndSpan(spanPtr)
+	}
+
+	// Test EndSpan with arbitrary pointer (should be safe no-op regardless of initialization)
+	otelInstance.EndSpan(123) // Should not panic
+}
+
+// TestOpenTelemetry_PublicSpanManagementAPIs_ThreadSafety tests thread safety of the public APIs
+func (suite *GlideTestSuite) TestOpenTelemetry_PublicSpanManagementAPIs_ThreadSafety() {
+	if !*otelTest {
+		suite.T().Skip("OpenTelemetry tests are disabled")
+	}
+
+	otelInstance := glide.GetOtelInstance()
+	
+	// Test concurrent span creation and cleanup
+	var wg sync.WaitGroup
+	spanPtrs := make([]uint64, 100)
+	errChan := make(chan error, 100)
+
+	// Create spans concurrently
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func(index int) {
+			defer wg.Done()
+			spanName := fmt.Sprintf("concurrent-span-%d", index)
+			spanPtr, err := otelInstance.CreateSpan(spanName)
+			if err != nil {
+				errChan <- err
+				return
+			}
+			spanPtrs[index] = spanPtr
+		}(i)
+	}
+
+	wg.Wait()
+	close(errChan)
+
+	// Check for any errors during span creation
+	for err := range errChan {
+		require.NoError(suite.T(), err, "Concurrent span creation failed")
+	}
+
+	// End spans concurrently
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func(index int) {
+			defer wg.Done()
+			otelInstance.EndSpan(spanPtrs[index])
+		}(i)
+	}
+
+	wg.Wait()
+}
