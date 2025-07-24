@@ -51,10 +51,10 @@ public abstract partial class BaseClient : IGenericBaseCommands
         => await Command(Request.KeyDumpAsync(key, flags));
 
     public async Task KeyRestoreAsync(ValkeyKey key, byte[] value, TimeSpan? expiry = null, RestoreOptions? restoreOptions = null, CommandFlags flags = CommandFlags.None)
-        => await Command(Request.KeyRestoreAsync(key, value, expiry, restoreOptions: restoreOptions, flags: flags));
+        => await Command(Request.KeyRestoreAsync(key, value, expiry, restoreOptions: restoreOptions, flags));
 
     public async Task KeyRestoreDateTimeAsync(ValkeyKey key, byte[] value, DateTime? expiry = null, RestoreOptions? restoreOptions = null, CommandFlags flags = CommandFlags.None)
-        => await Command(Request.KeyRestoreDateTimeAsync(key, value, expiry, restoreOptions: restoreOptions, flags: flags));
+        => await Command(Request.KeyRestoreDateTimeAsync(key, value, expiry, restoreOptions: restoreOptions, flags));
 
     public async Task<bool> KeyTouchAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None)
         => await Command(Request.KeyTouchAsync(key, flags));
