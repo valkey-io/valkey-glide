@@ -101,18 +101,27 @@ jobs:
                       ${{ matrix.host.TARGET }}
 
             # TODO strip debug symbols
-            - name: Build native libs
-              if: ${{ !contains(matrix.host.TARGET, 'linux-gnu') }}
+            - name: Build native libs (mac)
+              if: ${{ matrix.host.OS == 'macos' }}
               working-directory: csharp/rust
-              run: cargo build --release
+              run: |
+                  cargo build --release
+                  strip -S -x -X target/release/libglide_rs.dylib
 
-            - name: Build native libs (linux)
+            - name: Build native libs (linux gnu)
               if: ${{ contains(matrix.host.TARGET, 'linux-gnu') }}
               working-directory: csharp/rust
               run: |
                   cargo zigbuild -r --target ${{ matrix.host.TARGET }}.2.17
                   mkdir -p target/release
                   cp target/*/release/libglide_rs.so target/release/
+                  strip -s -x -X -S target/release/libglide_rs.so
+
+            - name: Build native libs (win)
+              if: ${{ matrix.host.OS == 'windows' }}
+              working-directory: csharp/rust
+              run: |
+                  cargo build --release
 
             - name: Upload artifacts to publish
               continue-on-error: true
@@ -181,7 +190,7 @@ jobs:
             - name: Publish
               run: |
                   ls -l
-                  : dotnet nuget push Valkey.Glide.*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
+                  dotnet nuget push Valkey.Glide.*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
 
     test:
         needs: [publish, set-release-version, load-platform-matrix]
@@ -260,10 +269,12 @@ jobs:
                       utils/clusters/**
 
     remove-package-if-validation-fails:
-        needs: [test, set-release-version]
+        needs: [publish, test, set-release-version]
         if: ${{ always() }}
         runs-on: ubuntu-latest
+        env:
+            RELEASE_VERSION: ${{ needs.set-release-version.outputs.RELEASE_VERSION }}
         steps:
             - name: Remove package from NuGet due to test failures
-              if: ${{ needs.test.result == 'failure' }}
+              if: ${{ needs.test.result == 'failure' && needs.publish.result != 'failure' }}
               run: dotnet nuget delete Valkey.Glide ${{ env.RELEASE_VERSION }} --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
