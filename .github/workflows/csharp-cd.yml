@@ -135,12 +135,13 @@ jobs:
             - name: Download published artifacts
               uses: actions/download-artifact@v4
               with:
-                  path: csharp/bin/
+                  path: csharp/bin
 
             - name: Rename lib for windows
+              working-directory: csharp/bin
               run: |
                   find . -name glide_rs.dll -execdir mv {} libglide_rs.dll \;
-                  tree csharp/bin
+                  tree
 
             - name: Set up dotnet
               uses: actions/setup-dotnet@v4
@@ -183,12 +184,35 @@ jobs:
                   : dotnet nuget push Valkey.Glide.*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
 
     test:
-        needs: [publish, set-release-version]
-        runs-on: ubuntu-latest
+        needs: [publish, set-release-version, load-platform-matrix]
+        timeout-minutes: 35
+        strategy:
+            # Run all jobs
+            fail-fast: false
+            matrix:
+                host: ${{ fromJson(needs.load-platform-matrix.outputs.PLATFORM_MATRIX) }}
+        runs-on: ${{ matrix.host.CD_RUNNER }}
         env:
             RELEASE_VERSION: ${{ needs.set-release-version.outputs.RELEASE_VERSION }}
         steps:
             - uses: actions/checkout@v4
+
+            - name: Download package
+              if: ${{ needs.publish.result == 'skipped' }}
+              uses: actions/download-artifact@v4
+              with:
+                  name: package
+                  path: csharp/nuget.local
+
+            - name: Set up a local nuget
+              if: ${{ needs.publish.result == 'skipped' }}
+              working-directory: csharp
+              run: |
+                  dotnet nuget config paths
+                  dotnet nuget config paths | xargs cat
+                  dotnet nuget add source nuget.local
+                  dotnet nuget config paths
+                  dotnet nuget config paths | xargs cat
 
             - name: Set up dotnet
               uses: actions/setup-dotnet@v4
@@ -209,7 +233,7 @@ jobs:
               uses: ./.github/workflows/install-engine
               with:
                   engine-version: 8.1
-                  target: x86_64-unknown-linux-gnu
+                  target: ${{ matrix.host.TARGET }}
 
             - name: Run tests
               working-directory: csharp/tests/Valkey.Glide.IntegrationTests
