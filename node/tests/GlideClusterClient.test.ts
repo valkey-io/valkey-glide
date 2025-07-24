@@ -126,7 +126,7 @@ describe("GlideClusterClient", () => {
             await new Promise((resolve) => setTimeout(resolve, 50));
             if (azCluster) await azCluster.close(true);
         }
-    });
+    }, TIMEOUT);
 
     runBaseTests({
         init: async (protocol, configOverrides) => {
