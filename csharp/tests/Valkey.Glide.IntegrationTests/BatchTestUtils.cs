@@ -397,6 +397,99 @@ internal class BatchTestUtils
         _ = batch.SortedSetRemove(key1, "nonexistent");
         testData.Add(new(false, "SortedSetRemove(key1, nonexistent)"));
 
+        // Add some test data for length, count, and range operations
+        _ = batch.SortedSetAdd(key1, "testMember1", 1.0);
+        testData.Add(new(true, "SortedSetAdd(key1, testMember1, 1.0)"));
+
+        _ = batch.SortedSetAdd(key1, "testMember2", 2.0);
+        testData.Add(new(true, "SortedSetAdd(key1, testMember2, 2.0)"));
+
+        _ = batch.SortedSetAdd(key1, "testMember3", 3.0);
+        testData.Add(new(true, "SortedSetAdd(key1, testMember3, 3.0)"));
+
+        // Test SortedSetLength (uses ZCARD)
+        _ = batch.SortedSetLength(key1);
+        testData.Add(new(3L, "SortedSetLength(key1)"));
+
+        _ = batch.SortedSetLength(key2);
+        testData.Add(new(1L, "SortedSetLength(key2)"));
+
+        // Test SortedSetLength with range (uses ZCOUNT)
+        _ = batch.SortedSetLength(key1, 1.5, 2.5);
+        testData.Add(new(1L, "SortedSetLength(key1, 1.5, 2.5)"));
+
+        // Test SortedSetCard (ZCARD)
+        _ = batch.SortedSetCard(key1);
+        testData.Add(new(3L, "SortedSetCard(key1)"));
+
+        _ = batch.SortedSetCard(key2);
+        testData.Add(new(1L, "SortedSetCard(key2)"));
+
+        // Test SortedSetCount
+        _ = batch.SortedSetCount(key1);
+        testData.Add(new(3L, "SortedSetCount(key1) - all elements"));
+
+        _ = batch.SortedSetCount(key1, 1.5, 2.5);
+        testData.Add(new(1L, "SortedSetCount(key1, 1.5, 2.5)"));
+
+        _ = batch.SortedSetCount(key1, 1.0, 3.0, Exclude.Start);
+        testData.Add(new(2L, "SortedSetCount(key1, 1.0, 3.0, Exclude.Start)"));
+
+        // Test SortedSetRangeByRank
+        _ = batch.SortedSetRangeByRank(key1);
+        testData.Add(new(Array.Empty<ValkeyValue>(), "SortedSetRangeByRank(key1) - all elements", true));
+
+        _ = batch.SortedSetRangeByRank(key1, 0, 1);
+        testData.Add(new(Array.Empty<ValkeyValue>(), "SortedSetRangeByRank(key1, 0, 1)", true));
+
+        _ = batch.SortedSetRangeByRank(key1, 0, 1, Order.Descending);
+        testData.Add(new(Array.Empty<ValkeyValue>(), "SortedSetRangeByRank(key1, 0, 1, Descending)", true));
+
+        // Test SortedSetRangeByRankWithScores
+        _ = batch.SortedSetRangeByRankWithScores(key1);
+        testData.Add(new(Array.Empty<SortedSetEntry>(), "SortedSetRangeByRankWithScores(key1) - all elements", true));
+
+        _ = batch.SortedSetRangeByRankWithScores(key1, 0, 1);
+        testData.Add(new(Array.Empty<SortedSetEntry>(), "SortedSetRangeByRankWithScores(key1, 0, 1)", true));
+
+        // Test SortedSetRangeByScore
+        _ = batch.SortedSetRangeByScore(key1, 1.0, 3.0);
+        testData.Add(new(Array.Empty<ValkeyValue>(), "SortedSetRangeByScore(key1, 1.0, 3.0)", true));
+
+        _ = batch.SortedSetRangeByScore(key1, 1.0, 3.0, Exclude.None, Order.Descending);
+        testData.Add(new(Array.Empty<ValkeyValue>(), "SortedSetRangeByScore(key1, 1.0, 3.0, Descending)", true));
+
+        // Test SortedSetRangeByScoreWithScores
+        _ = batch.SortedSetRangeByScoreWithScores(key1, 1.0, 3.0);
+        testData.Add(new(Array.Empty<SortedSetEntry>(), "SortedSetRangeByScoreWithScores(key1, 1.0, 3.0)", true));
+
+        _ = batch.SortedSetRangeByScoreWithScores(key1, 1.0, 3.0, skip: 1, take: 1);
+        testData.Add(new(Array.Empty<SortedSetEntry>(), "SortedSetRangeByScoreWithScores(key1, 1.0, 3.0, skip: 1, take: 1)", true));
+
+        // Add members with same score for lexicographical ordering tests
+        _ = batch.SortedSetAdd(key2, "apple", 0.0);
+        testData.Add(new(false, "SortedSetAdd(key2, apple, 0.0)"));
+
+        _ = batch.SortedSetAdd(key2, "banana", 0.0);
+        testData.Add(new(true, "SortedSetAdd(key2, banana, 0.0)"));
+
+        _ = batch.SortedSetAdd(key2, "cherry", 0.0);
+        testData.Add(new(true, "SortedSetAdd(key2, cherry, 0.0)"));
+
+        // Test SortedSetRangeByValue
+        _ = batch.SortedSetRangeByValue(key2, "a", "c", Exclude.None, 0, -1);
+        testData.Add(new(Array.Empty<ValkeyValue>(), "SortedSetRangeByValue(key2, 'a', 'c', Exclude.None, 0, -1)", true));
+
+        _ = batch.SortedSetRangeByValue(key2, "b", "d", Exclude.None, skip: 1, take: 1);
+        testData.Add(new(Array.Empty<ValkeyValue>(), "SortedSetRangeByValue(key2, 'b', 'd', Exclude.None, skip: 1, take: 1)", true));
+
+        // Test SortedSetRangeByValue
+        _ = batch.SortedSetRangeByValue(key2, order: Order.Descending);
+        testData.Add(new(Array.Empty<ValkeyValue>(), "SortedSetRangeByValue(key2, order: Descending)", true));
+
+        _ = batch.SortedSetRangeByValue(key2, "a", "c", order: Order.Ascending);
+        testData.Add(new(Array.Empty<ValkeyValue>(), "SortedSetRangeByValue(key2, 'a', 'c', order: Ascending)", true));
+
         return testData;
     }
 

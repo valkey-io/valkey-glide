@@ -5,9 +5,9 @@ namespace Valkey.Glide.Commands;
 /// <summary>
 /// Supports commands for the "List Commands" group for standalone and cluster clients.
 /// <br/>
-/// See more on <see href="https://valkey.io/commands/#list">valkey.io</see>.
+/// See more on <see href="https://valkey.io/commands#list">valkey.io</see>.
 /// </summary>
-public interface IListBaseCommands
+public interface IListCommands
 {
     /// <summary>
     /// Removes and returns the first elements of the list stored at <paramref name="key" />.
