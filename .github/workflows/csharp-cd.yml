@@ -200,6 +200,13 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
+            - name: Download package
+              if: ${{ needs.publish.result == 'skipped' }}
+              uses: actions/download-artifact@v4
+              with:
+                  name: package
+                  path: nuget.local
+
             - name: Set up dotnet
               uses: actions/setup-dotnet@v4
               with:
@@ -207,13 +214,6 @@ jobs:
                   dotnet-version: |
                       8
                       9
-
-            - name: Download package
-              if: ${{ needs.publish.result == 'skipped' }}
-              uses: actions/download-artifact@v4
-              with:
-                  name: package
-                  path: nuget.local
 
             - name: Set up a local nuget
               if: ${{ needs.publish.result == 'skipped' }}
@@ -269,5 +269,5 @@ jobs:
             RELEASE_VERSION: ${{ needs.set-release-version.outputs.RELEASE_VERSION }}
         steps:
             - name: Remove package from NuGet due to test failures
-              if: ${{ needs.test.result == 'failure' && needs.publish.result != 'failure' }}
+              if: ${{ needs.test.result == 'failure' && needs.publish.result == 'success' }}
               run: dotnet nuget delete Valkey.Glide ${{ env.RELEASE_VERSION }} --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
