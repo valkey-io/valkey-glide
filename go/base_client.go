@@ -292,9 +292,14 @@ func (client *baseClient) executeCommandWithRoute(
 	var spanPtr uint64
 	otelInstance := GetOtelInstance()
 	if otelInstance != nil && otelInstance.shouldSample() {
-		// Pass the request type to determine the descriptive name of the command
-		// to use as the span name
-		spanPtr = otelInstance.createSpan(requestType)
+		// Check if there's a parent span in the context
+		if parentSpanPtr, found := otelInstance.extractSpanPointer(ctx); found {
+			// Create child span with parent
+			spanPtr = otelInstance.createSpanWithParent(requestType, parentSpanPtr)
+		} else {
+			// Create independent span (current behavior)
+			spanPtr = otelInstance.createSpan(requestType)
+		}
 		defer otelInstance.dropSpan(spanPtr)
 	}
 	var cArgsPtr *C.uintptr_t = nil
@@ -417,9 +422,15 @@ func (client *baseClient) executeBatch(
 	var spanPtr uint64
 	otelInstance := GetOtelInstance()
 	if otelInstance != nil && otelInstance.shouldSample() {
-		// Pass the request type to determine the descriptive name of the command
-		// to use as the span name
-		spanPtr = otelInstance.createBatchSpan()
+		// Check if there's a parent span in the context
+		if _, found := otelInstance.extractSpanPointer(ctx); found {
+			// For now, create independent batch span since we don't have createBatchSpanWithParent in FFI yet
+			// TODO: This will be updated when we implement createBatchSpanWithParent in the FFI layer
+			spanPtr = otelInstance.createBatchSpan()
+		} else {
+			// Create independent batch span (current behavior)
+			spanPtr = otelInstance.createBatchSpan()
+		}
 		defer otelInstance.dropSpan(spanPtr)
 	}
 
