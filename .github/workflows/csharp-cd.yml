@@ -106,7 +106,9 @@ jobs:
               working-directory: csharp/rust
               run: |
                   cargo build --release
+                  ls -lh target/release/libglide_rs.dylib
                   strip -S -x -X target/release/libglide_rs.dylib
+                  ls -lh target/release/libglide_rs.dylib
 
             - name: Build native libs (linux gnu)
               if: ${{ contains(matrix.host.TARGET, 'linux-gnu') }}
@@ -115,7 +117,9 @@ jobs:
                   cargo zigbuild -r --target ${{ matrix.host.TARGET }}.2.17
                   mkdir -p target/release
                   cp target/*/release/libglide_rs.so target/release/
+                  ls -lh target/release/libglide_rs.so
                   strip -s -x -X -S target/release/libglide_rs.so
+                  ls -lh target/release/libglide_rs.so
 
             - name: Build native libs (win)
               if: ${{ matrix.host.OS == 'windows' }}
@@ -150,7 +154,7 @@ jobs:
               working-directory: csharp/bin
               run: |
                   find . -name glide_rs.dll -execdir mv {} libglide_rs.dll \;
-                  tree
+                  tree -h
 
             - name: Set up dotnet
               uses: actions/setup-dotnet@v4
@@ -189,7 +193,7 @@ jobs:
 
             - name: Publish
               run: |
-                  ls -l
+                  ls -lh
                   dotnet nuget push Valkey.Glide.*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
 
     test:
