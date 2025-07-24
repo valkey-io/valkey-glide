@@ -6,8 +6,8 @@ namespace Valkey.Glide.Commands;
 
 /// <summary>
 /// Supports commands for the "Sorted Set Commands" group for standalone and cluster clients.
-/// <br/>
-/// See more on <see href="https://valkey.io/commands/?group=sorted-set#sorted-set">valkey.io</see>.
+/// <br />
+/// See more on <see href="https://valkey.io/commands/#sorted-set">valkey.io</see>.
 /// </summary>
 public interface ISortedSetCommands
 {
