@@ -31,6 +31,8 @@ import glide.api.models.commands.bitmap.BitwiseOperation;
 import glide.api.models.commands.scan.ScanOptions;
 import glide.api.models.configuration.GlideClientConfiguration;
 import java.io.Closeable;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -79,6 +81,9 @@ import javax.net.ssl.SSLSocketFactory;
 public class Jedis implements Closeable {
 
     private static final Logger logger = Logger.getLogger(Jedis.class.getName());
+
+    /** Character encoding used for string-to-byte conversions in Valkey operations. */
+    private static final Charset VALKEY_CHARSET = StandardCharsets.UTF_8;
 
     private final GlideClient glideClient;
     private final boolean isPooled;
@@ -805,7 +810,7 @@ public class Jedis implements Closeable {
                     if (obj instanceof GlideString) {
                         keySet.add(((GlideString) obj).getBytes());
                     } else if (obj != null) {
-                        keySet.add(obj.toString().getBytes());
+                        keySet.add(obj.toString().getBytes(VALKEY_CHARSET));
                     }
                 }
                 return keySet;
@@ -1105,7 +1110,7 @@ public class Jedis implements Closeable {
                                         GlideString.of("GETSET"), GlideString.of(key), GlideString.of(value)
                                     })
                             .get();
-            return result != null ? result.toString().getBytes() : null;
+            return result != null ? result.toString().getBytes(VALKEY_CHARSET) : null;
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("GETSET operation failed", e);
         }
@@ -1158,7 +1163,7 @@ public class Jedis implements Closeable {
                                         GlideString.of("GET")
                                     })
                             .get();
-            return result != null ? result.toString().getBytes() : null;
+            return result != null ? result.toString().getBytes(VALKEY_CHARSET) : null;
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("SETGET operation failed", e);
         }
@@ -1212,7 +1217,7 @@ public class Jedis implements Closeable {
             args.add(GlideString.of("GET"));
 
             Object result = glideClient.customCommand(args.toArray(new GlideString[0])).get();
-            return result != null ? result.toString().getBytes() : null;
+            return result != null ? result.toString().getBytes(VALKEY_CHARSET) : null;
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("SETGET operation failed", e);
         }
@@ -2584,7 +2589,7 @@ public class Jedis implements Closeable {
         checkNotClosed();
         try {
             ScanOptions options = convertScanParamsToScanOptions(params);
-            Object[] result = glideClient.scan(new String(cursor), options).get();
+            Object[] result = glideClient.scan(new String(cursor, VALKEY_CHARSET), options).get();
 
             // Convert to binary ScanResult
             if (result != null && result.length >= 2) {
@@ -2595,12 +2600,12 @@ public class Jedis implements Closeable {
                     Object[] keysArray = (Object[]) keysObj;
                     List<byte[]> keys = new ArrayList<>();
                     for (Object key : keysArray) {
-                        keys.add(key != null ? key.toString().getBytes() : null);
+                        keys.add(key != null ? key.toString().getBytes(VALKEY_CHARSET) : null);
                     }
-                    return new ScanResult<>(newCursor.getBytes(), keys);
+                    return new ScanResult<>(newCursor.getBytes(VALKEY_CHARSET), keys);
                 }
             }
-            return new ScanResult<>("0".getBytes(), new ArrayList<>());
+            return new ScanResult<>("0".getBytes(VALKEY_CHARSET), new ArrayList<>());
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("SCAN operation failed", e);
         }
@@ -2615,7 +2620,7 @@ public class Jedis implements Closeable {
     public ScanResult<byte[]> scan(final byte[] cursor) {
         checkNotClosed();
         try {
-            Object[] result = glideClient.scan(new String(cursor)).get();
+            Object[] result = glideClient.scan(new String(cursor, VALKEY_CHARSET)).get();
 
             // Convert to binary ScanResult
             if (result != null && result.length >= 2) {
@@ -2626,12 +2631,12 @@ public class Jedis implements Closeable {
                     Object[] keysArray = (Object[]) keysObj;
                     List<byte[]> keys = new ArrayList<>();
                     for (Object key : keysArray) {
-                        keys.add(key != null ? key.toString().getBytes() : null);
+                        keys.add(key != null ? key.toString().getBytes(VALKEY_CHARSET) : null);
                     }
-                    return new ScanResult<>(newCursor.getBytes(), keys);
+                    return new ScanResult<>(newCursor.getBytes(VALKEY_CHARSET), keys);
                 }
             }
-            return new ScanResult<>("0".getBytes(), new ArrayList<>());
+            return new ScanResult<>("0".getBytes(VALKEY_CHARSET), new ArrayList<>());
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("SCAN operation failed", e);
         }
@@ -2701,7 +2706,7 @@ public class Jedis implements Closeable {
             if (type != null) {
                 // Override type from params with explicit type parameter
                 try {
-                    String typeStr = new String(type);
+                    String typeStr = new String(type, VALKEY_CHARSET);
                     ScanOptions.ObjectType objectType = ScanOptions.ObjectType.valueOf(typeStr.toUpperCase());
                     options =
                             ScanOptions.builder()
@@ -2713,7 +2718,7 @@ public class Jedis implements Closeable {
                     // Invalid type, use params as-is
                 }
             }
-            Object[] result = glideClient.scan(new String(cursor), options).get();
+            Object[] result = glideClient.scan(new String(cursor, VALKEY_CHARSET), options).get();
 
             // Convert to binary ScanResult
             if (result != null && result.length >= 2) {
@@ -2724,12 +2729,12 @@ public class Jedis implements Closeable {
                     Object[] keysArray = (Object[]) keysObj;
                     List<byte[]> keys = new ArrayList<>();
                     for (Object key : keysArray) {
-                        keys.add(key != null ? key.toString().getBytes() : null);
+                        keys.add(key != null ? key.toString().getBytes(VALKEY_CHARSET) : null);
                     }
-                    return new ScanResult<>(newCursor.getBytes(), keys);
+                    return new ScanResult<>(newCursor.getBytes(VALKEY_CHARSET), keys);
                 }
             }
-            return new ScanResult<>("0".getBytes(), new ArrayList<>());
+            return new ScanResult<>("0".getBytes(VALKEY_CHARSET), new ArrayList<>());
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("SCAN operation failed", e);
         }
@@ -3249,9 +3254,9 @@ public class Jedis implements Closeable {
             }
             String[] stringSrcKeys = new String[srcKeys.length];
             for (int i = 0; i < srcKeys.length; i++) {
-                stringSrcKeys[i] = new String(srcKeys[i]);
+                stringSrcKeys[i] = new String(srcKeys[i], VALKEY_CHARSET);
             }
-            return glideClient.bitop(operation, new String(destKey), stringSrcKeys).get();
+            return glideClient.bitop(operation, new String(destKey, VALKEY_CHARSET), stringSrcKeys).get();
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("BITOP operation failed", e);
         }
@@ -3299,7 +3304,7 @@ public class Jedis implements Closeable {
             // Convert byte[] arguments to String arguments
             String[] stringArguments = new String[arguments.length];
             for (int i = 0; i < arguments.length; i++) {
-                stringArguments[i] = new String(arguments[i]);
+                stringArguments[i] = new String(arguments[i], VALKEY_CHARSET);
             }
 
             // Parse Jedis-style arguments into GLIDE BitFieldSubCommands
@@ -3353,7 +3358,7 @@ public class Jedis implements Closeable {
             // Convert byte[] arguments to String arguments
             String[] stringArguments = new String[arguments.length];
             for (int i = 0; i < arguments.length; i++) {
-                stringArguments[i] = new String(arguments[i]);
+                stringArguments[i] = new String(arguments[i], VALKEY_CHARSET);
             }
 
             // Parse Jedis-style arguments into GLIDE BitFieldReadOnlySubCommands (only GET operations)
@@ -3658,9 +3663,9 @@ public class Jedis implements Closeable {
         try {
             String[] stringElements = new String[elements.length];
             for (int i = 0; i < elements.length; i++) {
-                stringElements[i] = new String(elements[i]);
+                stringElements[i] = new String(elements[i], VALKEY_CHARSET);
             }
-            Boolean result = glideClient.pfadd(new String(key), stringElements).get();
+            Boolean result = glideClient.pfadd(new String(key, VALKEY_CHARSET), stringElements).get();
             return result ? 1L : 0L;
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("PFADD operation failed", e);
@@ -3732,7 +3737,7 @@ public class Jedis implements Closeable {
     public long pfcount(final byte[] key) {
         checkNotClosed();
         try {
-            return glideClient.pfcount(new String[] {new String(key)}).get();
+            return glideClient.pfcount(new String[] {new String(key, VALKEY_CHARSET)}).get();
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("PFCOUNT operation failed", e);
         }
@@ -3749,7 +3754,7 @@ public class Jedis implements Closeable {
         try {
             String[] stringKeys = new String[keys.length];
             for (int i = 0; i < keys.length; i++) {
-                stringKeys[i] = new String(keys[i]);
+                stringKeys[i] = new String(keys[i], VALKEY_CHARSET);
             }
             return glideClient.pfcount(stringKeys).get();
         } catch (InterruptedException | ExecutionException e) {
@@ -3772,9 +3777,9 @@ public class Jedis implements Closeable {
         try {
             String[] stringSourceKeys = new String[sourceKeys.length];
             for (int i = 0; i < sourceKeys.length; i++) {
-                stringSourceKeys[i] = new String(sourceKeys[i]);
+                stringSourceKeys[i] = new String(sourceKeys[i], VALKEY_CHARSET);
             }
-            return glideClient.pfmerge(new String(destKey), stringSourceKeys).get();
+            return glideClient.pfmerge(new String(destKey, VALKEY_CHARSET), stringSourceKeys).get();
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("PFMERGE operation failed", e);
         }
