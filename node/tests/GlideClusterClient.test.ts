@@ -103,6 +103,8 @@ describe("GlideClusterClient", () => {
 
     afterEach(async () => {
         await flushAndCloseClient(true, cluster?.getAddresses(), client);
+        // Add small delay between cluster cleanups to prevent socket exhaustion
+        await new Promise((resolve) => setTimeout(resolve, 5));
         await flushAndCloseClient(true, azCluster?.getAddresses(), azClient);
     });
 
