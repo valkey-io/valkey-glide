@@ -370,7 +370,7 @@ where
     pub(crate) fn az_for_address(&self, address: &str) -> Option<String> {
         self.connection_map
             .get(address)
-            .map(|item| item.value().user_connection.az.clone())?
+            .and_then(|item| item.value().user_connection.az.clone())
     }
 
     /// Returns true if the address represents a known primary node.
