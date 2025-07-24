@@ -217,11 +217,10 @@ jobs:
               if: ${{ needs.publish.result == 'skipped' }}
               shell: bash
               run: |
-                  echo ~
                   ls -l $GITHUB_WORKSPACE/nuget.local
                   dotnet nuget add source $GITHUB_WORKSPACE/nuget.local
+                  dotnet nuget config paths
                   if [[ "$OS" != "Windows_NT" ]]; then
-                    dotnet nuget config paths
                     dotnet nuget config paths | xargs cat
                   else
                     cat "C:\\Users\\runneradmin\\AppData\\Roaming\\NuGet\\NuGet.Config"
@@ -236,12 +235,16 @@ jobs:
                   git diff
 
             - name: Install engine
+              # TODO activate this on windows once fixed, see https://github.com/valkey-io/valkey-glide/issues/3230
+              if: ${{ matrix.host.OS != 'windows' }}
               uses: ./.github/workflows/install-engine
               with:
                   engine-version: 8.1
                   target: ${{ matrix.host.TARGET }}
 
             - name: Run tests
+              # TODO activate this on windows once fixed, see https://github.com/valkey-io/valkey-glide/issues/3230
+              if: ${{ matrix.host.OS != 'windows' }}
               working-directory: csharp/tests/Valkey.Glide.IntegrationTests
               run: |
                   dotnet test --framework net8.0 --logger "console;verbosity=detailed" --logger "html;LogFileName=TestReport.html" --results-directory . --filter "FullyQualifiedName~CommandTests"
