@@ -65,7 +65,7 @@ GLIDE's [documentation site](https://valkey.io/valkey-glide/) currently offers d
 
 **Under Development SDKs**
 - [C#](./csharp/README.md)
-- [C++](./cpp/README.md)
+- [C++](https://github.com/valkey-io/valkey-glide-cpp)
 - [Ruby](https://github.com/valkey-io/valkey-glide-ruby)
 
 **General Concepts:**
