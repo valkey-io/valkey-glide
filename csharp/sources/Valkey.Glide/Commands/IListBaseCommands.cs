@@ -202,8 +202,9 @@ public interface IListBaseCommands
     /// <seealso href="https://valkey.io/commands/llen"/>
     /// <param name="key">The key of the list.</param>
     /// <param name="flags">Command flags are not supported by GLIDE.</param>
-    /// <returns>The length of the list at <paramref name="key" />.<br/>
-    /// If <paramref name="key" /> does not exist, 0 is returned.
+    /// <returns>
+    /// The length of the list at <paramref name="key" />.
+    /// If <paramref name="key" /> does not exist, it is interpreted as an empty list and 0 is returned.
     /// </returns>
     /// <remarks>
     /// <example>
@@ -226,9 +227,12 @@ public interface IListBaseCommands
     /// <seealso href="https://valkey.io/commands/lrem"/>
     /// <param name="key">The key of the list.</param>
     /// <param name="value">The value to remove from the list.</param>
-    /// <param name="count">The count behavior (see method summary).</param>
+    /// <param name="count">The count of the occurrences of elements equal to value to remove.</param>
     /// <param name="flags">Command flags are not supported by GLIDE.</param>
-    /// <returns>The number of removed elements.</returns>
+    /// <returns>
+    ///	The number of the removed elements.
+    ///	If <paramref name="key" /> does not exist, 0 is returned.
+    /// </returns>
     /// <remarks>
     /// <example>
     /// <code>
@@ -240,20 +244,26 @@ public interface IListBaseCommands
 
     /// <summary>
     /// Trims an existing list so that it will contain only the specified range of elements specified.
-    /// Both <paramref name="start" /> and <paramref name="stop" /> are zero-based indexes, where 0 is the first element of the list (the head), 1 the next element and so on.
-    /// For example: <c>LTRIM foobar 0 2</c> will modify the list stored at foobar so that only the first three elements of the list will remain.
-    /// <paramref name="start" /> and <paramref name="stop" /> can also be negative numbers indicating offsets from the end of the list, where -1 is the last element of the list, -2 the penultimate element and so on.
+    /// The offsets <paramref name="start" /> and <paramref name="stop" />  are zero-based indexes, with 0 being the first element of the list, 1 being the next element
+    /// and so on. These offsets can also be negative numbers indicating offsets starting at the end of the list, with -1 being
+    /// the last element of the list, -2 being the penultimate, and so on.
     /// </summary>
     /// <seealso href="https://valkey.io/commands/ltrim"/>
     /// <param name="key">The key of the list.</param>
     /// <param name="start">The start index of the list to trim to.</param>
     /// <param name="stop">The end index of the list to trim to.</param>
     /// <param name="flags">Command flags are not supported by GLIDE.</param>
-    /// <returns>A task that represents the asynchronous operation.</returns>
+    /// <returns>
+    /// A task that represents the asynchronous operation.
+    ///	If <paramref name="start" /> exceeds the end of the list, or if <paramref name="start" /> is greater than <paramref name="stop" /> , the list is emptied
+    ///	and the key is removed.
+    ///	If <paramref name="stop" />  exceeds the actual end of the list, it will be treated like the last element of the list.
+    ///	If key does not exist, the command will return without any changes to the database.
+    /// </returns>
     /// <remarks>
     /// <example>
     /// <code>
-    /// await client.ListTrimAsync(key, start, stop);
+    /// _ = await client.ListTrimAsync(key, start, stop);
     /// </code>
     /// </example>
     /// </remarks>
@@ -262,15 +272,19 @@ public interface IListBaseCommands
     /// <summary>
     /// Returns the specified elements of the list stored at <paramref name="key" />.
     /// The offsets <paramref name="start" /> and <paramref name="stop" /> are zero-based indexes, with 0 being the first element of the list (the head of the list), 1 being the next element and so on.
-    /// These offsets can also be negative numbers indicating offsets starting at the end of the list. For example, -1 is the last element of the list, -2 the penultimate, and so on.
-    /// Note that if you have a list of numbers from 0 to 100, LRANGE list 0 10 will return 11 elements, that is, the rightmost item is included.
+    /// These offsets can also be negative numbers indicating offsets starting at the end of the list, with -1 being the last element of the list, -2 being the penultimate, and so on.
     /// </summary>
     /// <seealso href="https://valkey.io/commands/lrange"/>
     /// <param name="key">The key of the list.</param>
-    /// <param name="start">The start index of the list.</param>
-    /// <param name="stop">The stop index of the list.</param>
+    /// <param name="start">The starting point of the range.</param>
+    /// <param name="stop">The end of the range.</param>
     /// <param name="flags">Command flags are not supported by GLIDE.</param>
-    /// <returns>List of elements in the specified range.</returns>
+    /// <returns>
+    ///	Array of <see cref="ValkeyValue"/>s in the specified range.
+    ///	If <paramref name="start" /> exceeds the end of the list, or if <paramref name="start" /> is greater than <paramref name="stop" />, an empty array will be returned.
+    ///	If <paramref name="stop" /> exceeds the actual end of the list, the range will stop at the actual end of the list.
+    ///	If <paramref name="key" /> does not exist an empty array will be returned.
+    /// </returns>
     /// <remarks>
     /// <example>
     /// <code>

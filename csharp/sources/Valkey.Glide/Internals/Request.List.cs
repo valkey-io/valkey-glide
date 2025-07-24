@@ -66,7 +66,7 @@ internal partial class Request
         return Simple<long>(RequestType.LLen, [key]);
     }
 
-    public static Cmd<long, long> ListRemoveAsync(ValkeyKey key, ValkeyValue value, long count, CommandFlags flags = CommandFlags.None)
+    public static Cmd<long, long> ListRemoveAsync(ValkeyKey key, ValkeyValue value, long count = 0, CommandFlags flags = CommandFlags.None)
     {
         Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
         return Simple<long>(RequestType.LRem, [key, count.ToString(), value]);
@@ -78,7 +78,7 @@ internal partial class Request
         return Simple<string>(RequestType.LTrim, [key, start.ToString(), stop.ToString()]);
     }
 
-    public static Cmd<object[], ValkeyValue[]> ListRangeAsync(ValkeyKey key, long start, long stop, CommandFlags flags = CommandFlags.None)
+    public static Cmd<object[], ValkeyValue[]> ListRangeAsync(ValkeyKey key, long start = 0, long stop = -1, CommandFlags flags = CommandFlags.None)
     {
         Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
         return new(RequestType.LRange, [key, start.ToString(), stop.ToString()], false, array =>

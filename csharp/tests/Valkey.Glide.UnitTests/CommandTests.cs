@@ -247,6 +247,7 @@ public class CommandTests
             () => Assert.Equal(0L, Request.ListRemoveAsync("a", "nonexistent", 0).Converter(0L)),
             () => Assert.Equal("OK", Request.ListTrimAsync("a", 0, 10).Converter("OK")),
             () => Assert.Equal(["one", "two", "three"], Request.ListRangeAsync("a", 0, -1).Converter([(gs)"one", (gs)"two", (gs)"three"])),
+            () => Assert.IsType<ValkeyValue[]>(Request.ListRangeAsync("a", 0, -1).Converter([(gs)"one", (gs)"two", (gs)"three"])),
             () => Assert.Equal([], Request.ListRangeAsync("nonexistent", 0, -1).Converter([])),
 
             // Hash Commands
