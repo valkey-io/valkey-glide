@@ -13,4 +13,29 @@ public static class Constants
     public const string AbsttlKeyword = "ABSTTL";
     public const string IdletimeKeyword = "IDLETIME";
     public const string FreqKeyword = "FREQ";
+    public const string WithScoresKeyword = "WITHSCORES";
+    public const string ReverseKeyword = "REV";
+    public const string ByLexKeyword = "BYLEX";
+    public const string ByScoreKeyword = "BYSCORE";
+
+    /// <summary>
+    /// The highest bound in the sorted set for lexicographical operations.
+    /// </summary>
+    public const string PositiveInfinity = "+";
+
+    /// <summary>
+    /// The lowest bound in the sorted set for lexicographical operations.
+    /// </summary>
+    public const string NegativeInfinity = "-";
+
+    /// <summary>
+    /// The highest bound in the sorted set for score operations.
+    /// </summary>
+    public const string PositiveInfinityScore = "+inf";
+
+    /// <summary>
+    /// The lowest bound in the sorted set for score operations.
+    /// </summary>
+    public const string NegativeInfinityScore = "-inf";
+
 }
