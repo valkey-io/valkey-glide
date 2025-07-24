@@ -35,6 +35,7 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -2531,7 +2532,7 @@ public class Jedis implements Closeable {
                 return new ScanResult<>(newCursor, keys);
             }
         }
-        return new ScanResult<>("0", new ArrayList<>());
+        return new ScanResult<>("0", Collections.emptyList());
     }
 
     /** Convert ScanParams to GLIDE ScanOptions. */
@@ -2605,7 +2606,7 @@ public class Jedis implements Closeable {
                     return new ScanResult<>(newCursor.getBytes(VALKEY_CHARSET), keys);
                 }
             }
-            return new ScanResult<>("0".getBytes(VALKEY_CHARSET), new ArrayList<>());
+            return new ScanResult<>("0".getBytes(VALKEY_CHARSET), Collections.emptyList());
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("SCAN operation failed", e);
         }
@@ -2636,7 +2637,7 @@ public class Jedis implements Closeable {
                     return new ScanResult<>(newCursor.getBytes(VALKEY_CHARSET), keys);
                 }
             }
-            return new ScanResult<>("0".getBytes(VALKEY_CHARSET), new ArrayList<>());
+            return new ScanResult<>("0".getBytes(VALKEY_CHARSET), Collections.emptyList());
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("SCAN operation failed", e);
         }
@@ -2734,7 +2735,7 @@ public class Jedis implements Closeable {
                     return new ScanResult<>(newCursor.getBytes(VALKEY_CHARSET), keys);
                 }
             }
-            return new ScanResult<>("0".getBytes(VALKEY_CHARSET), new ArrayList<>());
+            return new ScanResult<>("0".getBytes(VALKEY_CHARSET), Collections.emptyList());
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("SCAN operation failed", e);
         }
@@ -2847,7 +2848,7 @@ public class Jedis implements Closeable {
 
             Object result = glideClient.customCommand(args).get();
             if (result instanceof Long) {
-                return ((Long) result) == 1L;
+                return ((Long) result).equals(1L);
             } else if (result instanceof Boolean) {
                 return (Boolean) result;
             } else {
@@ -2893,7 +2894,7 @@ public class Jedis implements Closeable {
 
             Object result = glideClient.customCommand(args).get();
             if (result instanceof Long) {
-                return ((Long) result) == 1L;
+                return ((Long) result).equals(1L);
             } else if (result instanceof Boolean) {
                 return (Boolean) result;
             } else {
