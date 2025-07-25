@@ -123,7 +123,7 @@ public static class MainClass
             int index = (int)(s_started_tasks_counter % clients.Length);
             ClientWrapper client = clients[index];
             ChosenAction action = ChooseAction();
-            stopwatch.Start();
+            stopwatch.Restart();
             switch (action)
             {
                 case ChosenAction.GET_EXISTING:
@@ -140,7 +140,7 @@ public static class MainClass
             }
             stopwatch.Stop();
             ConcurrentBag<double> latency_list = action_latencies[action];
-            latency_list.Add(((double)stopwatch.ElapsedMilliseconds) / 1000);
+            latency_list.Add(stopwatch.Elapsed.TotalMilliseconds);
         } while (s_started_tasks_counter < total_commands);
     }
 
