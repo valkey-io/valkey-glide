@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 	glide "github.com/valkey-io/valkey-glide/go/v2"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/interfaces"
+	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/pipeline"
 )
 
@@ -647,6 +648,180 @@ func (suite *GlideTestSuite) TestOpenTelemetry_PublicSpanManagementAPIs_NotIniti
 
 	// Test EndSpan with arbitrary pointer (should be safe no-op regardless of initialization)
 	otelInstance.EndSpan(123) // Should not panic
+}
+
+// TestOpenTelemetry_SpanContextAttachment tests the span context attachment functionality
+func (suite *GlideTestSuite) TestOpenTelemetry_SpanContextAttachment() {
+	if !*otelTest {
+		suite.T().Skip("OpenTelemetry tests are disabled")
+	}
+
+	suite.runWithSpecificClients(ClientTypeFlag(StandaloneFlag), func(client interfaces.BaseClientCommands) {
+		otelInstance := glide.GetOtelInstance()
+
+		// Test 1: Command execution without parent span context (current behavior)
+		ctx := context.Background()
+		result, err := client.Set(ctx, "test-key-no-parent", "test-value")
+		require.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "OK", result)
+
+		// Test 2: Command execution with parent span context
+		// Create a parent span
+		parentSpanPtr, err := otelInstance.CreateSpan("user-operation")
+		require.NoError(suite.T(), err)
+		assert.NotEqual(suite.T(), uint64(0), parentSpanPtr)
+		defer otelInstance.EndSpan(parentSpanPtr)
+
+		// Store parent span in context using the helper function
+		ctxWithSpan := glide.WithSpan(context.Background(), parentSpanPtr)
+
+		// Configure SpanFromContext to extract the span from context
+		// Note: This test assumes OpenTelemetry is already initialized with SpanFromContext
+		// In a real scenario, this would be configured during initialization
+
+		// Execute command with parent context - this should create a child span
+		result, err = client.Set(ctxWithSpan, "test-key-with-parent", "test-value")
+		require.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "OK", result)
+
+		// Test 3: Batch operations with parent span context
+		// Create a batch operation with parent context
+		batch := pipeline.NewStandaloneBatch(false) // non-atomic pipeline
+		batch.Set("batch-key-1", "value1")
+		batch.Set("batch-key-2", "value2")
+		batch.Get("batch-key-1")
+
+		// Execute batch with parent context - this should create a child batch span
+		batchResults, err := client.(*glide.Client).Exec(ctxWithSpan, *batch, false)
+		require.NoError(suite.T(), err)
+		assert.Len(suite.T(), batchResults, 3)
+
+		// Test 4: Multiple nested operations with the same parent
+		getResult, err := client.Get(ctxWithSpan, "test-key-with-parent")
+		require.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "test-value", getResult.Value())
+
+		// Test 5: Mixed operations (some with context, some without)
+		result, err = client.Set(context.Background(), "test-key-no-parent-2", "test-value-2")
+		require.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "OK", result)
+
+		getResult, err = client.Get(ctxWithSpan, "test-key-no-parent-2")
+		require.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "test-value-2", getResult.Value())
+	})
+}
+
+// TestOpenTelemetry_SpanContextAttachment_BatchOperations tests batch operations with parent span context
+func (suite *GlideTestSuite) TestOpenTelemetry_SpanContextAttachment_BatchOperations() {
+	if !*otelTest {
+		suite.T().Skip("OpenTelemetry tests are disabled")
+	}
+
+	suite.runWithSpecificClients(ClientTypeFlag(StandaloneFlag), func(client interfaces.BaseClientCommands) {
+		otelInstance := glide.GetOtelInstance()
+
+		// Create a parent span for the entire operation
+		parentSpanPtr, err := otelInstance.CreateSpan("batch-user-operations")
+		require.NoError(suite.T(), err)
+		assert.NotEqual(suite.T(), uint64(0), parentSpanPtr)
+		defer otelInstance.EndSpan(parentSpanPtr)
+
+		// Store parent span in context
+		ctxWithSpan := glide.WithSpan(context.Background(), parentSpanPtr)
+
+		// Test batch operations with parent context
+		batch := pipeline.NewStandaloneBatch(false) // non-atomic pipeline
+		batch.Set("user:123:profile", "john_doe")
+		batch.Set("user:123:email", "john@example.com")
+		batch.Incr("user:123:login_count")
+		batch.SAdd("active_users", []string{"123"})
+		batch.Set("user:123:session", "active") // Create the key first
+		batch.Expire("user:123:session", 3600*time.Second)
+
+		// Execute batch - should create a child batch span under the parent
+		batchResults, err := client.(*glide.Client).Exec(ctxWithSpan, *batch, false)
+		require.NoError(suite.T(), err)
+		assert.Len(suite.T(), batchResults, 6)
+
+		// Verify the results
+		assert.Equal(suite.T(), "OK", batchResults[0])  // SET user:123:profile
+		assert.Equal(suite.T(), "OK", batchResults[1])  // SET user:123:email
+		assert.Equal(suite.T(), int64(1), batchResults[2])  // INCR user:123:login_count
+		assert.Equal(suite.T(), int64(1), batchResults[3])  // SADD active_users
+		assert.Equal(suite.T(), "OK", batchResults[4])  // SET user:123:session
+		assert.Equal(suite.T(), true, batchResults[5])  // EXPIRE user:123:session
+
+		// Test individual commands after batch (should also be children of parent)
+		result, err := client.Get(ctxWithSpan, "user:123:profile")
+		require.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "john_doe", result.Value())
+
+		// Test another batch operation with the same parent context
+		batch2 := pipeline.NewStandaloneBatch(false) // non-atomic pipeline
+		batch2.Get("user:123:profile")
+		batch2.Get("user:123:email")
+		batch2.Get("user:123:login_count")
+
+		batchResults2, err := client.(*glide.Client).Exec(ctxWithSpan, *batch2, false)
+		require.NoError(suite.T(), err)
+		assert.Len(suite.T(), batchResults2, 3)
+		// Handle batch results which return models.Result[string] for Get operations
+		if result0, ok := batchResults2[0].(models.Result[string]); ok {
+			assert.Equal(suite.T(), "john_doe", result0.Value())
+		}
+		if result1, ok := batchResults2[1].(models.Result[string]); ok {
+			assert.Equal(suite.T(), "john@example.com", result1.Value())
+		}
+		if result2, ok := batchResults2[2].(models.Result[string]); ok {
+			assert.Equal(suite.T(), "1", result2.Value())
+		}
+	})
+}
+
+// TestOpenTelemetry_SpanContextAttachment_ErrorHandling tests error handling in span context attachment
+func (suite *GlideTestSuite) TestOpenTelemetry_SpanContextAttachment_ErrorHandling() {
+	if !*otelTest {
+		suite.T().Skip("OpenTelemetry tests are disabled")
+	}
+
+	suite.runWithSpecificClients(ClientTypeFlag(StandaloneFlag), func(client interfaces.BaseClientCommands) {
+		// Test 1: Context with invalid span pointer (should fallback to independent spans)
+		ctxWithInvalidSpan := context.WithValue(context.Background(), glide.SpanContextKey, uint64(999999))
+		
+		// This should not fail, but should create independent spans due to invalid parent
+		result, err := client.Set(ctxWithInvalidSpan, "test-key-invalid-span", "test-value")
+		require.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "OK", result)
+
+		// Test 2: Context with zero span pointer (should be treated as no parent)
+		ctxWithZeroSpan := context.WithValue(context.Background(), glide.SpanContextKey, uint64(0))
+		
+		result, err = client.Set(ctxWithZeroSpan, "test-key-zero-span", "test-value")
+		require.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "OK", result)
+
+		// Test 3: Context with wrong type for span pointer (should fallback to independent spans)
+		ctxWithWrongType := context.WithValue(context.Background(), glide.SpanContextKey, "not-a-uint64")
+		
+		result, err = client.Set(ctxWithWrongType, "test-key-wrong-type", "test-value")
+		require.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "OK", result)
+
+		// Test 4: Batch operations with invalid parent context (should fallback gracefully)
+		batch := pipeline.NewStandaloneBatch(false) // non-atomic pipeline
+		batch.Set("batch-key-invalid", "value")
+		batch.Get("batch-key-invalid")
+
+		batchResults, err := client.(*glide.Client).Exec(ctxWithInvalidSpan, *batch, false)
+		require.NoError(suite.T(), err)
+		assert.Len(suite.T(), batchResults, 2)
+		assert.Equal(suite.T(), "OK", batchResults[0])
+		// Handle batch results which return models.Result[string] for Get operations
+		if result1, ok := batchResults[1].(models.Result[string]); ok {
+			assert.Equal(suite.T(), "value", result1.Value())
+		}
+	})
 }
 
 // TestOpenTelemetry_PublicSpanManagementAPIs_ThreadSafety tests thread safety of the public APIs

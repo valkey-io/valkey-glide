@@ -423,10 +423,11 @@ func (client *baseClient) executeBatch(
 	otelInstance := GetOtelInstance()
 	if otelInstance != nil && otelInstance.shouldSample() {
 		// Check if there's a parent span in the context
-		if _, found := otelInstance.extractSpanPointer(ctx); found {
-			// For now, create independent batch span since we don't have createBatchSpanWithParent in FFI yet
-			// TODO: This will be updated when we implement createBatchSpanWithParent in the FFI layer
-			spanPtr = otelInstance.createBatchSpan()
+		if parentSpanPtr, found := otelInstance.extractSpanPointer(ctx); found {
+			// Create child batch span with parent
+			// Since we don't have create_batch_otel_span_with_parent, we create a named child span
+			// using the parent span pointer to establish the parent-child relationship
+			spanPtr = otelInstance.createBatchSpanWithParent(parentSpanPtr)
 		} else {
 			// Create independent batch span (current behavior)
 			spanPtr = otelInstance.createBatchSpan()

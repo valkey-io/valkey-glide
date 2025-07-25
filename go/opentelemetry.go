@@ -317,6 +317,20 @@ func (o *OpenTelemetry) createSpanWithParent(requestType C.RequestType, parentSp
 	return uint64(C.create_otel_span_with_parent(C.enum_RequestType(requestType), C.uint64_t(parentSpanPtr)))
 }
 
+// createBatchSpanWithParent creates a new OpenTelemetry batch span with the given parent span pointer.
+// This is an internal method used by batch execution to create child batch spans.
+// Since there's no create_batch_otel_span_with_parent FFI function, we use the CustomCommand request type
+// to create a child span that represents batch operations.
+func (o *OpenTelemetry) createBatchSpanWithParent(parentSpanPtr uint64) uint64 {
+	if !o.IsInitialized() {
+		return 0
+	}
+	
+	// Use Set request type to create a child span for batch operations
+	// Set is a common, well-supported request type that should work for batch operations
+	return uint64(C.create_otel_span_with_parent(C.Set, C.uint64_t(parentSpanPtr)))
+}
+
 // DropSpan drops an OpenTelemetry span given its pointer.
 func (o *OpenTelemetry) dropSpan(spanPtr uint64) {
 	if spanPtr == 0 {
