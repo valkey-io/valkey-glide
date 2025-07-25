@@ -296,3 +296,47 @@ func TestConfig_InvalidRequestAndConnectionTimeouts(t *testing.T) {
 	_, err8 := config8.ToProtobuf()
 	assert.EqualError(t, err8, "setting connection timeout returned an error: invalid duration was specified")
 }
+
+func TestConfig_LazyConnect(t *testing.T) {
+	// Test for ClientConfiguration
+	clientConfig := NewClientConfiguration().
+		WithLazyConnect(true)
+
+	clientResult, err := clientConfig.ToProtobuf()
+	if err != nil {
+		t.Fatalf("Failed to convert client config to protobuf: %v", err)
+	}
+
+	assert.True(t, clientResult.LazyConnect)
+
+	// Test for ClusterClientConfiguration
+	clusterConfig := NewClusterClientConfiguration().
+		WithLazyConnect(true)
+
+	clusterResult, err := clusterConfig.ToProtobuf()
+	if err != nil {
+		t.Fatalf("Failed to convert cluster config to protobuf: %v", err)
+	}
+
+	assert.True(t, clusterResult.LazyConnect)
+
+	// Test default value (false) for ClientConfiguration
+	defaultClientConfig := NewClientConfiguration()
+
+	defaultClientResult, err := defaultClientConfig.ToProtobuf()
+	if err != nil {
+		t.Fatalf("Failed to convert default client config to protobuf: %v", err)
+	}
+
+	assert.False(t, defaultClientResult.LazyConnect)
+
+	// Test default value (false) for ClusterClientConfiguration
+	defaultClusterConfig := NewClusterClientConfiguration()
+
+	defaultClusterResult, err := defaultClusterConfig.ToProtobuf()
+	if err != nil {
+		t.Fatalf("Failed to convert default cluster config to protobuf: %v", err)
+	}
+
+	assert.False(t, defaultClusterResult.LazyConnect)
+}

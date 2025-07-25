@@ -101,6 +101,7 @@ type baseClientConfiguration struct {
 	clientName        string
 	clientAZ          string
 	reconnectStrategy *BackoffStrategy
+	lazyConnect       bool
 }
 
 func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest, error) {
@@ -145,6 +146,10 @@ func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest
 
 	if config.reconnectStrategy != nil {
 		request.ConnectionRetryStrategy = config.reconnectStrategy.toProtobuf()
+	}
+
+	if config.lazyConnect {
+		request.LazyConnect = config.lazyConnect
 	}
 
 	return &request, nil
@@ -266,6 +271,14 @@ func (config *ClientConfiguration) WithAddress(address *NodeAddress) *ClientConf
 // attempt will fail.
 func (config *ClientConfiguration) WithUseTLS(useTLS bool) *ClientConfiguration {
 	config.useTLS = useTLS
+	return config
+}
+
+// WithLazyConnect configures whether the client should establish connections lazily. When set to true,
+// the client will only establish connections when needed for the first operation, rather than
+// immediately upon client creation.
+func (config *ClientConfiguration) WithLazyConnect(lazyConnect bool) *ClientConfiguration {
+	config.lazyConnect = lazyConnect
 	return config
 }
 
@@ -407,6 +420,14 @@ func (config *ClusterClientConfiguration) WithAddress(address *NodeAddress) *Clu
 // attempt will fail.
 func (config *ClusterClientConfiguration) WithUseTLS(useTLS bool) *ClusterClientConfiguration {
 	config.useTLS = useTLS
+	return config
+}
+
+// WithLazyConnect configures whether the client should establish connections lazily. When set to true,
+// the client will only establish connections when needed for the first operation, rather than
+// immediately upon client creation.
+func (config *ClusterClientConfiguration) WithLazyConnect(lazyConnect bool) *ClusterClientConfiguration {
+	config.lazyConnect = lazyConnect
 	return config
 }
 

@@ -4,6 +4,7 @@ package integTest
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -13,6 +14,126 @@ import (
 	"github.com/valkey-io/valkey-glide/go/v2/config"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/interfaces"
 )
+
+func startDedicatedValkeyServer(suite *GlideTestSuite, clusterMode bool) (string, error) {
+	// Build command arguments
+	args := []string{}
+	args = append(args, "start")
+	if clusterMode {
+		args = append(args, "--cluster-mode")
+	}
+
+	args = append(args, fmt.Sprintf("-r %d", 0))
+
+	// Execute cluster manager script
+	output := runClusterManager(suite, args, false)
+
+	return output, nil
+}
+
+func stopDedicatedValkeyServer(suite *GlideTestSuite, clusterFolder string) {
+	args := []string{}
+	args = append(args, "stop", "--cluster-folder", clusterFolder)
+
+	runClusterManager(suite, args, false)
+}
+
+func createDedicatedClient(
+	addresses []config.NodeAddress,
+	clusterMode bool,
+	lazyConnect bool,
+) (interfaces.BaseClientCommands, error) {
+	if clusterMode {
+		cfg := config.NewClusterClientConfiguration()
+		for _, addr := range addresses {
+			cfg.WithAddress(&addr)
+		}
+
+		cfg.WithRequestTimeout(3 * time.Second)
+		advCfg := config.NewAdvancedClusterClientConfiguration()
+		advCfg.WithConnectionTimeout(3 * time.Second)
+		cfg.WithAdvancedConfiguration(advCfg)
+		cfg.WithLazyConnect(lazyConnect)
+
+		return glide.NewClusterClient(cfg)
+	}
+
+	cfg := config.NewClientConfiguration()
+	for _, addr := range addresses {
+		cfg.WithAddress(&addr)
+	}
+
+	cfg.WithRequestTimeout(3 * time.Second)
+	advCfg := config.NewAdvancedClientConfiguration()
+	advCfg.WithConnectionTimeout(3 * time.Second)
+	cfg.WithAdvancedConfiguration(advCfg)
+	cfg.WithLazyConnect(lazyConnect)
+
+	return glide.NewClient(cfg)
+}
+
+// getClientListOutputCount parses CLIENT LIST output and returns the number of clients
+func getClientListOutputCount(output interface{}) int {
+	if output == nil {
+		return 0
+	}
+
+	text := output.(string)
+
+	if text = strings.TrimSpace(text); text == "" {
+		return 0
+	}
+
+	return len(strings.Split(text, "\n"))
+}
+
+// getClientCount returns the number of connected clients
+func getClientCount(ctx context.Context, client interfaces.BaseClientCommands) (int, error) {
+	if clusterClient, ok := client.(interfaces.GlideClusterClientCommands); ok {
+		// For cluster client, execute CLIENT LIST on all nodes
+		result, err := clusterClient.CustomCommandWithRoute(ctx, []string{"CLIENT", "LIST"}, config.AllNodes)
+		if err != nil {
+			return 0, err
+		}
+
+		// Result will be a map with node addresses as keys and CLIENT LIST output as values
+		totalCount := 0
+		for _, nodeOutput := range result.MultiValue() {
+			totalCount += getClientListOutputCount(nodeOutput)
+		}
+		return totalCount, nil
+	}
+
+	// For standalone client, execute CLIENT LIST directly
+	glideClient := client.(interfaces.GlideClientCommands)
+	result, err := glideClient.CustomCommand(ctx, []string{"CLIENT", "LIST"})
+	if err != nil {
+		return 0, err
+	}
+	return getClientListOutputCount(result), nil
+}
+
+// getExpectedNewConnections returns the expected number of new connections when a lazy client is initialized
+func getExpectedNewConnections(ctx context.Context, client interfaces.BaseClientCommands) (int, error) {
+	if clusterClient, ok := client.(interfaces.GlideClusterClientCommands); ok {
+		// For cluster, get node count and multiply by 2 (2 connections per node)
+		result, err := clusterClient.CustomCommand(ctx, []string{"CLUSTER", "NODES"})
+		if err != nil {
+			return 0, err
+		}
+
+		nodesInfo := result.SingleValue().(string)
+
+		if nodesInfo = strings.TrimSpace(nodesInfo); nodesInfo == "" {
+			return 0, nil
+		}
+
+		return len(strings.Split(nodesInfo, "\n")) * 2, nil
+	}
+
+	// For standalone, always expect 1 new connection
+	return 1, nil
+}
 
 func (suite *GlideTestSuite) TestStandaloneConnect() {
 	config := config.NewClientConfiguration().
@@ -154,5 +275,62 @@ func (suite *GlideTestSuite) TestConnectionTimeout() {
 		if client != nil {
 			client.Close()
 		}
+	})
+}
+
+func (suite *GlideTestSuite) TestLazyConnectionEstablishesOnFirstCommand() {
+	// Run test for both standalone and cluster modes
+	suite.runWithTimeoutClients(func(client interfaces.BaseClientCommands) {
+		ctx := context.Background()
+		_, isCluster := client.(interfaces.GlideClusterClientCommands)
+
+		// Create a monitoring client (eagerly connected)
+		output, err := startDedicatedValkeyServer(suite, isCluster)
+		suite.NoError(err)
+		clusterFolder := extractClusterFolder(suite, output)
+		addresses := extractAddresses(suite, output)
+		defer stopDedicatedValkeyServer(suite, clusterFolder)
+		monitoringClient, err := createDedicatedClient(addresses, isCluster, false)
+		suite.NoError(err)
+		defer monitoringClient.Close()
+
+		// Get initial client count
+		clientsBeforeLazyInit, err := getClientCount(ctx, monitoringClient)
+		suite.NoError(err)
+
+		// Create the "lazy" client
+		lazyClient, err := createDedicatedClient(addresses, isCluster, true)
+		suite.NoError(err)
+		defer lazyClient.Close()
+
+		// Check count (should not change)
+		clientsAfterLazyInit, err := getClientCount(ctx, monitoringClient)
+		suite.NoError(err)
+		suite.Equal(clientsBeforeLazyInit, clientsAfterLazyInit,
+			"Lazy client should not connect before the first command")
+
+		// Send the first command using the lazy client
+		var result interface{}
+		if isCluster {
+			clusterClient := lazyClient.(interfaces.GlideClusterClientCommands)
+			result, err = clusterClient.Ping(ctx)
+		} else {
+			glideClient := lazyClient.(interfaces.GlideClientCommands)
+			result, err = glideClient.Ping(ctx)
+		}
+		suite.NoError(err)
+
+		// Assert PING success for both modes
+		suite.Equal("PONG", result)
+
+		// Check client count after the first command
+		clientsAfterFirstCommand, err := getClientCount(ctx, monitoringClient)
+		suite.NoError(err)
+
+		expectedNewConnections, err := getExpectedNewConnections(ctx, monitoringClient)
+		suite.NoError(err)
+
+		suite.Equal(clientsBeforeLazyInit+expectedNewConnections, clientsAfterFirstCommand,
+			"Lazy client should establish expected number of new connections after the first command")
 	})
 }
