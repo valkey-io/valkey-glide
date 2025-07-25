@@ -30,7 +30,7 @@ else ifeq ($(UNAME), Linux)
 	# zigbuild https://github.com/rust-cross/cargo-zigbuild
 	BUILD_CMD := zigbuild --target $(TARGET_TRIPLET)
 	# workaround for https://github.com/rust-cross/cargo-zigbuild/issues/337
-	CARGO_FIX_CMD := sed -i 's/crate-type.*/crate-type = ["staticlib"]/g' Cargo.toml
+	CARGO_FIX_CMD := sed -i 's/crate-type.*/crate-type = ["staticlib"]/g' Cargo.toml && rustup target add $(TARGET_TRIPLET)
 	CARGO_POSTFIX_CMD := git restore Cargo.toml
     STRIP_CMD := strip --strip-unneeded
 	TARGET_DIR := $(TARGET_DIR)/$(TARGET_TRIPLET)
