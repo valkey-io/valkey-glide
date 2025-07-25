@@ -83,20 +83,26 @@ public sealed class GlideClusterClient : BaseClient, IGenericClusterCommands, IS
         => await Command(Request.Info(sections).ToClusterValue(route is SingleNodeRoute), route);
 
     public async Task<ClusterValue<ValkeyValue>> EchoAsync(ValkeyValue message, Route route, CommandFlags flags = CommandFlags.None)
-        => await Command(Request.Echo(message, flags).ToClusterValue(route is SingleNodeRoute), route);
+    {
+        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
+        return await Command(Request.Echo(message).ToClusterValue(route is SingleNodeRoute), route);
+    }
 
     public async Task<ValkeyValue> EchoAsync(ValkeyValue message, CommandFlags flags = CommandFlags.None)
-        => await Command(Request.Echo(message, flags), Route.Random);
+    {
+        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
+        return await Command(Request.Echo(message), Route.Random);
+    }
 
-    public async Task<TimeSpan> PingAsync(CommandFlags flags = CommandFlags.None)
-        => await Command(Request.Ping(flags), AllPrimaries);
+    public async Task<TimeSpan> PingAsync()
+        => await Command(Request.Ping(), AllPrimaries);
 
-    public async Task<TimeSpan> PingAsync(ValkeyValue message, CommandFlags flags = CommandFlags.None)
-        => await Command(Request.Ping(message, flags), AllPrimaries);
+    public async Task<TimeSpan> PingAsync(ValkeyValue message)
+        => await Command(Request.Ping(message), AllPrimaries);
 
-    public async Task<TimeSpan> PingAsync(Route route, CommandFlags flags = CommandFlags.None)
-        => await Command(Request.Ping(flags), route);
+    public async Task<TimeSpan> PingAsync(Route route)
+        => await Command(Request.Ping(), route);
 
-    public async Task<TimeSpan> PingAsync(ValkeyValue message, Route route, CommandFlags flags = CommandFlags.None)
-        => await Command(Request.Ping(message, flags), route);
+    public async Task<TimeSpan> PingAsync(ValkeyValue message, Route route)
+        => await Command(Request.Ping(message), route);
 }

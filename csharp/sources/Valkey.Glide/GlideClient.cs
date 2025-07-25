@@ -74,13 +74,16 @@ public class GlideClient : BaseClient, IGenericCommands, IServerManagementComman
         => await Command(Request.Info(sections));
 
     public async Task<ValkeyValue> EchoAsync(ValkeyValue message, CommandFlags flags = CommandFlags.None)
-        => await Command(Request.Echo(message));
+    {
+        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
+        return await Command(Request.Echo(message));
+    }
 
     public async Task<TimeSpan> PingAsync(CommandFlags flags = CommandFlags.None)
-        => await Command(Request.Ping(flags));
+        => await Command(Request.Ping());
 
     public async Task<TimeSpan> PingAsync(ValkeyValue message, CommandFlags flags = CommandFlags.None)
-        => await Command(Request.Ping(message, flags));
+        => await Command(Request.Ping(message));
 
     public async Task<bool> KeyMoveAsync(ValkeyKey key, int database, CommandFlags flags = CommandFlags.None)
         => await Command(Request.KeyMoveAsync(key, database));
