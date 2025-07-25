@@ -559,62 +559,9 @@ impl GlideOpenTelemetry {
         Ok(span)
     }
 
-    /// Create new span with parent span pointer with validation and safety checks
-    /// 
-    /// # Arguments
-    /// * `name` - The name for the new span
-    /// * `parent_span_ptr` - A u64 pointer to the parent span (created by FFI layer)
-    /// 
-    /// # Returns
-    /// * `Ok(GlideSpan)` - The new child span if parent pointer is valid
-    /// * `Err(TraceError)` - If parent span pointer is invalid or span creation fails
-    /// 
-    /// # Safety
-    /// The parent_span_ptr must be a valid pointer to an Arc<GlideSpan> or 0.
-    /// Invalid pointers will result in an error being returned with graceful fallback.
-    pub fn new_span_with_parent(name: &str, parent_span_ptr: u64) -> Result<GlideSpan, TraceError> {
-        // First check if the pointer passes basic validation
-        if !Self::is_span_pointer_valid(parent_span_ptr) {
-            log::warn!("OpenTelemetry: Invalid parent span pointer 0x{:x} for child span '{}'. Creating independent span instead.", 
-                      parent_span_ptr, name);
-            // Graceful fallback: create independent span when parent pointer is invalid
-            return Ok(Self::new_span(name));
-        }
 
-        // Attempt to safely convert the validated pointer
-        let parent_span = match Self::safe_span_from_pointer(parent_span_ptr) {
-            Ok(span) => span,
-            Err(err) => {
-                log::warn!("OpenTelemetry: Failed to convert parent span pointer 0x{:x} for child span '{}': {}. Creating independent span instead.", 
-                          parent_span_ptr, name, err);
-                // Graceful fallback: create independent span when parent conversion fails
-                return Ok(Self::new_span(name));
-            }
-        };
 
-        // Create child span using existing parent-child functionality
-        match parent_span.add_span(name) {
-            Ok(child_span) => {
-                log::debug!("OpenTelemetry: Successfully created child span '{}' with parent pointer 0x{:x}", 
-                           name, parent_span_ptr);
-                Ok(child_span)
-            },
-            Err(err) => {
-                log::warn!("OpenTelemetry: Failed to create child span '{}' with valid parent pointer 0x{:x}: {}. Creating independent span instead.", 
-                          name, parent_span_ptr, err);
-                // Graceful fallback: create independent span when child creation fails
-                Ok(Self::new_span(name))
-            }
-        }
-    }
 
-    /// Create named span (for user-created parent spans)
-    /// 
-    /// This is an alias for new_span() to provide a clearer API for creating
-    /// parent spans that will be used with new_span_with_parent()
-    pub fn new_named_span(name: &str) -> GlideSpan {
-        Self::new_span(name)
-    }
 
     /// Initialise the open telemetry library with a file system exporter
     ///
@@ -1174,108 +1121,13 @@ mod tests {
         });
     }
 
-    #[test]
-    fn test_new_span_with_parent_null_pointer() {
-        let rt = shared_runtime();
-        rt.block_on(async {
-            init_otel().await.unwrap();
-            
-            // Test with null pointer (0) - should gracefully fallback to independent span
-            let result = GlideOpenTelemetry::new_span_with_parent("child_span", 0);
-            assert!(result.is_ok());
-            
-            let span = result.unwrap();
-            assert_eq!(span.id().len(), 16); // Should have valid span ID
-        });
-    }
 
-    #[test]
-    fn test_new_span_with_parent_valid_pointer_simulation() {
-        let rt = shared_runtime();
-        rt.block_on(async {
-            init_otel().await.unwrap();
-            
-            // Simulate the FFI layer creating a span pointer
-            // This is how the FFI layer actually creates span pointers
-            let parent_span = GlideOpenTelemetry::new_span("parent_span");
-            let parent_arc = Arc::new(parent_span);
-            let parent_ptr = Arc::into_raw(parent_arc) as u64;
-            
-            // Test creating child span with parent pointer
-            // This should work because we're following the same pattern as FFI
-            let child_result = GlideOpenTelemetry::new_span_with_parent("child_span", parent_ptr);
-            
-            // The function should succeed
-            assert!(child_result.is_ok(), "Failed to create child span: {:?}", child_result.err());
-            
-            let child_span = child_result.unwrap();
-            assert_eq!(child_span.id().len(), 16); // Span ID should be 16 hex characters
-            
-            // Important: Don't manually clean up the pointer here
-            // The Arc reference counting will handle it
-            // In real usage, the FFI layer manages the lifecycle
-        });
-    }
 
-    #[test]
-    fn test_new_named_span() {
-        let rt = shared_runtime();
-        rt.block_on(async {
-            init_otel().await.unwrap();
-            
-            let span = GlideOpenTelemetry::new_named_span("test_named_span");
-            assert_eq!(span.id().len(), 16); // Span ID should be 16 hex characters
-            
-            // Verify it behaves the same as new_span
-            let regular_span = GlideOpenTelemetry::new_span("test_regular_span");
-            assert_eq!(span.id().len(), regular_span.id().len());
-        });
-    }
 
-    #[test]
-    fn test_span_with_parent_hierarchy() {
-        let rt = shared_runtime();
-        rt.block_on(async {
-            let _ = std::fs::remove_file(SPANS_JSON);
-            init_otel().await.unwrap();
-            
-            // Create parent span and convert to pointer (simulating FFI layer)
-            let parent_span = GlideOpenTelemetry::new_named_span("parent_operation");
-            let parent_arc = Arc::new(parent_span);
-            let parent_ptr = Arc::into_raw(parent_arc) as u64;
-            
-            // Create child span using pointer
-            let child_span = GlideOpenTelemetry::new_span_with_parent("child_operation", parent_ptr).unwrap();
-            
-            // Add events to spans
-            child_span.add_event("child_event");
-            
-            // End child span first
-            child_span.end();
-            
-            // Note: We don't manually manage the parent span here
-            // In real usage, the FFI layer would handle the parent span lifecycle
-            
-            sleep(Duration::from_millis(2100)).await;
-            
-            // Verify spans were created and exported
-            let file_content = std::fs::read_to_string(SPANS_JSON).unwrap();
-            let lines: Vec<&str> = file_content
-                .split('\n')
-                .filter(|l| !l.trim().is_empty())
-                .collect();
-            
-            assert!(lines.len() >= 1);
-            
-            // Find the child span
-            let child_span_line = lines.iter()
-                .find(|line| line.contains("child_operation"))
-                .expect("Child span not found in output");
-            
-            let child_json: serde_json::Value = serde_json::from_str(child_span_line).unwrap();
-            assert_eq!(child_json["name"], "child_operation");
-        });
-    }
+
+
+
+
 
     #[test]
     fn test_span_pointer_validation() {
@@ -1327,61 +1179,9 @@ mod tests {
         });
     }
 
-    #[test]
-    fn test_new_span_with_parent_invalid_pointer_fallback() {
-        let rt = shared_runtime();
-        rt.block_on(async {
-            init_otel().await.unwrap();
-            
-            // Test with null pointer - should create independent span
-            let result = GlideOpenTelemetry::new_span_with_parent("test_span", 0);
-            assert!(result.is_ok());
-            let span = result.unwrap();
-            assert_eq!(span.id().len(), 16); // Should have valid span ID
-            
-            // Test with misaligned pointer - should create independent span
-            let result = GlideOpenTelemetry::new_span_with_parent("test_span2", 0x1001);
-            assert!(result.is_ok());
-            let span = result.unwrap();
-            assert_eq!(span.id().len(), 16); // Should have valid span ID
-            
-            // Test with address too low - should create independent span
-            let result = GlideOpenTelemetry::new_span_with_parent("test_span3", 0x800);
-            assert!(result.is_ok());
-            let span = result.unwrap();
-            assert_eq!(span.id().len(), 16); // Should have valid span ID
-            
-            // Test with address too high - should create independent span
-            let result = GlideOpenTelemetry::new_span_with_parent("test_span4", 0x8000_0000_0000_0000);
-            assert!(result.is_ok());
-            let span = result.unwrap();
-            assert_eq!(span.id().len(), 16); // Should have valid span ID
-        });
-    }
 
-    #[test]
-    fn test_new_span_with_parent_valid_pointer() {
-        let rt = shared_runtime();
-        rt.block_on(async {
-            init_otel().await.unwrap();
-            
-            // Test the validation logic with various pointer values
-            // These should pass basic validation
-            let valid_looking_ptrs = vec![
-                0x1000u64,      // Minimum valid address
-                0x10000u64,     // Reasonable heap address
-                0x100000u64,    // Another reasonable address
-            ];
-            
-            for ptr in valid_looking_ptrs {
-                // Test that these pointers pass basic validation
-                assert!(GlideOpenTelemetry::is_span_pointer_valid(ptr));
-            }
-            
-            // Note: We don't test actual Arc conversion with fake pointers as that would cause segfaults
-            // The real functionality is tested in integration tests with actual FFI-created pointers
-        });
-    }
+
+
 
     #[test]
     fn test_span_pointer_bounds_checking() {
@@ -1418,12 +1218,12 @@ mod tests {
         rt.block_on(async {
             init_otel().await.unwrap();
             
-            // These calls should trigger warning logs in new_span_with_parent (graceful fallback)
-            let result1 = GlideOpenTelemetry::new_span_with_parent("test", 0);
-            assert!(result1.is_ok()); // Should fallback to independent span
+            // Test that validation functions work correctly with various invalid pointers
+            let result1 = GlideOpenTelemetry::safe_span_from_pointer(0);
+            assert!(result1.is_err()); // Should return error for null pointer
             
-            let result2 = GlideOpenTelemetry::new_span_with_parent("test", 0x1001);
-            assert!(result2.is_ok()); // Should fallback to independent span
+            let result2 = GlideOpenTelemetry::safe_span_from_pointer(0x1001);
+            assert!(result2.is_err()); // Should return error for misaligned pointer
         });
     }
 }
