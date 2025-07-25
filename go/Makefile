@@ -26,9 +26,9 @@ ifeq ($(UNAME), Darwin)
     STRIP_CMD := strip -x
 else ifeq ($(UNAME), Linux)
     # TODO: musl
-    TARGET_TRIPLET := $(if $(filter arm64 aarch64,$(ARCH)),aarch64-unknown-linux-gnu,x86_64-unknown-linux-gnu)
+    TARGET_TRIPLET := $(if $(filter arm64 aarch64,$(ARCH)),aarch64-unknown-linux-musl,x86_64-unknown-linux-musl)
 	# zigbuild https://github.com/rust-cross/cargo-zigbuild
-	BUILD_CMD := zigbuild --target $(TARGET_TRIPLET).2.17
+	BUILD_CMD := zigbuild --target $(TARGET_TRIPLET)
 	# workaround for https://github.com/rust-cross/cargo-zigbuild/issues/337
 	CARGO_FIX_CMD := sed -i 's/crate-type.*/crate-type = ["staticlib"]/g' Cargo.toml
 	CARGO_POSTFIX_CMD := git restore Cargo.toml
