@@ -15,6 +15,9 @@
     <Configurations>Debug;Release;Lint</Configurations>
     <NuspecFile>Valkey.Glide.nuspec</NuspecFile>
     <IncludeBuildOutput>true</IncludeBuildOutput>
+    <Version>255.255.255</Version>
+    <GenerateAssemblyFileVersionAttribute>true</GenerateAssemblyFileVersionAttribute>
+    <Deterministic>true</Deterministic>
   </PropertyGroup>
 
   <!-- Enable analysis and un-suppress warnings only in `Lint` configuration -->

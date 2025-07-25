@@ -157,8 +157,8 @@ jobs:
             - name: Pack the client
               working-directory: csharp/sources/Valkey.Glide
               run: |
-                  dotnet build Valkey.Glide.csproj --configuration Release
-                  dotnet pack Valkey.Glide.csproj --configuration Release
+                  dotnet build Valkey.Glide.csproj --configuration Release /property:Version=${{ env.RELEASE_VERSION }}
+                  dotnet pack Valkey.Glide.csproj --configuration Release -p:NuspecProperties=version=${{ env.RELEASE_VERSION }}
                   tree -h bin/Release
               env:
                   SkipCargo: true
