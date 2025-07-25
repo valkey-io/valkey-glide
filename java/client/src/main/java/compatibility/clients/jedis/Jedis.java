@@ -873,6 +873,9 @@ public final class Jedis implements Closeable {
     public String mset(final byte[]... keysvalues) {
         checkNotClosed();
         try {
+            if (keysvalues.length % 2 == 1) {
+                throw new IllegalArgumentException("keyvalues must be of even length");
+            }
             Map<GlideString, GlideString> keyValueMap = new HashMap<>();
             for (int i = 0; i < keysvalues.length; i += 2) {
                 if (i + 1 < keysvalues.length) {
