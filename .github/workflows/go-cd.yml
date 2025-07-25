@@ -135,12 +135,12 @@ jobs:
             - name: Set artifact name
               id: set-artifact-name
               run: |
-                if [[ "${{ matrix.host.TARGET }}" == *"-gnu" ]]; then
-                    echo "replacing artifact name postfix from -gnu to -musl"
-                    echo "ARTIFACT_NAME=$(echo "${{ matrix.host.TARGET }}" | sed 's/-gnu$/-musl/')" >> $GITHUB_OUTPUT
-                else
-                    echo "ARTIFACT_NAME=${{ matrix.host.TARGET }}" >> $GITHUB_OUTPUT
-                fi
+                  if [[ "${{ matrix.host.TARGET }}" == *"-gnu" ]]; then
+                      echo "replacing artifact name postfix from -gnu to -musl"
+                      echo "ARTIFACT_NAME=$(echo "${{ matrix.host.TARGET }}" | sed 's/-gnu$/-musl/')" >> $GITHUB_OUTPUT
+                  else
+                      echo "ARTIFACT_NAME=${{ matrix.host.TARGET }}" >> $GITHUB_OUTPUT
+                  fi
             - name: Upload artifacts
               continue-on-error: true
               uses: actions/upload-artifact@v4
