@@ -6,6 +6,8 @@ import java.nio.charset.StandardCharsets;
 /** Parameters for SCAN command in Jedis compatibility layer. */
 public class ScanParams {
     public static final String SCAN_POINTER_START = "0";
+    public static final byte[] SCAN_POINTER_START_BINARY =
+            SCAN_POINTER_START.getBytes(StandardCharsets.UTF_8);
 
     private String matchPattern;
     private Long count;

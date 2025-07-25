@@ -2922,7 +2922,7 @@ public final class Jedis implements Closeable {
         checkNotClosed();
         try {
             Long result = glideClient.setbit(key, offset, value ? 1L : 0L).get();
-            return result == 1L;
+            return result.equals(1L);
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("SETBIT operation failed", e);
         }
@@ -2940,7 +2940,7 @@ public final class Jedis implements Closeable {
         checkNotClosed();
         try {
             Long result = glideClient.setbit(GlideString.of(key), offset, value ? 1L : 0L).get();
-            return result == 1L;
+            return result.equals(1L);
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("SETBIT operation failed", e);
         }
@@ -2957,7 +2957,7 @@ public final class Jedis implements Closeable {
         checkNotClosed();
         try {
             Long result = glideClient.getbit(key, offset).get();
-            return result == 1L;
+            return result.equals(1L);
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("GETBIT operation failed", e);
         }
@@ -2974,7 +2974,7 @@ public final class Jedis implements Closeable {
         checkNotClosed();
         try {
             Long result = glideClient.getbit(GlideString.of(key), offset).get();
-            return result == 1L;
+            return result.equals(1L);
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("GETBIT operation failed", e);
         }
