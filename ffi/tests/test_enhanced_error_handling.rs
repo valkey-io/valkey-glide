@@ -68,9 +68,8 @@ fn test_string_validation_edge_cases() {
     // Initialize logger to capture error messages
     logger_core::init(Some(logger_core::Level::Debug), None);
 
-    // Test with string containing control characters (should fail)
-    let control_char_string = "test\x00span"; // Contains null byte
-    // Note: CString::new will fail with null bytes, so we test the validation logic indirectly
+    // Note: Testing control characters is complex because CString::new will fail with null bytes
+    // The validation logic for control characters is tested indirectly through other tests
     
     // Test with string at exactly 256 characters (should succeed)
     let max_length_name = "a".repeat(256);

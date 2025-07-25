@@ -2050,8 +2050,8 @@ pub unsafe extern "C" fn create_named_otel_span(span_name: *const c_char) -> u64
         return 0;
     }
 
-    // Create the named span using Rust core method
-    let span = GlideOpenTelemetry::new_named_span(name_str);
+    // Create the named span using existing new_span method
+    let span = GlideOpenTelemetry::new_span(name_str);
     let arc = Arc::new(span);
     let ptr = Arc::into_raw(arc);
     let span_ptr = ptr as u64;
@@ -2120,12 +2120,22 @@ pub extern "C" fn create_otel_span_with_parent(request_type: RequestType, parent
         return span_ptr;
     }
 
-    // Create span with parent using the Rust core method (which handles validation internally)
-    let span = match GlideOpenTelemetry::new_span_with_parent(command_name, parent_span_ptr) {
-        Ok(span) => span,
+    // Convert parent pointer to GlideSpan and use existing add_span method
+    let span = match GlideOpenTelemetry::safe_span_from_pointer(parent_span_ptr) {
+        Ok(parent_span) => {
+            // Use existing add_span method to create child span
+            match parent_span.add_span(command_name) {
+                Ok(child_span) => child_span,
+                Err(e) => {
+                    logger_core::log_warn("ffi_otel", &format!("create_otel_span_with_parent: Failed to create child span '{}' with parent 0x{:x}: {}. Creating independent span as fallback.", command_name, parent_span_ptr, e));
+                    // Graceful fallback: create independent span
+                    GlideOpenTelemetry::new_span(command_name)
+                }
+            }
+        }
         Err(e) => {
-            logger_core::log_warn("ffi_otel", &format!("create_otel_span_with_parent: Failed to create child span '{}' with parent 0x{:x}: {}. Creating independent span as fallback.", command_name, parent_span_ptr, e));
-            // The Rust core already handles graceful fallback, but if it still fails, create independent span
+            logger_core::log_warn("ffi_otel", &format!("create_otel_span_with_parent: Invalid parent span pointer 0x{:x}: {}. Creating independent span as fallback.", parent_span_ptr, e));
+            // Graceful fallback: create independent span
             GlideOpenTelemetry::new_span(command_name)
         }
     };
