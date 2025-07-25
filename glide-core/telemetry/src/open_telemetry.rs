@@ -1226,4 +1226,281 @@ mod tests {
             assert!(result2.is_err()); // Should return error for misaligned pointer
         });
     }
+
+    #[test]
+    fn test_new_with_parent_creates_child_span() {
+        let rt = shared_runtime();
+        rt.block_on(async {
+            let _ = std::fs::remove_file(SPANS_JSON);
+            init_otel().await.unwrap();
+            
+            // Create parent span
+            let parent_span = GlideOpenTelemetry::new_span("parent_span");
+            
+            // Create child span using new_with_parent
+            let child_span_result = GlideSpanInner::new_with_parent("child_span", &parent_span.inner);
+            assert!(child_span_result.is_ok(), "Failed to create child span with parent");
+            
+            let child_span = child_span_result.unwrap();
+            
+            // Verify child span has different ID from parent
+            let parent_id = parent_span.id();
+            let child_id = child_span.id();
+            assert_ne!(parent_id, child_id, "Child span should have different ID from parent");
+            
+            // End spans to trigger export
+            child_span.end();
+            parent_span.end();
+            
+            // Wait for export
+            sleep(Duration::from_millis(2100)).await;
+            
+            // Verify spans were exported
+            let file_content = std::fs::read_to_string(SPANS_JSON).unwrap();
+            let lines: Vec<&str> = file_content
+                .split('\n')
+                .filter(|l| !l.trim().is_empty())
+                .collect();
+            
+            assert!(lines.len() >= 2, "Expected at least 2 spans to be exported");
+            
+            // Find child and parent spans in export
+            let mut child_found = false;
+            let mut parent_found = false;
+            
+            for line in lines {
+                let span_json: serde_json::Value = serde_json::from_str(line).unwrap();
+                let span_name = span_json["name"].as_str().unwrap();
+                
+                if span_name == "child_span" {
+                    child_found = true;
+                    // Verify child span has parent context
+                    assert!(span_json["parent_span_id"].is_string(), "Child span should have parent_span_id");
+                } else if span_name == "parent_span" {
+                    parent_found = true;
+                }
+            }
+            
+            assert!(child_found, "Child span should be found in export");
+            assert!(parent_found, "Parent span should be found in export");
+        });
+    }
+
+    #[test]
+    fn test_new_with_parent_preserves_parent_child_relationship() {
+        let rt = shared_runtime();
+        rt.block_on(async {
+            let _ = std::fs::remove_file(SPANS_JSON);
+            init_otel().await.unwrap();
+            
+            // Create parent span
+            let parent_span = GlideOpenTelemetry::new_span("test_parent");
+            
+            // Create multiple child spans
+            let child1_result = GlideSpanInner::new_with_parent("child_1", &parent_span.inner);
+            let child2_result = GlideSpanInner::new_with_parent("child_2", &parent_span.inner);
+            
+            assert!(child1_result.is_ok(), "Failed to create first child span");
+            assert!(child2_result.is_ok(), "Failed to create second child span");
+            
+            let child1 = child1_result.unwrap();
+            let child2 = child2_result.unwrap();
+            
+            // Verify all spans have unique IDs
+            let parent_id = parent_span.id();
+            let child1_id = child1.id();
+            let child2_id = child2.id();
+            
+            assert_ne!(parent_id, child1_id, "Parent and child1 should have different IDs");
+            assert_ne!(parent_id, child2_id, "Parent and child2 should have different IDs");
+            assert_ne!(child1_id, child2_id, "Child spans should have different IDs");
+            
+            // End all spans
+            child1.end();
+            child2.end();
+            parent_span.end();
+            
+            sleep(Duration::from_millis(2100)).await;
+        });
+    }
+
+    #[test]
+    fn test_new_with_parent_error_handling() {
+        let rt = shared_runtime();
+        rt.block_on(async {
+            init_otel().await.unwrap();
+            
+            // Create a parent span
+            let parent_span = GlideOpenTelemetry::new_span("error_test_parent");
+            
+            // Test creating child with empty name (should still work)
+            let child_result = GlideSpanInner::new_with_parent("", &parent_span.inner);
+            assert!(child_result.is_ok(), "Should be able to create child span with empty name");
+            
+            // Test creating child with very long name (should still work)
+            let long_name = "a".repeat(1000);
+            let child_result = GlideSpanInner::new_with_parent(&long_name, &parent_span.inner);
+            assert!(child_result.is_ok(), "Should be able to create child span with long name");
+            
+            // Clean up
+            if let Ok(child) = child_result {
+                child.end();
+            }
+            parent_span.end();
+        });
+    }
+
+    #[test]
+    fn test_span_pointer_validation_comprehensive() {
+        // Test comprehensive validation scenarios
+        
+        // Test null pointer
+        assert!(!GlideOpenTelemetry::is_span_pointer_valid(0));
+        
+        // Test alignment validation - pointers must be 8-byte aligned
+        for i in 1..8 {
+            let misaligned_ptr = 0x1000 + i;
+            assert!(!GlideOpenTelemetry::is_span_pointer_valid(misaligned_ptr), 
+                   "Pointer 0x{:x} should be invalid (misaligned)", misaligned_ptr);
+        }
+        
+        // Test valid aligned pointers
+        for i in 0..10 {
+            let aligned_ptr = 0x1000 + (i * 8);
+            assert!(GlideOpenTelemetry::is_span_pointer_valid(aligned_ptr), 
+                   "Pointer 0x{:x} should be valid (aligned)", aligned_ptr);
+        }
+        
+        // Test address range validation
+        assert!(!GlideOpenTelemetry::is_span_pointer_valid(0x800)); // Too low
+        assert!(GlideOpenTelemetry::is_span_pointer_valid(0x1000)); // Minimum valid
+        assert!(GlideOpenTelemetry::is_span_pointer_valid(0x7FFF_FFFF_FFFF_FFF8)); // Maximum valid
+        assert!(!GlideOpenTelemetry::is_span_pointer_valid(0x8000_0000_0000_0000)); // Too high
+    }
+
+    #[test]
+    fn test_safe_span_from_pointer_error_messages() {
+        let rt = shared_runtime();
+        rt.block_on(async {
+            init_otel().await.unwrap();
+            
+            // Test null pointer error message
+            let result = GlideOpenTelemetry::safe_span_from_pointer(0);
+            assert!(result.is_err());
+            let error_msg = result.unwrap_err().to_string();
+            assert!(error_msg.contains("Invalid span pointer"), "Error message should mention invalid span pointer");
+            assert!(error_msg.contains("0x0"), "Error message should include the pointer value");
+            
+            // Test misaligned pointer error message
+            let result = GlideOpenTelemetry::safe_span_from_pointer(0x1001);
+            assert!(result.is_err());
+            let error_msg = result.unwrap_err().to_string();
+            assert!(error_msg.contains("failed validation checks"), "Error message should mention validation failure");
+            assert!(error_msg.contains("0x1001"), "Error message should include the pointer value");
+            
+            // Test address too low error message
+            let result = GlideOpenTelemetry::safe_span_from_pointer(0x800);
+            assert!(result.is_err());
+            let error_msg = result.unwrap_err().to_string();
+            assert!(error_msg.contains("failed validation checks"), "Error message should mention validation failure");
+        });
+    }
+
+    #[test]
+    fn test_existing_new_with_parent_functionality_preserved() {
+        let rt = shared_runtime();
+        rt.block_on(async {
+            let _ = std::fs::remove_file(SPANS_JSON);
+            init_otel().await.unwrap();
+            
+            // Test that existing functionality still works after refactoring
+            let parent_span = GlideOpenTelemetry::new_span("existing_parent");
+            
+            // Use the existing add_span method which internally uses new_with_parent
+            let child_span_result = parent_span.add_span("existing_child");
+            assert!(child_span_result.is_ok(), "Existing add_span functionality should still work");
+            
+            let child_span = child_span_result.unwrap();
+            
+            // Verify the child span is properly created
+            assert_ne!(parent_span.id(), child_span.id(), "Parent and child should have different IDs");
+            
+            // Test adding events and status to both spans
+            parent_span.add_event("parent_event");
+            parent_span.set_status(GlideSpanStatus::Ok);
+            
+            child_span.add_event("child_event");
+            child_span.set_status(GlideSpanStatus::Ok);
+            
+            // End spans
+            child_span.end();
+            parent_span.end();
+            
+            sleep(Duration::from_millis(2100)).await;
+            
+            // Verify spans were exported correctly
+            let file_content = std::fs::read_to_string(SPANS_JSON).unwrap();
+            let lines: Vec<&str> = file_content
+                .split('\n')
+                .filter(|l| !l.trim().is_empty())
+                .collect();
+            
+            assert!(lines.len() >= 2, "Should have at least parent and child spans");
+            
+            // Verify both spans are present
+            let mut parent_found = false;
+            let mut child_found = false;
+            
+            for line in lines {
+                let span_json: serde_json::Value = serde_json::from_str(line).unwrap();
+                let span_name = span_json["name"].as_str().unwrap();
+                
+                if span_name == "existing_parent" {
+                    parent_found = true;
+                    // Parent should have links to child
+                    assert!(span_json["links"].is_array(), "Parent should have links array");
+                } else if span_name == "existing_child" {
+                    child_found = true;
+                    // Child should have parent context
+                    assert!(span_json["parent_span_id"].is_string(), "Child should have parent_span_id");
+                }
+            }
+            
+            assert!(parent_found, "Parent span should be found in export");
+            assert!(child_found, "Child span should be found in export");
+        });
+    }
+
+    #[test]
+    fn test_validation_functions_fallback_behavior() {
+        let rt = shared_runtime();
+        rt.block_on(async {
+            init_otel().await.unwrap();
+            
+            // Test that validation functions provide proper fallback behavior
+            // when given invalid inputs
+            
+            let invalid_pointers = vec![
+                0,                              // null
+                0x1001,                         // misaligned
+                0x800,                          // too low
+                0x8000_0000_0000_0000,         // too high
+            ];
+            
+            for &invalid_ptr in &invalid_pointers {
+                // Validation should return false
+                assert!(!GlideOpenTelemetry::is_span_pointer_valid(invalid_ptr), 
+                       "Pointer 0x{:x} should be invalid", invalid_ptr);
+                
+                // Safe conversion should return error
+                let result = GlideOpenTelemetry::safe_span_from_pointer(invalid_ptr);
+                assert!(result.is_err(), "Conversion of invalid pointer 0x{:x} should fail", invalid_ptr);
+                
+                // Error should contain meaningful information
+                let error_msg = result.unwrap_err().to_string();
+                assert!(error_msg.contains("Invalid span pointer") || error_msg.contains("failed validation"), 
+                       "Error message should be meaningful for pointer 0x{:x}: {}", invalid_ptr, error_msg);
+            }
+        });
+    }
 }

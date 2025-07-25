@@ -463,6 +463,9 @@ func WithSpan(ctx context.Context, spanPtr uint64) context.Context {
 //		SpanFromContext: glide.DefaultSpanFromContext,
 //	}
 func DefaultSpanFromContext(ctx context.Context) (uint64, bool) {
+	if ctx == nil {
+		return 0, false
+	}
 	if spanPtr, ok := ctx.Value(SpanContextKey).(uint64); ok && spanPtr != 0 {
 		return spanPtr, true
 	}
