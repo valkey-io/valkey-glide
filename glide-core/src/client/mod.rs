@@ -6,7 +6,6 @@ use crate::cluster_scan_container::insert_cluster_scan_cursor;
 use crate::scripts_container::get_script;
 use futures::FutureExt;
 use logger_core::{log_error, log_info, log_warn};
-use once_cell::sync::OnceCell;
 use redis::aio::ConnectionLike;
 use redis::cluster_async::ClusterConnection;
 use redis::cluster_routing::{
@@ -20,6 +19,7 @@ use redis::{
 pub use standalone_client::StandaloneClient;
 use std::io;
 use std::sync::Arc;
+use std::sync::OnceLock;
 use std::sync::atomic::{AtomicIsize, Ordering};
 use std::thread;
 use std::thread::JoinHandle;
@@ -63,7 +63,7 @@ pub const DEFAULT_MAX_INFLIGHT_REQUESTS: u32 = 1000;
 pub const CONNECTION_CHECKS_INTERVAL: Duration = Duration::from_secs(3);
 
 /// A static Glide runtime instance
-static RUNTIME: OnceCell<GlideRt> = OnceCell::new();
+static RUNTIME: OnceLock<GlideRt> = OnceLock::new();
 
 pub struct GlideRt {
     pub runtime: Handle,
@@ -76,38 +76,49 @@ pub struct GlideRt {
 /// The runtime remains active indefinitely until a shutdown is triggered via the notifier, allowing tasks to be spawned
 /// throughout the lifetime of the application.
 pub fn get_or_init_runtime() -> Result<&'static GlideRt, String> {
-    RUNTIME.get_or_try_init(|| {
-        let notify = Arc::new(Notify::new());
-        let notify_thread = notify.clone();
+    // Check if already initialized
+    if let Some(runtime) = RUNTIME.get() {
+        return Ok(runtime);
+    }
 
-        let (tx, rx) = oneshot::channel();
+    // Initialize if not already done
+    let notify = Arc::new(Notify::new());
+    let notify_thread = notify.clone();
 
-        let thread_handle = thread::Builder::new()
-            .name("glide-runtime-thread".into())
-            .spawn(move || {
-                match Builder::new_current_thread().enable_all().build() {
-                    Ok(runtime) => {
-                        let _ = tx.send(Ok(runtime.handle().clone()));
-                        // Keep runtime alive until shutdown is signaled
-                        runtime.block_on(notify_thread.notified());
-                    }
-                    Err(err) => {
-                        let _ = tx.send(Err(format!("Failed to create runtime: {err}")));
-                    }
+    let (tx, rx) = oneshot::channel();
+
+    let thread_handle = thread::Builder::new()
+        .name("glide-runtime-thread".into())
+        .spawn(move || {
+            match Builder::new_current_thread().enable_all().build() {
+                Ok(runtime) => {
+                    let _ = tx.send(Ok(runtime.handle().clone()));
+                    // Keep runtime alive until shutdown is signaled
+                    runtime.block_on(notify_thread.notified());
                 }
-            })
-            .map_err(|_| "Failed to spawn runtime thread".to_string())?;
-
-        let runtime_handle = rx
-            .blocking_recv()
-            .map_err(|err| format!("Failed to receive runtime handle: {err:?}"))??;
-
-        Ok(GlideRt {
-            runtime: runtime_handle,
-            thread: Some(thread_handle),
-            shutdown_notifier: notify,
+                Err(err) => {
+                    let _ = tx.send(Err(format!("Failed to create runtime: {err}")));
+                }
+            }
         })
-    })
+        .map_err(|_| "Failed to spawn runtime thread".to_string())?;
+
+    let runtime_handle = rx
+        .blocking_recv()
+        .map_err(|err| format!("Failed to receive runtime handle: {err:?}"))??;
+
+    let glide_rt = GlideRt {
+        runtime: runtime_handle,
+        thread: Some(thread_handle),
+        shutdown_notifier: notify,
+    };
+
+    // Try to set the value, return error if another thread already set it
+    RUNTIME
+        .set(glide_rt)
+        .map_err(|_| "Runtime already initialized by another thread".to_string())?;
+
+    Ok(RUNTIME.get().unwrap())
 }
 
 impl Drop for GlideRt {
