@@ -17,9 +17,9 @@ mod cluster_async {
 
     use futures::prelude::*;
     use futures_time::{future::FutureExt, task::sleep};
-    use once_cell::sync::Lazy;
     use std::ops::Add;
     use std::path::PathBuf;
+    use std::sync::LazyLock;
     use std::sync::OnceLock;
     use telemetrylib::*;
     use tokio::runtime::Runtime;
@@ -1490,7 +1490,7 @@ mod cluster_async {
         );
     }
 
-    static ERROR: Lazy<AtomicBool> = Lazy::new(Default::default);
+    static ERROR: LazyLock<AtomicBool> = LazyLock::new(Default::default);
 
     #[derive(Clone)]
     struct ErrorConnection {
