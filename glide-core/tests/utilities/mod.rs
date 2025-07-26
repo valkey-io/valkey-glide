@@ -69,11 +69,15 @@ pub fn get_shared_server_address(use_tls: bool) -> ConnectionAddr {
 
 #[ctor::dtor]
 fn clean_shared_clusters() {
-    if let Some(mutex) = SharedServer::get(&SHARED_SERVER) {
-        drop(mutex.lock().unwrap().take());
+    if let Ok(guard) = SHARED_SERVER.try_lock() {
+        if guard.is_some() {
+            drop(SHARED_SERVER.lock().unwrap().take());
+        }
     }
-    if let Some(mutex) = SharedServer::get(&SHARED_TLS_SERVER) {
-        drop(mutex.lock().unwrap().take());
+    if let Ok(guard) = SHARED_TLS_SERVER.try_lock() {
+        if guard.is_some() {
+            drop(SHARED_TLS_SERVER.lock().unwrap().take());
+        }
     }
 }
 
