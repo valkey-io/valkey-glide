@@ -3,9 +3,10 @@
         "OS": "ubuntu",
         "NAMED_OS": "linux",
         "RUNNER": "ubuntu-24.04",
+        "CD_RUNNER": "ubuntu-24.04",
         "ARCH": "x64",
         "TARGET": "x86_64-unknown-linux-gnu",
-        "PACKAGE_MANAGERS": ["pypi", "npm", "maven", "pkg_go_dev"],
+        "PACKAGE_MANAGERS": ["pypi", "npm", "maven", "pkg_go_dev", "nuget"],
         "run": "always",
         "languages": ["python", "node", "java", "go", "dotnet", "rust"]
     },
@@ -16,26 +17,27 @@
         "CD_RUNNER": "ubuntu-24.04-arm",
         "ARCH": "arm64",
         "TARGET": "aarch64-unknown-linux-gnu",
-        "PACKAGE_MANAGERS": ["pypi", "npm", "maven", "pkg_go_dev"],
+        "PACKAGE_MANAGERS": ["pypi", "npm", "maven", "pkg_go_dev", "nuget"],
         "languages": ["python", "node", "java", "go", "dotnet"]
     },
     {
         "OS": "macos",
         "NAMED_OS": "darwin",
         "RUNNER": "macos-15",
+        "CD_RUNNER": "macos-15",
         "ARCH": "arm64",
         "TARGET": "aarch64-apple-darwin",
-        "PACKAGE_MANAGERS": ["pypi", "npm", "maven", "pkg_go_dev"],
+        "PACKAGE_MANAGERS": ["pypi", "npm", "maven", "pkg_go_dev", "nuget"],
         "languages": ["python", "node", "java", "go", "dotnet"]
     },
     {
         "OS": "macos",
         "NAMED_OS": "darwin",
         "RUNNER": "macos-13",
-        "CD_RUNNER": "macos-15",
+        "CD_RUNNER": "macos-13",
         "ARCH": "x64",
         "TARGET": "x86_64-apple-darwin",
-        "PACKAGE_MANAGERS": ["pypi", "npm", "maven", "pkg_go_dev"],
+        "PACKAGE_MANAGERS": ["pypi", "npm", "maven", "pkg_go_dev", "nuget"],
         "languages": [],
         "comment": "Tests for all clients (CI) are skipped for that platform due to instability, but CD pipelines still run on it. See PR #3482 for details."
     },
@@ -71,5 +73,27 @@
         "IMAGE": "amazonlinux:latest",
         "PACKAGE_MANAGERS": [],
         "languages": ["python", "node", "java", "go", "dotnet"]
+    },
+    {
+        "OS": "windows",
+        "NAMED_OS": "windows",
+        "RUNNER": "windows-2025",
+        "CD_RUNNER": "windows-2025",
+        "ARCH": "x64",
+        "TARGET": "x86_64-pc-windows-msvc",
+        "PACKAGE_MANAGERS": ["nuget"],
+        "languages": [],
+        "comment": "No tests/CI is running there yet, but CD runs"
+    },
+    {
+        "OS": "windows",
+        "NAMED_OS": "windows",
+        "RUNNER": "windows-11-arm",
+        "CD_RUNNER": "windows-11-arm",
+        "ARCH": "arm64",
+        "TARGET": "aarch64-pc-windows-msvc",
+        "PACKAGE_MANAGERS": ["nuget"],
+        "languages": [],
+        "comment": "No tests/CI is running there yet, but CD runs"
     }
 ]
