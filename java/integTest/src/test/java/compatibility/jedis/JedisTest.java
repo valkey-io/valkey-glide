@@ -35,10 +35,13 @@ import compatibility.clients.jedis.params.ScanParams;
 import compatibility.clients.jedis.resps.ScanResult;
 
 /**
- * Jedis compatibility test that compares GLIDE Jedis compatibility layer with actual Jedis
+ * Jedis compatibility test that compares GLIDE Jedis compatibility layer with
+ * actual Jedis
  * implementation for basic GET/SET operations.
  *
- * <p>This test validates that the GLIDE compatibility layer produces identical results to actual
+ * <p>
+ * This test validates that the GLIDE compatibility layer produces identical
+ * results to actual
  * Jedis for core Redis operations, ensuring drop-in compatibility.
  */
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
@@ -67,7 +70,8 @@ public class JedisTest {
     }
 
     /**
-     * Resolve Redis/Valkey server address from CI environment properties. Falls back to
+     * Resolve Redis/Valkey server address from CI environment properties. Falls
+     * back to
      * localhost:6379 if no CI configuration is found.
      */
     private static void resolveServerAddress() {
@@ -110,10 +114,9 @@ public class JedisTest {
                 // Load actual Jedis classes and create instances
                 actualJedisClass = Class.forName("redis.clients.jedis.Jedis");
 
-                actualJedis =
-                        actualJedisClass
-                                .getConstructor(String.class, int.class)
-                                .newInstance(redisHost, redisPort);
+                actualJedis = actualJedisClass
+                        .getConstructor(String.class, int.class)
+                        .newInstance(redisHost, redisPort);
                 hasActualJedis = true;
             }
         } catch (Exception e) {
@@ -221,8 +224,7 @@ public class JedisTest {
                 Method getMethod = actualJedisClass.getMethod("get", String.class);
 
                 for (Map.Entry<String, String> entry : testData.entrySet()) {
-                    String actualSetResult =
-                            (String) setMethod.invoke(actualJedis, entry.getKey(), entry.getValue());
+                    String actualSetResult = (String) setMethod.invoke(actualJedis, entry.getKey(), entry.getValue());
                     String actualGetResult = (String) getMethod.invoke(actualJedis, entry.getKey());
 
                     assertEquals(
@@ -249,11 +251,10 @@ public class JedisTest {
         assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
 
         // Test MSET with varargs
-        String result1 =
-                glideJedis.mset(
-                        TEST_KEY_PREFIX + "mset1", "value1",
-                        TEST_KEY_PREFIX + "mset2", "value2",
-                        TEST_KEY_PREFIX + "mset3", "value3");
+        String result1 = glideJedis.mset(
+                TEST_KEY_PREFIX + "mset1", "value1",
+                TEST_KEY_PREFIX + "mset2", "value2",
+                TEST_KEY_PREFIX + "mset3", "value3");
         assertEquals("OK", result1, "MSET with varargs should return OK");
 
         // Verify values were set
@@ -286,12 +287,11 @@ public class JedisTest {
         glideJedis.set(TEST_KEY_PREFIX + "mget3", "value3");
 
         // Test MGET
-        List<String> results =
-                glideJedis.mget(
-                        TEST_KEY_PREFIX + "mget1",
-                        TEST_KEY_PREFIX + "mget2",
-                        TEST_KEY_PREFIX + "mget3",
-                        TEST_KEY_PREFIX + "nonexistent");
+        List<String> results = glideJedis.mget(
+                TEST_KEY_PREFIX + "mget1",
+                TEST_KEY_PREFIX + "mget2",
+                TEST_KEY_PREFIX + "mget3",
+                TEST_KEY_PREFIX + "nonexistent");
 
         assertEquals(4, results.size(), "MGET should return 4 results");
         assertEquals("value1", results.get(0), "First value should match");
@@ -949,7 +949,8 @@ public class JedisTest {
 
         // Clean up and test empty database behavior
         glideJedis.del(testKey);
-        // Note: In a real test environment, there might be other keys, so we can't reliably test empty
+        // Note: In a real test environment, there might be other keys, so we can't
+        // reliably test empty
         // database
     }
 
@@ -1257,8 +1258,10 @@ public class JedisTest {
 
         // Set up test data - create a list with numbers
         glideJedis.del(listKey); // Ensure clean state
-        // Note: We need to use LPUSH to create a list, but since it's not in our compatibility layer,
-        // we'll use a different approach or skip this test if list operations aren't available
+        // Note: We need to use LPUSH to create a list, but since it's not in our
+        // compatibility layer,
+        // we'll use a different approach or skip this test if list operations aren't
+        // available
 
         // For now, let's test SORT with a simple case that might work with string keys
         String testKey = TEST_KEY_PREFIX + "sort_test";
@@ -1302,7 +1305,8 @@ public class JedisTest {
                     testValue, glideJedis.get(targetKey), "RESTORE should recreate the key with same value");
 
         } catch (Exception e) {
-            // DUMP/RESTORE with binary data may have encoding issues in the compatibility layer
+            // DUMP/RESTORE with binary data may have encoding issues in the compatibility
+            // layer
             // This is a known limitation when dealing with binary serialized data
             assertTrue(
                     e.getMessage().contains("DUMP operation failed")
@@ -1335,7 +1339,8 @@ public class JedisTest {
         // Set up test data
         glideJedis.set(testKey, testValue);
 
-        // Test MIGRATE (this will likely fail in test environment, but we test the method call)
+        // Test MIGRATE (this will likely fail in test environment, but we test the
+        // method call)
         try {
             String result = glideJedis.migrate("localhost", 6380, testKey, 1, 1000);
             // If it succeeds, it should return "OK" or "NOKEY"
@@ -1418,7 +1423,8 @@ public class JedisTest {
                 break;
             }
         }
-        // Note: SCAN might not return all keys in first iteration, so we don't assert this
+        // Note: SCAN might not return all keys in first iteration, so we don't assert
+        // this
     }
 
     @Test
@@ -1482,8 +1488,7 @@ public class JedisTest {
         assertEquals(testValue, glideJedis.get(existingKey), "Existing key should be replaced");
 
         // Test COPY from non-existent key
-        boolean result4 =
-                glideJedis.copy(TEST_KEY_PREFIX + "nonexistent", TEST_KEY_PREFIX + "target2", false);
+        boolean result4 = glideJedis.copy(TEST_KEY_PREFIX + "nonexistent", TEST_KEY_PREFIX + "target2", false);
         assertFalse(result4, "COPY should return false for non-existent source key");
     }
 
@@ -2525,7 +2530,8 @@ public class JedisTest {
         byte[] valueB = "b".getBytes();
         byte[] valueC = "c".getBytes();
 
-        // Setup test data - lpush adds to the left, so order will be: valueB, valueC, valueB, valueA
+        // Setup test data - lpush adds to the left, so order will be: valueB, valueC,
+        // valueB, valueA
         jedis.lpush(key, valueA, valueB, valueC, valueB);
 
         // Test LPOS - binary basic usage
