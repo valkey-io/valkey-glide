@@ -72,7 +72,7 @@ cpp/include/glide/connection_request.pb.h
 cpp/include/glide/glide_base.h
 cpp/src/connection_request.pb.cc
 
-**/.claude/settings.local.json
+**/.claude/
 copilot-instructions.md
 **/.yarn
 
