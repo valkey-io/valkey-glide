@@ -85,7 +85,7 @@ public interface IServer
     IGrouping<string, KeyValuePair<string, string>>[] Info(ValkeyValue section = default, CommandFlags flags = CommandFlags.None);
 
     /// <summary>
-    /// Pings the server.
+    /// This command is often used to test if a connection is still alive, or to measure latency.
     /// </summary>
     /// <seealso href="https://valkey.io/commands/ping"/>
     /// <param name="flags">The command flags to use. Currently flags are ignored.</param>
@@ -100,7 +100,7 @@ public interface IServer
     Task<TimeSpan> PingAsync(CommandFlags flags = CommandFlags.None);
 
     /// <summary>
-    /// Pings the server.
+    /// This command is often used to test if a connection is still alive, or to measure latency.
     /// </summary>
     /// <seealso href="https://valkey.io/commands/ping"/>
     /// <param name="message">The message to send.</param>
@@ -116,10 +116,10 @@ public interface IServer
     Task<TimeSpan> PingAsync(ValkeyValue message, CommandFlags flags = CommandFlags.None);
 
     /// <summary>
-    /// Echo the provided message back.
+    /// Return the same message passed in.
     /// </summary>
     /// <seealso href="https://valkey.io/commands/echo"/>
-    /// <param name="message">The provided message.</param>
+    /// <param name="message">The message to echo.</param>
     /// <param name="flags">The command flags to use. Currently flags are ignored.</param>
     /// <returns>The provided message.</returns>
     /// <remarks>

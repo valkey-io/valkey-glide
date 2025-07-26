@@ -79,6 +79,12 @@ public class GlideClient : BaseClient, IGenericCommands, IServerManagementComman
         return await Command(Request.Echo(message));
     }
 
+    public async Task<TimeSpan> PingAsync(CommandFlags flags = CommandFlags.None)
+        => await Command(Request.Ping());
+
+    public async Task<TimeSpan> PingAsync(ValkeyValue message, CommandFlags flags = CommandFlags.None)
+        => await Command(Request.Ping(message));
+
     public async Task<bool> KeyMoveAsync(ValkeyKey key, int database, CommandFlags flags = CommandFlags.None)
         => await Command(Request.KeyMoveAsync(key, database));
 

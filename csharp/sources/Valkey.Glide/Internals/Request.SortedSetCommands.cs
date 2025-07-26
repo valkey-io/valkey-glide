@@ -33,10 +33,7 @@ internal partial class Request
 
     public static Cmd<long, bool> SortedSetAddAsync(ValkeyKey key, ValkeyValue member, double score, SortedSetWhen when = SortedSetWhen.Always, CommandFlags flags = CommandFlags.None)
     {
-        if (flags != CommandFlags.None)
-        {
-            throw new NotImplementedException("Command flags are not supported by GLIDE");
-        }
+        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
 
         List<GlideString> args = [key.ToGlideString()];
         AddSortedSetWhenOptions(args, when);
@@ -50,10 +47,7 @@ internal partial class Request
 
     public static Cmd<long, long> SortedSetAddAsync(ValkeyKey key, SortedSetEntry[] values, SortedSetWhen when = SortedSetWhen.Always, CommandFlags flags = CommandFlags.None)
     {
-        if (flags != CommandFlags.None)
-        {
-            throw new NotImplementedException("Command flags are not supported by GLIDE");
-        }
+        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
 
         List<GlideString> args = [key.ToGlideString()];
         AddSortedSetWhenOptions(args, when);
