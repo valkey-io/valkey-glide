@@ -1,5 +1,5 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
-package redis.clients.jedis.params;
+package compatibility.clients.jedis.params;
 
 /**
  * Parameters for GETEX command. Provides methods to set expiration options for the GETEX command.

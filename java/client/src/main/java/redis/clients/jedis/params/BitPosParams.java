@@ -1,7 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
-package redis.clients.jedis.params;
+package compatibility.clients.jedis.params;
 
-import redis.clients.jedis.args.BitCountOption;
+import compatibility.clients.jedis.args.BitCountOption;
 
 /** Parameters for BITPOS command in Jedis compatibility layer. */
 public class BitPosParams {
