@@ -94,7 +94,7 @@ public class DefaultJedisClientConfig implements JedisClientConfig {
 
     @Override
     public SSLParameters getSslParameters() {
-        return sslParameters;
+        return SSLParametersUtils.copy(sslParameters);
     }
 
     @Override
@@ -167,7 +167,7 @@ public class DefaultJedisClientConfig implements JedisClientConfig {
         }
 
         public Builder sslParameters(SSLParameters sslParameters) {
-            this.sslParameters = sslParameters;
+            this.sslParameters = SSLParametersUtils.copy(sslParameters);
             return this;
         }
 

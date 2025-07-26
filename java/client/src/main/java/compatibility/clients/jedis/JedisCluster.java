@@ -13,7 +13,7 @@ import java.util.concurrent.ExecutionException;
  * JedisCluster compatibility wrapper for Valkey GLIDE cluster client. This class provides a
  * Jedis-like cluster API while using Valkey GLIDE underneath.
  */
-public class JedisCluster implements Closeable {
+public final class JedisCluster implements Closeable {
 
     private final GlideClusterClient glideClusterClient;
     private final JedisClientConfig config;

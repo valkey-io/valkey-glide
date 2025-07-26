@@ -183,7 +183,18 @@ public class JedisPool implements Closeable {
     protected void returnResource(Jedis jedis) {
         if (!closed.get() && jedis != null && !jedis.isClosed()) {
             activeConnections.decrementAndGet();
-            availableConnections.offer(jedis);
+            // Check return value to handle queue full scenario
+            if (!availableConnections.offer(jedis)) {
+                // Queue is full, close the connection and decrement total count
+                totalConnections.decrementAndGet();
+                try {
+                    jedis.getGlideClient().close();
+                } catch (Exception e) {
+                    // Log error but don't throw - we're in cleanup mode
+                    System.err.println(
+                            "Warning: Failed to close Jedis connection when pool queue full: " + e.getMessage());
+                }
+            }
         } else if (jedis != null) {
             // Connection is closed or pool is closed, decrement total count
             totalConnections.decrementAndGet();
