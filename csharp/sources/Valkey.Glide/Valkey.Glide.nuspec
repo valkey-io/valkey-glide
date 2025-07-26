@@ -24,11 +24,11 @@
   </metadata>
   <files>
     <!-- Main package files -->
-    <file src="bin/Release/**/Valkey.Glide.dll" target="lib" />
-    <file src="bin/Release/**/Valkey.Glide.xml" target="lib" />
+    <file src="bin\Release\**\Valkey.Glide.dll" target="lib" />
+    <file src="bin\Release\**\Valkey.Glide.xml" target="lib" />
 
     <!-- PDB files for symbol package -->
-    <file src="bin/Release/**/Valkey.Glide.pdb" target="lib" />
+    <file src="bin\Release\**\Valkey.Glide.pdb" target="lib" />
 
 
     <!-- Source files for symbol package -->
