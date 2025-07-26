@@ -14,8 +14,8 @@ use std::{
 };
 
 use {
-    std::sync::LazyLock,
     redis::{IntoConnectionInfo, RedisResult, Value},
+    std::sync::LazyLock,
 };
 
 #[cfg(feature = "cluster-async")]

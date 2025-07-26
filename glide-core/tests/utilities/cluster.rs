@@ -109,11 +109,15 @@ pub fn get_shared_cluster_addresses(use_tls: bool) -> Vec<ConnectionAddr> {
 
 #[ctor::dtor]
 fn clean_shared_clusters() {
-    if let Some(mutex) = SharedCluster::get(&SHARED_CLUSTER) {
-        drop(mutex.lock().unwrap().take());
+    if let Ok(guard) = SHARED_CLUSTER.try_lock() {
+        if guard.is_some() {
+            drop(SHARED_CLUSTER.lock().unwrap().take());
+        }
     }
-    if let Some(mutex) = SharedCluster::get(&SHARED_TLS_CLUSTER) {
-        drop(mutex.lock().unwrap().take());
+    if let Ok(guard) = SHARED_TLS_CLUSTER.try_lock() {
+        if guard.is_some() {
+            drop(SHARED_TLS_CLUSTER.lock().unwrap().take());
+        }
     }
 }
 

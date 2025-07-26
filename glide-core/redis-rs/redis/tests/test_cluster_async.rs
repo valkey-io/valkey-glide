@@ -17,9 +17,9 @@ mod cluster_async {
 
     use futures::prelude::*;
     use futures_time::{future::FutureExt, task::sleep};
-    use std::sync::LazyLock;
     use std::ops::Add;
     use std::path::PathBuf;
+    use std::sync::LazyLock;
     use std::sync::OnceLock;
     use telemetrylib::*;
     use tokio::runtime::Runtime;
