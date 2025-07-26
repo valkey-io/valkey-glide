@@ -5,12 +5,12 @@
     <version>255.255.255</version>
     <authors>Valkey GLIDE Maintainers</authors>
     <owners>Valkey GLIDE Maintainers</owners>
-    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <requireLicenseAcceptance>true</requireLicenseAcceptance>
     <description>General Language Independent Driver for the Enterprise (GLIDE) for Valkey</description>
-    <projectUrl>https://github.com/valkey-io/valkey-glide</projectUrl>
+    <projectUrl>https://github.com/valkey-io/valkey-glide/csharp</projectUrl>
     <license type="expression">Apache-2.0</license>
     <!-- TODO other fields from schema: https://github.com/NuGet/NuGet.Client/blob/dev/src/NuGet.Core/NuGet.Packaging/compiler/resources/nuspec.xsd -->
-    <!-- iconUrl, releaseNotes -->
+    <!-- iconUrl -->
     <readme>docs/README.md</readme> <!-- TODO readme isn't used or isn't renderred -->
     <repository type="git" url="https://github.com/valkey-io/valkey-glide" /> <!-- TODO: commit="$GitCommitId$" -->
     <tags>open-source performance database csharp key-value fault-tolerance cache reliability pubsub valkey valkey-client</tags>
@@ -23,13 +23,25 @@
     </dependencies>
   </metadata>
   <files>
-    <!-- TODO include pdb files (debug symbols) and sources -->
-    <file src="bin/Release/net6.0/Valkey.Glide.dll" target="lib/net6.0/Valkey.Glide.dll" />
-    <file src="bin/Release/net6.0/Valkey.Glide.xml" target="lib/net6.0/Valkey.Glide.xml" />
-    <file src="bin/Release/net8.0/Valkey.Glide.dll" target="lib/net8.0/Valkey.Glide.dll" />
-    <file src="bin/Release/net8.0/Valkey.Glide.xml" target="lib/net8.0/Valkey.Glide.xml" />
+    <!-- Main package files -->
+    <file src="bin/Release/**/Valkey.Glide.dll" target="lib" />
+    <file src="bin/Release/**/Valkey.Glide.xml" target="lib" />
+
+    <!-- PDB files for symbol package -->
+    <file src="bin/Release/**/Valkey.Glide.pdb" target="lib" />
+
+
+    <!-- Source files for symbol package -->
+    <file src="*.cs" target="src" />
+    <file src="Abstract/**/*.cs" target="src/Abstract" />
+    <file src="abstract_APITypes/**/*.cs" target="src/abstract_APITypes" />
+    <file src="abstract_Enums/**/*.cs" target="src/abstract_Enums" />
+    <file src="Commands/**/*.cs" target="src/Commands" />
+    <file src="Internals/**/*.cs" target="src/Internals" />
+    <file src="Pipeline/**/*.cs" target="src/Pipeline" />
+
     <!-- TODO: make binaries optional/conditional, build fails on a dev's PC who doesn't have all files. Alternative: use different nuspec files -->
-    <!-- see RIDs in https://learn.microsoft.com/en-us/dotnet/core/rid-catalog -->
+    <!-- see runtime IDs in https://learn.microsoft.com/en-us/dotnet/core/rid-catalog -->
     <file src="../../bin/x86_64-unknown-linux-gnu/libglide_rs.so" target="runtimes/linux-x64/native" />
     <file src="../../bin/aarch64-unknown-linux-gnu/libglide_rs.so" target="runtimes/linux-arm64/native" />
     <file src="../../bin/x86_64-apple-darwin/libglide_rs.dylib" target="runtimes/osx-x64/native" />

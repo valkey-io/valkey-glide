@@ -18,6 +18,11 @@
     <Version>255.255.255</Version>
     <GenerateAssemblyFileVersionAttribute>true</GenerateAssemblyFileVersionAttribute>
     <Deterministic>true</Deterministic>
+
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>symbols.nupkg</SymbolPackageFormat>
+    <DebugType>portable</DebugType>
+    <DebugSymbols>true</DebugSymbols>
   </PropertyGroup>
 
   <!-- Enable analysis and un-suppress warnings only in `Lint` configuration -->
