@@ -1,8 +1,7 @@
 use chrono::{DateTime, Utc};
 use core::fmt;
-use futures_util::future::BoxFuture;
-use opentelemetry::trace::TraceError;
-use opentelemetry_sdk::export::{self, trace::ExportResult};
+use opentelemetry_sdk::error::OTelSdkError;
+use opentelemetry_sdk::trace::{SpanData, SpanExporter, TraceError};
 use serde_json::{Map, Value};
 use std::fs::OpenOptions;
 use std::io::Write;
@@ -47,56 +46,55 @@ impl SpanExporterFile {
     pub fn new(path: PathBuf) -> Result<Self, TraceError> {
         // TODO: Check if the file exists and has write permissions - https://github.com/valkey-io/valkey-glide/issues/3720
         Ok(Self {
-            resource: Resource::default(),
+            resource: Resource::builder_empty().build(),
             is_shutdown: atomic::AtomicBool::new(false),
             path,
         })
     }
 }
 
-macro_rules! file_writeln {
-    ($file:expr, $content:expr) => {{
-        if let Err(e) = writeln!($file, "{}", $content) {
-            return Box::pin(std::future::ready(Err(TraceError::from(format!(
-                "File write error. {e}",
-            )))));
-        }
-    }};
-}
-
-impl opentelemetry_sdk::export::trace::SpanExporter for SpanExporterFile {
+impl SpanExporter for SpanExporterFile {
     /// Write Spans to JSON file
-    fn export(&mut self, batch: Vec<export::trace::SpanData>) -> BoxFuture<'static, ExportResult> {
-        if self.is_shutdown.load(atomic::Ordering::SeqCst) {
-            return Box::pin(std::future::ready(Err(TraceError::from(
-                "Exporter is shutdown",
-            ))));
-        }
+    fn export(
+        &self,
+        batch: Vec<SpanData>,
+    ) -> impl futures_util::Future<Output = Result<(), OTelSdkError>> + std::marker::Send {
+        let path = self.path.clone();
+        let is_shutdown = self.is_shutdown.load(atomic::Ordering::SeqCst);
 
-        // TODO: Move the writes to Tokio task - https://github.com/valkey-io/valkey-glide/issues/3720
-        let Ok(mut file) = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&self.path)
-        else {
-            return Box::pin(std::future::ready(Err(TraceError::from(format!(
-                "Unable to open exporter file: {} for append.",
-                self.path.display()
-            )))));
-        };
-
-        let spans = to_jsons(batch);
-
-        for span in &spans {
-            if let Ok(s) = serde_json::to_string(&span) {
-                file_writeln!(file, s);
+        async move {
+            if is_shutdown {
+                return Err(OTelSdkError::InternalFailure("Exporter is shutdown".into()));
             }
+
+            // TODO: Move the writes to Tokio task - https://github.com/valkey-io/valkey-glide/issues/3720
+            let mut file = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&path)
+                .map_err(|_| {
+                    OTelSdkError::InternalFailure(format!(
+                        "Unable to open exporter file: {} for append.",
+                        path.display()
+                    ))
+                })?;
+
+            let spans = to_jsons(batch);
+
+            for span in &spans {
+                if let Ok(s) = serde_json::to_string(&span) {
+                    writeln!(file, "{s}").map_err(|e| {
+                        OTelSdkError::InternalFailure(format!("File write error. {e}"))
+                    })?;
+                }
+            }
+            Ok(())
         }
-        Box::pin(std::future::ready(Ok(())))
     }
 
-    fn shutdown(&mut self) {
+    fn shutdown(&mut self) -> Result<(), OTelSdkError> {
         self.is_shutdown.store(true, atomic::Ordering::SeqCst);
+        Ok(())
     }
 
     fn set_resource(&mut self, res: &opentelemetry_sdk::Resource) {
@@ -104,7 +102,7 @@ impl opentelemetry_sdk::export::trace::SpanExporter for SpanExporterFile {
     }
 }
 
-fn to_jsons(batch: Vec<export::trace::SpanData>) -> Vec<Value> {
+fn to_jsons(batch: Vec<SpanData>) -> Vec<Value> {
     let mut spans = Vec::<Value>::new();
     for span in &batch {
         let mut map = Map::new();
