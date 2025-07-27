@@ -355,7 +355,13 @@ macro_rules! implement_pipeline_commands {
                 let mut rv = Vec::with_capacity(resp.len() - self.ignored_commands.len());
                 for (idx, result) in resp.into_iter().enumerate() {
                     if let Value::ServerError(e) = result {
-                        return Err(e.into());
+                        // If this command is marked as ignored, don't fail the entire pipeline
+                        // This is critical for CLIENT SETINFO commands which should be optional
+                        if !self.ignored_commands.contains(&idx) {
+                            return Err(e.into());
+                        }
+                        // Continue without including the error in results for ignored commands
+                        continue;
                     }
                     if !self.ignored_commands.contains(&idx) {
                         rv.push(result);
