@@ -4,6 +4,8 @@ repo_url: https://github.com/valkey-io/valkey-glide
 repo_name: GitHub
 docs_dir: markdown
 nav:
+  - General Guides:
+      - ACL Permissions Requirements: acl-permissions.md
   - Python:
       - Client:
           - Standalone: python/glide_client.md

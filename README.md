@@ -69,6 +69,7 @@ GLIDE's [documentation site](https://valkey.io/valkey-glide/) currently offers d
 - [Ruby](https://github.com/valkey-io/valkey-glide-ruby)
 
 **General Concepts:**
+- [ACL Permissions Requirements](./docs/markdown/acl-permissions.md) - **Essential for production deployments**
 - [Custom Command](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command)
 - [Connection Management](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#connection-management)
 - [Multi-Slot Command Handling](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#multi-slot-command-handling)
