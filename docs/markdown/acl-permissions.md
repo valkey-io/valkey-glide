@@ -172,7 +172,9 @@ CLIENT SETINFO LIB-NAME test
 CLIENT SETNAME test-connection
 ```
 
-### 2. Connection Test
+### 2. Connection Test Scripts
+
+#### Python Example
 ```python
 # Python example
 from glide import GlideClient, GlideClientConfiguration, NodeAddress, ServerCredentials
@@ -184,10 +186,119 @@ config = GlideClientConfiguration(
 
 try:
     client = GlideClient.create_client(config).get()
-    print("Connection successful!")
+    print("✅ Connection successful!")
     client.close()
 except Exception as e:
-    print(f"Connection failed: {e}")
+    print(f"❌ Connection failed: {e}")
+```
+
+#### Java Example
+```java
+// Java example
+import glide.api.GlideClient;
+import glide.api.models.configuration.GlideClientConfiguration;
+import glide.api.models.configuration.NodeAddress;
+import glide.api.models.configuration.ServerCredentials;
+
+GlideClientConfiguration config = GlideClientConfiguration.builder()
+    .addresses(List.of(NodeAddress.builder().host("localhost").port(6379).build()))
+    .credentials(ServerCredentials.builder()
+        .username("your-acl-user")
+        .password("your-password")
+        .build())
+    .build();
+
+try {
+    GlideClient client = GlideClient.createClient(config).get();
+    System.out.println("✅ Connection successful!");
+    client.close();
+} catch (Exception e) {
+    System.out.println("❌ Connection failed: " + e.getMessage());
+}
+```
+
+#### Node.js Example
+```javascript
+// Node.js example
+import { GlideClient, GlideClientConfiguration } from '@valkey/valkey-glide';
+
+const config: GlideClientConfiguration = {
+    addresses: [{ host: 'localhost', port: 6379 }],
+    credentials: {
+        username: 'your-acl-user',
+        password: 'your-password'
+    }
+};
+
+try {
+    const client = await GlideClient.createClient(config);
+    console.log('✅ Connection successful!');
+    client.close();
+} catch (error) {
+    console.log('❌ Connection failed:', error.message);
+}
+```
+
+### 3. ACL Testing Commands
+
+#### Test Individual Permissions
+```bash
+# Basic connection commands
+redis-cli -u redis://your-acl-user:your-password@localhost:6379 PING
+redis-cli -u redis://your-acl-user:your-password@localhost:6379 INFO server
+
+# Client commands
+redis-cli -u redis://your-acl-user:your-password@localhost:6379 CLIENT SETNAME test
+redis-cli -u redis://your-acl-user:your-password@localhost:6379 CLIENT SETINFO LIB-NAME test
+
+# Data commands
+redis-cli -u redis://your-acl-user:your-password@localhost:6379 SET test:key value
+redis-cli -u redis://your-acl-user:your-password@localhost:6379 GET test:key
+```
+
+#### Test Cluster Commands (if using cluster mode)
+```bash
+# Cluster-specific commands
+redis-cli -u redis://your-acl-user:your-password@localhost:6379 READONLY
+redis-cli -u redis://your-acl-user:your-password@localhost:6379 CLUSTER NODES
+```
+
+### 4. Automated ACL Validation Script
+
+#### Bash Script
+```bash
+#!/bin/bash
+# acl-test.sh - Test ACL permissions for Valkey GLIDE
+
+USER="your-acl-user"
+PASSWORD="your-password"
+HOST="localhost"
+PORT="6379"
+
+REDIS_CLI="redis-cli -u redis://$USER:$PASSWORD@$HOST:$PORT"
+
+echo "🔍 Testing ACL permissions for user: $USER"
+
+# Test essential commands
+commands=(
+    "PING"
+    "INFO server"
+    "CLIENT SETNAME glide-test"
+    "CLIENT SETINFO LIB-NAME glide-test"
+    "CLIENT SETINFO LIB-VER 1.0.0"
+)
+
+for cmd in "${commands[@]}"; do
+    echo -n "Testing '$cmd'... "
+    if $REDIS_CLI $cmd >/dev/null 2>&1; then
+        echo "✅"
+    else
+        echo "❌"
+        echo "⚠️  Missing permission for: $cmd"
+    fi
+done
+
+echo "📋 Testing completed. Fix any ❌ failures before using GLIDE."
 ```
 
 ## Troubleshooting Connection Issues
@@ -244,6 +355,35 @@ When migrating from Redis or AWS ElastiCache for Redis to Valkey with GLIDE:
 2. **Add missing GLIDE-specific permissions** (`+client|setinfo`, `+client|setname`)
 3. **Test thoroughly** in non-production environments
 4. **Monitor logs** for permission errors during migration
+
+## Verifying the Fix
+
+As of this update, Valkey GLIDE has been patched to properly handle ACL permission errors for `CLIENT SETINFO` commands. The pipeline implementation now correctly ignores server errors for commands marked as ignored, preventing infinite retry loops.
+
+### How to Verify the Fix Works
+
+1. **Create a restricted ACL user** missing `+client|setinfo`:
+   ```bash
+   ACL SETUSER test-user on >password ~* -@all +@read +ping +info +client|setname
+   ```
+
+2. **Test connection with GLIDE** - it should now succeed without infinite retries
+3. **Check logs** - you may see permission warnings, but connections should establish successfully
+
+### Before vs After the Fix
+
+**Before (Problematic Behavior):**
+```
+WARN: Failed to create management connection for node "hostname:6379". 
+Error: NOPERM: this user has no permissions to run the 'client|setinfo' command
+[Infinite retry loop continues...]
+```
+
+**After (Fixed Behavior):**
+```
+WARN: CLIENT SETINFO command failed (ignored): NOPERM: this user has no permissions to run the 'client|setinfo' command
+INFO: Connection established successfully
+```
 
 ## Best Practices
 
