@@ -56,6 +56,7 @@ from glide_shared.constants import (
     TXInfoStreamFullResponse,
     TXInfoStreamResponse,
 )
+from glide_shared.exceptions import RequestError
 from glide_shared.protobuf.command_request_pb2 import RequestType
 from glide_shared.routes import Route
 
@@ -2100,8 +2101,8 @@ class CoreCommands(Protocol):
         Returns:
             TOK: A simple "OK" response.
 
-            If `start` exceeds the end of the list, or if `start` is greater than `end`, the result will be an empty list
-            (which causes `key` to be removed).
+            If `start` exceeds the end of the list, or if `start` is greater than `end`, the list is emptied
+            and the key is removed.
 
             If `end` exceeds the actual end of the list, it will be treated like the last element of the list.
 
@@ -2119,9 +2120,6 @@ class CoreCommands(Protocol):
     def lrem(self, key: TEncodable, count: int, element: TEncodable) -> int:
         """
         Removes the first `count` occurrences of elements equal to `element` from the list stored at `key`.
-        If `count` is positive, it removes elements equal to `element` moving from head to tail.
-        If `count` is negative, it removes elements equal to `element` moving from tail to head.
-        If `count` is 0 or greater than the occurrences of elements equal to `element`, it removes all elements
         equal to `element`.
 
         See [valkey.io](https://valkey.io/commands/lrem/) for more details.
@@ -2129,6 +2127,11 @@ class CoreCommands(Protocol):
         Args:
             key (TEncodable): The key of the list.
             count (int): The count of occurrences of elements equal to `element` to remove.
+
+                - If `count` is positive, it removes elements equal to `element` moving from head to tail.
+                - If `count` is negative, it removes elements equal to `element` moving from tail to head.
+                - If `count` is 0 or greater than the occurrences of elements equal to `element`, it removes all elements
+
             element (TEncodable): The element to remove from the list.
 
         Returns:
@@ -2731,26 +2734,26 @@ class CoreCommands(Protocol):
 
         Args:
             key (TEncodable): The key of the stream.
-            end (StreamRangeBound): The ending stream ID bound for the range.
+            end (StreamRangeBound): The ending stream entry ID bound for the range.
 
-                - Use `IdBound` to specify a stream ID.
-                - Use `ExclusiveIdBound` to specify an exclusive bounded stream ID.
+                - Use `IdBound` to specify a stream entry ID.
+                - Since Valkey 6.2.0, use `ExclusiveIdBound` to specify an exclusive bounded stream entry ID.
                 - Use `MaxId` to end with the maximum available ID.
 
-            start (StreamRangeBound): The starting stream ID bound for the range.
+            start (StreamRangeBound): The starting stream entry ID bound for the range.
 
-                - Use `IdBound` to specify a stream ID.
-                - Use `ExclusiveIdBound` to specify an exclusive bounded stream ID.
+                - Use `IdBound` to specify a stream entry ID.
+                - Since Valkey 6.2.0, use `ExclusiveIdBound` to specify an exclusive bounded stream entry ID.
                 - Use `MinId` to start with the minimum available ID.
 
             count (Optional[int]): An optional argument specifying the maximum count of stream entries to return.
                 If `count` is not provided, all stream entries in the range will be returned.
 
         Returns:
-            Optional[Mapping[bytes, List[List[bytes]]]]: A mapping of stream IDs to stream entry data, where entry data is a
+            Optional[Mapping[bytes, List[List[bytes]]]]: A mapping of stream entry IDs to stream entry data, where entry data is a
             list of pairings with format `[[field, entry], [field, entry], ...]`.
 
-            Returns None if the range arguments are not applicable.
+            Returns None if the range arguments are not applicable. Or if count is non-positive.
 
         Examples:
             >>> client.xadd("mystream", [("field1", "value1")], StreamAddOptions(id="0-1"))
@@ -2836,7 +2839,7 @@ class CoreCommands(Protocol):
             key (TEncodable): The key of the stream.
             group_name (TEncodable): The newly created consumer group name.
             group_id (TEncodable): The stream entry ID that specifies the last delivered entry in the stream from the new
-                group’s perspective. The special ID "$" can be used to specify the last entry in the stream.
+                group's perspective. The special ID "$" can be used to specify the last entry in the stream.
             options (Optional[StreamGroupOptions]): Options for creating the stream group.
 
         Returns:
@@ -5566,6 +5569,28 @@ class CoreCommands(Protocol):
             self._execute_command(RequestType.ZInterCard, args),
         )
 
+    def script_show(self, sha1: TEncodable) -> bytes:
+        """
+        Returns the original source code of a script in the script cache.
+
+        See [valkey.io](https://valkey.io/commands/script-show) for more details.
+
+        Args:
+            sha1 (TEncodable): The SHA1 digest of the script.
+
+        Returns:
+            bytes: The original source code of the script, if present in the cache.
+
+            If the script is not found in the cache, an error is thrown.
+
+        Example:
+            >>> await client.script_show(script.get_hash())
+                b"return { KEYS[1], ARGV[1] }"
+
+        Since: Valkey version 8.0.0.
+        """
+        return cast(bytes, self._execute_command(RequestType.ScriptShow, [sha1]))
+
     def pfadd(self, key: TEncodable, elements: List[TEncodable]) -> int:
         """
         Adds all elements to the HyperLogLog data structure stored at the specified `key`.
@@ -6172,6 +6197,10 @@ class CoreCommands(Protocol):
             args.append("REPLACE")
         if absttl is True:
             args.append("ABSTTL")
+        if idletime is not None and frequency is not None:
+            raise RequestError(
+                "syntax error: IDLETIME and FREQ cannot be set at the same time."
+            )
         if idletime is not None:
             args.extend(["IDLETIME", str(idletime)])
         if frequency is not None:
@@ -6510,7 +6539,7 @@ class CoreCommands(Protocol):
         See [valkey.io](https://valkey.io/commands/watch) for more details.
 
         Note:
-            In cluster mode, if keys in `key_value_map` map to different hash slots,
+            In cluster mode, if keys in `keys` map to different hash slots,
             the command will be split across these slots and executed separately for each.
             This means the command is atomic only at the slot level. If one or more slot-specific
             requests fail, the entire call will return the first encountered error, even

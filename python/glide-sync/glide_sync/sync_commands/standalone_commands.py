@@ -28,6 +28,10 @@ class StandaloneCommands(CoreCommands):
         See the [Valkey GLIDE Wiki](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command)
         for details on the restrictions and limitations of the custom command API.
 
+        This function should only be used for single-response commands. Commands that don't return complete response and awaits
+        (such as SUBSCRIBE), or that return potentially more than a single response (such as XREAD), or that change the
+        client's behavior (such as entering pub/sub mode on RESP2 connections) shouldn't be called using this function.
+
         Args:
             command_args (List[TEncodable]): List of the command's arguments, where each argument is either a string or bytes.
             Every part of the command, including the command name and subcommands, should be added as a separate value in args.
@@ -37,6 +41,8 @@ class StandaloneCommands(CoreCommands):
 
         Example:
             >>> connection.customCommand(["CLIENT", "LIST","TYPE", "PUBSUB"])
+            # Expected Output: A list of all pub/sub clients
+
 
         """
         return self._execute_command(RequestType.CustomCommand, command_args)

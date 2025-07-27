@@ -44,13 +44,21 @@ async def glide_client(
     cluster_mode: bool,
     protocol: ProtocolVersion,
 ) -> AsyncGenerator[TGlideClient, None]:
-    "Get async socket client for tests"
+    """Get async socket client for tests"""
     client = await create_client(
-        request, cluster_mode, protocol=protocol, request_timeout=5000
+        request,
+        cluster_mode,
+        protocol=protocol,
+        request_timeout=5000,
+        lazy_connect=False,  # Explicitly false for general test client
     )
-    yield client
-    await test_teardown(request, cluster_mode, protocol)
-    await client.close()
+    try:
+        yield client
+    finally:
+        # Close the client first, then run teardown
+        await client.close()
+        # Run teardown which has its own robust error handling
+        await test_teardown(request, cluster_mode, protocol)
 
 
 @pytest.fixture(scope="function")
@@ -59,11 +67,17 @@ async def management_client(
     cluster_mode: bool,
     protocol: ProtocolVersion,
 ) -> AsyncGenerator[TGlideClient, None]:
-    "Get async socket client for tests, used to manage the state when tests are on the client ability to connect"
-    client = await create_client(request, cluster_mode, protocol=protocol)
-    yield client
-    await test_teardown(request, cluster_mode, protocol)
-    await client.close()
+    """Get async socket client for tests, used to manage the state when tests are on the client ability to connect"""
+    client = await create_client(
+        request, cluster_mode, protocol=protocol, lazy_connect=False
+    )
+    try:
+        yield client
+    finally:
+        # Close the client first, then run teardown
+        await client.close()
+        # Run teardown which has its own robust error handling
+        await test_teardown(request, cluster_mode, protocol)
 
 
 @pytest.fixture(scope="function")
@@ -90,10 +104,49 @@ async def acl_glide_client(
         protocol=protocol,
         credentials=ServerCredentials(username=USERNAME, password=INITIAL_PASSWORD),
         request_timeout=2000,
+        lazy_connect=False,
     )
-    yield client
-    await test_teardown(request, cluster_mode, protocol)
-    await client.close()
+    try:
+        yield client
+    finally:
+        # Close the client first, then run teardown
+        await client.close()
+        # Run teardown which has its own robust error handling
+        await test_teardown(request, cluster_mode, protocol)
+
+
+@pytest.fixture
+def tls_insecure(request) -> bool:
+    # If the test has param'd tls_insecure, use it
+    # Otherwise default to False
+    return getattr(request, "param", False)
+
+
+@pytest.fixture(scope="function")
+async def glide_tls_client(
+    request,
+    cluster_mode: bool,
+    protocol: ProtocolVersion,
+    tls_insecure: bool,
+) -> AsyncGenerator[TGlideClient, None]:
+    """
+    Get async socket client for tests with TLS enabled.
+    """
+    client = await create_client(
+        request,
+        cluster_mode,
+        protocol=protocol,
+        use_tls=True,
+        tls_insecure=tls_insecure,
+        valkey_cluster=pytest.valkey_tls_cluster if cluster_mode else pytest.standalone_tls_cluster,  # type: ignore
+    )
+    try:
+        yield client
+    finally:
+        # Close the client first, then run teardown
+        await client.close()
+        # Run teardown which has its own robust error handling
+        await test_teardown(request, cluster_mode, protocol)
 
 
 async def create_client(
@@ -234,37 +287,3 @@ async def _attempt_teardown(request, cluster_mode: bool, protocol: ProtocolVersi
             raise TimeoutError(f"Connection timeout during teardown: {e}")
         else:
             raise e
-
-
-@pytest.fixture
-def tls_insecure(request) -> bool:
-    # If the test has param'd tls_insecure, use it
-    # Otherwise default to False
-    return getattr(request, "param", False)
-
-
-@pytest.fixture(scope="function")
-async def glide_tls_client(
-    request,
-    cluster_mode: bool,
-    protocol: ProtocolVersion,
-    tls_insecure: bool,
-) -> AsyncGenerator[TGlideClient, None]:
-    """
-    Get async socket client for tests with TLS enabled.
-    """
-    client = await create_client(
-        request,
-        cluster_mode,
-        protocol=protocol,
-        use_tls=True,
-        tls_insecure=tls_insecure,
-        valkey_cluster=pytest.valkey_tls_cluster if cluster_mode else pytest.standalone_tls_cluster,  # type: ignore
-    )
-    try:
-        yield client
-    finally:
-        # Close the client first, then run teardown
-        await client.close()
-        # Run teardown which has its own robust error handling
-        await test_teardown(request, cluster_mode, protocol)
