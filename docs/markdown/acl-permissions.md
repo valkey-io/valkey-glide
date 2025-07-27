@@ -65,6 +65,32 @@ GLIDE automatically executes the following commands during every connection esta
 - **Failure impact**: Connection fails with subscription errors
 - **Example**: `ACL SETUSER myuser +@pubsub`
 
+## Additional Commands for Cluster Mode
+
+When using GLIDE in cluster mode, additional commands are executed:
+
+### 8. PING Command (Connection Health Check)
+- **When executed**: During cluster connection establishment
+- **Required permission**: `+ping`
+- **Failure impact**: Connection fails during cluster setup
+- **Example**: `ACL SETUSER myuser +ping`
+
+### 9. READONLY Command (Read-from-Replica Configuration)
+- **When executed**: When read-from-replica strategy is enabled
+- **Required permission**: `+readonly`
+- **Failure impact**: Connection fails during user connection setup
+- **Example**: `ACL SETUSER myuser +readonly`
+
+### 10. CLIENT SETNAME Command (Management Connection) ⚠️ CLUSTER CRITICAL
+- **Command executed**: `CLIENT SETNAME glide_management_connection`
+- **When executed**: For every cluster management connection
+- **Required permission**: `+client|setname`
+- **Failure impact**: **Infinite retry loops in cluster mode** - "Failed to create management connection" errors
+- **Example**: `ACL SETUSER myuser +client|setname`
+
+!!! warning "Cluster Mode Critical"
+    In cluster mode, missing `+client|setname` permission causes "Failed to create management connection" errors and infinite retry loops.
+
 ## Minimum Required ACL Configurations
 
 ### Basic Read-Only User (Minimum)
@@ -79,10 +105,16 @@ ACL SETUSER readonly-user on >password ~* -@all +@read +ping +@connection +info
 ACL SETUSER readonly-user on >password ~* -@all +@read +ping +cluster +readonly +info +client|setname +client|setinfo
 ```
 
+### Cluster Read-Only User
+```bash
+# Read-only user for cluster deployments (includes cluster-specific commands)
+ACL SETUSER cluster-readonly-user on >password ~* -@all +@read +ping +cluster +readonly +info +client|setname +client|setinfo
+```
+
 ### Read-Write User (No Admin)
 ```bash
 # Read-write user without administrative commands
-ACL SETUSER readwrite-user on >password ~* -@all +@read +@write +ping +cluster +info +client|setname +client|setinfo
+ACL SETUSER readwrite-user on >password ~* -@all +@read +@write +ping +cluster +readonly +info +client|setname +client|setinfo
 ```
 
 ### Application User (Comprehensive)
@@ -169,19 +201,32 @@ Error: NOPERM: this user has no permissions to run the 'client|setinfo' command
 ```
 **Solution**: Add `+client|setinfo` to your ACL user
 
-#### 2. Infinite Retry Loops
+#### 2. CLIENT SETNAME Permission Denied (Cluster Mode)
+```
+WARN: Failed to create management connection for node "hostname:6379". 
+Error: NOPERM: this user has no permissions to run the 'client|setname' command
+```
+**Solution**: Add `+client|setname` to your ACL user
+
+#### 3. Infinite Retry Loops
 **Symptoms**: 
 - Thousands of identical permission errors in logs
 - No successful connections
 - High CPU usage from retry attempts
 
-**Solution**: Ensure ALL required connection permissions are granted, especially `+client|setinfo`
+**Solution**: Ensure ALL required connection permissions are granted, especially `+client|setinfo` and `+client|setname`
 
-#### 3. Database Selection Failures
+#### 4. Database Selection Failures
 ```
 Error: Redis server refused to switch database
 ```
 **Solution**: Add `+select` or `+@keyspace` to your ACL user
+
+#### 5. Cluster Connection Failures
+```
+Error: Failed to create initial connections
+```
+**Solution**: Ensure cluster-specific permissions (`+ping`, `+readonly`, `+cluster`) are granted
 
 ### Debug Steps
 
