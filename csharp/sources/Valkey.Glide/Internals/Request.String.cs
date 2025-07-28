@@ -100,7 +100,7 @@ internal partial class Request
     }
 
     public static Cmd<GlideString, string?> StringLongestCommonSubsequence(ValkeyKey first, ValkeyKey second)
-        => new(RequestType.LCS, [first.ToGlideString(), second.ToGlideString()], true, response => response is null ? null : response.ToString());
+        => new(RequestType.LCS, [first.ToGlideString(), second.ToGlideString()], true, response => response ?? response.ToString());
 
     public static Cmd<long, long> StringLongestCommonSubsequenceLength(ValkeyKey first, ValkeyKey second)
         => Simple<long>(RequestType.LCS, [first.ToGlideString(), second.ToGlideString(), LenKeyword.ToGlideString()]);
@@ -111,17 +111,15 @@ internal partial class Request
         return new(RequestType.LCS, [.. args], false, ConvertLCSMatchResult);
     }
 
-    private static LCSMatchResult ConvertLCSMatchResult(object response)
-    {
+    private static LCSMatchResult ConvertLCSMatchResult(object response) =>
         // Handle dictionary response (expected format)
-        return response is Dictionary<GlideString, object> dictResponse
+        response is Dictionary<GlideString, object> dictResponse
             ? ConvertLCSMatchResultFromDictionary(dictResponse)
             : LCSMatchResult.Null;
-    }
 
     private static LCSMatchResult ConvertLCSMatchResultFromDictionary(Dictionary<GlideString, object> response)
     {
-        List<LCSMatchResult.LCSMatch> matches = new();
+        List<LCSMatchResult.LCSMatch> matches = [];
         long totalLength = 0;
 
         // Extract length
