@@ -89,7 +89,7 @@ class PackageLicense:
 
 
 ort_results_per_lang = [
-    OrtResults("Python", "python/ort_results"),
+    OrtResults("PythonAsync", "python/glide-async/ort_results"),
     OrtResults("Node", "node/ort_results"),
     OrtResults("Java", "java/ort_results"),
     OrtResults("Rust", "glide-core/ort_results"),
