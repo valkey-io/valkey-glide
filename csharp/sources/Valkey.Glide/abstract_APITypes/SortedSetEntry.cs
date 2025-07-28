@@ -16,7 +16,7 @@ public readonly struct SortedSetEntry : IEquatable<SortedSetEntry>, IComparable,
     /// Initializes a <see cref="SortedSetEntry"/> value.
     /// </summary>
     /// <param name="element">The <see cref="ValkeyValue"/> to get an entry for.</param>
-    /// <param name="score">The redis score for <paramref name="element"/>.</param>
+    /// <param name="score">The score for <paramref name="element"/>.</param>
     public SortedSetEntry(ValkeyValue element, double score)
     {
         this.element = element;

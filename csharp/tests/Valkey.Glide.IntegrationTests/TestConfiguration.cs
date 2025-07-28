@@ -166,11 +166,11 @@ public class TestConfiguration : IDisposable
                 ConfigurationOptions resp2conf = DefaultCompatibleConfig();
                 resp2conf.Protocol = Protocol.Resp2;
                 ConnectionMultiplexer resp2Conn = ConnectionMultiplexer.Connect(resp2conf);
-                (resp2Conn.GetDatabase() as DatabaseImpl)!.SetInfo("RESP2");
+                (resp2Conn.GetDatabase() as Database)!.SetInfo("RESP2");
                 ConfigurationOptions resp3conf = DefaultCompatibleConfig();
                 resp3conf.Protocol = Protocol.Resp3;
                 ConnectionMultiplexer resp3Conn = ConnectionMultiplexer.Connect(resp3conf);
-                (resp3Conn.GetDatabase() as DatabaseImpl)!.SetInfo("RESP3");
+                (resp3Conn.GetDatabase() as Database)!.SetInfo("RESP3");
 
                 field = [resp2Conn, resp3Conn];
             }
@@ -189,11 +189,11 @@ public class TestConfiguration : IDisposable
                 ConfigurationOptions resp2conf = DefaultCompatibleClusterConfig();
                 resp2conf.Protocol = Protocol.Resp2;
                 ConnectionMultiplexer resp2Conn = ConnectionMultiplexer.Connect(resp2conf);
-                (resp2Conn.GetDatabase() as DatabaseImpl)!.SetInfo("RESP2");
+                (resp2Conn.GetDatabase() as Database)!.SetInfo("RESP2");
                 ConfigurationOptions resp3conf = DefaultCompatibleClusterConfig();
                 resp3conf.Protocol = Protocol.Resp3;
                 ConnectionMultiplexer resp3Conn = ConnectionMultiplexer.Connect(resp3conf);
-                (resp3Conn.GetDatabase() as DatabaseImpl)!.SetInfo("RESP3");
+                (resp3Conn.GetDatabase() as Database)!.SetInfo("RESP3");
 
                 field = [resp2Conn, resp3Conn];
             }
@@ -212,7 +212,8 @@ public class TestConfiguration : IDisposable
 #pragma warning disable xUnit1046 // Avoid using TheoryDataRow arguments that are not serializable
                 field = [
                     .. TestStandaloneConnections.Select(d => new TheoryDataRow<ConnectionMultiplexer, bool>(d.Data, false)),
-                    .. TestClusterConnections.Select(d => new TheoryDataRow<ConnectionMultiplexer, bool>(d.Data, true))];
+                    .. TestClusterConnections.Select(d => new TheoryDataRow<ConnectionMultiplexer, bool>(d.Data, true))
+                ];
 #pragma warning restore xUnit1046 // Avoid using TheoryDataRow arguments that are not serializable
             }
             return field;
@@ -275,7 +276,7 @@ public class TestConfiguration : IDisposable
             // Start standalone
             STANDALONE_HOSTS = StartServer(false, TLS);
         }
-        // Get redis version
+        // Get server version
         SERVER_VERSION = GetServerVersion();
 
         TestConsoleWriteLine($"Cluster hosts = {string.Join(", ", CLUSTER_HOSTS)}");
