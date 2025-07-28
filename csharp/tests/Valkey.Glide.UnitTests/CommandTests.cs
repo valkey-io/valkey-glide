@@ -539,7 +539,7 @@ public class CommandTests
             // Test SortedSetRangeByValueAsync converter
             () =>
             {
-                ValkeyValue[] result = Request.SortedSetRangeByValueAsync("key", "a", "z", Exclude.None, 0, -1, CommandFlags.None).Converter(testRankArray);
+                ValkeyValue[] result = Request.SortedSetRangeByValueAsync("key", "a", "z", Exclude.None, 0, -1).Converter(testRankArray);
                 Assert.Equal(3, result.Length);
                 Assert.All(result, item => Assert.IsType<ValkeyValue>(item));
                 Assert.Equal("member1", result[0]);
