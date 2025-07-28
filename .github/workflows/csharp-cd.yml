@@ -111,7 +111,7 @@ jobs:
             - name: Build native libs
               if: ${{ !contains(matrix.host.TARGET, 'linux-gnu') }}
               working-directory: csharp/rust
-              run: cargo build --release
+              run: cargo build --release --target ${{ matrix.host.TARGET }}
 
             - name: Upload artifacts to publish
               continue-on-error: true
@@ -269,4 +269,4 @@ jobs:
         steps:
             - name: Remove package from NuGet due to test failures
               if: ${{ needs.test.result == 'failure' && needs.publish.result == 'success' }}
-              run: dotnet nuget delete Valkey.Glide ${{ env.RELEASE_VERSION }} --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
+              run: dotnet nuget delete Valkey.Glide ${{ env.RELEASE_VERSION }} --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --non-interactive
