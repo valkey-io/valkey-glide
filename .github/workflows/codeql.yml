@@ -200,9 +200,16 @@ jobs:
               if: matrix.language == 'java-kotlin'
               shell: bash
               run: |
-                  # Build only Java components (skip Rust build for CodeQL analysis)
+                  # Build all Java components (skip Rust build for CodeQL analysis)
                   cd java
-                  ./gradlew --build-cache :client:processResources :client:compileJava --exclude-task :client:buildRust
+                  ./gradlew --build-cache assemble --exclude-task :client:buildRust
+
+            - name: Debug - Verify .class files are produced
+              if: matrix.language == 'java-kotlin'
+              shell: bash
+              run: |
+                  find java -name "*.class" || echo "No .class files found!"
+                  echo "Total .class files: $(find java -name "*.class" | wc -l)"
 
             - name: Perform CodeQL Analysis
               uses: github/codeql-action/analyze@v3
