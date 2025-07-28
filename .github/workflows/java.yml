@@ -129,13 +129,23 @@ jobs:
                       ${{ matrix.host.TARGET }}-glide-core
                       ${{ matrix.host.TARGET }}
 
+            - name: Cache Gradle dependencies
+              uses: actions/cache@v4
+              with:
+                  path: |
+                      ~/.gradle/caches
+                      ~/.gradle/wrapper
+                  key: ${{ runner.os }}-gradle-${{ hashFiles('java/**/*.gradle*', 'java/**/gradle-wrapper.properties') }}
+                  restore-keys: |
+                      ${{ runner.os }}-gradle-
+
             - name: Build java client
               working-directory: java
-              run: ./gradlew --continue build -x javadoc
+              run: ./gradlew --build-cache --continue build -x javadoc
 
             - name: Ensure no skipped files by linter
               working-directory: java
-              run: ./gradlew spotlessDiagnose | grep 'All formatters are well behaved for all files'
+              run: ./gradlew --build-cache spotlessDiagnose | grep 'All formatters are well behaved for all files'
 
             - uses: ./.github/workflows/test-benchmark
               if: ${{ matrix.engine.version == '8.0' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.java == '17' }}
@@ -205,9 +215,19 @@ jobs:
                       ${{ matrix.host.TARGET }}-glide-core
                       ${{ matrix.host.TARGET }}
 
+            - name: Cache Gradle dependencies
+              uses: actions/cache@v4
+              with:
+                  path: |
+                      ~/.gradle/caches
+                      ~/.gradle/wrapper
+                  key: ${{ runner.os }}-gradle-${{ hashFiles('java/**/*.gradle*', 'java/**/gradle-wrapper.properties') }}
+                  restore-keys: |
+                      ${{ runner.os }}-gradle-
+
             - name: Test pubsub
               working-directory: java
-              run: ./gradlew :integTest:pubsubTest
+              run: ./gradlew --build-cache :integTest:pubsubTest
 
             - name: Upload test & spotbugs reports
               if: always()
@@ -291,12 +311,23 @@ jobs:
                   key: ${{ matrix.host.IMAGE }}-java
                   restore-keys: ${{ matrix.host.IMAGE }}
 
+            - name: Cache Gradle dependencies
+              uses: actions/cache@v4
+              with:
+                  path: |
+                      ~/.gradle/caches
+                      ~/.gradle/wrapper
+                  key: ${{ runner.os }}-gradle-container-${{ hashFiles('java/**/*.gradle*', 'java/**/gradle-wrapper.properties') }}
+                  restore-keys: |
+                      ${{ runner.os }}-gradle-container-
+                      ${{ runner.os }}-gradle-
+
             - name: Build java wrapper
               working-directory: java
               env:
                   GLIDE_CONTAINER_BUILD: true
                   JAVA_HOME: /usr/lib/jvm/java-${{ matrix.java }}-amazon-corretto.x86_64
-              run: ./gradlew --continue build -x javadoc
+              run: ./gradlew --build-cache --continue build -x javadoc
 
             - name: Upload test & spotbugs reports
               if: always()
