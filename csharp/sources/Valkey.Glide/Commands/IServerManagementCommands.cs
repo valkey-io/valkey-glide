@@ -39,4 +39,21 @@ public interface IServerManagementCommands
     /// <param name="flags">The command flags. Currently flags are ignored.</param>
     /// <returns>The echoed message as a <see cref="ValkeyValue"/>.</returns>
     Task<ValkeyValue> EchoAsync(ValkeyValue message, CommandFlags flags = CommandFlags.None);
+
+    /// <summary>
+    /// Ping the server and measure the round-trip time.<br />
+    /// See <see href="https://valkey.io/commands/ping/">valkey.io</see> for details.
+    /// </summary>
+    /// <param name="flags">The command flags. Currently flags are ignored.</param>
+    /// <returns>The round-trip time as a <see cref="TimeSpan"/>.</returns>
+    Task<TimeSpan> PingAsync(CommandFlags flags = CommandFlags.None);
+
+    /// <summary>
+    /// Ping the server with a message and measure the round-trip time.<br />
+    /// See <see href="https://valkey.io/commands/ping/">valkey.io</see> for details.
+    /// </summary>
+    /// <param name="message">The message to send with the ping</param>
+    /// <param name="flags">The command flags. Currently flags are ignored.</param>
+    /// <returns>The round-trip time as a <see cref="TimeSpan"/>.</returns>
+    Task<TimeSpan> PingAsync(ValkeyValue message, CommandFlags flags = CommandFlags.None);
 }

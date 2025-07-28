@@ -184,15 +184,15 @@ public class SortedSetCommandTests(TestConfiguration config)
     {
         string key = Guid.NewGuid().ToString();
 
-        // Test obsolete overload with CommandFlags only
-        Assert.True(await client.SortedSetAddAsync(key, "member1", 10.5, CommandFlags.None));
+        // Test overload with default parameters
+        Assert.True(await client.SortedSetAddAsync(key, "member1", 10.5));
 
         // Test obsolete overload with When enum
         Assert.False(await client.SortedSetAddAsync(key, "member1", 15.0, When.Exists));
 
-        // Test obsolete array overloads
+        // Test array overloads
         SortedSetEntry[] entries = [new("member2", 8.0)];
-        Assert.Equal(1, await client.SortedSetAddAsync(key, entries, CommandFlags.None));
+        Assert.Equal(1, await client.SortedSetAddAsync(key, entries));
         Assert.Equal(0, await client.SortedSetAddAsync(key, entries, When.Exists));
     }
 
