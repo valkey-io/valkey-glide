@@ -30,6 +30,6 @@ runs:
           continue-on-error: true
           uses: actions/upload-artifact@v4
           with:
-              name: ort_results-${{ steps.ort.outputs.LOCAL_PATH }}
+              name: ort_results-${{ inputs.folder_path }}
               path: |
                   ${{ steps.ort.outputs.LOCAL_PATH }}/ort_results/**
