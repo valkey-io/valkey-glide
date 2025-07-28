@@ -22,7 +22,7 @@ public abstract partial class BaseBatch<T>
     public T ListLeftPush(ValkeyKey key, ValkeyValue[] values) => AddCmd(ListLeftPushAsync(key, values, When.Always));
 
     /// <inheritdoc cref="IBatchListCommands.ListLeftPush(ValkeyKey, ValkeyValue[], CommandFlags)" />
-    public T ListLeftPush(ValkeyKey key, ValkeyValue[] values, CommandFlags flags) => AddCmd(ListLeftPushAsync(key, values));
+    public T ListLeftPush(ValkeyKey key, ValkeyValue[] values, CommandFlags _) => AddCmd(ListLeftPushAsync(key, values));
 
     /// <inheritdoc cref="IBatchListCommands.ListRightPop(ValkeyKey)" />
     public T ListRightPop(ValkeyKey key) => AddCmd(ListRightPopAsync(key));
@@ -37,7 +37,7 @@ public abstract partial class BaseBatch<T>
     public T ListRightPush(ValkeyKey key, ValkeyValue[] values) => AddCmd(ListRightPushAsync(key, values, When.Always));
 
     /// <inheritdoc cref="IBatchListCommands.ListRightPush(ValkeyKey, ValkeyValue[], CommandFlags)" />
-    public T ListRightPush(ValkeyKey key, ValkeyValue[] values, CommandFlags flags) => AddCmd(ListRightPushAsync(key, values));
+    public T ListRightPush(ValkeyKey key, ValkeyValue[] values, CommandFlags _) => AddCmd(ListRightPushAsync(key, values));
 
     /// <inheritdoc cref="IBatchListCommands.ListLength(ValkeyKey)" />
     public T ListLength(ValkeyKey key) => AddCmd(ListLengthAsync(key));

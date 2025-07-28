@@ -94,13 +94,17 @@ public abstract partial class BaseClient : IGenericBaseCommands
 
     public async Task KeyRestoreAsync(ValkeyKey key, byte[] value, TimeSpan? expiry = null, RestoreOptions? restoreOptions = null, CommandFlags flags = CommandFlags.None)
     {
+#pragma warning disable IDE0058 // Expression value is never used
         Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
+#pragma warning restore IDE0058 // Expression value is never used
         await Command(Request.KeyRestoreAsync(key, value, expiry, restoreOptions: restoreOptions));
     }
 
     public async Task KeyRestoreDateTimeAsync(ValkeyKey key, byte[] value, DateTime? expiry = null, RestoreOptions? restoreOptions = null, CommandFlags flags = CommandFlags.None)
     {
+#pragma warning disable IDE0058 // Expression value is never used
         Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
+#pragma warning restore IDE0058 // Expression value is never used
         await Command(Request.KeyRestoreDateTimeAsync(key, value, expiry, restoreOptions: restoreOptions));
     }
 

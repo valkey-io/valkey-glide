@@ -27,7 +27,9 @@ public abstract partial class BaseClient : IHashCommands
 
     public async Task HashSetAsync(ValkeyKey key, HashEntry[] hashFields, CommandFlags flags = CommandFlags.None)
     {
+#pragma warning disable IDE0058 // Expression value is never used
         Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
+#pragma warning restore IDE0058 // Expression value is never used
         await Command(Request.HashSetAsync(key, hashFields));
     }
 
