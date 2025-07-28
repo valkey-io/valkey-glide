@@ -187,7 +187,7 @@ jobs:
 
     test:
         needs: [publish, set-release-version, load-platform-matrix]
-        if: ${{ always() }}
+        if: ${{ !cancelled() }}
         timeout-minutes: 35
         strategy:
             # Run all jobs
@@ -263,7 +263,7 @@ jobs:
 
     remove-package-if-validation-fails:
         needs: [publish, test, set-release-version]
-        if: ${{ always() }}
+        if: ${{ !cancelled() }}
         runs-on: ubuntu-latest
         env:
             RELEASE_VERSION: ${{ needs.set-release-version.outputs.RELEASE_VERSION }}

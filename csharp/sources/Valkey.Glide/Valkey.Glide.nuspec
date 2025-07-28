@@ -27,18 +27,9 @@
     <file src="bin\Release\**\Valkey.Glide.dll" target="lib" />
     <file src="bin\Release\**\Valkey.Glide.xml" target="lib" />
 
-    <!-- PDB files for symbol package -->
+    <!-- PDB files and sources are included into symbol package only -->
     <file src="bin\Release\**\Valkey.Glide.pdb" target="lib" />
-
-
-    <!-- Source files for symbol package -->
-    <file src="*.cs" target="src" />
-    <file src="Abstract/**/*.cs" target="src/Abstract" />
-    <file src="abstract_APITypes/**/*.cs" target="src/abstract_APITypes" />
-    <file src="abstract_Enums/**/*.cs" target="src/abstract_Enums" />
-    <file src="Commands/**/*.cs" target="src/Commands" />
-    <file src="Internals/**/*.cs" target="src/Internals" />
-    <file src="Pipeline/**/*.cs" target="src/Pipeline" />
+    <file src="**\*.cs" target="src" />
 
     <!-- TODO: make binaries optional/conditional, build fails on a dev's PC who doesn't have all files. Alternative: use different nuspec files -->
     <!-- see runtime IDs in https://learn.microsoft.com/en-us/dotnet/core/rid-catalog -->

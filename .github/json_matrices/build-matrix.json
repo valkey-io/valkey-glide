@@ -34,7 +34,7 @@
         "OS": "macos",
         "NAMED_OS": "darwin",
         "RUNNER": "macos-13",
-        "CD_RUNNER": "macos-13",
+        "CD_RUNNER": "macos-15",
         "ARCH": "x64",
         "TARGET": "x86_64-apple-darwin",
         "PACKAGE_MANAGERS": ["pypi", "npm", "maven", "pkg_go_dev", "nuget"],
