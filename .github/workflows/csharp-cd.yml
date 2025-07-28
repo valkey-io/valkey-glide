@@ -193,7 +193,7 @@ jobs:
             fail-fast: false
             matrix:
                 host: ${{ fromJson(needs.load-platform-matrix.outputs.PLATFORM_MATRIX) }}
-        runs-on: ${{ matrix.host.CD_RUNNER }}
+        runs-on: ${{ matrix.host.RUNNER }}
         env:
             RELEASE_VERSION: ${{ needs.set-release-version.outputs.RELEASE_VERSION }}
         steps:
