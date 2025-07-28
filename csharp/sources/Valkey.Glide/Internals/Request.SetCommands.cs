@@ -8,58 +8,26 @@ namespace Valkey.Glide.Internals;
 
 internal partial class Request
 {
-    public static Cmd<long, bool> SetAddAsync(ValkeyKey key, ValkeyValue value, CommandFlags flags = CommandFlags.None)
+    public static Cmd<long, bool> SetAddAsync(ValkeyKey key, ValkeyValue value)
+        => Boolean<long>(RequestType.SAdd, [key.ToGlideString(), value.ToGlideString()]);
+
+    public static Cmd<long, long> SetAddAsync(ValkeyKey key, ValkeyValue[] values)
+        => Simple<long>(RequestType.SAdd, [key.ToGlideString(), .. values.ToGlideStrings()]);
+
+    public static Cmd<long, bool> SetRemoveAsync(ValkeyKey key, ValkeyValue value)
+        => Boolean<long>(RequestType.SRem, [key.ToGlideString(), value.ToGlideString()]);
+
+    public static Cmd<long, long> SetRemoveAsync(ValkeyKey key, ValkeyValue[] values)
+        => Simple<long>(RequestType.SRem, [key.ToGlideString(), .. values.ToGlideStrings()]);
+
+    public static Cmd<HashSet<object>, ValkeyValue[]> SetMembersAsync(ValkeyKey key)
+        => new(RequestType.SMembers, [key.ToGlideString()], false, set => [.. set.Cast<GlideString>().Select(gs => (ValkeyValue)gs)]);
+
+    public static Cmd<long, long> SetLengthAsync(ValkeyKey key)
+        => Simple<long>(RequestType.SCard, [key.ToGlideString()]);
+
+    public static Cmd<long, long> SetIntersectionLengthAsync(ValkeyKey[] keys, long limit = 0)
     {
-        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
-
-        GlideString[] args = [key.ToGlideString(), value.ToGlideString()];
-        return Boolean<long>(RequestType.SAdd, args);
-    }
-
-    public static Cmd<long, long> SetAddAsync(ValkeyKey key, ValkeyValue[] values, CommandFlags flags = CommandFlags.None)
-    {
-        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
-
-        GlideString[] args = [key.ToGlideString(), .. values.ToGlideStrings()];
-        return Simple<long>(RequestType.SAdd, args);
-    }
-
-    public static Cmd<long, bool> SetRemoveAsync(ValkeyKey key, ValkeyValue value, CommandFlags flags = CommandFlags.None)
-    {
-        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
-
-        GlideString[] args = [key.ToGlideString(), value.ToGlideString()];
-        return Boolean<long>(RequestType.SRem, args);
-    }
-
-    public static Cmd<long, long> SetRemoveAsync(ValkeyKey key, ValkeyValue[] values, CommandFlags flags = CommandFlags.None)
-    {
-        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
-
-        GlideString[] args = [key.ToGlideString(), .. values.ToGlideStrings()];
-        return Simple<long>(RequestType.SRem, args);
-    }
-
-    public static Cmd<HashSet<object>, ValkeyValue[]> SetMembersAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None)
-    {
-        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
-
-        GlideString[] args = [key.ToGlideString()];
-        return new(RequestType.SMembers, args, false, set => [.. set.Cast<GlideString>().Select(gs => (ValkeyValue)gs)]);
-    }
-
-    public static Cmd<long, long> SetLengthAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None)
-    {
-        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
-
-        GlideString[] args = [key.ToGlideString()];
-        return Simple<long>(RequestType.SCard, args);
-    }
-
-    public static Cmd<long, long> SetIntersectionLengthAsync(ValkeyKey[] keys, long limit = 0, CommandFlags flags = CommandFlags.None)
-    {
-        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
-
         List<GlideString> args = [keys.Length.ToGlideString(), .. keys.ToGlideStrings()];
         if (limit > 0)
         {
@@ -68,67 +36,27 @@ internal partial class Request
         return Simple<long>(RequestType.SInterCard, [.. args]);
     }
 
-    public static Cmd<GlideString, GlideString> SetPopAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None)
-    {
-        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
+    public static Cmd<GlideString, GlideString> SetPopAsync(ValkeyKey key)
+        => Simple<GlideString>(RequestType.SPop, [key.ToGlideString()], true);
 
-        GlideString[] args = [key.ToGlideString()];
-        return Simple<GlideString>(RequestType.SPop, args, true);
-    }
+    public static Cmd<HashSet<object>, ValkeyValue[]> SetPopAsync(ValkeyKey key, long count)
+        => new(RequestType.SPop, [key.ToGlideString(), count.ToGlideString()], false, set => [.. set.Cast<GlideString>().Select(gs => (ValkeyValue)gs)]);
 
-    public static Cmd<HashSet<object>, ValkeyValue[]> SetPopAsync(ValkeyKey key, long count, CommandFlags flags = CommandFlags.None)
-    {
-        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
+    public static Cmd<HashSet<object>, ValkeyValue[]> SetUnionAsync(ValkeyKey[] keys)
+        => new(RequestType.SUnion, keys.ToGlideStrings(), false, set => [.. set.Cast<GlideString>().Select(gs => (ValkeyValue)gs)]);
 
-        GlideString[] args = [key.ToGlideString(), count.ToGlideString()];
-        return new(RequestType.SPop, args, false, set => [.. set.Cast<GlideString>().Select(gs => (ValkeyValue)gs)]);
-    }
+    public static Cmd<HashSet<object>, ValkeyValue[]> SetIntersectAsync(ValkeyKey[] keys)
+        => new(RequestType.SInter, keys.ToGlideStrings(), false, set => [.. set.Cast<GlideString>().Select(gs => (ValkeyValue)gs)]);
 
-    public static Cmd<HashSet<object>, ValkeyValue[]> SetUnionAsync(ValkeyKey[] keys, CommandFlags flags = CommandFlags.None)
-    {
-        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
+    public static Cmd<HashSet<object>, ValkeyValue[]> SetDifferenceAsync(ValkeyKey[] keys)
+        => new(RequestType.SDiff, keys.ToGlideStrings(), false, set => [.. set.Cast<GlideString>().Select(gs => (ValkeyValue)gs)]);
 
-        GlideString[] args = keys.ToGlideStrings();
-        return new(RequestType.SUnion, args, false, set => [.. set.Cast<GlideString>().Select(gs => (ValkeyValue)gs)]);
-    }
+    public static Cmd<long, long> SetUnionStoreAsync(ValkeyKey destination, ValkeyKey[] keys)
+        => Simple<long>(RequestType.SUnionStore, [destination.ToGlideString(), .. keys.ToGlideStrings()]);
 
-    public static Cmd<HashSet<object>, ValkeyValue[]> SetIntersectAsync(ValkeyKey[] keys, CommandFlags flags = CommandFlags.None)
-    {
-        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
+    public static Cmd<long, long> SetIntersectStoreAsync(ValkeyKey destination, ValkeyKey[] keys)
+        => Simple<long>(RequestType.SInterStore, [destination.ToGlideString(), .. keys.ToGlideStrings()]);
 
-        GlideString[] args = keys.ToGlideStrings();
-        return new(RequestType.SInter, args, false, set => [.. set.Cast<GlideString>().Select(gs => (ValkeyValue)gs)]);
-    }
-
-    public static Cmd<HashSet<object>, ValkeyValue[]> SetDifferenceAsync(ValkeyKey[] keys, CommandFlags flags = CommandFlags.None)
-    {
-        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
-
-        GlideString[] args = keys.ToGlideStrings();
-        return new(RequestType.SDiff, args, false, set => [.. set.Cast<GlideString>().Select(gs => (ValkeyValue)gs)]);
-    }
-
-    public static Cmd<long, long> SetUnionStoreAsync(ValkeyKey destination, ValkeyKey[] keys, CommandFlags flags = CommandFlags.None)
-    {
-        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
-
-        GlideString[] args = [destination.ToGlideString(), .. keys.ToGlideStrings()];
-        return Simple<long>(RequestType.SUnionStore, args);
-    }
-
-    public static Cmd<long, long> SetIntersectStoreAsync(ValkeyKey destination, ValkeyKey[] keys, CommandFlags flags = CommandFlags.None)
-    {
-        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
-
-        GlideString[] args = [destination.ToGlideString(), .. keys.ToGlideStrings()];
-        return Simple<long>(RequestType.SInterStore, args);
-    }
-
-    public static Cmd<long, long> SetDifferenceStoreAsync(ValkeyKey destination, ValkeyKey[] keys, CommandFlags flags = CommandFlags.None)
-    {
-        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
-
-        GlideString[] args = [destination.ToGlideString(), .. keys.ToGlideStrings()];
-        return Simple<long>(RequestType.SDiffStore, args);
-    }
+    public static Cmd<long, long> SetDifferenceStoreAsync(ValkeyKey destination, ValkeyKey[] keys)
+        => Simple<long>(RequestType.SDiffStore, [destination.ToGlideString(), .. keys.ToGlideStrings()]);
 }

@@ -10,46 +10,46 @@ namespace Valkey.Glide.Pipeline;
 public abstract partial class BaseBatch<T>
 {
     /// <inheritdoc cref="IBatchListCommands.ListLeftPop(ValkeyKey)" />
-    public T ListLeftPop(ValkeyKey key) => AddCmd(ListLeftPopAsync(key, CommandFlags.None));
+    public T ListLeftPop(ValkeyKey key) => AddCmd(ListLeftPopAsync(key));
 
     /// <inheritdoc cref="IBatchListCommands.ListLeftPop(ValkeyKey, long)" />
-    public T ListLeftPop(ValkeyKey key, long count) => AddCmd(ListLeftPopAsync(key, count, CommandFlags.None));
+    public T ListLeftPop(ValkeyKey key, long count) => AddCmd(ListLeftPopAsync(key, count));
 
     /// <inheritdoc cref="IBatchListCommands.ListLeftPush(ValkeyKey, ValkeyValue)" />
-    public T ListLeftPush(ValkeyKey key, ValkeyValue value) => AddCmd(ListLeftPushAsync(key, value, When.Always, CommandFlags.None));
+    public T ListLeftPush(ValkeyKey key, ValkeyValue value) => AddCmd(ListLeftPushAsync(key, value, When.Always));
 
     /// <inheritdoc cref="IBatchListCommands.ListLeftPush(ValkeyKey, ValkeyValue[])" />
-    public T ListLeftPush(ValkeyKey key, ValkeyValue[] values) => AddCmd(ListLeftPushAsync(key, values, When.Always, CommandFlags.None));
+    public T ListLeftPush(ValkeyKey key, ValkeyValue[] values) => AddCmd(ListLeftPushAsync(key, values, When.Always));
 
     /// <inheritdoc cref="IBatchListCommands.ListLeftPush(ValkeyKey, ValkeyValue[], CommandFlags)" />
-    public T ListLeftPush(ValkeyKey key, ValkeyValue[] values, CommandFlags flags) => AddCmd(ListLeftPushAsync(key, values, When.Always, flags));
+    public T ListLeftPush(ValkeyKey key, ValkeyValue[] values, CommandFlags flags) => AddCmd(ListLeftPushAsync(key, values));
 
     /// <inheritdoc cref="IBatchListCommands.ListRightPop(ValkeyKey)" />
-    public T ListRightPop(ValkeyKey key) => AddCmd(ListRightPopAsync(key, CommandFlags.None));
+    public T ListRightPop(ValkeyKey key) => AddCmd(ListRightPopAsync(key));
 
     /// <inheritdoc cref="IBatchListCommands.ListRightPop(ValkeyKey, long)" />
-    public T ListRightPop(ValkeyKey key, long count) => AddCmd(ListRightPopAsync(key, count, CommandFlags.None));
+    public T ListRightPop(ValkeyKey key, long count) => AddCmd(ListRightPopAsync(key, count));
 
     /// <inheritdoc cref="IBatchListCommands.ListRightPush(ValkeyKey, ValkeyValue)" />
-    public T ListRightPush(ValkeyKey key, ValkeyValue value) => AddCmd(ListRightPushAsync(key, value, When.Always, CommandFlags.None));
+    public T ListRightPush(ValkeyKey key, ValkeyValue value) => AddCmd(ListRightPushAsync(key, value, When.Always));
 
     /// <inheritdoc cref="IBatchListCommands.ListRightPush(ValkeyKey, ValkeyValue[])" />
-    public T ListRightPush(ValkeyKey key, ValkeyValue[] values) => AddCmd(ListRightPushAsync(key, values, When.Always, CommandFlags.None));
+    public T ListRightPush(ValkeyKey key, ValkeyValue[] values) => AddCmd(ListRightPushAsync(key, values, When.Always));
 
     /// <inheritdoc cref="IBatchListCommands.ListRightPush(ValkeyKey, ValkeyValue[], CommandFlags)" />
-    public T ListRightPush(ValkeyKey key, ValkeyValue[] values, CommandFlags flags) => AddCmd(ListRightPushAsync(key, values, When.Always, flags));
+    public T ListRightPush(ValkeyKey key, ValkeyValue[] values, CommandFlags flags) => AddCmd(ListRightPushAsync(key, values));
 
     /// <inheritdoc cref="IBatchListCommands.ListLength(ValkeyKey)" />
-    public T ListLength(ValkeyKey key) => AddCmd(ListLengthAsync(key, CommandFlags.None));
+    public T ListLength(ValkeyKey key) => AddCmd(ListLengthAsync(key));
 
     /// <inheritdoc cref="IBatchListCommands.ListRemove(ValkeyKey, ValkeyValue, long)" />
-    public T ListRemove(ValkeyKey key, ValkeyValue value, long count = 0) => AddCmd(ListRemoveAsync(key, value, count, CommandFlags.None));
+    public T ListRemove(ValkeyKey key, ValkeyValue value, long count = 0) => AddCmd(ListRemoveAsync(key, value, count));
 
     /// <inheritdoc cref="IBatchListCommands.ListTrim(ValkeyKey, long, long)" />
-    public T ListTrim(ValkeyKey key, long start, long stop) => AddCmd(ListTrimAsync(key, start, stop, CommandFlags.None));
+    public T ListTrim(ValkeyKey key, long start, long stop) => AddCmd(ListTrimAsync(key, start, stop));
 
     /// <inheritdoc cref="IBatchListCommands.ListRange(ValkeyKey, long, long)" />
-    public T ListRange(ValkeyKey key, long start = 0, long stop = -1) => AddCmd(ListRangeAsync(key, start, stop, CommandFlags.None));
+    public T ListRange(ValkeyKey key, long start = 0, long stop = -1) => AddCmd(ListRangeAsync(key, start, stop));
 
     // Explicit interface implementations for IBatchListCommands
     IBatch IBatchListCommands.ListLeftPop(ValkeyKey key) => ListLeftPop(key);

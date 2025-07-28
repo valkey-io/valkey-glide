@@ -31,10 +31,8 @@ internal partial class Request
         }
     }
 
-    public static Cmd<long, bool> SortedSetAddAsync(ValkeyKey key, ValkeyValue member, double score, SortedSetWhen when = SortedSetWhen.Always, CommandFlags flags = CommandFlags.None)
+    public static Cmd<long, bool> SortedSetAddAsync(ValkeyKey key, ValkeyValue member, double score, SortedSetWhen when = SortedSetWhen.Always)
     {
-        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
-
         List<GlideString> args = [key.ToGlideString()];
         AddSortedSetWhenOptions(args, when);
 
@@ -45,10 +43,8 @@ internal partial class Request
         return new(RequestType.ZAdd, [.. args], false, response => response == 1);
     }
 
-    public static Cmd<long, long> SortedSetAddAsync(ValkeyKey key, SortedSetEntry[] values, SortedSetWhen when = SortedSetWhen.Always, CommandFlags flags = CommandFlags.None)
+    public static Cmd<long, long> SortedSetAddAsync(ValkeyKey key, SortedSetEntry[] values, SortedSetWhen when = SortedSetWhen.Always)
     {
-        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
-
         List<GlideString> args = [key.ToGlideString()];
         AddSortedSetWhenOptions(args, when);
 
@@ -62,36 +58,22 @@ internal partial class Request
         return Simple<long>(RequestType.ZAdd, [.. args]);
     }
 
-    public static Cmd<long, bool> SortedSetRemoveAsync(ValkeyKey key, ValkeyValue member, CommandFlags flags = CommandFlags.None)
+    public static Cmd<long, bool> SortedSetRemoveAsync(ValkeyKey key, ValkeyValue member)
+        => Boolean<long>(RequestType.ZRem, [key.ToGlideString(), member.ToGlideString()]);
+
+    public static Cmd<long, long> SortedSetRemoveAsync(ValkeyKey key, ValkeyValue[] members)
     {
-        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
-
-        GlideString[] args = [key.ToGlideString(), member.ToGlideString()];
-        return Boolean<long>(RequestType.ZRem, args);
-    }
-
-    public static Cmd<long, long> SortedSetRemoveAsync(ValkeyKey key, ValkeyValue[] members, CommandFlags flags = CommandFlags.None)
-    {
-        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
-
         List<GlideString> args = [key.ToGlideString()];
         args.AddRange(members.Select(member => member.ToGlideString()));
 
         return Simple<long>(RequestType.ZRem, [.. args]);
     }
 
-    public static Cmd<long, long> SortedSetCardAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None)
+    public static Cmd<long, long> SortedSetCardAsync(ValkeyKey key)
+        => Simple<long>(RequestType.ZCard, [key.ToGlideString()]);
+
+    public static Cmd<long, long> SortedSetCountAsync(ValkeyKey key, double min = double.NegativeInfinity, double max = double.PositiveInfinity, Exclude exclude = Exclude.None)
     {
-        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
-
-        GlideString[] args = [key.ToGlideString()];
-        return Simple<long>(RequestType.ZCard, args);
-    }
-
-    public static Cmd<long, long> SortedSetCountAsync(ValkeyKey key, double min = double.NegativeInfinity, double max = double.PositiveInfinity, Exclude exclude = Exclude.None, CommandFlags flags = CommandFlags.None)
-    {
-        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
-
         // Create score boundaries based on exclude flags
         ScoreBoundary minBoundary = exclude.HasFlag(Exclude.Start)
             ? ScoreBoundary.Exclusive(min)
@@ -110,10 +92,8 @@ internal partial class Request
         return Simple<long>(RequestType.ZCount, [.. args]);
     }
 
-    public static Cmd<object[], ValkeyValue[]> SortedSetRangeByRankAsync(ValkeyKey key, long start = 0, long stop = -1, Order order = Order.Ascending, CommandFlags flags = CommandFlags.None)
+    public static Cmd<object[], ValkeyValue[]> SortedSetRangeByRankAsync(ValkeyKey key, long start = 0, long stop = -1, Order order = Order.Ascending)
     {
-        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
-
         RangeByIndex query = new(start, stop);
         if (order == Order.Descending)
         {
@@ -127,10 +107,8 @@ internal partial class Request
         return new(RequestType.ZRange, [.. args], false, array => [.. array.Cast<GlideString>().Select(gs => (ValkeyValue)gs)]);
     }
 
-    public static Cmd<Dictionary<GlideString, object>, SortedSetEntry[]> SortedSetRangeByRankWithScoresAsync(ValkeyKey key, long start = 0, long stop = -1, Order order = Order.Ascending, CommandFlags flags = CommandFlags.None)
+    public static Cmd<Dictionary<GlideString, object>, SortedSetEntry[]> SortedSetRangeByRankWithScoresAsync(ValkeyKey key, long start = 0, long stop = -1, Order order = Order.Ascending)
     {
-        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
-
         RangeByIndex query = new(start, stop);
         if (order == Order.Descending)
         {
@@ -160,10 +138,8 @@ internal partial class Request
         });
     }
 
-    public static Cmd<object[], ValkeyValue[]> SortedSetRangeByScoreAsync(ValkeyKey key, double start = double.NegativeInfinity, double stop = double.PositiveInfinity, Exclude exclude = Exclude.None, Order order = Order.Ascending, long skip = 0, long take = -1, CommandFlags flags = CommandFlags.None)
+    public static Cmd<object[], ValkeyValue[]> SortedSetRangeByScoreAsync(ValkeyKey key, double start = double.NegativeInfinity, double stop = double.PositiveInfinity, Exclude exclude = Exclude.None, Order order = Order.Ascending, long skip = 0, long take = -1)
     {
-        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
-
         // Create score boundaries based on exclude flags
         ScoreBoundary startBoundary = exclude.HasFlag(Exclude.Start)
             ? ScoreBoundary.Exclusive(start)
@@ -191,10 +167,8 @@ internal partial class Request
         return new(RequestType.ZRange, [.. args], false, array => [.. array.Cast<GlideString>().Select(gs => (ValkeyValue)gs)]);
     }
 
-    public static Cmd<Dictionary<GlideString, object>, SortedSetEntry[]> SortedSetRangeByScoreWithScoresAsync(ValkeyKey key, double start = double.NegativeInfinity, double stop = double.PositiveInfinity, Exclude exclude = Exclude.None, Order order = Order.Ascending, long skip = 0, long take = -1, CommandFlags flags = CommandFlags.None)
+    public static Cmd<Dictionary<GlideString, object>, SortedSetEntry[]> SortedSetRangeByScoreWithScoresAsync(ValkeyKey key, double start = double.NegativeInfinity, double stop = double.PositiveInfinity, Exclude exclude = Exclude.None, Order order = Order.Ascending, long skip = 0, long take = -1)
     {
-        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
-
         // Create score boundaries based on exclude flags
         ScoreBoundary startBoundary = exclude.HasFlag(Exclude.Start)
             ? ScoreBoundary.Exclusive(start)
@@ -238,10 +212,8 @@ internal partial class Request
         });
     }
 
-    public static Cmd<object[], ValkeyValue[]> SortedSetRangeByValueAsync(ValkeyKey key, ValkeyValue min, ValkeyValue max, Exclude exclude = Exclude.None, long skip = 0, long take = -1, CommandFlags flags = CommandFlags.None)
+    public static Cmd<object[], ValkeyValue[]> SortedSetRangeByValueAsync(ValkeyKey key, ValkeyValue min, ValkeyValue max, Exclude exclude = Exclude.None, long skip = 0, long take = -1)
     {
-        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
-
         // Create lexicographical boundaries based on exclude flags
         LexBoundary minBoundary = exclude.HasFlag(Exclude.Start)
             ? LexBoundary.Exclusive(min)
@@ -265,10 +237,8 @@ internal partial class Request
         return new(RequestType.ZRange, [.. args], false, array => [.. array.Cast<GlideString>().Select(gs => (ValkeyValue)gs)]);
     }
 
-    public static Cmd<object[], ValkeyValue[]> SortedSetRangeByValueAsync(ValkeyKey key, ValkeyValue min = default, ValkeyValue max = default, Exclude exclude = Exclude.None, Order order = Order.Ascending, long skip = 0, long take = -1, CommandFlags flags = CommandFlags.None)
+    public static Cmd<object[], ValkeyValue[]> SortedSetRangeByValueAsync(ValkeyKey key, ValkeyValue min = default, ValkeyValue max = default, Exclude exclude = Exclude.None, Order order = Order.Ascending, long skip = 0, long take = -1)
     {
-        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
-
         // Handle default values for min and max
         ValkeyValue actualMin = min.IsNull ? NegativeInfinity : min;
         ValkeyValue actualMax = max.IsNull ? PositiveInfinity : max;
