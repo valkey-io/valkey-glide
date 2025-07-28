@@ -193,7 +193,13 @@ jobs:
                       8
                       9
 
-            - name: Run ORT tools for Go
+            - name: Set up nuget-inspector
+              run: |
+                  wget https://github.com/aboutcode-org/nuget-inspector/releases/download/v0.9.12/nuget-inspector-v0.9.12-linux-x64.tar.gz
+                  tar xf nuget-inspector-*.tar.gz
+                  echo $GITHUB_WORKSPACE/nuget-inspector >> $GITHUB_PATH
+
+            - name: Run ORT tools for C#
               uses: ./.github/workflows/run-ort-tools
               with:
                   folder_path: "${{ github.workspace }}/csharp"
