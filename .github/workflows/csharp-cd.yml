@@ -43,7 +43,8 @@ jobs:
               shell: bash
               run: |
                   jq -c "[.[] | select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains([\"nuget\"])))]" \
-                    < .github/json_matrices/build-matrix.json | awk '{ printf "PLATFORM_MATRIX=%s\n", $0 }' | tee -a $GITHUB_OUTPUT
+                    < .github/json_matrices/build-matrix.json | sed 's/\["self-hosted","Linux","ARM64","ephemeral"\]/"ubuntu-24.04-arm"/g' \
+                    | awk '{ printf "PLATFORM_MATRIX=%s\n", $0 }' | tee -a $GITHUB_OUTPUT
 
     set-release-version:
         runs-on: ubuntu-latest
