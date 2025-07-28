@@ -34,6 +34,7 @@ jobs:
             RUST_ATTRIBUTIONS: "glide-core/THIRD_PARTY_LICENSES_RUST"
             JAVA_ATTRIBUTIONS: "java/THIRD_PARTY_LICENSES_JAVA"
             GO_ATTRIBUTIONS: "go/THIRD_PARTY_LICENSES_GO"
+            CSHARP_ATTRIBUTIONS: "go/THIRD_PARTY_LICENSES_CSHARP"
             INPUT_TARGET_BRANCH: ${{ github.event.inputs.branch_name }}
             EVENT_NAME: ${{ github.event_name }}
             HEAD_REF: ${{ github.head_ref }}
@@ -102,7 +103,7 @@ jobs:
                     analyzer:
                       skip_excluded: true
                       allowDynamicVersions: true
-                      enabledPackageManagers: [Cargo, GoMod, NPM, PIP, GradleInspector]
+                      enabledPackageManagers: [Cargo, GoMod, NPM, PIP, GradleInspector, NuGet]
                   EOF
                   cat ~/.ort/config/config.yml
 
@@ -184,6 +185,19 @@ jobs:
               with:
                   folder_path: "${{ github.workspace }}/go"
 
+              ### C# ###
+            - name: Set up dotnet
+              uses: actions/setup-dotnet@v4
+              with:
+                  dotnet-version: |
+                      8
+                      9
+
+            - name: Run ORT tools for Go
+              uses: ./.github/workflows/run-ort-tools
+              with:
+                  folder_path: "${{ github.workspace }}/csharp"
+
               ### Get licenses ###
             - name: Retrieve licenses list
               working-directory: ./utils
@@ -245,12 +259,13 @@ jobs:
                   cp node/ort_results/NOTICE_DEFAULT $NODE_ATTRIBUTIONS
                   cp glide-core/ort_results/NOTICE_DEFAULT $RUST_ATTRIBUTIONS
                   cp java/ort_results/NOTICE_DEFAULT $JAVA_ATTRIBUTIONS
+                  cp csharp/ort_results/NOTICE_DEFAULT $CSHARP_ATTRIBUTIONS
                   : Workaround for empty attributions for go packages. See discussions in https://github.com/valkey-io/valkey-glide/pull/3469 and in https://github.com/oss-review-toolkit/ort/issues/10454
                   curl https://raw.githubusercontent.com/valkey-io/valkey-glide/9c9ef0ae2c2ee865c7867f6ac0d3f9aac054bac8/go/THIRD_PARTY_LICENSES_GO -o $GO_ATTRIBUTIONS
                   cat go/ort_results/NOTICE_DEFAULT >> $GO_ATTRIBUTIONS
                   : Merge FFI attributions into GO attributions
                   cat ffi/ort_results/NOTICE_DEFAULT >> $GO_ATTRIBUTIONS
-                  GIT_DIFF=`git diff $PYTHON_ATTRIBUTIONS $NODE_ATTRIBUTIONS $RUST_ATTRIBUTIONS $JAVA_ATTRIBUTIONS $GO_ATTRIBUTIONS`
+                  GIT_DIFF=`git diff $PYTHON_ATTRIBUTIONS $NODE_ATTRIBUTIONS $RUST_ATTRIBUTIONS $JAVA_ATTRIBUTIONS $GO_ATTRIBUTIONS $CSHARP_ATTRIBUTIONS`
                   if [ -n "$GIT_DIFF" ]; then
                     echo "FOUND_DIFF=true" >> $GITHUB_ENV
                   else
@@ -298,6 +313,7 @@ jobs:
                     "${{ env.RUST_ATTRIBUTIONS }}"
                     "${{ env.JAVA_ATTRIBUTIONS }}"
                     "${{ env.GO_ATTRIBUTIONS }}"
+                    $CSHARP_ATTRIBUTIONS
                   )
 
                   MESSAGE="WARNING! The attribution files differ in this PR. Please ensure an updating PR is issued using a scheduled or manual run of this workflow!"
