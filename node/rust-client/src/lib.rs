@@ -622,12 +622,6 @@ impl Script {
     }
 }
 
-impl Drop for Script {
-    fn drop(&mut self) {
-        self.release_internal();
-    }
-}
-
 /// This struct is used to keep track of the cursor of a cluster scan.
 /// We want to avoid passing the cursor between layers of the application,
 /// So we keep the state in the container and only pass the id of the cursor.

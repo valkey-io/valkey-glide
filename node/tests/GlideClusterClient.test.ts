@@ -1686,11 +1686,12 @@ describe("GlideClusterClient", () => {
                                 ? { type: "primarySlotKey", key: "1" }
                                 : "allPrimaries";
 
+                            const script = new Script(
+                                Buffer.from("return {ARGV[1]}"),
+                            );
+
                             try {
                                 const arg = getRandomKey();
-                                const script = new Script(
-                                    Buffer.from("return {ARGV[1]}"),
-                                );
                                 let res = await client.invokeScriptWithRoute(
                                     script,
                                     { args: [Buffer.from(arg)], route },
@@ -1727,6 +1728,7 @@ describe("GlideClusterClient", () => {
                                     );
                                 }
                             } finally {
+                                script.release();
                                 client.close();
                             }
                         },
@@ -2137,6 +2139,7 @@ describe("GlideClusterClient", () => {
             } finally {
                 // If script wasn't killed, and it didn't time out - it blocks the server and cause the
                 // test to fail. Wait for the script to complete (we cannot kill it)
+                longScript.release();
                 expect(await promise).toContain("Timed out");
                 client1.close();
                 client2.close();
