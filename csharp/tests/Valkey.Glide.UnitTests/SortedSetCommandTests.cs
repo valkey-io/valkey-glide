@@ -44,11 +44,9 @@ public class SortedSetCommandTests
 
             // SortedSetRemove - Single Member
             () => Assert.Equal(["ZREM", "key", "member"], Request.SortedSetRemoveAsync("key", "member").GetArgs()),
-            () => Assert.Equal(["ZREM", "key", "member"], Request.SortedSetRemoveAsync("key", "member", CommandFlags.None).GetArgs()),
 
             // SortedSetRemove - Multiple Members
             () => Assert.Equal(["ZREM", "key", "member1", "member2", "member3"], Request.SortedSetRemoveAsync("key", ["member1", "member2", "member3"]).GetArgs()),
-            () => Assert.Equal(["ZREM", "key", "member1", "member2"], Request.SortedSetRemoveAsync("key", ["member1", "member2"], CommandFlags.None).GetArgs()),
             () => Assert.Equal(["ZREM", "key"], Request.SortedSetRemoveAsync("key", Array.Empty<ValkeyValue>()).GetArgs()),
             () => Assert.Equal(["ZREM", "key", "", " ", "null", "0", "-1"], Request.SortedSetRemoveAsync("key", ["", " ", "null", "0", "-1"]).GetArgs()),
 
@@ -61,26 +59,6 @@ public class SortedSetCommandTests
 
             () => Assert.Equal(["ZRANGE", "key", "-", "+", "BYLEX"], Request.SortedSetRangeByValueAsync("key", double.NegativeInfinity, double.PositiveInfinity, Exclude.None, Order.Ascending, 0, -1).GetArgs()),
             () => Assert.Equal(["ZRANGE", "key", "6", "2", "BYSCORE", "REV", "WITHSCORES"], Request.SortedSetRangeByScoreWithScoresAsync("key", 2.0, 6.0, order: Order.Descending).GetArgs())
-        );
-    }
-
-    [Fact]
-    public void ValidateSortedSetCommandExceptions()
-    {
-        Assert.Multiple(
-            // SortedSetAdd exceptions
-            () => Assert.Throws<NotImplementedException>(() => Request.SortedSetAddAsync("key", "member", 10.5, SortedSetWhen.Always, CommandFlags.DemandReplica)),
-            () => Assert.Throws<NotImplementedException>(() => Request.SortedSetAddAsync("key", [new SortedSetEntry("member", 10.5)], SortedSetWhen.Always, CommandFlags.DemandReplica)),
-
-            // SortedSetRemove exceptions
-            () => Assert.Throws<NotImplementedException>(() => Request.SortedSetRemoveAsync("key", "member", CommandFlags.DemandReplica)),
-            () => Assert.Throws<NotImplementedException>(() => Request.SortedSetRemoveAsync("key", ["member1", "member2"], CommandFlags.DemandReplica)),
-
-            // SortedSetCard exceptions
-            () => Assert.Throws<NotImplementedException>(() => Request.SortedSetCardAsync("key", CommandFlags.DemandReplica)),
-
-            // SortedSetCount exceptions
-            () => Assert.Throws<NotImplementedException>(() => Request.SortedSetCountAsync("key", 1.0, 10.0, Exclude.None, CommandFlags.DemandReplica))
         );
     }
 
@@ -247,17 +225,17 @@ public class SortedSetCommandTests
     {
         Assert.Multiple(
             // Basic lexicographical ranges with explicit min/max
-            () => Assert.Equal(["ZRANGE", "key", "[a", "[z", "BYLEX"], Request.SortedSetRangeByValueAsync("key", "a", "z", Exclude.None, 0, -1, CommandFlags.None).GetArgs()),
-            () => Assert.Equal(["ZRANGE", "key", "[apple", "[zebra", "BYLEX"], Request.SortedSetRangeByValueAsync("key", "apple", "zebra", Exclude.None, 0, -1, CommandFlags.None).GetArgs()),
+            () => Assert.Equal(["ZRANGE", "key", "[a", "[z", "BYLEX"], Request.SortedSetRangeByValueAsync("key", "a", "z", Exclude.None, 0, -1).GetArgs()),
+            () => Assert.Equal(["ZRANGE", "key", "[apple", "[zebra", "BYLEX"], Request.SortedSetRangeByValueAsync("key", "apple", "zebra", Exclude.None, 0, -1).GetArgs()),
 
             // Exclude options with explicit min/max
-            () => Assert.Equal(["ZRANGE", "key", "(a", "[z", "BYLEX"], Request.SortedSetRangeByValueAsync("key", "a", "z", Exclude.Start, 0, -1, CommandFlags.None).GetArgs()),
-            () => Assert.Equal(["ZRANGE", "key", "[a", "(z", "BYLEX"], Request.SortedSetRangeByValueAsync("key", "a", "z", Exclude.Stop, 0, -1, CommandFlags.None).GetArgs()),
-            () => Assert.Equal(["ZRANGE", "key", "(a", "(z", "BYLEX"], Request.SortedSetRangeByValueAsync("key", "a", "z", Exclude.Both, 0, -1, CommandFlags.None).GetArgs()),
+            () => Assert.Equal(["ZRANGE", "key", "(a", "[z", "BYLEX"], Request.SortedSetRangeByValueAsync("key", "a", "z", Exclude.Start, 0, -1).GetArgs()),
+            () => Assert.Equal(["ZRANGE", "key", "[a", "(z", "BYLEX"], Request.SortedSetRangeByValueAsync("key", "a", "z", Exclude.Stop, 0, -1).GetArgs()),
+            () => Assert.Equal(["ZRANGE", "key", "(a", "(z", "BYLEX"], Request.SortedSetRangeByValueAsync("key", "a", "z", Exclude.Both, 0, -1).GetArgs()),
 
             // Skip and take parameters with explicit min/max
-            () => Assert.Equal(["ZRANGE", "key", "[a", "[z", "BYLEX", "LIMIT", "2", "3"], Request.SortedSetRangeByValueAsync("key", "a", "z", Exclude.None, 2, 3, CommandFlags.None).GetArgs()),
-            () => Assert.Equal(["ZRANGE", "key", "(a", "(z", "BYLEX", "LIMIT", "1", "5"], Request.SortedSetRangeByValueAsync("key", "a", "z", Exclude.Both, 1, 5, CommandFlags.None).GetArgs()),
+            () => Assert.Equal(["ZRANGE", "key", "[a", "[z", "BYLEX", "LIMIT", "2", "3"], Request.SortedSetRangeByValueAsync("key", "a", "z", Exclude.None, 2, 3).GetArgs()),
+            () => Assert.Equal(["ZRANGE", "key", "(a", "(z", "BYLEX", "LIMIT", "1", "5"], Request.SortedSetRangeByValueAsync("key", "a", "z", Exclude.Both, 1, 5).GetArgs()),
 
             // Default parameters (should use lexicographical infinity symbols)
             () => Assert.Equal(["ZRANGE", "key", "-", "+", "BYLEX"], Request.SortedSetRangeByValueAsync("key").GetArgs()),
@@ -267,8 +245,8 @@ public class SortedSetCommandTests
             () => Assert.Equal(["ZRANGE", "key", "-", "+", "BYLEX"], Request.SortedSetRangeByValueAsync("key", double.NegativeInfinity, double.PositiveInfinity, Exclude.None, Order.Ascending, 0, -1).GetArgs()),
 
             // Edge cases
-            () => Assert.Equal(["ZRANGE", "key", "[a", "[a", "BYLEX"], Request.SortedSetRangeByValueAsync("key", "a", "a", Exclude.None, 0, -1, CommandFlags.None).GetArgs()),
-            () => Assert.Equal(["ZRANGE", "key", "[", "[z", "BYLEX"], Request.SortedSetRangeByValueAsync("key", "", "z", Exclude.None, 0, -1, CommandFlags.None).GetArgs())
+            () => Assert.Equal(["ZRANGE", "key", "[a", "[a", "BYLEX"], Request.SortedSetRangeByValueAsync("key", "a", "a", Exclude.None, 0, -1).GetArgs()),
+            () => Assert.Equal(["ZRANGE", "key", "[", "[z", "BYLEX"], Request.SortedSetRangeByValueAsync("key", "", "z", Exclude.None, 0, -1).GetArgs())
         );
     }
 }
