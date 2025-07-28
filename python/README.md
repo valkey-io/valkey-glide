@@ -53,24 +53,41 @@ Valkey GLIDE transparently supports both the `asyncio` and `trio` concurrency fr
 
 ## Installation and Setup
 
-### Installing via Package Manager (pip)
+### ✅ Async Client
 
-To install Valkey GLIDE using `pip`, follow these steps:
+To install the async version:
 
-1. Open your terminal.
-2. Execute the command below:
-    ```bash
-    $ pip install valkey-glide
-    ```
-3. After installation, confirm the client is accessible by running:
-    ```bash
-    $ python3
-    >>> import glide
-    ```
+```bash
+pip install valkey-glide
+```
+
+Verify installation:
+
+```bash
+python3
+>>> import glide
+```
+
+### ✅ Sync Client
+
+To install the sync version:
+
+```bash
+pip install valkey-glide-sync
+```
+
+Verify installation:
+
+```bash
+python3
+>>> import glide_sync
+```
+
+---
 
 ## Basic Examples
 
-#### Cluster Mode:
+### 🔁 Async Client
 
 ```python:
 >>> import asyncio
@@ -90,7 +107,7 @@ Set response is OK
 Get response is bar
 ```
 
-#### Standalone Mode:
+#### Async Standalone Mode
 
 ```python:
 >>> import asyncio
@@ -113,7 +130,56 @@ Set response is OK
 Get response is bar
 ```
 
-For complete examples with error handling, please refer to the [cluster example](https://github.com/valkey-io/valkey-glide/blob/main/examples/python/cluster_example.py) and the [standalone example](https://github.com/valkey-io/valkey-glide/blob/main/examples/python/standalone_example.py).
+---
+
+### 🔂 Sync Client
+
+#### Sync Cluster Mode
+
+```python
+>>> from glide_sync import GlideClusterClientConfiguration, NodeAddress, GlideClusterClient
+>>> def test_cluster_client():
+...     addresses = [NodeAddress("address.example.com", 6379)]
+...     # It is recommended to set a timeout for your specific use case
+...     config = GlideClusterClientConfiguration(addresses, request_timeout=500)  # 500ms timeout
+...     client = GlideClusterClient.create(config)
+...     set_result = client.set("foo", "bar")
+...     print(f"Set response is {set_result}")
+...     get_result = client.get("foo")
+...     print(f"Get response is {get_result}")
+
+Set response is OK
+Get response is bar
+```
+
+#### Sync Standalone Mode
+
+```python
+from glide_sync import GlideClientConfiguration, NodeAddress, GlideClient
+
+>>> def test_standalone_client():
+...     addresses = [
+...             NodeAddress("server_primary.example.com", 6379),
+...             NodeAddress("server_replica.example.com", 6379)
+...     ]
+...     # It is recommended to set a timeout for your specific use case
+...     config = GlideClientConfiguration(addresses, request_timeout=500)  # 500ms timeout
+...     client = GlideClient.create(config)
+...     set_result = client.set("foo", "bar")
+...     print(f"Set response is {set_result}")
+...     get_result = client.get("foo")
+...     print(f"Get response is {get_result}")
+... 
+
+Set response is OK
+Get response is bar
+```
+
+---
+
+For complete examples with error handling, please refer to:
+- [Async Cluster Example](https://github.com/valkey-io/valkey-glide/blob/main/examples/python/cluster_example.py)
+- [Async Standalone Example](https://github.com/valkey-io/valkey-glide/blob/main/examples/python/standalone_example.py)
 
 
 ### Building & Testing
