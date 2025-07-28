@@ -2,6 +2,7 @@
 package compatibility.clients.jedis;
 
 import glide.api.GlideClient;
+import glide.api.models.GlideString;
 import glide.api.models.configuration.GlideClientConfiguration;
 import java.io.Closeable;
 import java.net.URI;
@@ -181,6 +182,70 @@ public class UnifiedJedis implements Closeable {
             return glideClient.get(key).get();
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("GET operation failed", e);
+        }
+    }
+
+    /**
+     * Delete a key.
+     *
+     * @param key the key to delete
+     * @return the number of keys that were removed (0 or 1)
+     */
+    public long del(String key) {
+        checkNotClosed();
+        try {
+            return glideClient.del(new String[] {key}).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("DEL operation failed", e);
+        }
+    }
+
+    /**
+     * Delete one or more keys.
+     *
+     * @param keys the keys to delete
+     * @return the number of keys that were removed
+     */
+    public long del(String... keys) {
+        checkNotClosed();
+        try {
+            return glideClient.del(keys).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("DEL operation failed", e);
+        }
+    }
+
+    /**
+     * Delete a key (binary version).
+     *
+     * @param key the key to delete
+     * @return the number of keys that were removed (0 or 1)
+     */
+    public long del(final byte[] key) {
+        checkNotClosed();
+        try {
+            return glideClient.del(new GlideString[] {GlideString.of(key)}).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("DEL operation failed", e);
+        }
+    }
+
+    /**
+     * Delete one or more keys (binary version).
+     *
+     * @param keys the keys to delete
+     * @return the number of keys that were removed
+     */
+    public long del(final byte[]... keys) {
+        checkNotClosed();
+        try {
+            GlideString[] glideKeys = new GlideString[keys.length];
+            for (int i = 0; i < keys.length; i++) {
+                glideKeys[i] = GlideString.of(keys[i]);
+            }
+            return glideClient.del(glideKeys).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("DEL operation failed", e);
         }
     }
 
