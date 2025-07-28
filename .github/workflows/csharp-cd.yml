@@ -160,6 +160,8 @@ jobs:
                   dotnet build Valkey.Glide.csproj --configuration Release /property:Version=${{ env.RELEASE_VERSION }}
                   dotnet pack Valkey.Glide.csproj --configuration Release -p:NuspecProperties=version=${{ env.RELEASE_VERSION }}
                   tree -h bin/Release
+                  unzip -l bin/Release/Valkey.Glide.${{ env.RELEASE_VERSION }}.nupkg
+                  unzip -l bin/Release/Valkey.Glide.${{ env.RELEASE_VERSION }}.symbols.nupkg
               env:
                   SkipCargo: true
 
