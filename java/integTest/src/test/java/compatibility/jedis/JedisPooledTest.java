@@ -4,9 +4,6 @@ package compatibility.jedis;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.*;
 
-import compatibility.clients.jedis.DefaultJedisClientConfig;
-import compatibility.clients.jedis.HostAndPort;
-import compatibility.clients.jedis.JedisClientConfig;
 import compatibility.clients.jedis.JedisPooled;
 import java.lang.reflect.Method;
 import java.util.HashMap;
@@ -443,7 +440,7 @@ public class JedisPooledTest {
 
         // Since JedisPooled extends UnifiedJedis, we test that the main instance
         // (created in setup) works properly and behaves like UnifiedJedis
-        
+
         // Test 1: Verify the main instance works with basic operations
         String pingResult = glideJedisPooled.ping();
         assertEquals("PONG", pingResult, "JedisPooled instance should respond to PING");
@@ -451,24 +448,24 @@ public class JedisPooledTest {
         // Test 2: Verify SET/GET operations work (inherited from UnifiedJedis)
         String testKey = TEST_KEY_PREFIX + "constructor_test";
         String testValue = "constructor_value";
-        
+
         String setResult = glideJedisPooled.set(testKey, testValue);
         assertEquals("OK", setResult, "JedisPooled SET should work like UnifiedJedis");
-        
+
         String getResult = glideJedisPooled.get(testKey);
         assertEquals(testValue, getResult, "JedisPooled GET should work like UnifiedJedis");
-        
+
         // Test 3: Verify DEL operation works (inherited from UnifiedJedis)
         long delResult = glideJedisPooled.del(testKey);
         assertEquals(1L, delResult, "JedisPooled DEL should work like UnifiedJedis");
-        
+
         // Test 4: Verify key is actually deleted
         String getAfterDel = glideJedisPooled.get(testKey);
         assertNull(getAfterDel, "Key should be deleted after DEL operation");
 
         // Test 5: Verify configuration access (inherited from UnifiedJedis)
         assertNotNull(glideJedisPooled.getConfig(), "JedisPooled should have config access");
-        
+
         // Test 6: Verify connection state (inherited from UnifiedJedis)
         assertFalse(glideJedisPooled.isClosed(), "JedisPooled should not be closed during test");
     }
@@ -529,9 +526,8 @@ public class JedisPooledTest {
                 safeDelete(jedisPooled, TEST_KEY_PREFIX + "multi3");
                 safeDelete(jedisPooled, TEST_KEY_PREFIX + "multi4");
 
-                // Clean up constructor test keys
+                // Clean up constructor test key
                 safeDelete(jedisPooled, TEST_KEY_PREFIX + "constructor_test");
-                safeDelete(jedisPooled, TEST_KEY_PREFIX + "config_test");
 
             } else {
                 // Actual JedisPooled cleanup via reflection
@@ -546,8 +542,7 @@ public class JedisPooledTest {
                     TEST_KEY_PREFIX + "multi2",
                     TEST_KEY_PREFIX + "multi3",
                     TEST_KEY_PREFIX + "multi4",
-                    TEST_KEY_PREFIX + "constructor_test",
-                    TEST_KEY_PREFIX + "config_test"
+                    TEST_KEY_PREFIX + "constructor_test"
                 };
 
                 for (String key : keysToClean) {
