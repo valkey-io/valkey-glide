@@ -2,14 +2,20 @@
 import ast
 from pathlib import Path
 
-import glide
+import glide as shared
 
-exported_symbol_list = glide.__all__
+exported_symbol_list = shared.__all__
 
 
 def _get_export_rename_map():
-    glide.__all__
-    root_init_file = Path(__file__).parent.parent / "python" / "glide" / "__init__.py"
+    shared.__all__
+    root_init_file = (
+        Path(__file__).parent.parent
+        / "glide-async"
+        / "python"
+        / "glide"
+        / "__init__.py"
+    )
     source_code = root_init_file.read_text()
     tree = ast.parse(source_code)
     rename_map = {}
@@ -29,10 +35,13 @@ excluded_symbol_list = [
     "T",  # TypeVar
     "TRequest",  # Union
     # python/python/glide/glide_client.py
-    "get_request_error_class",  # FunctionDef
     "_CompatFuture",  # ClassDef
     "_get_new_future_instance",  # FunctionDef
     "BaseClient",  # ClassDef
+    # python/python/glide/sync/glide_client.py
+    "FFIClientTypeEnum",  # ClassDef
+    # python/python/glide/exceptions.py
+    "get_request_error_class",  # FunctionDef
     # python/python/glide/routes.py
     "to_protobuf_slot_type",  # FunctionDef
     "set_protobuf_route",  # FunctionDef
@@ -47,13 +56,13 @@ excluded_symbol_list = [
     "BaseBatchOptions",  # ClassDef
     # python/python/glide/async_commands/standalone_commands.py
     "StandaloneCommands",  # ClassDef
-    # python/python/glide/async_commands/cluster_commands.py
+    # python/python/glide/commands/async_commands/cluster_commands.py
     "ClusterCommands",  # ClassDef
-    # python/python/glide/async_commands/core.py
+    # python/python/glide/commands/async_commands/core.py
     "CoreCommands",  # ClassDef
-    # python/python/glide/async_commands/sorted_set.py
+    # python/python/glide/commands/async_commands/sorted_set.py
     "separate_keys",  # FunctionDef
-    # python/python/glide/async_commands/server_modules/ft_options/ft_constants.py
+    # python/python/glide/commands/async_commands/server_modules/ft_options/ft_constants.py
     "CommandNames",  # ClassDef
     "FtCreateKeywords",  # ClassDef
     "FtSearchKeywords",  # ClassDef
