@@ -114,21 +114,18 @@ internal partial class Request
     private static LCSMatchResult ConvertLCSMatchResult(object response)
     {
         // Handle dictionary response (expected format)
-        if (response is Dictionary<GlideString, object> dictResponse)
-        {
-            return ConvertLCSMatchResultFromDictionary(dictResponse);
-        }
-
-        return LCSMatchResult.Null;
+        return response is Dictionary<GlideString, object> dictResponse
+            ? ConvertLCSMatchResultFromDictionary(dictResponse)
+            : LCSMatchResult.Null;
     }
 
     private static LCSMatchResult ConvertLCSMatchResultFromDictionary(Dictionary<GlideString, object> response)
     {
-        var matches = new List<LCSMatchResult.LCSMatch>();
+        List<LCSMatchResult.LCSMatch> matches = new();
         long totalLength = 0;
 
         // Extract length
-        if (response.TryGetValue("len".ToGlideString(), out var lengthValue))
+        if (response.TryGetValue("len".ToGlideString(), out object? lengthValue))
         {
             totalLength = lengthValue switch
             {
@@ -139,15 +136,15 @@ internal partial class Request
         }
 
         // Extract matches
-        if (response.TryGetValue("matches".ToGlideString(), out var matchesValue) && matchesValue is object[] matchesArray)
+        if (response.TryGetValue("matches".ToGlideString(), out object? matchesValue) && matchesValue is object[] matchesArray)
         {
-            foreach (var matchObj in matchesArray)
+            foreach (object matchObj in matchesArray)
             {
                 if (matchObj is object[] matchArray && matchArray.Length >= 3)
                 {
-                    var firstRange = matchArray[0] as object[];
-                    var secondRange = matchArray[1] as object[];
-                    var matchLength = matchArray[2];
+                    object[]? firstRange = matchArray[0] as object[];
+                    object[]? secondRange = matchArray[1] as object[];
+                    object matchLength = matchArray[2];
 
                     if (firstRange?.Length >= 2 && secondRange?.Length >= 2)
                     {

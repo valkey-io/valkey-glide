@@ -18,14 +18,12 @@ public abstract partial class BaseClient : IStringCommands
 
 #pragma warning disable IDE0072 // Stop warnings for irrelevant cases
     public async Task<bool> StringSetAsync(KeyValuePair<ValkeyKey, ValkeyValue>[] values, When when = When.Always, CommandFlags flags = CommandFlags.None)
-    {
-        return when switch
+        => when switch
         {
             When.Always => await Command(Request.StringSetMultiple(values)),
             When.NotExists => await Command(Request.StringSetMultipleNX(values)),
             _ => throw new ArgumentOutOfRangeException(nameof(when), $"{when} is not supported for StringSetAsync.")
         };
-    }
 #pragma warning restore IDE0072
 
     public async Task<ValkeyValue> StringGetRangeAsync(ValkeyKey key, long start, long end, CommandFlags flags = CommandFlags.None)
