@@ -6,8 +6,8 @@ namespace Valkey.Glide.Commands;
 
 /// <summary>
 /// Supports commands for the "Generic Commands" group for standalone and cluster clients.
-/// <br/>
-/// See more on <see href="https://valkey.io/commands/?group=generic">valkey.io</see>.
+/// <br />
+/// See more on <see href="https://valkey.io/commands/#generic">valkey.io</see>.
 /// </summary>
 public interface IGenericBaseCommands
 {

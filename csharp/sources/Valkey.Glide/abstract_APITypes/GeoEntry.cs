@@ -4,7 +4,7 @@ namespace Valkey.Glide;
 
 /// <summary>
 /// Describes a GeoEntry element with the corresponding value.
-/// GeoEntries are stored in redis as SortedSetEntries.
+/// GeoEntries are stored as SortedSetEntries.
 /// </summary>
 public readonly struct GeoEntry : IEquatable<GeoEntry>
 {

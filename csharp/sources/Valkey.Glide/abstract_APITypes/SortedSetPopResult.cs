@@ -3,7 +3,7 @@
 namespace Valkey.Glide;
 
 /// <summary>
-/// A contiguous portion of a redis sorted set.
+/// A contiguous portion of a sorted set.
 /// </summary>
 public readonly struct SortedSetPopResult
 {
