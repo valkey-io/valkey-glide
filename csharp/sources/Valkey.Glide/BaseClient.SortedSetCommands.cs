@@ -8,10 +8,10 @@ namespace Valkey.Glide;
 public abstract partial class BaseClient : ISortedSetCommands
 {
     public async Task<bool> SortedSetAddAsync(ValkeyKey key, ValkeyValue member, double score, CommandFlags flags)
-        => await SortedSetAddAsync(key, member, score, SortedSetWhen.Always);
+        => await SortedSetAddAsync(key, member, score, SortedSetWhen.Always, flags);
 
     public async Task<bool> SortedSetAddAsync(ValkeyKey key, ValkeyValue member, double score, When when, CommandFlags flags = CommandFlags.None)
-        => await SortedSetAddAsync(key, member, score, SortedSetWhenExtensions.Parse(when));
+        => await SortedSetAddAsync(key, member, score, SortedSetWhenExtensions.Parse(when), flags);
 
     public async Task<bool> SortedSetAddAsync(ValkeyKey key, ValkeyValue member, double score, SortedSetWhen when = SortedSetWhen.Always, CommandFlags flags = CommandFlags.None)
     {
@@ -20,10 +20,10 @@ public abstract partial class BaseClient : ISortedSetCommands
     }
 
     public async Task<long> SortedSetAddAsync(ValkeyKey key, SortedSetEntry[] values, CommandFlags flags)
-        => await SortedSetAddAsync(key, values, SortedSetWhen.Always);
+        => await SortedSetAddAsync(key, values, SortedSetWhen.Always, flags);
 
     public async Task<long> SortedSetAddAsync(ValkeyKey key, SortedSetEntry[] values, When when, CommandFlags flags = CommandFlags.None)
-        => await SortedSetAddAsync(key, values, SortedSetWhenExtensions.Parse(when));
+        => await SortedSetAddAsync(key, values, SortedSetWhenExtensions.Parse(when), flags);
 
     public async Task<long> SortedSetAddAsync(ValkeyKey key, SortedSetEntry[] values, SortedSetWhen when = SortedSetWhen.Always, CommandFlags flags = CommandFlags.None)
     {
@@ -93,7 +93,7 @@ public abstract partial class BaseClient : ISortedSetCommands
     }
 
     public async Task<ValkeyValue[]> SortedSetRangeByValueAsync(ValkeyKey key, ValkeyValue min, ValkeyValue max, Exclude exclude, long skip, long take, CommandFlags flags = CommandFlags.None)
-        => await SortedSetRangeByValueAsync(key, min, max, exclude, Order.Ascending, skip, take);
+        => await SortedSetRangeByValueAsync(key, min, max, exclude, Order.Ascending, skip, take, flags);
 
     public async Task<ValkeyValue[]> SortedSetRangeByValueAsync(
         ValkeyKey key,

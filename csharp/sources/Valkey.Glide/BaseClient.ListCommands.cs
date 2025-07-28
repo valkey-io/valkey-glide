@@ -81,10 +81,8 @@ public abstract partial class BaseClient : IListCommands
 
     public async Task ListTrimAsync(ValkeyKey key, long start, long stop, CommandFlags flags = CommandFlags.None)
     {
-#pragma warning disable IDE0058 // Expression value is never used
         Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
-        await Command(Request.ListTrimAsync(key, start, stop));
-#pragma warning restore IDE0058 // Expression value is never used
+        _ = await Command(Request.ListTrimAsync(key, start, stop));
     }
 
     public async Task<ValkeyValue[]> ListRangeAsync(ValkeyKey key, long start = 0, long stop = -1, CommandFlags flags = CommandFlags.None)
