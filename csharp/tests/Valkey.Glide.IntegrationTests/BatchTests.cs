@@ -1027,4 +1027,91 @@ public class BatchTests(TestConfiguration config)
             .AddMilliseconds(double.Parse((arr[1] as gs)!) / 1000);
 #endif
     }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestConnections), MemberType = typeof(TestConfiguration))]
+    public async Task BatchStringCommands_NewCommands(ConnectionMultiplexer conn, bool _)
+    {
+        IDatabase db = conn.GetDatabase();
+        IBatch batch = db.CreateBatch();
+
+        // Use hash tags to ensure keys map to the same slot in cluster mode
+        string baseKey = Guid.NewGuid().ToString();
+        string key1 = $"{{{baseKey}}}:key1";
+        string key2 = $"{{{baseKey}}}:key2";
+        string key3 = $"{{{baseKey}}}:key3";
+        string key4 = $"{{{baseKey}}}:key4";
+        string value1 = "test_value_1";
+        string value2 = "test_value_2";
+        string newValue = "new_value";
+
+        // Test StringSetAsync with When.NotExists
+        KeyValuePair<ValkeyKey, ValkeyValue>[] keyValuePairs = [
+            new(key1, value1),
+            new(key2, value2)
+        ];
+        Task<bool> t1 = batch.StringSetAsync(keyValuePairs, When.NotExists);
+
+        // Test StringGetDeleteAsync
+        Task<bool> t2 = batch.StringSetAsync(key3, value1);
+        Task<ValkeyValue> t3 = batch.StringGetDeleteAsync(key3);
+
+        // Test StringGetSetExpiryAsync
+        Task<bool> t4 = batch.StringSetAsync(key4, newValue);
+        Task<ValkeyValue> t6 = batch.StringGetSetExpiryAsync(key4, TimeSpan.FromSeconds(60));
+
+        // Test LCS commands
+        string lcsKey1 = $"{{{baseKey}}}:lcs_key1";
+        string lcsKey2 = $"{{{baseKey}}}:lcs_key2";
+        Task<bool> t7 = batch.StringSetAsync(lcsKey1, "abcdef");
+        Task<bool> t8 = batch.StringSetAsync(lcsKey2, "acef");
+        Task<string?> t9 = batch.StringLongestCommonSubsequenceAsync(lcsKey1, lcsKey2);
+        Task<long> t10 = batch.StringLongestCommonSubsequenceLengthAsync(lcsKey1, lcsKey2);
+        Task<LCSMatchResult> t11 = batch.StringLongestCommonSubsequenceWithMatchesAsync(lcsKey1, lcsKey2);
+
+        batch.Execute();
+
+        // Verify results
+        Assert.True(await t1); // MSETNX should succeed
+        Assert.True(await t2); // SET should succeed
+        Assert.Equal(value1, (await t3).ToString()); // GETDEL should return original value
+        Assert.True(await t4); // SET should succeed
+        Assert.Equal(newValue, (await t6).ToString()); // GETEX should return current value
+        Assert.True(await t7); // SET should succeed
+        Assert.True(await t8); // SET should succeed
+        Assert.Equal("acef", await t9); // LCS should return common subsequence
+        Assert.Equal(4, await t10); // LCS LEN should return length
+
+        LCSMatchResult lcsResult = await t11;
+        Assert.True(lcsResult.LongestMatchLength > 0);
+        Assert.NotNull(lcsResult.Matches);
+    }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestConnections), MemberType = typeof(TestConfiguration))]
+    public async Task TransactionStringCommands_NewCommands(ConnectionMultiplexer conn, bool _)
+    {
+        IDatabase db = conn.GetDatabase();
+        ITransaction transaction = db.CreateTransaction();
+
+        // Use hash tags to ensure keys map to the same slot in cluster mode
+        string baseKey = Guid.NewGuid().ToString();
+        string key1 = $"{{{baseKey}}}:key1";
+        string key2 = $"{{{baseKey}}}:key2";
+        string value1 = "test_value_1";
+        string value2 = "test_value_2";
+
+        // Test basic new string commands in transaction
+        KeyValuePair<ValkeyKey, ValkeyValue>[] keyValuePairs = [
+            new(key1, value1),
+            new(key2, value2)
+        ];
+        Task<bool> t1 = transaction.StringSetAsync(keyValuePairs, When.NotExists);
+        Task<ValkeyValue> t2 = transaction.StringGetDeleteAsync(key1);
+
+        Assert.True(transaction.Execute());
+
+        Assert.True(await t1); // MSETNX should succeed
+        Assert.Equal(value1, (await t2).ToString()); // GETDEL should return original value
+    }
 }

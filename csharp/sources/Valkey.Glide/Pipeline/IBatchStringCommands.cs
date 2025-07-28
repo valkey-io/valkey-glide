@@ -19,8 +19,8 @@ internal interface IBatchStringCommands
     /// <returns>Command Response - <inheritdoc cref="Commands.IStringCommands.StringSetAsync(ValkeyKey, ValkeyValue, CommandFlags)" /></returns>
     IBatch StringSet(ValkeyKey key, ValkeyValue value);
 
-    /// <inheritdoc cref="Commands.IStringCommands.StringSetAsync(KeyValuePair{ValkeyKey, ValkeyValue}[], CommandFlags)" path="/*[not(self::remarks) and not(self::returns)]" />
-    /// <returns>Command Response - <inheritdoc cref="Commands.IStringCommands.StringSetAsync(KeyValuePair{ValkeyKey, ValkeyValue}[], CommandFlags)" /></returns>
+    /// <inheritdoc cref="Commands.IStringCommands.StringSetAsync(KeyValuePair{ValkeyKey, ValkeyValue}[], When, CommandFlags)" path="/*[not(self::remarks) and not(self::returns)]" />
+    /// <returns>Command Response - <inheritdoc cref="Commands.IStringCommands.StringSetAsync(KeyValuePair{ValkeyKey, ValkeyValue}[], When, CommandFlags)" /></returns>
     IBatch StringSet(KeyValuePair<ValkeyKey, ValkeyValue>[] values);
 
     /// <inheritdoc cref="Commands.IStringCommands.StringGetRangeAsync(ValkeyKey, long, long, CommandFlags)" path="/*[not(self::remarks) and not(self::returns)]" />

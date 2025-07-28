@@ -34,6 +34,18 @@ public class CommandTests
             () => Assert.Equal(["INCR", "key"], Request.StringIncr("key").GetArgs()),
             () => Assert.Equal(["INCRBY", "key", "5"], Request.StringIncrBy("key", 5).GetArgs()),
             () => Assert.Equal(["INCRBYFLOAT", "key", "0.5"], Request.StringIncrByFloat("key", 0.5).GetArgs()),
+            () => Assert.Equal(["MSETNX", "key1", "value1", "key2", "value2"], Request.StringSetMultipleNX([
+                new KeyValuePair<ValkeyKey, ValkeyValue>("key1", "value1"),
+                new KeyValuePair<ValkeyKey, ValkeyValue>("key2", "value2")
+            ]).GetArgs()),
+            () => Assert.Equal(["GETDEL", "key"], Request.StringGetDelete("key").GetArgs()),
+            () => Assert.Equal(["GETEX", "key", "EX", "60"], Request.StringGetSetExpiry("key", TimeSpan.FromSeconds(60)).GetArgs()),
+            () => Assert.Equal(["GETEX", "key", "PERSIST"], Request.StringGetSetExpiry("key", null).GetArgs()),
+            () => Assert.Equal(["GETEX", "key", "EXAT", "1609459200"], Request.StringGetSetExpiry("key", new DateTime(2021, 1, 1, 0, 0, 0, DateTimeKind.Utc)).GetArgs()),
+            () => Assert.Equal(["LCS", "key1", "key2"], Request.StringLongestCommonSubsequence("key1", "key2").GetArgs()),
+            () => Assert.Equal(["LCS", "key1", "key2", "LEN"], Request.StringLongestCommonSubsequenceLength("key1", "key2").GetArgs()),
+            () => Assert.Equal(["LCS", "key1", "key2", "IDX", "MINMATCHLEN", "0", "WITHMATCHLEN"], Request.StringLongestCommonSubsequenceWithMatches("key1", "key2").GetArgs()),
+            () => Assert.Equal(["LCS", "key1", "key2", "IDX", "MINMATCHLEN", "5", "WITHMATCHLEN"], Request.StringLongestCommonSubsequenceWithMatches("key1", "key2", 5).GetArgs()),
 
             () => Assert.Equal(["INFO"], Request.Info([]).GetArgs()),
             () => Assert.Equal(["INFO", "CLIENTS", "CPU"], Request.Info([InfoOptions.Section.CLIENTS, InfoOptions.Section.CPU]).GetArgs()),
