@@ -196,7 +196,7 @@ jobs:
 
             - name: Set up nuget-inspector
               run: |
-                  wget https://github.com/aboutcode-org/nuget-inspector/releases/download/v0.9.12/nuget-inspector-v0.9.12-linux-x64.tar.gz
+                  wget -q https://github.com/aboutcode-org/nuget-inspector/releases/download/v0.9.12/nuget-inspector-v0.9.12-linux-x64.tar.gz
                   tar xf nuget-inspector-*.tar.gz
                   echo $GITHUB_WORKSPACE/nuget-inspector >> $GITHUB_PATH
 
