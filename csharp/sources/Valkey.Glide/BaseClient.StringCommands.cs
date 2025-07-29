@@ -25,21 +25,18 @@ public abstract partial class BaseClient : IStringCommands
         return await Command(Request.StringGetMultiple(keys));
     }
 
-#pragma warning disable IDE0072 // Stop warnings for irrelevant cases
+#pragma warning disable IDE0072 // Add missing cases
     public async Task<bool> StringSetAsync(KeyValuePair<ValkeyKey, ValkeyValue>[] values, When when = When.Always, CommandFlags flags = CommandFlags.None)
     {
         Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
-        switch (when)
+        return when switch
         {
-            case When.Always:
-                return await Command(Request.StringSetMultiple(values));
-            case When.NotExists:
-                return await Command(Request.StringSetMultipleNX(values));
-            default:
-                throw new ArgumentOutOfRangeException(nameof(when), $"{when} is not supported for StringSetAsync.");
-        }
+            When.Always => await Command(Request.StringSetMultiple(values)),
+            When.NotExists => await Command(Request.StringSetMultipleNX(values)),
+            _ => throw new ArgumentOutOfRangeException(nameof(when), $"{when} is not supported for StringSetAsync.")
+        };
     }
-#pragma warning restore IDE0072
+#pragma warning restore IDE0072 // Add missing cases
 
     public async Task<ValkeyValue> StringGetRangeAsync(ValkeyKey key, long start, long end, CommandFlags flags = CommandFlags.None)
     {

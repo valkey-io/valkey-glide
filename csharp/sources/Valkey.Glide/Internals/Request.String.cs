@@ -100,7 +100,7 @@ internal partial class Request
     }
 
     public static Cmd<GlideString, string?> StringLongestCommonSubsequence(ValkeyKey first, ValkeyKey second)
-        => new(RequestType.LCS, [first.ToGlideString(), second.ToGlideString()], true, response => response ?? response.ToString());
+        => new(RequestType.LCS, [first.ToGlideString(), second.ToGlideString()], true, response => response?.ToString());
 
     public static Cmd<long, long> StringLongestCommonSubsequenceLength(ValkeyKey first, ValkeyKey second)
         => Simple<long>(RequestType.LCS, [first.ToGlideString(), second.ToGlideString(), LenKeyword.ToGlideString()]);
