@@ -1,3 +1,4 @@
+use logger_core::log_warn;
 use once_cell::sync::OnceCell;
 use opentelemetry::global::ObjectSafeSpan;
 use opentelemetry::trace::{SpanKind, TraceContextExt, TraceError};
@@ -606,7 +607,16 @@ impl GlideOpenTelemetry {
                 }
             }
             GlideOpenTelemetrySignalsExporter::Grpc(url) => {
-                match env_protocol.unwrap_or(Protocol::Grpc) {
+                let protocol = env_protocol.unwrap_or(Protocol::Grpc);
+                if protocol != Protocol::Grpc {
+                    log_warn(
+                        "opentelemetry",
+                        format!(
+                            "Inconsistent configuration: The endpoint URL '{url}' suggests gRPC, but the protocol is set to '{protocol:?}' via environment variables. The environment variable setting will be used."
+                        ),
+                    );
+                }
+                match protocol {
                     Protocol::Grpc => {
                         let exporter = opentelemetry_otlp::SpanExporter::builder()
                             .with_tonic()
@@ -671,6 +681,14 @@ impl GlideOpenTelemetry {
             }
             GlideOpenTelemetrySignalsExporter::Grpc(url) => {
                 let protocol = env_protocol.unwrap_or(Protocol::Grpc);
+                if protocol != Protocol::Grpc {
+                    log_warn(
+                        "opentelemetry",
+                        format!(
+                            "Inconsistent configuration: The endpoint URL '{url}' suggests gRPC, but the protocol is set to '{protocol:?}' via environment variables. The environment variable setting will be used."
+                        ),
+                    );
+                }
                 let exporter = match protocol {
                     Protocol::Grpc => MetricExporter::builder()
                         .with_tonic()
