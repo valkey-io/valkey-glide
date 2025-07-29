@@ -18,7 +18,6 @@ runs:
           run: |
               echo "Running ORT tools for $FOLDER"
               echo LOCAL_PATH=`basename $FOLDER` >> "$GITHUB_OUTPUT"
-              echo FOLDER_PATH=`realpath -s --relative-to=$GITHUB_WORKSPACE $FOLDER | sed 's|/|-|g'` >> "$GITHUB_OUTPUT"
               mkdir $FOLDER/ort_results
               # Analyzer (analyzer-result.json)
               ./gradlew cli:run --args="--info analyze -i $FOLDER -o $FOLDER/ort_results -f JSON"
@@ -31,6 +30,6 @@ runs:
           continue-on-error: true
           uses: actions/upload-artifact@v4
           with:
-              name: ort_results-${{ steps.ort.outputs.FOLDER_PATH }}
+              name: ort_results-${{ steps.ort.outputs.LOCAL_PATH }}
               path: |
-                  ${{ inputs.folder_path }}/ort_results/**
+                  ${{ steps.ort.outputs.LOCAL_PATH }}/ort_results/**
