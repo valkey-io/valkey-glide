@@ -2601,3 +2601,115 @@ fn create_child_span(span: Option<&GlideSpan>, name: &str) -> Result<GlideSpan, 
         )),
     }
 }
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Level {
+    ERROR = 0,
+    WARN = 1,
+    INFO = 2,
+    DEBUG = 3,
+    TRACE = 4,
+    OFF = 5,
+}
+
+impl From<logger_core::Level> for Level {
+    fn from(level: logger_core::Level) -> Self {
+        match level {
+            logger_core::Level::Error => Level::ERROR,
+            logger_core::Level::Warn => Level::WARN,
+            logger_core::Level::Info => Level::INFO,
+            logger_core::Level::Debug => Level::DEBUG,
+            logger_core::Level::Trace => Level::TRACE,
+            logger_core::Level::Off => Level::OFF,
+        }
+    }
+}
+
+impl From<Level> for logger_core::Level {
+    fn from(level: Level) -> Self {
+        match level {
+            Level::ERROR => logger_core::Level::Error,
+            Level::WARN => logger_core::Level::Warn,
+            Level::INFO => logger_core::Level::Info,
+            Level::DEBUG => logger_core::Level::Debug,
+            Level::TRACE => logger_core::Level::Trace,
+            Level::OFF => logger_core::Level::Off,
+        }
+    }
+}
+
+/// Logs a message using the logger backend.
+///
+/// # Parameters
+///
+/// * `level` - The severity level of the current message (e.g., Error, Warn, Info).
+/// * `logger_level` - The log level currently allowed by the logger. Messages with a level less severe than this will be ignored.
+/// * `identifier` - A pointer to a null-terminated C string identifying the source of the log message.
+/// * `message` - A pointer to a null-terminated C string containing the actual log message.
+///
+/// # Safety
+///
+/// * `identifier` must be a valid, non-null pointer to a null-terminated UTF-8 encoded C string.
+/// * `message` must be a valid, non-null pointer to a null-terminated UTF-8 encoded C string.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn log(
+    level: Level,
+    logger_level: Level,
+    identifier: *const c_char,
+    message: *const c_char,
+) {
+    if level > logger_level {
+        return;
+    }
+
+    let id_str = unsafe {
+        CStr::from_ptr(identifier)
+            .to_str()
+            .expect("Log identifier should be valid UTF-8")
+    };
+    let msg_str = unsafe {
+        CStr::from_ptr(message)
+            .to_str()
+            .expect("Log message should be valid UTF-8")
+    };
+
+    logger_core::log(level.into(), id_str, msg_str);
+}
+
+/// Initializes the logger with the provided log level and optional log file path.
+///
+/// # Parameters
+///
+/// * `level` - A pointer to a `Level` enum value that sets the maximum log level. If null, a WARN level will be used.
+/// * `file_name` - A pointer to a null-terminated C string representing the desired log file path.
+///
+/// # Returns
+///
+/// The actual log level set by the logger.
+///
+/// # Safety
+///
+/// * `level` may be null. If not null, it must point to a valid instance of the `Level` enum.
+/// * `file_name` may be null. If not null, it must point to a valid, null-terminated UTF-8 encoded C string.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn init(level: *const Level, file_name: *const c_char) -> Level {
+    let level_option = if level.is_null() {
+        None
+    } else {
+        Some(unsafe { *level }.into())
+    };
+
+    let file_name_option = if file_name.is_null() {
+        None
+    } else {
+        Some(unsafe {
+            CStr::from_ptr(file_name)
+                .to_str()
+                .expect("File name should be valid UTF-8")
+        })
+    };
+
+    let logger_level = logger_core::init(level_option, file_name_option);
+    logger_level.into()
+}
