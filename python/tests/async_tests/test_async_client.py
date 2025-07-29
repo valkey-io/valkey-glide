@@ -34,6 +34,7 @@ from glide_shared.commands.core_options import (
     ExpireOptions,
     ExpiryGetEx,
     ExpiryTypeGetEx,
+    FieldConditionalChange,
     FlushMode,
     FunctionRestorePolicy,
     InfoSection,
@@ -1029,6 +1030,36 @@ class TestCommands:
         assert await glide_client.set(key, "value") == OK
         with pytest.raises(RequestError):
             await glide_client.hsetnx(key, field, "value")
+
+    @pytest.mark.skip_if_version_below("9.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_hsetex(self, glide_client: TGlideClient):
+        key = get_random_string(10)
+        field = get_random_string(5)
+        value = get_random_string(5)
+        long_exp = ExpirySet(ExpiryType.SEC, 20000)
+        fxx = FieldConditionalChange.ONLY_IF_EXISTS
+        fnx = FieldConditionalChange.ONLY_IF_DOES_NOT_EXIST
+
+        # Test hsetex without expiry
+        assert await glide_client.hsetex(key, {field: value}) == 1
+        assert await glide_client.hget(key, field) == value.encode()
+        # Test hsetex with long expiry
+        assert (
+            await glide_client.hsetex(
+                key, {field: value}, conditional_options=fnx, expiry=long_exp
+            )
+            == 0
+        )
+        assert (
+            await glide_client.hsetex(
+                key, {field: value}, conditional_options=fxx, expiry=long_exp
+            )
+            == 1
+        )
+        assert await glide_client.hget(key, field) == value.encode()
+        assert await glide_client.hdel(key, [field])
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
