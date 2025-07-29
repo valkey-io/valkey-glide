@@ -2,21 +2,17 @@
 package compatibility.jedis;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.junit.jupiter.api.Assumptions.*;
 
-import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Map;
 import org.junit.jupiter.api.*;
 import redis.clients.jedis.JedisPooled;
 
 /**
- * JedisPooled compatibility test that validates GLIDE JedisPooled compatibility layer for basic
- * GET/SET operations.
+ * JedisPooled compatibility test that validates GLIDE JedisPooled functionality.
  *
- * <p>This test validates that the GLIDE JedisPooled compatibility layer produces correct results
- * for core Redis operations, ensuring compatibility with the JedisPooled interface. JedisPooled
- * extends UnifiedJedis and provides pooled connection semantics.
+ * <p>This test ensures that the GLIDE compatibility layer provides the expected JedisPooled API and
+ * behavior. JedisPooled extends UnifiedJedis and provides pooled connection semantics.
  */
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class JedisPooledTest {
@@ -27,552 +23,274 @@ public class JedisPooledTest {
     private static String redisHost;
     private static int redisPort;
 
-    // GLIDE JedisPooled compatibility layer instances
-    private JedisPooled glideJedisPooled;
-
-    // Actual JedisPooled instances (loaded via reflection if available)
-    private Object actualJedisPooled;
-    private Class<?> actualJedisPooledClass;
-
-    // Availability flags
-    private boolean hasGlideJedisPooled = false;
-    private boolean hasActualJedisPooled = false;
+    // GLIDE JedisPooled compatibility layer instance
+    private JedisPooled jedisPooled;
 
     @BeforeAll
     static void setupClass() {
         resolveServerAddress();
     }
 
-    /**
-     * Resolve Redis/Valkey server address from CI environment properties. Falls back to
-     * localhost:6379 if no CI configuration is found.
-     */
-    private static void resolveServerAddress() {
-        String standaloneHosts = System.getProperty("test.server.standalone");
-
-        if (standaloneHosts != null && !standaloneHosts.trim().isEmpty()) {
-            String firstHost = standaloneHosts.split(",")[0].trim();
-            String[] hostPort = firstHost.split(":");
-
-            if (hostPort.length == 2) {
-                redisHost = hostPort[0];
-                try {
-                    redisPort = Integer.parseInt(hostPort[1]);
-                    return;
-                } catch (NumberFormatException e) {
-                    // Fall through to default
-                }
-            }
-        }
-
-        // Fallback to localhost for local development
-        redisHost = "localhost";
-        redisPort = 6379;
-    }
-
     @BeforeEach
     void setup() {
-        // Initialize GLIDE JedisPooled compatibility layer
+        // Create GLIDE JedisPooled compatibility layer instance
         try {
-            glideJedisPooled = new JedisPooled(redisHost, redisPort);
-            hasGlideJedisPooled = true;
+            jedisPooled = new JedisPooled(redisHost, redisPort);
+            assertNotNull(jedisPooled, "GLIDE JedisPooled instance should be created successfully");
         } catch (Exception e) {
-            hasGlideJedisPooled = false;
-            System.err.println("Failed to initialize GLIDE JedisPooled: " + e.getMessage());
-        }
-
-        // Try to load actual JedisPooled via reflection (optional)
-        try {
-            String jedisJarPath = System.getProperty("jedis.jar.path");
-            if (jedisJarPath != null) {
-                // Load actual JedisPooled classes and create instances
-                actualJedisPooledClass = Class.forName("redis.clients.jedis.JedisPooled");
-
-                // Try different constructor patterns
-                try {
-                    // Try host/port constructor
-                    actualJedisPooled =
-                            actualJedisPooledClass
-                                    .getConstructor(String.class, int.class)
-                                    .newInstance(redisHost, redisPort);
-                } catch (Exception e1) {
-                    try {
-                        // Try HostAndPort constructor
-                        Class<?> hostAndPortClass = Class.forName("redis.clients.jedis.HostAndPort");
-                        Object hostAndPort =
-                                hostAndPortClass
-                                        .getConstructor(String.class, int.class)
-                                        .newInstance(redisHost, redisPort);
-                        actualJedisPooled =
-                                actualJedisPooledClass.getConstructor(hostAndPortClass).newInstance(hostAndPort);
-                    } catch (Exception e2) {
-                        // Try basic constructor
-                        actualJedisPooled = actualJedisPooledClass.getConstructor().newInstance();
-                    }
-                }
-                hasActualJedisPooled = true;
-            }
-        } catch (Exception e) {
-            hasActualJedisPooled = false;
+            fail("Failed to create GLIDE JedisPooled instance: " + e.getMessage());
         }
     }
 
     @AfterEach
     void cleanup() {
         // Cleanup test keys
-        if (hasGlideJedisPooled && glideJedisPooled != null) {
-            cleanupTestKeys(glideJedisPooled);
+        if (jedisPooled != null) {
             try {
-                glideJedisPooled.close();
-            } catch (Exception e) {
-                // Ignore cleanup errors
-            }
-        }
-
-        if (hasActualJedisPooled && actualJedisPooled != null) {
-            try {
-                cleanupTestKeys(actualJedisPooled);
-                Method closeMethod = actualJedisPooledClass.getMethod("close");
-                closeMethod.invoke(actualJedisPooled);
+                cleanupTestKeys(jedisPooled);
+                jedisPooled.close();
             } catch (Exception e) {
                 // Ignore cleanup errors
             }
         }
     }
 
-    // ===== BASIC GET/SET OPERATIONS =====
-
     @Test
     @Order(1)
-    @DisplayName("Basic SET Operation")
-    void testBasicSetOperation() {
-        assumeTrue(hasGlideJedisPooled, "GLIDE JedisPooled compatibility layer not available");
+    void testBasicSetAndGet() {
+        String testKey = TEST_KEY_PREFIX + "basic";
+        String testValue = "pooled_test_value_123";
 
-        String testKey = TEST_KEY_PREFIX + "basic_set";
-        String testValue = "test_value_123";
+        // Test GLIDE JedisPooled compatibility layer
+        String setResult = jedisPooled.set(testKey, testValue);
+        assertEquals("OK", setResult, "SET should return OK");
 
-        // Test GLIDE JedisPooled SET
-        String glideSetResult = glideJedisPooled.set(testKey, testValue);
-        assertEquals("OK", glideSetResult, "GLIDE JedisPooled SET should return OK");
-
-        // Compare with actual JedisPooled if available
-        if (hasActualJedisPooled) {
-            try {
-                Method setMethod = actualJedisPooledClass.getMethod("set", String.class, String.class);
-                String actualSetResult = (String) setMethod.invoke(actualJedisPooled, testKey, testValue);
-
-                assertEquals(
-                        actualSetResult,
-                        glideSetResult,
-                        "GLIDE and actual JedisPooled SET results should be identical");
-            } catch (Exception e) {
-                fail("Failed to compare SET with actual JedisPooled: " + e.getMessage());
-            }
-        }
+        String getResult = jedisPooled.get(testKey);
+        assertEquals(testValue, getResult, "GET should return the set value");
     }
 
     @Test
     @Order(2)
-    @DisplayName("Basic GET Operation")
-    void testBasicGetOperation() {
-        assumeTrue(hasGlideJedisPooled, "GLIDE JedisPooled compatibility layer not available");
+    void testMultipleOperations() {
+        Map<String, String> testData = new HashMap<>();
+        testData.put(TEST_KEY_PREFIX + "pooled_key1", "pooled_value1");
+        testData.put(TEST_KEY_PREFIX + "pooled_key2", "pooled_value2");
+        testData.put(TEST_KEY_PREFIX + "pooled_key3", "pooled_value3");
 
-        String testKey = TEST_KEY_PREFIX + "basic_get";
-        String testValue = "test_value_456";
+        // Test multiple SET operations
+        for (Map.Entry<String, String> entry : testData.entrySet()) {
+            String result = jedisPooled.set(entry.getKey(), entry.getValue());
+            assertEquals("OK", result, "SET should return OK for " + entry.getKey());
+        }
 
-        // First set the value
-        String setResult = glideJedisPooled.set(testKey, testValue);
-        assertEquals("OK", setResult, "SET should succeed before GET test");
-
-        // Test GLIDE JedisPooled GET
-        String glideGetResult = glideJedisPooled.get(testKey);
-        assertEquals(testValue, glideGetResult, "GLIDE JedisPooled GET should return the set value");
-
-        // Compare with actual JedisPooled if available
-        if (hasActualJedisPooled) {
-            try {
-                Method setMethod = actualJedisPooledClass.getMethod("set", String.class, String.class);
-                Method getMethod = actualJedisPooledClass.getMethod("get", String.class);
-
-                // Set value in actual JedisPooled
-                setMethod.invoke(actualJedisPooled, testKey, testValue);
-                String actualGetResult = (String) getMethod.invoke(actualJedisPooled, testKey);
-
-                assertEquals(
-                        actualGetResult,
-                        glideGetResult,
-                        "GLIDE and actual JedisPooled GET results should be identical");
-            } catch (Exception e) {
-                fail("Failed to compare GET with actual JedisPooled: " + e.getMessage());
-            }
+        // Test multiple GET operations
+        for (Map.Entry<String, String> entry : testData.entrySet()) {
+            String result = jedisPooled.get(entry.getKey());
+            assertEquals(
+                    entry.getValue(), result, "GET should return correct value for " + entry.getKey());
         }
     }
 
     @Test
     @Order(3)
-    @DisplayName("Combined GET/SET Operations")
-    void testCombinedGetSetOperations() {
-        assumeTrue(hasGlideJedisPooled, "GLIDE JedisPooled compatibility layer not available");
+    void testConnectionOperations() {
+        // Test PING
+        String pingResult = jedisPooled.ping();
+        assertEquals("PONG", pingResult, "PING should return PONG");
 
-        String testKey = TEST_KEY_PREFIX + "combined";
-        String testValue = "combined_test_value";
-
-        // Test GLIDE JedisPooled SET followed by GET
-        String glideSetResult = glideJedisPooled.set(testKey, testValue);
-        String glideGetResult = glideJedisPooled.get(testKey);
-
-        assertEquals("OK", glideSetResult, "GLIDE JedisPooled SET should return OK");
-        assertEquals(testValue, glideGetResult, "GLIDE JedisPooled GET should return the set value");
-
-        // Compare with actual JedisPooled if available
-        if (hasActualJedisPooled) {
-            try {
-                Method setMethod = actualJedisPooledClass.getMethod("set", String.class, String.class);
-                Method getMethod = actualJedisPooledClass.getMethod("get", String.class);
-
-                String actualSetResult = (String) setMethod.invoke(actualJedisPooled, testKey, testValue);
-                String actualGetResult = (String) getMethod.invoke(actualJedisPooled, testKey);
-
-                assertEquals(
-                        actualSetResult,
-                        glideSetResult,
-                        "GLIDE and actual JedisPooled SET results should be identical");
-                assertEquals(
-                        actualGetResult,
-                        glideGetResult,
-                        "GLIDE and actual JedisPooled GET results should be identical");
-            } catch (Exception e) {
-                fail("Failed to compare with actual JedisPooled: " + e.getMessage());
-            }
-        }
+        // Test PING with message
+        String message = "pooled_test_message";
+        String pingWithMessage = jedisPooled.ping(message);
+        assertEquals(message, pingWithMessage, "PING with message should return the message");
     }
 
     @Test
     @Order(4)
-    @DisplayName("Multiple GET/SET Operations")
-    void testMultipleGetSetOperations() {
-        assumeTrue(hasGlideJedisPooled, "GLIDE JedisPooled compatibility layer not available");
+    void testDeleteOperations() {
+        String testKey1 = TEST_KEY_PREFIX + "del1";
+        String testKey2 = TEST_KEY_PREFIX + "del2";
+        String testKey3 = TEST_KEY_PREFIX + "del3";
 
-        Map<String, String> testData = new HashMap<>();
-        testData.put(TEST_KEY_PREFIX + "multi1", "value1");
-        testData.put(TEST_KEY_PREFIX + "multi2", "value2");
-        testData.put(TEST_KEY_PREFIX + "multi3", "value3");
-        testData.put(TEST_KEY_PREFIX + "multi4", "value4");
+        // Set some keys
+        jedisPooled.set(testKey1, "value1");
+        jedisPooled.set(testKey2, "value2");
+        jedisPooled.set(testKey3, "value3");
 
-        // Test GLIDE JedisPooled
-        Map<String, String> glideSetResults = new HashMap<>();
-        Map<String, String> glideGetResults = new HashMap<>();
+        // Test single key deletion
+        long delResult = jedisPooled.del(testKey1);
+        assertEquals(1, delResult, "DEL should return 1 for deleted key");
 
-        for (Map.Entry<String, String> entry : testData.entrySet()) {
-            String setResult = glideJedisPooled.set(entry.getKey(), entry.getValue());
-            String getResult = glideJedisPooled.get(entry.getKey());
+        // Verify key is deleted
+        String getResult = jedisPooled.get(testKey1);
+        assertNull(getResult, "Key should not exist after deletion");
 
-            glideSetResults.put(entry.getKey(), setResult);
-            glideGetResults.put(entry.getKey(), getResult);
+        // Test multiple key deletion
+        long multiDelResult = jedisPooled.del(testKey2, testKey3);
+        assertEquals(2, multiDelResult, "DEL should return 2 for two deleted keys");
 
-            assertEquals("OK", setResult, "GLIDE JedisPooled SET should return OK for " + entry.getKey());
-            assertEquals(
-                    entry.getValue(),
-                    getResult,
-                    "GLIDE JedisPooled GET should return correct value for " + entry.getKey());
-        }
-
-        // Compare with actual JedisPooled if available
-        if (hasActualJedisPooled) {
-            try {
-                Method setMethod = actualJedisPooledClass.getMethod("set", String.class, String.class);
-                Method getMethod = actualJedisPooledClass.getMethod("get", String.class);
-
-                for (Map.Entry<String, String> entry : testData.entrySet()) {
-                    String actualSetResult =
-                            (String) setMethod.invoke(actualJedisPooled, entry.getKey(), entry.getValue());
-                    String actualGetResult = (String) getMethod.invoke(actualJedisPooled, entry.getKey());
-
-                    assertEquals(
-                            actualSetResult,
-                            glideSetResults.get(entry.getKey()),
-                            "GLIDE and actual JedisPooled SET results should be identical for " + entry.getKey());
-                    assertEquals(
-                            actualGetResult,
-                            glideGetResults.get(entry.getKey()),
-                            "GLIDE and actual JedisPooled GET results should be identical for " + entry.getKey());
-                }
-            } catch (Exception e) {
-                fail("Failed to compare with actual JedisPooled: " + e.getMessage());
-            }
-        }
+        // Verify keys are deleted
+        assertNull(jedisPooled.get(testKey2), "Key2 should not exist after deletion");
+        assertNull(jedisPooled.get(testKey3), "Key3 should not exist after deletion");
     }
 
     @Test
     @Order(5)
-    @DisplayName("GET Non-existent Key")
-    void testGetNonExistentKey() {
-        assumeTrue(hasGlideJedisPooled, "GLIDE JedisPooled compatibility layer not available");
+    void testPooledConnectionBehavior() {
+        // Test that JedisPooled maintains connection state properly
+        String testKey = TEST_KEY_PREFIX + "pooled_behavior";
 
-        String nonExistentKey = TEST_KEY_PREFIX + "non_existent_" + System.currentTimeMillis();
+        // Set a value
+        jedisPooled.set(testKey, "initial_value");
 
-        // Test GLIDE JedisPooled GET for non-existent key
-        String glideGetResult = glideJedisPooled.get(nonExistentKey);
-        assertNull(glideGetResult, "GLIDE JedisPooled GET should return null for non-existent key");
+        // Perform multiple operations to test connection reuse
+        for (int i = 0; i < 10; i++) {
+            String value = jedisPooled.get(testKey);
+            assertEquals("initial_value", value, "Value should be consistent across operations");
 
-        // Compare with actual JedisPooled if available
-        if (hasActualJedisPooled) {
-            try {
-                Method getMethod = actualJedisPooledClass.getMethod("get", String.class);
-                String actualGetResult = (String) getMethod.invoke(actualJedisPooled, nonExistentKey);
+            // Update value
+            jedisPooled.set(testKey, "value_" + i);
 
-                assertEquals(
-                        actualGetResult,
-                        glideGetResult,
-                        "GLIDE and actual JedisPooled should both return null for non-existent key");
-            } catch (Exception e) {
-                fail("Failed to compare GET non-existent key with actual JedisPooled: " + e.getMessage());
-            }
+            // Verify update
+            String updatedValue = jedisPooled.get(testKey);
+            assertEquals("value_" + i, updatedValue, "Updated value should be correct");
         }
     }
 
     @Test
     @Order(6)
-    @DisplayName("SET/GET with Special Characters")
-    void testSetGetWithSpecialCharacters() {
-        assumeTrue(hasGlideJedisPooled, "GLIDE JedisPooled compatibility layer not available");
+    void testConnectionState() {
+        // Test that connection is not closed initially
+        assertFalse(jedisPooled.isClosed(), "Connection should not be closed initially");
 
-        String testKey = TEST_KEY_PREFIX + "special_chars";
-        String testValue = "value_with_special_chars: !@#$%^&*()_+-=[]{}|;':\",./<>?`~";
+        // Test basic operations work
+        String testKey = TEST_KEY_PREFIX + "connection_test";
+        String testValue = "connection_value";
 
-        // Test GLIDE JedisPooled with special characters
-        String glideSetResult = glideJedisPooled.set(testKey, testValue);
-        String glideGetResult = glideJedisPooled.get(testKey);
+        jedisPooled.set(testKey, testValue);
+        String result = jedisPooled.get(testKey);
+        assertEquals(testValue, result, "Operations should work on active connection");
 
-        assertEquals("OK", glideSetResult, "GLIDE JedisPooled SET should handle special characters");
-        assertEquals(
-                testValue,
-                glideGetResult,
-                "GLIDE JedisPooled GET should return value with special characters");
-
-        // Compare with actual JedisPooled if available
-        if (hasActualJedisPooled) {
-            try {
-                Method setMethod = actualJedisPooledClass.getMethod("set", String.class, String.class);
-                Method getMethod = actualJedisPooledClass.getMethod("get", String.class);
-
-                String actualSetResult = (String) setMethod.invoke(actualJedisPooled, testKey, testValue);
-                String actualGetResult = (String) getMethod.invoke(actualJedisPooled, testKey);
-
-                assertEquals(
-                        actualSetResult,
-                        glideSetResult,
-                        "GLIDE and actual JedisPooled SET should handle special characters identically");
-                assertEquals(
-                        actualGetResult,
-                        glideGetResult,
-                        "GLIDE and actual JedisPooled GET should handle special characters identically");
-            } catch (Exception e) {
-                fail("Failed to compare special characters with actual JedisPooled: " + e.getMessage());
-            }
-        }
+        // Connection should still be active
+        assertFalse(jedisPooled.isClosed(), "Connection should still be active after operations");
     }
 
     @Test
     @Order(7)
-    @DisplayName("DEL Command")
-    void testDelCommand() {
-        assumeTrue(hasGlideJedisPooled, "GLIDE JedisPooled compatibility layer not available");
+    void testBinaryOperations() {
+        byte[] testKey = (TEST_KEY_PREFIX + "binary").getBytes();
 
-        String testKey = TEST_KEY_PREFIX + "del_test";
-        String testValue = "value_to_delete";
+        // Set using string method first
+        String stringKey = TEST_KEY_PREFIX + "binary";
+        jedisPooled.set(stringKey, "binary_value");
 
-        // First set a value
-        String setResult = glideJedisPooled.set(testKey, testValue);
-        assertEquals("OK", setResult, "SET should succeed before DEL test");
+        // Test binary key deletion
+        long delResult = jedisPooled.del(testKey);
+        assertEquals(1, delResult, "Binary DEL should return 1 for deleted key");
 
-        // Verify the key exists
-        String getValue = glideJedisPooled.get(testKey);
-        assertEquals(testValue, getValue, "Key should exist before deletion");
-
-        // Test GLIDE JedisPooled DEL
-        long glideDelResult = glideJedisPooled.del(testKey);
-        assertEquals(1L, glideDelResult, "GLIDE JedisPooled DEL should return 1 for existing key");
-
-        // Verify the key is deleted
-        String getAfterDel = glideJedisPooled.get(testKey);
-        assertNull(getAfterDel, "Key should not exist after deletion");
-
-        // Test DEL on non-existent key
-        long delNonExistent = glideJedisPooled.del(testKey);
-        assertEquals(0L, delNonExistent, "GLIDE JedisPooled DEL should return 0 for non-existent key");
-
-        // Compare with actual JedisPooled if available
-        if (hasActualJedisPooled) {
-            try {
-                Method setMethod = actualJedisPooledClass.getMethod("set", String.class, String.class);
-                Method delMethod = actualJedisPooledClass.getMethod("del", String.class);
-                Method getMethod = actualJedisPooledClass.getMethod("get", String.class);
-
-                // Set value in actual JedisPooled
-                setMethod.invoke(actualJedisPooled, testKey, testValue);
-
-                // Delete and compare result
-                Long actualDelResult = (Long) delMethod.invoke(actualJedisPooled, testKey);
-                assertEquals(
-                        actualDelResult.longValue(),
-                        glideDelResult,
-                        "GLIDE and actual JedisPooled DEL results should be identical");
-
-                // Test non-existent key deletion
-                Long actualDelNonExistent = (Long) delMethod.invoke(actualJedisPooled, testKey);
-                assertEquals(
-                        actualDelNonExistent.longValue(),
-                        delNonExistent,
-                        "GLIDE and actual JedisPooled should both return 0 for non-existent key deletion");
-
-            } catch (Exception e) {
-                fail("Failed to compare DEL with actual JedisPooled: " + e.getMessage());
-            }
-        }
+        // Verify key is deleted
+        String getResult = jedisPooled.get(stringKey);
+        assertNull(getResult, "Key should not exist after binary deletion");
     }
 
     @Test
     @Order(8)
-    @DisplayName("JedisPooled Constructor Variations")
-    void testJedisPooledConstructorVariations() {
-        assumeTrue(hasGlideJedisPooled, "GLIDE JedisPooled compatibility layer not available");
+    void testConcurrentOperations() throws InterruptedException {
+        final int threadCount = 5;
+        final String testKeyPrefix = TEST_KEY_PREFIX + "concurrent_";
+        Thread[] threads = new Thread[threadCount];
+        final boolean[] results = new boolean[threadCount];
 
-        // Since JedisPooled extends UnifiedJedis, we test that the main instance
-        // (created in setup) works properly and behaves like UnifiedJedis
+        // Create threads that use JedisPooled concurrently
+        for (int i = 0; i < threadCount; i++) {
+            final int threadIndex = i;
+            threads[i] =
+                    new Thread(
+                            () -> {
+                                try {
+                                    String key = testKeyPrefix + threadIndex;
+                                    String value = "thread_" + threadIndex + "_value";
 
-        // Test 1: Verify the main instance works with basic operations
-        String pingResult = glideJedisPooled.ping();
-        assertEquals("PONG", pingResult, "JedisPooled instance should respond to PING");
+                                    String setResult = jedisPooled.set(key, value);
+                                    String getResult = jedisPooled.get(key);
 
-        // Test 2: Verify SET/GET operations work (inherited from UnifiedJedis)
-        String testKey = TEST_KEY_PREFIX + "constructor_test";
-        String testValue = "constructor_value";
+                                    results[threadIndex] = "OK".equals(setResult) && value.equals(getResult);
+                                } catch (Exception e) {
+                                    results[threadIndex] = false;
+                                }
+                            });
+        }
 
-        String setResult = glideJedisPooled.set(testKey, testValue);
-        assertEquals("OK", setResult, "JedisPooled SET should work like UnifiedJedis");
+        // Start all threads
+        for (Thread thread : threads) {
+            thread.start();
+        }
 
-        String getResult = glideJedisPooled.get(testKey);
-        assertEquals(testValue, getResult, "JedisPooled GET should work like UnifiedJedis");
+        // Wait for all threads to complete
+        for (Thread thread : threads) {
+            thread.join(5000); // 5 second timeout
+        }
 
-        // Test 3: Verify DEL operation works (inherited from UnifiedJedis)
-        long delResult = glideJedisPooled.del(testKey);
-        assertEquals(1L, delResult, "JedisPooled DEL should work like UnifiedJedis");
-
-        // Test 4: Verify key is actually deleted
-        String getAfterDel = glideJedisPooled.get(testKey);
-        assertNull(getAfterDel, "Key should be deleted after DEL operation");
-
-        // Test 5: Verify configuration access (inherited from UnifiedJedis)
-        assertNotNull(glideJedisPooled.getConfig(), "JedisPooled should have config access");
-
-        // Test 6: Verify connection state (inherited from UnifiedJedis)
-        assertFalse(glideJedisPooled.isClosed(), "JedisPooled should not be closed during test");
+        // Verify all threads succeeded
+        for (int i = 0; i < threadCount; i++) {
+            assertTrue(results[i], "Thread " + i + " should have succeeded");
+        }
     }
 
     @Test
     @Order(9)
-    @DisplayName("JedisPooled Inheritance from UnifiedJedis")
-    void testJedisPooledInheritance() {
-        assumeTrue(hasGlideJedisPooled, "GLIDE JedisPooled compatibility layer not available");
+    void testLargeValueOperations() {
+        String testKey = TEST_KEY_PREFIX + "large_value";
+        StringBuilder largeValue = new StringBuilder();
 
-        // Verify that JedisPooled extends UnifiedJedis
-        assertTrue(
-                glideJedisPooled instanceof redis.clients.jedis.UnifiedJedis,
-                "JedisPooled should extend UnifiedJedis");
-
-        // Test that all UnifiedJedis methods are available
-        String testKey = TEST_KEY_PREFIX + "inheritance_test";
-        String testValue = "inheritance_value";
-
-        // These methods should be inherited from UnifiedJedis
-        String setResult = glideJedisPooled.set(testKey, testValue);
-        assertEquals("OK", setResult, "Inherited SET method should work");
-
-        String getResult = glideJedisPooled.get(testKey);
-        assertEquals(testValue, getResult, "Inherited GET method should work");
-
-        String pingResult = glideJedisPooled.ping();
-        assertEquals("PONG", pingResult, "Inherited PING method should work");
-
-        long delResult = glideJedisPooled.del(testKey);
-        assertEquals(1L, delResult, "Inherited DEL method should work");
-    }
-
-    // ===== UTILITY METHODS =====
-
-    /**
-     * Clean up test keys to avoid interference between tests.
-     *
-     * @param jedisInstance the JedisPooled instance to clean up
-     */
-    private void cleanupTestKeys(Object jedisInstance) {
-        try {
-            if (jedisInstance instanceof JedisPooled) {
-                // GLIDE JedisPooled cleanup
-                JedisPooled jedisPooled = (JedisPooled) jedisInstance;
-
-                // Clean up basic operation keys
-                safeDelete(jedisPooled, TEST_KEY_PREFIX + "basic_set");
-                safeDelete(jedisPooled, TEST_KEY_PREFIX + "basic_get");
-                safeDelete(jedisPooled, TEST_KEY_PREFIX + "combined");
-                safeDelete(jedisPooled, TEST_KEY_PREFIX + "special_chars");
-                safeDelete(jedisPooled, TEST_KEY_PREFIX + "del_test");
-                safeDelete(jedisPooled, TEST_KEY_PREFIX + "inheritance_test");
-
-                // Clean up multiple operation keys
-                safeDelete(jedisPooled, TEST_KEY_PREFIX + "multi1");
-                safeDelete(jedisPooled, TEST_KEY_PREFIX + "multi2");
-                safeDelete(jedisPooled, TEST_KEY_PREFIX + "multi3");
-                safeDelete(jedisPooled, TEST_KEY_PREFIX + "multi4");
-
-                // Clean up constructor test key
-                safeDelete(jedisPooled, TEST_KEY_PREFIX + "constructor_test");
-
-            } else {
-                // Actual JedisPooled cleanup via reflection
-                String[] keysToClean = {
-                    TEST_KEY_PREFIX + "basic_set",
-                    TEST_KEY_PREFIX + "basic_get",
-                    TEST_KEY_PREFIX + "combined",
-                    TEST_KEY_PREFIX + "special_chars",
-                    TEST_KEY_PREFIX + "del_test",
-                    TEST_KEY_PREFIX + "inheritance_test",
-                    TEST_KEY_PREFIX + "multi1",
-                    TEST_KEY_PREFIX + "multi2",
-                    TEST_KEY_PREFIX + "multi3",
-                    TEST_KEY_PREFIX + "multi4",
-                    TEST_KEY_PREFIX + "constructor_test"
-                };
-
-                for (String key : keysToClean) {
-                    try {
-                        // Try to delete via reflection using del method
-                        Method delMethod = jedisInstance.getClass().getMethod("del", String.class);
-                        delMethod.invoke(jedisInstance, key);
-                    } catch (Exception e) {
-                        // Ignore cleanup errors
-                    }
-                }
-            }
-        } catch (Exception e) {
-            // Ignore cleanup errors to avoid masking test failures
-            System.err.println("Warning: Failed to cleanup test keys: " + e.getMessage());
+        // Create a large value (5KB)
+        for (int i = 0; i < 500; i++) {
+            largeValue.append("0123456789");
         }
+        String expectedValue = largeValue.toString();
+
+        // Test setting and getting large value
+        String setResult = jedisPooled.set(testKey, expectedValue);
+        assertEquals("OK", setResult, "SET should work with large values");
+
+        String getResult = jedisPooled.get(testKey);
+        assertEquals(expectedValue, getResult, "GET should return complete large value");
+        assertEquals(5000, getResult.length(), "Large value should have correct length");
     }
 
-    /**
-     * Safely delete a key, ignoring any errors.
-     *
-     * @param jedisPooled the JedisPooled instance
-     * @param key the key to delete
-     */
-    private void safeDelete(JedisPooled jedisPooled, String key) {
+    // Helper methods
+    private static void resolveServerAddress() {
+        String host = System.getProperty("redis.host");
+        String port = System.getProperty("redis.port");
+
+        redisHost = (host != null) ? host : "localhost";
+        redisPort = (port != null) ? Integer.parseInt(port) : 6379;
+    }
+
+    private void cleanupTestKeys(JedisPooled jedisPooled) {
         try {
-            jedisPooled.del(key);
+            // Delete all test keys
+            String[] keysToDelete = {
+                TEST_KEY_PREFIX + "basic",
+                TEST_KEY_PREFIX + "pooled_key1",
+                TEST_KEY_PREFIX + "pooled_key2",
+                TEST_KEY_PREFIX + "pooled_key3",
+                TEST_KEY_PREFIX + "del1",
+                TEST_KEY_PREFIX + "del2",
+                TEST_KEY_PREFIX + "del3",
+                TEST_KEY_PREFIX + "pooled_behavior",
+                TEST_KEY_PREFIX + "connection_test",
+                TEST_KEY_PREFIX + "binary",
+                TEST_KEY_PREFIX + "large_value",
+                TEST_KEY_PREFIX + "concurrent_0",
+                TEST_KEY_PREFIX + "concurrent_1",
+                TEST_KEY_PREFIX + "concurrent_2",
+                TEST_KEY_PREFIX + "concurrent_3",
+                TEST_KEY_PREFIX + "concurrent_4"
+            };
+
+            jedisPooled.del(keysToDelete);
         } catch (Exception e) {
-            // Ignore deletion errors to avoid masking test failures
-            System.err.println("Warning: Failed to delete key '" + key + "': " + e.getMessage());
+            // Ignore cleanup errors
         }
     }
 }

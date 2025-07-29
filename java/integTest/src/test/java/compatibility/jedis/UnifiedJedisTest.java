@@ -2,20 +2,17 @@
 package compatibility.jedis;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.junit.jupiter.api.Assumptions.*;
 
-import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Map;
 import org.junit.jupiter.api.*;
 import redis.clients.jedis.UnifiedJedis;
 
 /**
- * UnifiedJedis compatibility test that validates GLIDE UnifiedJedis compatibility layer for basic
- * GET/SET operations.
+ * UnifiedJedis compatibility test that validates GLIDE UnifiedJedis functionality.
  *
- * <p>This test validates that the GLIDE UnifiedJedis compatibility layer produces correct results
- * for core Redis operations, ensuring compatibility with the UnifiedJedis interface.
+ * <p>This test ensures that the GLIDE compatibility layer provides the expected UnifiedJedis API
+ * and behavior for core Redis operations.
  */
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class UnifiedJedisTest {
@@ -26,539 +23,230 @@ public class UnifiedJedisTest {
     private static String redisHost;
     private static int redisPort;
 
-    // GLIDE UnifiedJedis compatibility layer instances
-    private UnifiedJedis glideUnifiedJedis;
-
-    // Actual UnifiedJedis instances (loaded via reflection if available)
-    private Object actualUnifiedJedis;
-    private Class<?> actualUnifiedJedisClass;
-
-    // Availability flags
-    private boolean hasGlideUnifiedJedis = false;
-    private boolean hasActualUnifiedJedis = false;
+    // GLIDE UnifiedJedis compatibility layer instance
+    private UnifiedJedis unifiedJedis;
 
     @BeforeAll
     static void setupClass() {
         resolveServerAddress();
     }
 
-    /**
-     * Resolve Redis/Valkey server address from CI environment properties. Falls back to
-     * localhost:6379 if no CI configuration is found.
-     */
-    private static void resolveServerAddress() {
-        String standaloneHosts = System.getProperty("test.server.standalone");
-
-        if (standaloneHosts != null && !standaloneHosts.trim().isEmpty()) {
-            String firstHost = standaloneHosts.split(",")[0].trim();
-            String[] hostPort = firstHost.split(":");
-
-            if (hostPort.length == 2) {
-                redisHost = hostPort[0];
-                try {
-                    redisPort = Integer.parseInt(hostPort[1]);
-                    return;
-                } catch (NumberFormatException e) {
-                    // Fall through to default
-                }
-            }
-        }
-
-        // Fallback to localhost for local development
-        redisHost = "localhost";
-        redisPort = 6379;
-    }
-
     @BeforeEach
     void setup() {
-        // Initialize GLIDE UnifiedJedis compatibility layer
+        // Create GLIDE UnifiedJedis compatibility layer instance
         try {
-            glideUnifiedJedis = new UnifiedJedis(redisHost, redisPort);
-            hasGlideUnifiedJedis = true;
+            unifiedJedis = new UnifiedJedis(redisHost, redisPort);
+            assertNotNull(unifiedJedis, "GLIDE UnifiedJedis instance should be created successfully");
         } catch (Exception e) {
-            hasGlideUnifiedJedis = false;
-            System.err.println("Failed to initialize GLIDE UnifiedJedis: " + e.getMessage());
-        }
-
-        // Try to load actual UnifiedJedis via reflection (optional)
-        try {
-            String jedisJarPath = System.getProperty("jedis.jar.path");
-            if (jedisJarPath != null) {
-                // Load actual UnifiedJedis classes and create instances
-                actualUnifiedJedisClass = Class.forName("redis.clients.jedis.UnifiedJedis");
-
-                // Try different constructor patterns
-                try {
-                    // Try HostAndPort constructor
-                    Class<?> hostAndPortClass = Class.forName("redis.clients.jedis.HostAndPort");
-                    Object hostAndPort =
-                            hostAndPortClass
-                                    .getConstructor(String.class, int.class)
-                                    .newInstance(redisHost, redisPort);
-                    actualUnifiedJedis =
-                            actualUnifiedJedisClass.getConstructor(hostAndPortClass).newInstance(hostAndPort);
-                } catch (Exception e1) {
-                    // Try basic constructor
-                    actualUnifiedJedis = actualUnifiedJedisClass.getConstructor().newInstance();
-                }
-                hasActualUnifiedJedis = true;
-            }
-        } catch (Exception e) {
-            hasActualUnifiedJedis = false;
+            fail("Failed to create GLIDE UnifiedJedis instance: " + e.getMessage());
         }
     }
 
     @AfterEach
     void cleanup() {
         // Cleanup test keys
-        if (hasGlideUnifiedJedis && glideUnifiedJedis != null) {
-            cleanupTestKeys(glideUnifiedJedis);
+        if (unifiedJedis != null) {
             try {
-                glideUnifiedJedis.close();
-            } catch (Exception e) {
-                // Ignore cleanup errors
-            }
-        }
-
-        if (hasActualUnifiedJedis && actualUnifiedJedis != null) {
-            try {
-                cleanupTestKeys(actualUnifiedJedis);
-                Method closeMethod = actualUnifiedJedisClass.getMethod("close");
-                closeMethod.invoke(actualUnifiedJedis);
+                cleanupTestKeys(unifiedJedis);
+                unifiedJedis.close();
             } catch (Exception e) {
                 // Ignore cleanup errors
             }
         }
     }
 
-    // ===== BASIC GET/SET OPERATIONS =====
-
     @Test
     @Order(1)
-    @DisplayName("Basic SET Operation")
-    void testBasicSetOperation() {
-        assumeTrue(hasGlideUnifiedJedis, "GLIDE UnifiedJedis compatibility layer not available");
+    void testBasicSetAndGet() {
+        String testKey = TEST_KEY_PREFIX + "basic";
+        String testValue = "unified_test_value_123";
 
-        String testKey = TEST_KEY_PREFIX + "basic_set";
-        String testValue = "test_value_123";
+        // Test GLIDE UnifiedJedis compatibility layer
+        String setResult = unifiedJedis.set(testKey, testValue);
+        assertEquals("OK", setResult, "SET should return OK");
 
-        // Test GLIDE UnifiedJedis SET
-        String glideSetResult = glideUnifiedJedis.set(testKey, testValue);
-        assertEquals("OK", glideSetResult, "GLIDE UnifiedJedis SET should return OK");
-
-        // Compare with actual UnifiedJedis if available
-        if (hasActualUnifiedJedis) {
-            try {
-                Method setMethod = actualUnifiedJedisClass.getMethod("set", String.class, String.class);
-                String actualSetResult = (String) setMethod.invoke(actualUnifiedJedis, testKey, testValue);
-
-                assertEquals(
-                        actualSetResult,
-                        glideSetResult,
-                        "GLIDE and actual UnifiedJedis SET results should be identical");
-            } catch (Exception e) {
-                fail("Failed to compare SET with actual UnifiedJedis: " + e.getMessage());
-            }
-        }
+        String getResult = unifiedJedis.get(testKey);
+        assertEquals(testValue, getResult, "GET should return the set value");
     }
 
     @Test
     @Order(2)
-    @DisplayName("Basic GET Operation")
-    void testBasicGetOperation() {
-        assumeTrue(hasGlideUnifiedJedis, "GLIDE UnifiedJedis compatibility layer not available");
+    void testMultipleOperations() {
+        Map<String, String> testData = new HashMap<>();
+        testData.put(TEST_KEY_PREFIX + "unified_key1", "unified_value1");
+        testData.put(TEST_KEY_PREFIX + "unified_key2", "unified_value2");
+        testData.put(TEST_KEY_PREFIX + "unified_key3", "unified_value3");
 
-        String testKey = TEST_KEY_PREFIX + "basic_get";
-        String testValue = "test_value_456";
+        // Test multiple SET operations
+        for (Map.Entry<String, String> entry : testData.entrySet()) {
+            String result = unifiedJedis.set(entry.getKey(), entry.getValue());
+            assertEquals("OK", result, "SET should return OK for " + entry.getKey());
+        }
 
-        // First set the value
-        String setResult = glideUnifiedJedis.set(testKey, testValue);
-        assertEquals("OK", setResult, "SET should succeed before GET test");
-
-        // Test GLIDE UnifiedJedis GET
-        String glideGetResult = glideUnifiedJedis.get(testKey);
-        assertEquals(testValue, glideGetResult, "GLIDE UnifiedJedis GET should return the set value");
-
-        // Compare with actual UnifiedJedis if available
-        if (hasActualUnifiedJedis) {
-            try {
-                Method setMethod = actualUnifiedJedisClass.getMethod("set", String.class, String.class);
-                Method getMethod = actualUnifiedJedisClass.getMethod("get", String.class);
-
-                // Set value in actual UnifiedJedis
-                setMethod.invoke(actualUnifiedJedis, testKey, testValue);
-                String actualGetResult = (String) getMethod.invoke(actualUnifiedJedis, testKey);
-
-                assertEquals(
-                        actualGetResult,
-                        glideGetResult,
-                        "GLIDE and actual UnifiedJedis GET results should be identical");
-            } catch (Exception e) {
-                fail("Failed to compare GET with actual UnifiedJedis: " + e.getMessage());
-            }
+        // Test multiple GET operations
+        for (Map.Entry<String, String> entry : testData.entrySet()) {
+            String result = unifiedJedis.get(entry.getKey());
+            assertEquals(
+                    entry.getValue(), result, "GET should return correct value for " + entry.getKey());
         }
     }
 
     @Test
     @Order(3)
-    @DisplayName("Combined GET/SET Operations")
-    void testCombinedGetSetOperations() {
-        assumeTrue(hasGlideUnifiedJedis, "GLIDE UnifiedJedis compatibility layer not available");
+    void testConnectionOperations() {
+        // Test PING
+        String pingResult = unifiedJedis.ping();
+        assertEquals("PONG", pingResult, "PING should return PONG");
 
-        String testKey = TEST_KEY_PREFIX + "combined";
-        String testValue = "combined_test_value";
-
-        // Test GLIDE UnifiedJedis SET followed by GET
-        String glideSetResult = glideUnifiedJedis.set(testKey, testValue);
-        String glideGetResult = glideUnifiedJedis.get(testKey);
-
-        assertEquals("OK", glideSetResult, "GLIDE UnifiedJedis SET should return OK");
-        assertEquals(testValue, glideGetResult, "GLIDE UnifiedJedis GET should return the set value");
-
-        // Compare with actual UnifiedJedis if available
-        if (hasActualUnifiedJedis) {
-            try {
-                Method setMethod = actualUnifiedJedisClass.getMethod("set", String.class, String.class);
-                Method getMethod = actualUnifiedJedisClass.getMethod("get", String.class);
-
-                String actualSetResult = (String) setMethod.invoke(actualUnifiedJedis, testKey, testValue);
-                String actualGetResult = (String) getMethod.invoke(actualUnifiedJedis, testKey);
-
-                assertEquals(
-                        actualSetResult,
-                        glideSetResult,
-                        "GLIDE and actual UnifiedJedis SET results should be identical");
-                assertEquals(
-                        actualGetResult,
-                        glideGetResult,
-                        "GLIDE and actual UnifiedJedis GET results should be identical");
-            } catch (Exception e) {
-                fail("Failed to compare with actual UnifiedJedis: " + e.getMessage());
-            }
-        }
+        // Test PING with message
+        String message = "unified_test_message";
+        String pingWithMessage = unifiedJedis.ping(message);
+        assertEquals(message, pingWithMessage, "PING with message should return the message");
     }
 
     @Test
     @Order(4)
-    @DisplayName("Multiple GET/SET Operations")
-    void testMultipleGetSetOperations() {
-        assumeTrue(hasGlideUnifiedJedis, "GLIDE UnifiedJedis compatibility layer not available");
+    void testDeleteOperations() {
+        String testKey1 = TEST_KEY_PREFIX + "del1";
+        String testKey2 = TEST_KEY_PREFIX + "del2";
+        String testKey3 = TEST_KEY_PREFIX + "del3";
 
-        Map<String, String> testData = new HashMap<>();
-        testData.put(TEST_KEY_PREFIX + "multi1", "value1");
-        testData.put(TEST_KEY_PREFIX + "multi2", "value2");
-        testData.put(TEST_KEY_PREFIX + "multi3", "value3");
-        testData.put(TEST_KEY_PREFIX + "multi4", "value4");
+        // Set some keys
+        unifiedJedis.set(testKey1, "value1");
+        unifiedJedis.set(testKey2, "value2");
+        unifiedJedis.set(testKey3, "value3");
 
-        // Test GLIDE UnifiedJedis
-        Map<String, String> glideSetResults = new HashMap<>();
-        Map<String, String> glideGetResults = new HashMap<>();
+        // Test single key deletion
+        long delResult = unifiedJedis.del(testKey1);
+        assertEquals(1, delResult, "DEL should return 1 for deleted key");
 
-        for (Map.Entry<String, String> entry : testData.entrySet()) {
-            String setResult = glideUnifiedJedis.set(entry.getKey(), entry.getValue());
-            String getResult = glideUnifiedJedis.get(entry.getKey());
+        // Verify key is deleted
+        String getResult = unifiedJedis.get(testKey1);
+        assertNull(getResult, "Key should not exist after deletion");
 
-            glideSetResults.put(entry.getKey(), setResult);
-            glideGetResults.put(entry.getKey(), getResult);
+        // Test multiple key deletion
+        long multiDelResult = unifiedJedis.del(testKey2, testKey3);
+        assertEquals(2, multiDelResult, "DEL should return 2 for two deleted keys");
 
-            assertEquals(
-                    "OK", setResult, "GLIDE UnifiedJedis SET should return OK for " + entry.getKey());
-            assertEquals(
-                    entry.getValue(),
-                    getResult,
-                    "GLIDE UnifiedJedis GET should return correct value for " + entry.getKey());
-        }
-
-        // Compare with actual UnifiedJedis if available
-        if (hasActualUnifiedJedis) {
-            try {
-                Method setMethod = actualUnifiedJedisClass.getMethod("set", String.class, String.class);
-                Method getMethod = actualUnifiedJedisClass.getMethod("get", String.class);
-
-                for (Map.Entry<String, String> entry : testData.entrySet()) {
-                    String actualSetResult =
-                            (String) setMethod.invoke(actualUnifiedJedis, entry.getKey(), entry.getValue());
-                    String actualGetResult = (String) getMethod.invoke(actualUnifiedJedis, entry.getKey());
-
-                    assertEquals(
-                            actualSetResult,
-                            glideSetResults.get(entry.getKey()),
-                            "GLIDE and actual UnifiedJedis SET results should be identical for "
-                                    + entry.getKey());
-                    assertEquals(
-                            actualGetResult,
-                            glideGetResults.get(entry.getKey()),
-                            "GLIDE and actual UnifiedJedis GET results should be identical for "
-                                    + entry.getKey());
-                }
-            } catch (Exception e) {
-                fail("Failed to compare with actual UnifiedJedis: " + e.getMessage());
-            }
-        }
+        // Verify keys are deleted
+        assertNull(unifiedJedis.get(testKey2), "Key2 should not exist after deletion");
+        assertNull(unifiedJedis.get(testKey3), "Key3 should not exist after deletion");
     }
 
     @Test
     @Order(5)
-    @DisplayName("GET Non-existent Key")
-    void testGetNonExistentKey() {
-        assumeTrue(hasGlideUnifiedJedis, "GLIDE UnifiedJedis compatibility layer not available");
+    void testConnectionState() {
+        // Test that connection is not closed initially
+        assertFalse(unifiedJedis.isClosed(), "Connection should not be closed initially");
 
-        String nonExistentKey = TEST_KEY_PREFIX + "non_existent_" + System.currentTimeMillis();
+        // Test basic operations work
+        String testKey = TEST_KEY_PREFIX + "connection_test";
+        String testValue = "connection_value";
 
-        // Test GLIDE UnifiedJedis GET for non-existent key
-        String glideGetResult = glideUnifiedJedis.get(nonExistentKey);
-        assertNull(glideGetResult, "GLIDE UnifiedJedis GET should return null for non-existent key");
+        unifiedJedis.set(testKey, testValue);
+        String result = unifiedJedis.get(testKey);
+        assertEquals(testValue, result, "Operations should work on active connection");
 
-        // Compare with actual UnifiedJedis if available
-        if (hasActualUnifiedJedis) {
-            try {
-                Method getMethod = actualUnifiedJedisClass.getMethod("get", String.class);
-                String actualGetResult = (String) getMethod.invoke(actualUnifiedJedis, nonExistentKey);
-
-                assertEquals(
-                        actualGetResult,
-                        glideGetResult,
-                        "GLIDE and actual UnifiedJedis should both return null for non-existent key");
-            } catch (Exception e) {
-                fail("Failed to compare GET non-existent key with actual UnifiedJedis: " + e.getMessage());
-            }
-        }
+        // Connection should still be active
+        assertFalse(unifiedJedis.isClosed(), "Connection should still be active after operations");
     }
 
     @Test
     @Order(6)
-    @DisplayName("SET/GET with Special Characters")
-    void testSetGetWithSpecialCharacters() {
-        assumeTrue(hasGlideUnifiedJedis, "GLIDE UnifiedJedis compatibility layer not available");
+    void testBinaryOperations() {
+        byte[] testKey = (TEST_KEY_PREFIX + "binary").getBytes();
+        byte[] testValue = "binary_value".getBytes();
 
-        String testKey = TEST_KEY_PREFIX + "special_chars";
-        String testValue = "value_with_special_chars: !@#$%^&*()_+-=[]{}|;':\",./<>?`~";
+        // Note: UnifiedJedis currently only supports del for binary keys
+        // Set using string method first
+        String stringKey = TEST_KEY_PREFIX + "binary";
+        unifiedJedis.set(stringKey, "binary_value");
 
-        // Test GLIDE UnifiedJedis with special characters
-        String glideSetResult = glideUnifiedJedis.set(testKey, testValue);
-        String glideGetResult = glideUnifiedJedis.get(testKey);
+        // Test binary key deletion
+        long delResult = unifiedJedis.del(testKey);
+        assertEquals(1, delResult, "Binary DEL should return 1 for deleted key");
 
-        assertEquals("OK", glideSetResult, "GLIDE UnifiedJedis SET should handle special characters");
-        assertEquals(
-                testValue,
-                glideGetResult,
-                "GLIDE UnifiedJedis GET should return value with special characters");
-
-        // Compare with actual UnifiedJedis if available
-        if (hasActualUnifiedJedis) {
-            try {
-                Method setMethod = actualUnifiedJedisClass.getMethod("set", String.class, String.class);
-                Method getMethod = actualUnifiedJedisClass.getMethod("get", String.class);
-
-                String actualSetResult = (String) setMethod.invoke(actualUnifiedJedis, testKey, testValue);
-                String actualGetResult = (String) getMethod.invoke(actualUnifiedJedis, testKey);
-
-                assertEquals(
-                        actualSetResult,
-                        glideSetResult,
-                        "GLIDE and actual UnifiedJedis SET should handle special characters identically");
-                assertEquals(
-                        actualGetResult,
-                        glideGetResult,
-                        "GLIDE and actual UnifiedJedis GET should handle special characters identically");
-            } catch (Exception e) {
-                fail("Failed to compare special characters with actual UnifiedJedis: " + e.getMessage());
-            }
-        }
+        // Verify key is deleted
+        String getResult = unifiedJedis.get(stringKey);
+        assertNull(getResult, "Key should not exist after binary deletion");
     }
 
     @Test
     @Order(7)
-    @DisplayName("DEL Command")
-    void testDelCommand() {
-        assumeTrue(hasGlideUnifiedJedis, "GLIDE UnifiedJedis compatibility layer not available");
+    void testMultipleBinaryDeletion() {
+        // Set up test keys using string methods
+        String key1 = TEST_KEY_PREFIX + "binary1";
+        String key2 = TEST_KEY_PREFIX + "binary2";
+        String key3 = TEST_KEY_PREFIX + "binary3";
 
-        String testKey = TEST_KEY_PREFIX + "del_test";
-        String testValue = "value_to_delete";
+        unifiedJedis.set(key1, "value1");
+        unifiedJedis.set(key2, "value2");
+        unifiedJedis.set(key3, "value3");
 
-        // First set a value
-        String setResult = glideUnifiedJedis.set(testKey, testValue);
-        assertEquals("OK", setResult, "SET should succeed before DEL test");
+        // Test multiple binary key deletion
+        byte[][] binaryKeys = {key1.getBytes(), key2.getBytes(), key3.getBytes()};
 
-        // Verify the key exists
-        String getValue = glideUnifiedJedis.get(testKey);
-        assertEquals(testValue, getValue, "Key should exist before deletion");
+        long delResult = unifiedJedis.del(binaryKeys);
+        assertEquals(3, delResult, "Binary DEL should return 3 for three deleted keys");
 
-        // Test GLIDE UnifiedJedis DEL
-        long glideDelResult = glideUnifiedJedis.del(testKey);
-        assertEquals(1L, glideDelResult, "GLIDE UnifiedJedis DEL should return 1 for existing key");
-
-        // Verify the key is deleted
-        String getAfterDel = glideUnifiedJedis.get(testKey);
-        assertNull(getAfterDel, "Key should not exist after deletion");
-
-        // Test DEL on non-existent key
-        long delNonExistent = glideUnifiedJedis.del(testKey);
-        assertEquals(0L, delNonExistent, "GLIDE UnifiedJedis DEL should return 0 for non-existent key");
-
-        // Compare with actual UnifiedJedis if available
-        if (hasActualUnifiedJedis) {
-            try {
-                Method setMethod = actualUnifiedJedisClass.getMethod("set", String.class, String.class);
-                Method delMethod = actualUnifiedJedisClass.getMethod("del", String.class);
-                Method getMethod = actualUnifiedJedisClass.getMethod("get", String.class);
-
-                // Set value in actual UnifiedJedis
-                setMethod.invoke(actualUnifiedJedis, testKey, testValue);
-
-                // Delete and compare result
-                Long actualDelResult = (Long) delMethod.invoke(actualUnifiedJedis, testKey);
-                assertEquals(
-                        actualDelResult.longValue(),
-                        glideDelResult,
-                        "GLIDE and actual UnifiedJedis DEL results should be identical");
-
-                // Test non-existent key deletion
-                Long actualDelNonExistent = (Long) delMethod.invoke(actualUnifiedJedis, testKey);
-                assertEquals(
-                        actualDelNonExistent.longValue(),
-                        delNonExistent,
-                        "GLIDE and actual UnifiedJedis should both return 0 for non-existent key deletion");
-
-            } catch (Exception e) {
-                fail("Failed to compare DEL with actual UnifiedJedis: " + e.getMessage());
-            }
-        }
+        // Verify keys are deleted
+        assertNull(unifiedJedis.get(key1), "Key1 should not exist after deletion");
+        assertNull(unifiedJedis.get(key2), "Key2 should not exist after deletion");
+        assertNull(unifiedJedis.get(key3), "Key3 should not exist after deletion");
     }
 
     @Test
     @Order(8)
-    @DisplayName("DEL Multiple Keys")
-    void testDelMultipleKeys() {
-        assumeTrue(hasGlideUnifiedJedis, "GLIDE UnifiedJedis compatibility layer not available");
+    void testLargeValueOperations() {
+        String testKey = TEST_KEY_PREFIX + "large_value";
+        StringBuilder largeValue = new StringBuilder();
 
-        String[] testKeys = {
-            TEST_KEY_PREFIX + "del_multi1", TEST_KEY_PREFIX + "del_multi2", TEST_KEY_PREFIX + "del_multi3"
-        };
-        String testValue = "multi_delete_value";
-
-        // Set multiple keys
-        for (String key : testKeys) {
-            String setResult = glideUnifiedJedis.set(key, testValue);
-            assertEquals("OK", setResult, "SET should succeed for key: " + key);
+        // Create a large value (10KB)
+        for (int i = 0; i < 1000; i++) {
+            largeValue.append("0123456789");
         }
+        String expectedValue = largeValue.toString();
 
-        // Test GLIDE UnifiedJedis DEL with multiple keys
-        long glideDelResult = glideUnifiedJedis.del(testKeys);
-        assertEquals(
-                3L, glideDelResult, "GLIDE UnifiedJedis DEL should return 3 for three existing keys");
+        // Test setting and getting large value
+        String setResult = unifiedJedis.set(testKey, expectedValue);
+        assertEquals("OK", setResult, "SET should work with large values");
 
-        // Verify all keys are deleted
-        for (String key : testKeys) {
-            String getResult = glideUnifiedJedis.get(key);
-            assertNull(getResult, "Key should not exist after deletion: " + key);
-        }
-
-        // Test DEL on non-existent keys
-        long delNonExistent = glideUnifiedJedis.del(testKeys);
-        assertEquals(
-                0L, delNonExistent, "GLIDE UnifiedJedis DEL should return 0 for non-existent keys");
-
-        // Compare with actual UnifiedJedis if available
-        if (hasActualUnifiedJedis) {
-            try {
-                Method setMethod = actualUnifiedJedisClass.getMethod("set", String.class, String.class);
-                Method delMethod = actualUnifiedJedisClass.getMethod("del", String[].class);
-
-                // Set values in actual UnifiedJedis
-                for (String key : testKeys) {
-                    setMethod.invoke(actualUnifiedJedis, key, testValue);
-                }
-
-                // Delete and compare result
-                Long actualDelResult = (Long) delMethod.invoke(actualUnifiedJedis, (Object) testKeys);
-                assertEquals(
-                        actualDelResult.longValue(),
-                        glideDelResult,
-                        "GLIDE and actual UnifiedJedis DEL results should be identical for multiple keys");
-
-            } catch (Exception e) {
-                fail("Failed to compare multiple DEL with actual UnifiedJedis: " + e.getMessage());
-            }
-        }
+        String getResult = unifiedJedis.get(testKey);
+        assertEquals(expectedValue, getResult, "GET should return complete large value");
+        assertEquals(10000, getResult.length(), "Large value should have correct length");
     }
 
-    // ===== UTILITY METHODS =====
+    // Helper methods
+    private static void resolveServerAddress() {
+        String host = System.getProperty("redis.host");
+        String port = System.getProperty("redis.port");
 
-    /**
-     * Clean up test keys to avoid interference between tests.
-     *
-     * @param jedisInstance the UnifiedJedis instance to clean up
-     */
-    private void cleanupTestKeys(Object jedisInstance) {
-        try {
-            if (jedisInstance instanceof UnifiedJedis) {
-                // GLIDE UnifiedJedis cleanup
-                UnifiedJedis unifiedJedis = (UnifiedJedis) jedisInstance;
-
-                // Clean up basic operation keys
-                safeDelete(unifiedJedis, TEST_KEY_PREFIX + "basic_set");
-                safeDelete(unifiedJedis, TEST_KEY_PREFIX + "basic_get");
-                safeDelete(unifiedJedis, TEST_KEY_PREFIX + "combined");
-                safeDelete(unifiedJedis, TEST_KEY_PREFIX + "special_chars");
-                safeDelete(unifiedJedis, TEST_KEY_PREFIX + "del_test");
-
-                // Clean up multiple operation keys
-                safeDelete(unifiedJedis, TEST_KEY_PREFIX + "multi1");
-                safeDelete(unifiedJedis, TEST_KEY_PREFIX + "multi2");
-                safeDelete(unifiedJedis, TEST_KEY_PREFIX + "multi3");
-                safeDelete(unifiedJedis, TEST_KEY_PREFIX + "multi4");
-
-                // Clean up del test keys
-                safeDelete(unifiedJedis, TEST_KEY_PREFIX + "del_multi1");
-                safeDelete(unifiedJedis, TEST_KEY_PREFIX + "del_multi2");
-                safeDelete(unifiedJedis, TEST_KEY_PREFIX + "del_multi3");
-
-            } else {
-                // Actual UnifiedJedis cleanup via reflection
-                String[] keysToClean = {
-                    TEST_KEY_PREFIX + "basic_set",
-                    TEST_KEY_PREFIX + "basic_get",
-                    TEST_KEY_PREFIX + "combined",
-                    TEST_KEY_PREFIX + "special_chars",
-                    TEST_KEY_PREFIX + "del_test",
-                    TEST_KEY_PREFIX + "multi1",
-                    TEST_KEY_PREFIX + "multi2",
-                    TEST_KEY_PREFIX + "multi3",
-                    TEST_KEY_PREFIX + "multi4",
-                    TEST_KEY_PREFIX + "del_multi1",
-                    TEST_KEY_PREFIX + "del_multi2",
-                    TEST_KEY_PREFIX + "del_multi3"
-                };
-
-                for (String key : keysToClean) {
-                    try {
-                        // Try to delete via reflection using del method
-                        Method delMethod = jedisInstance.getClass().getMethod("del", String.class);
-                        delMethod.invoke(jedisInstance, key);
-                    } catch (Exception e) {
-                        // Ignore cleanup errors
-                    }
-                }
-            }
-        } catch (Exception e) {
-            // Ignore cleanup errors to avoid masking test failures
-            System.err.println("Warning: Failed to cleanup test keys: " + e.getMessage());
-        }
+        redisHost = (host != null) ? host : "localhost";
+        redisPort = (port != null) ? Integer.parseInt(port) : 6379;
     }
 
-    /**
-     * Safely delete a key, ignoring any errors.
-     *
-     * @param unifiedJedis the UnifiedJedis instance
-     * @param key the key to delete
-     */
-    private void safeDelete(UnifiedJedis unifiedJedis, String key) {
+    private void cleanupTestKeys(UnifiedJedis unifiedJedis) {
         try {
-            unifiedJedis.del(key);
+            // Delete all test keys using the available del methods
+            String[] keysToDelete = {
+                TEST_KEY_PREFIX + "basic",
+                TEST_KEY_PREFIX + "unified_key1",
+                TEST_KEY_PREFIX + "unified_key2",
+                TEST_KEY_PREFIX + "unified_key3",
+                TEST_KEY_PREFIX + "del1",
+                TEST_KEY_PREFIX + "del2",
+                TEST_KEY_PREFIX + "del3",
+                TEST_KEY_PREFIX + "connection_test",
+                TEST_KEY_PREFIX + "binary",
+                TEST_KEY_PREFIX + "binary1",
+                TEST_KEY_PREFIX + "binary2",
+                TEST_KEY_PREFIX + "binary3",
+                TEST_KEY_PREFIX + "large_value"
+            };
+
+            unifiedJedis.del(keysToDelete);
         } catch (Exception e) {
-            // Ignore deletion errors to avoid masking test failures
-            System.err.println("Warning: Failed to delete key '" + key + "': " + e.getMessage());
+            // Ignore cleanup errors
         }
     }
 }
