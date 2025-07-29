@@ -18,7 +18,7 @@ The Valkey GLIDE Java wrapper consists of both Java and Rust code. Rust bindings
 - GCC
 - pkg-config
 - cmake
-- protoc (protobuf compiler) >= 29.1
+- protoc (protobuf compiler) v29.1
 - openssl
 - openssl-dev
 - rustup
@@ -59,33 +59,31 @@ Continue with **Install protobuf compiler** and **Install `ziglang` and `zigbuil
 
 ```bash
 brew update
-brew install openjdk@11 git gcc pkgconfig protobuf openssl cmake
+brew install openjdk@11 git gcc pkgconfig openssl cmake
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 ```
 
 Continue with **Install protobuf compiler** below.
+It is not necessary to **Install `ziglang` and `zigbuild`** for MacOS.
 
 **Install protobuf compiler**
 
-To install protobuf for MacOS, run:
+Only protobuf v29.1 is supported. Other versions are not supported and may cause build issues.
 
-```bash
-brew install protobuf
-# Check that the protobuf compiler version 29.1 or higher is installed
-protoc --version
-```
-
-For the remaining systems, do the following:
+Various platform-specific zips can be found [here](https://github.com/protocolbuffers/protobuf/releases/tag/v29.1).
+Choose the appropriate zip for your system and run the commands below, adjusting for the zip you chose:
 
 ```bash
 PB_REL="https://github.com/protocolbuffers/protobuf/releases"
 curl -LO $PB_REL/download/v29.1/protoc-29.1-linux-x86_64.zip
 unzip protoc-29.1-linux-x86_64.zip -d $HOME/.local
 export PATH="$PATH:$HOME/.local/bin"
-# Check that the protobuf compiler version 29.1 or higher is installed
+# Check that the protobuf compiler version is 29.1
 protoc --version
 ```
+
+You may wish to add the entire `export PATH` line to your shell configuration file to persist this path addition, either `.bashrc` or `.zshrc` depending on which shell you are using.
 
 **Install `ziglang` and `zigbuild`**
 
@@ -174,7 +172,6 @@ Some troubleshooting issues:
   you may need to restart your machine. In particular, this may solve the following problems:
   - Failed to find `cargo` after `rustup`.
   - No Protobuf compiler (protoc) found.
-- If protobuf 29.0 or earlier is detected, upgrade to the latest protobuf release.
 
 ## Running Examples App
 

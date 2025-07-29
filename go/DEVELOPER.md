@@ -21,7 +21,7 @@ Software Dependencies
 - GCC
 - pkg-config
 - cmake
-- protoc (protobuf compiler) >= v3.20.0
+- protoc (protobuf compiler) v29.1
 - openssl
 - openssl-dev
 - rustup
@@ -47,6 +47,8 @@ source "$HOME/.cargo/env"
 rustc --version
 ```
 
+You may wish to add the entire `export PATH` line to your shell configuration file to persist this path addition, either `.bashrc` or `.zshrc` depending on which shell you are using.
+
 Continue with **Install protobuf compiler** and **Install `ziglang` and `zigbuild`** below.
 
 **Dependencies installation for CentOS**
@@ -66,13 +68,15 @@ source "$HOME/.cargo/env"
 rustc --version
 ```
 
+You may wish to add the entire `export PATH` lines to your shell configuration file to persist this path addition, either `.bashrc` or `.zshrc` depending on which shell you are using.
+
 Continue with **Install protobuf compiler** and **Install `ziglang` and `zigbuild`** below.
 
 **Dependencies installation for MacOS**
 
 ```bash
 brew update
-brew install go make git gcc pkgconfig protobuf@3 openssl cmake
+brew install go make git gcc pkgconfig openssl cmake
 export PATH="$PATH:$HOME/go/bin"
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
@@ -80,31 +84,28 @@ source "$HOME/.cargo/env"
 rustc --version
 ```
 
+You may wish to add the entire `export PATH` line to your shell configuration file to persist this path addition, either `.bashrc` or `.zshrc` depending on which shell you are using.
+
+Continue with **Install protobuf compiler** below.
+It is not necessary to **Install `ziglang` and `zigbuild`** for MacOS.
+
 **Install protobuf compiler**
 
-To install protobuf for MacOS, run:
+Only protobuf v29.1 is supported. Other versions are not supported and may cause build issues.
 
-```bash
-brew install protobuf@3
-# Verify the Protobuf compiler installation
-protoc --version
-
-# If protoc is not found or does not work correctly, update the PATH
-echo 'export PATH="/opt/homebrew/opt/protobuf@3/bin:$PATH"' >> /Users/$USER/.bash_profile
-source /Users/$USER/.bash_profile
-protoc --version
-```
-
-For the remaining systems, do the following:
+Various platform-specific zips can be found [here](https://github.com/protocolbuffers/protobuf/releases/tag/v29.1).
+Choose the appropriate zip for your system and run the commands below, adjusting for the zip you chose:
 
 ```bash
 PB_REL="https://github.com/protocolbuffers/protobuf/releases"
-curl -LO $PB_REL/download/v3.20.3/protoc-3.20.3-linux-x86_64.zip
-unzip protoc-3.20.3-linux-x86_64.zip -d $HOME/.local
+curl -LO $PB_REL/download/v29.1/protoc-29.1-linux-x86_64.zip
+unzip protoc-29.1-linux-x86_64.zip -d $HOME/.local
 export PATH="$PATH:$HOME/.local/bin"
-# Check that the protobuf compiler is installed. A minimum version of 3.20.0 is required.
+# Check that the protobuf compiler version is 29.1
 protoc --version
 ```
+
+You may wish to add the entire `export PATH` line to your shell configuration file to persist this path addition, either `.bashrc` or `.zshrc` depending on which shell you are using.
 
 **Install `ziglang` and `zigbuild`**
 

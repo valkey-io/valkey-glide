@@ -9,13 +9,12 @@ The Valkey GLIDE Python wrapper consists of both Python and Rust code. Rust bind
 
 Before building the package from source, make sure that you have installed the listed dependencies below:
 
-
 - python3 virtualenv
 - git
 - GCC
 - pkg-config
 - cmake
-- protoc (protobuf compiler) >= v3.20.0
+- protoc (protobuf compiler) v29.1
 - openssl
 - openssl-dev
 - rustup
@@ -66,42 +65,35 @@ Continue with **Install protobuf compiler** and **Install `ziglang` and `zigbuil
 
 ```bash
 brew update
-brew install python3 git gcc pkgconfig protobuf@3 openssl virtualenv cmake
+brew install python3 git gcc pkgconfig openssl virtualenv cmake
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 # Check that the Rust compiler is installed
 rustc --version
 ```
+
 Continue with **Install protobuf compiler** below.
+It is not necessary to **Install `ziglang` and `zigbuild`** for MacOS.
 
 </details>
 
 <details>
 <summary>Install protobuf compiler</summary>
 
-To install protobuf for MacOS, run:
+Only protobuf v29.1 is supported. Other versions are not supported and may cause build issues.
 
-```bash
-brew install protobuf@3
-# Verify the Protobuf compiler installation
-protoc --version
-
-# If protoc is not found or does not work correctly, update the PATH
-echo 'export PATH="/opt/homebrew/opt/protobuf@3/bin:$PATH"' >> /Users/$USER/.bash_profile
-source /Users/$USER/.bash_profile
-protoc --version
-```
-
-For the remaining systems, do the following:
+Various platform-specific zips can be found [here](https://github.com/protocolbuffers/protobuf/releases/tag/v29.1).
+Choose the appropriate zip for your system and run the commands below, adjusting for the zip you chose:
 
 ```bash
 PB_REL="https://github.com/protocolbuffers/protobuf/releases"
-curl -LO $PB_REL/download/v3.20.3/protoc-3.20.3-linux-x86_64.zip
-unzip protoc-3.20.3-linux-x86_64.zip -d $HOME/.local
+curl -LO $PB_REL/download/v29.1/protoc-29.1-linux-x86_64.zip
+unzip protoc-29.1-linux-x86_64.zip -d $HOME/.local
 export PATH="$PATH:$HOME/.local/bin"
-# Check that the protobuf compiler is installed. A minimum version of 3.20.0 is required.
+# Check that the protobuf compiler version is 29.1
 protoc --version
 ```
+You may wish to add the entire `export PATH` line to your shell configuration file to persist this path addition, either `.bashrc` or `.zshrc` depending on which shell you are using.
 
 </details>
 
@@ -246,7 +238,7 @@ cargo fmt --manifest-path ./Cargo.toml --all
 
 > By default, `mkdocs` should still be using Google's Python Docstring Style so the "Documentation Style" section below will still be valid.
 
-We follow the [Google Style Python Docstrings format](https://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_google.html) in our documentation. For our documentation tool, we use `sphinx`. 
+We follow the [Google Style Python Docstrings format](https://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_google.html) in our documentation. For our documentation tool, we use `sphinx`.
 
 **Note:** `docs/index.rst` has manual modifications to it and should NOT be deleted. Modify this file with caution.
 
@@ -312,7 +304,7 @@ Examples:
 """
 ```
 
-### Example of Properly Formatted Documentation for a Class 
+### Example of Properly Formatted Documentation for a Class
 
 ```python
 class BitOffsetMultiplier(BitFieldOffset):
@@ -383,7 +375,7 @@ Attributes:
 
 #### Return value(s)
 
-Return values are a little special for sphinx. If we wanted to provide more context or multiple possible return values, the convention we will go for is that we should add a space between every different return value. 
+Return values are a little special for sphinx. If we wanted to provide more context or multiple possible return values, the convention we will go for is that we should add a space between every different return value.
 
 We start by adding the return type on the first line, followed by a description of the return value.
 
@@ -392,10 +384,10 @@ We start by adding the return type on the first line, followed by a description 
 ```python
 Returns:
     List[int]: Some description here regarding the purpose of the list of ints being
-    returned. Notice how this new line is not indented but it is still apart of the same 
+    returned. Notice how this new line is not indented but it is still apart of the same
     description.
 
-    If we ever want to provide more context or another description of another return value 
+    If we ever want to provide more context or another description of another return value
     (ex. None, -1, True/False, etc.) we add a space between this description and the
     previous description.
 ```
@@ -439,7 +431,7 @@ Examples:
         }
         # Indicates the stream entries for "my_stream" with IDs greater than "0-0". The operation blocks up to
         # 1000ms if there is no stream data.
-    
+
     ... # More examples here
 ```
 
