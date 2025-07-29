@@ -38,14 +38,20 @@ public class CommandTests
                 new KeyValuePair<ValkeyKey, ValkeyValue>("key1", "value1"),
                 new KeyValuePair<ValkeyKey, ValkeyValue>("key2", "value2")
             ]).GetArgs()),
+            () => Assert.Equal(["MSETNX"], Request.StringSetMultipleNX([]).GetArgs()),
             () => Assert.Equal(["GETDEL", "key"], Request.StringGetDelete("key").GetArgs()),
+            () => Assert.Equal(["GETDEL", "test_key"], Request.StringGetDelete("test_key").GetArgs()),
             () => Assert.Equal(["GETEX", "key", "EX", "60"], Request.StringGetSetExpiry("key", TimeSpan.FromSeconds(60)).GetArgs()),
+            () => Assert.Equal(["GETEX", "test_key", "EX", "60"], Request.StringGetSetExpiry("test_key", TimeSpan.FromSeconds(60)).GetArgs()),
             () => Assert.Equal(["GETEX", "key", "PERSIST"], Request.StringGetSetExpiry("key", null).GetArgs()),
+            () => Assert.Equal(["GETEX", "test_key", "PERSIST"], Request.StringGetSetExpiry("test_key", null).GetArgs()),
             () => Assert.Equal(["GETEX", "key", "EXAT", "1609459200"], Request.StringGetSetExpiry("key", new DateTime(2021, 1, 1, 0, 0, 0, DateTimeKind.Utc)).GetArgs()),
+            () => Assert.Equal(["GETEX", "test_key", "EXAT", "1609459200"], Request.StringGetSetExpiry("test_key", new DateTime(2021, 1, 1, 0, 0, 0, DateTimeKind.Utc)).GetArgs()),
             () => Assert.Equal(["LCS", "key1", "key2"], Request.StringLongestCommonSubsequence("key1", "key2").GetArgs()),
             () => Assert.Equal(["LCS", "key1", "key2", "LEN"], Request.StringLongestCommonSubsequenceLength("key1", "key2").GetArgs()),
             () => Assert.Equal(["LCS", "key1", "key2", "IDX", "MINMATCHLEN", "0", "WITHMATCHLEN"], Request.StringLongestCommonSubsequenceWithMatches("key1", "key2").GetArgs()),
             () => Assert.Equal(["LCS", "key1", "key2", "IDX", "MINMATCHLEN", "5", "WITHMATCHLEN"], Request.StringLongestCommonSubsequenceWithMatches("key1", "key2", 5).GetArgs()),
+            () => Assert.Equal(["LCS", "key1", "key2", "IDX", "MINMATCHLEN", "0", "WITHMATCHLEN"], Request.StringLongestCommonSubsequenceWithMatches("key1", "key2", 0).GetArgs()),
 
             () => Assert.Equal(["INFO"], Request.Info([]).GetArgs()),
             () => Assert.Equal(["INFO", "CLIENTS", "CPU"], Request.Info([InfoOptions.Section.CLIENTS, InfoOptions.Section.CPU]).GetArgs()),
@@ -178,6 +184,14 @@ public class CommandTests
                 new KeyValuePair<ValkeyKey, ValkeyValue>("key1", "value1"),
                 new KeyValuePair<ValkeyKey, ValkeyValue>("key2", "value2")
             ]).Converter("ERROR")),
+            () => Assert.True(Request.StringSetMultipleNX([new KeyValuePair<ValkeyKey, ValkeyValue>("key1", "value1")]).Converter(true)),
+            () => Assert.False(Request.StringSetMultipleNX([new KeyValuePair<ValkeyKey, ValkeyValue>("key1", "value1")]).Converter(false)),
+            () => Assert.Equal("test_value", Request.StringGetDelete("test_key").Converter(new GlideString("test_value")).ToString()),
+            () => Assert.True(Request.StringGetDelete("test_key").Converter(null).IsNull),
+            () => Assert.Equal("test_value", Request.StringGetSetExpiry("test_key", TimeSpan.FromSeconds(60)).Converter(new GlideString("test_value")).ToString()),
+            () => Assert.Equal("test_value", Request.StringGetSetExpiry("test_key", new DateTime(2021, 1, 1, 0, 0, 0, DateTimeKind.Utc)).Converter(new GlideString("test_value")).ToString()),
+            () => Assert.Equal("common", Request.StringLongestCommonSubsequence("key1", "key2").Converter(new GlideString("common")).ToString()),
+            () => Assert.Equal(5L, Request.StringLongestCommonSubsequenceLength("key1", "key2").Converter(5L)),
 
             () => Assert.Equal("info", Request.Info([]).Converter("info")),
 

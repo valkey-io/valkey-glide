@@ -86,18 +86,19 @@ internal partial class Request
         return new(RequestType.GetEx, [.. args], true, response => response is null ? ValkeyValue.Null : (ValkeyValue)response);
     }
 
+#pragma warning disable IDE0072 // Add missing cases
     public static Cmd<GlideString, ValkeyValue> StringGetSetExpiry(ValkeyKey key, DateTime expiry)
     {
         long unixTimestamp = expiry.Kind switch
         {
             DateTimeKind.Local => ((DateTimeOffset)expiry.ToUniversalTime()).ToUnixTimeSeconds(),
             DateTimeKind.Utc => ((DateTimeOffset)expiry).ToUnixTimeSeconds(),
-            DateTimeKind.Unspecified => throw new ArgumentException("Expiry time must have a specified DateTimeKind (Local or Utc)", nameof(expiry)),
             _ => throw new ArgumentException("Expiry time must be either Utc or Local", nameof(expiry))
         };
         GlideString[] args = [key.ToGlideString(), ExpiryAtKeyword.ToGlideString(), unixTimestamp.ToGlideString()];
         return new(RequestType.GetEx, args, true, response => response is null ? ValkeyValue.Null : (ValkeyValue)response);
     }
+#pragma warning restore IDE0072 // Add missing cases
 
     public static Cmd<GlideString, string?> StringLongestCommonSubsequence(ValkeyKey first, ValkeyKey second)
         => new(RequestType.LCS, [first.ToGlideString(), second.ToGlideString()], true, response => response?.ToString());
@@ -125,12 +126,7 @@ internal partial class Request
         // Extract length
         if (response.TryGetValue("len".ToGlideString(), out object? lengthValue))
         {
-            totalLength = lengthValue switch
-            {
-                long l => l,
-                string s when long.TryParse(s, out long parsed) => parsed,
-                _ => 0
-            };
+            totalLength = lengthValue is long l ? l : 0;
         }
 
         // Extract matches

@@ -978,4 +978,42 @@ public class StringCommandTests(TestConfiguration config)
         Assert.Equal(8, sortedMatches[2].SecondStringIndex);
         Assert.Equal(3, sortedMatches[2].Length);
     }
+
+    [Theory(DisableDiscoveryEnumeration = true)]
+    [MemberData(nameof(Config.TestClients), MemberType = typeof(TestConfiguration))]
+    public async Task StringLongestCommonSubsequenceWithMatchesAsync_DifferentIndices(BaseClient client)
+    {
+        Assert.SkipWhen(
+            TestConfiguration.SERVER_VERSION < new Version("7.0.0"),
+            "LCS is supported since 7.0.0"
+        );
+
+        // Use hash tags to ensure keys map to the same slot in cluster mode
+        string baseKey = Guid.NewGuid().ToString();
+        string key1 = $"{{{baseKey}}}:key1";
+        string key2 = $"{{{baseKey}}}:key2";
+
+        // Set strings where common subsequences appear at different positions
+        await client.StringSetAsync(key1, "xyzabcdef");  // "abc" at index 3-5
+        await client.StringSetAsync(key2, "abcxyzdef");  // "abc" at index 0-2, "def" at index 6-8
+
+        LCSMatchResult result = await client.StringLongestCommonSubsequenceWithMatchesAsync(key1, key2);
+
+        // The LCS should be "abcdef" with length 6
+        Assert.Equal(6, result.LongestMatchLength);
+        Assert.Equal(2, result.Matches.Length);
+
+        // Sort matches by first string index for consistent testing
+        var sortedMatches = result.Matches.OrderBy(m => m.FirstStringIndex).ToArray();
+
+        // Match 1: "abc" appears at different positions - (3,0) with length 3
+        Assert.Equal(3, sortedMatches[0].FirstStringIndex);  // "abc" starts at index 3 in first string
+        Assert.Equal(0, sortedMatches[0].SecondStringIndex); // "abc" starts at index 0 in second string
+        Assert.Equal(3, sortedMatches[0].Length);
+
+        // Match 2: "def" appears at same positions - (6,6) with length 3
+        Assert.Equal(6, sortedMatches[1].FirstStringIndex);  // "def" starts at index 6 in first string
+        Assert.Equal(6, sortedMatches[1].SecondStringIndex); // "def" starts at index 6 in second string
+        Assert.Equal(3, sortedMatches[1].Length);
+    }
 }

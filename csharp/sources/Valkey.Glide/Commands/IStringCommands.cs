@@ -28,7 +28,7 @@ public interface IStringCommands
     Task<bool> StringSetAsync(ValkeyKey key, ValkeyValue value, CommandFlags flags = CommandFlags.None);
 
     /// <summary>
-    /// Sets multiple keys to multiple values in a single operation, only if none of the keys exist.
+    /// Sets multiple keys to multiple values in a single operation based on a specified condition.
     /// </summary>
     /// <seealso href="https://valkey.io/commands/mset/">valkey.io</seealso>
     /// <seealso href="https://valkey.io/commands/msetnx/">valkey.io</seealso>
@@ -39,6 +39,7 @@ public interface IStringCommands
     /// while others did not. If this behavior impacts your application logic, consider splitting
     /// the request into sub-requests per slot to ensure atomicity.</note>
     /// <param name="values">An array of key-value pairs to set.</param>
+    /// <param name="when">The condition to specify. If specified to Not-Exists, sets multiple keys to values only if the key does not exist. Defaults to Always.</param>
     /// <param name="flags">The flags to use for this operation. Currently flags are ignored.</param>
     /// <returns><see langword="true"/> if all the keys were set, <see langword="false"/> if no key was set (at least one key already existed).</returns>
     /// <remarks>
@@ -102,8 +103,6 @@ public interface IStringCommands
     /// </example>
     /// </remarks>
     Task<ValkeyValue[]> StringGetAsync(ValkeyKey[] keys, CommandFlags flags = CommandFlags.None);
-
-
 
     /// <summary>
     /// Returns the substring of the string value stored at key, determined by the offsets 
@@ -310,10 +309,9 @@ public interface IStringCommands
 
     /// <summary>
     /// Get the value of key and delete the key. If the key does not exist the special value <see cref="ValkeyValue.Null"/> is returned.
-    /// An error is returned if the value stored at key is not a string, because GETDEL only handles string values.
     /// </summary>
     /// <seealso href="https://valkey.io/commands/getdel/">valkey.io</seealso>
-    /// <param name="key">The key of the string.</param>
+    /// <param name="key">The key to get and delete.</param>
     /// <param name="flags">The flags to use for this operation. Currently flags are ignored.</param>
     /// <returns>The value of key, or <see cref="ValkeyValue.Null"/> when key does not exist.</returns>
     /// <remarks>
@@ -331,11 +329,12 @@ public interface IStringCommands
     Task<ValkeyValue> StringGetDeleteAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None);
 
     /// <summary>
-    /// Gets the value of key and update its (relative) expiry.
+    /// Gets the string value associated with the key and optionally update its (relative) expiry.
     /// If the key does not exist, the result will be <see cref="ValkeyValue.Null"/>.
     /// </summary>
     /// <seealso href="https://valkey.io/commands/getex/">valkey.io</seealso>
-    /// <param name="key">The key of the string.</param>
+    /// <note>Since Valkey 6.2.0 and above.</note>
+    /// <param name="key">The key to be retrieved from the database.</param>
     /// <param name="expiry">The expiry to set. <see langword="null"/> will remove expiry.</param>
     /// <param name="flags">The flags to use for this operation. Currently flags are ignored.</param>
     /// <returns>The value of key, or <see cref="ValkeyValue.Null"/> when key does not exist.</returns>
@@ -351,11 +350,12 @@ public interface IStringCommands
     Task<ValkeyValue> StringGetSetExpiryAsync(ValkeyKey key, TimeSpan? expiry, CommandFlags flags = CommandFlags.None);
 
     /// <summary>
-    /// Gets the value of key and update its (absolute) expiry.
+    /// Gets the string value associated with the key and optionally update its (absolute) expiry.
     /// If the key does not exist, the result will be <see cref="ValkeyValue.Null"/>.
     /// </summary>
     /// <seealso href="https://valkey.io/commands/getex/">valkey.io</seealso>
-    /// <param name="key">The key of the string.</param>
+    /// <note>Since Valkey 6.2.0 and above.</note>
+    /// <param name="key">The key to be retrieved from the database.</param>
     /// <param name="expiry">The exact date and time to expire at.</param>
     /// <param name="flags">The flags to use for this operation. Currently flags are ignored.</param>
     /// <returns>The value of key, or <see cref="ValkeyValue.Null"/> when key does not exist.</returns>
@@ -371,14 +371,16 @@ public interface IStringCommands
     Task<ValkeyValue> StringGetSetExpiryAsync(ValkeyKey key, DateTime expiry, CommandFlags flags = CommandFlags.None);
 
     /// <summary>
-    /// Implements the longest common subsequence algorithm between the values at <paramref name="first"/> and <paramref name="second"/>,
+    /// Returns the longest common subsequence between the values at <paramref name="first"/> and <paramref name="second"/>,
     /// returning a string containing the common sequence.
     /// Note that this is different than the longest common string algorithm,
     /// since matching characters in the string does not need to be contiguous.
     /// </summary>
     /// <seealso href="https://valkey.io/commands/lcs/">valkey.io</seealso>
-    /// <param name="first">The key of the first string.</param>
-    /// <param name="second">The key of the second string.</param>
+    /// <note>Since Valkey 7.0 and above.</note>
+    /// <note>When in cluster mode, both <paramref name="first"/> and <paramref name="second"/> must map to the same hash slot.</note>
+    /// <param name="first">The key that stores the first string.</param>
+    /// <param name="second">The key that stores the second string.</param>
     /// <param name="flags">The flags to use for this operation. Currently flags are ignored.</param>
     /// <returns>A string (sequence of characters) of the LCS match.</returns>
     /// <remarks>
@@ -394,14 +396,16 @@ public interface IStringCommands
     Task<string?> StringLongestCommonSubsequenceAsync(ValkeyKey first, ValkeyKey second, CommandFlags flags = CommandFlags.None);
 
     /// <summary>
-    /// Implements the longest common subsequence algorithm between the values at <paramref name="first"/> and <paramref name="second"/>,
+    /// Returns the longest common subsequence between the values at <paramref name="first"/> and <paramref name="second"/>,
     /// returning the length of the common sequence.
     /// Note that this is different than the longest common string algorithm,
     /// since matching characters in the string does not need to be contiguous.
     /// </summary>
     /// <seealso href="https://valkey.io/commands/lcs/">valkey.io</seealso>
-    /// <param name="first">The key of the first string.</param>
-    /// <param name="second">The key of the second string.</param>
+    /// <note>Since Valkey 7.0 and above.</note>
+    /// <note>When in cluster mode, both <paramref name="first"/> and <paramref name="second"/> must map to the same hash slot.</note>
+    /// <param name="first">The key that stores the first string.</param>
+    /// <param name="second">The key that stores the second string.</param>
     /// <param name="flags">The flags to use for this operation. Currently flags are ignored.</param>
     /// <returns>The length of the LCS match.</returns>
     /// <remarks>
@@ -417,14 +421,14 @@ public interface IStringCommands
     Task<long> StringLongestCommonSubsequenceLengthAsync(ValkeyKey first, ValkeyKey second, CommandFlags flags = CommandFlags.None);
 
     /// <summary>
-    /// Implements the longest common subsequence algorithm between the values at <paramref name="first"/> and <paramref name="second"/>,
+    /// Returns the longest common subsequence between the values at <paramref name="first"/> and <paramref name="second"/>,
     /// returning a list of all common sequences with their positions and match information.
     /// Note that this is different than the longest common string algorithm,
     /// since matching characters in the string does not need to be contiguous.
     /// </summary>
     /// <seealso href="https://valkey.io/commands/lcs/">valkey.io</seealso>
-    /// <param name="first">The key of the first string.</param>
-    /// <param name="second">The key of the second string.</param>
+    /// <param name="first">The key that stores the first string.</param>
+    /// <param name="second">The key that stores the second string.</param>
     /// <param name="minLength">Can be used to restrict the list of matches to the ones of a given minimum length. Defaults to 0.</param>
     /// <param name="flags">The flags to use for this operation. Currently flags are ignored.</param>
     /// <returns>The result of LCS algorithm, containing match positions and lengths based on the given parameters.</returns>
