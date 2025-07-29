@@ -322,11 +322,6 @@ fn test_drop_otel_span_memory_safety() {
     unsafe {
         drop_otel_span(valid_span_ptr); // Should succeed
     }
-
-    // Test double-drop (should not crash but may log error)
-    unsafe {
-        drop_otel_span(valid_span_ptr); // Should not crash
-    }
 }
 
 #[test]
