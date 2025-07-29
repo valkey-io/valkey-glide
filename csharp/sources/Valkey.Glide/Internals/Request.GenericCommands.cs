@@ -9,72 +9,26 @@ namespace Valkey.Glide.Internals;
 
 internal partial class Request
 {
-    public static Cmd<long, bool> KeyDeleteAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None)
-    {
-        if (flags != CommandFlags.None)
-        {
-            throw new NotImplementedException("Command flags are not supported by GLIDE");
-        }
-        GlideString[] args = [key.ToGlideString()];
-        return Boolean<long>(RequestType.Del, args);
-    }
+    public static Cmd<long, bool> KeyDeleteAsync(ValkeyKey key)
+        => Boolean<long>(RequestType.Del, [key.ToGlideString()]);
 
-    public static Cmd<long, long> KeyDeleteAsync(ValkeyKey[] keys, CommandFlags flags = CommandFlags.None)
-    {
-        if (flags != CommandFlags.None)
-        {
-            throw new NotImplementedException("Command flags are not supported by GLIDE");
-        }
-        GlideString[] args = keys.ToGlideStrings();
-        return Simple<long>(RequestType.Del, args);
-    }
+    public static Cmd<long, long> KeyDeleteAsync(ValkeyKey[] keys)
+        => Simple<long>(RequestType.Del, keys.ToGlideStrings());
 
-    public static Cmd<long, bool> KeyUnlinkAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None)
-    {
-        if (flags != CommandFlags.None)
-        {
-            throw new NotImplementedException("Command flags are not supported by GLIDE");
-        }
-        GlideString[] args = [key.ToGlideString()];
-        return Boolean<long>(RequestType.Unlink, args);
-    }
+    public static Cmd<long, bool> KeyUnlinkAsync(ValkeyKey key)
+        => Boolean<long>(RequestType.Unlink, [key.ToGlideString()]);
 
-    public static Cmd<long, long> KeyUnlinkAsync(ValkeyKey[] keys, CommandFlags flags = CommandFlags.None)
-    {
-        if (flags != CommandFlags.None)
-        {
-            throw new NotImplementedException("Command flags are not supported by GLIDE");
-        }
-        GlideString[] args = keys.ToGlideStrings();
-        return Simple<long>(RequestType.Unlink, args);
-    }
+    public static Cmd<long, long> KeyUnlinkAsync(ValkeyKey[] keys)
+        => Simple<long>(RequestType.Unlink, keys.ToGlideStrings());
 
-    public static Cmd<long, bool> KeyExistsAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None)
-    {
-        if (flags != CommandFlags.None)
-        {
-            throw new NotImplementedException("Command flags are not supported by GLIDE");
-        }
-        GlideString[] args = [key.ToGlideString()];
-        return Boolean<long>(RequestType.Exists, args);
-    }
+    public static Cmd<long, bool> KeyExistsAsync(ValkeyKey key)
+        => Boolean<long>(RequestType.Exists, [key.ToGlideString()]);
 
-    public static Cmd<long, long> KeyExistsAsync(ValkeyKey[] keys, CommandFlags flags = CommandFlags.None)
-    {
-        if (flags != CommandFlags.None)
-        {
-            throw new NotImplementedException("Command flags are not supported by GLIDE");
-        }
-        GlideString[] args = keys.ToGlideStrings();
-        return Simple<long>(RequestType.Exists, args);
-    }
+    public static Cmd<long, long> KeyExistsAsync(ValkeyKey[] keys)
+        => Simple<long>(RequestType.Exists, keys.ToGlideStrings());
 
-    public static Cmd<bool, bool> KeyExpireAsync(ValkeyKey key, TimeSpan? expiry, ExpireWhen when = ExpireWhen.Always, CommandFlags flags = CommandFlags.None)
+    public static Cmd<bool, bool> KeyExpireAsync(ValkeyKey key, TimeSpan? expiry, ExpireWhen when = ExpireWhen.Always)
     {
-        if (flags != CommandFlags.None)
-        {
-            throw new NotImplementedException("Command flags are not supported by GLIDE");
-        }
         List<GlideString> args = [key.ToGlideString()];
 
         if (expiry.HasValue)
@@ -94,12 +48,8 @@ internal partial class Request
         return Simple<bool>(RequestType.Expire, [.. args]);
     }
 
-    public static Cmd<bool, bool> KeyExpireAsync(ValkeyKey key, DateTime? expiry, ExpireWhen when = ExpireWhen.Always, CommandFlags flags = CommandFlags.None)
+    public static Cmd<bool, bool> KeyExpireAsync(ValkeyKey key, DateTime? expiry, ExpireWhen when = ExpireWhen.Always)
     {
-        if (flags != CommandFlags.None)
-        {
-            throw new NotImplementedException("Command flags are not supported by GLIDE");
-        }
         List<GlideString> args = [key.ToGlideString()];
 
         if (expiry.HasValue)
@@ -120,25 +70,12 @@ internal partial class Request
         return Simple<bool>(RequestType.ExpireAt, [.. args]);
     }
 
-    public static Cmd<long, TimeSpan?> KeyTimeToLiveAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None)
-    {
-        if (flags != CommandFlags.None)
-        {
-            throw new NotImplementedException("Command flags are not supported by GLIDE");
-        }
-        GlideString[] args = [key.ToGlideString()];
-        return new(RequestType.TTL, args, true, response =>
+    public static Cmd<long, TimeSpan?> KeyTimeToLiveAsync(ValkeyKey key)
+        => new(RequestType.TTL, [key.ToGlideString()], true, response =>
             response is -1 or -2 ? null : TimeSpan.FromSeconds(response));
-    }
 
-    public static Cmd<GlideString, ValkeyType> KeyTypeAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None)
-    {
-        if (flags != CommandFlags.None)
-        {
-            throw new NotImplementedException("Command flags are not supported by GLIDE");
-        }
-        GlideString[] args = [key.ToGlideString()];
-        return new(RequestType.Type, args, false, response =>
+    public static Cmd<GlideString, ValkeyType> KeyTypeAsync(ValkeyKey key)
+        => new(RequestType.Type, [key.ToGlideString()], false, response =>
         {
             string typeStr = response.ToString();
             return typeStr switch
@@ -152,54 +89,21 @@ internal partial class Request
                 _ => ValkeyType.None
             };
         });
-    }
 
-    public static Cmd<string, bool> KeyRenameAsync(ValkeyKey key, ValkeyKey newKey, CommandFlags flags = CommandFlags.None)
-    {
-        if (flags != CommandFlags.None)
-        {
-            throw new NotImplementedException("Command flags are not supported by GLIDE");
-        }
-        GlideString[] args = [key.ToGlideString(), newKey.ToGlideString()];
-        return OKToBool(RequestType.Rename, args);
-    }
+    public static Cmd<string, bool> KeyRenameAsync(ValkeyKey key, ValkeyKey newKey)
+        => OKToBool(RequestType.Rename, [key.ToGlideString(), newKey.ToGlideString()]);
 
-    public static Cmd<bool, bool> KeyRenameNXAsync(ValkeyKey key, ValkeyKey newKey, CommandFlags flags = CommandFlags.None)
-    {
-        if (flags != CommandFlags.None)
-        {
-            throw new NotImplementedException("Command flags are not supported by GLIDE");
-        }
-        GlideString[] args = [key.ToGlideString(), newKey.ToGlideString()];
-        return Simple<bool>(RequestType.RenameNX, args);
-    }
+    public static Cmd<bool, bool> KeyRenameNXAsync(ValkeyKey key, ValkeyKey newKey)
+        => Simple<bool>(RequestType.RenameNX, [key.ToGlideString(), newKey.ToGlideString()]);
 
-    public static Cmd<bool, bool> KeyPersistAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None)
-    {
-        if (flags != CommandFlags.None)
-        {
-            throw new NotImplementedException("Command flags are not supported by GLIDE");
-        }
-        GlideString[] args = [key.ToGlideString()];
-        return Simple<bool>(RequestType.Persist, args);
-    }
+    public static Cmd<bool, bool> KeyPersistAsync(ValkeyKey key)
+        => Simple<bool>(RequestType.Persist, [key.ToGlideString()]);
 
-    public static Cmd<GlideString, byte[]?> KeyDumpAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None)
-    {
-        if (flags != CommandFlags.None)
-        {
-            throw new NotImplementedException("Command flags are not supported by GLIDE");
-        }
-        GlideString[] args = [key.ToGlideString()];
-        return new(RequestType.Dump, args, true, response => response?.Bytes);
-    }
+    public static Cmd<GlideString, byte[]?> KeyDumpAsync(ValkeyKey key)
+        => new(RequestType.Dump, [key.ToGlideString()], true, response => response?.Bytes);
 
-    public static Cmd<string, string> KeyRestoreAsync(ValkeyKey key, byte[] value, TimeSpan? expiry = null, RestoreOptions? restoreOptions = null, CommandFlags flags = CommandFlags.None)
+    public static Cmd<string, string> KeyRestoreAsync(ValkeyKey key, byte[] value, TimeSpan? expiry = null, RestoreOptions? restoreOptions = null)
     {
-        if (flags != CommandFlags.None)
-        {
-            throw new NotImplementedException("Command flags are not supported by GLIDE");
-        }
         List<GlideString> args = [key.ToGlideString()];
 
         if (expiry.HasValue)
@@ -221,12 +125,8 @@ internal partial class Request
         return OK(RequestType.Restore, [.. args]);
     }
 
-    public static Cmd<string, string> KeyRestoreDateTimeAsync(ValkeyKey key, byte[] value, DateTime? expiry = null, RestoreOptions? restoreOptions = null, CommandFlags flags = CommandFlags.None)
+    public static Cmd<string, string> KeyRestoreDateTimeAsync(ValkeyKey key, byte[] value, DateTime? expiry = null, RestoreOptions? restoreOptions = null)
     {
-        if (flags != CommandFlags.None)
-        {
-            throw new NotImplementedException("Command flags are not supported by GLIDE");
-        }
         List<GlideString> args = [key.ToGlideString()];
 
         if (expiry.HasValue)
@@ -249,32 +149,14 @@ internal partial class Request
         return OK(RequestType.Restore, [.. args]);
     }
 
-    public static Cmd<long, bool> KeyTouchAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None)
-    {
-        if (flags != CommandFlags.None)
-        {
-            throw new NotImplementedException("Command flags are not supported by GLIDE");
-        }
-        GlideString[] args = [key.ToGlideString()];
-        return Boolean<long>(RequestType.Touch, args);
-    }
+    public static Cmd<long, bool> KeyTouchAsync(ValkeyKey key)
+        => Boolean<long>(RequestType.Touch, [key.ToGlideString()]);
 
-    public static Cmd<long, long> KeyTouchAsync(ValkeyKey[] keys, CommandFlags flags = CommandFlags.None)
-    {
-        if (flags != CommandFlags.None)
-        {
-            throw new NotImplementedException("Command flags are not supported by GLIDE");
-        }
-        GlideString[] args = keys.ToGlideStrings();
-        return Simple<long>(RequestType.Touch, args);
-    }
+    public static Cmd<long, long> KeyTouchAsync(ValkeyKey[] keys)
+        => Simple<long>(RequestType.Touch, keys.ToGlideStrings());
 
-    public static Cmd<bool, bool> KeyCopyAsync(ValkeyKey sourceKey, ValkeyKey destinationKey, bool replace = false, CommandFlags flags = CommandFlags.None)
+    public static Cmd<bool, bool> KeyCopyAsync(ValkeyKey sourceKey, ValkeyKey destinationKey, bool replace = false)
     {
-        if (flags != CommandFlags.None)
-        {
-            throw new NotImplementedException("Command flags are not supported by GLIDE");
-        }
         List<GlideString> args = [sourceKey.ToGlideString(), destinationKey.ToGlideString()];
 
         if (replace)
@@ -285,12 +167,8 @@ internal partial class Request
         return Simple<bool>(RequestType.Copy, [.. args]);
     }
 
-    public static Cmd<bool, bool> KeyCopyAsync(ValkeyKey sourceKey, ValkeyKey destinationKey, int destinationDatabase, bool replace = false, CommandFlags flags = CommandFlags.None)
+    public static Cmd<bool, bool> KeyCopyAsync(ValkeyKey sourceKey, ValkeyKey destinationKey, int destinationDatabase, bool replace = false)
     {
-        if (flags != CommandFlags.None)
-        {
-            throw new NotImplementedException("Command flags are not supported by GLIDE");
-        }
         List<GlideString> args = [sourceKey.ToGlideString(), destinationKey.ToGlideString()];
 
         args.AddRange([Constants.DbKeyword, destinationDatabase.ToGlideString()]);
@@ -303,13 +181,6 @@ internal partial class Request
         return Simple<bool>(RequestType.Copy, [.. args]);
     }
 
-    public static Cmd<bool, bool> KeyMoveAsync(ValkeyKey key, int database, CommandFlags flags = CommandFlags.None)
-    {
-        if (flags != CommandFlags.None)
-        {
-            throw new NotImplementedException("Command flags are not supported by GLIDE");
-        }
-        GlideString[] args = [key.ToGlideString(), database.ToGlideString()];
-        return Simple<bool>(RequestType.Move, args);
-    }
+    public static Cmd<bool, bool> KeyMoveAsync(ValkeyKey key, int database)
+        => Simple<bool>(RequestType.Move, [key.ToGlideString(), database.ToGlideString()]);
 }
