@@ -4,12 +4,12 @@ package compatibility.jedis;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-import redis.clients.jedis.Jedis;
-import redis.clients.jedis.JedisPool;
 import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Map;
 import org.junit.jupiter.api.*;
+import redis.clients.jedis.Jedis;
+import redis.clients.jedis.JedisPool;
 
 /**
  * Jedis compatibility test that compares GLIDE Jedis compatibility layer with actual Jedis

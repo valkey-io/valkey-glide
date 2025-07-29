@@ -4,11 +4,11 @@ package compatibility.jedis;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.*;
 
-import redis.clients.jedis.JedisPooled;
 import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Map;
 import org.junit.jupiter.api.*;
+import redis.clients.jedis.JedisPooled;
 
 /**
  * JedisPooled compatibility test that validates GLIDE JedisPooled compatibility layer for basic

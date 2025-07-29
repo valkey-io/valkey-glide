@@ -4,10 +4,10 @@ package compatibility.jedis;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.*;
 
-import redis.clients.jedis.Jedis;
-import redis.clients.jedis.JedisPool;
 import java.lang.reflect.Method;
 import org.junit.jupiter.api.*;
+import redis.clients.jedis.Jedis;
+import redis.clients.jedis.JedisPool;
 
 /**
  * JedisPool compatibility test that validates GLIDE JedisPool behavior matches actual Jedis pool

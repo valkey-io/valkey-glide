@@ -5,17 +5,17 @@ import static glide.TestConfiguration.SERVER_VERSION;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.*;
 
-import redis.clients.jedis.Jedis;
-import redis.clients.jedis.params.BitPosParams;
-import redis.clients.jedis.params.GetExParams;
-import redis.clients.jedis.params.ScanParams;
-import redis.clients.jedis.resps.ScanResult;
 import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.*;
+import redis.clients.jedis.Jedis;
+import redis.clients.jedis.params.BitPosParams;
+import redis.clients.jedis.params.GetExParams;
+import redis.clients.jedis.params.ScanParams;
+import redis.clients.jedis.resps.ScanResult;
 
 /**
  * Jedis compatibility test that compares GLIDE Jedis compatibility layer with actual Jedis

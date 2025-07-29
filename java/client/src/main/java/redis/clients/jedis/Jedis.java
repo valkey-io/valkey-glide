@@ -1,13 +1,6 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package redis.clients.jedis;
 
-import redis.clients.jedis.args.BitCountOption;
-import redis.clients.jedis.args.ExpiryOption;
-import redis.clients.jedis.params.BitPosParams;
-import redis.clients.jedis.params.GetExParams;
-import redis.clients.jedis.params.ScanParams;
-import redis.clients.jedis.params.SetParams;
-import redis.clients.jedis.resps.ScanResult;
 import glide.api.GlideClient;
 import glide.api.models.GlideString;
 import glide.api.models.commands.ExpireOptions;
@@ -46,6 +39,13 @@ import java.util.logging.Logger;
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SSLSocketFactory;
+import redis.clients.jedis.args.BitCountOption;
+import redis.clients.jedis.args.ExpiryOption;
+import redis.clients.jedis.params.BitPosParams;
+import redis.clients.jedis.params.GetExParams;
+import redis.clients.jedis.params.ScanParams;
+import redis.clients.jedis.params.SetParams;
+import redis.clients.jedis.resps.ScanResult;
 
 /**
  * Jedis compatibility wrapper for Valkey GLIDE client. This class provides a Jedis-like API while
