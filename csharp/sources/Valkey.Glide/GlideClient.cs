@@ -14,7 +14,7 @@ namespace Valkey.Glide;
 /// <summary>
 /// Client used for connection to standalone servers. Use <see cref="CreateClient"/> to request a client.
 /// </summary>
-public class GlideClient : BaseClient, IDatabase
+public class GlideClient : BaseClient, IGenericCommands, IServerManagementCommands
 {
     internal GlideClient() { }
 
@@ -74,11 +74,32 @@ public class GlideClient : BaseClient, IDatabase
         => await Command(Request.Info(sections));
 
     public async Task<ValkeyValue> EchoAsync(ValkeyValue message, CommandFlags flags = CommandFlags.None)
-        => await Command(Request.Echo(message, flags));
+    {
+        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
+        return await Command(Request.Echo(message));
+    }
+
+    public async Task<TimeSpan> PingAsync(CommandFlags flags = CommandFlags.None)
+    {
+        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
+        return await Command(Request.Ping());
+    }
+
+    public async Task<TimeSpan> PingAsync(ValkeyValue message, CommandFlags flags = CommandFlags.None)
+    {
+        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
+        return await Command(Request.Ping(message));
+    }
 
     public async Task<bool> KeyMoveAsync(ValkeyKey key, int database, CommandFlags flags = CommandFlags.None)
-        => await Command(Request.KeyMoveAsync(key, database));
+    {
+        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
+        return await Command(Request.KeyMoveAsync(key, database));
+    }
 
     public async Task<bool> KeyCopyAsync(ValkeyKey sourceKey, ValkeyKey destinationKey, int destinationDatabase, bool replace = false, CommandFlags flags = CommandFlags.None)
-        => await Command(Request.KeyCopyAsync(sourceKey, destinationKey, destinationDatabase, replace));
+    {
+        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
+        return await Command(Request.KeyCopyAsync(sourceKey, destinationKey, destinationDatabase, replace));
+    }
 }

@@ -31,9 +31,6 @@ public interface IServer
     /// </summary>
     ServerType ServerType { get; }
 
-    /*
-    TODO Execute aka custom command
-
     /// <summary>
     /// Execute an arbitrary command against the server; this is primarily intended for
     /// executing modules, but may also be used to provide access to new features that lack
@@ -43,11 +40,25 @@ public interface IServer
     /// <param name="args">The arguments to pass for the command.</param>
     /// <returns>A dynamic representation of the command's result.</returns>
     /// <remarks>This API should be considered an advanced feature; inappropriate use can be harmful.</remarks>
-    RedisResult Execute(string command, params object[] args);
+    ValkeyResult Execute(string command, params object[] args);
 
     /// <inheritdoc cref="Execute(string, object[])"/>
-    Task<RedisResult> ExecuteAsync(string command, params object[] args);
-    */
+    Task<ValkeyResult> ExecuteAsync(string command, params object[] args);
+
+    /// <summary>
+    /// Execute an arbitrary command against the server; this is primarily intended for
+    /// executing modules, but may also be used to provide access to new features that lack
+    /// a direct API.
+    /// </summary>
+    /// <param name="command">The command to run.</param>
+    /// <param name="args">The arguments to pass for the command.</param>
+    /// <param name="flags">Command flags are not supported by GLIDE.</param>
+    /// <returns>A dynamic representation of the command's result.</returns>
+    /// <remarks>This API should be considered an advanced feature; inappropriate use can be harmful.</remarks>
+    ValkeyResult Execute(string command, ICollection<object> args, CommandFlags flags = CommandFlags.None);
+
+    /// <inheritdoc cref="Execute(string, ICollection{object}, CommandFlags)"/>
+    Task<ValkeyResult> ExecuteAsync(string command, ICollection<object> args, CommandFlags flags = CommandFlags.None);
 
     /// <summary>
     /// The INFO command returns information and statistics about the server in a format that is simple to parse by computers and easy to read by humans.
@@ -74,7 +85,7 @@ public interface IServer
     IGrouping<string, KeyValuePair<string, string>>[] Info(ValkeyValue section = default, CommandFlags flags = CommandFlags.None);
 
     /// <summary>
-    /// Pings the server.
+    /// This command is often used to test if a connection is still alive, or to measure latency.
     /// </summary>
     /// <seealso href="https://valkey.io/commands/ping"/>
     /// <param name="flags">The command flags to use. Currently flags are ignored.</param>
@@ -89,7 +100,7 @@ public interface IServer
     Task<TimeSpan> PingAsync(CommandFlags flags = CommandFlags.None);
 
     /// <summary>
-    /// Pings the server.
+    /// This command is often used to test if a connection is still alive, or to measure latency.
     /// </summary>
     /// <seealso href="https://valkey.io/commands/ping"/>
     /// <param name="message">The message to send.</param>
@@ -105,10 +116,10 @@ public interface IServer
     Task<TimeSpan> PingAsync(ValkeyValue message, CommandFlags flags = CommandFlags.None);
 
     /// <summary>
-    /// Echo the provided message back.
+    /// Return the same message passed in.
     /// </summary>
     /// <seealso href="https://valkey.io/commands/echo"/>
-    /// <param name="message">The provided message.</param>
+    /// <param name="message">The message to echo.</param>
     /// <param name="flags">The command flags to use. Currently flags are ignored.</param>
     /// <returns>The provided message.</returns>
     /// <remarks>

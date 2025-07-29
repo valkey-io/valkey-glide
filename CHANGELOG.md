@@ -1,3 +1,20 @@
+## 2.1
+
+#### Changes
+
+#### Fixes
+
+* Java: Add lazy connection support to Java module ([#4350](https://github.com/valkey-io/valkey-glide/pull/4370))
+* Go: Add lazy connection support ([#4374](https://github.com/valkey-io/valkey-glide/pull/4374))
+
+## 2.0 (2025-06-18)
+
+#### Changes
+
+* Core/FFI/Go: Fix memory leak in FFI layer ([#4395](https://github.com/valkey-io/valkey-glide/pull/4395))
+
+## 2.0.1 (2025-07-19)
+
 #### Changes
 
 * Java: fix addReturnField method in FT module ([#4084]https://github.com/valkey-io/valkey-glide/pull/4084)

@@ -2,7 +2,6 @@
 
 using System.Net;
 
-using Valkey.Glide.Commands;
 using Valkey.Glide.Internals;
 
 using static Valkey.Glide.Commands.Options.InfoOptions;
@@ -60,7 +59,7 @@ public sealed class ConnectionMultiplexer : IConnectionMultiplexer, IDisposable,
             ? CreateClientConfigBuilder<ClusterClientConfigurationBuilder>(configuration).Build()
             : standaloneConfig;
 
-        return new(configuration, await DatabaseImpl.Create(config));
+        return new(configuration, await Database.Create(config));
     }
 
     public EndPoint[] GetEndPoints(bool configuredOnly)
@@ -69,10 +68,10 @@ public sealed class ConnectionMultiplexer : IConnectionMultiplexer, IDisposable,
             : [.. GetServers().Select(s => s.EndPoint)];
 
     public IServer GetServer(string host, int port, object? asyncState = null)
-        => GetServer(Utils.ParseEndPoint(host, port), asyncState);
+        => GetServer(Format.ParseEndPoint(host, port), asyncState);
 
     public IServer GetServer(string hostAndPort, object? asyncState = null)
-        => Utils.TryParseEndPoint(hostAndPort, out IPEndPoint? ep)
+        => Format.TryParseEndPoint(hostAndPort, out EndPoint? ep)
             ? GetServer(ep, asyncState)
             : throw new ArgumentException($"The specified host and port could not be parsed: {hostAndPort}", nameof(hostAndPort));
 
@@ -152,9 +151,9 @@ public sealed class ConnectionMultiplexer : IConnectionMultiplexer, IDisposable,
     internal ConfigurationOptions RawConfig { private set; get; }
 
     private readonly object _lock = new();
-    private DatabaseImpl? _db;
+    private Database? _db;
 
-    private ConnectionMultiplexer(ConfigurationOptions configuration, DatabaseImpl db)
+    private ConnectionMultiplexer(ConfigurationOptions configuration, Database db)
     {
         RawConfig = configuration;
         _db = db;
@@ -166,8 +165,7 @@ public sealed class ConnectionMultiplexer : IConnectionMultiplexer, IDisposable,
         T config = new();
         foreach (EndPoint ep in configuration.EndPoints)
         {
-            string[] parts = ep.ToString()!.Split(':');
-            config.Addresses += (parts[0], ushort.Parse(parts[1]));
+            config.Addresses += Utils.SplitEndpoint(ep);
         }
         config.UseTls = configuration.Ssl;
         _ = configuration.ConnectTimeout.HasValue ? config.ConnectionTimeout = TimeSpan.FromMilliseconds(configuration.ConnectTimeout.Value) : new();

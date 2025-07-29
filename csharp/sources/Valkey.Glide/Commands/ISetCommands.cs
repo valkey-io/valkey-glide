@@ -4,10 +4,10 @@ namespace Valkey.Glide.Commands;
 
 /// <summary>
 /// Supports commands for the "Set Commands" group for standalone and cluster clients.
-/// <br/>
-/// See more on <see href="https://valkey.io/commands/?group=set#set">valkey.io</see>.
+/// <br />
+/// See more on <see href="https://valkey.io/commands#set">valkey.io</see>.
 /// </summary>
-internal interface ISetCommands
+public interface ISetCommands
 {
     /// <summary>
     /// SAdd adds specified members to the set stored at key.
