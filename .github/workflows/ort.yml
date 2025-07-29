@@ -205,11 +205,6 @@ jobs:
               with:
                   folder_path: "${{ github.workspace }}/csharp"
 
-            - name: Run ORT tools for C# bench
-              uses: ./.github/workflows/run-ort-tools
-              with:
-                  folder_path: "${{ github.workspace }}/benchmarks/csharp"
-
               ### Get licenses ###
             - name: Retrieve licenses list
               working-directory: ./utils
@@ -272,7 +267,8 @@ jobs:
                   cp glide-core/ort_results/NOTICE_DEFAULT $RUST_ATTRIBUTIONS
                   cp java/ort_results/NOTICE_DEFAULT $JAVA_ATTRIBUTIONS
                   cp csharp/ort_results/NOTICE_DEFAULT $CSHARP_ATTRIBUTIONS
-                  cat benchmarks/csharp/ort_results/NOTICE_DEFAULT >> $CSHARP_ATTRIBUTIONS
+                  curl https://raw.githubusercontent.com/StackExchange/StackExchange.Redis/refs/tags/2.8.58/LICENSE -o SER_LICENSE
+                  cat SER_LICENSE >> $CSHARP_ATTRIBUTIONS
                   : Workaround for empty attributions for go packages. See discussions in https://github.com/valkey-io/valkey-glide/pull/3469 and in https://github.com/oss-review-toolkit/ort/issues/10454
                   curl https://raw.githubusercontent.com/valkey-io/valkey-glide/9c9ef0ae2c2ee865c7867f6ac0d3f9aac054bac8/go/THIRD_PARTY_LICENSES_GO -o $GO_ATTRIBUTIONS
                   cat go/ort_results/NOTICE_DEFAULT >> $GO_ATTRIBUTIONS
