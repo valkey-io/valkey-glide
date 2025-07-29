@@ -121,6 +121,10 @@ jobs:
               working-directory: ./ffi
               run: cargo test
 
+            - name: Run glide-ffi MIRI tests
+              working-directory: ./ffi/miri-tests
+              run: cargo miri test
+
             - uses: actions/cache@v4
               with:
                   path: |
