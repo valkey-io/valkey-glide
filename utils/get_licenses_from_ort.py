@@ -95,7 +95,6 @@ ort_results_per_lang = [
     OrtResults("Rust", "glide-core/ort_results"),
     OrtResults("Go", "go/ort_results"),
     OrtResults("C#", "csharp/ort_results"),
-    OrtResults("C#", "benchmarks/csharp/ort_results"),
 ]
 
 all_licenses_set: Set = set()
