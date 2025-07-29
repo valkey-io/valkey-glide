@@ -144,6 +144,7 @@ pub enum RequestType {
     HSetNX = 614,
     HStrlen = 615,
     HVals = 616,
+    HSetex = 617,
 
     //// HyperLogLog commands
     PfAdd = 701,
@@ -463,6 +464,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::ClientUnpause => RequestType::ClientUnpause,
             ProtobufRequestType::Expire => RequestType::Expire,
             ProtobufRequestType::HSet => RequestType::HSet,
+            ProtobufRequestType::HSetex => RequestType::HSetex,
             ProtobufRequestType::HGet => RequestType::HGet,
             ProtobufRequestType::HDel => RequestType::HDel,
             ProtobufRequestType::HExists => RequestType::HExists,
@@ -725,6 +727,7 @@ impl RequestType {
             RequestType::ClientUnpause => Some(get_two_word_command("CLIENT", "UNPAUSE")),
             RequestType::Expire => Some(cmd("EXPIRE")),
             RequestType::HSet => Some(cmd("HSET")),
+            RequestType::HSetex => Some(cmd("HSETEX")),
             RequestType::HGet => Some(cmd("HGET")),
             RequestType::HDel => Some(cmd("HDEL")),
             RequestType::HExists => Some(cmd("HEXISTS")),

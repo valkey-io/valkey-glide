@@ -722,6 +722,56 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.HSet, field_value_list),
         )
 
+    async def hsetex(
+        self,
+        key: TEncodable,
+        field_value_map: Mapping[TEncodable, TEncodable],
+        conditional_options: Optional[FieldConditionalChange] = None,
+        expiry: Optional[ExpirySet] = None,
+    ) -> int:
+        """
+        Sets the specified fields to their respective values in the hash stored at `key` with optional expiration.
+
+        This method allows setting hash fields while also applying an expiration time to the hash key.
+
+        Args:
+            key (TEncodable): The key of the hash.
+            field_value_map (Mapping[TEncodable, TEncodable]): A field-value map consisting of fields and their corresponding
+                values to be set in the hash stored at the specified key.
+            expiry (Optional[ExpirySet], optional): Set expiration for the hash key.
+                Equivalent to [`EX` | `PX` | `EXAT` | `PXAT` | `KEEPTTL`]. Defaults to None.
+
+        Returns:
+            int: The number of fields that were added to the hash.
+
+        Example:
+            >>> await client.hsetex(
+            ...     "my_hash",
+            ...     {"field": "value", "field2": "value2"},
+            ...     expiry=ExpirySet(ExpiryType.SEC, 60)
+            ... )
+                2 # Indicates that 2 fields were successfully set in the hash "my_hash" with a 60-second expiration.
+        """
+        args: List[TEncodable] = [key]
+
+        if conditional_options:
+            args.append(conditional_options.value)
+
+        if expiry is not None:
+            args.extend(expiry.get_cmd_args())
+
+        field_value_list: List[TEncodable] = []
+        for pair in field_value_map.items():
+            field_value_list.extend(pair)
+
+        args.extend(["FIELDS", str(len(field_value_map))])
+        args.extend(field_value_list)
+
+        return cast(
+            int,
+            await self._execute_command(RequestType.HSetex, args),
+        )
+
     async def hget(self, key: TEncodable, field: TEncodable) -> Optional[bytes]:
         """
         Retrieves the value associated with `field` in the hash stored at `key`.
