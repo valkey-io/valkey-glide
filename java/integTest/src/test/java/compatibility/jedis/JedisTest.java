@@ -5,11 +5,11 @@ import static glide.TestConfiguration.SERVER_VERSION;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.*;
 
-import compatibility.clients.jedis.Jedis;
-import compatibility.clients.jedis.params.BitPosParams;
-import compatibility.clients.jedis.params.GetExParams;
-import compatibility.clients.jedis.params.ScanParams;
-import compatibility.clients.jedis.resps.ScanResult;
+import redis.clients.jedis.Jedis;
+import redis.clients.jedis.params.BitPosParams;
+import redis.clients.jedis.params.GetExParams;
+import redis.clients.jedis.params.ScanParams;
+import redis.clients.jedis.resps.ScanResult;
 import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.List;

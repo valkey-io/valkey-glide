@@ -4,7 +4,7 @@ package compatibility.jedis;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.*;
 
-import compatibility.clients.jedis.UnifiedJedis;
+import redis.clients.jedis.UnifiedJedis;
 import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Map;

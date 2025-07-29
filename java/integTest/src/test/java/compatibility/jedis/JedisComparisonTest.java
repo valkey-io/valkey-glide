@@ -4,8 +4,8 @@ package compatibility.jedis;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-import compatibility.clients.jedis.Jedis;
-import compatibility.clients.jedis.JedisPool;
+import redis.clients.jedis.Jedis;
+import redis.clients.jedis.JedisPool;
 import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Map;

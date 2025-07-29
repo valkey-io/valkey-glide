@@ -1,13 +1,13 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
-package compatibility.clients.jedis;
+package redis.clients.jedis;
 
-import compatibility.clients.jedis.args.BitCountOption;
-import compatibility.clients.jedis.args.ExpiryOption;
-import compatibility.clients.jedis.params.BitPosParams;
-import compatibility.clients.jedis.params.GetExParams;
-import compatibility.clients.jedis.params.ScanParams;
-import compatibility.clients.jedis.params.SetParams;
-import compatibility.clients.jedis.resps.ScanResult;
+import redis.clients.jedis.args.BitCountOption;
+import redis.clients.jedis.args.ExpiryOption;
+import redis.clients.jedis.params.BitPosParams;
+import redis.clients.jedis.params.GetExParams;
+import redis.clients.jedis.params.ScanParams;
+import redis.clients.jedis.params.SetParams;
+import redis.clients.jedis.resps.ScanResult;
 import glide.api.GlideClient;
 import glide.api.models.GlideString;
 import glide.api.models.commands.ExpireOptions;

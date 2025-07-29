@@ -1,5 +1,5 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
-package compatibility.clients.jedis.args;
+package redis.clients.jedis.args;
 
 /** Enumeration of setting expiration options for Jedis compatibility layer. */
 public enum ExpiryOption {

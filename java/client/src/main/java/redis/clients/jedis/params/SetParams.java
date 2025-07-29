@@ -1,5 +1,5 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
-package compatibility.clients.jedis.params;
+package redis.clients.jedis.params;
 
 /**
  * Parameters for SET command in Jedis compatibility layer. Provides a fluent API for setting

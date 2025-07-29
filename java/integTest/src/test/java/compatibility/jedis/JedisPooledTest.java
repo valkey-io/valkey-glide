@@ -4,7 +4,7 @@ package compatibility.jedis;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.*;
 
-import compatibility.clients.jedis.JedisPooled;
+import redis.clients.jedis.JedisPooled;
 import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Map;
@@ -478,7 +478,7 @@ public class JedisPooledTest {
 
         // Verify that JedisPooled extends UnifiedJedis
         assertTrue(
-                glideJedisPooled instanceof compatibility.clients.jedis.UnifiedJedis,
+                glideJedisPooled instanceof redis.clients.jedis.UnifiedJedis,
                 "JedisPooled should extend UnifiedJedis");
 
         // Test that all UnifiedJedis methods are available

@@ -1,5 +1,5 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
-package compatibility.clients.jedis;
+package redis.clients.jedis;
 
 import java.lang.ref.WeakReference;
 import java.util.concurrent.ConcurrentHashMap;
