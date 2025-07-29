@@ -29,7 +29,7 @@ jobs:
 
         continue-on-error: true
         env:
-            PYTHON_ASYNC_ATTRIBUTIONS: "python/glide-async/THIRD_PARTY_LICENSES_PYTHON"
+            PYTHON_ASYNC_ATTRIBUTIONS: "python/glide-async/THIRD_PARTY_LICENSES_PYTHON_ASYNC"
             NODE_ATTRIBUTIONS: "node/THIRD_PARTY_LICENSES_NODE"
             RUST_ATTRIBUTIONS: "glide-core/THIRD_PARTY_LICENSES_RUST"
             JAVA_ATTRIBUTIONS: "java/THIRD_PARTY_LICENSES_JAVA"
