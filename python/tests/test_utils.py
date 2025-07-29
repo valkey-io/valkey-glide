@@ -1,8 +1,14 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 from glide.logger import Level, Logger
+from glide_sync import LogLevel as SyncLogLevel
+from glide_sync.logger import Logger as SyncLogger
 
-from tests.utils.utils import DEFAULT_TEST_LOG_LEVEL, compare_maps
+from tests.utils.utils import (
+    DEFAULT_SYNC_TEST_LOG_LEVEL,
+    DEFAULT_TEST_LOG_LEVEL,
+    compare_maps,
+)
 
 
 class TestLogger:
@@ -17,6 +23,18 @@ class TestLogger:
         # Revert to the tests default log level
         Logger.set_logger_config(DEFAULT_TEST_LOG_LEVEL)
         assert Logger.logger_level == DEFAULT_TEST_LOG_LEVEL.value
+
+    def test_init_sync_logger(self):
+        # The logger is already configured in the conftest file, so calling init again shouldn't modify the log level
+        SyncLogger.init(SyncLogLevel.ERROR)
+        assert SyncLogger.logger_level == DEFAULT_SYNC_TEST_LOG_LEVEL
+
+    def test_sync_set_logger_config(self):
+        SyncLogger.set_logger_config(SyncLogLevel.INFO)
+        assert SyncLogger.logger_level == SyncLogLevel.INFO
+        # Revert to the tests default log level
+        SyncLogger.set_logger_config(DEFAULT_SYNC_TEST_LOG_LEVEL)
+        assert SyncLogger.logger_level == DEFAULT_SYNC_TEST_LOG_LEVEL
 
 
 class TestCompareMaps:

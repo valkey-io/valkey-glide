@@ -22,6 +22,7 @@ from .config import (
     GlideClientConfiguration,
     GlideClusterClientConfiguration,
 )
+from .logger import Level, Logger
 from .sync_commands.cluster_commands import ClusterCommands
 from .sync_commands.core import CoreCommands
 from .sync_commands.standalone_commands import StandaloneCommands
@@ -108,6 +109,9 @@ class BaseClient(CoreCommands):
         client_response_ptr = self._lib.create_client(
             conn_req_bytes, len(conn_req_bytes), client_type
         )
+
+        Logger.log(Level.INFO, "connection info", "new connection established")
+
         # Handle the connection response
         if client_response_ptr != self._ffi.NULL:
             client_response = self._try_ffi_cast(

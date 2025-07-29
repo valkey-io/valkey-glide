@@ -45,6 +45,7 @@ from glide_sync.config import GlideClientConfiguration as SyncGlideClientConfigu
 from glide_sync.config import (
     GlideClusterClientConfiguration as SyncGlideClusterClientConfiguration,
 )
+from glide_sync.logger import Level as SyncLogLevel
 from packaging import version
 
 from tests.utils.cluster import ValkeyCluster
@@ -53,6 +54,7 @@ TAnyGlideClient = Union[TGlideClient, TSyncGlideClient]
 
 T = TypeVar("T")
 DEFAULT_TEST_LOG_LEVEL = logLevel.OFF
+DEFAULT_SYNC_TEST_LOG_LEVEL = SyncLogLevel.OFF
 USERNAME = "username"
 INITIAL_PASSWORD = "initial_password"
 NEW_PASSWORD = "new_secure_password"
