@@ -7,12 +7,21 @@ from pathlib import Path
 from typing import List, Optional, Union
 
 from cffi import FFI
-from glide_shared.config import BaseClientConfiguration, GlideClusterClientConfiguration
+from glide_shared.config import BaseClientConfiguration
 from glide_shared.constants import OK, TEncodable, TResult
-from glide_shared.exceptions import ClosingError, RequestError, get_request_error_class
+from glide_shared.exceptions import (
+    ClosingError,
+    ConfigurationError,
+    RequestError,
+    get_request_error_class,
+)
 from glide_shared.protobuf.command_request_pb2 import RequestType
 from glide_shared.routes import Route, build_protobuf_route
 
+from .config import (
+    GlideClientConfiguration,
+    GlideClusterClientConfiguration,
+)
 from .sync_commands.cluster_commands import ClusterCommands
 from .sync_commands.core import CoreCommands
 from .sync_commands.standalone_commands import StandaloneCommands
@@ -68,6 +77,12 @@ class BaseClient(CoreCommands):
 
     @classmethod
     def create(cls, config: BaseClientConfiguration) -> Self:
+        if not isinstance(
+            config, (GlideClientConfiguration, GlideClusterClientConfiguration)
+        ):
+            raise ConfigurationError(
+                "Configuration must be an instance of the sync version of GlideClientConfiguration or GlideClusterClientConfiguration, imported from glide_sync.config."
+            )
         self = cls(config)
         self._init_ffi()
         self._config = config

@@ -63,8 +63,6 @@ from glide_shared import (
     GeoSearchCount,
     GeospatialData,
     GeoUnit,
-    GlideClientConfiguration,
-    GlideClusterClientConfiguration,
     GlideError,
     IdBound,
     InfBound,
@@ -140,6 +138,10 @@ from glide_shared import (
     json_batch,
 )
 
+from .config import (
+    GlideClientConfiguration,
+    GlideClusterClientConfiguration,
+)
 from .glide_client import GlideClient, GlideClusterClient, TGlideClient
 
 __all__ = [

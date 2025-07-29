@@ -5,8 +5,6 @@ from typing import Generator, List, Optional
 import pytest
 from glide_shared.config import (
     BackoffStrategy,
-    GlideClientConfiguration,
-    GlideClusterClientConfiguration,
     NodeAddress,
     ProtocolVersion,
     ReadFrom,
@@ -22,7 +20,7 @@ from tests.utils.utils import (
     NEW_PASSWORD,
     auth_client,
     config_set_new_password,
-    create_client_config,
+    create_sync_client_config,
 )
 
 
@@ -47,22 +45,18 @@ def create_sync_client(
     addresses: Optional[List[NodeAddress]] = None,
     client_name: Optional[str] = None,
     protocol: ProtocolVersion = ProtocolVersion.RESP3,
-    timeout: Optional[int] = 1000,
+    request_timeout: Optional[int] = 1000,
     connection_timeout: Optional[int] = 1000,
-    cluster_mode_pubsub: Optional[
-        GlideClusterClientConfiguration.PubSubSubscriptions
-    ] = None,
-    standalone_mode_pubsub: Optional[
-        GlideClientConfiguration.PubSubSubscriptions
-    ] = None,
-    inflight_requests_limit: Optional[int] = None,
     read_from: ReadFrom = ReadFrom.PRIMARY,
     client_az: Optional[str] = None,
     reconnect_strategy: Optional[BackoffStrategy] = None,
     valkey_cluster: Optional[ValkeyCluster] = None,
+    use_tls: Optional[bool] = None,
+    tls_insecure: Optional[bool] = None,
+    lazy_connect: Optional[bool] = False,
 ) -> TSyncGlideClient:
     # Create sync client
-    config = create_client_config(
+    config = create_sync_client_config(
         request,
         cluster_mode,
         credentials,
@@ -70,20 +64,47 @@ def create_sync_client(
         addresses,
         client_name,
         protocol,
-        timeout,
+        request_timeout,
         connection_timeout,
-        cluster_mode_pubsub,
-        standalone_mode_pubsub,
-        inflight_requests_limit,
         read_from,
         client_az,
         reconnect_strategy,
         valkey_cluster,
+        use_tls=use_tls,
+        tls_insecure=tls_insecure,
+        lazy_connect=lazy_connect,
     )
     if cluster_mode:
         return SyncGlideClusterClient.create(config)
     else:
         return SyncGlideClient.create(config)
+
+
+@pytest.fixture(scope="function")
+def glide_sync_tls_client(
+    request,
+    cluster_mode: bool,
+    protocol: ProtocolVersion,
+    tls_insecure: bool,
+) -> Generator[TSyncGlideClient, None, None]:
+    """
+    Get sync client for tests with TLS enabled.
+    """
+    client = create_sync_client(
+        request,
+        cluster_mode,
+        protocol=protocol,
+        use_tls=True,
+        tls_insecure=tls_insecure,
+        valkey_cluster=pytest.valkey_tls_cluster if cluster_mode else pytest.standalone_tls_cluster,  # type: ignore
+    )
+    try:
+        yield client
+    finally:
+        # Close the client first, then run teardown
+        client.close()
+        # Run teardown which has its own robust error handling
+        sync_test_teardown(request, cluster_mode, protocol)
 
 
 def sync_test_teardown(request, cluster_mode: bool, protocol: ProtocolVersion):
@@ -97,7 +118,7 @@ def sync_test_teardown(request, cluster_mode: bool, protocol: ProtocolVersion):
     try:
         # Try connecting without credentials
         client = create_sync_client(
-            request, cluster_mode, protocol=protocol, timeout=2000
+            request, cluster_mode, protocol=protocol, request_timeout=2000
         )
         client.custom_command(["FLUSHALL"])
         client.close()
@@ -110,7 +131,7 @@ def sync_test_teardown(request, cluster_mode: bool, protocol: ProtocolVersion):
                 request,
                 cluster_mode,
                 protocol=protocol,
-                timeout=2000,
+                request_timeout=2000,
                 credentials=credentials,
             )
             try:

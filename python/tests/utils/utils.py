@@ -41,6 +41,10 @@ from glide_shared.routes import AllNodes
 from glide_sync import GlideClient as SyncGlideClient
 from glide_sync import GlideClusterClient as SyncGlideClusterClient
 from glide_sync import TGlideClient as TSyncGlideClient
+from glide_sync.config import GlideClientConfiguration as SyncGlideClientConfiguration
+from glide_sync.config import (
+    GlideClusterClientConfiguration as SyncGlideClusterClientConfiguration,
+)
 from packaging import version
 
 from tests.utils.cluster import ValkeyCluster
@@ -518,6 +522,70 @@ def create_client_config(
             request_timeout=timeout,
             pubsub_subscriptions=standalone_mode_pubsub,
             inflight_requests_limit=inflight_requests_limit,
+            read_from=read_from,
+            client_az=client_az,
+            advanced_config=AdvancedGlideClientConfiguration(
+                connection_timeout, tls_config=tls_adv_conf
+            ),
+            reconnect_strategy=reconnect_strategy,
+            lazy_connect=lazy_connect,
+        )
+
+
+def create_sync_client_config(
+    request,
+    cluster_mode: bool,
+    credentials: Optional[ServerCredentials] = None,
+    database_id: int = 0,
+    addresses: Optional[List[NodeAddress]] = None,
+    client_name: Optional[str] = None,
+    protocol: ProtocolVersion = ProtocolVersion.RESP3,
+    timeout: Optional[int] = 1000,
+    connection_timeout: Optional[int] = 1000,
+    read_from: ReadFrom = ReadFrom.PRIMARY,
+    client_az: Optional[str] = None,
+    reconnect_strategy: Optional[BackoffStrategy] = None,
+    valkey_cluster: Optional[ValkeyCluster] = None,
+    use_tls: Optional[bool] = None,
+    tls_insecure: Optional[bool] = None,
+    lazy_connect: Optional[bool] = False,
+) -> Union[SyncGlideClusterClientConfiguration, SyncGlideClientConfiguration]:
+    if use_tls is not None:
+        use_tls = use_tls
+    else:
+        use_tls = request.config.getoption("--tls")
+    tls_adv_conf = TlsAdvancedConfiguration(use_insecure_tls=tls_insecure)
+    if cluster_mode:
+        valkey_cluster = valkey_cluster or pytest.valkey_cluster  # type: ignore
+        assert type(valkey_cluster) is ValkeyCluster
+        assert database_id == 0
+        k = min(3, len(valkey_cluster.nodes_addr))
+        seed_nodes = random.sample(valkey_cluster.nodes_addr, k=k)
+        return SyncGlideClusterClientConfiguration(
+            addresses=seed_nodes if addresses is None else addresses,
+            use_tls=use_tls,
+            credentials=credentials,
+            client_name=client_name,
+            protocol=protocol,
+            request_timeout=timeout,
+            read_from=read_from,
+            client_az=client_az,
+            advanced_config=AdvancedGlideClusterClientConfiguration(
+                connection_timeout, tls_config=tls_adv_conf
+            ),
+            lazy_connect=lazy_connect,
+        )
+    else:
+        valkey_cluster = valkey_cluster or pytest.standalone_cluster  # type: ignore
+        assert type(valkey_cluster) is ValkeyCluster
+        return SyncGlideClientConfiguration(
+            addresses=(valkey_cluster.nodes_addr if addresses is None else addresses),
+            use_tls=use_tls,
+            credentials=credentials,
+            database_id=database_id,
+            client_name=client_name,
+            protocol=protocol,
+            request_timeout=timeout,
             read_from=read_from,
             client_az=client_az,
             advanced_config=AdvancedGlideClientConfiguration(
