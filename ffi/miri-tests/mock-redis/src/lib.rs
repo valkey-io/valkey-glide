@@ -23,6 +23,10 @@ impl Cmd {
     pub fn set_span(&mut self, _span: Option<GlideSpan>) -> &mut Cmd {
         self
     }
+
+    pub fn span(&self) -> Option<GlideSpan> {
+        None
+    }
 }
 
 pub struct Pipeline;
