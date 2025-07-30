@@ -226,12 +226,31 @@ public class JedisPoolTest {
     }
 
     // Helper methods
+    /**
+     * Resolve Redis/Valkey server address from CI environment properties. Falls back to
+     * localhost:6379 if no CI configuration is found.
+     */
     private static void resolveServerAddress() {
-        String host = System.getProperty("redis.host");
-        String port = System.getProperty("redis.port");
+        String standaloneHosts = System.getProperty("test.server.standalone");
 
-        redisHost = (host != null) ? host : "localhost";
-        redisPort = (port != null) ? Integer.parseInt(port) : 6379;
+        if (standaloneHosts != null && !standaloneHosts.trim().isEmpty()) {
+            String firstHost = standaloneHosts.split(",")[0].trim();
+            String[] hostPort = firstHost.split(":");
+
+            if (hostPort.length == 2) {
+                redisHost = hostPort[0];
+                try {
+                    redisPort = Integer.parseInt(hostPort[1]);
+                    return;
+                } catch (NumberFormatException e) {
+                    // Fall through to default
+                }
+            }
+        }
+
+        // Fallback to localhost for local development
+        redisHost = "localhost";
+        redisPort = 6379;
     }
 
     private void cleanupTestKeys(Jedis jedis) {
