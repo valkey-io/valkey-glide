@@ -25,11 +25,18 @@ public abstract partial class BaseClient : IStringCommands
         return await Command(Request.StringGetMultiple(keys));
     }
 
-    public async Task<bool> StringSetAsync(KeyValuePair<ValkeyKey, ValkeyValue>[] values, CommandFlags flags = CommandFlags.None)
+#pragma warning disable IDE0072 // Add missing cases
+    public async Task<bool> StringSetAsync(KeyValuePair<ValkeyKey, ValkeyValue>[] values, When when = When.Always, CommandFlags flags = CommandFlags.None)
     {
         Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
-        return await Command(Request.StringSetMultiple(values));
+        return when switch
+        {
+            When.Always => await Command(Request.StringSetMultiple(values)),
+            When.NotExists => await Command(Request.StringSetMultipleNX(values)),
+            _ => throw new ArgumentOutOfRangeException(nameof(when), $"{when} is not supported for StringSetAsync.")
+        };
     }
+#pragma warning restore IDE0072 // Add missing cases
 
     public async Task<ValkeyValue> StringGetRangeAsync(ValkeyKey key, long start, long end, CommandFlags flags = CommandFlags.None)
     {
@@ -83,5 +90,43 @@ public abstract partial class BaseClient : IStringCommands
     {
         Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
         return await Command(Request.StringIncrByFloat(key, increment));
+    }
+
+    public async Task<ValkeyValue> StringGetDeleteAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None)
+    {
+        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
+        return await Command(Request.StringGetDelete(key));
+    }
+
+    public async Task<ValkeyValue> StringGetSetExpiryAsync(ValkeyKey key, TimeSpan? expiry, CommandFlags flags = CommandFlags.None)
+    {
+        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
+        return await Command(Request.StringGetSetExpiry(key, expiry));
+    }
+
+    public async Task<ValkeyValue> StringGetSetExpiryAsync(ValkeyKey key, DateTime expiry, CommandFlags flags = CommandFlags.None)
+    {
+        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
+        return await Command(Request.StringGetSetExpiry(key, expiry));
+    }
+
+    public async Task<string?> StringLongestCommonSubsequenceAsync(ValkeyKey first, ValkeyKey second, CommandFlags flags = CommandFlags.None)
+    {
+        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
+
+        ValkeyValue result = await Command(Request.StringLongestCommonSubsequence(first, second));
+        return result.IsNull ? null : result.ToString();
+    }
+
+    public async Task<long> StringLongestCommonSubsequenceLengthAsync(ValkeyKey first, ValkeyKey second, CommandFlags flags = CommandFlags.None)
+    {
+        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
+        return await Command(Request.StringLongestCommonSubsequenceLength(first, second));
+    }
+
+    public async Task<LCSMatchResult> StringLongestCommonSubsequenceWithMatchesAsync(ValkeyKey first, ValkeyKey second, long minLength = 0, CommandFlags flags = CommandFlags.None)
+    {
+        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
+        return await Command(Request.StringLongestCommonSubsequenceWithMatches(first, second, minLength));
     }
 }

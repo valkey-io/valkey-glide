@@ -45,6 +45,24 @@ public abstract partial class BaseBatch<T> where T : BaseBatch<T>
     /// <inheritdoc cref="IBatchStringCommands.StringIncrement(ValkeyKey, double)" />
     public T StringIncrementAsync(ValkeyKey key, double increment) => AddCmd(Request.StringIncrByFloat(key, increment));
 
+    /// <inheritdoc cref="IBatchStringCommands.StringGetDelete(ValkeyKey)" />
+    public T StringGetDeleteAsync(ValkeyKey key) => AddCmd(Request.StringGetDelete(key));
+
+    /// <inheritdoc cref="IBatchStringCommands.StringGetSetExpiry(ValkeyKey, TimeSpan?)" />
+    public T StringGetSetExpiryAsync(ValkeyKey key, TimeSpan? expiry) => AddCmd(Request.StringGetSetExpiry(key, expiry));
+
+    /// <inheritdoc cref="IBatchStringCommands.StringGetSetExpiry(ValkeyKey, DateTime)" />
+    public T StringGetSetExpiryAsync(ValkeyKey key, DateTime expiry) => AddCmd(Request.StringGetSetExpiry(key, expiry));
+
+    /// <inheritdoc cref="IBatchStringCommands.StringLongestCommonSubsequence(ValkeyKey, ValkeyKey)" />
+    public T StringLongestCommonSubsequenceAsync(ValkeyKey first, ValkeyKey second) => AddCmd(Request.StringLongestCommonSubsequence(first, second));
+
+    /// <inheritdoc cref="IBatchStringCommands.StringLongestCommonSubsequenceLength(ValkeyKey, ValkeyKey)" />
+    public T StringLongestCommonSubsequenceLengthAsync(ValkeyKey first, ValkeyKey second) => AddCmd(Request.StringLongestCommonSubsequenceLength(first, second));
+
+    /// <inheritdoc cref="IBatchStringCommands.StringLongestCommonSubsequenceWithMatches(ValkeyKey, ValkeyKey, long)" />
+    public T StringLongestCommonSubsequenceWithMatchesAsync(ValkeyKey first, ValkeyKey second, long minLength = 0) => AddCmd(Request.StringLongestCommonSubsequenceWithMatches(first, second, minLength));
+
     IBatch IBatchStringCommands.StringGet(ValkeyKey key) => StringGetAsync(key);
     IBatch IBatchStringCommands.StringGet(ValkeyKey[] keys) => StringGetAsync(keys);
     IBatch IBatchStringCommands.StringSet(ValkeyKey key, ValkeyValue value) => StringSetAsync(key, value);
@@ -58,4 +76,10 @@ public abstract partial class BaseBatch<T> where T : BaseBatch<T>
     IBatch IBatchStringCommands.StringIncrement(ValkeyKey key) => StringIncrementAsync(key);
     IBatch IBatchStringCommands.StringIncrement(ValkeyKey key, long increment) => StringIncrementAsync(key, increment);
     IBatch IBatchStringCommands.StringIncrement(ValkeyKey key, double increment) => StringIncrementAsync(key, increment);
+    IBatch IBatchStringCommands.StringGetDelete(ValkeyKey key) => StringGetDeleteAsync(key);
+    IBatch IBatchStringCommands.StringGetSetExpiry(ValkeyKey key, TimeSpan? expiry) => StringGetSetExpiryAsync(key, expiry);
+    IBatch IBatchStringCommands.StringGetSetExpiry(ValkeyKey key, DateTime expiry) => StringGetSetExpiryAsync(key, expiry);
+    IBatch IBatchStringCommands.StringLongestCommonSubsequence(ValkeyKey first, ValkeyKey second) => StringLongestCommonSubsequenceAsync(first, second);
+    IBatch IBatchStringCommands.StringLongestCommonSubsequenceLength(ValkeyKey first, ValkeyKey second) => StringLongestCommonSubsequenceLengthAsync(first, second);
+    IBatch IBatchStringCommands.StringLongestCommonSubsequenceWithMatches(ValkeyKey first, ValkeyKey second, long minLength) => StringLongestCommonSubsequenceWithMatchesAsync(first, second, minLength);
 }

@@ -19,8 +19,8 @@ internal interface IBatchStringCommands
     /// <returns>Command Response - <inheritdoc cref="Commands.IStringCommands.StringSetAsync(ValkeyKey, ValkeyValue, CommandFlags)" /></returns>
     IBatch StringSet(ValkeyKey key, ValkeyValue value);
 
-    /// <inheritdoc cref="Commands.IStringCommands.StringSetAsync(KeyValuePair{ValkeyKey, ValkeyValue}[], CommandFlags)" path="/*[not(self::remarks) and not(self::returns)]" />
-    /// <returns>Command Response - <inheritdoc cref="Commands.IStringCommands.StringSetAsync(KeyValuePair{ValkeyKey, ValkeyValue}[], CommandFlags)" /></returns>
+    /// <inheritdoc cref="Commands.IStringCommands.StringSetAsync(KeyValuePair{ValkeyKey, ValkeyValue}[], When, CommandFlags)" path="/*[not(self::remarks) and not(self::returns)]" />
+    /// <returns>Command Response - <inheritdoc cref="Commands.IStringCommands.StringSetAsync(KeyValuePair{ValkeyKey, ValkeyValue}[], When, CommandFlags)" /></returns>
     IBatch StringSet(KeyValuePair<ValkeyKey, ValkeyValue>[] values);
 
     /// <inheritdoc cref="Commands.IStringCommands.StringGetRangeAsync(ValkeyKey, long, long, CommandFlags)" path="/*[not(self::remarks) and not(self::returns)]" />
@@ -58,4 +58,28 @@ internal interface IBatchStringCommands
     /// <inheritdoc cref="Commands.IStringCommands.StringIncrementAsync(ValkeyKey, double, CommandFlags)" path="/*[not(self::remarks) and not(self::returns)]" />
     /// <returns>Command Response - <inheritdoc cref="Commands.IStringCommands.StringIncrementAsync(ValkeyKey, double, CommandFlags)" /></returns>
     IBatch StringIncrement(ValkeyKey key, double increment);
+
+    /// <inheritdoc cref="Commands.IStringCommands.StringGetDeleteAsync(ValkeyKey, CommandFlags)" path="/*[not(self::remarks) and not(self::returns)]" />
+    /// <returns>Command Response - <inheritdoc cref="Commands.IStringCommands.StringGetDeleteAsync(ValkeyKey, CommandFlags)" /></returns>
+    IBatch StringGetDelete(ValkeyKey key);
+
+    /// <inheritdoc cref="Commands.IStringCommands.StringGetSetExpiryAsync(ValkeyKey, TimeSpan?, CommandFlags)" path="/*[not(self::remarks) and not(self::returns)]" />
+    /// <returns>Command Response - <inheritdoc cref="Commands.IStringCommands.StringGetSetExpiryAsync(ValkeyKey, TimeSpan?, CommandFlags)" /></returns>
+    IBatch StringGetSetExpiry(ValkeyKey key, TimeSpan? expiry);
+
+    /// <inheritdoc cref="Commands.IStringCommands.StringGetSetExpiryAsync(ValkeyKey, DateTime, CommandFlags)" path="/*[not(self::remarks) and not(self::returns)]" />
+    /// <returns>Command Response - <inheritdoc cref="Commands.IStringCommands.StringGetSetExpiryAsync(ValkeyKey, DateTime, CommandFlags)" /></returns>
+    IBatch StringGetSetExpiry(ValkeyKey key, DateTime expiry);
+
+    /// <inheritdoc cref="Commands.IStringCommands.StringLongestCommonSubsequenceAsync(ValkeyKey, ValkeyKey, CommandFlags)" path="/*[not(self::remarks) and not(self::returns)]" />
+    /// <returns>Command Response - <inheritdoc cref="Commands.IStringCommands.StringLongestCommonSubsequenceAsync(ValkeyKey, ValkeyKey, CommandFlags)" /></returns>
+    IBatch StringLongestCommonSubsequence(ValkeyKey first, ValkeyKey second);
+
+    /// <inheritdoc cref="Commands.IStringCommands.StringLongestCommonSubsequenceLengthAsync(ValkeyKey, ValkeyKey, CommandFlags)" path="/*[not(self::remarks) and not(self::returns)]" />
+    /// <returns>Command Response - <inheritdoc cref="Commands.IStringCommands.StringLongestCommonSubsequenceLengthAsync(ValkeyKey, ValkeyKey, CommandFlags)" /></returns>
+    IBatch StringLongestCommonSubsequenceLength(ValkeyKey first, ValkeyKey second);
+
+    /// <inheritdoc cref="Commands.IStringCommands.StringLongestCommonSubsequenceWithMatchesAsync(ValkeyKey, ValkeyKey, long, CommandFlags)" path="/*[not(self::remarks) and not(self::returns)]" />
+    /// <returns>Command Response - <inheritdoc cref="Commands.IStringCommands.StringLongestCommonSubsequenceWithMatchesAsync(ValkeyKey, ValkeyKey, long, CommandFlags)" /></returns>
+    IBatch StringLongestCommonSubsequenceWithMatches(ValkeyKey first, ValkeyKey second, long minLength = 0);
 }

@@ -19,6 +19,21 @@ public static class Constants
     public const string ByScoreKeyword = "BYSCORE";
 
     /// <summary>
+    /// Expiry keywords.
+    /// </summary>
+    public const string PersistKeyword = "PERSIST";
+    public const string ExpiryKeyword = "EX";
+    public const string ExpiryAtKeyword = "EXAT";
+
+    /// <summary>
+    /// Keywords for the LCS command.
+    /// </summary>
+    public const string LenKeyword = "LEN";
+    public const string IdxKeyword = "IDX";
+    public const string MinMatchLenKeyword = "MINMATCHLEN";
+    public const string WithMatchLenKeyword = "WITHMATCHLEN";
+
+    /// <summary>
     /// The highest bound in the sorted set for lexicographical operations.
     /// </summary>
     public const string PositiveInfinity = "+";
