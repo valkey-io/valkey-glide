@@ -29,7 +29,9 @@ jobs:
 
         continue-on-error: true
         env:
-            PYTHON_ASYNC_ATTRIBUTIONS: "python/glide-async/THIRD_PARTY_LICENSES_PYTHON"
+            PYTHON_ASYNC_ATTRIBUTIONS: "python/glide-async/THIRD_PARTY_LICENSES_PYTHON_ASYNC"
+            PYTHON_SYNC_ATTRIBUTIONS: "python/glide-sync/THIRD_PARTY_LICENSES_PYTHON_SYNC"
+            PYTHON_SHARED_ATTRIBUTIONS: "python/glide-shared/THIRD_PARTY_LICENSES_PYTHON_SHARED"
             NODE_ATTRIBUTIONS: "node/THIRD_PARTY_LICENSES_NODE"
             RUST_ATTRIBUTIONS: "glide-core/THIRD_PARTY_LICENSES_RUST"
             JAVA_ATTRIBUTIONS: "java/THIRD_PARTY_LICENSES_JAVA"
@@ -136,6 +138,16 @@ jobs:
               uses: ./.github/workflows/run-ort-tools
               with:
                   folder_path: "${{ github.workspace }}/python/glide-async"
+
+            - name: Run ORT tools for Python Sync Client
+              uses: ./.github/workflows/run-ort-tools
+              with:
+                  folder_path: "${{ github.workspace }}/python/glide-sync"
+
+            - name: Run ORT tools for Python Shared Package
+              uses: ./.github/workflows/run-ort-tools
+              with:
+                  folder_path: "${{ github.workspace }}/python/glide-shared"
 
               ### Rust glide-core ###
             - name: Run ORT tools for glide-core
@@ -247,6 +259,8 @@ jobs:
             - name: Check for diff
               run: |
                   cp python/glide-async/ort_results/NOTICE_DEFAULT $PYTHON_ASYNC_ATTRIBUTIONS
+                  cp python/glide-sync/ort_results/NOTICE_DEFAULT $PYTHON_SYNC_ATTRIBUTIONS
+                  cp python/glide-shared/ort_results/NOTICE_DEFAULT $PYTHON_SHARED_ATTRIBUTIONS
                   cp node/ort_results/NOTICE_DEFAULT $NODE_ATTRIBUTIONS
                   cp glide-core/ort_results/NOTICE_DEFAULT $RUST_ATTRIBUTIONS
                   cp java/ort_results/NOTICE_DEFAULT $JAVA_ATTRIBUTIONS
@@ -255,7 +269,7 @@ jobs:
                   cat go/ort_results/NOTICE_DEFAULT >> $GO_ATTRIBUTIONS
                   : Merge FFI attributions into GO attributions
                   cat ffi/ort_results/NOTICE_DEFAULT >> $GO_ATTRIBUTIONS
-                  GIT_DIFF=`git diff $PYTHON_ASYNC_ATTRIBUTIONS $NODE_ATTRIBUTIONS $RUST_ATTRIBUTIONS $JAVA_ATTRIBUTIONS $GO_ATTRIBUTIONS`
+                  GIT_DIFF=`git diff $PYTHON_ASYNC_ATTRIBUTIONS $PYTHON_SYNC_ATTRIBUTIONS $PYTHON_SHARED_ATTRIBUTIONS $NODE_ATTRIBUTIONS $RUST_ATTRIBUTIONS $JAVA_ATTRIBUTIONS $GO_ATTRIBUTIONS`
                   if [ -n "$GIT_DIFF" ]; then
                     echo "FOUND_DIFF=true" >> $GITHUB_ENV
                   else
@@ -271,7 +285,7 @@ jobs:
                   git config --global user.email "valkey-glide@lists.valkey.io"
                   git config --global user.name "ort-bot"
                   git checkout -b ${ORT_DIFF_BRANCH_NAME}
-                  git add $PYTHON_ASYNC_ATTRIBUTIONS $NODE_ATTRIBUTIONS $RUST_ATTRIBUTIONS $JAVA_ATTRIBUTIONS $GO_ATTRIBUTIONS
+                  git add $PYTHON_ASYNC_ATTRIBUTIONS $PYTHON_SYNC_ATTRIBUTIONS $PYTHON_SHARED_ATTRIBUTIONS $NODE_ATTRIBUTIONS $RUST_ATTRIBUTIONS $JAVA_ATTRIBUTIONS $GO_ATTRIBUTIONS
                   git commit -m "Updated attribution files" -s
                   git push --set-upstream origin ${ORT_DIFF_BRANCH_NAME} -f || { echo "Failed to push branch."; exit 1; }
 
@@ -299,6 +313,8 @@ jobs:
               run: |
                   ATTRIBUTION_FILES=(
                     "${{ env.PYTHON_ASYNC_ATTRIBUTIONS }}"
+                    "${{ env.PYTHON_SYNC_ATTRIBUTIONS }}"
+                    "${{ env.PYTHON_SHARED_ATTRIBUTIONS }}"
                     "${{ env.NODE_ATTRIBUTIONS }}"
                     "${{ env.RUST_ATTRIBUTIONS }}"
                     "${{ env.JAVA_ATTRIBUTIONS }}"

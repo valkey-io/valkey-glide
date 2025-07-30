@@ -51,6 +51,16 @@ on:
                 description: "Run modules tests"
                 type: boolean
                 default: false
+            run_async_tests:
+                description: "Run only async tests"
+                required: false
+                type: boolean
+                default: false
+            run_sync_tests:
+                description: "run only sync tests"
+                required: false
+                type: boolean
+                default: false
 
     workflow_call:
 
@@ -70,6 +80,8 @@ run-name:
 env:
     # Run full test matrix if job started by cron or it was explictly specified by a person who triggered the workflow
     RUN_FULL_MATRIX: ${{ (github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule') }}
+    RUN_SYNC_ONLY: ${{ (github.event.inputs.run_sync_tests == 'true' && github.event.inputs.run_async_tests == 'false') }}
+    RUN_ASYNC_ONLY: ${{ (github.event.inputs.run_async_tests == 'true' && github.event.inputs.run_sync_tests == 'false') }}
 
 jobs:
     get-matrices:
@@ -134,7 +146,7 @@ jobs:
                   engine-version: ${{ matrix.engine.version }}
 
             - name: Test with pytest
-              if: ${{ env.RUN_FULL_MATRIX != 'true' }}
+              if: ${{ env.RUN_FULL_MATRIX != 'true' && env.RUN_SYNC_ONLY != 'true' && env.RUN_ASYNC_ONLY != 'true' }}
               working-directory: ./python
               run: |
                   python3 dev.py test --args --async-backend=asyncio --html=pytest_report.html --self-contained-html
@@ -144,6 +156,18 @@ jobs:
               working-directory: ./python
               run: |
                   python3 dev.py test --args --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
+
+            - name: Test with pytest (async only)
+              if: ${{ env.RUN_ASYNC_ONLY == 'true' && env.RUN_FULL_MATRIX != 'true'}}
+              working-directory: ./python
+              run: |
+                  python3 dev.py test --args tests/async_tests --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
+
+            - name: Test with pytest (sync only)
+              if: ${{ env.RUN_SYNC_ONLY == 'true' && env.RUN_FULL_MATRIX != 'true'}}
+              working-directory: ./python
+              run: |
+                  python3 dev.py test --args tests/sync_tests --html=pytest_report.html --self-contained-html
 
             - uses: ./.github/workflows/test-benchmark
               if: ${{ matrix.engine.version == '8.0' && matrix.host.OS == 'ubuntu' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.python == '3.13' }}

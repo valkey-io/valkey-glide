@@ -20,8 +20,13 @@ on:
             version:
                 description: "The release version of GLIDE, formatted as *.*.* or *.*.*-rc*"
                 required: true
-            publish:
-                description: "Publish"
+            publish_async:
+                description: "Publish Async Client to PyPI"
+                required: true
+                type: boolean
+                default: false
+            publish_sync:
+                description: "Publish Sync Client to PyPI"
                 required: true
                 type: boolean
                 default: false
@@ -421,7 +426,7 @@ jobs:
                   merge-multiple: true
 
             - name: Async client - Publish binaries and source to PyPI
-              if: ${{ github.event_name == 'push' || inputs.publish == true }}
+              if: ${{ github.event_name == 'push' || inputs.publish_async == true }}
               uses: PyO3/maturin-action@v1
               env:
                   MATURIN_PYPI_TOKEN: ${{ secrets.LIVEPYPI_API_TOKEN }}
@@ -458,7 +463,7 @@ jobs:
                   merge-multiple: true
 
             - name: Sync client - Publish binaries and source to PyPI
-              if: ${{ github.event_name == 'push' || inputs.publish == true }}
+              if: ${{ github.event_name == 'push' || inputs.publish_sync == true }}
               env:
                   TWINE_USERNAME: __token__
                   TWINE_PASSWORD: ${{ secrets.LIVEPYPI_API_TOKEN }}
@@ -474,7 +479,7 @@ jobs:
                       python/glide-sync/dist/*.tar.gz
 
     test-release:
-        if: ${{ github.event_name == 'push' || inputs.publish == true }}
+        if: ${{ github.event_name == 'push' || inputs.publish_async== true || inputs.publish_sync == true }}
         name: Test the release
         runs-on: ${{ matrix.build.RUNNER }}
         needs:
@@ -566,6 +571,7 @@ jobs:
                   echo "PYPI_VERSION=${PYPI_VERSION}" >> $GITHUB_ENV
 
             - name: Run the Async Client tests
+              if: ${{ inputs.publish_async == true }}
               shell: bash
               working-directory: ./utils/release-candidate-testing/python
               run: |
@@ -580,6 +586,7 @@ jobs:
                   python rc_test.py
 
             - name: Run the Async Clients tests with PyPy
+              if: ${{ inputs.publish_async == true }}
               shell: bash
               working-directory: ./utils/release-candidate-testing/python
               run: |
@@ -594,6 +601,7 @@ jobs:
                   pypy3 rc_test.py
 
             - name: Run the Sync Client tests
+              if: ${{ inputs.publish_sync == true }}
               shell: bash
               working-directory: ./utils/release-candidate-testing/python
               run: |
@@ -608,6 +616,7 @@ jobs:
                   python sync_rc_test.py
 
             - name: Run the Sync Client tests with PyPy
+              if: ${{ inputs.publish_sync == true }}
               shell: bash
               working-directory: ./utils/release-candidate-testing/python
               run: |
