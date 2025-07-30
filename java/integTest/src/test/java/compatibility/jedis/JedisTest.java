@@ -37,7 +37,7 @@ public class JedisTest {
     private Jedis jedis;
 
     @BeforeAll
-    static void setupClass() {
+    public static void setupClass() {
         resolveServerAddress();
     }
 
