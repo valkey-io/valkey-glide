@@ -155,7 +155,7 @@ jobs:
               continue-on-error: true
               uses: actions/upload-artifact@v4
               with:
-                  name: test-report-python-${{ matrix.python }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ toJson(matrix.host.RUNNER) }}
+                  name: test-report-python-${{ matrix.python }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ matrix.host.OS }}-${{ matrix.host.ARCH }}
                   path: |
                       python/tests/pytest_report.html
                       utils/clusters/**
@@ -221,7 +221,7 @@ jobs:
               continue-on-error: true
               uses: actions/upload-artifact@v4
               with:
-                  name: pubsub-test-report-python-${{ matrix.python }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ toJson(matrix.host.RUNNER) }}
+                  name: pubsub-test-report-python-${{ matrix.python }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ matrix.host.OS }}-${{ matrix.host.ARCH }}
                   path: |
                       python/tests/pytest_report.html
 
