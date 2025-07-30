@@ -40,6 +40,7 @@ import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SSLSocketFactory;
 import redis.clients.jedis.args.BitCountOption;
+import redis.clients.jedis.args.BitOP;
 import redis.clients.jedis.args.ExpiryOption;
 import redis.clients.jedis.params.BitPosParams;
 import redis.clients.jedis.params.GetExParams;
@@ -3217,6 +3218,13 @@ public final class Jedis implements Closeable {
                 case NOT:
                     operation = BitwiseOperation.NOT;
                     break;
+                case DIFF:
+                case DIFF1:
+                case ANDOR:
+                case ONE:
+                    // These operations are not supported by GLIDE's BitwiseOperation enum
+                    throw new UnsupportedOperationException(
+                            "BITOP operation " + op + " is not supported by GLIDE");
                 default:
                     throw new IllegalArgumentException("Unsupported bitwise operation: " + op);
             }
@@ -3253,6 +3261,13 @@ public final class Jedis implements Closeable {
                 case NOT:
                     operation = BitwiseOperation.NOT;
                     break;
+                case DIFF:
+                case DIFF1:
+                case ANDOR:
+                case ONE:
+                    // These operations are not supported by GLIDE's BitwiseOperation enum
+                    throw new UnsupportedOperationException(
+                            "BITOP operation " + op + " is not supported by GLIDE");
                 default:
                     throw new IllegalArgumentException("Unsupported bitwise operation: " + op);
             }
@@ -3618,14 +3633,6 @@ public final class Jedis implements Closeable {
         System.arraycopy(array1, 0, result, 0, array1.length);
         System.arraycopy(array2, 0, result, array1.length, array2.length);
         return result;
-    }
-
-    /** Enum for bitwise operations to match Jedis BitOP enum. */
-    public enum BitOP {
-        AND,
-        OR,
-        XOR,
-        NOT
     }
 
     // ===== HYPERLOGLOG COMMANDS =====

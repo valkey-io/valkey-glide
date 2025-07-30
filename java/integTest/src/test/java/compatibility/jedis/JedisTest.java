@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.*;
 import redis.clients.jedis.Jedis;
+import redis.clients.jedis.args.BitOP;
 import redis.clients.jedis.params.BitPosParams;
 import redis.clients.jedis.params.GetExParams;
 import redis.clients.jedis.params.ScanParams;
@@ -897,30 +898,26 @@ public class JedisTest {
         jedis.setbit(srcKey2, 1, true);
         jedis.setbit(srcKey2, 2, true);
 
-        // Test BITOP AND - commented out due to missing BitOP enum
-        // long result = jedis.bitop(redis.clients.jedis.args.BitOP.AND, destKey, srcKey1, srcKey2);
-        // assertTrue(result > 0, "BITOP should return length of result");
-        // assertTrue(jedis.getbit(destKey, 2), "Bit 2 should be set (1 AND 1)");
-        // assertFalse(jedis.getbit(destKey, 0), "Bit 0 should not be set (1 AND 0)");
-        // assertFalse(jedis.getbit(destKey, 1), "Bit 1 should not be set (0 AND 1)");
+        // Test BITOP AND
+        long result = jedis.bitop(BitOP.AND, destKey, srcKey1, srcKey2);
+        assertTrue(result > 0, "BITOP should return length of result");
+        assertTrue(jedis.getbit(destKey, 2), "Bit 2 should be set (1 AND 1)");
+        assertFalse(jedis.getbit(destKey, 0), "Bit 0 should not be set (1 AND 0)");
+        assertFalse(jedis.getbit(destKey, 1), "Bit 1 should not be set (0 AND 1)");
 
-        // Test BITOP OR - commented out due to missing BitOP enum
-        // result = jedis.bitop(redis.clients.jedis.args.BitOP.OR, destKey, srcKey1, srcKey2);
-        // assertTrue(result > 0, "BITOP OR should return length of result");
-        // assertTrue(jedis.getbit(destKey, 0), "Bit 0 should be set (1 OR 0)");
-        // assertTrue(jedis.getbit(destKey, 1), "Bit 1 should be set (0 OR 1)");
-        // assertTrue(jedis.getbit(destKey, 2), "Bit 2 should be set (1 OR 1)");
+        // Test BITOP OR
+        result = jedis.bitop(BitOP.OR, destKey, srcKey1, srcKey2);
+        assertTrue(result > 0, "BITOP OR should return length of result");
+        assertTrue(jedis.getbit(destKey, 0), "Bit 0 should be set (1 OR 0)");
+        assertTrue(jedis.getbit(destKey, 1), "Bit 1 should be set (0 OR 1)");
+        assertTrue(jedis.getbit(destKey, 2), "Bit 2 should be set (1 OR 1)");
 
-        // Test BITOP XOR - commented out due to missing BitOP enum
-        // result = jedis.bitop(redis.clients.jedis.args.BitOP.XOR, destKey, srcKey1, srcKey2);
-        // assertTrue(result > 0, "BITOP XOR should return length of result");
-        // assertTrue(jedis.getbit(destKey, 0), "Bit 0 should be set (1 XOR 0)");
-        // assertTrue(jedis.getbit(destKey, 1), "Bit 1 should be set (0 XOR 1)");
-        // assertFalse(jedis.getbit(destKey, 2), "Bit 2 should not be set (1 XOR 1)");
-
-        // For now, just verify the source keys exist
-        assertTrue(jedis.exists(srcKey1), "Source key 1 should exist");
-        assertTrue(jedis.exists(srcKey2), "Source key 2 should exist");
+        // Test BITOP XOR
+        result = jedis.bitop(BitOP.XOR, destKey, srcKey1, srcKey2);
+        assertTrue(result > 0, "BITOP XOR should return length of result");
+        assertTrue(jedis.getbit(destKey, 0), "Bit 0 should be set (1 XOR 0)");
+        assertTrue(jedis.getbit(destKey, 1), "Bit 1 should be set (0 XOR 1)");
+        assertFalse(jedis.getbit(destKey, 2), "Bit 2 should not be set (1 XOR 1)");
     }
 
     @Test
