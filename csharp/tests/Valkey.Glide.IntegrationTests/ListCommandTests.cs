@@ -50,8 +50,8 @@ public class ListCommandTests(TestConfiguration config)
         string key = Guid.NewGuid().ToString();
 
         // Test RPUSH - elements should be added to the tail
-        Assert.Equal(2, await client.ListRightPushAsync(key, ["test1", "test2"], CommandFlags.None));
-        Assert.Equal(3, await client.ListRightPushAsync(key, ["test3"], CommandFlags.None));
+        Assert.Equal(2, await client.ListRightPushAsync(key, ["test1", "test2"]));
+        Assert.Equal(3, await client.ListRightPushAsync(key, ["test3"]));
 
         // Test RPOP - should remove from tail (last added)
         ValkeyValue rPopResult1 = await client.ListRightPopAsync(key);
@@ -116,7 +116,7 @@ public class ListCommandTests(TestConfiguration config)
         string key = Guid.NewGuid().ToString();
 
         // Setup list: [test1, test2, test3, test4] (left to right)
-        Assert.Equal(4, await client.ListRightPushAsync(key, ["test1", "test2", "test3", "test4"], CommandFlags.None));
+        Assert.Equal(4, await client.ListRightPushAsync(key, ["test1", "test2", "test3", "test4"]));
 
         // Pop 2 elements from right (tail)
         ValkeyValue[]? rPopResultWithCount = await client.ListRightPopAsync(key, 2);
@@ -145,7 +145,7 @@ public class ListCommandTests(TestConfiguration config)
         Assert.Equal(3, await client.ListLengthAsync(key));
 
         // Test length after adding more elements
-        Assert.Equal(5, await client.ListRightPushAsync(key, ["test4", "test5"], CommandFlags.None));
+        Assert.Equal(5, await client.ListRightPushAsync(key, ["test4", "test5"]));
         Assert.Equal(5, await client.ListLengthAsync(key));
 
         // Test length after removing elements
@@ -163,7 +163,7 @@ public class ListCommandTests(TestConfiguration config)
         string key = Guid.NewGuid().ToString();
 
         // Setup list with duplicate values: [a, b, a, c, a, b]
-        await client.ListRightPushAsync(key, ["a", "b", "a", "c", "a", "b"], CommandFlags.None);
+        await client.ListRightPushAsync(key, ["a", "b", "a", "c", "a", "b"]);
 
         // Test removing all occurrences (count = 0)
         Assert.Equal(3, await client.ListRemoveAsync(key, "a", 0));
@@ -171,7 +171,7 @@ public class ListCommandTests(TestConfiguration config)
 
         // Reset list
         await client.KeyDeleteAsync(key);
-        await client.ListRightPushAsync(key, ["a", "b", "a", "c", "a", "b"], CommandFlags.None);
+        await client.ListRightPushAsync(key, ["a", "b", "a", "c", "a", "b"]);
 
         // Test removing from head to tail (count > 0)
         Assert.Equal(2, await client.ListRemoveAsync(key, "a", 2));
@@ -179,7 +179,7 @@ public class ListCommandTests(TestConfiguration config)
 
         // Reset list
         await client.KeyDeleteAsync(key);
-        await client.ListRightPushAsync(key, ["a", "b", "a", "c", "a", "b"], CommandFlags.None);
+        await client.ListRightPushAsync(key, ["a", "b", "a", "c", "a", "b"]);
 
         // Test removing from tail to head (count < 0)
         Assert.Equal(2, await client.ListRemoveAsync(key, "a", -2));
@@ -199,7 +199,7 @@ public class ListCommandTests(TestConfiguration config)
         string key = Guid.NewGuid().ToString();
 
         // Setup list: [0, 1, 2, 3, 4, 5]
-        await client.ListRightPushAsync(key, ["0", "1", "2", "3", "4", "5"], CommandFlags.None);
+        await client.ListRightPushAsync(key, ["0", "1", "2", "3", "4", "5"]);
 
         // Trim to keep elements from index 1 to 3
         await client.ListTrimAsync(key, 1, 3);
@@ -211,7 +211,7 @@ public class ListCommandTests(TestConfiguration config)
 
         // Test trim with negative indices
         await client.KeyDeleteAsync(key);
-        await client.ListRightPushAsync(key, ["0", "1", "2", "3", "4", "5"], CommandFlags.None);
+        await client.ListRightPushAsync(key, ["0", "1", "2", "3", "4", "5"]);
 
         // Keep last 3 elements
         await client.ListTrimAsync(key, -3, -1);
@@ -235,7 +235,7 @@ public class ListCommandTests(TestConfiguration config)
         Assert.Empty(emptyResult);
 
         // Setup list: [0, 1, 2, 3, 4, 5]
-        await client.ListRightPushAsync(key, ["0", "1", "2", "3", "4", "5"], CommandFlags.None);
+        await client.ListRightPushAsync(key, ["0", "1", "2", "3", "4", "5"]);
 
         // Test getting all elements (default parameters)
         ValkeyValue[] allElements = await client.ListRangeAsync(key);
@@ -275,9 +275,9 @@ public class ListCommandTests(TestConfiguration config)
         // Test comprehensive workflow combining all list commands
 
         // 1. Build list using both LPUSH and RPUSH
-        Assert.Equal(2, await client.ListLeftPushAsync(key, ["left2", "left1"], CommandFlags.None)); // [left1, left2]
-        Assert.Equal(4, await client.ListRightPushAsync(key, ["right1", "right2"], CommandFlags.None)); // [left1, left2, right1, right2]
-        Assert.Equal(6, await client.ListLeftPushAsync(key, ["extra2", "extra1"], CommandFlags.None)); // [extra1, extra2, left1, left2, right1, right2]
+        Assert.Equal(2, await client.ListLeftPushAsync(key, ["left2", "left1"])); // [left1, left2]
+        Assert.Equal(4, await client.ListRightPushAsync(key, ["right1", "right2"])); // [left1, left2, right1, right2]
+        Assert.Equal(6, await client.ListLeftPushAsync(key, ["extra2", "extra1"])); // [extra1, extra2, left1, left2, right1, right2]
 
         // 2. Verify length
         Assert.Equal(6, await client.ListLengthAsync(key));
@@ -287,7 +287,7 @@ public class ListCommandTests(TestConfiguration config)
         Assert.Equal(["extra1", "extra2", "left1", "left2", "right1", "right2"], fullList.ToGlideStrings());
 
         // 4. Add duplicates and test removal
-        await client.ListRightPushAsync(key, ["left1", "duplicate", "left1"], CommandFlags.None); // [extra1, extra2, left1, left2, right1, right2, left1, duplicate, left1]
+        await client.ListRightPushAsync(key, ["left1", "duplicate", "left1"]); // [extra1, extra2, left1, left2, right1, right2, left1, duplicate, left1]
         Assert.Equal(9, await client.ListLengthAsync(key));
 
         // Remove first 2 occurrences of "left1"

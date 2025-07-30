@@ -7,10 +7,11 @@ internal class BatchTestUtils
     public static List<TestInfo> CreateStringTest(Pipeline.IBatch batch, bool isAtomic)
     {
         List<TestInfo> testData = [];
-        string prefix = isAtomic ? "{stringKey}-" : "";
-        string key1 = $"{prefix}1-{Guid.NewGuid()}";
-        string key2 = $"{prefix}2-{Guid.NewGuid()}";
-        string nonExistingKey = $"{prefix}nonexisting-{Guid.NewGuid()}";
+        string prefix = "{stringKey}-";
+        string atomicPrefix = isAtomic ? prefix : "";
+        string key1 = $"{atomicPrefix}1-{Guid.NewGuid()}";
+        string key2 = $"{atomicPrefix}2-{Guid.NewGuid()}";
+        string nonExistingKey = $"{atomicPrefix}nonexisting-{Guid.NewGuid()}";
 
         string value1 = $"value-1-{Guid.NewGuid()}";
         string value2 = "test-value";
@@ -54,12 +55,12 @@ internal class BatchTestUtils
         testData.Add(new(new gs(value2), "StringGet(key2) after append empty string"));
 
         // Increment/Decrement tests
-        string numKey1 = $"{prefix}num1-{Guid.NewGuid()}";
-        string numKey2 = $"{prefix}num2-{Guid.NewGuid()}";
-        string numKey3 = $"{prefix}num3-{Guid.NewGuid()}";
-        string numKey4 = $"{prefix}num4-{Guid.NewGuid()}";
-        string floatKey1 = $"{prefix}float1-{Guid.NewGuid()}";
-        string floatKey2 = $"{prefix}float2-{Guid.NewGuid()}";
+        string numKey1 = $"{atomicPrefix}num1-{Guid.NewGuid()}";
+        string numKey2 = $"{atomicPrefix}num2-{Guid.NewGuid()}";
+        string numKey3 = $"{atomicPrefix}num3-{Guid.NewGuid()}";
+        string numKey4 = $"{atomicPrefix}num4-{Guid.NewGuid()}";
+        string floatKey1 = $"{atomicPrefix}float1-{Guid.NewGuid()}";
+        string floatKey2 = $"{atomicPrefix}float2-{Guid.NewGuid()}";
 
         // Set initial values
         _ = batch.StringSet(numKey1, "10");
@@ -140,6 +141,135 @@ internal class BatchTestUtils
 
         _ = batch.StringGet(numKey4);
         testData.Add(new(new gs("-1"), "StringGet(numKey4) after decrement non-existent key"));
+
+        // StringGetRange tests
+        string rangeKey = $"{atomicPrefix}range-{Guid.NewGuid()}";
+        string rangeValue = "Hello World";
+        _ = batch.StringSet(rangeKey, rangeValue);
+        testData.Add(new(true, "StringSet(rangeKey, Hello World)"));
+
+        _ = batch.StringGetRange(rangeKey, 0, 4);
+        testData.Add(new(new gs("Hello"), "StringGetRange(rangeKey, 0, 4)"));
+
+        _ = batch.StringGetRange(rangeKey, 6, -1);
+        testData.Add(new(new gs("World"), "StringGetRange(rangeKey, 6, -1)"));
+
+        _ = batch.StringGetRange(rangeKey, -5, -1);
+        testData.Add(new(new gs("World"), "StringGetRange(rangeKey, -5, -1)"));
+
+        string nonExistingKey2 = $"{atomicPrefix}nonexisting2-{Guid.NewGuid()}";
+        _ = batch.StringGetRange(nonExistingKey2, 0, 5);
+        testData.Add(new(new gs(""), "StringGetRange(nonExistingKey2, 0, 5)"));
+
+        // StringSetRange tests
+        string setRangeKey = $"{atomicPrefix}setrange-{Guid.NewGuid()}";
+        _ = batch.StringSet(setRangeKey, "Hello World");
+        testData.Add(new(true, "StringSet(setRangeKey, Hello World)"));
+
+        _ = batch.StringSetRange(setRangeKey, 6, "Redis");
+        testData.Add(new(11L, "StringSetRange(setRangeKey, 6, Redis)"));
+
+        _ = batch.StringGet(setRangeKey);
+        testData.Add(new(new gs("Hello Redis"), "StringGet(setRangeKey) after setrange"));
+
+        // StringSetRange on non-existent key (should create it with null padding)
+        string setRangeKey2 = $"{atomicPrefix}setrange2-{Guid.NewGuid()}";
+        _ = batch.StringSetRange(setRangeKey2, 5, "test");
+        testData.Add(new(9L, "StringSetRange(setRangeKey2, 5, test) non-existent key"));
+
+        _ = batch.StringGet(setRangeKey2);
+        testData.Add(new(new gs("\0\0\0\0\0test"), "StringGet(setRangeKey2) after setrange non-existent", true));
+
+        // Multiple key StringSet and StringGet tests
+        string multiKey1 = $"{atomicPrefix}multi1-{Guid.NewGuid()}";
+        string multiKey2 = $"{atomicPrefix}multi2-{Guid.NewGuid()}";
+        string multiKey3 = $"{atomicPrefix}multi3-{Guid.NewGuid()}";
+
+        KeyValuePair<ValkeyKey, ValkeyValue>[] multiKeyValues = [
+            new(multiKey1, "value1"),
+            new(multiKey2, "value2"),
+            new(multiKey3, "value3")
+        ];
+
+        _ = batch.StringSet(multiKeyValues);
+        testData.Add(new(true, "StringSet(multiKeyValues)"));
+
+        string nonExistingKey3 = $"{atomicPrefix}nonexisting3-{Guid.NewGuid()}";
+        ValkeyKey[] multiKeys = [multiKey1, multiKey2, multiKey3, nonExistingKey3];
+        _ = batch.StringGet(multiKeys);
+        testData.Add(new(Array.Empty<ValkeyValue>(), "StringGet(multiKeys)", true));
+
+        // StringGetDelete tests
+        string getDelKey = $"{atomicPrefix}getdel-{Guid.NewGuid()}";
+        _ = batch.StringSet(getDelKey, "delete-me");
+        testData.Add(new(true, "StringSet(getDelKey, delete-me)"));
+
+        _ = batch.StringGetDelete(getDelKey);
+        testData.Add(new(new ValkeyValue("delete-me"), "StringGetDelete(getDelKey)"));
+
+        _ = batch.StringGet(getDelKey);
+        testData.Add(new(null, "StringGet(getDelKey) after delete"));
+
+        string nonExistingKey4 = $"{atomicPrefix}nonexisting4-{Guid.NewGuid()}";
+        _ = batch.StringGetDelete(nonExistingKey4);
+        testData.Add(new(null, "StringGetDelete(nonExistingKey4)"));
+
+        // StringGetSetExpiry tests (TimeSpan)
+        string getSetExpiryKey1 = $"{atomicPrefix}getsetexpiry1-{Guid.NewGuid()}";
+        _ = batch.StringSet(getSetExpiryKey1, "expire-me");
+        testData.Add(new(true, "StringSet(getSetExpiryKey1, expire-me)"));
+
+        _ = batch.StringGetSetExpiry(getSetExpiryKey1, TimeSpan.FromSeconds(60));
+        testData.Add(new(new ValkeyValue("expire-me"), "StringGetSetExpiry(getSetExpiryKey1, 60s)"));
+
+        _ = batch.StringGetSetExpiry(getSetExpiryKey1, null);
+        testData.Add(new(new ValkeyValue("expire-me"), "StringGetSetExpiry(getSetExpiryKey1, null) - remove expiry"));
+
+        string nonExistingKey5 = $"{atomicPrefix}nonexisting5-{Guid.NewGuid()}";
+        _ = batch.StringGetSetExpiry(nonExistingKey5, TimeSpan.FromSeconds(30));
+        testData.Add(new(null, "StringGetSetExpiry(nonExistingKey5, 30s)"));
+
+        // StringGetSetExpiry tests (DateTime)
+        string getSetExpiryKey2 = $"{atomicPrefix}getsetexpiry2-{Guid.NewGuid()}";
+        _ = batch.StringSet(getSetExpiryKey2, "expire-me-abs");
+        testData.Add(new(true, "StringSet(getSetExpiryKey2, expire-me-abs)"));
+
+        DateTime futureTime = DateTime.UtcNow.AddMinutes(5);
+        _ = batch.StringGetSetExpiry(getSetExpiryKey2, futureTime);
+        testData.Add(new(new ValkeyValue("expire-me-abs"), "StringGetSetExpiry(getSetExpiryKey2, futureTime)"));
+
+        if (TestConfiguration.SERVER_VERSION >= new Version("7.0.0"))
+        {
+            string lcsKey1 = $"{prefix}lcs1-{Guid.NewGuid()}";
+            string lcsKey2 = $"{prefix}lcs2-{Guid.NewGuid()}";
+
+            _ = batch.StringSet(lcsKey1, "abcdef");
+            testData.Add(new(true, "StringSet(lcsKey1, abcdef)"));
+
+            _ = batch.StringSet(lcsKey2, "acef");
+            testData.Add(new(true, "StringSet(lcsKey2, acef)"));
+
+            _ = batch.StringLongestCommonSubsequence(lcsKey1, lcsKey2);
+            testData.Add(new("acef", "StringLongestCommonSubsequence(lcsKey1, lcsKey2)"));
+
+            _ = batch.StringLongestCommonSubsequenceLength(lcsKey1, lcsKey2);
+            testData.Add(new(4L, "StringLongestCommonSubsequenceLength(lcsKey1, lcsKey2)"));
+
+            _ = batch.StringLongestCommonSubsequenceWithMatches(lcsKey1, lcsKey2);
+            testData.Add(new(LCSMatchResult.Null, "StringLongestCommonSubsequenceWithMatches(lcsKey1, lcsKey2)", true));
+
+            _ = batch.StringLongestCommonSubsequenceWithMatches(lcsKey1, lcsKey2, 2);
+            testData.Add(new(LCSMatchResult.Null, "StringLongestCommonSubsequenceWithMatches(lcsKey1, lcsKey2, minLength=2)", true));
+
+            // Test LCS with non-existent keys
+            string nonExistingKey6 = $"{prefix}nonexisting6-{Guid.NewGuid()}";
+            _ = batch.StringLongestCommonSubsequence(lcsKey1, nonExistingKey6);
+            testData.Add(new("", "StringLongestCommonSubsequence(lcsKey1, nonExistingKey6)"));
+
+            string nonExistingKey7 = $"{prefix}nonexisting7-{Guid.NewGuid()}";
+            _ = batch.StringLongestCommonSubsequenceLength(nonExistingKey7, lcsKey2);
+            testData.Add(new(0L, "StringLongestCommonSubsequenceLength(nonExistingKey7, lcsKey2)"));
+        }
 
         return testData;
     }

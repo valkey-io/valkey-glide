@@ -7,6 +7,9 @@
 * Java: Add lazy connection support to Java module ([#4350](https://github.com/valkey-io/valkey-glide/pull/4370))
 * Go: Add lazy connection support ([#4374](https://github.com/valkey-io/valkey-glide/pull/4374))
 
+#### Operational Enhancements
+* FFI: Add MIRI tests to CI ([#4506](https://github.com/valkey-io/valkey-glide/pull/4506))
+
 ## 2.0 (2025-06-18)
 
 #### Changes
