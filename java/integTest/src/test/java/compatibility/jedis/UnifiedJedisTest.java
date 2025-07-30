@@ -20,38 +20,45 @@ public class UnifiedJedisTest {
     private static final String TEST_KEY_PREFIX = "unified_jedis_test:";
 
     // Server configuration - dynamically resolved from CI environment
-    private static String redisHost;
-    private static int redisPort;
+    private static final String redisHost;
+    private static final int redisPort;
 
     // GLIDE UnifiedJedis compatibility layer instance
     private UnifiedJedis unifiedJedis;
 
-    @BeforeAll
-    static void setupClass() {
-        resolveServerAddress();
+    static {
+        String standaloneHosts = System.getProperty("test.server.standalone");
+
+        if (standaloneHosts != null && !standaloneHosts.trim().isEmpty()) {
+            String firstHost = standaloneHosts.split(",")[0].trim();
+            String[] hostPort = firstHost.split(":");
+
+            if (hostPort.length == 2) {
+                redisHost = hostPort[0];
+                redisPort = Integer.parseInt(hostPort[1]);
+            } else {
+                redisHost = "localhost";
+                redisPort = 6379;
+            }
+        } else {
+            redisHost = "localhost";
+            redisPort = 6379;
+        }
     }
 
     @BeforeEach
     void setup() {
         // Create GLIDE UnifiedJedis compatibility layer instance
-        try {
-            unifiedJedis = new UnifiedJedis(redisHost, redisPort);
-            assertNotNull(unifiedJedis, "GLIDE UnifiedJedis instance should be created successfully");
-        } catch (Exception e) {
-            fail("Failed to create GLIDE UnifiedJedis instance: " + e.getMessage());
-        }
+        unifiedJedis = new UnifiedJedis(redisHost, redisPort);
+        assertNotNull(unifiedJedis, "GLIDE UnifiedJedis instance should be created successfully");
     }
 
     @AfterEach
     void cleanup() {
         // Cleanup test keys
         if (unifiedJedis != null) {
-            try {
-                cleanupTestKeys(unifiedJedis);
-                unifiedJedis.close();
-            } catch (Exception e) {
-                // Ignore cleanup errors
-            }
+            cleanupTestKeys(unifiedJedis);
+            unifiedJedis.close();
         }
     }
 
@@ -216,56 +223,23 @@ public class UnifiedJedisTest {
         assertEquals(10000, getResult.length(), "Large value should have correct length");
     }
 
-    // Helper methods
-    /**
-     * Resolve Redis/Valkey server address from CI environment properties. Falls back to
-     * localhost:6379 if no CI configuration is found.
-     */
-    private static void resolveServerAddress() {
-        String standaloneHosts = System.getProperty("test.server.standalone");
-
-        if (standaloneHosts != null && !standaloneHosts.trim().isEmpty()) {
-            String firstHost = standaloneHosts.split(",")[0].trim();
-            String[] hostPort = firstHost.split(":");
-
-            if (hostPort.length == 2) {
-                redisHost = hostPort[0];
-                try {
-                    redisPort = Integer.parseInt(hostPort[1]);
-                    return;
-                } catch (NumberFormatException e) {
-                    // Fall through to default
-                }
-            }
-        }
-
-        // Fallback to localhost for local development
-        redisHost = "localhost";
-        redisPort = 6379;
-    }
-
     private void cleanupTestKeys(UnifiedJedis unifiedJedis) {
-        try {
-            // Delete all test keys using the available del methods
-            String[] keysToDelete = {
-                TEST_KEY_PREFIX + "basic",
-                TEST_KEY_PREFIX + "unified_key1",
-                TEST_KEY_PREFIX + "unified_key2",
-                TEST_KEY_PREFIX + "unified_key3",
-                TEST_KEY_PREFIX + "del1",
-                TEST_KEY_PREFIX + "del2",
-                TEST_KEY_PREFIX + "del3",
-                TEST_KEY_PREFIX + "connection_test",
-                TEST_KEY_PREFIX + "binary",
-                TEST_KEY_PREFIX + "binary1",
-                TEST_KEY_PREFIX + "binary2",
-                TEST_KEY_PREFIX + "binary3",
-                TEST_KEY_PREFIX + "large_value"
-            };
-
-            unifiedJedis.del(keysToDelete);
-        } catch (Exception e) {
-            // Ignore cleanup errors
-        }
+        // Delete all test keys using the available del methods
+        String[] keysToDelete = {
+            TEST_KEY_PREFIX + "basic",
+            TEST_KEY_PREFIX + "unified_key1",
+            TEST_KEY_PREFIX + "unified_key2",
+            TEST_KEY_PREFIX + "unified_key3",
+            TEST_KEY_PREFIX + "del1",
+            TEST_KEY_PREFIX + "del2",
+            TEST_KEY_PREFIX + "del3",
+            TEST_KEY_PREFIX + "connection_test",
+            TEST_KEY_PREFIX + "binary",
+            TEST_KEY_PREFIX + "binary1",
+            TEST_KEY_PREFIX + "binary2",
+            TEST_KEY_PREFIX + "binary3",
+            TEST_KEY_PREFIX + "large_value"
+        };
+        unifiedJedis.del(keysToDelete);
     }
 }

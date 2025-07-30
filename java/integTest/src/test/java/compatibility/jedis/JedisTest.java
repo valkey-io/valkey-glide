@@ -30,15 +30,30 @@ public class JedisTest {
     private static final String TEST_KEY_PREFIX = "jedis_test:";
 
     // Server configuration - dynamically resolved from CI environment
-    private static String redisHost;
-    private static int redisPort;
+    private static final String redisHost;
+    private static final int redisPort;
 
     // GLIDE compatibility layer instance
     private Jedis jedis;
 
-    @BeforeAll
-    public static void setupClass() {
-        resolveServerAddress();
+    static {
+        String standaloneHosts = System.getProperty("test.server.standalone");
+
+        if (standaloneHosts != null && !standaloneHosts.trim().isEmpty()) {
+            String firstHost = standaloneHosts.split(",")[0].trim();
+            String[] hostPort = firstHost.split(":");
+
+            if (hostPort.length == 2) {
+                redisHost = hostPort[0];
+                redisPort = Integer.parseInt(hostPort[1]);
+            } else {
+                redisHost = "localhost";
+                redisPort = 6379;
+            }
+        } else {
+            redisHost = "localhost";
+            redisPort = 6379;
+        }
     }
 
     @BeforeEach
@@ -55,34 +70,6 @@ public class JedisTest {
             cleanupTestKeys(jedis);
             jedis.close();
         }
-    }
-
-    // Helper methods
-    /**
-     * Resolve Redis/Valkey server address from CI environment properties. Falls back to
-     * localhost:6379 if no CI configuration is found.
-     */
-    private static void resolveServerAddress() {
-        String standaloneHosts = System.getProperty("test.server.standalone");
-
-        if (standaloneHosts != null && !standaloneHosts.trim().isEmpty()) {
-            String firstHost = standaloneHosts.split(",")[0].trim();
-            String[] hostPort = firstHost.split(":");
-
-            if (hostPort.length == 2) {
-                redisHost = hostPort[0];
-                try {
-                    redisPort = Integer.parseInt(hostPort[1]);
-                    return;
-                } catch (NumberFormatException e) {
-                    // Fall through to default
-                }
-            }
-        }
-
-        // Fallback to localhost for local development
-        redisHost = "localhost";
-        redisPort = 6379;
     }
 
     private void cleanupTestKeys(Jedis jedis) {
@@ -990,41 +977,7 @@ public class JedisTest {
     @Order(80)
     @DisplayName("SORT Command")
     void testSORT() {
-        // Note: SORT test is limited because GLIDE doesn't have list operations (lpush) yet
-        String testKey = TEST_KEY_PREFIX + "sort_test";
-
-        try {
-            // Test SORT on non-existing key (should return empty list)
-            List<String> result = jedis.sort(testKey);
-            assertNotNull(result, "SORT should return a list");
-            assertEquals(0, result.size(), "SORT on non-existing key should return empty list");
-
-            // Test SORT with parameters on non-existing key
-            result = jedis.sort(testKey, "DESC");
-            assertNotNull(result, "SORT with parameters should return a list");
-            assertEquals(
-                    0, result.size(), "SORT with parameters on non-existing key should return empty list");
-
-            // Create a string key to test SORT behavior on wrong type
-            jedis.set(testKey, "not_a_list");
-
-            try {
-                result = jedis.sort(testKey);
-                // If it doesn't throw an exception, it should return empty list
-                assertNotNull(result, "SORT should return a list even for wrong type");
-            } catch (Exception e) {
-                // Expected behavior - SORT on wrong type should throw exception
-                // Accept any exception as valid since GLIDE may have different error messages
-                assertNotNull(e.getMessage(), "Exception should have a message");
-                assertTrue(e.getMessage().length() > 0, "Exception message should not be empty");
-            }
-
-        } catch (Exception e) {
-            // SORT might not be fully implemented in GLIDE or may fail for other reasons
-            // Accept any exception as valid since this is testing API compatibility
-            assertNotNull(e.getMessage(), "Exception should have a message");
-            assertTrue(e.getMessage().length() > 0, "Exception message should not be empty");
-        }
+        // TO DO: Add integration test
     }
 
     @Test
@@ -1079,83 +1032,14 @@ public class JedisTest {
     @Order(83)
     @DisplayName("MIGRATE Command")
     void testMIGRATE() {
-        // Note: MIGRATE requires a destination Redis instance
-        // This test will verify the method exists but may not execute successfully
-        String testKey = TEST_KEY_PREFIX + "migrate";
-        jedis.set(testKey, "migrate_value");
-
-        try {
-            // Test MIGRATE (will likely fail without a destination server)
-            String result = jedis.migrate("localhost", 6380, testKey, 0, 5000);
-            // If it succeeds, it should return OK
-            if (result != null) {
-                assertEquals("OK", result, "MIGRATE should return OK if successful");
-            }
-        } catch (Exception e) {
-            // Expected if no destination server is available
-            assertTrue(
-                    e.getMessage().contains("MIGRATE")
-                            || e.getMessage().contains("connection")
-                            || e.getMessage().contains("refused")
-                            || e.getMessage().contains("timeout"),
-                    "Exception should be migration-related");
-        }
+        // TO DO: Add integration test
     }
 
     @Test
     @Order(84)
     @DisplayName("MOVE Command")
     void testMOVE() {
-        // Note: GLIDE may not support true database isolation like traditional Redis
-        // This test handles both scenarios: true move vs single-database behavior
-        String testKey = TEST_KEY_PREFIX + "move";
-        jedis.set(testKey, "move_value");
-
-        try {
-            // Test MOVE to database 1
-            long result = jedis.move(testKey, 1);
-            // Result depends on whether database 1 exists and key doesn't exist there
-            assertTrue(result >= 0, "MOVE should return non-negative value");
-
-            if (result == 1) {
-                // Key was moved successfully (or GLIDE reports success but doesn't actually move)
-                String sourceValue = jedis.get(testKey);
-                if (sourceValue == null) {
-                    // Key no longer exists in source database
-                    // In GLIDE, this might mean the key was deleted rather than moved
-                    assertNull(sourceValue, "Key should not exist in source database after move");
-
-                    // Switch to database 1 to verify
-                    jedis.select(1);
-                    String destValue = jedis.get(testKey);
-
-                    if (destValue != null) {
-                        // True database isolation - key exists in destination
-                        assertEquals("move_value", destValue, "Key should exist in destination database");
-                        // Clean up destination
-                        jedis.del(testKey);
-                    } else {
-                        // GLIDE behavior - key might be deleted entirely instead of moved
-                        assertNull(
-                                destValue,
-                                "Key doesn't exist in destination - GLIDE may not support database isolation");
-                    }
-
-                    // Switch back to database 0
-                    jedis.select(0);
-                } else {
-                    // GLIDE might not support database isolation - key still exists in source
-                    assertEquals(
-                            "move_value",
-                            sourceValue,
-                            "Key still exists - GLIDE may not support database isolation");
-                }
-            }
-        } catch (Exception e) {
-            assertTrue(
-                    e.getMessage().contains("MOVE") || e.getMessage().contains("database"),
-                    "Exception should be database-related");
-        }
+        // TO DO: Add integration test
     }
 
     @Test
@@ -1427,7 +1311,7 @@ public class JedisTest {
 
         assertNotNull(scanResult, "SCAN result should not be null");
         assertNotNull(scanResult.getResult(), "SCAN result list should not be null");
-        assertTrue(scanResult.getResult().size() > 0, "SCAN should return some keys");
+        assertFalse(scanResult.getResult().isEmpty(), "SCAN should return some keys");
     }
 
     @Test

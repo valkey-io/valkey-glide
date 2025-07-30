@@ -19,41 +19,49 @@ public class JedisPoolTest {
     private static final String TEST_KEY_PREFIX = "jedis_pool_test:";
 
     // Server configuration - dynamically resolved from CI environment
-    private static String redisHost;
-    private static int redisPort;
+    private static final String redisHost;
+    private static final int redisPort;
 
     // GLIDE compatibility layer pool
     private JedisPool jedisPool;
 
-    @BeforeAll
-    static void setupClass() {
-        resolveServerAddress();
+    static {
+        String standaloneHosts = System.getProperty("test.server.standalone");
+
+        if (standaloneHosts != null && !standaloneHosts.trim().isEmpty()) {
+            String firstHost = standaloneHosts.split(",")[0].trim();
+            String[] hostPort = firstHost.split(":");
+
+            if (hostPort.length == 2) {
+                redisHost = hostPort[0];
+                redisPort = Integer.parseInt(hostPort[1]);
+            } else {
+                // Fallback to localhost
+                redisHost = "localhost";
+                redisPort = 6379;
+            }
+        } else {
+            // Fallback to localhost
+            redisHost = "localhost";
+            redisPort = 6379;
+        }
     }
 
     @BeforeEach
     void setup() {
-        // Create GLIDE JedisPool compatibility layer instance
-        try {
-            jedisPool = new JedisPool(redisHost, redisPort);
-            assertNotNull(jedisPool, "GLIDE JedisPool instance should be created successfully");
-        } catch (Exception e) {
-            fail("Failed to create GLIDE JedisPool instance: " + e.getMessage());
-        }
+        jedisPool = new JedisPool(redisHost, redisPort);
+        assertNotNull(jedisPool, "GLIDE JedisPool instance should be created successfully");
     }
 
     @AfterEach
     void cleanup() {
         // Cleanup and close pool
         if (jedisPool != null) {
-            try {
-                // Clean up test keys before closing pool
-                try (Jedis jedis = jedisPool.getResource()) {
-                    cleanupTestKeys(jedis);
-                }
-                jedisPool.close();
-            } catch (Exception e) {
-                // Ignore cleanup errors
+            // Clean up test keys before closing pool
+            try (Jedis jedis = jedisPool.getResource()) {
+                cleanupTestKeys(jedis);
             }
+            jedisPool.close();
         }
     }
 
@@ -225,52 +233,20 @@ public class JedisPoolTest {
         }
     }
 
-    // Helper methods
-    /**
-     * Resolve Redis/Valkey server address from CI environment properties. Falls back to
-     * localhost:6379 if no CI configuration is found.
-     */
-    private static void resolveServerAddress() {
-        String standaloneHosts = System.getProperty("test.server.standalone");
-
-        if (standaloneHosts != null && !standaloneHosts.trim().isEmpty()) {
-            String firstHost = standaloneHosts.split(",")[0].trim();
-            String[] hostPort = firstHost.split(":");
-
-            if (hostPort.length == 2) {
-                redisHost = hostPort[0];
-                try {
-                    redisPort = Integer.parseInt(hostPort[1]);
-                    return;
-                } catch (NumberFormatException e) {
-                    // Fall through to default
-                }
-            }
-        }
-
-        // Fallback to localhost for local development
-        redisHost = "localhost";
-        redisPort = 6379;
-    }
-
     private void cleanupTestKeys(Jedis jedis) {
-        try {
-            // Delete all test keys
-            String[] keysToDelete = {
-                TEST_KEY_PREFIX + "pool_basic",
-                TEST_KEY_PREFIX + "multi_conn1",
-                TEST_KEY_PREFIX + "multi_conn2",
-                TEST_KEY_PREFIX + "reuse_test",
-                TEST_KEY_PREFIX + "concurrent_0",
-                TEST_KEY_PREFIX + "concurrent_1",
-                TEST_KEY_PREFIX + "concurrent_2",
-                TEST_KEY_PREFIX + "concurrent_3",
-                TEST_KEY_PREFIX + "concurrent_4"
-            };
+        // Delete all test keys
+        String[] keysToDelete = {
+            TEST_KEY_PREFIX + "pool_basic",
+            TEST_KEY_PREFIX + "multi_conn1",
+            TEST_KEY_PREFIX + "multi_conn2",
+            TEST_KEY_PREFIX + "reuse_test",
+            TEST_KEY_PREFIX + "concurrent_0",
+            TEST_KEY_PREFIX + "concurrent_1",
+            TEST_KEY_PREFIX + "concurrent_2",
+            TEST_KEY_PREFIX + "concurrent_3",
+            TEST_KEY_PREFIX + "concurrent_4"
+        };
 
-            jedis.del(keysToDelete);
-        } catch (Exception e) {
-            // Ignore cleanup errors
-        }
+        jedis.del(keysToDelete);
     }
 }
