@@ -17,6 +17,8 @@ public static class Constants
     public const string ReverseKeyword = "REV";
     public const string ByLexKeyword = "BYLEX";
     public const string ByScoreKeyword = "BYSCORE";
+    public const string MatchKeyword = "MATCH";
+    public const string CountKeyword = "COUNT";
 
     /// <summary>
     /// Expiry keywords.

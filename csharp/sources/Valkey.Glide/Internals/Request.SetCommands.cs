@@ -59,4 +59,42 @@ internal partial class Request
 
     public static Cmd<long, long> SetDifferenceStoreAsync(ValkeyKey destination, ValkeyKey[] keys)
         => Simple<long>(RequestType.SDiffStore, [destination.ToGlideString(), .. keys.ToGlideStrings()]);
+
+    public static Cmd<bool, bool> SetContainsAsync(ValkeyKey key, ValkeyValue value)
+        => Simple<bool>(RequestType.SIsMember, [key.ToGlideString(), value.ToGlideString()]);
+
+    public static Cmd<object[], bool[]> SetContainsAsync(ValkeyKey key, ValkeyValue[] values)
+        => new(RequestType.SMIsMember, [key.ToGlideString(), .. values.ToGlideStrings()], false, arr => [.. arr.Cast<bool>()]);
+
+    public static Cmd<GlideString, ValkeyValue> SetRandomMemberAsync(ValkeyKey key)
+        => new(RequestType.SRandMember, [key.ToGlideString()], true, response => response is null ? ValkeyValue.Null : (ValkeyValue)response);
+
+    public static Cmd<object[], ValkeyValue[]> SetRandomMembersAsync(ValkeyKey key, long count)
+        => new(RequestType.SRandMember, [key.ToGlideString(), count.ToGlideString()], false, arr => [.. arr.Cast<GlideString>().Select(gs => (ValkeyValue)gs)]);
+
+    public static Cmd<bool, bool> SetMoveAsync(ValkeyKey source, ValkeyKey destination, ValkeyValue value)
+        => Simple<bool>(RequestType.SMove, [source.ToGlideString(), destination.ToGlideString(), value.ToGlideString()]);
+
+    public static Cmd<object[], (long, ValkeyValue[])> SetScanAsync(ValkeyKey key, long cursor, ValkeyValue pattern = default, long count = 0)
+    {
+        List<GlideString> args = [key.ToGlideString(), cursor.ToGlideString()];
+
+        if (!pattern.IsNull)
+        {
+            args.AddRange([Constants.MatchKeyword.ToGlideString(), pattern.ToGlideString()]);
+        }
+
+        if (count > 0)
+        {
+            args.AddRange([Constants.CountKeyword.ToGlideString(), count.ToGlideString()]);
+        }
+
+        return new(RequestType.SScan, [.. args], false, arr =>
+        {
+            object[] scanArray = arr;
+            long nextCursor = long.Parse(((GlideString)scanArray[0]).ToString());
+            ValkeyValue[] elements = [.. ((object[])scanArray[1]).Cast<GlideString>().Select(gs => (ValkeyValue)gs)];
+            return (nextCursor, elements);
+        });
+    }
 }

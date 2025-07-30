@@ -89,4 +89,28 @@ internal interface IBatchSetCommands
     /// <inheritdoc cref="ISetCommands.SetDifferenceStoreAsync(ValkeyKey, ValkeyKey[], CommandFlags)" path="/*[not(self::remarks) and not(self::returns)]" />
     /// <returns>Command Response - <inheritdoc cref="ISetCommands.SetDifferenceStoreAsync(ValkeyKey, ValkeyKey[], CommandFlags)" /></returns>
     IBatch SetDifferenceStore(ValkeyKey destination, ValkeyKey[] keys);
+
+    /// <inheritdoc cref="ISetCommands.SetContainsAsync(ValkeyKey, ValkeyValue, CommandFlags)" path="/*[not(self::remarks) and not(self::returns)]" />
+    /// <returns>Command Response - <inheritdoc cref="ISetCommands.SetContainsAsync(ValkeyKey, ValkeyValue, CommandFlags)" /></returns>
+    IBatch SetContains(ValkeyKey key, ValkeyValue value);
+
+    /// <inheritdoc cref="ISetCommands.SetContainsAsync(ValkeyKey, ValkeyValue[], CommandFlags)" path="/*[not(self::remarks) and not(self::returns)]" />
+    /// <returns>Command Response - <inheritdoc cref="ISetCommands.SetContainsAsync(ValkeyKey, ValkeyValue[], CommandFlags)" /></returns>
+    IBatch SetContains(ValkeyKey key, ValkeyValue[] values);
+
+    /// <inheritdoc cref="ISetCommands.SetRandomMemberAsync(ValkeyKey, CommandFlags)" path="/*[not(self::remarks) and not(self::returns)]" />
+    /// <returns>Command Response - <inheritdoc cref="ISetCommands.SetRandomMemberAsync(ValkeyKey, CommandFlags)" /></returns>
+    IBatch SetRandomMember(ValkeyKey key);
+
+    /// <inheritdoc cref="ISetCommands.SetRandomMembersAsync(ValkeyKey, long, CommandFlags)" path="/*[not(self::remarks) and not(self::returns)]" />
+    /// <returns>Command Response - <inheritdoc cref="ISetCommands.SetRandomMembersAsync(ValkeyKey, long, CommandFlags)" /></returns>
+    IBatch SetRandomMembers(ValkeyKey key, long count);
+
+    /// <inheritdoc cref="ISetCommands.SetMoveAsync(ValkeyKey, ValkeyKey, ValkeyValue, CommandFlags)" path="/*[not(self::remarks) and not(self::returns)]" />
+    /// <returns>Command Response - <inheritdoc cref="ISetCommands.SetMoveAsync(ValkeyKey, ValkeyKey, ValkeyValue, CommandFlags)" /></returns>
+    IBatch SetMove(ValkeyKey source, ValkeyKey destination, ValkeyValue value);
+
+    /// <inheritdoc cref="ISetCommands.SetScanAsync(ValkeyKey, ValkeyValue, int, long, int, CommandFlags)" path="/*[not(self::remarks) and not(self::returns)]" />
+    /// <returns>Command Response - <inheritdoc cref="ISetCommands.SetScanAsync(ValkeyKey, ValkeyValue, int, long, int, CommandFlags)" /></returns>
+    IBatch SetScan(ValkeyKey key, long cursor, ValkeyValue pattern = default, long count = 0);
 }
