@@ -359,7 +359,7 @@ public class SetCommandTests(TestConfiguration config)
         List<ValkeyValue> patternScanned = [];
         await foreach (var member in client.SetScanAsync(key, "member1*"))
         {
-            Assert.Contains("member1", member);
+            Assert.StartsWith("member1", member);
             patternScanned.Add(member);
         }
         Assert.Equal(11111, patternScanned.Count);  // At least member1, member10-19, member100-199, etc.
