@@ -1,7 +1,7 @@
 name: The OSS Review Toolkit (ORT)
 
 permissions:
-    contents: read
+    contents: write
     pull-requests: write
     actions: read
 
@@ -268,7 +268,7 @@ jobs:
                   git checkout -b ${ORT_DIFF_BRANCH_NAME}
                   git add $PYTHON_ATTRIBUTIONS $NODE_ATTRIBUTIONS $RUST_ATTRIBUTIONS $JAVA_ATTRIBUTIONS $GO_ATTRIBUTIONS
                   git commit -m "Updated attribution files" -s
-                  git push --set-upstream origin ${ORT_DIFF_BRANCH_NAME} -f
+                  git push --set-upstream origin ${ORT_DIFF_BRANCH_NAME} -f || { echo "Failed to push branch."; exit 1; }
 
                   # Check if PR already exists
                   existing_pr=$(gh pr list --base ${TARGET_BRANCH} --head ${ORT_DIFF_BRANCH_NAME} --json number --jq '.[0].number')
@@ -276,12 +276,12 @@ jobs:
                   if [ -z "$existing_pr" ]; then
                     # Create a new PR if none exists
                     title="Updated attribution files for commit ${TARGET_COMMIT}"
-                    gh pr create -B ${TARGET_BRANCH} -H ${ORT_DIFF_BRANCH_NAME} --title "${title}" --body "Created by Github action. ${{ env.LICENSES_LIST }}"
+                    gh pr create -B ${TARGET_BRANCH} -H ${ORT_DIFF_BRANCH_NAME} --title "${title}" --body "Created by Github action. ${{ env.LICENSES_LIST }}" || { echo "Failed to create PR."; exit 1; }
                     echo "Pull request created successfully."
                   else
                     # Update the existing PR
                     echo "Pull request #$existing_pr already exists. Updating branch."
-                    gh pr edit $existing_pr --title "Updated attribution files for commit ${TARGET_COMMIT}" --body "Created by Github action. ${{ env.LICENSES_LIST }}"
+                    gh pr edit $existing_pr --title "Updated attribution files for commit ${TARGET_COMMIT}" --body "Created by Github action. ${{ env.LICENSES_LIST }}" || { echo "Failed to update PR."; exit 1; }
                     echo "Pull request updated successfully."
                   fi
               env:
