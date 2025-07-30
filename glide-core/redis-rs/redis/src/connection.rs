@@ -925,6 +925,127 @@ pub fn connect(
     setup_connection(con, &connection_info.redis)
 }
 
+/// Check if the current user has permission to execute a specific command (async version).
+/// This is used to avoid ACL permission errors during connection setup.
+#[cfg(feature = "aio")]
+async fn has_command_permission_async<C>(con: &mut C, command: &str) -> bool 
+where
+    C: crate::aio::ConnectionLike,
+{
+    // Try to execute ACL DRYRUN to test if the command is allowed
+    // ACL DRYRUN <username> <command> [args...]
+    // First, get the current username
+    let username = match crate::cmd("ACL").arg("WHOAMI").query_async::<C, String>(con).await {
+        Ok(user) => user,
+        Err(_) => {
+            // If ACL WHOAMI fails, assume we're not using ACL or it's an older server
+            // In this case, try the command anyway as it likely won't fail
+            return true;
+        }
+    };
+
+    // Use ACL DRYRUN to test the command
+    match crate::cmd("ACL").arg("DRYRUN").arg(&username).arg(command).query_async::<C, String>(con).await {
+        Ok(result) => result == "OK",
+        Err(_) => {
+            // If ACL DRYRUN is not available or fails, assume permission exists
+            // This handles older Redis/Valkey versions or non-ACL setups
+            true
+        }
+    }
+}
+
+/// Create CLIENT SETINFO pipeline only if user has required permissions (async version).
+/// This prevents ACL permission errors during connection setup.
+#[cfg(feature = "aio")]
+pub(crate) async fn client_set_info_pipeline_safe_async<C>(con: &mut C) -> Pipeline
+where
+    C: crate::aio::ConnectionLike,
+{
+    let mut pipeline = crate::pipe();
+    
+    // Only add CLIENT SETINFO commands if user has the required permissions
+    if has_command_permission_async(con, "CLIENT|SETINFO").await {
+        pipeline
+            .cmd("CLIENT")
+            .arg("SETINFO")
+            .arg("LIB-NAME")
+            .arg(std::env!("GLIDE_NAME"))
+            .ignore();
+        pipeline
+            .cmd("CLIENT")
+            .arg("SETINFO")
+            .arg("LIB-VER")
+            .arg(std::env!("GLIDE_VERSION"))
+            .ignore();
+    } else {
+        // Log a warning that we couldn't set client info
+        tracing::warn!(
+            "CLIENT SETINFO commands not executed: user lacks +client|setinfo permission. \
+            Client library metadata will not be available to server monitoring."
+        );
+    }
+    
+    pipeline
+}
+
+/// Check if the current user has permission to execute a specific command.
+/// This is used to avoid ACL permission errors during connection setup.
+fn has_command_permission(con: &mut dyn ConnectionLike, command: &str) -> bool {
+    // Try to execute ACL DRYRUN to test if the command is allowed
+    // ACL DRYRUN <username> <command> [args...]
+    // First, get the current username
+    let username = match crate::cmd("ACL").arg("WHOAMI").query::<String>(con) {
+        Ok(user) => user,
+        Err(_) => {
+            // If ACL WHOAMI fails, assume we're not using ACL or it's an older server
+            // In this case, try the command anyway as it likely won't fail
+            return true;
+        }
+    };
+
+    // Use ACL DRYRUN to test the command
+    match crate::cmd("ACL").arg("DRYRUN").arg(&username).arg(command).query::<String>(con) {
+        Ok(result) => result == "OK",
+        Err(_) => {
+            // If ACL DRYRUN is not available or fails, assume permission exists
+            // This handles older Redis/Valkey versions or non-ACL setups
+            true
+        }
+    }
+}
+
+/// Create CLIENT SETINFO pipeline only if user has required permissions.
+/// This prevents ACL permission errors during connection setup.
+pub(crate) fn client_set_info_pipeline_safe(con: &mut dyn ConnectionLike) -> Pipeline {
+    let mut pipeline = crate::pipe();
+    
+    // Only add CLIENT SETINFO commands if user has the required permissions
+    if has_command_permission(con, "CLIENT|SETINFO") {
+        pipeline
+            .cmd("CLIENT")
+            .arg("SETINFO")
+            .arg("LIB-NAME")
+            .arg(std::env!("GLIDE_NAME"))
+            .ignore();
+        pipeline
+            .cmd("CLIENT")
+            .arg("SETINFO")
+            .arg("LIB-VER")
+            .arg(std::env!("GLIDE_VERSION"))
+            .ignore();
+    } else {
+        // Log a warning that we couldn't set client info
+        eprintln!(
+            "Warning: CLIENT SETINFO commands not executed: user lacks +client|setinfo permission. \
+            Client library metadata will not be available to server monitoring."
+        );
+    }
+    
+    pipeline
+}
+
+/// Legacy function for backward compatibility - kept for existing code
 pub(crate) fn client_set_info_pipeline() -> Pipeline {
     let mut pipeline = crate::pipe();
     pipeline
@@ -993,7 +1114,8 @@ fn setup_connection(
 
     // result is ignored, as per the command's instructions.
     // https://redis.io/commands/client-setinfo/
-    let _: RedisResult<()> = client_set_info_pipeline().query(&mut rv);
+    // Use permission-safe version to avoid ACL errors
+    let _: RedisResult<()> = client_set_info_pipeline_safe(&mut rv).query(&mut rv);
 
     Ok(rv)
 }
