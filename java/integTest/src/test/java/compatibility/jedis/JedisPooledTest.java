@@ -139,21 +139,36 @@ public class JedisPooledTest {
         // Test that JedisPooled maintains connection state properly
         String testKey = TEST_KEY_PREFIX + "pooled_behavior";
 
-        // Set a value
+        // Set initial value
         jedisPooled.set(testKey, "initial_value");
 
-        // Perform multiple operations to test connection reuse
+        // Verify initial value
+        String initialValue = jedisPooled.get(testKey);
+        assertEquals("initial_value", initialValue, "Initial value should be set correctly");
+
+        // Perform multiple operations to test connection reuse and value updates
         for (int i = 0; i < 10; i++) {
-            String value = jedisPooled.get(testKey);
-            assertEquals("initial_value", value, "Value should be consistent across operations");
-
             // Update value
-            jedisPooled.set(testKey, "value_" + i);
+            String newValue = "value_" + i;
+            jedisPooled.set(testKey, newValue);
 
-            // Verify update
-            String updatedValue = jedisPooled.get(testKey);
-            assertEquals("value_" + i, updatedValue, "Updated value should be correct");
+            // Verify update immediately
+            String retrievedValue = jedisPooled.get(testKey);
+            assertEquals(newValue, retrievedValue, "Updated value should be correct for iteration " + i);
+
+            // Test that the value persists across multiple gets (connection reuse)
+            for (int j = 0; j < 3; j++) {
+                String persistentValue = jedisPooled.get(testKey);
+                assertEquals(
+                        newValue,
+                        persistentValue,
+                        "Value should be consistent across multiple gets in iteration " + i);
+            }
         }
+
+        // Final verification - should have the last value
+        String finalValue = jedisPooled.get(testKey);
+        assertEquals("value_9", finalValue, "Final value should be the last updated value");
     }
 
     @Test
