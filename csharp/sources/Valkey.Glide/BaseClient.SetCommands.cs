@@ -154,12 +154,11 @@ public abstract partial class BaseClient : ISetCommands
 
         do
         {
-            var (nextCursor, elements) = await Command(Request.SetScanAsync(key, currentCursor, pattern, pageSize));
+            (long nextCursor, ValkeyValue[] elements) = await Command(Request.SetScanAsync(key, currentCursor, pattern, pageSize));
 
-            // Skip elements based on offset for the first page
-            var elementsToYield = currentOffset > 0 ? elements.Skip(currentOffset) : elements;
+            IEnumerable<ValkeyValue> elementsToYield = currentOffset > 0 ? elements.Skip(currentOffset) : elements;
 
-            foreach (var element in elementsToYield)
+            foreach (ValkeyValue element in elementsToYield)
             {
                 yield return element;
             }
