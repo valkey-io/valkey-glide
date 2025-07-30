@@ -18,7 +18,7 @@ The Valkey GLIDE Java wrapper consists of both Java and Rust code. Rust bindings
 - GCC
 - pkg-config
 - cmake
-- protoc (protobuf compiler) v29.1
+- protoc (protobuf compiler) >= v29.1
 - openssl
 - openssl-dev
 - rustup
@@ -79,7 +79,7 @@ PB_REL="https://github.com/protocolbuffers/protobuf/releases"
 curl -LO $PB_REL/download/v29.1/protoc-29.1-linux-x86_64.zip
 unzip protoc-29.1-linux-x86_64.zip -d $HOME/.local
 export PATH="$PATH:$HOME/.local/bin"
-# Check that the protobuf compiler version is 29.1
+# Check that the protobuf compiler version 29.1 or higher is installed
 protoc --version
 ```
 

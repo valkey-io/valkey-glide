@@ -9,12 +9,13 @@ The Valkey GLIDE Python wrapper consists of both Python and Rust code. Rust bind
 
 Before building the package from source, make sure that you have installed the listed dependencies below:
 
+
 - python3 virtualenv
 - git
 - GCC
 - pkg-config
 - cmake
-- protoc (protobuf compiler) v29.1
+- protoc (protobuf compiler) >= v3.20.0
 - openssl
 - openssl-dev
 - rustup
@@ -80,19 +81,18 @@ It is not necessary to **Install `ziglang` and `zigbuild`** for MacOS.
 <details>
 <summary>Install protobuf compiler</summary>
 
-Only protobuf v29.1 is supported. Other versions are not supported and may cause build issues.
-
-Various platform-specific zips can be found [here](https://github.com/protocolbuffers/protobuf/releases/tag/v29.1).
+Various platform-specific zips can be found [here](https://github.com/protocolbuffers/protobuf/releases/v3.20.3).
 Choose the appropriate zip for your system and run the commands below, adjusting for the zip you chose:
 
 ```bash
 PB_REL="https://github.com/protocolbuffers/protobuf/releases"
-curl -LO $PB_REL/download/v29.1/protoc-29.1-linux-x86_64.zip
-unzip protoc-29.1-linux-x86_64.zip -d $HOME/.local
+curl -LO $PB_REL/download/v3.20.3/protoc-3.20.3-linux-x86_64.zip
+unzip protoc-3.20.3-linux-x86_64.zip -d $HOME/.local
 export PATH="$PATH:$HOME/.local/bin"
-# Check that the protobuf compiler version is 29.1
+# Check that the protobuf compiler is installed. A minimum version of 3.20.0 is required.
 protoc --version
 ```
+
 You may wish to add the entire `export PATH` line to your shell configuration file to persist this path addition, either `.bashrc` or `.zshrc` depending on which shell you are using.
 
 </details>
