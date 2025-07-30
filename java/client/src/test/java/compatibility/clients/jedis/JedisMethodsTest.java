@@ -19,11 +19,11 @@ public class JedisMethodsTest {
 
         // Test del(String key) method exists
         Method delSingleKey = jedisClass.getMethod("del", String.class);
-        assertEquals(Long.class, delSingleKey.getReturnType());
+        assertEquals(long.class, delSingleKey.getReturnType());
 
         // Test del(String... keys) method exists
         Method delMultipleKeys = jedisClass.getMethod("del", String[].class);
-        assertEquals(Long.class, delMultipleKeys.getReturnType());
+        assertEquals(long.class, delMultipleKeys.getReturnType());
     }
 
     @Test

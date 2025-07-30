@@ -69,7 +69,6 @@
     "java.configuration.updateBuildConfiguration": "interactive",
     "files.associations": {
         "**/frontmatter.json": "jsonc",
-        "**/.frontmatter/config/*.json": "jsonc",
-        "iosfwd": "cpp"
+        "**/.frontmatter/config/*.json": "jsonc"
     }
 }

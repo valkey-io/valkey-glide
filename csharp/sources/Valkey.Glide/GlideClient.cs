@@ -79,9 +79,27 @@ public class GlideClient : BaseClient, IGenericCommands, IServerManagementComman
         return await Command(Request.Echo(message));
     }
 
+    public async Task<TimeSpan> PingAsync(CommandFlags flags = CommandFlags.None)
+    {
+        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
+        return await Command(Request.Ping());
+    }
+
+    public async Task<TimeSpan> PingAsync(ValkeyValue message, CommandFlags flags = CommandFlags.None)
+    {
+        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
+        return await Command(Request.Ping(message));
+    }
+
     public async Task<bool> KeyMoveAsync(ValkeyKey key, int database, CommandFlags flags = CommandFlags.None)
-        => await Command(Request.KeyMoveAsync(key, database));
+    {
+        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
+        return await Command(Request.KeyMoveAsync(key, database));
+    }
 
     public async Task<bool> KeyCopyAsync(ValkeyKey sourceKey, ValkeyKey destinationKey, int destinationDatabase, bool replace = false, CommandFlags flags = CommandFlags.None)
-        => await Command(Request.KeyCopyAsync(sourceKey, destinationKey, destinationDatabase, replace));
+    {
+        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
+        return await Command(Request.KeyCopyAsync(sourceKey, destinationKey, destinationDatabase, replace));
+    }
 }
