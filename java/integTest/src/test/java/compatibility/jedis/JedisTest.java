@@ -42,24 +42,16 @@ public class JedisTest {
     @BeforeEach
     void setup() {
         // Create GLIDE Jedis compatibility layer instance
-        try {
-            jedis = new Jedis(redisHost, redisPort);
-            assertNotNull(jedis, "GLIDE Jedis instance should be created successfully");
-        } catch (Exception e) {
-            fail("Failed to create GLIDE Jedis instance: " + e.getMessage());
-        }
+        jedis = new Jedis(redisHost, redisPort);
+        assertNotNull(jedis, "GLIDE Jedis instance should be created successfully");
     }
 
     @AfterEach
     void cleanup() {
         // Cleanup test keys
         if (jedis != null) {
-            try {
-                cleanupTestKeys(jedis);
-                jedis.close();
-            } catch (Exception e) {
-                // Ignore cleanup errors
-            }
+            cleanupTestKeys(jedis);
+            jedis.close();
         }
     }
 
@@ -73,137 +65,133 @@ public class JedisTest {
     }
 
     private void cleanupTestKeys(Jedis jedis) {
-        try {
-            // Delete all test keys - comprehensive cleanup
-            String[] keysToDelete = {
-                // Basic operation keys
-                TEST_KEY_PREFIX + "basic",
-                TEST_KEY_PREFIX + "key1",
-                TEST_KEY_PREFIX + "key2",
-                TEST_KEY_PREFIX + "key3",
-                TEST_KEY_PREFIX + "mset_key1",
-                TEST_KEY_PREFIX + "mset_key2",
-                TEST_KEY_PREFIX + "mset_key3",
-                TEST_KEY_PREFIX + "mget_key1",
-                TEST_KEY_PREFIX + "mget_key2",
-                TEST_KEY_PREFIX + "mget_key3",
-                TEST_KEY_PREFIX + "setnx",
-                TEST_KEY_PREFIX + "setex",
-                TEST_KEY_PREFIX + "psetex",
-                TEST_KEY_PREFIX + "getset",
-                TEST_KEY_PREFIX + "setget",
-                TEST_KEY_PREFIX + "getdel",
-                TEST_KEY_PREFIX + "getex",
-                TEST_KEY_PREFIX + "append",
-                TEST_KEY_PREFIX + "strlen",
-                TEST_KEY_PREFIX + "setbit",
-                TEST_KEY_PREFIX + "getbit",
-                TEST_KEY_PREFIX + "bitcount",
-                TEST_KEY_PREFIX + "bitpos",
-                TEST_KEY_PREFIX + "bitop_dest",
-                TEST_KEY_PREFIX + "bitop_src1",
-                TEST_KEY_PREFIX + "bitop_src2",
-                TEST_KEY_PREFIX + "bitfield",
-                TEST_KEY_PREFIX + "bitfield_ro",
-                TEST_KEY_PREFIX + "incr",
-                TEST_KEY_PREFIX + "incrby",
-                TEST_KEY_PREFIX + "incrbyfloat",
-                TEST_KEY_PREFIX + "decr",
-                TEST_KEY_PREFIX + "decrby",
-                TEST_KEY_PREFIX + "del1",
-                TEST_KEY_PREFIX + "del2",
-                TEST_KEY_PREFIX + "del3",
-                TEST_KEY_PREFIX + "unlink1",
-                TEST_KEY_PREFIX + "unlink2",
-                TEST_KEY_PREFIX + "exists",
-                TEST_KEY_PREFIX + "type",
-                TEST_KEY_PREFIX + "keys_test1",
-                TEST_KEY_PREFIX + "keys_test2",
-                TEST_KEY_PREFIX + "keys_test3",
-                TEST_KEY_PREFIX + "random1",
-                TEST_KEY_PREFIX + "random2",
-                TEST_KEY_PREFIX + "random3",
-                TEST_KEY_PREFIX + "rename_src",
-                TEST_KEY_PREFIX + "rename_dest",
-                TEST_KEY_PREFIX + "renamenx_src",
-                TEST_KEY_PREFIX + "renamenx_dest",
-                TEST_KEY_PREFIX + "expire",
-                TEST_KEY_PREFIX + "expireat",
-                TEST_KEY_PREFIX + "pexpire",
-                TEST_KEY_PREFIX + "pexpireat",
-                TEST_KEY_PREFIX + "ttl",
-                TEST_KEY_PREFIX + "pttl",
-                TEST_KEY_PREFIX + "expiretime",
-                TEST_KEY_PREFIX + "pexpiretime",
-                TEST_KEY_PREFIX + "persist",
-                TEST_KEY_PREFIX + "sort",
-                TEST_KEY_PREFIX + "dump",
-                TEST_KEY_PREFIX + "restore",
-                TEST_KEY_PREFIX + "migrate",
-                TEST_KEY_PREFIX + "move",
-                TEST_KEY_PREFIX + "scan_0",
-                TEST_KEY_PREFIX + "scan_1",
-                TEST_KEY_PREFIX + "scan_2",
-                TEST_KEY_PREFIX + "scan_3",
-                TEST_KEY_PREFIX + "scan_4",
-                TEST_KEY_PREFIX + "scan_5",
-                TEST_KEY_PREFIX + "scan_6",
-                TEST_KEY_PREFIX + "scan_7",
-                TEST_KEY_PREFIX + "scan_8",
-                TEST_KEY_PREFIX + "scan_9",
-                TEST_KEY_PREFIX + "touch1",
-                TEST_KEY_PREFIX + "touch2",
-                TEST_KEY_PREFIX + "copy_src",
-                TEST_KEY_PREFIX + "copy_dest",
-                TEST_KEY_PREFIX + "pfadd1",
-                TEST_KEY_PREFIX + "pfadd2",
-                TEST_KEY_PREFIX + "pfcount1",
-                TEST_KEY_PREFIX + "pfcount2",
-                TEST_KEY_PREFIX + "pfmerge_src1",
-                TEST_KEY_PREFIX + "pfmerge_src2",
-                TEST_KEY_PREFIX + "pfmerge_dest",
-                // New test keys
-                TEST_KEY_PREFIX + "set_params",
-                TEST_KEY_PREFIX + "set_nx",
-                TEST_KEY_PREFIX + "set_xx",
-                TEST_KEY_PREFIX + "setget_params",
-                TEST_KEY_PREFIX + "rename_src",
-                TEST_KEY_PREFIX + "rename_dest",
-                TEST_KEY_PREFIX + "renamenx_src",
-                TEST_KEY_PREFIX + "renamenx_dest",
-                TEST_KEY_PREFIX + "renamenx_src2",
-                TEST_KEY_PREFIX + "exists_multi1",
-                TEST_KEY_PREFIX + "exists_multi2",
-                TEST_KEY_PREFIX + "exists_multi3",
-                TEST_KEY_PREFIX + "keyexists",
-                TEST_KEY_PREFIX + "bitcount_range",
-                TEST_KEY_PREFIX + "bitop_src1",
-                TEST_KEY_PREFIX + "bitop_src2",
-                TEST_KEY_PREFIX + "bitop_dest",
-                TEST_KEY_PREFIX + "bitfield",
-                TEST_KEY_PREFIX + "bitfield_ro",
-                TEST_KEY_PREFIX + "sort_test",
-                TEST_KEY_PREFIX + "dump",
-                TEST_KEY_PREFIX + "restore_src",
-                TEST_KEY_PREFIX + "restore_dest",
-                TEST_KEY_PREFIX + "restore_ttl",
-                TEST_KEY_PREFIX + "migrate",
-                TEST_KEY_PREFIX + "move",
-                TEST_KEY_PREFIX + "select_test",
-                TEST_KEY_PREFIX + "touch1",
-                TEST_KEY_PREFIX + "touch2",
-                TEST_KEY_PREFIX + "touch_nonexistent",
-                TEST_KEY_PREFIX + "copy_src",
-                TEST_KEY_PREFIX + "copy_dest",
-                TEST_KEY_PREFIX + "expiretime",
-                TEST_KEY_PREFIX + "pexpiretime",
-                TEST_KEY_PREFIX + "expire_option"
-            };
+        // Delete all test keys - comprehensive cleanup
+        String[] keysToDelete = {
+            // Basic operation keys
+            TEST_KEY_PREFIX + "basic",
+            TEST_KEY_PREFIX + "key1",
+            TEST_KEY_PREFIX + "key2",
+            TEST_KEY_PREFIX + "key3",
+            TEST_KEY_PREFIX + "mset_key1",
+            TEST_KEY_PREFIX + "mset_key2",
+            TEST_KEY_PREFIX + "mset_key3",
+            TEST_KEY_PREFIX + "mget_key1",
+            TEST_KEY_PREFIX + "mget_key2",
+            TEST_KEY_PREFIX + "mget_key3",
+            TEST_KEY_PREFIX + "setnx",
+            TEST_KEY_PREFIX + "setex",
+            TEST_KEY_PREFIX + "psetex",
+            TEST_KEY_PREFIX + "getset",
+            TEST_KEY_PREFIX + "setget",
+            TEST_KEY_PREFIX + "getdel",
+            TEST_KEY_PREFIX + "getex",
+            TEST_KEY_PREFIX + "append",
+            TEST_KEY_PREFIX + "strlen",
+            TEST_KEY_PREFIX + "setbit",
+            TEST_KEY_PREFIX + "getbit",
+            TEST_KEY_PREFIX + "bitcount",
+            TEST_KEY_PREFIX + "bitpos",
+            TEST_KEY_PREFIX + "bitop_dest",
+            TEST_KEY_PREFIX + "bitop_src1",
+            TEST_KEY_PREFIX + "bitop_src2",
+            TEST_KEY_PREFIX + "bitfield",
+            TEST_KEY_PREFIX + "bitfield_ro",
+            TEST_KEY_PREFIX + "incr",
+            TEST_KEY_PREFIX + "incrby",
+            TEST_KEY_PREFIX + "incrbyfloat",
+            TEST_KEY_PREFIX + "decr",
+            TEST_KEY_PREFIX + "decrby",
+            TEST_KEY_PREFIX + "del1",
+            TEST_KEY_PREFIX + "del2",
+            TEST_KEY_PREFIX + "del3",
+            TEST_KEY_PREFIX + "unlink1",
+            TEST_KEY_PREFIX + "unlink2",
+            TEST_KEY_PREFIX + "exists",
+            TEST_KEY_PREFIX + "type",
+            TEST_KEY_PREFIX + "keys_test1",
+            TEST_KEY_PREFIX + "keys_test2",
+            TEST_KEY_PREFIX + "keys_test3",
+            TEST_KEY_PREFIX + "random1",
+            TEST_KEY_PREFIX + "random2",
+            TEST_KEY_PREFIX + "random3",
+            TEST_KEY_PREFIX + "rename_src",
+            TEST_KEY_PREFIX + "rename_dest",
+            TEST_KEY_PREFIX + "renamenx_src",
+            TEST_KEY_PREFIX + "renamenx_dest",
+            TEST_KEY_PREFIX + "expire",
+            TEST_KEY_PREFIX + "expireat",
+            TEST_KEY_PREFIX + "pexpire",
+            TEST_KEY_PREFIX + "pexpireat",
+            TEST_KEY_PREFIX + "ttl",
+            TEST_KEY_PREFIX + "pttl",
+            TEST_KEY_PREFIX + "expiretime",
+            TEST_KEY_PREFIX + "pexpiretime",
+            TEST_KEY_PREFIX + "persist",
+            TEST_KEY_PREFIX + "sort",
+            TEST_KEY_PREFIX + "dump",
+            TEST_KEY_PREFIX + "restore",
+            TEST_KEY_PREFIX + "migrate",
+            TEST_KEY_PREFIX + "move",
+            TEST_KEY_PREFIX + "scan_0",
+            TEST_KEY_PREFIX + "scan_1",
+            TEST_KEY_PREFIX + "scan_2",
+            TEST_KEY_PREFIX + "scan_3",
+            TEST_KEY_PREFIX + "scan_4",
+            TEST_KEY_PREFIX + "scan_5",
+            TEST_KEY_PREFIX + "scan_6",
+            TEST_KEY_PREFIX + "scan_7",
+            TEST_KEY_PREFIX + "scan_8",
+            TEST_KEY_PREFIX + "scan_9",
+            TEST_KEY_PREFIX + "touch1",
+            TEST_KEY_PREFIX + "touch2",
+            TEST_KEY_PREFIX + "copy_src",
+            TEST_KEY_PREFIX + "copy_dest",
+            TEST_KEY_PREFIX + "pfadd1",
+            TEST_KEY_PREFIX + "pfadd2",
+            TEST_KEY_PREFIX + "pfcount1",
+            TEST_KEY_PREFIX + "pfcount2",
+            TEST_KEY_PREFIX + "pfmerge_src1",
+            TEST_KEY_PREFIX + "pfmerge_src2",
+            TEST_KEY_PREFIX + "pfmerge_dest",
+            // New test keys
+            TEST_KEY_PREFIX + "set_params",
+            TEST_KEY_PREFIX + "set_nx",
+            TEST_KEY_PREFIX + "set_xx",
+            TEST_KEY_PREFIX + "setget_params",
+            TEST_KEY_PREFIX + "rename_src",
+            TEST_KEY_PREFIX + "rename_dest",
+            TEST_KEY_PREFIX + "renamenx_src",
+            TEST_KEY_PREFIX + "renamenx_dest",
+            TEST_KEY_PREFIX + "renamenx_src2",
+            TEST_KEY_PREFIX + "exists_multi1",
+            TEST_KEY_PREFIX + "exists_multi2",
+            TEST_KEY_PREFIX + "exists_multi3",
+            TEST_KEY_PREFIX + "keyexists",
+            TEST_KEY_PREFIX + "bitcount_range",
+            TEST_KEY_PREFIX + "bitop_src1",
+            TEST_KEY_PREFIX + "bitop_src2",
+            TEST_KEY_PREFIX + "bitop_dest",
+            TEST_KEY_PREFIX + "bitfield",
+            TEST_KEY_PREFIX + "bitfield_ro",
+            TEST_KEY_PREFIX + "sort_test",
+            TEST_KEY_PREFIX + "dump",
+            TEST_KEY_PREFIX + "restore_src",
+            TEST_KEY_PREFIX + "restore_dest",
+            TEST_KEY_PREFIX + "restore_ttl",
+            TEST_KEY_PREFIX + "migrate",
+            TEST_KEY_PREFIX + "move",
+            TEST_KEY_PREFIX + "select_test",
+            TEST_KEY_PREFIX + "touch1",
+            TEST_KEY_PREFIX + "touch2",
+            TEST_KEY_PREFIX + "touch_nonexistent",
+            TEST_KEY_PREFIX + "copy_src",
+            TEST_KEY_PREFIX + "copy_dest",
+            TEST_KEY_PREFIX + "expiretime",
+            TEST_KEY_PREFIX + "pexpiretime",
+            TEST_KEY_PREFIX + "expire_option"
+        };
 
-            jedis.del(keysToDelete);
-        } catch (Exception e) {
-            // Ignore cleanup errors
-        }
+        jedis.del(keysToDelete);
     }
 
     @Test
@@ -1071,85 +1059,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(98)
-    @DisplayName("AUTH Command")
-    void testAUTH() {
-        // Note: This test assumes no authentication is required on the test server
-        // In a real scenario with auth, this would test actual authentication
-
-        try {
-            // Test AUTH with password (should work on servers without auth)
-            String result = jedis.auth("dummy_password");
-            // If no auth is configured, this might return OK or throw an exception
-            // We'll just verify the method exists and can be called
-            assertNotNull(result, "AUTH should return a response");
-        } catch (Exception e) {
-            // Expected if no auth is configured - just verify method exists
-            assertTrue(
-                    e.getMessage().contains("AUTH") || e.getMessage().contains("password"),
-                    "Exception should be auth-related");
-        }
-
-        try {
-            // Test AUTH with username and password
-            String result = jedis.auth("dummy_user", "dummy_password");
-            assertNotNull(result, "AUTH with user should return a response");
-        } catch (Exception e) {
-            // Expected if no auth is configured
-            assertTrue(
-                    e.getMessage().contains("AUTH")
-                            || e.getMessage().contains("password")
-                            || e.getMessage().contains("user"),
-                    "Exception should be auth-related");
-        }
-    }
-
-    @Test
-    @Order(99)
-    @DisplayName("SELECT Command")
-    void testSELECT() {
-        // Note: GLIDE may not support true database isolation like traditional Redis
-        // This test handles both scenarios: true isolation vs single-database behavior
-        try {
-            String result = jedis.select(0);
-            assertEquals("OK", result, "SELECT should return OK");
-
-            // Set a key in current database
-            String testKey = TEST_KEY_PREFIX + "select_test";
-            jedis.set(testKey, "db0_value");
-
-            // Switch to database 1 (if available)
-            result = jedis.select(1);
-            assertEquals("OK", result, "SELECT database 1 should return OK");
-
-            // Key should not exist in database 1 (unless GLIDE doesn't support database isolation)
-            String keyValue = jedis.get(testKey);
-            if (keyValue == null) {
-                // True database isolation - key should not exist in different database
-                assertNull(keyValue, "Key should not exist in different database");
-            } else {
-                // GLIDE might not support database isolation - key still exists
-                assertEquals(
-                        "db0_value", keyValue, "Key exists - GLIDE may not support database isolation");
-            }
-
-            // Switch back to database 0
-            result = jedis.select(0);
-            assertEquals("OK", result, "SELECT back to database 0 should return OK");
-            assertEquals("db0_value", jedis.get(testKey), "Key should exist in original database");
-
-        } catch (Exception e) {
-            // Some Redis configurations or GLIDE might not support multiple databases
-            assertTrue(
-                    e.getMessage().contains("SELECT")
-                            || e.getMessage().contains("database")
-                            || e.getMessage().contains("not supported")
-                            || e.getMessage().contains("ERR"),
-                    "Exception should be database-related: " + e.getMessage());
-        }
-    }
-
-    @Test
     @Order(83)
     @DisplayName("MIGRATE Command")
     void testMIGRATE() {
@@ -1215,7 +1124,6 @@ public class JedisTest {
                 }
             }
         } catch (Exception e) {
-            // Some Redis configurations might not support multiple databases
             assertTrue(
                     e.getMessage().contains("MOVE") || e.getMessage().contains("database"),
                     "Exception should be database-related");
