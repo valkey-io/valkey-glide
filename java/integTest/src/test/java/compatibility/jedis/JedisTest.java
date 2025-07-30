@@ -14,6 +14,7 @@ import redis.clients.jedis.Jedis;
 import redis.clients.jedis.params.BitPosParams;
 import redis.clients.jedis.params.GetExParams;
 import redis.clients.jedis.params.ScanParams;
+import redis.clients.jedis.params.SetParams;
 import redis.clients.jedis.resps.ScanResult;
 
 /**
@@ -217,7 +218,7 @@ public class JedisTest {
         String testValue = "set_params_value";
 
         // Test SET with EX (expiration in seconds)
-        redis.clients.jedis.params.SetParams params = new redis.clients.jedis.params.SetParams().ex(60);
+        SetParams params = new SetParams().ex(60);
         String result = jedis.set(testKey, testValue, params);
         assertEquals("OK", result, "SET with params should return OK");
         assertEquals(testValue, jedis.get(testKey), "Key should have correct value");
@@ -230,14 +231,14 @@ public class JedisTest {
         String existingKey = TEST_KEY_PREFIX + "set_nx";
         jedis.set(existingKey, "existing_value");
 
-        params = new redis.clients.jedis.params.SetParams().nx();
+        params = new SetParams().nx();
         result = jedis.set(existingKey, "new_value", params);
         assertNull(result, "SET NX should return null when key exists");
         assertEquals("existing_value", jedis.get(existingKey), "Key should retain original value");
 
         // Test SET with XX (only if exists)
         String nonExistentKey = TEST_KEY_PREFIX + "set_xx";
-        params = new redis.clients.jedis.params.SetParams().xx();
+        params = new SetParams().xx();
         result = jedis.set(nonExistentKey, "xx_value", params);
         assertNull(result, "SET XX should return null when key doesn't exist");
         assertNull(jedis.get(nonExistentKey), "Key should not be created");
@@ -396,7 +397,7 @@ public class JedisTest {
         String testKey = TEST_KEY_PREFIX + "setget_params";
 
         // Test SETGET with EX parameter
-        redis.clients.jedis.params.SetParams params = new redis.clients.jedis.params.SetParams().ex(60);
+        SetParams params = new SetParams().ex(60);
         String result = jedis.setGet(testKey, "test_value", params);
         assertNull(result, "SETGET should return null for new key");
         assertEquals("test_value", jedis.get(testKey), "Key should have correct value");
@@ -406,7 +407,7 @@ public class JedisTest {
         assertTrue(ttl > 0 && ttl <= 60, "TTL should be set correctly");
 
         // Test SETGET with params on existing key
-        params = new redis.clients.jedis.params.SetParams().px(30000);
+        params = new SetParams().px(30000);
         result = jedis.setGet(testKey, "new_value", params);
         assertEquals("test_value", result, "SETGET should return old value");
         assertEquals("new_value", jedis.get(testKey), "Key should have new value");
