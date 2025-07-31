@@ -37,10 +37,6 @@ on:
                 description: "Test Java client"
                 type: boolean
                 default: true
-            csharp:
-                description: "Test C# client"
-                type: boolean
-                default: true
             go:
                 description: "Test Golang client"
                 type: boolean
@@ -87,12 +83,6 @@ jobs:
         if: (github.repository_owner == 'valkey-io' && github.event_name == 'schedule') || (github.event_name == 'workflow_dispatch' && inputs.node == true)
         uses: ./.github/workflows/node.yml
         name: Run CI for node client
-        secrets: inherit
-
-    run-full-tests-for-csharp:
-        if: (github.repository_owner == 'valkey-io' && github.event_name == 'schedule') || (github.event_name == 'workflow_dispatch' && inputs.csharp == true)
-        uses: ./.github/workflows/csharp.yml
-        name: Run CI for c# client
         secrets: inherit
 
     run-full-tests-for-go:
