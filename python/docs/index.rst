@@ -12,6 +12,9 @@ Welcome to the documentation page for Valkey GLIDE!
    :maxdepth: 8
    :caption: Contents:
 
-   glide
-   glide.async_commands
-   modules
+   glide_async/glide
+   glide_async/modules
+   glide_sync/glide_sync
+   glide_sync/modules
+   glide_shared/glide_shared
+   glide_shared/modules

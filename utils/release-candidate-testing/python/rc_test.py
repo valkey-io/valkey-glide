@@ -1,80 +1,13 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import asyncio
-import os
-import subprocess
-import sys
-from typing import List, Tuple
-
-SCRIPT_FILE = os.path.abspath(f"{__file__}/../../../cluster_manager.py")
+from typing import List
+from utils import start_servers, stop_servers, parse_cluster_script_start_output, create_client
 
 from glide import (
     GlideClient,
-    GlideClientConfiguration,
-    GlideClusterClient,
-    GlideClusterClientConfiguration,
     NodeAddress,
 )
-
-
-def start_servers(cluster_mode: bool, shard_count: int, replica_count: int) -> str:
-    args_list: List[str] = [sys.executable, SCRIPT_FILE]
-    args_list.append("start")
-    if cluster_mode:
-        args_list.append("--cluster-mode")
-    args_list.append(f"-n {shard_count}")
-    args_list.append(f"-r {replica_count}")
-    p = subprocess.Popen(
-        args_list,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-    output, err = p.communicate(timeout=40)
-    if p.returncode != 0:
-        raise Exception(f"Failed to create a cluster. Executed: {p}:\n{err}")
-    print("Servers started successfully")
-    return output
-
-
-def parse_cluster_script_start_output(output: str) -> Tuple[List[NodeAddress], str]:
-    assert "CLUSTER_FOLDER" in output and "CLUSTER_NODES" in output
-    lines_output: List[str] = output.splitlines()
-    cluster_folder: str = ""
-    nodes_addr: List[NodeAddress] = []
-    for line in lines_output:
-        if "CLUSTER_FOLDER" in line:
-            splitted_line = line.split("CLUSTER_FOLDER=")
-            assert len(splitted_line) == 2
-            cluster_folder = splitted_line[1]
-        if "CLUSTER_NODES" in line:
-            nodes_list: List[NodeAddress] = []
-            splitted_line = line.split("CLUSTER_NODES=")
-            assert len(splitted_line) == 2
-            nodes_addresses = splitted_line[1].split(",")
-            assert len(nodes_addresses) > 0
-            for addr in nodes_addresses:
-                host, port = addr.split(":")
-                nodes_list.append(NodeAddress(host, int(port)))
-            nodes_addr = nodes_list
-    print("Cluster script output parsed successfully")
-    return nodes_addr, cluster_folder
-
-
-def stop_servers(folder: str) -> str:
-    args_list: List[str] = [sys.executable, SCRIPT_FILE]
-    args_list.extend(["stop", "--cluster-folder", folder])
-    p = subprocess.Popen(
-        args_list,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-    output, err = p.communicate(timeout=40)
-    if p.returncode != 0:
-        raise Exception(f"Failed to stop the cluster. Executed: {p}:\n{err}")
-    print("Servers stopped successfully")
-    return output
 
 
 async def run_commands(client: GlideClient) -> None:
@@ -149,58 +82,38 @@ async def run_commands(client: GlideClient) -> None:
     print("All commands executed successfully")
 
 
-async def create_cluster_client(
-    nodes_list: List[NodeAddress] = [("localhost", 6379)]
-) -> GlideClusterClient:
-    addresses: List[NodeAddress] = nodes_list
-    config = GlideClusterClientConfiguration(
-        addresses=addresses,
-        client_name="test_cluster_client",
-    )
-    client = await GlideClusterClient.create(config)
-    print("Cluster client created successfully")
-    return client
-
-
-async def create_standalone_client(server: List[NodeAddress]) -> GlideClient:
-    config = GlideClientConfiguration(
-        addresses=server,
-        client_name="test_standalone_client",
-    )
-    client = await GlideClient.create(config)
-    print("Standalone client created successfully")
-    return client
-
-
 async def test_standalone_client() -> None:
-    print("Testing standalone client")
+    print("Testing Async Standalone Client")
     output = start_servers(False, 1, 1)
     servers, folder = parse_cluster_script_start_output(output)
-    standalone_client = await create_standalone_client(servers)
+    servers = [NodeAddress(hp.host, hp.port) for hp in servers]
+    standalone_client = await create_client(servers, is_cluster=False, is_sync=False)
     await run_commands(standalone_client)
     stop_servers(folder)
-    print("Standalone client test completed")
+    print("Async Standalone Client test completed")
 
 
 async def test_cluster_client() -> None:
-    print("Testing cluster client")
+    print("Testing Async Cluster Client")
     output = start_servers(True, 3, 1)
     servers, folder = parse_cluster_script_start_output(output)
-    cluster_client = await create_cluster_client(servers)
+    servers = [NodeAddress(hp.host, hp.port) for hp in servers]
+    cluster_client = await create_client(servers, is_cluster=True, is_sync=False)
     await run_commands(cluster_client)
     stop_servers(folder)
-    print("Cluster client test completed")
+    print("Async Cluster Client test completed")
 
 
-async def test_clients() -> None:
+async def test_async_clients() -> None:
+    print("### Starting Glide's Python Async Client release candidate tests ###")
     await test_cluster_client()
-    print("Cluster client test passed")
+    print("Async Cluster client test passed")
     await test_standalone_client()
-    print("Standalone client test passed")
+    print("Async Standalone client test passed")
 
 
 def main() -> None:
-    asyncio.run(test_clients())
+    asyncio.run(test_async_clients())
     print("All tests completed successfully")
 
 
