@@ -290,3 +290,10 @@ def skip_if_version_below(request):
                 )
         finally:
             client.close()
+
+
+@pytest.fixture
+def tls_insecure(request) -> bool:
+    # If the test has param'd tls_insecure, use it
+    # Otherwise default to False
+    return getattr(request, "param", False)

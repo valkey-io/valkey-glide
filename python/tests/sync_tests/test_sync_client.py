@@ -115,7 +115,6 @@ class TestGlideClients:
         info = glide_sync_client.custom_command(["CLIENT", "INFO"])
         assert isinstance(info, bytes)
         info_str = info.decode()
-        print(info_str)
         assert "lib-name=GlidePySync" in info_str
         assert "lib-ver=unknown" in info_str
 
@@ -123,7 +122,7 @@ class TestGlideClients:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_send_and_receive_large_values(self, request, cluster_mode, protocol):
         glide_sync_client = create_sync_client(
-            request, cluster_mode=cluster_mode, protocol=protocol, timeout=5000
+            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=5000
         )
         length = 2**25  # 33mb
         key = "0" * length
@@ -304,7 +303,7 @@ class TestGlideClients:
             request,
             cluster_mode,
             protocol=protocol,
-            timeout=2000,
+            request_timeout=2000,
             connection_timeout=2000,
         )
         assert isinstance(client, (GlideClient, GlideClusterClient))
@@ -325,7 +324,7 @@ class TestGlideClients:
             request,
             cluster_mode,
             protocol=protocol,
-            timeout=20000,  # 20 seconds timeout
+            request_timeout=20000,  # 20 seconds timeout
         )
 
         def run_debug_sleep():
@@ -5534,7 +5533,7 @@ class TestCommands:
             request=request,
             protocol=protocol,
             cluster_mode=cluster_mode,
-            timeout=900,
+            request_timeout=900,
         )
         # ensure command doesn't time out even if timeout > request timeout
         assert (
@@ -5928,7 +5927,7 @@ class TestCommands:
             request=request,
             protocol=protocol,
             cluster_mode=cluster_mode,
-            timeout=900,
+            request_timeout=900,
         )
         timeout_key = f"{{testKey}}{get_random_string(10)}"
         timeout_group_name = get_random_string(10)
@@ -8401,11 +8400,11 @@ class TestCommands:
 
         # create a second client to run fcall
         test_client = create_sync_client(
-            request, cluster_mode=cluster_mode, protocol=protocol, timeout=30000
+            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=30000
         )
 
         test_client2 = create_sync_client(
-            request, cluster_mode=cluster_mode, protocol=protocol, timeout=30000
+            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=30000
         )
 
         def endless_fcall_route_call():
@@ -8528,7 +8527,7 @@ class TestCommands:
 
         # create a second client to run fcall
         test_client = create_sync_client(
-            request, cluster_mode=cluster_mode, protocol=protocol, timeout=15000
+            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=15000
         )
 
         def endless_fcall_route_call():
@@ -8584,7 +8583,7 @@ class TestCommands:
 
         # create a second client to run fcall - and give it a long timeout
         test_client = create_sync_client(
-            request, cluster_mode=cluster_mode, protocol=protocol, timeout=15000
+            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=15000
         )
 
         # call fcall to run the function loaded function

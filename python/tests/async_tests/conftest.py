@@ -115,13 +115,6 @@ async def acl_glide_client(
         await test_teardown(request, cluster_mode, protocol)
 
 
-@pytest.fixture
-def tls_insecure(request) -> bool:
-    # If the test has param'd tls_insecure, use it
-    # Otherwise default to False
-    return getattr(request, "param", False)
-
-
 @pytest.fixture(scope="function")
 async def glide_tls_client(
     request,
