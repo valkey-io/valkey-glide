@@ -33,6 +33,7 @@ import {
     InsertPosition,
     JsonBatch,
     ListDirection,
+    Logger,
     ProtocolVersion,
     ReturnTypeMap,
     ScoreFilter,
@@ -481,13 +482,48 @@ export function createLongRunningLuaScript(
 export async function testTeardown(
     cluster_mode: boolean,
     option: BaseClientConfiguration,
+    existingClient?: BaseClient,
 ) {
-    const client = cluster_mode
-        ? await GlideClusterClient.createClient(option)
-        : await GlideClient.createClient(option);
+    let client: GlideClient | GlideClusterClient | undefined;
+    let clientCreated = false;
 
-    await client.customCommand(["FLUSHALL"]);
-    client.close();
+    try {
+        // Try to reuse existing client if available
+        if (existingClient) {
+            try {
+                client = existingClient as GlideClient | GlideClusterClient;
+                // Test if client is still usable by trying a quick operation
+                await client.ping();
+            } catch {
+                // If existing client fails, create a new one
+                client = cluster_mode
+                    ? await GlideClusterClient.createClient(option)
+                    : await GlideClient.createClient(option);
+                clientCreated = true;
+            }
+        } else {
+            // Create new client if existing one is not available
+            client = cluster_mode
+                ? await GlideClusterClient.createClient(option)
+                : await GlideClient.createClient(option);
+            clientCreated = true;
+        }
+
+        await client.flushall();
+    } catch (error) {
+        // If teardown fails, log the error but don't throw to avoid masking the original test failure
+        Logger.log(
+            "warn",
+            "TestUtilities",
+            "Test teardown failed",
+            error as Error,
+        );
+    } finally {
+        // Only close client if we created it (don't close existing client)
+        if (client && clientCreated) {
+            client.close();
+        }
+    }
 }
 
 export const getClientConfigurationOption = (
@@ -519,13 +555,18 @@ export async function flushAndCloseClient(
                 cluster_mode,
                 getClientConfigurationOption(addresses, ProtocolVersion.RESP3, {
                     ...tlsConfig,
-                    requestTimeout: 2000,
+                    requestTimeout: 1500, // Reduced timeout to fail faster on socket exhaustion
                 }),
+                client, // Pass existing client to reuse if possible
             );
         }
     } finally {
-        // some tests don't initialize a client
+        // Close the client
         client?.close();
+
+        // Add a small delay to allow sockets to be properly released
+        // This prevents socket exhaustion when running many tests sequentially
+        await new Promise((resolve) => setTimeout(resolve, 10));
     }
 }
 

@@ -15,8 +15,14 @@ module glide.api {
     exports glide.api.models.configuration;
     exports glide.api.models.exceptions;
     exports glide.api.commands.servermodules;
+    // Export Jedis compatibility layer for drop-in replacement
+    exports redis.clients.jedis;
+    exports redis.clients.jedis.params;
+    exports redis.clients.jedis.args;
+    exports redis.clients.jedis.resps;
 
     requires java.logging; // required by shadowed protobuf
     requires static lombok;
     requires org.apache.commons.lang3;
+    requires org.apache.commons.pool2; // Required for Jedis compatibility layer
 }

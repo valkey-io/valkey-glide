@@ -5,8 +5,9 @@ using static Valkey.Glide.Commands.Options.InfoOptions;
 namespace Valkey.Glide.Commands;
 
 /// <summary>
-/// Supports commands for the "Server Management" group for a cluster client.<br />
-/// See <see href="https://valkey.io/commands/?group=server">Server Management Commands</see>.
+/// Supports commands for the "Server Management" group for a cluster client.
+/// <br />
+/// See <see href="https://valkey.io/commands#server">Server Management Commands</see>.
 /// </summary>
 public interface IServerManagementClusterCommands
 {
@@ -116,4 +117,58 @@ public interface IServerManagementClusterCommands
     /// </example>
     /// </remarks>
     Task<ClusterValue<ValkeyValue>> EchoAsync(ValkeyValue message, Route route, CommandFlags flags = CommandFlags.None);
+
+    /// <summary>
+    /// Ping the server and measure the round-trip time.<br />
+    /// The command will be routed to all primary nodes.<br />
+    /// See <see href="https://valkey.io/commands/ping/">valkey.io</see> for details.
+    /// </summary>
+    /// <returns>The round-trip time as a <see cref="TimeSpan"/>.</returns>
+    Task<TimeSpan> PingAsync();
+
+    /// <summary>
+    /// Ping the server with a message and measure the round-trip time.<br />
+    /// The command will be routed to all primary nodes.<br />
+    /// See <see href="https://valkey.io/commands/ping/">valkey.io</see> for details.
+    /// </summary>
+    /// <param name="message">The message to send with the ping</param>
+    /// <returns>The round-trip time as a <see cref="TimeSpan"/>.</returns>
+    Task<TimeSpan> PingAsync(ValkeyValue message);
+
+    /// <summary>
+    /// Ping the server and measure the round-trip time.
+    /// </summary>
+    /// <seealso href="https://valkey.io/commands/ping/">valkey.io</seealso> for details.
+    /// <param name="route">Specifies the routing configuration for the command. The client will route the
+    /// command to the nodes defined by <c>route</c>.</param>
+    /// <returns>
+    /// The round-trip time as a <see cref="TimeSpan"/>.<br />
+    /// </returns>
+    /// <remarks>
+    /// <example>
+    /// <code>
+    /// TimeSpan response = await client.PingAsync(Route.AllPrimaries);
+    /// </code>
+    /// </example>
+    /// </remarks>
+    Task<TimeSpan> PingAsync(Route route);
+
+    /// <summary>
+    /// Ping the server and measure the round-trip time.
+    /// </summary>
+    /// <seealso href="https://valkey.io/commands/ping/">valkey.io</seealso> for details.
+    /// <param name="message">The message to send with the ping</param>
+    /// <param name="route">Specifies the routing configuration for the command. The client will route the
+    /// command to the nodes defined by <c>route</c>.</param>
+    /// <returns>
+    /// The round-trip time as a <see cref="TimeSpan"/>.<br />
+    /// </returns>
+    /// <remarks>
+    /// <example>
+    /// <code>
+    /// TimeSpan response = await client.PingAsync("Hello World", Route.AllPrimaries);
+    /// </code>
+    /// </example>
+    /// </remarks>
+    Task<TimeSpan> PingAsync(ValkeyValue message, Route route);
 }

@@ -44,4 +44,33 @@ internal partial class Request
     /// <returns>A command that converts the response to a boolean value (true if response equals OK)</returns>
     private static Cmd<string, bool> OKToBool(RequestType request, GlideString[] args)
         => new(request, args, false, response => response == "OK");
+
+    /// <summary>
+    /// Create a Cmd which converts the response to a ValkeyValue.
+    /// </summary>
+    /// <param name="request">The request type</param>
+    /// <param name="args">The command arguments</param>
+    /// <param name="isNullable">Whether the response can be null</param>
+    /// <returns>A command that converts the response to a ValkeyValue</returns>
+    private static Cmd<GlideString, ValkeyValue> ToValkeyValue(RequestType request, GlideString[] args, bool isNullable = false)
+        => new(request, args, isNullable, response => (ValkeyValue)response);
+
+    /// <summary>
+    /// Create a Cmd which converts an array of GlideStrings to an array of ValkeyValues.
+    /// </summary>
+    /// <param name="request">The request type</param>
+    /// <param name="args">The command arguments</param>
+    /// <returns>A command that converts an array to a ValkeyValue array</returns>
+    private static Cmd<object[], ValkeyValue[]> ObjectArrayToValkeyValueArray(RequestType request, GlideString[] args)
+        => new(request, args, false, set => [.. set.Cast<GlideString>().Select(gs => gs)]);
+
+    private static Cmd<object[], HashEntry[]> ObjectArrayToHashEntries(RequestType request, GlideString[] args, bool isNullable = false)
+        => new(request, args, isNullable, objects => [.. objects.Select(he => {
+            object[] arr = (object[])he;
+            return new HashEntry((GlideString)arr[0], (GlideString)arr[1]);
+        })]);
+
+    private static Cmd<Dictionary<GlideString, object>, HashEntry[]> DictionaryToHashEntries(RequestType request, GlideString[] args, bool isNullable = false)
+        => new(request, args, isNullable, dict => [.. dict.Select(he =>
+            new HashEntry(he.Key, (GlideString)he.Value))]);
 }
