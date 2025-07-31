@@ -1,34 +1,67 @@
+use aws_config::BehaviorVersion;
+use aws_credential_types::{Credentials, provider::ProvideCredentials};
+use aws_sigv4::http_request::{SignableBody, SignableRequest, SigningSettings, sign};
+use aws_sigv4::sign::v4;
+use logger_core::{log_error, log_info};
 use std::sync::Arc;
 use std::time::Duration;
+use std::time::SystemTime;
 use tokio::sync::{Notify, RwLock};
 use tokio::task::JoinHandle;
 use tokio::time::{MissedTickBehavior, interval};
+
+// Service type configuration for IAM authentication
+#[derive(Clone, Debug)]
+pub enum ServiceType {
+    ElastiCache,
+    MemoryDB,
+}
+
+impl ServiceType {
+    fn service_name(&self) -> &'static str {
+        match self {
+            ServiceType::ElastiCache => "elasticache",
+            ServiceType::MemoryDB => "memorydb",
+        }
+    }
+    
+    fn hostname_suffix(&self) -> &'static str {
+        match self {
+            ServiceType::ElastiCache => "cache.amazonaws.com",
+            ServiceType::MemoryDB => "memorydb.amazonaws.com",
+        }
+    }
+}
+
+/// Internal state for IAM token manager
+struct IAMTokenState {
+    /// AWS region for signing requests
+    region: String,
+    /// ElastiCache/MemoryDB cluster name
+    cluster_name: String,
+    /// Username for the connection
+    username: String,
+    /// Service type (ElastiCache or MemoryDB)
+    service_type: ServiceType,
+    /// Currently cached auth token
+    cached_token: String,
+    /// Token refresh interval in minutes
+    refresh_interval_minutes: u32,
+}
 
 /// IAM-based authentication token manager for ElastiCache/MemoryDB
 ///
 /// Manages automatic token refresh using AWS IAM credentials and SigV4 signing.
 /// Tokens are valid for 15 minutes and refreshed every 8 minutes by default.
 pub struct IAMTokenManager {
-    /// AWS region for signing requests
-    region: String,
-
-    /// ElastiCache/MemoryDB cluster name
-    cluster_name: String,
-
-    /// Username for the connection
-    username: String,
-
-    /// Currently cached auth token
-    cached_token: Arc<RwLock<String>>,
+    /// Internal state protected by a single RwLock
+    state: Arc<RwLock<IAMTokenState>>,
 
     /// Background refresh task handle
     refresh_task: Option<JoinHandle<()>>,
 
     /// Shutdown signal for graceful task termination
     shutdown_notify: Arc<Notify>,
-
-    /// Token refresh interval in minutes
-    refresh_interval_minutes: u32,
 }
 
 impl IAMTokenManager {
@@ -38,18 +71,26 @@ impl IAMTokenManager {
         username: String,
         region: String,
         refresh_interval_minutes: Option<u32>,
+        service_type: Option<ServiceType>,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
-        // Generate initial token (placeholder for now)
-        let initial_token = Self::generate_token_static(&region, &cluster_name, &username).await?;
+        let service_type = service_type.unwrap_or(ServiceType::ElastiCache);
+        
+        // Generate initial token
+        let initial_token = Self::generate_token_static(&region, &cluster_name, &username, &service_type).await?;
 
-        Ok(Self {
+        let state = IAMTokenState {
             region,
             cluster_name,
             username,
-            cached_token: Arc::new(RwLock::new(initial_token)),
+            service_type,
+            cached_token: initial_token,
+            refresh_interval_minutes: refresh_interval_minutes.unwrap_or(8),
+        };
+
+        Ok(Self {
+            state: Arc::new(RwLock::new(state)),
             refresh_task: None,
             shutdown_notify: Arc::new(Notify::new()),
-            refresh_interval_minutes: refresh_interval_minutes.unwrap_or(8),
         })
     }
 
@@ -59,14 +100,16 @@ impl IAMTokenManager {
             return; // Task already running
         }
 
-        let region = self.region.clone();
-        let cluster_name = self.cluster_name.clone();
-        let username = self.username.clone();
-        let cached_token = Arc::clone(&self.cached_token);
+        let state = Arc::clone(&self.state);
         let shutdown_notify = Arc::clone(&self.shutdown_notify);
-        let refresh_interval = Duration::from_secs(self.refresh_interval_minutes as u64 * 60);
 
         let task = tokio::spawn(async move {
+            // Get refresh interval from state
+            let refresh_interval = {
+                let state_guard = state.read().await;
+                Duration::from_secs(state_guard.refresh_interval_minutes as u64 * 60)
+            };
+
             let mut interval_timer = interval(refresh_interval);
             interval_timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
@@ -76,24 +119,36 @@ impl IAMTokenManager {
             loop {
                 tokio::select! {
                     _ = interval_timer.tick() => {
+                        // Get current state values for token generation
+                        let (region, cluster_name, username, service_type) = {
+                            let state_guard = state.read().await;
+                            (
+                                state_guard.region.clone(),
+                                state_guard.cluster_name.clone(),
+                                state_guard.username.clone(),
+                                state_guard.service_type.clone(),
+                            )
+                        };
+
                         match Self::generate_token_static(
                             &region,
                             &cluster_name,
                             &username,
+                            &service_type,
                         ).await {
                             Ok(new_token) => {
-                                let mut token_guard = cached_token.write().await;
-                                *token_guard = new_token;
-                                println!("IAM token refreshed successfully");
+                                let mut state_guard = state.write().await;
+                                state_guard.cached_token = new_token;
+                                log_info("IAM token refreshed successfully", "");
                             }
                             Err(e) => {
-                                eprintln!("Failed to refresh IAM token: {e}");
+                                log_error("Failed to refresh IAM token", format!("{e}"));
                                 // Continue running - temporary failures shouldn't stop the task
                             }
                         }
                     }
                     _ = shutdown_notify.notified() => {
-                        println!("IAM token refresh task shutting down");
+                        log_info("IAM token refresh task shutting down", "");
                         break;
                     }
                 }
@@ -115,10 +170,11 @@ impl IAMTokenManager {
 
     /// Get the current cached token
     pub async fn get_token(&self) -> String {
-        let token_guard = self.cached_token.read().await;
-        token_guard.clone()
+        let state_guard = self.state.read().await;
+        state_guard.cached_token.clone()
     }
 
+    // todo: test it works well
     /// Generate a new IAM auth token using SigV4 signing
     ///
     /// Creates an ElastiCache/MemoryDB auth token using AWS IAM credentials and SigV4 signing.
@@ -127,13 +183,8 @@ impl IAMTokenManager {
         region: &str,
         cluster_name: &str,
         username: &str,
+        service_type: &ServiceType,
     ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-        use aws_config::BehaviorVersion;
-        use aws_credential_types::{Credentials, provider::ProvideCredentials};
-        use aws_sigv4::http_request::{SignableBody, SignableRequest, SigningSettings, sign};
-        use aws_sigv4::sign::v4;
-        use std::time::SystemTime;
-
         // Load AWS credentials from the environment or AWS config files
         let config = aws_config::defaults(BehaviorVersion::latest())
             .region(aws_config::Region::new(region.to_string()))
@@ -151,6 +202,7 @@ impl IAMTokenManager {
             .await
             .map_err(|e| format!("Failed to get AWS credentials: {e}"))?;
 
+        // todo: why shouldn't it be a singleton? instead of creating a new one every time?
         // Create AWS identity from credentials
         let identity = Credentials::new(
             creds.access_key_id(),
@@ -163,8 +215,8 @@ impl IAMTokenManager {
         // Calculate the current time for signing
         let signing_time = SystemTime::now();
 
-        // Create the canonical request for ElastiCache auth token
-        let hostname = format!("{cluster_name}.{region}.cache.amazonaws.com");
+        // Create the canonical request for ElastiCache/MemoryDB auth token
+        let hostname = format!("{cluster_name}.{region}.{}", service_type.hostname_suffix());
         let canonical_uri = "/";
         let canonical_querystring = format!(
             "Action=connect&User={}&X-Amz-Expires=900",
@@ -176,7 +228,7 @@ impl IAMTokenManager {
         let signing_params = v4::SigningParams::builder()
             .identity(&identity_value)
             .region(region)
-            .name("elasticache")
+            .name(service_type.service_name())
             .time(signing_time)
             .settings(signing_settings)
             .build()
@@ -230,11 +282,20 @@ impl IAMTokenManager {
 
     /// Force refresh the token immediately
     pub async fn refresh_token(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let new_token =
-            Self::generate_token_static(&self.region, &self.cluster_name, &self.username).await?;
-
-        let mut token_guard = self.cached_token.write().await;
-        *token_guard = new_token;
+        // todo: check why write and read in two seperate blocks and not in one
+        let new_token = {
+            let state_guard = self.state.read().await;
+            Self::generate_token_static(
+                &state_guard.region,
+                &state_guard.cluster_name,
+                &state_guard.username,
+                &state_guard.service_type,
+            )
+            .await?
+        };
+        
+        let mut state_guard = self.state.write().await;
+        state_guard.cached_token = new_token;
 
         Ok(())
     }
