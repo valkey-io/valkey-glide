@@ -66,6 +66,7 @@ import static command_request.CommandRequestOuterClass.RequestType.HRandField;
 import static command_request.CommandRequestOuterClass.RequestType.HScan;
 import static command_request.CommandRequestOuterClass.RequestType.HSet;
 import static command_request.CommandRequestOuterClass.RequestType.HSetNX;
+import static command_request.CommandRequestOuterClass.RequestType.HSetex;
 import static command_request.CommandRequestOuterClass.RequestType.HStrlen;
 import static command_request.CommandRequestOuterClass.RequestType.HVals;
 import static command_request.CommandRequestOuterClass.RequestType.Incr;
@@ -250,6 +251,7 @@ import command_request.CommandRequestOuterClass.Command.ArgsArray;
 import command_request.CommandRequestOuterClass.RequestType;
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.GetExOptions;
+import glide.api.models.commands.HashFieldExpirationOptions;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
@@ -395,6 +397,33 @@ public class BatchTests {
 
         batch.hset("key", Map.of("field", "value"));
         results.add(Pair.of(HSet, buildArgs("key", "field", "value")));
+
+        batch.hsetex(
+                "key",
+                Map.of("field", "value"),
+                HashFieldExpirationOptions.builder()
+                        .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(10L))
+                        .build());
+        results.add(Pair.of(HSetex, buildArgs("key", "EX", "10", "FIELDS", "1", "field", "value")));
+
+        Map<String, String> fieldValueMap = new LinkedHashMap<>();
+        fieldValueMap.put("field1", "value1");
+        fieldValueMap.put("field2", "value2");
+        batch.hsetex(
+                "key",
+                fieldValueMap,
+                HashFieldExpirationOptions.builder()
+                        .conditionalChange(HashFieldExpirationOptions.ConditionalChange.ONLY_IF_EXISTS)
+                        .fieldConditionalChange(
+                                HashFieldExpirationOptions.FieldConditionalChange.ONLY_IF_ALL_EXIST)
+                        .expiry(HashFieldExpirationOptions.ExpirySet.Milliseconds(5000L))
+                        .build());
+        results.add(
+                Pair.of(
+                        HSetex,
+                        buildArgs(
+                                "key", "XX", "FXX", "PX", "5000", "FIELDS", "2", "field1", "value1", "field2",
+                                "value2")));
 
         batch.hsetnx("key", "field", "value");
         results.add(Pair.of(HSetNX, buildArgs("key", "field", "value")));

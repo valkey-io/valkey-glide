@@ -49,6 +49,7 @@ import static command_request.CommandRequestOuterClass.RequestType.HRandField;
 import static command_request.CommandRequestOuterClass.RequestType.HScan;
 import static command_request.CommandRequestOuterClass.RequestType.HSet;
 import static command_request.CommandRequestOuterClass.RequestType.HSetNX;
+import static command_request.CommandRequestOuterClass.RequestType.HSetex;
 import static command_request.CommandRequestOuterClass.RequestType.HStrlen;
 import static command_request.CommandRequestOuterClass.RequestType.HVals;
 import static command_request.CommandRequestOuterClass.RequestType.Incr;
@@ -217,6 +218,7 @@ import glide.api.models.PubSubMessage;
 import glide.api.models.Script;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.GetExOptions;
+import glide.api.models.commands.HashFieldExpirationOptions;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
 import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
@@ -1166,6 +1168,36 @@ public abstract class BaseClient
             @NonNull GlideString key, @NonNull GlideString field, @NonNull GlideString value) {
         return commandManager.submitNewCommand(
                 HSetNX, new GlideString[] {key, field, value}, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> hsetex(
+            @NonNull String key,
+            @NonNull Map<String, String> fieldValueMap,
+            @NonNull HashFieldExpirationOptions options) {
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {key},
+                        options.toArgs(),
+                        new String[] {"FIELDS", String.valueOf(fieldValueMap.size())},
+                        convertMapToKeyValueStringArray(fieldValueMap));
+        return commandManager.submitNewCommand(HSetex, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> hsetex(
+            @NonNull GlideString key,
+            @NonNull Map<GlideString, GlideString> fieldValueMap,
+            @NonNull HashFieldExpirationOptions options) {
+        GlideString[] arguments =
+                new ArgsBuilder()
+                        .add(key)
+                        .add(options.toArgs())
+                        .add("FIELDS")
+                        .add(fieldValueMap.size())
+                        .add(convertMapToKeyValueGlideStringArray(fieldValueMap))
+                        .toArray();
+        return commandManager.submitNewCommand(HSetex, arguments, this::handleLongResponse);
     }
 
     @Override

@@ -68,6 +68,7 @@ import static command_request.CommandRequestOuterClass.RequestType.HRandField;
 import static command_request.CommandRequestOuterClass.RequestType.HScan;
 import static command_request.CommandRequestOuterClass.RequestType.HSet;
 import static command_request.CommandRequestOuterClass.RequestType.HSetNX;
+import static command_request.CommandRequestOuterClass.RequestType.HSetex;
 import static command_request.CommandRequestOuterClass.RequestType.HStrlen;
 import static command_request.CommandRequestOuterClass.RequestType.HVals;
 import static command_request.CommandRequestOuterClass.RequestType.Incr;
@@ -301,6 +302,7 @@ import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.GetExOptions;
+import glide.api.models.commands.HashFieldExpirationOptions;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
@@ -2540,6 +2542,86 @@ public class GlideClientTest {
         // verify
         assertEquals(testResponse, response);
         assertTrue(payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void hsetex_success() {
+        // setup
+        String key = "testKey";
+        Map<String, String> fieldValueMap = new LinkedHashMap<>();
+        fieldValueMap.put("field1", "value1");
+        fieldValueMap.put("field2", "value2");
+        HashFieldExpirationOptions options =
+                HashFieldExpirationOptions.builder()
+                        .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
+                        .build();
+
+        String[] expectedArgs = {
+            key, "EX", "60", "FIELDS", "2", "field1", "value1", "field2", "value2"
+        };
+        Long value = 2L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(HSetex), eq(expectedArgs), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.hsetex(key, fieldValueMap, options);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void hsetex_binary_success() {
+        // setup
+        GlideString key = gs("testKey");
+        Map<GlideString, GlideString> fieldValueMap = new LinkedHashMap<>();
+        fieldValueMap.put(gs("field1"), gs("value1"));
+        fieldValueMap.put(gs("field2"), gs("value2"));
+        HashFieldExpirationOptions options =
+                HashFieldExpirationOptions.builder()
+                        .conditionalSetOnlyIfNotExist()
+                        .fieldConditionalSetOnlyIfNoneExist()
+                        .expiry(HashFieldExpirationOptions.ExpirySet.Milliseconds(30000L))
+                        .build();
+
+        GlideString[] expectedArgs = {
+            gs("testKey"),
+            gs("NX"),
+            gs("FNX"),
+            gs("PX"),
+            gs("30000"),
+            gs("FIELDS"),
+            gs("2"),
+            gs("field1"),
+            gs("value1"),
+            gs("field2"),
+            gs("value2")
+        };
+        Long value = 2L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(HSetex), eq(expectedArgs), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.hsetex(key, fieldValueMap, options);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
     }
 
     @SneakyThrows
