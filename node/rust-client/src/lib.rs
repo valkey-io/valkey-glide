@@ -580,6 +580,9 @@ pub fn drop_otel_span(span_ptr: BigInt) {
 
 #[napi]
 /// A wrapper for a script object. As long as this object is alive, the script's code is saved in memory, and can be resent to the server.
+///
+/// **IMPORTANT**: Script objects are NOT automatically garbage collected. You are responsible for calling `release()`
+/// on every Script object when you're done with it to prevent memory leaks. Failure to do so will result in memory leaks.
 struct Script {
     hash: String,
 }
@@ -612,18 +615,11 @@ impl Script {
     /// Decrements the script's reference count in the local container.  
     /// Removes the script when the count reaches zero.
     ///
-    /// This method is primarily intended for testing or manual cleanup.
-    /// It does not need to be called explicitly, as the script will be automatically
-    /// released when dropped.
+    /// You need to call this method when you're done with the Script object. Script objects are NOT
+    /// automatically garbage collected, and failure to call release() will result in memory leaks.
     #[napi]
     #[allow(dead_code)]
     pub fn release(&self) {
-        self.release_internal();
-    }
-}
-
-impl Drop for Script {
-    fn drop(&mut self) {
         self.release_internal();
     }
 }
