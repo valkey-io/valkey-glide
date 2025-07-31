@@ -13,6 +13,16 @@
     <NuGetAudit>false</NuGetAudit>
     <WarningLevel>0</WarningLevel>
     <Configurations>Debug;Release;Lint</Configurations>
+    <NuspecFile>Valkey.Glide.nuspec</NuspecFile>
+    <IncludeBuildOutput>true</IncludeBuildOutput>
+    <Version>255.255.255</Version>
+    <GenerateAssemblyFileVersionAttribute>true</GenerateAssemblyFileVersionAttribute>
+    <Deterministic>true</Deterministic>
+
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>symbols.nupkg</SymbolPackageFormat>
+    <DebugType>portable</DebugType>
+    <DebugSymbols>true</DebugSymbols>
   </PropertyGroup>
 
   <!-- Enable analysis and un-suppress warnings only in `Lint` configuration -->
@@ -39,7 +49,7 @@
     <InternalsVisibleTo Include="Valkey.Glide.UnitTests" />
   </ItemGroup>
 
-  <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
+  <Target Name="PreBuild" BeforeTargets="PreBuildEvent" Condition="'$(SkipCargo)' != 'true'">
     <Exec Condition="'$(Configuration)' == 'Debug'" Command="cargo build" EnvironmentVariables="CARGO_TERM_COLOR=always" ConsoleToMSBuild="true" WorkingDirectory="$(MSBuildThisFileDirectory)../../rust">
       <Output TaskParameter="ConsoleOutput" PropertyName="OutputOfExec" />
     </Exec>
@@ -48,7 +58,7 @@
     </Exec>
   </Target>
 
-  <ItemGroup Condition="'$(Configuration)' != 'Lint'">
+  <ItemGroup Condition="'$(Configuration)' != 'Lint' And '$(SkipCargo)' != 'true'">
     <Content Include="$(MSBuildThisFileDirectory)../../rust/target/$(Configuration.ToLower())/glide_rs.dll" Condition="$([MSBuild]::IsOSPlatform('Windows'))">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <Link>lib%(FileName)%(Extension)</Link>
@@ -62,5 +72,4 @@
       <Link>%(FileName)%(Extension)</Link>
     </Content>
   </ItemGroup>
-
 </Project>
