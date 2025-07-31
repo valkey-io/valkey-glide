@@ -5,24 +5,24 @@ import static glide.TestConfiguration.SERVER_VERSION;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.*;
 
-import compatibility.clients.jedis.Jedis;
-import compatibility.clients.jedis.params.BitPosParams;
-import compatibility.clients.jedis.params.GetExParams;
-import compatibility.clients.jedis.params.ScanParams;
-import compatibility.clients.jedis.resps.ScanResult;
-import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.*;
+import redis.clients.jedis.Jedis;
+import redis.clients.jedis.args.BitOP;
+import redis.clients.jedis.params.BitPosParams;
+import redis.clients.jedis.params.GetExParams;
+import redis.clients.jedis.params.ScanParams;
+import redis.clients.jedis.params.SetParams;
+import redis.clients.jedis.resps.ScanResult;
 
 /**
- * Jedis compatibility test that compares GLIDE Jedis compatibility layer with actual Jedis
- * implementation for basic GET/SET operations.
+ * Jedis compatibility test that validates GLIDE's Jedis compatibility layer functionality.
  *
- * <p>This test validates that the GLIDE compatibility layer produces identical results to actual
- * Jedis for core Redis operations, ensuring drop-in compatibility.
+ * <p>This test ensures that the GLIDE compatibility layer provides the expected Jedis API and
+ * behavior for comprehensive Redis operations.
  */
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class JedisTest {
@@ -30,30 +30,13 @@ public class JedisTest {
     private static final String TEST_KEY_PREFIX = "jedis_test:";
 
     // Server configuration - dynamically resolved from CI environment
-    private static String redisHost;
-    private static int redisPort;
+    private static final String redisHost;
+    private static final int redisPort;
 
-    // GLIDE compatibility layer instances
-    private Jedis glideJedis;
+    // GLIDE compatibility layer instance
+    private Jedis jedis;
 
-    // Actual Jedis instances (loaded via reflection if available)
-    private Object actualJedis;
-    private Class<?> actualJedisClass;
-
-    // Availability flags
-    private boolean hasGlideJedis = false;
-    private boolean hasActualJedis = false;
-
-    @BeforeAll
-    static void setupClass() {
-        resolveServerAddress();
-    }
-
-    /**
-     * Resolve Redis/Valkey server address from CI environment properties. Falls back to
-     * localhost:6379 if no CI configuration is found.
-     */
-    private static void resolveServerAddress() {
+    static {
         String standaloneHosts = System.getProperty("test.server.standalone");
 
         if (standaloneHosts != null && !standaloneHosts.trim().isEmpty()) {
@@ -62,1777 +45,1354 @@ public class JedisTest {
 
             if (hostPort.length == 2) {
                 redisHost = hostPort[0];
-                try {
-                    redisPort = Integer.parseInt(hostPort[1]);
-                    return;
-                } catch (NumberFormatException e) {
-                    // Fall through to default
-                }
+                redisPort = Integer.parseInt(hostPort[1]);
+            } else {
+                redisHost = "localhost";
+                redisPort = 6379;
             }
+        } else {
+            redisHost = "localhost";
+            redisPort = 6379;
         }
-
-        // Fallback to localhost for local development
-        redisHost = "localhost";
-        redisPort = 6379;
     }
 
     @BeforeEach
     void setup() {
-        // Initialize GLIDE Jedis compatibility layer
-        try {
-            glideJedis = new Jedis(redisHost, redisPort);
-            hasGlideJedis = true;
-        } catch (Exception e) {
-            hasGlideJedis = false;
-        }
-
-        // Try to load actual Jedis via reflection (optional)
-        try {
-            String jedisJarPath = System.getProperty("jedis.jar.path");
-            if (jedisJarPath != null) {
-                // Load actual Jedis classes and create instances
-                actualJedisClass = Class.forName("redis.clients.jedis.Jedis");
-
-                actualJedis =
-                        actualJedisClass
-                                .getConstructor(String.class, int.class)
-                                .newInstance(redisHost, redisPort);
-                hasActualJedis = true;
-            }
-        } catch (Exception e) {
-            hasActualJedis = false;
-        }
+        // Create GLIDE Jedis compatibility layer instance
+        jedis = new Jedis(redisHost, redisPort);
+        assertNotNull(jedis, "GLIDE Jedis instance should be created successfully");
     }
 
     @AfterEach
     void cleanup() {
         // Cleanup test keys
-        if (hasGlideJedis && glideJedis != null) {
-            cleanupTestKeys(glideJedis);
-            try {
-                glideJedis.close();
-            } catch (Exception e) {
-                // Ignore cleanup errors
-            }
-        }
-
-        if (hasActualJedis && actualJedis != null) {
-            try {
-                cleanupTestKeys(actualJedis);
-                Method closeMethod = actualJedisClass.getMethod("close");
-                closeMethod.invoke(actualJedis);
-            } catch (Exception e) {
-                // Ignore cleanup errors
-            }
+        if (jedis != null) {
+            cleanupTestKeys(jedis);
+            jedis.close();
         }
     }
 
-    // ===== BASIC OPERATIONS =====
+    private void cleanupTestKeys(Jedis jedis) {
+        // Delete all test keys - comprehensive cleanup
+        String[] keysToDelete = {
+            // Basic operation keys
+            TEST_KEY_PREFIX + "basic",
+            TEST_KEY_PREFIX + "key1",
+            TEST_KEY_PREFIX + "key2",
+            TEST_KEY_PREFIX + "key3",
+            TEST_KEY_PREFIX + "mset_key1",
+            TEST_KEY_PREFIX + "mset_key2",
+            TEST_KEY_PREFIX + "mset_key3",
+            TEST_KEY_PREFIX + "mget_key1",
+            TEST_KEY_PREFIX + "mget_key2",
+            TEST_KEY_PREFIX + "mget_key3",
+            TEST_KEY_PREFIX + "setnx",
+            TEST_KEY_PREFIX + "setex",
+            TEST_KEY_PREFIX + "psetex",
+            TEST_KEY_PREFIX + "getset",
+            TEST_KEY_PREFIX + "setget",
+            TEST_KEY_PREFIX + "getdel",
+            TEST_KEY_PREFIX + "getex",
+            TEST_KEY_PREFIX + "append",
+            TEST_KEY_PREFIX + "strlen",
+            TEST_KEY_PREFIX + "setbit",
+            TEST_KEY_PREFIX + "getbit",
+            TEST_KEY_PREFIX + "bitcount",
+            TEST_KEY_PREFIX + "bitpos",
+            TEST_KEY_PREFIX + "bitop_dest",
+            TEST_KEY_PREFIX + "bitop_src1",
+            TEST_KEY_PREFIX + "bitop_src2",
+            TEST_KEY_PREFIX + "bitfield",
+            TEST_KEY_PREFIX + "bitfield_ro",
+            TEST_KEY_PREFIX + "incr",
+            TEST_KEY_PREFIX + "incrby",
+            TEST_KEY_PREFIX + "incrbyfloat",
+            TEST_KEY_PREFIX + "decr",
+            TEST_KEY_PREFIX + "decrby",
+            TEST_KEY_PREFIX + "del1",
+            TEST_KEY_PREFIX + "del2",
+            TEST_KEY_PREFIX + "del3",
+            TEST_KEY_PREFIX + "unlink1",
+            TEST_KEY_PREFIX + "unlink2",
+            TEST_KEY_PREFIX + "exists",
+            TEST_KEY_PREFIX + "type",
+            TEST_KEY_PREFIX + "keys_test1",
+            TEST_KEY_PREFIX + "keys_test2",
+            TEST_KEY_PREFIX + "keys_test3",
+            TEST_KEY_PREFIX + "random1",
+            TEST_KEY_PREFIX + "random2",
+            TEST_KEY_PREFIX + "random3",
+            TEST_KEY_PREFIX + "rename_src",
+            TEST_KEY_PREFIX + "rename_dest",
+            TEST_KEY_PREFIX + "renamenx_src",
+            TEST_KEY_PREFIX + "renamenx_dest",
+            TEST_KEY_PREFIX + "expire",
+            TEST_KEY_PREFIX + "expireat",
+            TEST_KEY_PREFIX + "pexpire",
+            TEST_KEY_PREFIX + "pexpireat",
+            TEST_KEY_PREFIX + "ttl",
+            TEST_KEY_PREFIX + "pttl",
+            TEST_KEY_PREFIX + "expiretime",
+            TEST_KEY_PREFIX + "pexpiretime",
+            TEST_KEY_PREFIX + "persist",
+            TEST_KEY_PREFIX + "sort",
+            TEST_KEY_PREFIX + "dump",
+            TEST_KEY_PREFIX + "restore",
+            TEST_KEY_PREFIX + "migrate",
+            TEST_KEY_PREFIX + "move",
+            TEST_KEY_PREFIX + "scan_0",
+            TEST_KEY_PREFIX + "scan_1",
+            TEST_KEY_PREFIX + "scan_2",
+            TEST_KEY_PREFIX + "scan_3",
+            TEST_KEY_PREFIX + "scan_4",
+            TEST_KEY_PREFIX + "scan_5",
+            TEST_KEY_PREFIX + "scan_6",
+            TEST_KEY_PREFIX + "scan_7",
+            TEST_KEY_PREFIX + "scan_8",
+            TEST_KEY_PREFIX + "scan_9",
+            TEST_KEY_PREFIX + "touch1",
+            TEST_KEY_PREFIX + "touch2",
+            TEST_KEY_PREFIX + "copy_src",
+            TEST_KEY_PREFIX + "copy_dest",
+            TEST_KEY_PREFIX + "pfadd1",
+            TEST_KEY_PREFIX + "pfadd2",
+            TEST_KEY_PREFIX + "pfcount1",
+            TEST_KEY_PREFIX + "pfcount2",
+            TEST_KEY_PREFIX + "pfmerge_src1",
+            TEST_KEY_PREFIX + "pfmerge_src2",
+            TEST_KEY_PREFIX + "pfmerge_dest",
+            // New test keys
+            TEST_KEY_PREFIX + "set_params",
+            TEST_KEY_PREFIX + "set_nx",
+            TEST_KEY_PREFIX + "set_xx",
+            TEST_KEY_PREFIX + "setget_params",
+            TEST_KEY_PREFIX + "rename_src",
+            TEST_KEY_PREFIX + "rename_dest",
+            TEST_KEY_PREFIX + "renamenx_src",
+            TEST_KEY_PREFIX + "renamenx_dest",
+            TEST_KEY_PREFIX + "renamenx_src2",
+            TEST_KEY_PREFIX + "exists_multi1",
+            TEST_KEY_PREFIX + "exists_multi2",
+            TEST_KEY_PREFIX + "exists_multi3",
+            TEST_KEY_PREFIX + "keyexists",
+            TEST_KEY_PREFIX + "bitcount_range",
+            TEST_KEY_PREFIX + "bitop_src1",
+            TEST_KEY_PREFIX + "bitop_src2",
+            TEST_KEY_PREFIX + "bitop_dest",
+            TEST_KEY_PREFIX + "bitfield",
+            TEST_KEY_PREFIX + "bitfield_ro",
+            TEST_KEY_PREFIX + "sort_test",
+            TEST_KEY_PREFIX + "dump",
+            TEST_KEY_PREFIX + "restore_src",
+            TEST_KEY_PREFIX + "restore_dest",
+            TEST_KEY_PREFIX + "restore_ttl",
+            TEST_KEY_PREFIX + "migrate",
+            TEST_KEY_PREFIX + "move",
+            TEST_KEY_PREFIX + "select_test",
+            TEST_KEY_PREFIX + "touch1",
+            TEST_KEY_PREFIX + "touch2",
+            TEST_KEY_PREFIX + "touch_nonexistent",
+            TEST_KEY_PREFIX + "copy_src",
+            TEST_KEY_PREFIX + "copy_dest",
+            TEST_KEY_PREFIX + "expiretime",
+            TEST_KEY_PREFIX + "pexpiretime",
+            TEST_KEY_PREFIX + "expire_option"
+        };
+
+        jedis.del(keysToDelete);
+    }
 
     @Test
     @Order(1)
     @DisplayName("Basic GET/SET Operations")
-    void testBasicGetSetOperations() {
-        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
-
+    void testBasicSetAndGet() {
         String testKey = TEST_KEY_PREFIX + "basic";
         String testValue = "test_value_123";
 
-        // Test GLIDE Jedis
-        String glideSetResult = glideJedis.set(testKey, testValue);
-        String glideGetResult = glideJedis.get(testKey);
+        // Test GLIDE Jedis compatibility layer
+        String setResult = jedis.set(testKey, testValue);
+        assertEquals("OK", setResult, "SET should return OK");
 
-        assertEquals("OK", glideSetResult, "GLIDE Jedis SET should return OK");
-        assertEquals(testValue, glideGetResult, "GLIDE Jedis GET should return the set value");
+        String getResult = jedis.get(testKey);
+        assertEquals(testValue, getResult, "GET should return the set value");
+    }
 
-        // Compare with actual Jedis if available
-        if (hasActualJedis) {
-            try {
-                Method setMethod = actualJedisClass.getMethod("set", String.class, String.class);
-                Method getMethod = actualJedisClass.getMethod("get", String.class);
+    @Test
+    @Order(3)
+    @DisplayName("SET Command with SetParams")
+    void testSETWithParams() {
+        String testKey = TEST_KEY_PREFIX + "set_params";
+        String testValue = "set_params_value";
 
-                String actualSetResult = (String) setMethod.invoke(actualJedis, testKey, testValue);
-                String actualGetResult = (String) getMethod.invoke(actualJedis, testKey);
+        // Test SET with EX (expiration in seconds)
+        SetParams params = new SetParams().ex(60);
+        String result = jedis.set(testKey, testValue, params);
+        assertEquals("OK", result, "SET with params should return OK");
+        assertEquals(testValue, jedis.get(testKey), "Key should have correct value");
 
-                assertEquals(
-                        actualSetResult,
-                        glideSetResult,
-                        "GLIDE and actual Jedis SET results should be identical");
-                assertEquals(
-                        actualGetResult,
-                        glideGetResult,
-                        "GLIDE and actual Jedis GET results should be identical");
-            } catch (Exception e) {
-                fail("Failed to compare with actual Jedis: " + e.getMessage());
-            }
-        }
+        // Verify TTL is set
+        long ttl = jedis.ttl(testKey);
+        assertTrue(ttl > 0 && ttl <= 60, "TTL should be set correctly");
+
+        // Test SET with NX (only if not exists)
+        String existingKey = TEST_KEY_PREFIX + "set_nx";
+        jedis.set(existingKey, "existing_value");
+
+        params = new SetParams().nx();
+        result = jedis.set(existingKey, "new_value", params);
+        assertNull(result, "SET NX should return null when key exists");
+        assertEquals("existing_value", jedis.get(existingKey), "Key should retain original value");
+
+        // Test SET with XX (only if exists)
+        String nonExistentKey = TEST_KEY_PREFIX + "set_xx";
+        params = new SetParams().xx();
+        result = jedis.set(nonExistentKey, "xx_value", params);
+        assertNull(result, "SET XX should return null when key doesn't exist");
+        assertNull(jedis.get(nonExistentKey), "Key should not be created");
     }
 
     @Test
     @Order(2)
     @DisplayName("Multiple GET/SET Operations")
-    void testMultipleGetSetOperations() {
-        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
-
+    void testMultipleOperations() {
         Map<String, String> testData = new HashMap<>();
         testData.put(TEST_KEY_PREFIX + "key1", "value1");
         testData.put(TEST_KEY_PREFIX + "key2", "value2");
         testData.put(TEST_KEY_PREFIX + "key3", "value3");
 
-        // Test GLIDE Jedis
-        Map<String, String> glideSetResults = new HashMap<>();
-        Map<String, String> glideGetResults = new HashMap<>();
-
+        // Test multiple SET operations
         for (Map.Entry<String, String> entry : testData.entrySet()) {
-            String setResult = glideJedis.set(entry.getKey(), entry.getValue());
-            String getResult = glideJedis.get(entry.getKey());
-
-            glideSetResults.put(entry.getKey(), setResult);
-            glideGetResults.put(entry.getKey(), getResult);
-
-            assertEquals("OK", setResult, "GLIDE Jedis SET should return OK for " + entry.getKey());
-            assertEquals(
-                    entry.getValue(),
-                    getResult,
-                    "GLIDE Jedis GET should return correct value for " + entry.getKey());
+            String result = jedis.set(entry.getKey(), entry.getValue());
+            assertEquals("OK", result, "SET should return OK for " + entry.getKey());
         }
 
-        // Compare with actual Jedis if available
-        if (hasActualJedis) {
-            try {
-                Method setMethod = actualJedisClass.getMethod("set", String.class, String.class);
-                Method getMethod = actualJedisClass.getMethod("get", String.class);
-
-                for (Map.Entry<String, String> entry : testData.entrySet()) {
-                    String actualSetResult =
-                            (String) setMethod.invoke(actualJedis, entry.getKey(), entry.getValue());
-                    String actualGetResult = (String) getMethod.invoke(actualJedis, entry.getKey());
-
-                    assertEquals(
-                            actualSetResult,
-                            glideSetResults.get(entry.getKey()),
-                            "GLIDE and actual Jedis SET results should be identical for " + entry.getKey());
-                    assertEquals(
-                            actualGetResult,
-                            glideGetResults.get(entry.getKey()),
-                            "GLIDE and actual Jedis GET results should be identical for " + entry.getKey());
-                }
-            } catch (Exception e) {
-                fail("Failed to compare with actual Jedis: " + e.getMessage());
-            }
+        // Test multiple GET operations
+        for (Map.Entry<String, String> entry : testData.entrySet()) {
+            String result = jedis.get(entry.getKey());
+            assertEquals(
+                    entry.getValue(), result, "GET should return correct value for " + entry.getKey());
         }
     }
-
-    // ===== MULTIPLE KEY OPERATIONS =====
 
     @Test
     @Order(10)
     @DisplayName("MSET Command")
-    void testMsetCommand() {
-        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
+    void testMSET() {
+        String key1 = TEST_KEY_PREFIX + "mset_key1";
+        String key2 = TEST_KEY_PREFIX + "mset_key2";
+        String key3 = TEST_KEY_PREFIX + "mset_key3";
 
-        // Test MSET with varargs
-        String result1 =
-                glideJedis.mset(
-                        TEST_KEY_PREFIX + "mset1", "value1",
-                        TEST_KEY_PREFIX + "mset2", "value2",
-                        TEST_KEY_PREFIX + "mset3", "value3");
-        assertEquals("OK", result1, "MSET with varargs should return OK");
+        // Test MSET
+        String result = jedis.mset(key1, "value1", key2, "value2", key3, "value3");
+        assertEquals("OK", result, "MSET should return OK");
 
-        // Verify values were set
-        assertEquals("value1", glideJedis.get(TEST_KEY_PREFIX + "mset1"));
-        assertEquals("value2", glideJedis.get(TEST_KEY_PREFIX + "mset2"));
-        assertEquals("value3", glideJedis.get(TEST_KEY_PREFIX + "mset3"));
-
-        // Test MSET with Map
-        Map<String, String> keyValueMap = new HashMap<>();
-        keyValueMap.put(TEST_KEY_PREFIX + "mset4", "value4");
-        keyValueMap.put(TEST_KEY_PREFIX + "mset5", "value5");
-
-        String result2 = glideJedis.mset(keyValueMap);
-        assertEquals("OK", result2, "MSET with Map should return OK");
-
-        // Verify values were set
-        assertEquals("value4", glideJedis.get(TEST_KEY_PREFIX + "mset4"));
-        assertEquals("value5", glideJedis.get(TEST_KEY_PREFIX + "mset5"));
+        // Verify all keys were set
+        assertEquals("value1", jedis.get(key1), "Key1 should have correct value");
+        assertEquals("value2", jedis.get(key2), "Key2 should have correct value");
+        assertEquals("value3", jedis.get(key3), "Key3 should have correct value");
     }
 
     @Test
     @Order(11)
     @DisplayName("MGET Command")
-    void testMgetCommand() {
-        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
+    void testMGET() {
+        String key1 = TEST_KEY_PREFIX + "mget_key1";
+        String key2 = TEST_KEY_PREFIX + "mget_key2";
+        String key3 = TEST_KEY_PREFIX + "mget_key3";
 
         // Set up test data
-        glideJedis.set(TEST_KEY_PREFIX + "mget1", "value1");
-        glideJedis.set(TEST_KEY_PREFIX + "mget2", "value2");
-        glideJedis.set(TEST_KEY_PREFIX + "mget3", "value3");
+        jedis.set(key1, "value1");
+        jedis.set(key2, "value2");
+        jedis.set(key3, "value3");
 
         // Test MGET
-        List<String> results =
-                glideJedis.mget(
-                        TEST_KEY_PREFIX + "mget1",
-                        TEST_KEY_PREFIX + "mget2",
-                        TEST_KEY_PREFIX + "mget3",
-                        TEST_KEY_PREFIX + "nonexistent");
-
-        assertEquals(4, results.size(), "MGET should return 4 results");
-        assertEquals("value1", results.get(0), "First value should match");
-        assertEquals("value2", results.get(1), "Second value should match");
-        assertEquals("value3", results.get(2), "Third value should match");
-        assertNull(results.get(3), "Non-existent key should return null");
+        List<String> results = jedis.mget(key1, key2, key3);
+        assertNotNull(results, "MGET should return a list");
+        assertEquals(3, results.size(), "MGET should return 3 values");
+        assertEquals("value1", results.get(0), "First value should be correct");
+        assertEquals("value2", results.get(1), "Second value should be correct");
+        assertEquals("value3", results.get(2), "Third value should be correct");
     }
-
-    // ===== CONDITIONAL SET OPERATIONS =====
 
     @Test
     @Order(20)
     @DisplayName("SETNX Command")
-    void testSetnxCommand() {
-        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
-
+    void testSETNX() {
         String testKey = TEST_KEY_PREFIX + "setnx";
 
-        // Test SETNX on new key
-        Long result1 = glideJedis.setnx(testKey, "first_value");
-        assertEquals(1L, result1, "SETNX should return 1 for new key");
-        assertEquals("first_value", glideJedis.get(testKey), "Value should be set");
+        // Test SETNX on non-existing key
+        long result = jedis.setnx(testKey, "value1");
+        assertEquals(1, result, "SETNX should return 1 for new key");
+        assertEquals("value1", jedis.get(testKey), "Key should have correct value");
 
         // Test SETNX on existing key
-        Long result2 = glideJedis.setnx(testKey, "second_value");
-        assertEquals(0L, result2, "SETNX should return 0 for existing key");
-        assertEquals("first_value", glideJedis.get(testKey), "Value should remain unchanged");
+        result = jedis.setnx(testKey, "value2");
+        assertEquals(0, result, "SETNX should return 0 for existing key");
+        assertEquals("value1", jedis.get(testKey), "Key should retain original value");
     }
 
     @Test
     @Order(21)
     @DisplayName("SETEX Command")
-    void testSetexCommand() {
-        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
-
+    void testSETEX() {
         String testKey = TEST_KEY_PREFIX + "setex";
-        String testValue = "expires_in_60_seconds";
 
         // Test SETEX
-        String result = glideJedis.setex(testKey, 60, testValue);
+        String result = jedis.setex(testKey, 60, "test_value");
         assertEquals("OK", result, "SETEX should return OK");
-        assertEquals(testValue, glideJedis.get(testKey), "Value should be set correctly");
+        assertEquals("test_value", jedis.get(testKey), "Key should have correct value");
+
+        // Verify TTL is set
+        long ttl = jedis.ttl(testKey);
+        assertTrue(ttl > 0 && ttl <= 60, "TTL should be set correctly");
     }
 
     @Test
     @Order(22)
     @DisplayName("PSETEX Command")
-    void testPsetexCommand() {
-        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
-
+    void testPSETEX() {
         String testKey = TEST_KEY_PREFIX + "psetex";
-        String testValue = "expires_in_60000_milliseconds";
 
         // Test PSETEX
-        String result = glideJedis.psetex(testKey, 60000, testValue);
+        String result = jedis.psetex(testKey, 60000, "test_value");
         assertEquals("OK", result, "PSETEX should return OK");
-        assertEquals(testValue, glideJedis.get(testKey), "Value should be set correctly");
-    }
+        assertEquals("test_value", jedis.get(testKey), "Key should have correct value");
 
-    // ===== GET AND MODIFY OPERATIONS =====
+        // Verify PTTL is set
+        long pttl = jedis.pttl(testKey);
+        assertTrue(pttl > 0 && pttl <= 60000, "PTTL should be set correctly");
+    }
 
     @Test
     @Order(30)
     @DisplayName("GETSET Command")
-    void testGetsetCommand() {
-        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
-
+    void testGETSET() {
         String testKey = TEST_KEY_PREFIX + "getset";
 
-        // Test GETSET on non-existent key
-        String result1 = glideJedis.getSet(testKey, "new_value");
-        assertNull(result1, "GETSET should return null for non-existent key");
-        assertEquals("new_value", glideJedis.get(testKey), "New value should be set");
+        // Test GETSET on non-existing key
+        String result = jedis.getSet(testKey, "new_value");
+        assertNull(result, "GETSET should return null for non-existing key");
+        assertEquals("new_value", jedis.get(testKey), "Key should have new value");
 
         // Test GETSET on existing key
-        String result2 = glideJedis.getSet(testKey, "newer_value");
-        assertEquals("new_value", result2, "GETSET should return old value");
-        assertEquals("newer_value", glideJedis.get(testKey), "Newer value should be set");
+        result = jedis.getSet(testKey, "newer_value");
+        assertEquals("new_value", result, "GETSET should return old value");
+        assertEquals("newer_value", jedis.get(testKey), "Key should have newer value");
     }
 
     @Test
     @Order(31)
     @DisplayName("SETGET Command")
-    void testSetgetCommand() {
-        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
-
+    void testSETGET() {
         String testKey = TEST_KEY_PREFIX + "setget";
 
-        // Test SETGET on non-existent key
-        String result1 = glideJedis.setGet(testKey, "new_value");
-        assertNull(result1, "SETGET should return null for non-existent key");
-        assertEquals("new_value", glideJedis.get(testKey), "New value should be set");
+        // Test SETGET
+        String result = jedis.setGet(testKey, "test_value");
+        assertNull(result, "SETGET should return null for new key");
+        assertEquals("test_value", jedis.get(testKey), "Key should have correct value");
 
         // Test SETGET on existing key
-        String result2 = glideJedis.setGet(testKey, "newer_value");
-        assertEquals("new_value", result2, "SETGET should return old value");
-        assertEquals("newer_value", glideJedis.get(testKey), "Newer value should be set");
+        result = jedis.setGet(testKey, "new_value");
+        assertEquals("test_value", result, "SETGET should return old value");
+        assertEquals("new_value", jedis.get(testKey), "Key should have new value");
+    }
+
+    @Test
+    @Order(32)
+    @DisplayName("SETGET Command with SetParams")
+    void testSETGETWithParams() {
+        String testKey = TEST_KEY_PREFIX + "setget_params";
+
+        // Test SETGET with EX parameter
+        SetParams params = new SetParams().ex(60);
+        String result = jedis.setGet(testKey, "test_value", params);
+        assertNull(result, "SETGET should return null for new key");
+        assertEquals("test_value", jedis.get(testKey), "Key should have correct value");
+
+        // Verify TTL is set
+        long ttl = jedis.ttl(testKey);
+        assertTrue(ttl > 0 && ttl <= 60, "TTL should be set correctly");
+
+        // Test SETGET with params on existing key
+        params = new SetParams().px(30000);
+        result = jedis.setGet(testKey, "new_value", params);
+        assertEquals("test_value", result, "SETGET should return old value");
+        assertEquals("new_value", jedis.get(testKey), "Key should have new value");
+
+        // Verify PTTL is set
+        long pttl = jedis.pttl(testKey);
+        assertTrue(pttl > 0 && pttl <= 30000, "PTTL should be set correctly");
     }
 
     @Test
     @Order(32)
     @DisplayName("GETDEL Command")
-    void testGetdelCommand() {
-        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
+    void testGETDEL() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"),
+                "GETDEL command requires Redis 6.2.0 or higher");
 
         String testKey = TEST_KEY_PREFIX + "getdel";
-        String testValue = "to_be_deleted";
 
         // Set up test data
-        glideJedis.set(testKey, testValue);
+        jedis.set(testKey, "test_value");
 
         // Test GETDEL
-        String result = glideJedis.getDel(testKey);
-        assertEquals(testValue, result, "GETDEL should return the value");
-        assertNull(glideJedis.get(testKey), "Key should be deleted after GETDEL");
+        String result = jedis.getDel(testKey);
+        assertEquals("test_value", result, "GETDEL should return the value");
+        assertNull(jedis.get(testKey), "Key should be deleted");
 
-        // Test GETDEL on non-existent key
-        String result2 = glideJedis.getDel(testKey + "_nonexistent");
-        assertNull(result2, "GETDEL should return null for non-existent key");
+        // Test GETDEL on non-existing key
+        result = jedis.getDel(testKey);
+        assertNull(result, "GETDEL should return null for non-existing key");
     }
 
     @Test
     @Order(33)
     @DisplayName("GETEX Command")
-    void testGetexCommand() {
-        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
+    void testGETEX() {
         assumeTrue(
-                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "GETEX command added in version 6.2.0");
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"),
+                "GETEX command requires Redis 6.2.0 or higher");
 
         String testKey = TEST_KEY_PREFIX + "getex";
-        String testValue = "test_value";
+        String testValue = "getex_value";
 
-        // Set up test data
-        glideJedis.set(testKey, testValue);
+        // Set initial value
+        jedis.set(testKey, testValue);
 
-        // Test GETEX with GetExParams - EX option
-        String result1 = glideJedis.getEx(testKey, GetExParams.getExParams().ex(60));
-        assertEquals(testValue, result1, "GETEX with EX should return the value");
+        // Test GETEX with expiration
+        GetExParams params = new GetExParams().ex(10); // 10 seconds
+        String result = jedis.getEx(testKey, params);
+        assertEquals(testValue, result, "GETEX should return the current value");
 
-        // Test GETEX with GetExParams - PX option
-        String result2 = glideJedis.getEx(testKey, GetExParams.getExParams().px(60000));
-        assertEquals(testValue, result2, "GETEX with PX should return the value");
-
-        // Test GETEX with GetExParams - PERSIST option
-        String result3 = glideJedis.getEx(testKey, GetExParams.getExParams().persist());
-        assertEquals(testValue, result3, "GETEX with PERSIST should return the value");
-
-        // Test GETEX on non-existent key
-        String result4 = glideJedis.getEx(testKey + "_nonexistent", GetExParams.getExParams().ex(60));
-        assertNull(result4, "GETEX should return null for non-existent key");
+        // Verify TTL was set
+        long ttl = jedis.ttl(testKey);
+        assertTrue(ttl > 0 && ttl <= 10, "TTL should be set correctly");
     }
-
-    // ===== STRING MANIPULATION OPERATIONS =====
 
     @Test
     @Order(40)
     @DisplayName("APPEND Command")
-    void testAppendCommand() {
-        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
-
+    void testAPPEND() {
         String testKey = TEST_KEY_PREFIX + "append";
 
-        // Test APPEND on non-existent key
-        Long result1 = glideJedis.append(testKey, "hello");
-        assertEquals(5L, result1, "APPEND should return length of new string");
-        assertEquals("hello", glideJedis.get(testKey), "Value should be set");
+        // Test APPEND on non-existing key
+        long result = jedis.append(testKey, "Hello");
+        assertEquals(5, result, "APPEND should return string length");
+        assertEquals("Hello", jedis.get(testKey), "Key should have appended value");
 
         // Test APPEND on existing key
-        Long result2 = glideJedis.append(testKey, " world");
-        assertEquals(11L, result2, "APPEND should return new length");
-        assertEquals("hello world", glideJedis.get(testKey), "Value should be appended");
+        result = jedis.append(testKey, " World");
+        assertEquals(11, result, "APPEND should return updated string length");
+        assertEquals("Hello World", jedis.get(testKey), "Key should have concatenated value");
     }
 
     @Test
     @Order(41)
     @DisplayName("STRLEN Command")
-    void testStrlenCommand() {
-        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
-
+    void testSTRLEN() {
         String testKey = TEST_KEY_PREFIX + "strlen";
 
-        // Test STRLEN on non-existent key
-        Long result1 = glideJedis.strlen(testKey);
-        assertEquals(0L, result1, "STRLEN should return 0 for non-existent key");
+        // Test STRLEN on non-existing key
+        long result = jedis.strlen(testKey);
+        assertEquals(0, result, "STRLEN should return 0 for non-existing key");
 
         // Test STRLEN on existing key
-        glideJedis.set(testKey, "hello world");
-        Long result2 = glideJedis.strlen(testKey);
-        assertEquals(11L, result2, "STRLEN should return correct length");
+        jedis.set(testKey, "Hello World");
+        result = jedis.strlen(testKey);
+        assertEquals(11, result, "STRLEN should return correct length");
     }
-
-    // ===== BITMAP OPERATIONS =====
-
-    @Test
-    @Order(90)
-    @DisplayName("SETBIT Command")
-    void testSetbitCommand() {
-        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
-
-        String testKey = TEST_KEY_PREFIX + "setbit";
-
-        // Test SETBIT on new key
-        boolean result1 = glideJedis.setbit(testKey, 0, true);
-        assertFalse(result1, "SETBIT should return false for new bit");
-
-        // Test SETBIT on existing bit
-        boolean result2 = glideJedis.setbit(testKey, 0, false);
-        assertTrue(result2, "SETBIT should return true for previously set bit");
-
-        // Test SETBIT at different offsets
-        boolean result3 = glideJedis.setbit(testKey, 7, true);
-        assertFalse(result3, "SETBIT should return false for new bit at offset 7");
-
-        boolean result4 = glideJedis.setbit(testKey, 15, true);
-        assertFalse(result4, "SETBIT should return false for new bit at offset 15");
-    }
-
-    @Test
-    @Order(91)
-    @DisplayName("GETBIT Command")
-    void testGetbitCommand() {
-        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
-
-        String testKey = TEST_KEY_PREFIX + "getbit";
-
-        // Test GETBIT on non-existent key
-        boolean result1 = glideJedis.getbit(testKey, 0);
-        assertFalse(result1, "GETBIT should return false for non-existent key");
-
-        // Set some bits and test GETBIT
-        glideJedis.setbit(testKey, 0, true);
-        glideJedis.setbit(testKey, 7, true);
-
-        boolean result2 = glideJedis.getbit(testKey, 0);
-        assertTrue(result2, "GETBIT should return true for set bit at offset 0");
-
-        boolean result3 = glideJedis.getbit(testKey, 7);
-        assertTrue(result3, "GETBIT should return true for set bit at offset 7");
-
-        boolean result4 = glideJedis.getbit(testKey, 1);
-        assertFalse(result4, "GETBIT should return false for unset bit at offset 1");
-
-        boolean result5 = glideJedis.getbit(testKey, 100);
-        assertFalse(result5, "GETBIT should return false for offset beyond string length");
-    }
-
-    @Test
-    @Order(92)
-    @DisplayName("BITCOUNT Command")
-    void testBitcountCommand() {
-        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
-
-        String testKey = TEST_KEY_PREFIX + "bitcount";
-
-        // Test BITCOUNT on non-existent key
-        long result1 = glideJedis.bitcount(testKey);
-        assertEquals(0L, result1, "BITCOUNT should return 0 for non-existent key");
-
-        // Set some bits and test BITCOUNT
-        glideJedis.setbit(testKey, 0, true);
-        glideJedis.setbit(testKey, 1, true);
-        glideJedis.setbit(testKey, 7, true);
-        glideJedis.setbit(testKey, 8, true);
-
-        long result2 = glideJedis.bitcount(testKey);
-        assertEquals(4L, result2, "BITCOUNT should return 4 for 4 set bits");
-
-        // Test BITCOUNT with range
-        long result3 = glideJedis.bitcount(testKey, 0, 0);
-        assertEquals(3L, result3, "BITCOUNT should return 3 for first byte (3 set bits)");
-
-        long result4 = glideJedis.bitcount(testKey, 1, 1);
-        assertEquals(1L, result4, "BITCOUNT should return 1 for second byte (1 set bit)");
-    }
-
-    @Test
-    @Order(93)
-    @DisplayName("BITPOS Command")
-    void testBitposCommand() {
-        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
-
-        String testKey = TEST_KEY_PREFIX + "bitpos";
-
-        // Test BITPOS on non-existent key
-        long result1 = glideJedis.bitpos(testKey, true);
-        assertEquals(-1L, result1, "BITPOS should return -1 for non-existent key searching for 1");
-
-        long result2 = glideJedis.bitpos(testKey, false);
-        assertEquals(0L, result2, "BITPOS should return 0 for non-existent key searching for 0");
-
-        // Set some bits and test BITPOS
-        glideJedis.setbit(testKey, 2, true);
-        glideJedis.setbit(testKey, 5, true);
-
-        long result3 = glideJedis.bitpos(testKey, true);
-        assertEquals(2L, result3, "BITPOS should return 2 for first set bit");
-
-        long result4 = glideJedis.bitpos(testKey, false);
-        assertEquals(0L, result4, "BITPOS should return 0 for first unset bit");
-
-        // Test BITPOS with BitPosParams for range
-        BitPosParams params = new BitPosParams(0, 0);
-        long result5 = glideJedis.bitpos(testKey, true, params);
-        assertEquals(2L, result5, "BITPOS should return 2 for first set bit in first byte");
-    }
-
-    @Test
-    @Order(94)
-    @DisplayName("BITOP Command")
-    void testBitopCommand() {
-        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
-
-        String key1 = TEST_KEY_PREFIX + "bitop1";
-        String key2 = TEST_KEY_PREFIX + "bitop2";
-        String destKey = TEST_KEY_PREFIX + "bitop_dest";
-
-        // Set up test data with ASCII characters that produce valid UTF-8 results
-        // key1: 01110000 (ASCII 'p' = 112)
-        glideJedis.set(key1, "p");
-        // key2: 01110001 (ASCII 'q' = 113)
-        glideJedis.set(key2, "q");
-
-        // Test AND operation
-        long result1 = glideJedis.bitop(Jedis.BitOP.AND, destKey, key1, key2);
-        assertEquals(1L, result1, "BITOP AND should return length of result");
-        // AND result: 01110000 (ASCII 'p' = 112)
-        assertEquals("p", glideJedis.get(destKey), "BITOP AND result should be 'p'");
-
-        // Test OR operation
-        long result2 = glideJedis.bitop(Jedis.BitOP.OR, destKey, key1, key2);
-        assertEquals(1L, result2, "BITOP OR should return length of result");
-        // OR result: 01110001 (ASCII 'q' = 113)
-        assertEquals("q", glideJedis.get(destKey), "BITOP OR result should be 'q'");
-
-        // Test XOR operation
-        long result3 = glideJedis.bitop(Jedis.BitOP.XOR, destKey, key1, key2);
-        assertEquals(1L, result3, "BITOP XOR should return length of result");
-        // XOR result may not be valid UTF-8, so just verify the key exists
-        assertTrue(glideJedis.exists(destKey), "BITOP XOR result key should exist");
-
-        // Test NOT operation (single key)
-        long result4 = glideJedis.bitop(Jedis.BitOP.NOT, destKey, key1);
-        assertEquals(1L, result4, "BITOP NOT should return length of result");
-        // NOT result will be bitwise complement, which may not be valid UTF-8
-        // Just verify the key exists
-        assertTrue(glideJedis.exists(destKey), "BITOP NOT result key should exist");
-    }
-
-    @Test
-    @Order(95)
-    @DisplayName("BITFIELD Command")
-    void testBitfieldCommand() {
-        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
-
-        String testKey = TEST_KEY_PREFIX + "bitfield";
-
-        // Test BITFIELD SET and GET operations
-        List<Long> result1 = glideJedis.bitfield(testKey, "SET", "u8", "0", "255");
-        assertNotNull(result1, "BITFIELD should return a result list");
-        assertEquals(1, result1.size(), "BITFIELD SET should return one result");
-        assertEquals(0L, result1.get(0), "BITFIELD SET should return previous value (0)");
-
-        List<Long> result2 = glideJedis.bitfield(testKey, "GET", "u8", "0");
-        assertNotNull(result2, "BITFIELD GET should return a result list");
-        assertEquals(1, result2.size(), "BITFIELD GET should return one result");
-        assertEquals(255L, result2.get(0), "BITFIELD GET should return set value (255)");
-
-        // Test BITFIELD INCRBY operation
-        List<Long> result3 = glideJedis.bitfield(testKey, "INCRBY", "u8", "0", "1");
-        assertNotNull(result3, "BITFIELD INCRBY should return a result list");
-        assertEquals(1, result3.size(), "BITFIELD INCRBY should return one result");
-        // Note: This might wrap around due to overflow, depending on implementation
-        assertNotNull(result3.get(0), "BITFIELD INCRBY should return a value");
-    }
-
-    @Test
-    @Order(96)
-    @DisplayName("BITFIELD_RO Command")
-    void testBitfieldReadonlyCommand() {
-        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
-
-        String testKey = TEST_KEY_PREFIX + "bitfield_ro";
-
-        // Set up test data using regular BITFIELD
-        glideJedis.bitfield(testKey, "SET", "u8", "0", "170"); // 10101010 in binary
-
-        // Test BITFIELD_RO GET operations
-        List<Long> result1 = glideJedis.bitfieldReadonly(testKey, "GET", "u8", "0");
-        assertNotNull(result1, "BITFIELD_RO should return a result list");
-        assertEquals(1, result1.size(), "BITFIELD_RO GET should return one result");
-        assertEquals(170L, result1.get(0), "BITFIELD_RO GET should return correct value");
-
-        // Test BITFIELD_RO with multiple GET operations
-        List<Long> result2 = glideJedis.bitfieldReadonly(testKey, "GET", "u4", "0", "GET", "u4", "4");
-        assertNotNull(result2, "BITFIELD_RO should return a result list");
-        assertEquals(2, result2.size(), "BITFIELD_RO should return two results");
-        assertEquals(10L, result2.get(0), "First nibble should be 10 (1010)");
-        assertEquals(10L, result2.get(1), "Second nibble should be 10 (1010)");
-    }
-
-    // ===== NUMERIC OPERATIONS =====
 
     @Test
     @Order(50)
     @DisplayName("INCR Command")
-    void testIncrCommand() {
-        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
-
+    void testINCR() {
         String testKey = TEST_KEY_PREFIX + "incr";
 
-        // Test INCR on non-existent key
-        Long result1 = glideJedis.incr(testKey);
-        assertEquals(1L, result1, "INCR should return 1 for non-existent key");
+        // Test INCR on non-existing key
+        long result = jedis.incr(testKey);
+        assertEquals(1, result, "INCR should return 1 for new key");
+        assertEquals("1", jedis.get(testKey), "Key should have value 1");
 
         // Test INCR on existing key
-        Long result2 = glideJedis.incr(testKey);
-        assertEquals(2L, result2, "INCR should increment by 1");
-
-        // Verify final value
-        assertEquals("2", glideJedis.get(testKey), "Final value should be 2");
+        result = jedis.incr(testKey);
+        assertEquals(2, result, "INCR should return 2");
+        assertEquals("2", jedis.get(testKey), "Key should have value 2");
     }
 
     @Test
     @Order(51)
     @DisplayName("INCRBY Command")
-    void testIncrbyCommand() {
-        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
-
+    void testINCRBY() {
         String testKey = TEST_KEY_PREFIX + "incrby";
 
-        // Test INCRBY on non-existent key
-        Long result1 = glideJedis.incrBy(testKey, 5);
-        assertEquals(5L, result1, "INCRBY should return 5 for non-existent key");
+        // Test INCRBY on non-existing key
+        long result = jedis.incrBy(testKey, 5);
+        assertEquals(5, result, "INCRBY should return 5 for new key");
+        assertEquals("5", jedis.get(testKey), "Key should have value 5");
 
         // Test INCRBY on existing key
-        Long result2 = glideJedis.incrBy(testKey, 10);
-        assertEquals(15L, result2, "INCRBY should increment by 10");
-
-        // Test INCRBY with negative value
-        Long result3 = glideJedis.incrBy(testKey, -3);
-        assertEquals(12L, result3, "INCRBY should handle negative increment");
+        result = jedis.incrBy(testKey, 3);
+        assertEquals(8, result, "INCRBY should return 8");
+        assertEquals("8", jedis.get(testKey), "Key should have value 8");
     }
 
     @Test
     @Order(52)
     @DisplayName("INCRBYFLOAT Command")
-    void testIncrbyfloatCommand() {
-        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
-
+    void testINCRBYFLOAT() {
         String testKey = TEST_KEY_PREFIX + "incrbyfloat";
 
-        // Test INCRBYFLOAT on non-existent key
-        Double result1 = glideJedis.incrByFloat(testKey, 2.5);
-        assertEquals(2.5, result1, 0.001, "INCRBYFLOAT should return 2.5 for non-existent key");
+        // Test INCRBYFLOAT on non-existing key
+        double result = jedis.incrByFloat(testKey, 2.5);
+        assertEquals(2.5, result, 0.001, "INCRBYFLOAT should return 2.5 for new key");
+        assertEquals("2.5", jedis.get(testKey), "Key should have value 2.5");
 
         // Test INCRBYFLOAT on existing key
-        Double result2 = glideJedis.incrByFloat(testKey, 1.5);
-        assertEquals(4.0, result2, 0.001, "INCRBYFLOAT should increment by 1.5");
-
-        // Test INCRBYFLOAT with negative value
-        Double result3 = glideJedis.incrByFloat(testKey, -0.5);
-        assertEquals(3.5, result3, 0.001, "INCRBYFLOAT should handle negative increment");
+        result = jedis.incrByFloat(testKey, 1.5);
+        assertEquals(4.0, result, 0.001, "INCRBYFLOAT should return 4.0");
+        assertEquals("4", jedis.get(testKey), "Key should have value 4");
     }
 
     @Test
     @Order(53)
     @DisplayName("DECR Command")
-    void testDecrCommand() {
-        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
-
+    void testDECR() {
         String testKey = TEST_KEY_PREFIX + "decr";
 
         // Set initial value
-        glideJedis.set(testKey, "10");
+        jedis.set(testKey, "10");
 
         // Test DECR
-        Long result1 = glideJedis.decr(testKey);
-        assertEquals(9L, result1, "DECR should decrement by 1");
+        long result = jedis.decr(testKey);
+        assertEquals(9, result, "DECR should return 9");
+        assertEquals("9", jedis.get(testKey), "Key should have value 9");
 
         // Test DECR again
-        Long result2 = glideJedis.decr(testKey);
-        assertEquals(8L, result2, "DECR should decrement by 1 again");
-
-        // Verify final value
-        assertEquals("8", glideJedis.get(testKey), "Final value should be 8");
+        result = jedis.decr(testKey);
+        assertEquals(8, result, "DECR should return 8");
+        assertEquals("8", jedis.get(testKey), "Key should have value 8");
     }
 
     @Test
     @Order(54)
     @DisplayName("DECRBY Command")
-    void testDecrbyCommand() {
-        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
-
+    void testDECRBY() {
         String testKey = TEST_KEY_PREFIX + "decrby";
 
         // Set initial value
-        glideJedis.set(testKey, "20");
+        jedis.set(testKey, "20");
 
         // Test DECRBY
-        Long result1 = glideJedis.decrBy(testKey, 5);
-        assertEquals(15L, result1, "DECRBY should decrement by 5");
+        long result = jedis.decrBy(testKey, 5);
+        assertEquals(15, result, "DECRBY should return 15");
+        assertEquals("15", jedis.get(testKey), "Key should have value 15");
 
-        // Test DECRBY with larger value
-        Long result2 = glideJedis.decrBy(testKey, 10);
-        assertEquals(5L, result2, "DECRBY should decrement by 10");
-
-        // Test DECRBY with negative value (should increment)
-        Long result3 = glideJedis.decrBy(testKey, -3);
-        assertEquals(8L, result3, "DECRBY should handle negative decrement");
+        // Test DECRBY again
+        result = jedis.decrBy(testKey, 7);
+        assertEquals(8, result, "DECRBY should return 8");
+        assertEquals("8", jedis.get(testKey), "Key should have value 8");
     }
-
-    // ===== KEY MANAGEMENT OPERATIONS =====
 
     @Test
     @Order(60)
     @DisplayName("DEL Command")
-    void testDelCommand() {
-        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
+    void testDEL() {
+        String key1 = TEST_KEY_PREFIX + "del1";
+        String key2 = TEST_KEY_PREFIX + "del2";
+        String key3 = TEST_KEY_PREFIX + "del3";
 
-        String testKey1 = TEST_KEY_PREFIX + "del1";
-        String testKey2 = TEST_KEY_PREFIX + "del2";
-        String testKey3 = TEST_KEY_PREFIX + "del3";
+        // Set up test keys
+        jedis.set(key1, "value1");
+        jedis.set(key2, "value2");
+        jedis.set(key3, "value3");
 
-        // Set up test data
-        glideJedis.set(testKey1, "value1");
-        glideJedis.set(testKey2, "value2");
+        // Test single key deletion
+        long result = jedis.del(key1);
+        assertEquals(1, result, "DEL should return 1 for deleted key");
+        assertNull(jedis.get(key1), "Key should not exist after deletion");
 
-        // Test DEL single key
-        Long result1 = glideJedis.del(testKey1);
-        assertEquals(1L, result1, "DEL should return 1 for existing key");
-        assertNull(glideJedis.get(testKey1), "Key should be deleted");
-
-        // Test DEL multiple keys
-        Long result2 = glideJedis.del(testKey2, testKey3);
-        assertEquals(1L, result2, "DEL should return 1 for one existing key out of two");
-        assertNull(glideJedis.get(testKey2), "Key should be deleted");
-
-        // Test DEL non-existent key
-        Long result3 = glideJedis.del(testKey3);
-        assertEquals(0L, result3, "DEL should return 0 for non-existent key");
+        // Test multiple key deletion
+        result = jedis.del(key2, key3);
+        assertEquals(2, result, "DEL should return 2 for two deleted keys");
+        assertNull(jedis.get(key2), "Key2 should not exist after deletion");
+        assertNull(jedis.get(key3), "Key3 should not exist after deletion");
     }
 
     @Test
     @Order(61)
     @DisplayName("UNLINK Command")
-    void testUnlinkCommand() {
-        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
+    void testUNLINK() {
+        String key1 = TEST_KEY_PREFIX + "unlink1";
+        String key2 = TEST_KEY_PREFIX + "unlink2";
 
-        String testKey1 = TEST_KEY_PREFIX + "unlink1";
-        String testKey2 = TEST_KEY_PREFIX + "unlink2";
-        String testKey3 = TEST_KEY_PREFIX + "unlink3";
+        // Set up test keys
+        jedis.set(key1, "value1");
+        jedis.set(key2, "value2");
 
-        // Set up test data
-        glideJedis.set(testKey1, "value1");
-        glideJedis.set(testKey2, "value2");
-
-        // Test UNLINK multiple keys
-        Long result = glideJedis.unlink(testKey1, testKey2, testKey3);
-        assertEquals(2L, result, "UNLINK should return 2 for two existing keys out of three");
-        assertNull(glideJedis.get(testKey1), "Key should be unlinked");
-        assertNull(glideJedis.get(testKey2), "Key should be unlinked");
+        // Test UNLINK
+        long result = jedis.unlink(key1, key2);
+        assertEquals(2, result, "UNLINK should return 2 for two deleted keys");
+        assertNull(jedis.get(key1), "Key1 should not exist after unlink");
+        assertNull(jedis.get(key2), "Key2 should not exist after unlink");
     }
 
     @Test
     @Order(62)
     @DisplayName("EXISTS Command")
-    void testExistsCommand() {
-        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
+    void testEXISTS() {
+        String testKey = TEST_KEY_PREFIX + "exists";
 
-        String testKey1 = TEST_KEY_PREFIX + "exists1";
-        String testKey2 = TEST_KEY_PREFIX + "exists2";
-        String testKey3 = TEST_KEY_PREFIX + "exists3";
+        // Test EXISTS on non-existing key
+        boolean result = jedis.exists(testKey);
+        assertFalse(result, "EXISTS should return false for non-existing key");
 
-        // Test EXISTS on non-existent keys
-        Long result1 = glideJedis.exists(testKey1, testKey2, testKey3);
-        assertEquals(0L, result1, "EXISTS should return 0 for non-existent keys");
+        // Test EXISTS on existing key
+        jedis.set(testKey, "test_value");
+        result = jedis.exists(testKey);
+        assertTrue(result, "EXISTS should return true for existing key");
+    }
 
-        // Set up test data
-        glideJedis.set(testKey1, "value1");
-        glideJedis.set(testKey2, "value2");
+    @Test
+    @Order(62)
+    @DisplayName("EXISTS Multiple Keys Command")
+    void testEXISTSMultiple() {
+        String key1 = TEST_KEY_PREFIX + "exists_multi1";
+        String key2 = TEST_KEY_PREFIX + "exists_multi2";
+        String key3 = TEST_KEY_PREFIX + "exists_multi3";
 
-        // Test EXISTS on mixed keys
-        Long result2 = glideJedis.exists(testKey1, testKey2, testKey3);
-        assertEquals(2L, result2, "EXISTS should return 2 for two existing keys out of three");
+        // Set up some keys
+        jedis.set(key1, "value1");
+        jedis.set(key2, "value2");
 
-        // Test EXISTS on single key
-        boolean result3 = glideJedis.exists(testKey1);
-        assertTrue(result3, "EXISTS should return true for existing key");
+        // Test EXISTS on multiple keys
+        long result = jedis.exists(key1, key2, key3);
+        assertEquals(2, result, "EXISTS should return 2 for two existing keys");
+
+        // Test EXISTS on all non-existing keys
+        result = jedis.exists(key3, TEST_KEY_PREFIX + "nonexistent");
+        assertEquals(0, result, "EXISTS should return 0 for no existing keys");
+    }
+
+    @Test
+    @Order(63)
+    @DisplayName("KEYEXISTS Command")
+    void testKEYEXISTS() {
+        String testKey = TEST_KEY_PREFIX + "keyexists";
+
+        // Test KEYEXISTS on non-existing key
+        boolean result = jedis.keyExists(testKey);
+        assertFalse(result, "KEYEXISTS should return false for non-existing key");
+
+        // Test KEYEXISTS on existing key
+        jedis.set(testKey, "test_value");
+        result = jedis.keyExists(testKey);
+        assertTrue(result, "KEYEXISTS should return true for existing key");
     }
 
     @Test
     @Order(63)
     @DisplayName("TYPE Command")
-    void testTypeCommand() {
-        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
+    void testTYPE() {
+        String testKey = TEST_KEY_PREFIX + "type";
 
-        String stringKey = TEST_KEY_PREFIX + "type_string";
-        String nonExistentKey = TEST_KEY_PREFIX + "type_nonexistent";
-
-        // Test TYPE on non-existent key
-        String result1 = glideJedis.type(nonExistentKey);
-        assertEquals("none", result1, "TYPE should return 'none' for non-existent key");
+        // Test TYPE on non-existing key
+        String result = jedis.type(testKey);
+        assertEquals("none", result, "TYPE should return 'none' for non-existing key");
 
         // Test TYPE on string key
-        glideJedis.set(stringKey, "test_value");
-        String result2 = glideJedis.type(stringKey);
-        assertEquals("string", result2, "TYPE should return 'string' for string key");
+        jedis.set(testKey, "test_value");
+        result = jedis.type(testKey);
+        assertEquals("string", result, "TYPE should return 'string' for string key");
     }
 
     @Test
     @Order(64)
     @DisplayName("KEYS Command")
-    void testKeysCommand() {
-        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
+    void testKEYS() {
+        String key1 = TEST_KEY_PREFIX + "keys_test1";
+        String key2 = TEST_KEY_PREFIX + "keys_test2";
+        String key3 = TEST_KEY_PREFIX + "keys_test3";
 
-        String prefix = TEST_KEY_PREFIX + "keys_test:";
-        String key1 = prefix + "key1";
-        String key2 = prefix + "key2";
-        String key3 = prefix + "different";
-
-        // Set up test data
-        glideJedis.set(key1, "value1");
-        glideJedis.set(key2, "value2");
-        glideJedis.set(key3, "value3");
+        // Set up test keys
+        jedis.set(key1, "value1");
+        jedis.set(key2, "value2");
+        jedis.set(key3, "value3");
 
         // Test KEYS with pattern
-        Set<String> result1 = glideJedis.keys(prefix + "key*");
-        assertEquals(2, result1.size(), "KEYS should return 2 keys matching pattern");
-        assertTrue(result1.contains(key1), "Result should contain key1");
-        assertTrue(result1.contains(key2), "Result should contain key2");
-        assertFalse(result1.contains(key3), "Result should not contain key3");
-
-        // Test KEYS with wildcard
-        Set<String> result2 = glideJedis.keys(prefix + "*");
-        assertEquals(3, result2.size(), "KEYS should return 3 keys matching wildcard");
-        assertTrue(result2.contains(key1), "Result should contain key1");
-        assertTrue(result2.contains(key2), "Result should contain key2");
-        assertTrue(result2.contains(key3), "Result should contain key3");
+        Set<String> result = jedis.keys(TEST_KEY_PREFIX + "keys_test*");
+        assertNotNull(result, "KEYS should return a set");
+        assertEquals(3, result.size(), "KEYS should return 3 matching keys");
+        assertTrue(result.contains(key1), "Result should contain key1");
+        assertTrue(result.contains(key2), "Result should contain key2");
+        assertTrue(result.contains(key3), "Result should contain key3");
     }
 
     @Test
     @Order(65)
     @DisplayName("RANDOMKEY Command")
-    void testRandomkeyCommand() {
-        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
-
-        String testKey = TEST_KEY_PREFIX + "randomkey";
-
-        // Set up test data
-        glideJedis.set(testKey, "value");
+    void testRANDOMKEY() {
+        // Set up some test keys
+        jedis.set(TEST_KEY_PREFIX + "random1", "value1");
+        jedis.set(TEST_KEY_PREFIX + "random2", "value2");
+        jedis.set(TEST_KEY_PREFIX + "random3", "value3");
 
         // Test RANDOMKEY
-        String result = glideJedis.randomKey();
-        assertNotNull(result, "RANDOMKEY should return a key when database is not empty");
-
-        // Clean up and test empty database behavior
-        glideJedis.del(testKey);
-        // Note: In a real test environment, there might be other keys, so we can't reliably test empty
-        // database
+        String randomKey = jedis.randomKey();
+        assertNotNull(randomKey, "RANDOMKEY should return a key");
+        assertTrue(randomKey.length() > 0, "Random key should not be empty");
     }
 
     @Test
     @Order(66)
     @DisplayName("RENAME Command")
-    void testRenameCommand() {
-        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
+    void testRENAME() {
+        String srcKey = TEST_KEY_PREFIX + "rename_src";
+        String destKey = TEST_KEY_PREFIX + "rename_dest";
 
-        String oldKey = TEST_KEY_PREFIX + "rename_old";
-        String newKey = TEST_KEY_PREFIX + "rename_new";
-        String testValue = "test_value";
-
-        // Set up test data
-        glideJedis.set(oldKey, testValue);
+        // Set up source key
+        jedis.set(srcKey, "test_value");
 
         // Test RENAME
-        String result = glideJedis.rename(oldKey, newKey);
+        String result = jedis.rename(srcKey, destKey);
         assertEquals("OK", result, "RENAME should return OK");
-        assertNull(glideJedis.get(oldKey), "Old key should not exist after rename");
-        assertEquals(testValue, glideJedis.get(newKey), "New key should have the value");
+
+        // Verify source key is gone and destination key exists
+        assertNull(jedis.get(srcKey), "Source key should not exist after rename");
+        assertEquals("test_value", jedis.get(destKey), "Destination key should have the value");
     }
 
     @Test
     @Order(67)
     @DisplayName("RENAMENX Command")
-    void testRenamenxCommand() {
-        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
+    void testRENAMENX() {
+        String srcKey = TEST_KEY_PREFIX + "renamenx_src";
+        String destKey = TEST_KEY_PREFIX + "renamenx_dest";
 
-        String oldKey = TEST_KEY_PREFIX + "renamenx_old";
-        String newKey = TEST_KEY_PREFIX + "renamenx_new";
-        String existingKey = TEST_KEY_PREFIX + "renamenx_existing";
-        String testValue = "test_value";
+        // Set up source key
+        jedis.set(srcKey, "source_value");
 
-        // Set up test data
-        glideJedis.set(oldKey, testValue);
+        // Test RENAMENX on non-existing destination
+        long result = jedis.renamenx(srcKey, destKey);
+        assertEquals(1, result, "RENAMENX should return 1 for successful rename");
+        assertEquals("source_value", jedis.get(destKey), "Destination key should have the value");
 
-        // Test RENAMENX to non-existent key
-        Long result1 = glideJedis.renamenx(oldKey, newKey);
-        assertEquals(1L, result1, "RENAMENX should return 1 for successful rename");
-        assertNull(glideJedis.get(oldKey), "Old key should not exist after rename");
-        assertEquals(testValue, glideJedis.get(newKey), "New key should have the value");
+        // Set up another source key and test RENAMENX on existing destination
+        String srcKey2 = TEST_KEY_PREFIX + "renamenx_src2";
+        jedis.set(srcKey2, "source_value2");
 
-        // Set up for second test
-        glideJedis.set(oldKey, testValue);
-        glideJedis.set(existingKey, "existing_value");
-
-        // Test RENAMENX to existing key
-        Long result2 = glideJedis.renamenx(oldKey, existingKey);
-        assertEquals(0L, result2, "RENAMENX should return 0 when target key exists");
-        assertEquals(testValue, glideJedis.get(oldKey), "Old key should still exist");
-        assertEquals("existing_value", glideJedis.get(existingKey), "Existing key should be unchanged");
+        result = jedis.renamenx(srcKey2, destKey);
+        assertEquals(0, result, "RENAMENX should return 0 when destination exists");
+        assertEquals(
+                "source_value", jedis.get(destKey), "Destination key should retain original value");
+        assertEquals("source_value2", jedis.get(srcKey2), "Source key should still exist");
     }
 
-    // ===== EXPIRATION AND TTL OPERATIONS =====
+    @Test
+    @Order(90)
+    @DisplayName("SETBIT Command")
+    void testSETBIT() {
+        String testKey = TEST_KEY_PREFIX + "setbit";
+
+        // Test SETBIT
+        boolean result = jedis.setbit(testKey, 7, true);
+        assertFalse(result, "Initial bit should be false");
+
+        // Test SETBIT again
+        result = jedis.setbit(testKey, 7, false);
+        assertTrue(result, "Previous bit should be true");
+
+        // Test SETBIT on different position
+        result = jedis.setbit(testKey, 0, true);
+        assertFalse(result, "Initial bit at position 0 should be false");
+    }
+
+    @Test
+    @Order(91)
+    @DisplayName("GETBIT Command")
+    void testGETBIT() {
+        String testKey = TEST_KEY_PREFIX + "getbit";
+
+        // Test GETBIT on non-existing key
+        boolean result = jedis.getbit(testKey, 0);
+        assertFalse(result, "Bit should be false for non-existing key");
+
+        // Set a bit and test GETBIT
+        jedis.setbit(testKey, 7, true);
+        result = jedis.getbit(testKey, 7);
+        assertTrue(result, "Bit should be true after setting");
+
+        result = jedis.getbit(testKey, 0);
+        assertFalse(result, "Unset bit should be false");
+    }
+
+    @Test
+    @Order(92)
+    @DisplayName("BITCOUNT Command")
+    void testBITCOUNT() {
+        String testKey = TEST_KEY_PREFIX + "bitcount";
+
+        // Test BITCOUNT on non-existing key
+        long result = jedis.bitcount(testKey);
+        assertEquals(0, result, "BITCOUNT should return 0 for non-existing key");
+
+        // Set some bits and test BITCOUNT
+        jedis.setbit(testKey, 0, true);
+        jedis.setbit(testKey, 7, true);
+        jedis.setbit(testKey, 15, true);
+
+        result = jedis.bitcount(testKey);
+        assertEquals(3, result, "BITCOUNT should return 3 for three set bits");
+    }
+
+    @Test
+    @Order(93)
+    @DisplayName("BITPOS Command")
+    void testBITPOS() {
+        String testKey = TEST_KEY_PREFIX + "bitpos";
+
+        // Set some bits
+        jedis.setbit(testKey, 0, false);
+        jedis.setbit(testKey, 1, true);
+        jedis.setbit(testKey, 2, false);
+        jedis.setbit(testKey, 3, true);
+
+        // Test BITPOS for first set bit
+        long result = jedis.bitpos(testKey, true);
+        assertEquals(1, result, "First set bit should be at position 1");
+
+        // Test BITPOS with parameters
+        BitPosParams params = new BitPosParams(0, 1);
+        result = jedis.bitpos(testKey, true, params);
+        assertEquals(1, result, "First set bit in range should be at position 1");
+    }
+
+    @Test
+    @Order(94)
+    @DisplayName("BITCOUNT with range Command")
+    void testBITCOUNTWithRange() {
+        String testKey = TEST_KEY_PREFIX + "bitcount_range";
+
+        // Set up test data - create a byte with pattern 10101010
+        jedis.setbit(testKey, 0, true);
+        jedis.setbit(testKey, 2, true);
+        jedis.setbit(testKey, 4, true);
+        jedis.setbit(testKey, 6, true);
+        jedis.setbit(testKey, 8, true);
+        jedis.setbit(testKey, 10, true);
+
+        // Test BITCOUNT with byte range
+        long result = jedis.bitcount(testKey, 0, 0);
+        assertEquals(4, result, "BITCOUNT should count bits in first byte");
+
+        result = jedis.bitcount(testKey, 0, 1);
+        assertEquals(6, result, "BITCOUNT should count bits in first two bytes");
+    }
+
+    @Test
+    @Order(95)
+    @DisplayName("BITOP Command")
+    void testBITOP() {
+        String srcKey1 = TEST_KEY_PREFIX + "bitop_src1";
+        String srcKey2 = TEST_KEY_PREFIX + "bitop_src2";
+        String destKey = TEST_KEY_PREFIX + "bitop_dest";
+
+        // Set up source keys with different bit patterns
+        jedis.setbit(srcKey1, 0, true);
+        jedis.setbit(srcKey1, 2, true);
+        jedis.setbit(srcKey2, 1, true);
+        jedis.setbit(srcKey2, 2, true);
+
+        // Test BITOP AND
+        long result = jedis.bitop(BitOP.AND, destKey, srcKey1, srcKey2);
+        assertTrue(result > 0, "BITOP should return length of result");
+        assertTrue(jedis.getbit(destKey, 2), "Bit 2 should be set (1 AND 1)");
+        assertFalse(jedis.getbit(destKey, 0), "Bit 0 should not be set (1 AND 0)");
+        assertFalse(jedis.getbit(destKey, 1), "Bit 1 should not be set (0 AND 1)");
+
+        // Test BITOP OR
+        result = jedis.bitop(BitOP.OR, destKey, srcKey1, srcKey2);
+        assertTrue(result > 0, "BITOP OR should return length of result");
+        assertTrue(jedis.getbit(destKey, 0), "Bit 0 should be set (1 OR 0)");
+        assertTrue(jedis.getbit(destKey, 1), "Bit 1 should be set (0 OR 1)");
+        assertTrue(jedis.getbit(destKey, 2), "Bit 2 should be set (1 OR 1)");
+
+        // Test BITOP XOR
+        result = jedis.bitop(BitOP.XOR, destKey, srcKey1, srcKey2);
+        assertTrue(result > 0, "BITOP XOR should return length of result");
+        assertTrue(jedis.getbit(destKey, 0), "Bit 0 should be set (1 XOR 0)");
+        assertTrue(jedis.getbit(destKey, 1), "Bit 1 should be set (0 XOR 1)");
+        assertFalse(jedis.getbit(destKey, 2), "Bit 2 should not be set (1 XOR 1)");
+    }
+
+    @Test
+    @Order(96)
+    @DisplayName("BITFIELD Command")
+    void testBITFIELD() {
+        String testKey = TEST_KEY_PREFIX + "bitfield";
+
+        // Test BITFIELD SET
+        List<Long> result = jedis.bitfield(testKey, "SET", "u8", "0", "255");
+        assertNotNull(result, "BITFIELD should return a list");
+        assertEquals(1, result.size(), "BITFIELD should return one result");
+        assertEquals(0L, result.get(0), "Initial value should be 0");
+
+        // Test BITFIELD GET
+        result = jedis.bitfield(testKey, "GET", "u8", "0");
+        assertNotNull(result, "BITFIELD GET should return a list");
+        assertEquals(1, result.size(), "BITFIELD GET should return one result");
+        assertEquals(255L, result.get(0), "Should return the set value");
+
+        // Test BITFIELD INCRBY
+        result = jedis.bitfield(testKey, "INCRBY", "u8", "0", "1");
+        assertNotNull(result, "BITFIELD INCRBY should return a list");
+        assertEquals(1, result.size(), "BITFIELD INCRBY should return one result");
+        assertEquals(0L, result.get(0), "Should wrap around from 255 to 0");
+    }
+
+    @Test
+    @Order(97)
+    @DisplayName("BITFIELD_RO Command")
+    void testBITFIELD_RO() {
+        String testKey = TEST_KEY_PREFIX + "bitfield_ro";
+
+        // Set up test data
+        jedis.bitfield(testKey, "SET", "u8", "0", "42");
+
+        // Test BITFIELD_RO (read-only)
+        List<Long> result = jedis.bitfieldReadonly(testKey, "GET", "u8", "0");
+        assertNotNull(result, "BITFIELD_RO should return a list");
+        assertEquals(1, result.size(), "BITFIELD_RO should return one result");
+        assertEquals(42L, result.get(0), "Should return the stored value");
+
+        // Test BITFIELD_RO on non-existing key
+        result = jedis.bitfieldReadonly(TEST_KEY_PREFIX + "nonexistent", "GET", "u8", "0");
+        assertNotNull(result, "BITFIELD_RO should return a list for non-existing key");
+        assertEquals(1, result.size(), "BITFIELD_RO should return one result");
+        assertEquals(0L, result.get(0), "Should return 0 for non-existing key");
+    }
+
+    @Test
+    @Order(80)
+    @DisplayName("SORT Command")
+    void testSORT() {
+        // TO DO: Add integration test
+    }
+
+    @Test
+    @Order(81)
+    @DisplayName("DUMP Command")
+    void testDUMP() {
+        String testKey = TEST_KEY_PREFIX + "dump";
+
+        // Set up test data
+        jedis.set(testKey, "dump_test_value");
+
+        // Test DUMP
+        byte[] result = jedis.dump(testKey);
+        assertNotNull(result, "DUMP should return serialized data");
+        assertTrue(result.length > 0, "DUMP should return non-empty data");
+
+        // Test DUMP on non-existing key
+        result = jedis.dump(TEST_KEY_PREFIX + "nonexistent");
+        assertNull(result, "DUMP should return null for non-existing key");
+    }
+
+    @Test
+    @Order(82)
+    @DisplayName("RESTORE Command")
+    void testRESTORE() {
+        String sourceKey = TEST_KEY_PREFIX + "restore_src";
+        String destKey = TEST_KEY_PREFIX + "restore_dest";
+
+        // Set up source data and dump it
+        jedis.set(sourceKey, "restore_test_value");
+        byte[] dumpData = jedis.dump(sourceKey);
+        assertNotNull(dumpData, "Should be able to dump source key");
+
+        // Test RESTORE
+        String result = jedis.restore(destKey, 0, dumpData);
+        assertEquals("OK", result, "RESTORE should return OK");
+        assertEquals(
+                "restore_test_value", jedis.get(destKey), "Restored key should have correct value");
+
+        // Test RESTORE with TTL
+        String destKeyWithTTL = TEST_KEY_PREFIX + "restore_ttl";
+        result = jedis.restore(destKeyWithTTL, 60000, dumpData);
+        assertEquals("OK", result, "RESTORE with TTL should return OK");
+        assertEquals(
+                "restore_test_value", jedis.get(destKeyWithTTL), "Restored key should have correct value");
+
+        long ttl = jedis.pttl(destKeyWithTTL);
+        assertTrue(ttl > 0 && ttl <= 60000, "Restored key should have TTL set");
+    }
+
+    @Test
+    @Order(83)
+    @DisplayName("MIGRATE Command")
+    void testMIGRATE() {
+        // TO DO: Add integration test
+    }
+
+    @Test
+    @Order(84)
+    @DisplayName("MOVE Command")
+    void testMOVE() {
+        // TO DO: Add integration test
+    }
 
     @Test
     @Order(70)
     @DisplayName("EXPIRE Command")
-    void testExpireCommand() {
-        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
-
+    void testEXPIRE() {
         String testKey = TEST_KEY_PREFIX + "expire";
-        String testValue = "test_value";
 
-        // Set up test data
-        glideJedis.set(testKey, testValue);
+        // Set up test key
+        jedis.set(testKey, "test_value");
 
         // Test EXPIRE
-        Long result1 = glideJedis.expire(testKey, 60);
-        assertEquals(1L, result1, "EXPIRE should return 1 for existing key");
+        long result = jedis.expire(testKey, 60);
+        assertEquals(1, result, "EXPIRE should return 1 for success");
 
         // Verify TTL is set
-        Long ttl = glideJedis.ttl(testKey);
-        assertTrue(ttl > 0 && ttl <= 60, "TTL should be positive and <= 60 seconds");
-
-        // Test EXPIRE on non-existent key
-        Long result2 = glideJedis.expire(TEST_KEY_PREFIX + "nonexistent", 60);
-        assertEquals(0L, result2, "EXPIRE should return 0 for non-existent key");
+        long ttl = jedis.ttl(testKey);
+        assertTrue(ttl > 0 && ttl <= 60, "TTL should be set correctly");
     }
 
     @Test
     @Order(71)
     @DisplayName("EXPIREAT Command")
-    void testExpireatCommand() {
-        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
-
+    void testEXPIREAT() {
         String testKey = TEST_KEY_PREFIX + "expireat";
-        String testValue = "test_value";
 
-        // Set up test data
-        glideJedis.set(testKey, testValue);
+        // Set up test key
+        jedis.set(testKey, "test_value");
 
-        // Test EXPIREAT (set expiration to 1 hour from now)
-        long futureTimestamp = System.currentTimeMillis() / 1000 + 3600;
-        Long result1 = glideJedis.expireAt(testKey, futureTimestamp);
-        assertEquals(1L, result1, "EXPIREAT should return 1 for existing key");
+        // Test EXPIREAT (set expiration to 60 seconds from now)
+        long expireTime = System.currentTimeMillis() / 1000 + 60;
+        long result = jedis.expireAt(testKey, expireTime);
+        assertEquals(1, result, "EXPIREAT should return 1 for success");
 
-        // Verify expiration is set (only available in 7.0.0+)
-        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
-            Long expiretime = glideJedis.expireTime(testKey);
-            assertTrue(expiretime > 0, "EXPIRETIME should return positive timestamp");
-        }
-
-        // Test EXPIREAT on non-existent key
-        Long result2 = glideJedis.expireAt(TEST_KEY_PREFIX + "nonexistent", futureTimestamp);
-        assertEquals(0L, result2, "EXPIREAT should return 0 for non-existent key");
+        // Verify TTL is set
+        long ttl = jedis.ttl(testKey);
+        assertTrue(ttl > 0 && ttl <= 60, "TTL should be set correctly");
     }
 
     @Test
     @Order(72)
     @DisplayName("PEXPIRE Command")
-    void testPexpireCommand() {
-        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
-
+    void testPEXPIRE() {
         String testKey = TEST_KEY_PREFIX + "pexpire";
-        String testValue = "test_value";
 
-        // Set up test data
-        glideJedis.set(testKey, testValue);
+        // Set up test key
+        jedis.set(testKey, "test_value");
 
         // Test PEXPIRE
-        Long result1 = glideJedis.pexpire(testKey, 60000);
-        assertEquals(1L, result1, "PEXPIRE should return 1 for existing key");
+        long result = jedis.pexpire(testKey, 60000);
+        assertEquals(1, result, "PEXPIRE should return 1 for success");
 
         // Verify PTTL is set
-        Long pttl = glideJedis.pttl(testKey);
-        assertTrue(pttl > 0 && pttl <= 60000, "PTTL should be positive and <= 60000 milliseconds");
-
-        // Test PEXPIRE on non-existent key
-        Long result2 = glideJedis.pexpire(TEST_KEY_PREFIX + "nonexistent", 60000);
-        assertEquals(0L, result2, "PEXPIRE should return 0 for non-existent key");
+        long pttl = jedis.pttl(testKey);
+        assertTrue(pttl > 0 && pttl <= 60000, "PTTL should be set correctly");
     }
 
     @Test
     @Order(73)
     @DisplayName("PEXPIREAT Command")
-    void testPexpireatCommand() {
-        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
-
+    void testPEXPIREAT() {
         String testKey = TEST_KEY_PREFIX + "pexpireat";
-        String testValue = "test_value";
 
-        // Set up test data
-        glideJedis.set(testKey, testValue);
+        // Set up test key
+        jedis.set(testKey, "test_value");
 
-        // Test PEXPIREAT (set expiration to 1 hour from now in milliseconds)
-        long futureTimestamp = System.currentTimeMillis() + 3600000;
-        Long result1 = glideJedis.pexpireAt(testKey, futureTimestamp);
-        assertEquals(1L, result1, "PEXPIREAT should return 1 for existing key");
+        // Test PEXPIREAT (set expiration to 60 seconds from now)
+        long expireTime = System.currentTimeMillis() + 60000;
+        long result = jedis.pexpireAt(testKey, expireTime);
+        assertEquals(1, result, "PEXPIREAT should return 1 for success");
 
-        // Verify expiration is set (only available in 7.0.0+)
-        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
-            Long pexpiretime = glideJedis.pexpireTime(testKey);
-            assertTrue(pexpiretime > 0, "PEXPIRETIME should return positive timestamp");
-        }
-
-        // Test PEXPIREAT on non-existent key
-        Long result2 = glideJedis.pexpireAt(TEST_KEY_PREFIX + "nonexistent", futureTimestamp);
-        assertEquals(0L, result2, "PEXPIREAT should return 0 for non-existent key");
+        // Verify PTTL is set
+        long pttl = jedis.pttl(testKey);
+        assertTrue(pttl > 0 && pttl <= 60000, "PTTL should be set correctly");
     }
 
     @Test
     @Order(74)
     @DisplayName("TTL Command")
-    void testTtlCommand() {
-        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
-
+    void testTTL() {
         String testKey = TEST_KEY_PREFIX + "ttl";
-        String testValue = "test_value";
 
-        // Test TTL on non-existent key
-        Long result1 = glideJedis.ttl(TEST_KEY_PREFIX + "nonexistent");
-        assertEquals(-2L, result1, "TTL should return -2 for non-existent key");
+        // Test TTL on non-existing key
+        long result = jedis.ttl(testKey);
+        assertEquals(-2, result, "TTL should return -2 for non-existing key");
 
-        // Set up test data without expiration
-        glideJedis.set(testKey, testValue);
-        Long result2 = glideJedis.ttl(testKey);
-        assertEquals(-1L, result2, "TTL should return -1 for key without expiration");
+        // Test TTL on key without expiration
+        jedis.set(testKey, "test_value");
+        result = jedis.ttl(testKey);
+        assertEquals(-1, result, "TTL should return -1 for key without expiration");
 
-        // Set expiration and test TTL
-        glideJedis.expire(testKey, 60);
-        Long result3 = glideJedis.ttl(testKey);
-        assertTrue(result3 > 0 && result3 <= 60, "TTL should be positive and <= 60 seconds");
+        // Test TTL on key with expiration
+        jedis.expire(testKey, 60);
+        result = jedis.ttl(testKey);
+        assertTrue(result > 0 && result <= 60, "TTL should return remaining time");
     }
 
     @Test
     @Order(75)
     @DisplayName("PTTL Command")
-    void testPttlCommand() {
-        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
-
+    void testPTTL() {
         String testKey = TEST_KEY_PREFIX + "pttl";
-        String testValue = "test_value";
 
-        // Test PTTL on non-existent key
-        Long result1 = glideJedis.pttl(TEST_KEY_PREFIX + "nonexistent");
-        assertEquals(-2L, result1, "PTTL should return -2 for non-existent key");
+        // Test PTTL on non-existing key
+        long result = jedis.pttl(testKey);
+        assertEquals(-2, result, "PTTL should return -2 for non-existing key");
 
-        // Set up test data without expiration
-        glideJedis.set(testKey, testValue);
-        Long result2 = glideJedis.pttl(testKey);
-        assertEquals(-1L, result2, "PTTL should return -1 for key without expiration");
+        // Test PTTL on key without expiration
+        jedis.set(testKey, "test_value");
+        result = jedis.pttl(testKey);
+        assertEquals(-1, result, "PTTL should return -1 for key without expiration");
 
-        // Set expiration and test PTTL
-        glideJedis.pexpire(testKey, 60000);
-        Long result3 = glideJedis.pttl(testKey);
-        assertTrue(
-                result3 > 0 && result3 <= 60000, "PTTL should be positive and <= 60000 milliseconds");
+        // Test PTTL on key with expiration
+        jedis.pexpire(testKey, 60000);
+        result = jedis.pttl(testKey);
+        assertTrue(result > 0 && result <= 60000, "PTTL should return remaining time in milliseconds");
+    }
+
+    @Test
+    @Order(76)
+    @DisplayName("PERSIST Command")
+    void testPERSIST() {
+        String testKey = TEST_KEY_PREFIX + "persist";
+
+        // Set up test key with expiration
+        jedis.set(testKey, "test_value");
+        jedis.expire(testKey, 60);
+
+        // Verify key has expiration
+        long ttl = jedis.ttl(testKey);
+        assertTrue(ttl > 0, "Key should have expiration");
+
+        // Test PERSIST
+        long result = jedis.persist(testKey);
+        assertEquals(1, result, "PERSIST should return 1 for success");
+
+        // Verify expiration is removed
+        ttl = jedis.ttl(testKey);
+        assertEquals(-1, ttl, "Key should not have expiration after PERSIST");
     }
 
     @Test
     @Order(76)
     @DisplayName("EXPIRETIME Command")
-    void testExpiretimeCommand() {
-        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
+    void testEXPIRETIME() {
         assumeTrue(
                 SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"),
-                "EXPIRETIME command added in version 7.0.0");
+                "EXPIRETIME command requires Redis 7.0.0 or higher");
 
         String testKey = TEST_KEY_PREFIX + "expiretime";
-        String testValue = "test_value";
 
-        // Test EXPIRETIME on non-existent key
-        Long result1 = glideJedis.expireTime(TEST_KEY_PREFIX + "nonexistent");
-        assertEquals(-2L, result1, "EXPIRETIME should return -2 for non-existent key");
+        // Test EXPIRETIME on non-existing key
+        long result = jedis.expireTime(testKey);
+        assertEquals(-2, result, "EXPIRETIME should return -2 for non-existing key");
 
-        // Set up test data without expiration
-        glideJedis.set(testKey, testValue);
-        Long result2 = glideJedis.expireTime(testKey);
-        assertEquals(-1L, result2, "EXPIRETIME should return -1 for key without expiration");
+        // Test EXPIRETIME on key without expiration
+        jedis.set(testKey, "test_value");
+        result = jedis.expireTime(testKey);
+        assertEquals(-1, result, "EXPIRETIME should return -1 for key without expiration");
 
-        // Set expiration and test EXPIRETIME
-        long futureTimestamp = System.currentTimeMillis() / 1000 + 3600;
-        glideJedis.expireAt(testKey, futureTimestamp);
-        Long result3 = glideJedis.expireTime(testKey);
-        assertTrue(result3 > 0, "EXPIRETIME should return positive timestamp");
+        // Test EXPIRETIME on key with expiration
+        long currentTime = System.currentTimeMillis() / 1000;
+        jedis.expireAt(testKey, currentTime + 60);
+        result = jedis.expireTime(testKey);
+        assertTrue(
+                result > currentTime && result <= currentTime + 60,
+                "EXPIRETIME should return expiration timestamp");
     }
 
     @Test
     @Order(77)
     @DisplayName("PEXPIRETIME Command")
-    void testPexpiretimeCommand() {
-        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
+    void testPEXPIRETIME() {
         assumeTrue(
                 SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"),
-                "PEXPIRETIME command added in version 7.0.0");
+                "PEXPIRETIME command requires Redis 7.0.0 or higher");
 
         String testKey = TEST_KEY_PREFIX + "pexpiretime";
-        String testValue = "test_value";
 
-        // Test PEXPIRETIME on non-existent key
-        Long result1 = glideJedis.pexpireTime(TEST_KEY_PREFIX + "nonexistent");
-        assertEquals(-2L, result1, "PEXPIRETIME should return -2 for non-existent key");
+        // Test PEXPIRETIME on non-existing key
+        long result = jedis.pexpireTime(testKey);
+        assertEquals(-2, result, "PEXPIRETIME should return -2 for non-existing key");
 
-        // Set up test data without expiration
-        glideJedis.set(testKey, testValue);
-        Long result2 = glideJedis.pexpireTime(testKey);
-        assertEquals(-1L, result2, "PEXPIRETIME should return -1 for key without expiration");
+        // Test PEXPIRETIME on key without expiration
+        jedis.set(testKey, "test_value");
+        result = jedis.pexpireTime(testKey);
+        assertEquals(-1, result, "PEXPIRETIME should return -1 for key without expiration");
 
-        // Set expiration and test PEXPIRETIME
-        long futureTimestamp = System.currentTimeMillis() + 3600000;
-        glideJedis.pexpireAt(testKey, futureTimestamp);
-        Long result3 = glideJedis.pexpireTime(testKey);
-        assertTrue(result3 > 0, "PEXPIRETIME should return positive timestamp");
-    }
-
-    @Test
-    @Order(78)
-    @DisplayName("PERSIST Command")
-    void testPersistCommand() {
-        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
-
-        String testKey = TEST_KEY_PREFIX + "persist";
-        String testValue = "test_value";
-
-        // Test PERSIST on non-existent key
-        Long result1 = glideJedis.persist(TEST_KEY_PREFIX + "nonexistent");
-        assertEquals(0L, result1, "PERSIST should return 0 for non-existent key");
-
-        // Set up test data without expiration
-        glideJedis.set(testKey, testValue);
-        Long result2 = glideJedis.persist(testKey);
-        assertEquals(0L, result2, "PERSIST should return 0 for key without expiration");
-
-        // Set expiration and test PERSIST
-        glideJedis.expire(testKey, 60);
-        Long result3 = glideJedis.persist(testKey);
-        assertEquals(1L, result3, "PERSIST should return 1 for key with expiration");
-
-        // Verify expiration was removed
-        Long ttl = glideJedis.ttl(testKey);
-        assertEquals(-1L, ttl, "TTL should return -1 after PERSIST");
-    }
-
-    // ===== ADVANCED KEY OPERATIONS =====
-
-    @Test
-    @Order(80)
-    @DisplayName("SORT Command")
-    void testSortCommand() {
-        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
-
-        String listKey = TEST_KEY_PREFIX + "sort_list";
-
-        // Set up test data - create a list with numbers
-        glideJedis.del(listKey); // Ensure clean state
-        // Note: We need to use LPUSH to create a list, but since it's not in our compatibility layer,
-        // we'll use a different approach or skip this test if list operations aren't available
-
-        // For now, let's test SORT with a simple case that might work with string keys
-        String testKey = TEST_KEY_PREFIX + "sort_test";
-        glideJedis.set(testKey, "test_value");
-
-        try {
-            List<String> result = glideJedis.sort(testKey);
-            // SORT on a string key should work but may return empty or the value itself
-            assertNotNull(result, "SORT should return a list");
-        } catch (Exception e) {
-            // SORT might not work on string keys, which is expected behavior
-            assertTrue(
-                    e.getMessage().contains("SORT") || e.getMessage().contains("WRONGTYPE"),
-                    "Expected SORT-related error for string key");
-        }
-    }
-
-    @Test
-    @Order(81)
-    @DisplayName("DUMP and RESTORE Commands")
-    void testDumpRestoreCommands() {
-        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
-
-        String sourceKey = TEST_KEY_PREFIX + "dump_source";
-        String targetKey = TEST_KEY_PREFIX + "dump_target";
-        String testValue = "test_value_for_dump";
-
-        // Set up test data
-        glideJedis.set(sourceKey, testValue);
-
-        try {
-            // Test DUMP
-            byte[] dumpData = glideJedis.dump(sourceKey);
-            assertNotNull(dumpData, "DUMP should return serialized data");
-            assertTrue(dumpData.length > 0, "DUMP data should not be empty");
-
-            // Test RESTORE
-            String restoreResult = glideJedis.restore(targetKey, 0, dumpData);
-            assertEquals("OK", restoreResult, "RESTORE should return OK");
-            assertEquals(
-                    testValue, glideJedis.get(targetKey), "RESTORE should recreate the key with same value");
-
-        } catch (Exception e) {
-            // DUMP/RESTORE with binary data may have encoding issues in the compatibility layer
-            // This is a known limitation when dealing with binary serialized data
-            assertTrue(
-                    e.getMessage().contains("DUMP operation failed")
-                            || e.getMessage().contains("invalid utf-8 sequence")
-                            || e.getMessage().contains("RESTORE operation failed"),
-                    "Expected DUMP/RESTORE related error due to binary data handling: " + e.getMessage());
-
-            // Test that DUMP on non-existent key works
-            try {
-                byte[] dumpNull = glideJedis.dump(TEST_KEY_PREFIX + "nonexistent");
-                assertNull(dumpNull, "DUMP should return null for non-existent key");
-            } catch (Exception e2) {
-                // This is also acceptable for non-existent keys
-                assertTrue(
-                        e2.getMessage().contains("DUMP operation failed"),
-                        "Expected DUMP operation error for non-existent key");
-            }
-        }
-    }
-
-    @Test
-    @Order(82)
-    @DisplayName("MIGRATE Command")
-    void testMigrateCommand() {
-        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
-
-        String testKey = TEST_KEY_PREFIX + "migrate";
-        String testValue = "test_value";
-
-        // Set up test data
-        glideJedis.set(testKey, testValue);
-
-        // Test MIGRATE (this will likely fail in test environment, but we test the method call)
-        try {
-            String result = glideJedis.migrate("localhost", 6380, testKey, 1, 1000);
-            // If it succeeds, it should return "OK" or "NOKEY"
-            assertTrue(
-                    "OK".equals(result) || "NOKEY".equals(result), "MIGRATE should return OK or NOKEY");
-        } catch (Exception e) {
-            // Expected in test environment - connection refused, etc.
-            assertTrue(
-                    e.getMessage().contains("MIGRATE")
-                            || e.getMessage().contains("Connection refused")
-                            || e.getMessage().contains("timeout"),
-                    "Expected MIGRATE-related error in test environment");
-        }
-    }
-
-    @Test
-    @Order(83)
-    @DisplayName("MOVE Command")
-    void testMoveCommand() {
-        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
-
-        String testKey = TEST_KEY_PREFIX + "move";
-        String testValue = "test_value";
-
-        // Set up test data
-        glideJedis.set(testKey, testValue);
-
-        // Test MOVE (this might fail if multiple databases aren't supported)
-        try {
-            Long result = glideJedis.move(testKey, 1);
-            // Result should be 1 if moved, 0 if not
-            assertTrue(result == 0L || result == 1L, "MOVE should return 0 or 1");
-        } catch (Exception e) {
-            // Expected if multiple databases aren't supported
-            assertTrue(
-                    e.getMessage().contains("MOVE")
-                            || e.getMessage().contains("database")
-                            || e.getMessage().contains("ERR"),
-                    "Expected MOVE-related error if multiple databases not supported");
-        }
-    }
-
-    @Test
-    @Order(84)
-    @DisplayName("SCAN Command")
-    void testScanCommand() {
-        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
-
-        String prefix = TEST_KEY_PREFIX + "scan:";
-        String key1 = prefix + "key1";
-        String key2 = prefix + "key2";
-        String key3 = prefix + "key3";
-
-        // Set up test data
-        glideJedis.set(key1, "value1");
-        glideJedis.set(key2, "value2");
-        glideJedis.set(key3, "value3");
-
-        // Test SCAN without pattern
-        ScanResult<String> result1 = glideJedis.scan("0");
-        assertNotNull(result1, "SCAN should return ScanResult");
-        assertNotNull(result1.getCursor(), "SCAN should return cursor");
-        assertNotNull(result1.getResult(), "SCAN should return result list");
-
-        String cursor = result1.getCursor();
-        assertNotNull(cursor, "SCAN should return cursor");
-
-        // Test SCAN with pattern using ScanParams
-        ScanParams scanParams = new ScanParams().match(prefix + "*");
-        ScanResult<String> result2 = glideJedis.scan("0", scanParams);
-        assertNotNull(result2, "SCAN with pattern should return ScanResult");
-        assertNotNull(result2.getCursor(), "SCAN with pattern should return cursor");
-        assertNotNull(result2.getResult(), "SCAN with pattern should return result list");
-
-        // Check if our test keys are in the results (they might be in subsequent scans)
-        boolean foundTestKey = false;
-        for (String key : result2.getResult()) {
-            if (key != null && key.startsWith(prefix)) {
-                foundTestKey = true;
-                break;
-            }
-        }
-        // Note: SCAN might not return all keys in first iteration, so we don't assert this
+        // Test PEXPIRETIME on key with expiration
+        long currentTime = System.currentTimeMillis();
+        jedis.pexpireAt(testKey, currentTime + 60000);
+        result = jedis.pexpireTime(testKey);
+        assertTrue(
+                result > currentTime && result <= currentTime + 60000,
+                "PEXPIRETIME should return expiration timestamp in milliseconds");
     }
 
     @Test
     @Order(85)
     @DisplayName("TOUCH Command")
-    void testTouchCommand() {
-        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
+    void testTOUCH() {
+        String key1 = TEST_KEY_PREFIX + "touch1";
+        String key2 = TEST_KEY_PREFIX + "touch2";
+        String nonExistentKey = TEST_KEY_PREFIX + "touch_nonexistent";
 
-        String testKey1 = TEST_KEY_PREFIX + "touch1";
-        String testKey2 = TEST_KEY_PREFIX + "touch2";
-        String testKey3 = TEST_KEY_PREFIX + "touch3";
-
-        // Set up test data
-        glideJedis.set(testKey1, "value1");
-        glideJedis.set(testKey2, "value2");
+        // Set up test keys
+        jedis.set(key1, "value1");
+        jedis.set(key2, "value2");
 
         // Test TOUCH on existing keys
-        Long result1 = glideJedis.touch(testKey1, testKey2);
-        assertEquals(2L, result1, "TOUCH should return 2 for two existing keys");
+        long result = jedis.touch(key1, key2);
+        assertEquals(2, result, "TOUCH should return 2 for two existing keys");
 
-        // Test TOUCH on mixed keys (existing and non-existing)
-        Long result2 = glideJedis.touch(testKey1, testKey3);
-        assertEquals(1L, result2, "TOUCH should return 1 for one existing key out of two");
+        // Test TOUCH on mix of existing and non-existing keys
+        result = jedis.touch(key1, nonExistentKey);
+        assertEquals(1, result, "TOUCH should return 1 for one existing key");
 
-        // Test TOUCH on non-existent key
-        Long result3 = glideJedis.touch(testKey3);
-        assertEquals(0L, result3, "TOUCH should return 0 for non-existent key");
+        // Test TOUCH on non-existing key only
+        result = jedis.touch(nonExistentKey);
+        assertEquals(0, result, "TOUCH should return 0 for non-existing key");
     }
 
     @Test
     @Order(86)
     @DisplayName("COPY Command")
-    void testCopyCommand() {
-        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
-        assumeTrue(
-                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "COPY command added in version 6.2.0");
+    void testCOPY() {
+        String srcKey = TEST_KEY_PREFIX + "copy_src";
+        String destKey = TEST_KEY_PREFIX + "copy_dest";
 
-        String sourceKey = TEST_KEY_PREFIX + "copy_source";
-        String targetKey = TEST_KEY_PREFIX + "copy_target";
-        String existingKey = TEST_KEY_PREFIX + "copy_existing";
-        String testValue = "test_value";
+        // Set up source key
+        jedis.set(srcKey, "copy_value");
 
+        // Test COPY to non-existing destination
+        boolean result = jedis.copy(srcKey, destKey, false);
+        assertTrue(result, "COPY should return true for successful copy");
+        assertEquals("copy_value", jedis.get(srcKey), "Source key should still exist");
+        assertEquals("copy_value", jedis.get(destKey), "Destination key should have copied value");
+
+        // Test COPY to existing destination without replace
+        jedis.set(destKey, "existing_value");
+        result = jedis.copy(srcKey, destKey, false);
+        assertFalse(result, "COPY should return false when destination exists and replace=false");
+        assertEquals("existing_value", jedis.get(destKey), "Destination should retain original value");
+
+        // Test COPY to existing destination with replace
+        result = jedis.copy(srcKey, destKey, true);
+        assertTrue(result, "COPY should return true when replace=true");
+        assertEquals("copy_value", jedis.get(destKey), "Destination should have copied value");
+    }
+
+    @Test
+    @Order(84)
+    @DisplayName("SCAN Command")
+    void testSCAN() {
         // Set up test data
-        glideJedis.set(sourceKey, testValue);
+        Map<String, String> testData = new HashMap<>();
+        for (int i = 0; i < 10; i++) {
+            testData.put(TEST_KEY_PREFIX + "scan_" + i, "value_" + i);
+        }
 
-        // Test COPY to non-existent key
-        boolean result1 = glideJedis.copy(sourceKey, targetKey, false);
-        assertTrue(result1, "COPY should return true for successful copy");
-        assertEquals(testValue, glideJedis.get(sourceKey), "Source key should still exist");
-        assertEquals(testValue, glideJedis.get(targetKey), "Target key should have copied value");
+        // Set all test data
+        for (Map.Entry<String, String> entry : testData.entrySet()) {
+            jedis.set(entry.getKey(), entry.getValue());
+        }
 
-        // Test COPY to existing key without replace
-        glideJedis.set(existingKey, "existing_value");
-        boolean result2 = glideJedis.copy(sourceKey, existingKey, false);
-        assertFalse(result2, "COPY should return false when target exists and replace=false");
-        assertEquals("existing_value", glideJedis.get(existingKey), "Existing key should be unchanged");
+        // Test SCAN
+        ScanParams scanParams = new ScanParams().match(TEST_KEY_PREFIX + "scan_*").count(5);
+        ScanResult<String> scanResult = jedis.scan("0", scanParams);
 
-        // Test COPY to existing key with replace=true
-        boolean result3 = glideJedis.copy(sourceKey, existingKey, true);
-        assertTrue(result3, "COPY with replace=true should return true");
-        assertEquals(testValue, glideJedis.get(existingKey), "Existing key should be replaced");
-
-        // Test COPY from non-existent key
-        boolean result4 =
-                glideJedis.copy(TEST_KEY_PREFIX + "nonexistent", TEST_KEY_PREFIX + "target2", false);
-        assertFalse(result4, "COPY should return false for non-existent source key");
+        assertNotNull(scanResult, "SCAN result should not be null");
+        assertNotNull(scanResult.getResult(), "SCAN result list should not be null");
+        assertFalse(scanResult.getResult().isEmpty(), "SCAN should return some keys");
     }
 
     @Test
     @Order(87)
     @DisplayName("PFADD Command")
-    void testPfaddCommand() {
-        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
+    void testPFADD() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("2.8.9"),
+                "HyperLogLog commands require Redis 2.8.9 or higher");
 
-        String key = TEST_KEY_PREFIX + "pfadd";
+        String testKey = TEST_KEY_PREFIX + "pfadd1";
 
-        // Test adding elements to a new HyperLogLog
-        long result1 = glideJedis.pfadd(key, "element1", "element2", "element3");
-        assertEquals(1L, result1, "PFADD should return 1 when HyperLogLog is created or modified");
+        // Test PFADD
+        long result = jedis.pfadd(testKey, "element1", "element2", "element3");
+        assertEquals(1, result, "PFADD should return 1 for new HyperLogLog");
 
-        // Test adding duplicate elements (should not modify the HLL)
-        long result2 = glideJedis.pfadd(key, "element1", "element2");
-        assertEquals(0L, result2, "PFADD should return 0 when no new elements are added");
-
-        // Test adding new elements to existing HyperLogLog
-        long result3 = glideJedis.pfadd(key, "element4", "element5");
-        assertEquals(1L, result3, "PFADD should return 1 when new elements are added");
-
-        // Test adding no elements to existing HyperLogLog
-        long result4 = glideJedis.pfadd(key);
-        assertEquals(
-                0L, result4, "PFADD should return 0 when no elements are provided to existing HLL");
-
-        // Test adding no elements to non-existent HyperLogLog (creates empty HLL)
-        String newKey = TEST_KEY_PREFIX + "pfadd_empty";
-        long result5 = glideJedis.pfadd(newKey);
-        assertEquals(1L, result5, "PFADD should return 1 when creating empty HyperLogLog");
+        // Test PFADD with existing elements
+        result = jedis.pfadd(testKey, "element1", "element4");
+        assertTrue(result >= 0, "PFADD should return non-negative value");
     }
 
     @Test
     @Order(88)
     @DisplayName("PFCOUNT Command")
-    void testPfcountCommand() {
-        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
+    void testPFCOUNT() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("2.8.9"),
+                "HyperLogLog commands require Redis 2.8.9 or higher");
 
         String key1 = TEST_KEY_PREFIX + "pfcount1";
         String key2 = TEST_KEY_PREFIX + "pfcount2";
-        String key3 = TEST_KEY_PREFIX + "pfcount3";
 
-        // Test PFCOUNT on non-existent key
-        long result1 = glideJedis.pfcount(key1);
-        assertEquals(0L, result1, "PFCOUNT should return 0 for non-existent key");
+        // Set up test data
+        jedis.pfadd(key1, "element1", "element2", "element3");
+        jedis.pfadd(key2, "element3", "element4", "element5");
 
-        // Add elements to first HyperLogLog
-        glideJedis.pfadd(key1, "a", "b", "c", "d", "e");
-        long count1 = glideJedis.pfcount(key1);
-        assertTrue(
-                count1 >= 4 && count1 <= 6, "PFCOUNT should return approximate cardinality around 5");
+        // Test PFCOUNT on single key
+        long result = jedis.pfcount(key1);
+        assertEquals(3, result, "PFCOUNT should return approximate count");
 
-        // Add elements to second HyperLogLog
-        glideJedis.pfadd(key2, "c", "d", "e", "f", "g");
-        long count2 = glideJedis.pfcount(key2);
-        assertTrue(
-                count2 >= 4 && count2 <= 6, "PFCOUNT should return approximate cardinality around 5");
-
-        // Test PFCOUNT with multiple keys
-        long combinedCount = glideJedis.pfcount(key1, key2);
-        assertTrue(
-                combinedCount >= 6 && combinedCount <= 8,
-                "PFCOUNT with multiple keys should return combined cardinality around 7");
-
-        // Test PFCOUNT with mix of existing and non-existent keys
-        long mixedCount = glideJedis.pfcount(key1, key3);
-        assertTrue(
-                mixedCount >= 4 && mixedCount <= 6,
-                "PFCOUNT with non-existent key should ignore the non-existent key");
+        // Test PFCOUNT on multiple keys
+        result = jedis.pfcount(key1, key2);
+        assertEquals(5, result, "PFCOUNT should return combined approximate count");
     }
 
     @Test
     @Order(89)
     @DisplayName("PFMERGE Command")
-    void testPfmergeCommand() {
-        assumeTrue(hasGlideJedis, "GLIDE Jedis compatibility layer not available");
+    void testPFMERGE() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("2.8.9"),
+                "HyperLogLog commands require Redis 2.8.9 or higher");
 
-        String source1 = TEST_KEY_PREFIX + "pfmerge_src1";
-        String source2 = TEST_KEY_PREFIX + "pfmerge_src2";
-        String source3 = TEST_KEY_PREFIX + "pfmerge_src3";
-        String dest = TEST_KEY_PREFIX + "pfmerge_dest";
+        String sourceKey1 = TEST_KEY_PREFIX + "pfmerge_src1";
+        String sourceKey2 = TEST_KEY_PREFIX + "pfmerge_src2";
+        String destKey = TEST_KEY_PREFIX + "pfmerge_dest";
 
-        // Set up source HyperLogLogs
-        glideJedis.pfadd(source1, "a", "b", "c");
-        glideJedis.pfadd(source2, "c", "d", "e");
-        glideJedis.pfadd(source3, "e", "f", "g");
+        // Add elements to source HyperLogLogs
+        jedis.pfadd(sourceKey1, "element1", "element2", "element3");
+        jedis.pfadd(sourceKey2, "element3", "element4", "element5");
 
-        // Test merging into new destination
-        String result1 = glideJedis.pfmerge(dest, source1, source2);
-        assertEquals("OK", result1, "PFMERGE should return OK");
+        // Test PFMERGE
+        String result = jedis.pfmerge(destKey, sourceKey1, sourceKey2);
+        assertEquals("OK", result, "PFMERGE should return OK");
 
-        // Verify the merged result
-        long mergedCount = glideJedis.pfcount(dest);
-        assertTrue(
-                mergedCount >= 4 && mergedCount <= 6,
-                "Merged HyperLogLog should have approximate cardinality around 5");
-
-        // Test merging into existing destination
-        String result2 = glideJedis.pfmerge(dest, source3);
-        assertEquals("OK", result2, "PFMERGE into existing destination should return OK");
-
-        // Verify the updated merged result
-        long updatedCount = glideJedis.pfcount(dest);
-        assertTrue(
-                updatedCount >= 6 && updatedCount <= 8,
-                "Updated merged HyperLogLog should have approximate cardinality around 7");
-
-        // Test merging with non-existent source (should not affect result)
-        String nonExistentKey = TEST_KEY_PREFIX + "pfmerge_nonexistent";
-        String result3 = glideJedis.pfmerge(dest, nonExistentKey);
-        assertEquals("OK", result3, "PFMERGE with non-existent source should return OK");
-
-        long finalCount = glideJedis.pfcount(dest);
-        assertEquals(
-                updatedCount, finalCount, "PFMERGE with non-existent source should not change cardinality");
-
-        // Test merging into non-existent destination
-        String newDest = TEST_KEY_PREFIX + "pfmerge_new_dest";
-        String result4 = glideJedis.pfmerge(newDest, source1, source2, source3);
-        assertEquals("OK", result4, "PFMERGE into new destination should return OK");
-
-        long newDestCount = glideJedis.pfcount(newDest);
-        assertTrue(
-                newDestCount >= 6 && newDestCount <= 8,
-                "New destination should have approximate cardinality around 7");
+        // Verify merged count
+        long count = jedis.pfcount(destKey);
+        assertEquals(5, count, "Merged HyperLogLog should have 5 unique elements");
     }
 
-    /** Clean up test keys to avoid interference between tests. */
-    private void cleanupTestKeys(Object jedisInstance) {
-        try {
-            if (jedisInstance instanceof Jedis) {
-                // GLIDE Jedis cleanup
-                Jedis jedis = (Jedis) jedisInstance;
-                // Basic operation keys
-                jedis.del(TEST_KEY_PREFIX + "basic");
-                jedis.del(TEST_KEY_PREFIX + "key1");
-                jedis.del(TEST_KEY_PREFIX + "key2");
-                jedis.del(TEST_KEY_PREFIX + "key3");
+    @Test
+    @Order(100)
+    @DisplayName("PING Command")
+    void testPING() {
+        // Test PING
+        String result = jedis.ping();
+        assertEquals("PONG", result, "PING should return PONG");
 
-                // MSET/MGET keys
-                jedis.del(TEST_KEY_PREFIX + "mset1");
-                jedis.del(TEST_KEY_PREFIX + "mset2");
-                jedis.del(TEST_KEY_PREFIX + "mset3");
-                jedis.del(TEST_KEY_PREFIX + "mset4");
-                jedis.del(TEST_KEY_PREFIX + "mset5");
-                jedis.del(TEST_KEY_PREFIX + "mget1");
-                jedis.del(TEST_KEY_PREFIX + "mget2");
-                jedis.del(TEST_KEY_PREFIX + "mget3");
-
-                // Conditional set keys
-                jedis.del(TEST_KEY_PREFIX + "setnx");
-                jedis.del(TEST_KEY_PREFIX + "setex");
-                jedis.del(TEST_KEY_PREFIX + "psetex");
-
-                // Get and modify keys
-                jedis.del(TEST_KEY_PREFIX + "getset");
-                jedis.del(TEST_KEY_PREFIX + "setget");
-                jedis.del(TEST_KEY_PREFIX + "getdel");
-                jedis.del(TEST_KEY_PREFIX + "getex");
-
-                // String manipulation keys
-                jedis.del(TEST_KEY_PREFIX + "append");
-                jedis.del(TEST_KEY_PREFIX + "strlen");
-
-                // Numeric operation keys
-                jedis.del(TEST_KEY_PREFIX + "incr");
-                jedis.del(TEST_KEY_PREFIX + "incrby");
-                jedis.del(TEST_KEY_PREFIX + "incrbyfloat");
-                jedis.del(TEST_KEY_PREFIX + "decr");
-                jedis.del(TEST_KEY_PREFIX + "decrby");
-
-                // Key management keys
-                jedis.del(TEST_KEY_PREFIX + "del1");
-                jedis.del(TEST_KEY_PREFIX + "del2");
-                jedis.del(TEST_KEY_PREFIX + "del3");
-                jedis.del(TEST_KEY_PREFIX + "unlink1");
-                jedis.del(TEST_KEY_PREFIX + "unlink2");
-                jedis.del(TEST_KEY_PREFIX + "unlink3");
-                jedis.del(TEST_KEY_PREFIX + "exists1");
-                jedis.del(TEST_KEY_PREFIX + "exists2");
-                jedis.del(TEST_KEY_PREFIX + "exists3");
-                jedis.del(TEST_KEY_PREFIX + "type_string");
-                jedis.del(TEST_KEY_PREFIX + "keys_test:key1");
-                jedis.del(TEST_KEY_PREFIX + "keys_test:key2");
-                jedis.del(TEST_KEY_PREFIX + "keys_test:different");
-                jedis.del(TEST_KEY_PREFIX + "randomkey");
-                jedis.del(TEST_KEY_PREFIX + "rename_old");
-                jedis.del(TEST_KEY_PREFIX + "rename_new");
-                jedis.del(TEST_KEY_PREFIX + "renamenx_old");
-                jedis.del(TEST_KEY_PREFIX + "renamenx_new");
-                jedis.del(TEST_KEY_PREFIX + "renamenx_existing");
-
-                // Expiration and TTL keys
-                jedis.del(TEST_KEY_PREFIX + "expire");
-                jedis.del(TEST_KEY_PREFIX + "expireat");
-                jedis.del(TEST_KEY_PREFIX + "pexpire");
-                jedis.del(TEST_KEY_PREFIX + "pexpireat");
-                jedis.del(TEST_KEY_PREFIX + "ttl");
-                jedis.del(TEST_KEY_PREFIX + "pttl");
-                jedis.del(TEST_KEY_PREFIX + "expiretime");
-                jedis.del(TEST_KEY_PREFIX + "pexpiretime");
-                jedis.del(TEST_KEY_PREFIX + "persist");
-
-                // Advanced key operation keys
-                jedis.del(TEST_KEY_PREFIX + "sort_list");
-                jedis.del(TEST_KEY_PREFIX + "sort_test");
-                jedis.del(TEST_KEY_PREFIX + "dump_source");
-                jedis.del(TEST_KEY_PREFIX + "dump_target");
-                jedis.del(TEST_KEY_PREFIX + "migrate");
-                jedis.del(TEST_KEY_PREFIX + "move");
-                jedis.del(TEST_KEY_PREFIX + "scan:key1");
-                jedis.del(TEST_KEY_PREFIX + "scan:key2");
-                jedis.del(TEST_KEY_PREFIX + "scan:key3");
-                jedis.del(TEST_KEY_PREFIX + "touch1");
-                jedis.del(TEST_KEY_PREFIX + "touch2");
-                jedis.del(TEST_KEY_PREFIX + "touch3");
-                jedis.del(TEST_KEY_PREFIX + "copy_source");
-                jedis.del(TEST_KEY_PREFIX + "copy_target");
-                jedis.del(TEST_KEY_PREFIX + "copy_existing");
-                jedis.del(TEST_KEY_PREFIX + "target2");
-
-                // Bitmap operation keys
-                jedis.del(TEST_KEY_PREFIX + "setbit");
-                jedis.del(TEST_KEY_PREFIX + "getbit");
-                jedis.del(TEST_KEY_PREFIX + "bitcount");
-                jedis.del(TEST_KEY_PREFIX + "bitpos");
-                jedis.del(TEST_KEY_PREFIX + "bitop1");
-                jedis.del(TEST_KEY_PREFIX + "bitop2");
-                jedis.del(TEST_KEY_PREFIX + "bitop_dest");
-                jedis.del(TEST_KEY_PREFIX + "bitfield");
-                jedis.del(TEST_KEY_PREFIX + "bitfield_ro");
-
-                // HyperLogLog operation keys
-                jedis.del(TEST_KEY_PREFIX + "pfadd");
-                jedis.del(TEST_KEY_PREFIX + "pfadd_empty");
-                jedis.del(TEST_KEY_PREFIX + "pfcount1");
-                jedis.del(TEST_KEY_PREFIX + "pfcount2");
-                jedis.del(TEST_KEY_PREFIX + "pfcount3");
-                jedis.del(TEST_KEY_PREFIX + "pfmerge_src1");
-                jedis.del(TEST_KEY_PREFIX + "pfmerge_src2");
-                jedis.del(TEST_KEY_PREFIX + "pfmerge_src3");
-                jedis.del(TEST_KEY_PREFIX + "pfmerge_dest");
-                jedis.del(TEST_KEY_PREFIX + "pfmerge_nonexistent");
-                jedis.del(TEST_KEY_PREFIX + "pfmerge_new_dest");
-            } else {
-                // Actual Jedis cleanup via reflection
-                Method delMethod = actualJedisClass.getMethod("del", String[].class);
-                String[] keysToDelete = {
-                    // Basic operation keys
-                    TEST_KEY_PREFIX + "basic",
-                    TEST_KEY_PREFIX + "key1",
-                    TEST_KEY_PREFIX + "key2",
-                    TEST_KEY_PREFIX + "key3",
-
-                    // MSET/MGET keys
-                    TEST_KEY_PREFIX + "mset1",
-                    TEST_KEY_PREFIX + "mset2",
-                    TEST_KEY_PREFIX + "mset3",
-                    TEST_KEY_PREFIX + "mset4",
-                    TEST_KEY_PREFIX + "mset5",
-                    TEST_KEY_PREFIX + "mget1",
-                    TEST_KEY_PREFIX + "mget2",
-                    TEST_KEY_PREFIX + "mget3",
-
-                    // Conditional set keys
-                    TEST_KEY_PREFIX + "setnx",
-                    TEST_KEY_PREFIX + "setex",
-                    TEST_KEY_PREFIX + "psetex",
-
-                    // Get and modify keys
-                    TEST_KEY_PREFIX + "getset",
-                    TEST_KEY_PREFIX + "setget",
-                    TEST_KEY_PREFIX + "getdel",
-                    TEST_KEY_PREFIX + "getex",
-
-                    // String manipulation keys
-                    TEST_KEY_PREFIX + "append",
-                    TEST_KEY_PREFIX + "strlen",
-
-                    // Numeric operation keys
-                    TEST_KEY_PREFIX + "incr",
-                    TEST_KEY_PREFIX + "incrby",
-                    TEST_KEY_PREFIX + "incrbyfloat",
-                    TEST_KEY_PREFIX + "decr",
-                    TEST_KEY_PREFIX + "decrby",
-
-                    // Key management keys
-                    TEST_KEY_PREFIX + "del1",
-                    TEST_KEY_PREFIX + "del2",
-                    TEST_KEY_PREFIX + "del3",
-                    TEST_KEY_PREFIX + "unlink1",
-                    TEST_KEY_PREFIX + "unlink2",
-                    TEST_KEY_PREFIX + "unlink3",
-                    TEST_KEY_PREFIX + "exists1",
-                    TEST_KEY_PREFIX + "exists2",
-                    TEST_KEY_PREFIX + "exists3",
-                    TEST_KEY_PREFIX + "type_string",
-                    TEST_KEY_PREFIX + "keys_test:key1",
-                    TEST_KEY_PREFIX + "keys_test:key2",
-                    TEST_KEY_PREFIX + "keys_test:different",
-                    TEST_KEY_PREFIX + "randomkey",
-                    TEST_KEY_PREFIX + "rename_old",
-                    TEST_KEY_PREFIX + "rename_new",
-                    TEST_KEY_PREFIX + "renamenx_old",
-                    TEST_KEY_PREFIX + "renamenx_new",
-                    TEST_KEY_PREFIX + "renamenx_existing",
-
-                    // Expiration and TTL keys
-                    TEST_KEY_PREFIX + "expire",
-                    TEST_KEY_PREFIX + "expireat",
-                    TEST_KEY_PREFIX + "pexpire",
-                    TEST_KEY_PREFIX + "pexpireat",
-                    TEST_KEY_PREFIX + "ttl",
-                    TEST_KEY_PREFIX + "pttl",
-                    TEST_KEY_PREFIX + "expiretime",
-                    TEST_KEY_PREFIX + "pexpiretime",
-                    TEST_KEY_PREFIX + "persist",
-
-                    // Advanced key operation keys
-                    TEST_KEY_PREFIX + "sort_list",
-                    TEST_KEY_PREFIX + "sort_test",
-                    TEST_KEY_PREFIX + "dump_source",
-                    TEST_KEY_PREFIX + "dump_target",
-                    TEST_KEY_PREFIX + "migrate",
-                    TEST_KEY_PREFIX + "move",
-                    TEST_KEY_PREFIX + "scan:key1",
-                    TEST_KEY_PREFIX + "scan:key2",
-                    TEST_KEY_PREFIX + "scan:key3",
-                    TEST_KEY_PREFIX + "touch1",
-                    TEST_KEY_PREFIX + "touch2",
-                    TEST_KEY_PREFIX + "touch3",
-                    TEST_KEY_PREFIX + "copy_source",
-                    TEST_KEY_PREFIX + "copy_target",
-                    TEST_KEY_PREFIX + "copy_existing",
-                    TEST_KEY_PREFIX + "target2",
-
-                    // Bitmap operation keys
-                    TEST_KEY_PREFIX + "setbit",
-                    TEST_KEY_PREFIX + "getbit",
-                    TEST_KEY_PREFIX + "bitcount",
-                    TEST_KEY_PREFIX + "bitpos",
-                    TEST_KEY_PREFIX + "bitop1",
-                    TEST_KEY_PREFIX + "bitop2",
-                    TEST_KEY_PREFIX + "bitop_dest",
-                    TEST_KEY_PREFIX + "bitfield",
-                    TEST_KEY_PREFIX + "bitfield_ro",
-
-                    // HyperLogLog operation keys
-                    TEST_KEY_PREFIX + "pfadd",
-                    TEST_KEY_PREFIX + "pfadd_empty",
-                    TEST_KEY_PREFIX + "pfcount1",
-                    TEST_KEY_PREFIX + "pfcount2",
-                    TEST_KEY_PREFIX + "pfcount3",
-                    TEST_KEY_PREFIX + "pfmerge_src1",
-                    TEST_KEY_PREFIX + "pfmerge_src2",
-                    TEST_KEY_PREFIX + "pfmerge_src3",
-                    TEST_KEY_PREFIX + "pfmerge_dest",
-                    TEST_KEY_PREFIX + "pfmerge_nonexistent",
-                    TEST_KEY_PREFIX + "pfmerge_new_dest"
-                };
-                delMethod.invoke(jedisInstance, (Object) keysToDelete);
-            }
-        } catch (Exception e) {
-            // Ignore cleanup errors
-        }
+        // Test PING with message
+        String message = "test_message";
+        String pingWithMessage = jedis.ping(message);
+        assertEquals(message, pingWithMessage, "PING with message should return the message");
     }
 }
