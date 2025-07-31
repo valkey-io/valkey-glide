@@ -227,7 +227,9 @@ where
 
     // result is ignored, as per the command's instructions.
     // https://redis.io/commands/client-setinfo/
-    let _: RedisResult<()> = crate::connection::client_set_info_pipeline()
+    // Use permission-safe version to avoid ACL errors
+    let _: RedisResult<()> = crate::connection::client_set_info_pipeline_safe_async(con)
+        .await
         .query_async(con)
         .await;
 
