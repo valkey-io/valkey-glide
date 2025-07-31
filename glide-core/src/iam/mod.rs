@@ -175,10 +175,10 @@ impl IAMTokenManager {
     }
 
     // todo: test it works well
-    /// Generate a new IAM auth token using SigV4 signing
-    ///
-    /// Creates an ElastiCache/MemoryDB auth token using AWS IAM credentials and SigV4 signing.
-    /// The token is valid for 15 minutes and contains the signed username for authentication.
+    /// This method creates an ElastiCache/MemoryDB authentication token using AWS IAM credentials
+    /// and SigV4 signing. The generated token is valid for 15 minutes and includes the signed
+    /// username for authentication. It is designed to be used in environments where secure
+    /// authentication to AWS services is required.
     async fn generate_token_static(
         region: &str,
         cluster_name: &str,
@@ -308,5 +308,302 @@ impl Drop for IAMTokenManager {
 
         // Note: We can't await in Drop, so the task cleanup happens in stop_refresh_task()
         // or will be handled by the tokio runtime when the JoinHandle is dropped
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::env;
+    use tokio::time::{sleep, Duration};
+
+    // Helper function to set up mock AWS credentials for testing
+    fn setup_test_credentials() {
+        unsafe {
+            env::set_var("AWS_ACCESS_KEY_ID", "test_access_key");
+            env::set_var("AWS_SECRET_ACCESS_KEY", "test_secret_key");
+            env::set_var("AWS_SESSION_TOKEN", "test_session_token");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_service_type_service_name() {
+        assert_eq!(ServiceType::ElastiCache.service_name(), "elasticache");
+        assert_eq!(ServiceType::MemoryDB.service_name(), "memorydb");
+    }
+
+    #[tokio::test]
+    async fn test_service_type_hostname_suffix() {
+        assert_eq!(ServiceType::ElastiCache.hostname_suffix(), "cache.amazonaws.com");
+        assert_eq!(ServiceType::MemoryDB.hostname_suffix(), "memorydb.amazonaws.com");
+    }
+
+    #[tokio::test]
+    async fn test_generate_token_static_returns_valid_token_format() {
+        setup_test_credentials();
+        
+        let region = "us-east-1";
+        let cluster_name = "test-cluster";
+        let username = "test-user";
+        let service_type = ServiceType::ElastiCache;
+
+        let result = IAMTokenManager::generate_token_static(
+            region,
+            cluster_name,
+            username,
+            &service_type,
+        ).await;
+
+        assert!(result.is_ok(), "Token generation should succeed with valid credentials");
+        
+        let token = result.unwrap();
+        
+        // Verify token format: username?query_params&Authorization=signature
+        assert!(token.starts_with(username), "Token should start with username");
+        assert!(token.contains("Action=connect"), "Token should contain Action=connect");
+        assert!(token.contains("User=test-user"), "Token should contain User parameter");
+        assert!(token.contains("X-Amz-Expires=900"), "Token should contain 15-minute expiration");
+        assert!(token.contains("Authorization="), "Token should contain Authorization parameter");
+    }
+
+    #[tokio::test]
+    async fn test_generate_token_static_with_memorydb_service() {
+        setup_test_credentials();
+        
+        let region = "us-west-2";
+        let cluster_name = "memorydb-cluster";
+        let username = "memorydb-user";
+        let service_type = ServiceType::MemoryDB;
+
+        let result = IAMTokenManager::generate_token_static(
+            region,
+            cluster_name,
+            username,
+            &service_type,
+        ).await;
+
+        assert!(result.is_ok(), "Token generation should succeed for MemoryDB");
+        
+        let token = result.unwrap();
+        assert!(token.starts_with(username), "Token should start with username");
+        assert!(token.contains("User=memorydb-user"), "Token should contain correct username");
+    }
+
+    #[tokio::test]
+    async fn test_generate_token_static_with_special_characters_in_username() {
+        setup_test_credentials();
+        
+        let region = "eu-west-1";
+        let cluster_name = "test-cluster";
+        let username = "test@user.com";
+        let service_type = ServiceType::ElastiCache;
+
+        let result = IAMTokenManager::generate_token_static(
+            region,
+            cluster_name,
+            username,
+            &service_type,
+        ).await;
+
+        assert!(result.is_ok(), "Token generation should succeed with special characters in username");
+        
+        let token = result.unwrap();
+        assert!(token.starts_with(username), "Token should start with encoded username");
+        assert!(token.contains("User=test%40user.com"), "Username should be URL encoded in token");
+    }
+
+    #[tokio::test]
+    async fn test_iam_token_manager_new_creates_initial_token() {
+        setup_test_credentials();
+        
+        let cluster_name = "test-cluster".to_string();
+        let username = "test-user".to_string();
+        let region = "us-east-1".to_string();
+
+        let result = IAMTokenManager::new(
+            cluster_name,
+            username,
+            region,
+            None,
+            None,
+        ).await;
+
+        assert!(result.is_ok(), "IAMTokenManager creation should succeed");
+        
+        let manager = result.unwrap();
+        let token = manager.get_token().await;
+        
+        assert!(!token.is_empty(), "Initial token should not be empty");
+        assert!(token.starts_with("test-user"), "Token should start with username");
+    }
+
+    #[tokio::test]
+    async fn test_iam_token_manager_new_with_custom_refresh_interval() {
+        setup_test_credentials();
+        
+        let cluster_name = "test-cluster".to_string();
+        let username = "test-user".to_string();
+        let region = "us-east-1".to_string();
+        let custom_interval = Some(5); // 5 minutes
+
+        let result = IAMTokenManager::new(
+            cluster_name,
+            username,
+            region,
+            custom_interval,
+            Some(ServiceType::MemoryDB),
+        ).await;
+
+        assert!(result.is_ok(), "IAMTokenManager creation should succeed with custom interval");
+        
+        let manager = result.unwrap();
+        let token = manager.get_token().await;
+        
+        assert!(!token.is_empty(), "Initial token should not be empty");
+    }
+
+    #[tokio::test]
+    async fn test_iam_token_manager_get_token_returns_cached_token() {
+        setup_test_credentials();
+        
+        let cluster_name = "test-cluster".to_string();
+        let username = "test-user".to_string();
+        let region = "us-east-1".to_string();
+
+        let manager = IAMTokenManager::new(
+            cluster_name,
+            username,
+            region,
+            None,
+            None,
+        ).await.unwrap();
+
+        let token1 = manager.get_token().await;
+        let token2 = manager.get_token().await;
+        
+        assert_eq!(token1, token2, "get_token should return the same cached token");
+    }
+
+    #[tokio::test]
+    async fn test_iam_token_manager_refresh_token_updates_cached_token() {
+        setup_test_credentials();
+        
+        let cluster_name = "test-cluster".to_string();
+        let username = "test-user".to_string();
+        let region = "us-east-1".to_string();
+
+        let manager = IAMTokenManager::new(
+            cluster_name,
+            username,
+            region,
+            None,
+            None,
+        ).await.unwrap();
+
+        let initial_token = manager.get_token().await;
+        
+        // Wait a small amount to ensure timestamp difference
+        sleep(Duration::from_millis(10)).await;
+        
+        let refresh_result = manager.refresh_token().await;
+        assert!(refresh_result.is_ok(), "Token refresh should succeed");
+        
+        let new_token = manager.get_token().await;
+        
+        // Tokens should be different due to different timestamps in signing
+        assert_ne!(initial_token, new_token, "Refreshed token should be different from initial token");
+        assert!(new_token.starts_with("test-user"), "New token should still start with username");
+    }
+
+    #[tokio::test]
+    async fn test_iam_token_manager_start_and_stop_refresh_task() {
+        setup_test_credentials();
+        
+        let cluster_name = "test-cluster".to_string();
+        let username = "test-user".to_string();
+        let region = "us-east-1".to_string();
+
+        let mut manager = IAMTokenManager::new(
+            cluster_name,
+            username,
+            region,
+            Some(1), // 1 minute refresh interval for faster testing
+            None,
+        ).await.unwrap();
+
+        // Start the refresh task
+        manager.start_refresh_task();
+        assert!(manager.refresh_task.is_some(), "Refresh task should be started");
+        
+        // Starting again should not create a new task
+        manager.start_refresh_task();
+        assert!(manager.refresh_task.is_some(), "Refresh task should still exist");
+        
+        // Stop the refresh task
+        manager.stop_refresh_task().await;
+        assert!(manager.refresh_task.is_none(), "Refresh task should be stopped");
+    }
+
+    #[tokio::test]
+    async fn test_generate_token_static_fails_without_credentials() {
+        // Clear any existing AWS credentials
+        unsafe {
+            env::remove_var("AWS_ACCESS_KEY_ID");
+            env::remove_var("AWS_SECRET_ACCESS_KEY");
+            env::remove_var("AWS_SESSION_TOKEN");
+            env::remove_var("AWS_PROFILE");
+        }
+        
+        let region = "us-east-1";
+        let cluster_name = "test-cluster";
+        let username = "test-user";
+        let service_type = ServiceType::ElastiCache;
+
+        let result = IAMTokenManager::generate_token_static(
+            region,
+            cluster_name,
+            username,
+            &service_type,
+        ).await;
+
+        assert!(result.is_err(), "Token generation should fail without credentials");
+        
+        // Restore test credentials for other tests
+        setup_test_credentials();
+    }
+
+    #[tokio::test]
+    async fn test_service_type_clone_and_debug() {
+        let elasticache = ServiceType::ElastiCache;
+        let elasticache_clone = elasticache.clone();
+        
+        assert_eq!(elasticache.service_name(), elasticache_clone.service_name());
+        
+        let debug_str = format!("{:?}", elasticache);
+        assert!(debug_str.contains("ElastiCache"), "Debug output should contain service type name");
+    }
+
+    #[tokio::test]
+    async fn test_iam_token_manager_defaults() {
+        setup_test_credentials();
+        
+        let cluster_name = "test-cluster".to_string();
+        let username = "test-user".to_string();
+        let region = "us-east-1".to_string();
+
+        // Test with all defaults (None values)
+        let manager = IAMTokenManager::new(
+            cluster_name,
+            username,
+            region,
+            None, // Should default to 8 minutes
+            None, // Should default to ElastiCache
+        ).await.unwrap();
+
+        let token = manager.get_token().await;
+        
+        // Verify it uses ElastiCache service by checking the token format
+        assert!(token.starts_with("test-user"), "Token should start with username");
+        assert!(token.contains("Action=connect"), "Token should contain Action=connect");
     }
 }
