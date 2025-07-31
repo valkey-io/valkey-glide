@@ -67,6 +67,7 @@ import static command_request.CommandRequestOuterClass.RequestType.HRandField;
 import static command_request.CommandRequestOuterClass.RequestType.HScan;
 import static command_request.CommandRequestOuterClass.RequestType.HSet;
 import static command_request.CommandRequestOuterClass.RequestType.HSetNX;
+import static command_request.CommandRequestOuterClass.RequestType.HSetex;
 import static command_request.CommandRequestOuterClass.RequestType.HStrlen;
 import static command_request.CommandRequestOuterClass.RequestType.HVals;
 import static command_request.CommandRequestOuterClass.RequestType.Incr;
@@ -231,6 +232,7 @@ import glide.api.commands.StringBaseCommands;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.GetExOptions;
+import glide.api.models.commands.HashFieldExpirationOptions;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
 import glide.api.models.commands.LPosOptions;
@@ -797,6 +799,38 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
         protobufBatch.addCommands(
                 buildCommand(
                         HSet, newArgsBuilder().add(key).add(flattenMapToGlideStringArray(fieldValueMap))));
+        return getThis();
+    }
+
+    /**
+     * Sets the specified fields to their respective values in the hash stored at <code>key</code>
+     * with optional expiration. If <code>key</code> does not exist, a new key holding a hash is
+     * created.
+     *
+     * @since Valkey 9.0.0.
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
+     * @see <a href="https://valkey.io/commands/hsetex/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param fieldValueMap A field-value map consisting of fields and their corresponding values to
+     *     be set in the hash stored at the specified key.
+     * @param options The {@link HashFieldExpirationOptions} for the command.
+     * @return Command Response - The number of fields that were added to the hash.
+     */
+    public <ArgType> T hsetex(
+            @NonNull ArgType key,
+            @NonNull Map<ArgType, ArgType> fieldValueMap,
+            @NonNull HashFieldExpirationOptions options) {
+        checkTypeOrThrow(key);
+        protobufBatch.addCommands(
+                buildCommand(
+                        HSetex,
+                        newArgsBuilder()
+                                .add(key)
+                                .add(options.toArgs())
+                                .add("FIELDS")
+                                .add(fieldValueMap.size())
+                                .add(flattenMapToGlideStringArray(fieldValueMap))));
         return getThis();
     }
 

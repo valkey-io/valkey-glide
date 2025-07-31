@@ -179,6 +179,7 @@ enum RequestType {
     HSetNX                         = 614;
     HStrlen                        = 615;
     HVals                          = 616;
+    HSetex                         = 617;
 
     //// HyperLogLog commands
 
