@@ -396,6 +396,30 @@ internal class BatchTestUtils
         _ = batch.SetLength(key4);
         testData.Add(new(1L, "SetLength(key4) after pop with count"));
 
+        _ = batch.SetContains(key1, "c");
+        testData.Add(new(true, "SetContains(key1, c)"));
+
+        _ = batch.SetContains(key1, "nonexistent");
+        testData.Add(new(false, "SetContains(key1, nonexistent)"));
+
+        _ = batch.SetContains(key1, ["c", "e", "nonexistent"]);
+        testData.Add(new(new bool[] { true, true, false }, "SetContains(key1, [c, e, nonexistent])"));
+
+        _ = batch.SetRandomMember(key1);
+        testData.Add(new(new ValkeyValue(""), "SetRandomMember(key1)", true)); // Can't predict exact value
+
+        _ = batch.SetRandomMembers(key1, 1);
+        testData.Add(new(Array.Empty<ValkeyValue>(), "SetRandomMembers(key1, 1)", true)); // Can't predict exact values
+
+        _ = batch.SetMove(prefix + key1, prefix + key2, "e");
+        testData.Add(new(true, "SetMove(prefix+key1, prefix+key2, e)"));
+
+        _ = batch.SetMove(prefix + key1, prefix + key2, "nonexistent");
+        testData.Add(new(false, "SetMove(prefix+key1, prefix+key2, nonexistent)"));
+
+        _ = batch.SetScan(key1, 0);
+        testData.Add(new((0L, Array.Empty<ValkeyValue>()), "SetScan(key1, 0)", true)); // Test tuple types
+
         return testData;
     }
 

@@ -72,6 +72,24 @@ public abstract partial class BaseBatch<T>
     /// <inheritdoc cref="IBatchSetCommands.SetDifferenceStore(ValkeyKey, ValkeyKey[])" />
     public T SetDifferenceStore(ValkeyKey destination, ValkeyKey[] keys) => AddCmd(SetDifferenceStoreAsync(destination, keys));
 
+    /// <inheritdoc cref="IBatchSetCommands.SetContains(ValkeyKey, ValkeyValue)" />
+    public T SetContains(ValkeyKey key, ValkeyValue value) => AddCmd(SetContainsAsync(key, value));
+
+    /// <inheritdoc cref="IBatchSetCommands.SetContains(ValkeyKey, ValkeyValue[])" />
+    public T SetContains(ValkeyKey key, ValkeyValue[] values) => AddCmd(SetContainsAsync(key, values));
+
+    /// <inheritdoc cref="IBatchSetCommands.SetRandomMember(ValkeyKey)" />
+    public T SetRandomMember(ValkeyKey key) => AddCmd(SetRandomMemberAsync(key));
+
+    /// <inheritdoc cref="IBatchSetCommands.SetRandomMembers(ValkeyKey, long)" />
+    public T SetRandomMembers(ValkeyKey key, long count) => AddCmd(SetRandomMembersAsync(key, count));
+
+    /// <inheritdoc cref="IBatchSetCommands.SetMove(ValkeyKey, ValkeyKey, ValkeyValue)" />
+    public T SetMove(ValkeyKey source, ValkeyKey destination, ValkeyValue value) => AddCmd(SetMoveAsync(source, destination, value));
+
+    /// <inheritdoc cref="IBatchSetCommands.SetScan(ValkeyKey, long, ValkeyValue, long)" />
+    public T SetScan(ValkeyKey key, long cursor, ValkeyValue pattern = default, long count = 0) => AddCmd(SetScanAsync(key, cursor, pattern, count));
+
     // Explicit interface implementations for IBatchSetCommands
     IBatch IBatchSetCommands.SetAdd(ValkeyKey key, ValkeyValue value) => SetAdd(key, value);
     IBatch IBatchSetCommands.SetAdd(ValkeyKey key, ValkeyValue[] values) => SetAdd(key, values);
@@ -94,4 +112,10 @@ public abstract partial class BaseBatch<T>
     IBatch IBatchSetCommands.SetIntersectStore(ValkeyKey destination, ValkeyKey[] keys) => SetIntersectStore(destination, keys);
     IBatch IBatchSetCommands.SetDifferenceStore(ValkeyKey destination, ValkeyKey first, ValkeyKey second) => SetDifferenceStore(destination, first, second);
     IBatch IBatchSetCommands.SetDifferenceStore(ValkeyKey destination, ValkeyKey[] keys) => SetDifferenceStore(destination, keys);
+    IBatch IBatchSetCommands.SetContains(ValkeyKey key, ValkeyValue value) => SetContains(key, value);
+    IBatch IBatchSetCommands.SetContains(ValkeyKey key, ValkeyValue[] values) => SetContains(key, values);
+    IBatch IBatchSetCommands.SetRandomMember(ValkeyKey key) => SetRandomMember(key);
+    IBatch IBatchSetCommands.SetRandomMembers(ValkeyKey key, long count) => SetRandomMembers(key, count);
+    IBatch IBatchSetCommands.SetMove(ValkeyKey source, ValkeyKey destination, ValkeyValue value) => SetMove(source, destination, value);
+    IBatch IBatchSetCommands.SetScan(ValkeyKey key, long cursor, ValkeyValue pattern, long count) => SetScan(key, cursor, pattern, count);
 }

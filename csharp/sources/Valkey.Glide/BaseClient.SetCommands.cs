@@ -114,4 +114,56 @@ public abstract partial class BaseClient : ISetCommands
         Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
         return await Command(Request.SetDifferenceStoreAsync(destination, keys));
     }
+
+    public async Task<bool> SetContainsAsync(ValkeyKey key, ValkeyValue value, CommandFlags flags = CommandFlags.None)
+    {
+        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
+        return await Command(Request.SetContainsAsync(key, value));
+    }
+
+    public async Task<bool[]> SetContainsAsync(ValkeyKey key, ValkeyValue[] values, CommandFlags flags = CommandFlags.None)
+    {
+        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
+        return await Command(Request.SetContainsAsync(key, values));
+    }
+
+    public async Task<ValkeyValue> SetRandomMemberAsync(ValkeyKey key, CommandFlags flags = CommandFlags.None)
+    {
+        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
+        return await Command(Request.SetRandomMemberAsync(key));
+    }
+
+    public async Task<ValkeyValue[]> SetRandomMembersAsync(ValkeyKey key, long count, CommandFlags flags = CommandFlags.None)
+    {
+        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
+        return await Command(Request.SetRandomMembersAsync(key, count));
+    }
+
+    public async Task<bool> SetMoveAsync(ValkeyKey source, ValkeyKey destination, ValkeyValue value, CommandFlags flags = CommandFlags.None)
+    {
+        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
+        return await Command(Request.SetMoveAsync(source, destination, value));
+    }
+
+    public async IAsyncEnumerable<ValkeyValue> SetScanAsync(ValkeyKey key, ValkeyValue pattern = default, int pageSize = 250, long cursor = 0, int pageOffset = 0, CommandFlags flags = CommandFlags.None)
+    {
+        Utils.Requires<NotImplementedException>(flags == CommandFlags.None, "Command flags are not supported by GLIDE");
+
+        long currentCursor = cursor;
+        int currentOffset = pageOffset;
+
+        do
+        {
+            (long nextCursor, ValkeyValue[] elements) = await Command(Request.SetScanAsync(key, currentCursor, pattern, pageSize));
+
+            IEnumerable<ValkeyValue> elementsToYield = currentOffset > 0 ? elements.Skip(currentOffset) : elements;
+
+            foreach (ValkeyValue element in elementsToYield)
+            {
+                yield return element;
+            }
+
+            currentCursor = nextCursor;
+        } while (currentCursor != 0);
+    }
 }
