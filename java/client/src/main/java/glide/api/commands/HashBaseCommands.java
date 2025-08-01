@@ -2,6 +2,7 @@
 package glide.api.commands;
 
 import glide.api.models.GlideString;
+import glide.api.models.commands.HashFieldExpirationOptions;
 import glide.api.models.commands.scan.HScanOptions;
 import glide.api.models.commands.scan.HScanOptions.HScanOptionsBuilder;
 import glide.api.models.commands.scan.HScanOptionsBinary;
@@ -760,4 +761,74 @@ public interface HashBaseCommands {
      */
     CompletableFuture<Object[]> hscan(
             GlideString key, GlideString cursor, HScanOptionsBinary hScanOptions);
+
+    /**
+     * Sets the specified fields to their respective values in the hash stored at <code>key</code>
+     * with optional expiration and conditional options.
+     *
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/hsetex/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param fieldValueMap A field-value map consisting of fields and their corresponding values to
+     *     be set in the hash stored at the specified key.
+     * @param options Optional parameters for the command including conditional changes and expiry
+     *     settings.
+     * @return The number of fields that were added to the hash.
+     * @example
+     *     <pre>{@code
+     * // Set fields with 60 second expiration
+     * HashFieldExpirationOptions options = HashFieldExpirationOptions.builder()
+     *     .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
+     *     .build();
+     * Long num = client.hsetex("my_hash", Map.of("field1", "value1", "field2", "value2"), options).get();
+     * assert num == 2L;
+     *
+     * // Set fields only if hash doesn't exist with field conditional
+     * HashFieldExpirationOptions conditionalOptions = HashFieldExpirationOptions.builder()
+     *     .conditionalSetOnlyIfNotExist()
+     *     .fieldConditionalSetOnlyIfNoneExist()
+     *     .expiry(HashFieldExpirationOptions.ExpirySet.Milliseconds(30000L))
+     *     .build();
+     * Long result = client.hsetex("new_hash", Map.of("field", "value"), conditionalOptions).get();
+     * assert result == 1L;
+     * }</pre>
+     */
+    CompletableFuture<Long> hsetex(
+            String key, Map<String, String> fieldValueMap, HashFieldExpirationOptions options);
+
+    /**
+     * Sets the specified fields to their respective values in the hash stored at <code>key</code>
+     * with optional expiration and conditional options.
+     *
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/hsetex/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param fieldValueMap A field-value map consisting of fields and their corresponding values to
+     *     be set in the hash stored at the specified key.
+     * @param options Optional parameters for the command including conditional changes and expiry
+     *     settings.
+     * @return The number of fields that were added to the hash.
+     * @example
+     *     <pre>{@code
+     * // Set fields with 60 second expiration
+     * HashFieldExpirationOptions options = HashFieldExpirationOptions.builder()
+     *     .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
+     *     .build();
+     * Long num = client.hsetex(gs("my_hash"), Map.of(gs("field1"), gs("value1"), gs("field2"), gs("value2")), options).get();
+     * assert num == 2L;
+     *
+     * // Set fields only if hash doesn't exist with field conditional
+     * HashFieldExpirationOptions conditionalOptions = HashFieldExpirationOptions.builder()
+     *     .conditionalSetOnlyIfNotExist()
+     *     .fieldConditionalSetOnlyIfNoneExist()
+     *     .expiry(HashFieldExpirationOptions.ExpirySet.Milliseconds(30000L))
+     *     .build();
+     * Long result = client.hsetex(gs("new_hash"), Map.of(gs("field"), gs("value")), conditionalOptions).get();
+     * assert result == 1L;
+     * }</pre>
+     */
+    CompletableFuture<Long> hsetex(
+            GlideString key,
+            Map<GlideString, GlideString> fieldValueMap,
+            HashFieldExpirationOptions options);
 }

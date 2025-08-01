@@ -41,6 +41,7 @@ import glide.api.models.Script;
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.GetExOptions;
+import glide.api.models.commands.HashFieldExpirationOptions;
 import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions;
@@ -1396,6 +1397,252 @@ public class SharedCommandTests {
         assertArrayEquals(
                 new GlideString[] {null, null},
                 client.hmget(gs("non_existing_key"), new GlideString[] {field1, field2}).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void hsetex_basic_functionality(BaseClient client) {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0"),
+                "Hash field expiration commands require Valkey 9.0.0 or higher");
+
+        String key = "test_hsetex_basic_" + UUID.randomUUID();
+        Map<String, String> fieldValueMap = new LinkedHashMap<>();
+        fieldValueMap.put("field1", "value1");
+        fieldValueMap.put("field2", "value2");
+
+        HashFieldExpirationOptions options =
+                HashFieldExpirationOptions.builder()
+                        .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
+                        .build();
+
+        // Test HSETEX
+        Long result = client.hsetex(key, fieldValueMap, options).get();
+        assertEquals(2L, result);
+
+        // Verify fields were set
+        assertEquals("value1", client.hget(key, "field1").get());
+        assertEquals("value2", client.hget(key, "field2").get());
+
+        // Clean up
+        client.del(new String[] {key}).get();
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void hsetex_with_conditional_options(BaseClient client) {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0"),
+                "Hash field expiration commands require Valkey 9.0.0 or higher");
+
+        String key = "test_hsetex_conditional_" + UUID.randomUUID();
+        Map<String, String> fieldValueMap = new LinkedHashMap<>();
+        fieldValueMap.put("field1", "value1");
+        fieldValueMap.put("field2", "value2");
+
+        // Test NX option - should succeed on non-existent hash
+        HashFieldExpirationOptions nxOptions =
+                HashFieldExpirationOptions.builder()
+                        .conditionalSetOnlyIfNotExist()
+                        .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
+                        .build();
+
+        Long result = client.hsetex(key, fieldValueMap, nxOptions).get();
+        assertEquals(2L, result);
+
+        // Test XX option - should succeed on existing hash
+        Map<String, String> newFieldValueMap = new LinkedHashMap<>();
+        newFieldValueMap.put("field3", "value3");
+
+        HashFieldExpirationOptions xxOptions =
+                HashFieldExpirationOptions.builder()
+                        .conditionalSetOnlyIfExists()
+                        .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
+                        .build();
+
+        result = client.hsetex(key, newFieldValueMap, xxOptions).get();
+        assertEquals(1L, result);
+
+        // Clean up
+        client.del(new String[] {key}).get();
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void hsetex_with_field_conditional_options(BaseClient client) {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0"),
+                "Hash field expiration commands require Valkey 9.0.0 or higher");
+
+        String key = "test_hsetex_field_conditional_" + UUID.randomUUID();
+
+        // First, set some fields
+        Map<String, String> initialFields = new LinkedHashMap<>();
+        initialFields.put("existing1", "value1");
+        initialFields.put("existing2", "value2");
+        client.hset(key, initialFields).get();
+
+        // Test FXX option - should succeed when all fields exist
+        Map<String, String> existingFieldsMap = new LinkedHashMap<>();
+        existingFieldsMap.put("existing1", "new_value1");
+        existingFieldsMap.put("existing2", "new_value2");
+
+        HashFieldExpirationOptions fxxOptions =
+                HashFieldExpirationOptions.builder()
+                        .fieldConditionalSetOnlyIfAllExist()
+                        .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
+                        .build();
+
+        Long result = client.hsetex(key, existingFieldsMap, fxxOptions).get();
+        assertEquals(0L, result); // Fields updated, not added
+
+        // Test FNX option - should succeed when none of the fields exist
+        Map<String, String> newFieldsMap = new LinkedHashMap<>();
+        newFieldsMap.put("new1", "value1");
+        newFieldsMap.put("new2", "value2");
+
+        HashFieldExpirationOptions fnxOptions =
+                HashFieldExpirationOptions.builder()
+                        .fieldConditionalSetOnlyIfNoneExist()
+                        .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
+                        .build();
+
+        result = client.hsetex(key, newFieldsMap, fnxOptions).get();
+        assertEquals(2L, result); // New fields added
+
+        // Clean up
+        client.del(new String[] {key}).get();
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void hsetex_with_different_expiry_types(BaseClient client) {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0"),
+                "Hash field expiration commands require Valkey 9.0.0 or higher");
+
+        String key = "test_hsetex_expiry_types_" + UUID.randomUUID();
+        Map<String, String> fieldValueMap = new LinkedHashMap<>();
+        fieldValueMap.put("field1", "value1");
+
+        // Test EX (seconds)
+        HashFieldExpirationOptions exOptions =
+                HashFieldExpirationOptions.builder()
+                        .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
+                        .build();
+        client.hsetex(key, fieldValueMap, exOptions).get();
+        client.del(new String[] {key}).get();
+
+        // Test PX (milliseconds)
+        HashFieldExpirationOptions pxOptions =
+                HashFieldExpirationOptions.builder()
+                        .expiry(HashFieldExpirationOptions.ExpirySet.Milliseconds(60000L))
+                        .build();
+        client.hsetex(key, fieldValueMap, pxOptions).get();
+        client.del(new String[] {key}).get();
+
+        // Test EXAT (Unix timestamp in seconds)
+        long futureTimestamp = System.currentTimeMillis() / 1000 + 3600;
+        HashFieldExpirationOptions exatOptions =
+                HashFieldExpirationOptions.builder()
+                        .expiry(HashFieldExpirationOptions.ExpirySet.UnixSeconds(futureTimestamp))
+                        .build();
+        client.hsetex(key, fieldValueMap, exatOptions).get();
+        client.del(new String[] {key}).get();
+
+        // Test PXAT (Unix timestamp in milliseconds)
+        long futureTimestampMs = System.currentTimeMillis() + 3600000;
+        HashFieldExpirationOptions pxatOptions =
+                HashFieldExpirationOptions.builder()
+                        .expiry(HashFieldExpirationOptions.ExpirySet.UnixMilliseconds(futureTimestampMs))
+                        .build();
+        client.hsetex(key, fieldValueMap, pxatOptions).get();
+        client.del(new String[] {key}).get();
+
+        // Test KEEPTTL
+        // First set a field with TTL
+        client.hsetex(key, fieldValueMap, exOptions).get();
+        // Then use KEEPTTL to maintain existing TTL
+        Map<String, String> additionalFields = new LinkedHashMap<>();
+        additionalFields.put("field2", "value2");
+        HashFieldExpirationOptions keepTtlOptions =
+                HashFieldExpirationOptions.builder()
+                        .expiry(HashFieldExpirationOptions.ExpirySet.KeepExisting())
+                        .build();
+        client.hsetex(key, additionalFields, keepTtlOptions).get();
+
+        // Clean up
+        client.del(new String[] {key}).get();
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void hsetex_binary_parameters(BaseClient client) {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0"),
+                "Hash field expiration commands require Valkey 9.0.0 or higher");
+
+        GlideString key = gs("test_hsetex_binary_" + UUID.randomUUID());
+        Map<GlideString, GlideString> fieldValueMap = new LinkedHashMap<>();
+        fieldValueMap.put(gs("field1"), gs("value1"));
+        fieldValueMap.put(gs("field2"), gs("value2"));
+
+        HashFieldExpirationOptions options =
+                HashFieldExpirationOptions.builder()
+                        .conditionalSetOnlyIfNotExist()
+                        .fieldConditionalSetOnlyIfNoneExist()
+                        .expiry(HashFieldExpirationOptions.ExpirySet.Milliseconds(30000L))
+                        .build();
+
+        Long result = client.hsetex(key, fieldValueMap, options).get();
+        assertEquals(2L, result);
+
+        // Verify fields were set
+        assertEquals(gs("value1"), client.hget(key, gs("field1")).get());
+        assertEquals(gs("value2"), client.hget(key, gs("field2")).get());
+
+        // Clean up
+        client.del(new GlideString[] {key}).get();
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void hsetex_error_handling(BaseClient client) {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0"),
+                "Hash field expiration commands require Valkey 9.0.0 or higher");
+
+        String key = "test_hsetex_error_" + UUID.randomUUID();
+
+        // Set up a non-hash key to test type error
+        client.set(key, "not_a_hash").get();
+
+        Map<String, String> fieldValueMap = new LinkedHashMap<>();
+        fieldValueMap.put("field1", "value1");
+
+        HashFieldExpirationOptions options =
+                HashFieldExpirationOptions.builder()
+                        .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
+                        .build();
+
+        // Should throw an exception when trying to use HSETEX on a non-hash key
+        ExecutionException exception =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> {
+                            client.hsetex(key, fieldValueMap, options).get();
+                        });
+
+        assertInstanceOf(RequestException.class, exception.getCause());
+
+        // Clean up
+        client.del(new String[] {key}).get();
     }
 
     @SneakyThrows
