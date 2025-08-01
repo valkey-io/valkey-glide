@@ -40,6 +40,7 @@ import static command_request.CommandRequestOuterClass.RequestType.HDel;
 import static command_request.CommandRequestOuterClass.RequestType.HExists;
 import static command_request.CommandRequestOuterClass.RequestType.HGet;
 import static command_request.CommandRequestOuterClass.RequestType.HGetAll;
+import static command_request.CommandRequestOuterClass.RequestType.HGetex;
 import static command_request.CommandRequestOuterClass.RequestType.HIncrBy;
 import static command_request.CommandRequestOuterClass.RequestType.HIncrByFloat;
 import static command_request.CommandRequestOuterClass.RequestType.HKeys;
@@ -1198,6 +1199,38 @@ public abstract class BaseClient
                         .add(convertMapToKeyValueGlideStringArray(fieldValueMap))
                         .toArray();
         return commandManager.submitNewCommand(HSetex, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<String[]> hgetex(
+            @NonNull String key, @NonNull String[] fields, @NonNull HashFieldExpirationOptions options) {
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {key},
+                        options.toArgs(),
+                        new String[] {"FIELDS", String.valueOf(fields.length)},
+                        fields);
+        return commandManager.submitNewCommand(
+                HGetex, arguments, response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<GlideString[]> hgetex(
+            @NonNull GlideString key,
+            @NonNull GlideString[] fields,
+            @NonNull HashFieldExpirationOptions options) {
+        GlideString[] arguments =
+                new ArgsBuilder()
+                        .add(key)
+                        .add(options.toArgs())
+                        .add("FIELDS")
+                        .add(fields.length)
+                        .add(fields)
+                        .toArray();
+        return commandManager.submitNewCommand(
+                HGetex,
+                arguments,
+                response -> castArray(handleArrayOrNullResponseBinary(response), GlideString.class));
     }
 
     @Override
