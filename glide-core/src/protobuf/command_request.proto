@@ -181,6 +181,7 @@ enum RequestType {
     HVals                          = 616;
     HSetex                         = 617;
     HGetex                         = 618;
+    HExpire                        = 619;
 
     //// HyperLogLog commands
 

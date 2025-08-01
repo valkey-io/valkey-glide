@@ -56,6 +56,7 @@ import static command_request.CommandRequestOuterClass.RequestType.GetEx;
 import static command_request.CommandRequestOuterClass.RequestType.GetRange;
 import static command_request.CommandRequestOuterClass.RequestType.HDel;
 import static command_request.CommandRequestOuterClass.RequestType.HExists;
+import static command_request.CommandRequestOuterClass.RequestType.HExpire;
 import static command_request.CommandRequestOuterClass.RequestType.HGet;
 import static command_request.CommandRequestOuterClass.RequestType.HGetAll;
 import static command_request.CommandRequestOuterClass.RequestType.HGetex;
@@ -861,6 +862,45 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
                         HGetex,
                         newArgsBuilder()
                                 .add(key)
+                                .add(options.toArgs())
+                                .add("FIELDS")
+                                .add(fields.length)
+                                .add(fields)));
+        return getThis();
+    }
+
+    /**
+     * Sets expiration time for hash fields. HEXPIRE sets the expiration time in seconds for the
+     * specified fields of the hash stored at <code>key</code>. You can specify whether to set the
+     * expiration only if the field has no expiration, only if the field has an existing expiration,
+     * only if the new expiration is greater than the current one, or only if the new expiration is
+     * less than the current one.
+     *
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/hexpire/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param seconds The expiration time in seconds.
+     * @param fields The fields in the hash stored at <code>key</code> to set expiration for.
+     * @param options The expiration condition options.
+     * @return Command Response - An array of <code>Boolean</code> values indicating the success of
+     *     setting expiration for each field. <code>true</code> indicates that the expiration was
+     *     successfully set, and <code>false</code> indicates that the condition was not met or the
+     *     field does not exist.
+     */
+    public <ArgType> T hexpire(
+            @NonNull ArgType key,
+            long seconds,
+            @NonNull ArgType[] fields,
+            @NonNull HashFieldExpirationOptions options) {
+        checkTypeOrThrow(key);
+        protobufBatch.addCommands(
+                buildCommand(
+                        HExpire,
+                        newArgsBuilder()
+                                .add(key)
+                                .add(seconds)
                                 .add(options.toArgs())
                                 .add("FIELDS")
                                 .add(fields.length)

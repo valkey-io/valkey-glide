@@ -146,6 +146,7 @@ pub enum RequestType {
     HVals = 616,
     HSetex = 617,
     HGetex = 618,
+    HExpire = 619,
 
     //// HyperLogLog commands
     PfAdd = 701,
@@ -524,6 +525,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::HVals => RequestType::HVals,
             ProtobufRequestType::HSetex => RequestType::HSetex,
             ProtobufRequestType::HGetex => RequestType::HGetex,
+            ProtobufRequestType::HExpire => RequestType::HExpire,
             ProtobufRequestType::PTTL => RequestType::PTTL,
             ProtobufRequestType::ZRemRangeByRank => RequestType::ZRemRangeByRank,
             ProtobufRequestType::Persist => RequestType::Persist,
@@ -788,6 +790,7 @@ impl RequestType {
             RequestType::HVals => Some(cmd("HVALS")),
             RequestType::HSetex => Some(cmd("HSETEX")),
             RequestType::HGetex => Some(cmd("HGETEX")),
+            RequestType::HExpire => Some(cmd("HEXPIRE")),
             RequestType::PTTL => Some(cmd("PTTL")),
             RequestType::ZRemRangeByRank => Some(cmd("ZREMRANGEBYRANK")),
             RequestType::Persist => Some(cmd("PERSIST")),
