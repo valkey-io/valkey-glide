@@ -65,6 +65,7 @@ import static command_request.CommandRequestOuterClass.RequestType.HIncrByFloat;
 import static command_request.CommandRequestOuterClass.RequestType.HKeys;
 import static command_request.CommandRequestOuterClass.RequestType.HLen;
 import static command_request.CommandRequestOuterClass.RequestType.HMGet;
+import static command_request.CommandRequestOuterClass.RequestType.HPersist;
 import static command_request.CommandRequestOuterClass.RequestType.HRandField;
 import static command_request.CommandRequestOuterClass.RequestType.HScan;
 import static command_request.CommandRequestOuterClass.RequestType.HSet;
@@ -905,6 +906,32 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
                                 .add("FIELDS")
                                 .add(fields.length)
                                 .add(fields)));
+        return getThis();
+    }
+
+    /**
+     * Removes the expiration time for each specified field, turning the field from volatile (a field
+     * with expiration time) to persistent (a field that will never expire as no expiration time is
+     * associated).
+     *
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/hpersist/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param fields The fields to remove expiration from.
+     * @return Command Response - An array of <code>Boolean</code> values, each corresponding to a
+     *     field:
+     *     <ul>
+     *       <li><code>true</code> if the expiration time was successfully removed from the field.
+     *       <li><code>false</code> if the field does not exist or does not have an expiration time.
+     *     </ul>
+     */
+    public <ArgType> T hpersist(@NonNull ArgType key, @NonNull ArgType[] fields) {
+        checkTypeOrThrow(key);
+        protobufBatch.addCommands(
+                buildCommand(
+                        HPersist, newArgsBuilder().add(key).add("FIELDS").add(fields.length).add(fields)));
         return getThis();
     }
 

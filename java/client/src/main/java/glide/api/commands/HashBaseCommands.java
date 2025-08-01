@@ -971,4 +971,64 @@ public interface HashBaseCommands {
      */
     CompletableFuture<Boolean[]> hexpire(
             GlideString key, long seconds, GlideString[] fields, HashFieldExpirationOptions options);
+
+    /**
+     * Removes the expiration time for each specified field, turning the field from volatile (a field
+     * with expiration time) to persistent (a field that will never expire as no expiration time is
+     * associated).
+     *
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/hpersist/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param fields The fields to remove expiration from.
+     * @return An array of <code>Boolean</code> values, each corresponding to a field:
+     *     <ul>
+     *       <li><code>true</code> if the expiration time was successfully removed from the field.
+     *       <li><code>false</code> if the field does not exist or does not have an expiration time.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * // Set fields with expiration
+     * HashFieldExpirationOptions options = HashFieldExpirationOptions.builder()
+     *     .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
+     *     .build();
+     * client.hsetex("my_hash", Map.of("field1", "value1", "field2", "value2"), options).get();
+     *
+     * // Remove expiration from fields
+     * Boolean[] results = client.hpersist("my_hash", new String[] {"field1", "field2", "field3"}).get();
+     * assert Arrays.equals(results, new Boolean[] {true, true, false}); // field1 and field2 had expiry removed, field3 doesn't exist
+     * }</pre>
+     */
+    CompletableFuture<Boolean[]> hpersist(String key, String[] fields);
+
+    /**
+     * Removes the expiration time for each specified field, turning the field from volatile (a field
+     * with expiration time) to persistent (a field that will never expire as no expiration time is
+     * associated).
+     *
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/hpersist/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param fields The fields to remove expiration from.
+     * @return An array of <code>Boolean</code> values, each corresponding to a field:
+     *     <ul>
+     *       <li><code>true</code> if the expiration time was successfully removed from the field.
+     *       <li><code>false</code> if the field does not exist or does not have an expiration time.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * // Set fields with expiration
+     * HashFieldExpirationOptions options = HashFieldExpirationOptions.builder()
+     *     .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
+     *     .build();
+     * client.hsetex(gs("my_hash"), Map.of(gs("field1"), gs("value1"), gs("field2"), gs("value2")), options).get();
+     *
+     * // Remove expiration from fields
+     * Boolean[] results = client.hpersist(gs("my_hash"), new GlideString[] {gs("field1"), gs("field2"), gs("field3")}).get();
+     * assert Arrays.equals(results, new Boolean[] {true, true, false}); // field1 and field2 had expiry removed, field3 doesn't exist
+     * }</pre>
+     */
+    CompletableFuture<Boolean[]> hpersist(GlideString key, GlideString[] fields);
 }
