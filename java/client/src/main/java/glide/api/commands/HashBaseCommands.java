@@ -899,4 +899,76 @@ public interface HashBaseCommands {
      */
     CompletableFuture<GlideString[]> hgetex(
             GlideString key, GlideString[] fields, HashFieldExpirationOptions options);
+
+    /**
+     * Sets expiration time for hash fields. HEXPIRE sets the expiration time in seconds for the
+     * specified fields of the hash stored at <code>key</code>. You can specify whether to set the
+     * expiration only if the field has no expiration, only if the field has an existing expiration,
+     * only if the new expiration is greater than the current one, or only if the new expiration is
+     * less than the current one.
+     *
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/hexpire/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param seconds The expiration time in seconds.
+     * @param fields The fields in the hash stored at <code>key</code> to set expiration for.
+     * @param options The expiration condition options.
+     * @return An array of <code>Boolean</code> values indicating the success of setting expiration
+     *     for each field. <code>true</code> indicates that the expiration was successfully set, and
+     *     <code>false</code> indicates that the condition was not met or the field does not exist.
+     * @example
+     *     <pre>{@code
+     * // Set expiration for fields only if they have no existing expiration
+     * HashFieldExpirationOptions options = HashFieldExpirationOptions.builder()
+     *     .expirationConditionOnlyIfNoExpiry()
+     *     .build();
+     * Boolean[] results = client.hexpire("my_hash", 60L, new String[] {"field1", "field2"}, options).get();
+     * assert Arrays.equals(results, new Boolean[] {true, false}); // field1 had no expiry, field2 already had expiry
+     *
+     * // Set expiration for fields only if new expiration is greater than current
+     * HashFieldExpirationOptions gtOptions = HashFieldExpirationOptions.builder()
+     *     .expirationConditionOnlyIfGreaterThanCurrent()
+     *     .build();
+     * Boolean[] gtResults = client.hexpire("my_hash", 120L, new String[] {"field1"}, gtOptions).get();
+     * assert Arrays.equals(gtResults, new Boolean[] {true}); // 120 > 60, so expiration was updated
+     * }</pre>
+     */
+    CompletableFuture<Boolean[]> hexpire(
+            String key, long seconds, String[] fields, HashFieldExpirationOptions options);
+
+    /**
+     * Sets expiration time for hash fields. HEXPIRE sets the expiration time in seconds for the
+     * specified fields of the hash stored at <code>key</code>. You can specify whether to set the
+     * expiration only if the field has no expiration, only if the field has an existing expiration,
+     * only if the new expiration is greater than the current one, or only if the new expiration is
+     * less than the current one.
+     *
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/hexpire/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param seconds The expiration time in seconds.
+     * @param fields The fields in the hash stored at <code>key</code> to set expiration for.
+     * @param options The expiration condition options.
+     * @return An array of <code>Boolean</code> values indicating the success of setting expiration
+     *     for each field. <code>true</code> indicates that the expiration was successfully set, and
+     *     <code>false</code> indicates that the condition was not met or the field does not exist.
+     * @example
+     *     <pre>{@code
+     * // Set expiration for fields only if they have no existing expiration
+     * HashFieldExpirationOptions options = HashFieldExpirationOptions.builder()
+     *     .expirationConditionOnlyIfNoExpiry()
+     *     .build();
+     * Boolean[] results = client.hexpire(gs("my_hash"), 60L, new GlideString[] {gs("field1"), gs("field2")}, options).get();
+     * assert Arrays.equals(results, new Boolean[] {true, false}); // field1 had no expiry, field2 already had expiry
+     *
+     * // Set expiration for fields only if new expiration is greater than current
+     * HashFieldExpirationOptions gtOptions = HashFieldExpirationOptions.builder()
+     *     .expirationConditionOnlyIfGreaterThanCurrent()
+     *     .build();
+     * Boolean[] gtResults = client.hexpire(gs("my_hash"), 120L, new GlideString[] {gs("field1")}, gtOptions).get();
+     * assert Arrays.equals(gtResults, new Boolean[] {true}); // 120 > 60, so expiration was updated
+     * }</pre>
+     */
+    CompletableFuture<Boolean[]> hexpire(
+            GlideString key, long seconds, GlideString[] fields, HashFieldExpirationOptions options);
 }
