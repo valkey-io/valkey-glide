@@ -3,6 +3,7 @@ package glide.api.models.commands;
 
 import static glide.api.models.commands.HashFieldExpirationOptions.ExpiryType.KEEP_EXISTING;
 import static glide.api.models.commands.HashFieldExpirationOptions.ExpiryType.MILLISECONDS;
+import static glide.api.models.commands.HashFieldExpirationOptions.ExpiryType.PERSIST;
 import static glide.api.models.commands.HashFieldExpirationOptions.ExpiryType.SECONDS;
 import static glide.api.models.commands.HashFieldExpirationOptions.ExpiryType.UNIX_MILLISECONDS;
 import static glide.api.models.commands.HashFieldExpirationOptions.ExpiryType.UNIX_SECONDS;
@@ -172,6 +173,14 @@ public final class HashFieldExpirationOptions {
         }
 
         /**
+         * Remove the time to live associated with the field. Equivalent to <code>PERSIST</code> in the
+         * Valkey API. This option is only available for HGETEX command.
+         */
+        public static ExpirySet Persist() {
+            return new ExpirySet(PERSIST);
+        }
+
+        /**
          * Converts ExpirySet into a String[] to add to command arguments.
          *
          * @return String[]
@@ -179,7 +188,7 @@ public final class HashFieldExpirationOptions {
         public String[] toArgs() {
             List<String> args = new ArrayList<>();
             args.add(type.valkeyApi);
-            if (type != KEEP_EXISTING) {
+            if (type != KEEP_EXISTING && type != PERSIST) {
                 assert count != null
                         : "Hash field expiration command received expiry type "
                                 + type
@@ -194,6 +203,7 @@ public final class HashFieldExpirationOptions {
     @RequiredArgsConstructor
     protected enum ExpiryType {
         KEEP_EXISTING("KEEPTTL"),
+        PERSIST("PERSIST"),
         SECONDS("EX"),
         MILLISECONDS("PX"),
         UNIX_SECONDS("EXAT"),
@@ -222,6 +232,18 @@ public final class HashFieldExpirationOptions {
                                 + conditionalChange
                                 + " and "
                                 + fieldConditionalChange);
+            }
+        }
+
+        // Validate expiry options - PERSIST is mutually exclusive with all other expiry types
+        if (expiry != null && expiry.type == PERSIST) {
+            // PERSIST should not be combined with any conditional or field conditional changes
+            // for HGETEX as it's a simple operation to remove expiration
+            if (conditionalChange != null
+                    || fieldConditionalChange != null
+                    || expirationCondition != null) {
+                throw new IllegalArgumentException(
+                        "PERSIST option cannot be combined with conditional options");
             }
         }
     }

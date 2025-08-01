@@ -831,4 +831,72 @@ public interface HashBaseCommands {
             GlideString key,
             Map<GlideString, GlideString> fieldValueMap,
             HashFieldExpirationOptions options);
+
+    /**
+     * Retrieves the values of specified fields from the hash stored at <code>key</code> and
+     * optionally sets their expiration or removes it.
+     *
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/hgetex/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param fields The fields in the hash stored at <code>key</code> to retrieve from the database.
+     * @param options Optional parameters for the command including expiry settings or persist option.
+     * @return An array of values associated with the given fields, in the same order as they are
+     *     requested.<br>
+     *     For every field that does not exist in the hash, a null value is returned.<br>
+     *     If <code>key</code> does not exist, it is treated as an empty hash, and it returns an array
+     *     of null values.<br>
+     * @example
+     *     <pre>{@code
+     * // Get fields and set 60 second expiration
+     * HashFieldExpirationOptions options = HashFieldExpirationOptions.builder()
+     *     .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
+     *     .build();
+     * String[] values = client.hgetex("my_hash", new String[] {"field1", "field2"}, options).get();
+     * assert Arrays.equals(values, new String[] {"value1", "value2"});
+     *
+     * // Get fields and remove their expiration
+     * HashFieldExpirationOptions persistOptions = HashFieldExpirationOptions.builder()
+     *     .expiry(HashFieldExpirationOptions.ExpirySet.Persist())
+     *     .build();
+     * String[] persistedValues = client.hgetex("my_hash", new String[] {"field1"}, persistOptions).get();
+     * assert Arrays.equals(persistedValues, new String[] {"value1"});
+     * }</pre>
+     */
+    CompletableFuture<String[]> hgetex(
+            String key, String[] fields, HashFieldExpirationOptions options);
+
+    /**
+     * Retrieves the values of specified fields from the hash stored at <code>key</code> and
+     * optionally sets their expiration or removes it.
+     *
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/hgetex/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param fields The fields in the hash stored at <code>key</code> to retrieve from the database.
+     * @param options Optional parameters for the command including expiry settings or persist option.
+     * @return An array of values associated with the given fields, in the same order as they are
+     *     requested.<br>
+     *     For every field that does not exist in the hash, a null value is returned.<br>
+     *     If <code>key</code> does not exist, it is treated as an empty hash, and it returns an array
+     *     of null values.<br>
+     * @example
+     *     <pre>{@code
+     * // Get fields and set 60 second expiration
+     * HashFieldExpirationOptions options = HashFieldExpirationOptions.builder()
+     *     .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
+     *     .build();
+     * GlideString[] values = client.hgetex(gs("my_hash"), new GlideString[] {gs("field1"), gs("field2")}, options).get();
+     * assert Arrays.equals(values, new GlideString[] {gs("value1"), gs("value2")});
+     *
+     * // Get fields and remove their expiration
+     * HashFieldExpirationOptions persistOptions = HashFieldExpirationOptions.builder()
+     *     .expiry(HashFieldExpirationOptions.ExpirySet.Persist())
+     *     .build();
+     * GlideString[] persistedValues = client.hgetex(gs("my_hash"), new GlideString[] {gs("field1")}, persistOptions).get();
+     * assert Arrays.equals(persistedValues, new GlideString[] {gs("value1")});
+     * }</pre>
+     */
+    CompletableFuture<GlideString[]> hgetex(
+            GlideString key, GlideString[] fields, HashFieldExpirationOptions options);
 }

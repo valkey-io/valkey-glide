@@ -85,6 +85,14 @@ public class HashFieldExpirationOptionsTest {
     }
 
     @Test
+    public void testExpirySetPersist() {
+        HashFieldExpirationOptions.ExpirySet expiry = HashFieldExpirationOptions.ExpirySet.Persist();
+        String[] args = expiry.toArgs();
+        assertEquals(1, args.length);
+        assertEquals("PERSIST", args[0]);
+    }
+
+    @Test
     public void testBasicOptionsToArgs() {
         HashFieldExpirationOptions options =
                 HashFieldExpirationOptions.builder()
@@ -182,5 +190,70 @@ public class HashFieldExpirationOptionsTest {
         assertEquals("NX", args[0]);
         assertEquals("FNX", args[1]);
         assertEquals("NX", args[2]); // expiration condition NX
+    }
+
+    @Test
+    public void testPersistWithConditionalChangeValidation() {
+        // Test that PERSIST cannot be combined with conditional change options
+        HashFieldExpirationOptions options =
+                HashFieldExpirationOptions.builder()
+                        .conditionalChange(HashFieldExpirationOptions.ConditionalChange.ONLY_IF_EXISTS)
+                        .expiry(HashFieldExpirationOptions.ExpirySet.Persist())
+                        .build();
+
+        IllegalArgumentException exception =
+                assertThrows(IllegalArgumentException.class, options::toArgs);
+        assertTrue(
+                exception
+                        .getMessage()
+                        .contains("PERSIST option cannot be combined with conditional options"));
+    }
+
+    @Test
+    public void testPersistWithFieldConditionalChangeValidation() {
+        // Test that PERSIST cannot be combined with field conditional change options
+        HashFieldExpirationOptions options =
+                HashFieldExpirationOptions.builder()
+                        .fieldConditionalChange(
+                                HashFieldExpirationOptions.FieldConditionalChange.ONLY_IF_ALL_EXIST)
+                        .expiry(HashFieldExpirationOptions.ExpirySet.Persist())
+                        .build();
+
+        IllegalArgumentException exception =
+                assertThrows(IllegalArgumentException.class, options::toArgs);
+        assertTrue(
+                exception
+                        .getMessage()
+                        .contains("PERSIST option cannot be combined with conditional options"));
+    }
+
+    @Test
+    public void testPersistWithExpirationConditionValidation() {
+        // Test that PERSIST cannot be combined with expiration condition options
+        HashFieldExpirationOptions options =
+                HashFieldExpirationOptions.builder()
+                        .expirationCondition(HashFieldExpirationOptions.ExpirationCondition.ONLY_IF_NO_EXPIRY)
+                        .expiry(HashFieldExpirationOptions.ExpirySet.Persist())
+                        .build();
+
+        IllegalArgumentException exception =
+                assertThrows(IllegalArgumentException.class, options::toArgs);
+        assertTrue(
+                exception
+                        .getMessage()
+                        .contains("PERSIST option cannot be combined with conditional options"));
+    }
+
+    @Test
+    public void testPersistAloneIsValid() {
+        // Test that PERSIST by itself is valid for HGETEX
+        HashFieldExpirationOptions options =
+                HashFieldExpirationOptions.builder()
+                        .expiry(HashFieldExpirationOptions.ExpirySet.Persist())
+                        .build();
+
+        String[] args = options.toArgs();
+        assertEquals(1, args.length);
+        assertEquals("PERSIST", args[0]);
     }
 }

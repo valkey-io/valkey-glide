@@ -1648,6 +1648,153 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void hgetex_basic_functionality(BaseClient client) {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0"),
+                "Hash field expiration commands require Valkey 9.0.0 or higher");
+
+        String key = "test_hgetex_basic_" + UUID.randomUUID();
+
+        // First set some fields using regular hset
+        Map<String, String> fieldValueMap = new LinkedHashMap<>();
+        fieldValueMap.put("field1", "value1");
+        fieldValueMap.put("field2", "value2");
+        client.hset(key, fieldValueMap).get();
+
+        // Test HGETEX with expiry setting
+        HashFieldExpirationOptions options =
+                HashFieldExpirationOptions.builder()
+                        .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
+                        .build();
+
+        String[] fields = {"field1", "field2", "nonexistent"};
+        String[] result = client.hgetex(key, fields, options).get();
+
+        assertEquals(3, result.length);
+        assertEquals("value1", result[0]);
+        assertEquals("value2", result[1]);
+        assertNull(result[2]); // nonexistent field should return null
+
+        // Clean up
+        client.del(new String[] {key}).get();
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void hgetex_with_persist_option(BaseClient client) {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0"),
+                "Hash field expiration commands require Valkey 9.0.0 or higher");
+
+        String key = "test_hgetex_persist_" + UUID.randomUUID();
+
+        // First set fields with expiration using hsetex
+        Map<String, String> fieldValueMap = new LinkedHashMap<>();
+        fieldValueMap.put("field1", "value1");
+        HashFieldExpirationOptions setOptions =
+                HashFieldExpirationOptions.builder()
+                        .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
+                        .build();
+        client.hsetex(key, fieldValueMap, setOptions).get();
+
+        // Test HGETEX with PERSIST option
+        HashFieldExpirationOptions persistOptions =
+                HashFieldExpirationOptions.builder()
+                        .expiry(HashFieldExpirationOptions.ExpirySet.Persist())
+                        .build();
+
+        String[] fields = {"field1"};
+        String[] result = client.hgetex(key, fields, persistOptions).get();
+
+        assertEquals(1, result.length);
+        assertEquals("value1", result[0]);
+
+        // Clean up
+        client.del(new String[] {key}).get();
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void hgetex_binary_parameters(BaseClient client) {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0"),
+                "Hash field expiration commands require Valkey 9.0.0 or higher");
+
+        GlideString key = gs("test_hgetex_binary_" + UUID.randomUUID());
+
+        // First set some fields using regular hset
+        Map<GlideString, GlideString> fieldValueMap = new LinkedHashMap<>();
+        fieldValueMap.put(gs("field1"), gs("value1"));
+        fieldValueMap.put(gs("field2"), gs("value2"));
+        client.hset(key, fieldValueMap).get();
+
+        // Test HGETEX with expiry setting
+        HashFieldExpirationOptions options =
+                HashFieldExpirationOptions.builder()
+                        .expiry(HashFieldExpirationOptions.ExpirySet.Milliseconds(60000L))
+                        .build();
+
+        GlideString[] fields = {gs("field1"), gs("field2")};
+        GlideString[] result = client.hgetex(key, fields, options).get();
+
+        assertEquals(2, result.length);
+        assertEquals(gs("value1"), result[0]);
+        assertEquals(gs("value2"), result[1]);
+
+        // Clean up
+        client.del(new GlideString[] {key}).get();
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClientsWithAtomic")
+    public void hgetex_batch_functionality(BaseClient client, boolean isAtomic) {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0"),
+                "Hash field expiration commands require Valkey 9.0.0 or higher");
+
+        boolean isCluster = client instanceof GlideClusterClient;
+        String key = "test_hgetex_batch_" + UUID.randomUUID();
+
+        // First set some fields using regular hset
+        Map<String, String> fieldValueMap = new LinkedHashMap<>();
+        fieldValueMap.put("field1", "value1");
+        fieldValueMap.put("field2", "value2");
+        client.hset(key, fieldValueMap).get();
+
+        // Create batch with HGETEX command
+        BaseBatch batch = isCluster ? new ClusterBatch(isAtomic) : new Batch(isAtomic);
+
+        HashFieldExpirationOptions options =
+                HashFieldExpirationOptions.builder()
+                        .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
+                        .build();
+
+        String[] fields = {"field1", "field2", "nonexistent"};
+        batch.hgetex(key, fields, options);
+
+        // Execute batch
+        Object[] result =
+                isCluster
+                        ? ((GlideClusterClient) client).exec((ClusterBatch) batch, false).get()
+                        : ((GlideClient) client).exec((Batch) batch, false).get();
+
+        assertEquals(1, result.length);
+        String[] hgetexResult = (String[]) result[0];
+        assertEquals(3, hgetexResult.length);
+        assertEquals("value1", hgetexResult[0]);
+        assertEquals("value2", hgetexResult[1]);
+        assertNull(hgetexResult[2]); // nonexistent field should return null
+
+        // Clean up
+        client.del(new String[] {key}).get();
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void hexists_existing_field_non_existing_field_non_existing_key(BaseClient client) {
         String key = UUID.randomUUID().toString();
         String field1 = UUID.randomUUID().toString();
