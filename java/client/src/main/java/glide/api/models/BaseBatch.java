@@ -58,6 +58,7 @@ import static command_request.CommandRequestOuterClass.RequestType.HDel;
 import static command_request.CommandRequestOuterClass.RequestType.HExists;
 import static command_request.CommandRequestOuterClass.RequestType.HGet;
 import static command_request.CommandRequestOuterClass.RequestType.HGetAll;
+import static command_request.CommandRequestOuterClass.RequestType.HGetex;
 import static command_request.CommandRequestOuterClass.RequestType.HIncrBy;
 import static command_request.CommandRequestOuterClass.RequestType.HIncrByFloat;
 import static command_request.CommandRequestOuterClass.RequestType.HKeys;
@@ -831,6 +832,39 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
                                 .add("FIELDS")
                                 .add(fieldValueMap.size())
                                 .add(flattenMapToGlideStringArray(fieldValueMap))));
+        return getThis();
+    }
+
+    /**
+     * Gets the values of the specified fields from the hash stored at <code>key</code> and optionally
+     * sets their expiration.<br>
+     * If a field does not exist in the hash, a <code>null</code> value is returned for that field.
+     *
+     * @since Valkey 9.0.0.
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
+     * @see <a href="https://valkey.io/commands/hgetex/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param fields The fields to retrieve from the hash.
+     * @param options The expiration options for the fields.
+     * @return Command Response - An array of values associated with the given fields, in the same
+     *     order as they are requested. For every field that does not exist in the hash, a <code>null
+     *     </code> value is returned.
+     */
+    public <ArgType> T hgetex(
+            @NonNull ArgType key,
+            @NonNull ArgType[] fields,
+            @NonNull HashFieldExpirationOptions options) {
+        checkTypeOrThrow(key);
+        protobufBatch.addCommands(
+                buildCommand(
+                        HGetex,
+                        newArgsBuilder()
+                                .add(key)
+                                .add(options.toArgs())
+                                .add("FIELDS")
+                                .add(fields.length)
+                                .add(fields)));
         return getThis();
     }
 
