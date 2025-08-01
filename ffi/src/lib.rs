@@ -2065,7 +2065,7 @@ pub extern "C" fn create_batch_otel_span_with_parent(parent_span_ptr: u64) -> u6
     }
 
     // Convert parent pointer to GlideSpan and use existing add_span method
-    let span = match GlideOpenTelemetry::safe_span_from_pointer(parent_span_ptr) {
+    let span = match unsafe { GlideOpenTelemetry::span_from_pointer(parent_span_ptr) } {
         Ok(parent_span) => {
             // Use existing add_span method to create child batch span
             match parent_span.add_span(command_name) {
@@ -2274,7 +2274,7 @@ pub extern "C" fn create_otel_span_with_parent(
     }
 
     // Convert parent pointer to GlideSpan and use existing add_span method
-    let span = match GlideOpenTelemetry::safe_span_from_pointer(parent_span_ptr) {
+    let span = match unsafe { GlideOpenTelemetry::span_from_pointer(parent_span_ptr) } {
         Ok(parent_span) => {
             // Use existing add_span method to create child span
             match parent_span.add_span(command_name) {

@@ -478,7 +478,7 @@ static OTEL: OnceCell<RwLock<GlideOpenTelemetry>> = OnceCell::new();
 
 /// Our interface to OpenTelemetry
 impl GlideOpenTelemetry {
-    /// Validate if a span pointer is valid and safe to use
+    /// Validate if a span pointer is valid
     ///
     /// # Arguments
     /// * `span_ptr` - The u64 span pointer to validate
@@ -490,7 +490,7 @@ impl GlideOpenTelemetry {
     /// # Safety
     /// This function performs basic validation but cannot guarantee the pointer points to valid memory.
     /// It only checks for obvious invalid values like null pointers and unreasonable addresses.
-    pub fn is_span_pointer_valid(span_ptr: u64) -> bool {
+    pub unsafe fn is_span_pointer_valid(span_ptr: u64) -> bool {
         // Check for null pointer
         if span_ptr == 0 {
             logger_core::log_warn("OpenTelemetry", "Invalid span pointer - null pointer (0)");
@@ -536,7 +536,7 @@ impl GlideOpenTelemetry {
         true
     }
 
-    /// Safely convert a span pointer to a GlideSpan with validation
+    /// Convert a span pointer to a GlideSpan with validation
     ///
     /// # Arguments
     /// * `span_ptr` - The u64 span pointer to convert
@@ -547,11 +547,9 @@ impl GlideOpenTelemetry {
     ///
     /// # Safety
     /// This function validates the pointer before attempting conversion, but still uses unsafe code
-    /// to perform the actual pointer conversion. The caller must ensure the pointer was created
-    /// by the FFI layer using Arc::into_raw().
-    pub fn safe_span_from_pointer(span_ptr: u64) -> Result<GlideSpan, TraceError> {
+    pub unsafe fn span_from_pointer(span_ptr: u64) -> Result<GlideSpan, TraceError> {
         // First validate the pointer
-        if !Self::is_span_pointer_valid(span_ptr) {
+        if !unsafe { Self::is_span_pointer_valid(span_ptr) } {
             return Err(TraceError::from(format!(
                 "Invalid span pointer: 0x{:x} failed validation checks",
                 span_ptr
@@ -1132,41 +1130,35 @@ mod tests {
     #[test]
     fn test_span_pointer_validation() {
         // Test null pointer validation
-        assert!(!GlideOpenTelemetry::is_span_pointer_valid(0));
+        assert!(unsafe { !GlideOpenTelemetry::is_span_pointer_valid(0) });
 
         // Test misaligned pointer validation
-        assert!(!GlideOpenTelemetry::is_span_pointer_valid(0x1001)); // Not 8-byte aligned
-        assert!(!GlideOpenTelemetry::is_span_pointer_valid(0x1002)); // Not 8-byte aligned
-        assert!(!GlideOpenTelemetry::is_span_pointer_valid(0x1007)); // Not 8-byte aligned
+        assert!(unsafe { !GlideOpenTelemetry::is_span_pointer_valid(0x1001) }); // Not 8-byte aligned
+        assert!(unsafe { !GlideOpenTelemetry::is_span_pointer_valid(0x1002) }); // Not 8-byte aligned
+        assert!(unsafe { !GlideOpenTelemetry::is_span_pointer_valid(0x1007) }); // Not 8-byte aligned
 
         // Test address too low validation
-        assert!(!GlideOpenTelemetry::is_span_pointer_valid(0x800)); // Below MIN_VALID_ADDRESS
-        assert!(!GlideOpenTelemetry::is_span_pointer_valid(0x100)); // Way too low
+        assert!(unsafe { !GlideOpenTelemetry::is_span_pointer_valid(0x800) }); // Below MIN_VALID_ADDRESS
+        assert!(unsafe { !GlideOpenTelemetry::is_span_pointer_valid(0x100) }); // Way too low
 
         // Test address too high validation
-        assert!(!GlideOpenTelemetry::is_span_pointer_valid(
-            0x8000_0000_0000_0000
-        )); // Above MAX_VALID_ADDRESS
-        assert!(!GlideOpenTelemetry::is_span_pointer_valid(
-            0xFFFF_FFFF_FFFF_FFFF
-        )); // Maximum u64
+        assert!(unsafe { !GlideOpenTelemetry::is_span_pointer_valid(0x8000_0000_0000_0000) }); // Above MAX_VALID_ADDRESS
+        assert!(unsafe { !GlideOpenTelemetry::is_span_pointer_valid(0xFFFF_FFFF_FFFF_FFFF) }); // Maximum u64
 
         // Test valid pointer ranges
-        assert!(GlideOpenTelemetry::is_span_pointer_valid(0x1000)); // Minimum valid
-        assert!(GlideOpenTelemetry::is_span_pointer_valid(0x10000)); // Reasonable heap address
-        assert!(GlideOpenTelemetry::is_span_pointer_valid(
-            0x7FFF_FFFF_FFFF_FFF8
-        )); // Near maximum valid
+        assert!(unsafe { GlideOpenTelemetry::is_span_pointer_valid(0x1000) }); // Minimum valid
+        assert!(unsafe { GlideOpenTelemetry::is_span_pointer_valid(0x10000) }); // Reasonable heap address
+        assert!(unsafe { GlideOpenTelemetry::is_span_pointer_valid(0x7FFF_FFFF_FFFF_FFF8) }); // Near maximum valid
     }
 
     #[test]
-    fn test_safe_span_from_pointer_validation() {
+    fn test_span_from_pointer_validation() {
         let rt = shared_runtime();
         rt.block_on(async {
             init_otel().await.unwrap();
 
             // Test with null pointer
-            let result = GlideOpenTelemetry::safe_span_from_pointer(0);
+            let result = unsafe { GlideOpenTelemetry::span_from_pointer(0) };
             assert!(result.is_err());
             assert!(
                 result
@@ -1176,7 +1168,7 @@ mod tests {
             );
 
             // Test with misaligned pointer
-            let result = GlideOpenTelemetry::safe_span_from_pointer(0x1001);
+            let result = unsafe { GlideOpenTelemetry::span_from_pointer(0x1001) };
             assert!(result.is_err());
             assert!(
                 result
@@ -1186,7 +1178,7 @@ mod tests {
             );
 
             // Test with address too low
-            let result = GlideOpenTelemetry::safe_span_from_pointer(0x800);
+            let result = unsafe { GlideOpenTelemetry::span_from_pointer(0x800) };
             assert!(result.is_err());
             assert!(
                 result
@@ -1302,13 +1294,13 @@ mod tests {
     }
 
     #[test]
-    fn test_safe_span_from_pointer_error_messages() {
+    fn test_span_from_pointer_error_messages() {
         let rt = shared_runtime();
         rt.block_on(async {
             init_otel().await.unwrap();
 
             // Test null pointer error message
-            let result = GlideOpenTelemetry::safe_span_from_pointer(0);
+            let result = unsafe { GlideOpenTelemetry::span_from_pointer(0) };
             assert!(result.is_err());
             let error_msg = result.unwrap_err().to_string();
             assert!(
@@ -1321,7 +1313,7 @@ mod tests {
             );
 
             // Test misaligned pointer error message
-            let result = GlideOpenTelemetry::safe_span_from_pointer(0x1001);
+            let result = unsafe { GlideOpenTelemetry::span_from_pointer(0x1001) };
             assert!(result.is_err());
             let error_msg = result.unwrap_err().to_string();
             assert!(
@@ -1334,7 +1326,7 @@ mod tests {
             );
 
             // Test address too low error message
-            let result = GlideOpenTelemetry::safe_span_from_pointer(0x800);
+            let result = unsafe { GlideOpenTelemetry::span_from_pointer(0x800) };
             assert!(result.is_err());
             let error_msg = result.unwrap_err().to_string();
             assert!(
@@ -1363,13 +1355,13 @@ mod tests {
             for &invalid_ptr in &invalid_pointers {
                 // Validation should return false
                 assert!(
-                    !GlideOpenTelemetry::is_span_pointer_valid(invalid_ptr),
+                    unsafe { !GlideOpenTelemetry::is_span_pointer_valid(invalid_ptr) },
                     "Pointer 0x{:x} should be invalid",
                     invalid_ptr
                 );
 
                 // Safe conversion should return error
-                let result = GlideOpenTelemetry::safe_span_from_pointer(invalid_ptr);
+                let result = unsafe { GlideOpenTelemetry::span_from_pointer(invalid_ptr) };
                 assert!(
                     result.is_err(),
                     "Conversion of invalid pointer 0x{:x} should fail",
