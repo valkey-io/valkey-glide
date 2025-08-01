@@ -2022,6 +2022,219 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void hpersist_basic(BaseClient client) {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0"),
+                "Hash field expiration commands require Valkey 9.0.0 or higher");
+
+        String key = "test_hpersist_basic_" + UUID.randomUUID();
+
+        // First set some fields with expiration using hsetex
+        Map<String, String> fieldValueMap = new LinkedHashMap<>();
+        fieldValueMap.put("field1", "value1");
+        fieldValueMap.put("field2", "value2");
+
+        HashFieldExpirationOptions setOptions =
+                HashFieldExpirationOptions.builder()
+                        .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
+                        .build();
+
+        client.hsetex(key, fieldValueMap, setOptions).get();
+
+        // Test HPERSIST - remove expiration from fields
+        String[] fields = {"field1", "field2", "nonexistent"};
+        Boolean[] result = client.hpersist(key, fields).get();
+
+        assertEquals(3, result.length);
+        assertTrue(result[0]); // field1 had expiry removed
+        assertTrue(result[1]); // field2 had expiry removed
+        assertFalse(result[2]); // nonexistent field should return false
+
+        // Verify fields are now persistent (no expiration)
+        // We can't directly check TTL for hash fields in this version, but we can verify the fields
+        // still exist
+        String[] values = client.hmget(key, new String[] {"field1", "field2"}).get();
+        assertEquals("value1", values[0]);
+        assertEquals("value2", values[1]);
+
+        // Clean up
+        client.del(new String[] {key}).get();
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void hpersist_non_existent_key(BaseClient client) {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0"),
+                "Hash field expiration commands require Valkey 9.0.0 or higher");
+
+        String key = "test_hpersist_nonexistent_" + UUID.randomUUID();
+
+        // Test HPERSIST on non-existent key
+        String[] fields = {"field1", "field2"};
+        Boolean[] result = client.hpersist(key, fields).get();
+
+        assertEquals(2, result.length);
+        assertFalse(result[0]); // field doesn't exist
+        assertFalse(result[1]); // field doesn't exist
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void hpersist_fields_without_expiration(BaseClient client) {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0"),
+                "Hash field expiration commands require Valkey 9.0.0 or higher");
+
+        String key = "test_hpersist_no_expiry_" + UUID.randomUUID();
+
+        // Set fields without expiration using regular hset
+        Map<String, String> fieldValueMap = new LinkedHashMap<>();
+        fieldValueMap.put("field1", "value1");
+        fieldValueMap.put("field2", "value2");
+        client.hset(key, fieldValueMap).get();
+
+        // Test HPERSIST on fields that don't have expiration
+        String[] fields = {"field1", "field2"};
+        Boolean[] result = client.hpersist(key, fields).get();
+
+        assertEquals(2, result.length);
+        assertFalse(result[0]); // field1 doesn't have expiry to remove
+        assertFalse(result[1]); // field2 doesn't have expiry to remove
+
+        // Clean up
+        client.del(new String[] {key}).get();
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void hpersist_mixed_fields(BaseClient client) {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0"),
+                "Hash field expiration commands require Valkey 9.0.0 or higher");
+
+        String key = "test_hpersist_mixed_" + UUID.randomUUID();
+
+        // Set some fields with expiration
+        Map<String, String> fieldValueMapWithExpiry = new LinkedHashMap<>();
+        fieldValueMapWithExpiry.put("field1", "value1");
+        fieldValueMapWithExpiry.put("field2", "value2");
+
+        HashFieldExpirationOptions setOptions =
+                HashFieldExpirationOptions.builder()
+                        .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
+                        .build();
+
+        client.hsetex(key, fieldValueMapWithExpiry, setOptions).get();
+
+        // Set some fields without expiration
+        Map<String, String> fieldValueMapNoExpiry = new LinkedHashMap<>();
+        fieldValueMapNoExpiry.put("field3", "value3");
+        fieldValueMapNoExpiry.put("field4", "value4");
+        client.hset(key, fieldValueMapNoExpiry).get();
+
+        // Test HPERSIST on mixed fields
+        String[] fields = {"field1", "field2", "field3", "field4", "nonexistent"};
+        Boolean[] result = client.hpersist(key, fields).get();
+
+        assertEquals(5, result.length);
+        assertTrue(result[0]); // field1 had expiry removed
+        assertTrue(result[1]); // field2 had expiry removed
+        assertFalse(result[2]); // field3 doesn't have expiry to remove
+        assertFalse(result[3]); // field4 doesn't have expiry to remove
+        assertFalse(result[4]); // nonexistent field
+
+        // Clean up
+        client.del(new String[] {key}).get();
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void hpersist_binary(BaseClient client) {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0"),
+                "Hash field expiration commands require Valkey 9.0.0 or higher");
+
+        GlideString key = gs("test_hpersist_binary_" + UUID.randomUUID());
+
+        // First set some fields with expiration using hsetex
+        Map<GlideString, GlideString> fieldValueMap = new LinkedHashMap<>();
+        fieldValueMap.put(gs("field1"), gs("value1"));
+        fieldValueMap.put(gs("field2"), gs("value2"));
+
+        HashFieldExpirationOptions setOptions =
+                HashFieldExpirationOptions.builder()
+                        .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
+                        .build();
+
+        client.hsetex(key, fieldValueMap, setOptions).get();
+
+        // Test HPERSIST with binary parameters
+        GlideString[] fields = {gs("field1"), gs("field2"), gs("nonexistent")};
+        Boolean[] result = client.hpersist(key, fields).get();
+
+        assertEquals(3, result.length);
+        assertTrue(result[0]); // field1 had expiry removed
+        assertTrue(result[1]); // field2 had expiry removed
+        assertFalse(result[2]); // nonexistent field should return false
+
+        // Clean up
+        client.del(new GlideString[] {key}).get();
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClientsAndBooleans")
+    public void hpersist_batch(BaseClient client, boolean isAtomic) {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0"),
+                "Hash field expiration commands require Valkey 9.0.0 or higher");
+
+        boolean isCluster = client instanceof GlideClusterClient;
+        String key = "test_hpersist_batch_" + UUID.randomUUID();
+
+        // First set some fields with expiration using hsetex
+        Map<String, String> fieldValueMap = new LinkedHashMap<>();
+        fieldValueMap.put("field1", "value1");
+        fieldValueMap.put("field2", "value2");
+
+        HashFieldExpirationOptions setOptions =
+                HashFieldExpirationOptions.builder()
+                        .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
+                        .build();
+
+        client.hsetex(key, fieldValueMap, setOptions).get();
+
+        // Create batch with HPERSIST command
+        BaseBatch batch = isCluster ? new ClusterBatch(isAtomic) : new Batch(isAtomic);
+
+        String[] fields = {"field1", "field2", "nonexistent"};
+        batch.hpersist(key, fields);
+
+        // Execute batch
+        Object[] result =
+                isCluster
+                        ? ((GlideClusterClient) client).exec((ClusterBatch) batch, false).get()
+                        : ((GlideClient) client).exec((Batch) batch, false).get();
+
+        assertEquals(1, result.length);
+        Boolean[] hpersistResult = (Boolean[]) result[0];
+        assertEquals(3, hpersistResult.length);
+        assertTrue(hpersistResult[0]); // field1 should have expiry removed
+        assertTrue(hpersistResult[1]); // field2 should have expiry removed
+        assertFalse(hpersistResult[2]); // nonexistent field should return false
+
+        // Clean up
+        client.del(new String[] {key}).get();
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void hexists_existing_field_non_existing_field_non_existing_key(BaseClient client) {
         String key = UUID.randomUUID().toString();
         String field1 = UUID.randomUUID().toString();

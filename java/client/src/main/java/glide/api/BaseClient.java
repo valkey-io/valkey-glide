@@ -47,6 +47,7 @@ import static command_request.CommandRequestOuterClass.RequestType.HIncrByFloat;
 import static command_request.CommandRequestOuterClass.RequestType.HKeys;
 import static command_request.CommandRequestOuterClass.RequestType.HLen;
 import static command_request.CommandRequestOuterClass.RequestType.HMGet;
+import static command_request.CommandRequestOuterClass.RequestType.HPersist;
 import static command_request.CommandRequestOuterClass.RequestType.HRandField;
 import static command_request.CommandRequestOuterClass.RequestType.HScan;
 import static command_request.CommandRequestOuterClass.RequestType.HSet;
@@ -1267,6 +1268,24 @@ public abstract class BaseClient
                         .toArray();
         return commandManager.submitNewCommand(
                 HExpire, arguments, response -> castArray(handleArrayResponse(response), Boolean.class));
+    }
+
+    @Override
+    public CompletableFuture<Boolean[]> hpersist(@NonNull String key, @NonNull String[] fields) {
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {key}, new String[] {"FIELDS", String.valueOf(fields.length)}, fields);
+        return commandManager.submitNewCommand(
+                HPersist, arguments, response -> castArray(handleArrayResponse(response), Boolean.class));
+    }
+
+    @Override
+    public CompletableFuture<Boolean[]> hpersist(
+            @NonNull GlideString key, @NonNull GlideString[] fields) {
+        GlideString[] arguments =
+                new ArgsBuilder().add(key).add("FIELDS").add(fields.length).add(fields).toArray();
+        return commandManager.submitNewCommand(
+                HPersist, arguments, response -> castArray(handleArrayResponse(response), Boolean.class));
     }
 
     @Override
