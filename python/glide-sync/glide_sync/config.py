@@ -27,13 +27,12 @@ class GlideClientConfiguration(SharedGlideClientConfiguration):
 
     Attributes:
         addresses (List[NodeAddress]): DNS Addresses and ports of known nodes in the cluster.
-        Only nodes whose addresses were provided will be used by the client.
-            For example::
-
-                [
-                    {address:sample-address-0001.use1.cache.amazonaws.com, port:6379},
-                    {address: sample-address-0002.use2.cache.amazonaws.com, port:6379}
-                ]
+            Only nodes whose addresses were provided will be used by the client.
+            For example:
+            [
+                NodeAddress("sample-address-0001.use1.cache.amazonaws.com", 6379),
+                NodeAddress("sample-address-0002.use1.cache.amazonaws.com", 6379)
+            ]
 
         use_tls (bool): True if communication with the cluster should use Transport Level Security.
                 Please use `AdvancedGlideClusterClientConfiguration`.
@@ -104,11 +103,10 @@ class GlideClusterClientConfiguration(SharedGlideClusterClientConfiguration):
     Attributes:
         addresses (List[NodeAddress]): DNS Addresses and ports of known nodes in the cluster.
             The list can be partial, as the client will attempt to map out the cluster and find all nodes.
-            For example::
-
-                [
-                    {address:configuration-endpoint.use1.cache.amazonaws.com, port:6379}
-                ]
+            For example:
+            [
+                NodeAddress("sample-address-0001.use1.cache.amazonaws.com", 6379),
+            ]
 
         use_tls (bool): True if communication with the cluster should use Transport Level Security.
                 For advanced tls configuration, please use `AdvancedGlideClusterClientConfiguration`.

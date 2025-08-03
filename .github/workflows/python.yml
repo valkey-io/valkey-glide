@@ -146,7 +146,7 @@ jobs:
                   engine-version: ${{ matrix.engine.version }}
 
             - name: Test with pytest
-              if: ${{ env.RUN_FULL_MATRIX != 'true' && env.RUN_SYNC_ONLY != 'true' && env.RUN_ASYNC_ONLY != 'true' }}
+              if: ${{ env.RUN_FULL_MATRIX != 'true' && env.RUN_SYNC_ONLY == 'false' && env.RUN_ASYNC_ONLY == 'false' }}
               working-directory: ./python
               env:
                   TEST_NAME_ARG: ${{ inputs.name && format('-k {0}', inputs.name) || '' }}

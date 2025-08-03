@@ -188,6 +188,7 @@ __all__ = [
     "ProtocolVersion",
     "PeriodicChecksManualInterval",
     "PeriodicChecksStatus",
+    "TlsAdvancedConfiguration",
     # Response
     "OK",
     "TClusterResponse",
@@ -199,7 +200,6 @@ __all__ = [
     "TJsonUniversalResponse",
     "TOK",
     "TResult",
-    "TlsAdvancedConfiguration",
     "TXInfoStreamFullResponse",
     "TXInfoStreamResponse",
     "FtAggregateResponse",

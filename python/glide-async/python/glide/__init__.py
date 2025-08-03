@@ -17,6 +17,8 @@ from glide_shared import (
     AllPrimaries,
     BackoffStrategy,
     Batch,
+    BatchOptions,
+    BatchRetryStrategy,
     BitEncoding,
     BitFieldGet,
     BitFieldIncrBy,
@@ -32,6 +34,7 @@ from glide_shared import (
     ByAddressRoute,
     ClosingError,
     ClusterBatch,
+    ClusterBatchOptions,
     ClusterTransaction,
     ConditionalChange,
     ConfigurationError,
@@ -131,6 +134,7 @@ from glide_shared import (
     TimeoutError,
     TJsonResponse,
     TJsonUniversalResponse,
+    TlsAdvancedConfiguration,
     Transaction,
     TResult,
     TrimByMaxLen,
@@ -155,11 +159,20 @@ from .logger import Level as LogLevel
 from .logger import Logger
 
 __all__ = [
+    # Client
+    "TGlideClient",
+    "GlideClient",
+    "GlideClusterClient",
     "Batch",
     "ClusterBatch",
     "ClusterTransaction",
     "Transaction",
     "TBatch",
+    # Batch Options
+    "BatchOptions",
+    "BatchRetryStrategy",
+    "ClusterBatchOptions",
+    # Config
     "AdvancedGlideClientConfiguration",
     "AdvancedGlideClusterClientConfiguration",
     "GlideClientConfiguration",
@@ -168,9 +181,14 @@ __all__ = [
     "ReadFrom",
     "ServerCredentials",
     "NodeAddress",
+    "OpenTelemetryConfig",
+    "OpenTelemetryMetricsConfig",
+    "OpenTelemetryTracesConfig",
     "ProtocolVersion",
     "PeriodicChecksManualInterval",
     "PeriodicChecksStatus",
+    "TlsAdvancedConfiguration",
+    # Response
     "OK",
     "TClusterResponse",
     "TEncodable",
@@ -187,6 +205,7 @@ __all__ = [
     "FtInfoResponse",
     "FtProfileResponse",
     "FtSearchResponse",
+    # Commands
     "BitEncoding",
     "BitFieldGet",
     "BitFieldIncrBy",
@@ -202,6 +221,7 @@ __all__ = [
     "OffsetOptions",
     "SignedEncoding",
     "UnsignedEncoding",
+    "Script",
     "ScoreBoundary",
     "ConditionalChange",
     "OnlyIfEqual",
@@ -245,13 +265,19 @@ __all__ = [
     "TrimByMaxLen",
     "TrimByMinId",
     "UpdateOptions",
+    "ClusterScanCursor",
+    # PubSub
     "PubSubMsg",
+    # Json
+    "glide_json",
     "json_batch",
     "JsonGetOptions",
     "JsonArrIndexOptions",
     "JsonArrPopOptions",
+    # Logger
     "Logger",
     "LogLevel",
+    # Routes
     "Route",
     "SlotType",
     "AllNodes",
@@ -261,6 +287,7 @@ __all__ = [
     "SlotKeyRoute",
     "SlotIdRoute",
     "TSingleNodeRoute",
+    # Exceptions
     "ClosingError",
     "ConfigurationError",
     "ConnectionError",
@@ -268,6 +295,8 @@ __all__ = [
     "GlideError",
     "RequestError",
     "TimeoutError",
+    # Ft
+    "ft",
     "DataType",
     "DistanceMetricType",
     "Field",
@@ -296,14 +325,4 @@ __all__ = [
     "FtAggregateSortProperty",
     "FtProfileOptions",
     "QueryType",
-    "TGlideClient",
-    "GlideClient",
-    "GlideClusterClient",
-    "ClusterScanCursor",
-    "Script",
-    "glide_json",
-    "ft",
-    "OpenTelemetryConfig",
-    "OpenTelemetryMetricsConfig",
-    "OpenTelemetryTracesConfig",
 ]

@@ -229,9 +229,9 @@ class BaseClientConfiguration:
             For example::
 
                 [
-                    {address:sample-address-0001.use1.cache.amazonaws.com, port:6379},
-                    {address: sample-address-0002.use2.cache.amazonaws.com, port:6379}
-                ].
+                    NodeAddress("sample-address-0001.use1.cache.amazonaws.com", 6379),
+                    NodeAddress("sample-address-0002.use1.cache.amazonaws.com", 6379)
+                ]
 
         use_tls (bool): True if communication with the cluster should use Transport Level Security.
             Should match the TLS configuration of the server/cluster, otherwise the connection attempt will fail.
@@ -403,12 +403,12 @@ class GlideClientConfiguration(BaseClientConfiguration):
 
     Attributes:
         addresses (List[NodeAddress]): DNS Addresses and ports of known nodes in the cluster.
-        Only nodes whose addresses were provided will be used by the client.
+            Only nodes whose addresses were provided will be used by the client.
             For example::
 
                 [
-                    {address:sample-address-0001.use1.cache.amazonaws.com, port:6379},
-                    {address: sample-address-0002.use2.cache.amazonaws.com, port:6379}
+                    NodeAddress("sample-address-0001.use1.cache.amazonaws.com", 6379),
+                    NodeAddress("sample-address-0002.use1.cache.amazonaws.com", 6379)
                 ]
 
         use_tls (bool): True if communication with the cluster should use Transport Level Security.
@@ -575,7 +575,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
             For example::
 
                 [
-                    {address:configuration-endpoint.use1.cache.amazonaws.com, port:6379}
+                    NodeAddress("sample-address-0001.use1.cache.amazonaws.com", 6379),
                 ]
 
         use_tls (bool): True if communication with the cluster should use Transport Level Security.

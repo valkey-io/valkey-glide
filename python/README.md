@@ -89,90 +89,88 @@ python3
 
 ### 🔁 Async Client
 
-```python:
->>> import asyncio
->>> from glide import GlideClusterClientConfiguration, NodeAddress, GlideClusterClient
->>> async def test_cluster_client():
-...     addresses = [NodeAddress("address.example.com", 6379)]
-...     # It is recommended to set a timeout for your specific use case
-...     config = GlideClusterClientConfiguration(addresses, request_timeout=500)  # 500ms timeout
-...     client = await GlideClusterClient.create(config)
-...     set_result = await client.set("foo", "bar")
-...     print(f"Set response is {set_result}")
-...     get_result = await client.get("foo")
-...     print(f"Get response is {get_result}")
-... 
->>> asyncio.run(test_cluster_client())
-Set response is OK
-Get response is bar
+### ✅ Async Cluster Mode
+
+```python
+import asyncio
+from glide import GlideClusterClientConfiguration, NodeAddress, GlideClusterClient
+
+async def test_cluster_client():
+    addresses = [NodeAddress("address.example.com", 6379)]
+    # It is recommended to set a timeout for your specific use case
+    config = GlideClusterClientConfiguration(addresses, request_timeout=500)  # 500ms timeout
+    client = await GlideClusterClient.create(config)
+    set_result = await client.set("foo", "bar")
+    print(f"Set response is {set_result}")
+    get_result = await client.get("foo")
+    print(f"Get response is {get_result}")
+
+asyncio.run(test_cluster_client())
 ```
 
-#### Async Standalone Mode
+#### ✅ Async Standalone Mode
 
 ```python:
->>> import asyncio
->>> from glide import GlideClientConfiguration, NodeAddress, GlideClient
->>> async def test_standalone_client():
-...     addresses = [
-...             NodeAddress("server_primary.example.com", 6379),
-...             NodeAddress("server_replica.example.com", 6379)
-...     ]
-...     # It is recommended to set a timeout for your specific use case
-...     config = GlideClientConfiguration(addresses, request_timeout=500)  # 500ms timeout
-...     client = await GlideClient.create(config)
-...     set_result = await client.set("foo", "bar")
-...     print(f"Set response is {set_result}")
-...     get_result = await client.get("foo")
-...     print(f"Get response is {get_result}")
-... 
->>> asyncio.run(test_standalone_client())
-Set response is OK
-Get response is bar
+import asyncio
+from glide import GlideClientConfiguration, NodeAddress, GlideClient
+
+async def test_standalone_client():
+    addresses = [
+        NodeAddress("server_primary.example.com", 6379),
+        NodeAddress("server_replica.example.com", 6379)
+    ]
+    # It is recommended to set a timeout for your specific use case
+    config = GlideClientConfiguration(addresses, request_timeout=500)  # 500ms timeout
+    client = await GlideClient.create(config)
+    set_result = await client.set("foo", "bar")
+    print(f"Set response is {set_result}")
+    get_result = await client.get("foo")
+    print(f"Get response is {get_result}")
+
+asyncio.run(test_standalone_client())
 ```
 
 ---
 
 ### 🔂 Sync Client
 
-#### Sync Cluster Mode
+#### ✅ Sync Cluster Mode
 
 ```python
->>> from glide_sync import GlideClusterClientConfiguration, NodeAddress, GlideClusterClient
->>> def test_cluster_client():
-...     addresses = [NodeAddress("address.example.com", 6379)]
-...     # It is recommended to set a timeout for your specific use case
-...     config = GlideClusterClientConfiguration(addresses, request_timeout=500)  # 500ms timeout
-...     client = GlideClusterClient.create(config)
-...     set_result = client.set("foo", "bar")
-...     print(f"Set response is {set_result}")
-...     get_result = client.get("foo")
-...     print(f"Get response is {get_result}")
+from glide_sync import GlideClusterClientConfiguration, NodeAddress, GlideClusterClient
 
-Set response is OK
-Get response is bar
+def test_cluster_client():
+    addresses = [NodeAddress("address.example.com", 6379)]
+    # It is recommended to set a timeout for your specific use case
+    config = GlideClusterClientConfiguration(addresses, request_timeout=500)  # 500ms timeout
+    client = GlideClusterClient.create(config)
+    set_result = client.set("foo", "bar")
+    print(f"Set response is {set_result}")
+    get_result = client.get("foo")
+    print(f"Get response is {get_result}")
+
+test_cluster_client()
 ```
 
-#### Sync Standalone Mode
+#### ✅ Sync Standalone Mode
 
 ```python
 from glide_sync import GlideClientConfiguration, NodeAddress, GlideClient
 
->>> def test_standalone_client():
-...     addresses = [
-...             NodeAddress("server_primary.example.com", 6379),
-...             NodeAddress("server_replica.example.com", 6379)
-...     ]
-...     # It is recommended to set a timeout for your specific use case
-...     config = GlideClientConfiguration(addresses, request_timeout=500)  # 500ms timeout
-...     client = GlideClient.create(config)
-...     set_result = client.set("foo", "bar")
-...     print(f"Set response is {set_result}")
-...     get_result = client.get("foo")
-...     print(f"Get response is {get_result}")
-... 
+def test_standalone_client():
+    addresses = [
+        NodeAddress("server_primary.example.com", 6379),
+        NodeAddress("server_replica.example.com", 6379)
+    ]
+    # It is recommended to set a timeout for your specific use case
+    config = GlideClientConfiguration(addresses, request_timeout=500)  # 500ms timeout
+    client = GlideClient.create(config)
+    set_result = client.set("foo", "bar")
+    print(f"Set response is {set_result}")
+    get_result = client.get("foo")
+    print(f"Get response is {get_result}")
 
-Set response is OK
-Get response is bar
+test_standalone_client()
 ```
 
 ---

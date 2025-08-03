@@ -583,7 +583,7 @@ jobs:
                   else
                     pip install valkey-glide
                   fi
-                  python rc_test.py
+                  python async_rc_test.py
 
             - name: Run the Async Clients tests with PyPy
               if: ${{ inputs.publish_async == true }}
@@ -598,7 +598,7 @@ jobs:
                   else
                     pip install valkey-glide
                   fi
-                  pypy3 rc_test.py
+                  pypy3 async_rc_test.py
 
             - name: Run the Sync Client tests
               if: ${{ inputs.publish_sync == true }}

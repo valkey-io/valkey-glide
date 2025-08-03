@@ -10,6 +10,8 @@ from glide_shared import (
     AllPrimaries,
     BackoffStrategy,
     Batch,
+    BatchOptions,
+    BatchRetryStrategy,
     BitEncoding,
     BitFieldGet,
     BitFieldIncrBy,
@@ -25,6 +27,8 @@ from glide_shared import (
     ByAddressRoute,
     ClosingError,
     ClusterBatch,
+    ClusterBatchOptions,
+    ClusterTransaction,
     ConditionalChange,
     ConfigurationError,
     ConnectionError,
@@ -121,6 +125,8 @@ from glide_shared import (
     TimeoutError,
     TJsonResponse,
     TJsonUniversalResponse,
+    TlsAdvancedConfiguration,
+    Transaction,
     TResult,
     TrimByMaxLen,
     TrimByMinId,
@@ -138,16 +144,24 @@ from glide_shared import (
     json_batch,
 )
 
-from .config import (
-    GlideClientConfiguration,
-    GlideClusterClientConfiguration,
-)
+from .config import GlideClientConfiguration, GlideClusterClientConfiguration
 from .glide_client import GlideClient, GlideClusterClient, TGlideClient
 
 __all__ = [
+    # Client
+    "TGlideClient",
+    "GlideClient",
+    "GlideClusterClient",
     "Batch",
     "ClusterBatch",
     "TBatch",
+    "Transaction",
+    "ClusterTransaction",
+    # Batch Options
+    "BatchOptions",
+    "BatchRetryStrategy",
+    "ClusterBatchOptions",
+    # Config
     "AdvancedGlideClientConfiguration",
     "AdvancedGlideClusterClientConfiguration",
     "GlideClientConfiguration",
@@ -159,6 +173,8 @@ __all__ = [
     "ProtocolVersion",
     "PeriodicChecksManualInterval",
     "PeriodicChecksStatus",
+    "TlsAdvancedConfiguration",
+    # Response
     "OK",
     "TClusterResponse",
     "TEncodable",
@@ -175,6 +191,7 @@ __all__ = [
     "FtInfoResponse",
     "FtProfileResponse",
     "FtSearchResponse",
+    # Commands
     "BitEncoding",
     "BitFieldGet",
     "BitFieldIncrBy",
@@ -233,11 +250,14 @@ __all__ = [
     "TrimByMaxLen",
     "TrimByMinId",
     "UpdateOptions",
+    # PubSub
     "PubSubMsg",
+    # Json
     "json_batch",
     "JsonGetOptions",
     "JsonArrIndexOptions",
     "JsonArrPopOptions",
+    # Routes
     "Route",
     "SlotType",
     "AllNodes",
@@ -247,6 +267,7 @@ __all__ = [
     "SlotKeyRoute",
     "SlotIdRoute",
     "TSingleNodeRoute",
+    # Exceptions
     "ClosingError",
     "ConfigurationError",
     "ConnectionError",
@@ -254,6 +275,7 @@ __all__ = [
     "GlideError",
     "RequestError",
     "TimeoutError",
+    # Ft
     "DataType",
     "DistanceMetricType",
     "Field",
@@ -282,7 +304,4 @@ __all__ = [
     "FtAggregateSortProperty",
     "FtProfileOptions",
     "QueryType",
-    "TGlideClient",
-    "GlideClient",
-    "GlideClusterClient",
 ]
