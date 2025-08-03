@@ -156,6 +156,7 @@ class AnomalousSymbolVisitor(ast.NodeVisitor):
 
 
 class TestAPIExport:
+    # Return a list with all non-excluded symbols found that are not exported by the package
     def _check_package(
         self,
         package_name: str,
@@ -192,6 +193,7 @@ class TestAPIExport:
         return aggregated_anomalous_symbols
 
     def test_api_export(self):
+        """Test that all non-excluded symbols are exported by the package"""
         all_anomalies = {}
 
         # async
@@ -237,3 +239,28 @@ class TestAPIExport:
                 ]
             )
         )
+
+    def test_shared_symbols_reexported(self):
+        """Test that all shared package symbols are re-exported by both async and sync packages"""
+
+        missing_from_async = []
+        missing_from_sync = []
+
+        for shared_symbol in shared_exported_symbol_list:
+            # Check if symbol is exported by async package
+            if shared_symbol not in async_exported_symbol_list:
+                missing_from_async.append(shared_symbol)
+
+            # Check if symbol is exported by sync package
+            if shared_symbol not in sync_exported_symbol_list:
+                missing_from_sync.append(shared_symbol)
+
+            assert not missing_from_async, (
+                "Shared symbols missing from async package exports. "
+                + f"Missing symbols: {missing_from_async}"
+            )
+
+            assert not missing_from_sync, (
+                "Shared symbols missing from sync package exports. "
+                + f"Missing symbols: {missing_from_sync}"
+            )
