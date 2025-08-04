@@ -1,6 +1,6 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-use super::get_redis_connection_info;
+use super::get_redis_connection_info_with_iam;
 use super::reconnecting_connection::{ReconnectReason, ReconnectingConnection};
 use super::{ConnectionRequest, NodeAddress, TlsMode};
 use super::{DEFAULT_CONNECTION_TIMEOUT, to_duration};
@@ -120,7 +120,21 @@ impl StandaloneClient {
         if connection_request.addresses.is_empty() {
             return Err(StandaloneClientConnectionError::NoAddressesProvided);
         }
-        let mut redis_connection_info = get_redis_connection_info(&connection_request);
+
+        // Check if we need to create an IAM token manager for connection establishment
+        let iam_token_manager = if let Some(auth_info) = &connection_request.authentication_info {
+            if auth_info.iam_config.is_some() {
+                super::Client::create_iam_token_manager(auth_info).await
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        let mut redis_connection_info =
+            get_redis_connection_info_with_iam(&connection_request, iam_token_manager.as_ref())
+                .await;
         let pubsub_connection_info = redis_connection_info.clone();
         redis_connection_info.pubsub_subscriptions = None;
         let retry_strategy = match connection_request.connection_retry_strategy {
