@@ -110,7 +110,7 @@ asyncio.run(test_cluster_client())
 
 #### ✅ Async Standalone Mode
 
-```python:
+```python
 import asyncio
 from glide import GlideClientConfiguration, NodeAddress, GlideClient
 
