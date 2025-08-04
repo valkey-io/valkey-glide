@@ -1,0 +1,15 @@
+include README.md
+# Ensure ffi, glide-core and logger are included
+recursive-include ffi *
+recursive-include glide-core *
+recursive-include logger_core *
+recursive-include glide_shared *
+recursive-include glide-shared *
+prune **/target
+prune **/tests
+prune **/benches/
+prune **/benchmarks/
+prune **/docs/
+prune **/glide-logs/
+prune **/*-test/
+prune **/*q_results/

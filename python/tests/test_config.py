@@ -1,8 +1,7 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import pytest
-
-from glide.config import (
+from glide_shared.config import (
     AdvancedGlideClientConfiguration,
     AdvancedGlideClusterClientConfiguration,
     BackoffStrategy,
@@ -16,9 +15,9 @@ from glide.config import (
     ReadFrom,
     TlsAdvancedConfiguration,
 )
-from glide.protobuf.connection_request_pb2 import ConnectionRequest
-from glide.protobuf.connection_request_pb2 import ReadFrom as ProtobufReadFrom
-from glide.protobuf.connection_request_pb2 import TlsMode
+from glide_shared.protobuf.connection_request_pb2 import ConnectionRequest
+from glide_shared.protobuf.connection_request_pb2 import ReadFrom as ProtobufReadFrom
+from glide_shared.protobuf.connection_request_pb2 import TlsMode
 
 
 def test_default_client_config():

@@ -15,3 +15,9 @@ sphinx >= 7.4.7
 sphinx-rtd-theme
 psutil
 pytest_asyncio
+
+# Sync Client
+types-cffi
+setuptools
+wheel >= 0.45
+build

@@ -6,7 +6,8 @@
 import os
 import sys
 
-sys.path.insert(0, os.path.abspath("../python"))
+for path in ("../glide-async", "../glide-sync", "../glide-shared"):
+    sys.path.insert(0, os.path.abspath(path))
 
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
@@ -28,9 +29,10 @@ templates_path = ["_templates"]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 autodoc_mock_imports = [
     "glide.glide",
-    "glide.protobuf",
+    "glide_shared.protobuf",
     "pytest",
     "google",
+    "cffi",
 ]  # Prevents confusion in sphinx with imports
 
 autodoc_typehints = "description"
