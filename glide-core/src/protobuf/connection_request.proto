@@ -21,8 +21,22 @@ enum TlsMode {
 }
 
 message AuthenticationInfo {
+    oneof credentials {
+        ServerCredentials server_credentials = 1;
+        IamCredentials iam_credentials = 2;
+    }
+}
+
+message ServerCredentials {
     string password = 1;
     string username = 2;
+}
+
+message IamCredentials {
+    string cluster_name = 1;
+    string username = 2;
+    string region = 3;
+    optional uint32 refresh_interval_minutes = 4;  // Default: 10
 }
 
 enum ProtocolVersion {
