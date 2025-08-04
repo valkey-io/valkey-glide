@@ -54,7 +54,7 @@ TAnyGlideClient = Union[TGlideClient, TSyncGlideClient]
 
 T = TypeVar("T")
 DEFAULT_TEST_LOG_LEVEL = logLevel.OFF
-DEFAULT_SYNC_TEST_LOG_LEVEL = SyncLogLevel.OFF
+DEFAULT_SYNC_TEST_LOG_LEVEL = SyncLogLevel.DEBUG
 USERNAME = "username"
 INITIAL_PASSWORD = "initial_password"
 NEW_PASSWORD = "new_secure_password"

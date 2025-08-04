@@ -1892,7 +1892,7 @@ pub(crate) unsafe fn create_cmd(ptr: *const CmdInfo) -> Result<Cmd, String> {
 /// * `ptr` must be able to be safely casted to a valid [`BatchInfo`].
 /// * `cmds` in a referred [`BatchInfo`] structure must not be `null`.
 /// * `cmds` in a referred [`BatchInfo`] structure must point to `cmd_count` consecutive [`CmdInfo`] pointers.
-///   They must be able to be safely casted to a valid to a slice of the corresponding type via [`from_raw_parts`]. See the safety documentation of [`from_raw_parts`].
+///   They must be able to safely casted to a valid to a slice of the corresponding type via [`from_raw_parts`]. See the safety documentation of [`from_raw_parts`].
 /// * Every pointer stored in `cmds` must not be `null` and must point to a valid [`CmdInfo`] structure.
 /// * All data in referred [`CmdInfo`] structure(s) should be valid. See the safety documentation of [`create_cmd`].
 pub(crate) unsafe fn create_pipeline(ptr: *const BatchInfo) -> Result<Pipeline, String> {
@@ -2644,7 +2644,6 @@ impl From<Level> for logger_core::Level {
 /// # Parameters
 ///
 /// * `level` - The severity level of the current message (e.g., Error, Warn, Info).
-/// * `logger_level` - The log level currently allowed by the logger. Messages with a level less severe than this will be ignored.
 /// * `identifier` - A pointer to a null-terminated C string identifying the source of the log message.
 /// * `message` - A pointer to a null-terminated C string containing the actual log message.
 ///
@@ -2652,17 +2651,13 @@ impl From<Level> for logger_core::Level {
 ///
 /// * `identifier` must be a valid, non-null pointer to a null-terminated UTF-8 encoded C string.
 /// * `message` must be a valid, non-null pointer to a null-terminated UTF-8 encoded C string.
+///
+/// # Note
+///
+/// The caller (Python, etc.) is responsible for filtering log messages according to the logger's current log level.
+/// This function will log any message it receives.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn log(
-    level: Level,
-    logger_level: Level,
-    identifier: *const c_char,
-    message: *const c_char,
-) {
-    if level > logger_level {
-        return;
-    }
-
+pub unsafe extern "C" fn log(level: Level, identifier: *const c_char, message: *const c_char) {
     let id_str = unsafe {
         CStr::from_ptr(identifier)
             .to_str()
