@@ -5,7 +5,7 @@ from __future__ import annotations
 import traceback
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any, Optional
 
 from cffi import FFI
 
@@ -33,13 +33,12 @@ class Logger:
     If none of these functions are called, the first log attempt will initialize a new logger with default configuration.
     """
 
-    logger_level: Optional[Level] = None
     _instance = None
+    logger_level: Level = Level.OFF
 
     def __init__(self, level: Optional[Level] = None, file_name: Optional[str] = None):
-
-        Logger.logger_level = level
-
+        self._ffi: FFI
+        self._lib: Any
         self._init_ffi()
 
         c_level = (
@@ -53,12 +52,8 @@ class Logger:
             else self._ffi.NULL
         )
 
-        if file_name is not None:
-            c_file_name = self._ffi.new("char[]", file_name.encode(ENCODING))
-        else:
-            c_file_name = self._ffi.NULL
-
-        self._lib.init(c_level, c_file_name)
+        logger_level = self._lib.init(c_level, c_file_name)
+        Logger.logger_level = Level(logger_level)
 
     @classmethod
     def init(cls, level: Optional[Level] = None, file_name: Optional[str] = None):
@@ -98,13 +93,13 @@ class Logger:
         """
         if not cls._instance:
             cls._instance = cls(None)
+        if log_level.value > Logger.logger_level.value:
+            return
         if err:
             message = f"{message}: {traceback.format_exception(err)}"
-
         c_identifier = cls._ffi.new("char[]", log_identifier.encode(ENCODING))
         c_message = cls._ffi.new("char[]", message.encode(ENCODING))
-
-        cls._lib.log(log_level.value, cls.logger_level.value, c_identifier, c_message)
+        cls._lib.log(log_level.value, c_identifier, c_message)
 
     @classmethod
     def _init_ffi(cls):
@@ -121,7 +116,7 @@ class Logger:
             } Level;
 
             Level init(const Level* level, const char* file_name);
-            void log(Level level, Level logger_level, const char* identifier, const char* message);
+            void log(Level level, const char* identifier, const char* message);
         """
         )
         cls._lib = cls._ffi.dlopen(str(LIB_FILE.resolve()))
