@@ -3,6 +3,7 @@
 
 debug/
 target/
+.env*/**
 
 # Git stuff
 .worktrees

@@ -1,0 +1,14 @@
+[project]
+name = "valkey-glide-shared"
+dynamic = ["version"]
+description = "Shared code for GLIDE Python clients"
+dependencies = [
+    # ⚠️  Note: If you add a dependency here, make sure to also add it to the requirements.txt files under glide-async and glide-sync.
+    # Once issue https://github.com/aboutcode-org/python-inspector/issues/197 is resolved, the requirements.txt file can be removed.
+    "protobuf>=6.20",
+    "typing-extensions>=4.8.0; python_version < '3.11'",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"

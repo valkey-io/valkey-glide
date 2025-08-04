@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 from typing import List, Optional
 
-from glide.config import NodeAddress
+from glide_shared.config import NodeAddress
 
 SCRIPT_FILE = (
     Path(__file__).parent.parent.parent.parent / "utils" / "cluster_manager.py"
