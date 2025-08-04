@@ -32,6 +32,14 @@ pub struct ConnectionRequest {
 pub struct AuthenticationInfo {
     pub username: Option<String>,
     pub password: Option<String>,
+    pub iam_config: Option<IamAuthenticationConfig>,
+}
+
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub struct IamAuthenticationConfig {
+    pub cluster_name: String,
+    pub region: String,
+    pub refresh_interval_minutes: Option<u32>,
 }
 
 #[derive(Default, Clone, Copy, Debug)]
@@ -134,13 +142,45 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
 
         let client_name = chars_to_string_option(&value.client_name);
         let authentication_info = value.authentication_info.0.and_then(|authentication_info| {
-            let password = chars_to_string_option(&authentication_info.password);
-            let username = chars_to_string_option(&authentication_info.username);
-            if password.is_none() && username.is_none() {
-                return None;
-            }
+            match authentication_info.credentials {
+                Some(
+                    crate::connection_request::authentication_info::Credentials::ServerCredentials(
+                        server_creds,
+                    ),
+                ) => {
+                    let password = chars_to_string_option(&server_creds.password);
+                    let username = chars_to_string_option(&server_creds.username);
+                    if password.is_none() && username.is_none() {
+                        return None;
+                    }
+                    Some(AuthenticationInfo {
+                        password,
+                        username,
+                        iam_config: None,
+                    })
+                }
+                Some(
+                    crate::connection_request::authentication_info::Credentials::IamCredentials(
+                        iam_creds,
+                    ),
+                ) => {
+                    let cluster_name = chars_to_string_option(&iam_creds.cluster_name)?;
+                    let region = chars_to_string_option(&iam_creds.region)?;
+                    let username = chars_to_string_option(&iam_creds.username);
+                    let refresh_interval_minutes = iam_creds.refresh_interval_minutes;
 
-            Some(AuthenticationInfo { password, username })
+                    Some(AuthenticationInfo {
+                        password: None,
+                        username,
+                        iam_config: Some(IamAuthenticationConfig {
+                            cluster_name,
+                            region,
+                            refresh_interval_minutes,
+                        }),
+                    })
+                }
+                None => None,
+            }
         });
 
         let database_id = value.database_id as i64;
