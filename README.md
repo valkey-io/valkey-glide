@@ -81,8 +81,12 @@ GLIDE's [documentation site](https://valkey.io/valkey-glide/) currently offers d
 - [OpenTelemetry](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#opentelemetry)
 
 **Migration Guides**
+- [go-redis](https://github.com/valkey-io/valkey-glide/wiki/Migration-Guide-go%E2%80%90redis)
 - [ioredis](https://github.com/valkey-io/valkey-glide/wiki/Migration-Guide-ioredis)
 - [Jedis](https://github.com/valkey-io/valkey-glide/wiki/Migration-Guide-Jedis)
+- [Lettuce](https://github.com/valkey-io/valkey-glide/wiki/Migration-Guide-Lettuce)
+- [Redisson](https://github.com/valkey-io/valkey-glide/wiki/Migration-Guide-redisson)
+- [redis-py](https://github.com/valkey-io/valkey-glide/wiki/Migration-Guide-redis%E2%80%90py)
 
 **Community**
 - [Contributors meeting](https://github.com/valkey-io/valkey-glide/wiki/Contributors-meeting)
