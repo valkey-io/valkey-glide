@@ -55,7 +55,7 @@ ffi/
 ```
 
 ### 📦 Packaging and Installation Notes
--	During development, glide_shared must be installed locally (editable or standard install).
+-	During development, `glide_shared` must be installed locally (editable or standard install).
 -	Each client is built and released independently, with its own isolated package name and pyproject.toml.
 -	Shared logic remains fully decoupled from both clients and reusable between them.
 
@@ -252,7 +252,7 @@ pytest -v --async-backend=trio --async-backend=asyncio
 
 ## Protobuf
 ---
-During the initial build, Python protobuf files were created in `python/python/glide/shared/protobuf`. If modifications are made to the protobuf definition files (`.proto` files located in `glide-core/src/protofuf`), it becomes necessary to regenerate the Python protobuf files.
+During the initial build, Python protobuf files were created in `python/glide-shared/glide_shared/protobuf`. If modifications are made to the protobuf definition files (`.proto` files located in `glide-core/src/protofuf`), it becomes necessary to regenerate the Python protobuf files.
 
 Protobuf files are automatically regenerated as part of the `build` process. If you only need to regenerate the protobuf files (e.g., after editing `.proto` files), you can use the standalone command the root `python/` directory:
 
@@ -260,7 +260,7 @@ Protobuf files are automatically regenerated as part of the `build` process. If 
 python3 dev.py protobuf
 ```
 
-This generates `.py` and `.pyi` interface files for type checking and places them in the `python/python/glide/shared/protobuf` folder.
+This generates `.py` and `.pyi` interface files for type checking and places them in the `python/glide-shared/glide_shared/protobuf` folder.
 
 ## Linters
 ---
