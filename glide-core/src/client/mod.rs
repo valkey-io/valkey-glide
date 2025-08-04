@@ -896,7 +896,6 @@ impl Client {
     }
 
     // todo: add option for changin service type in the request
-    //         
     /// Create an IAM token manager from authentication config if needed
     async fn create_iam_token_manager(
         auth_info: &crate::client::types::AuthenticationInfo,
@@ -930,13 +929,14 @@ impl Client {
         }
     }
 
-    /// Update the IAM token manager for this client
-    async fn update_iam_token_manager(
-        &mut self,
-        iam_token_manager: Arc<crate::iam::IAMTokenManager>,
-    ) {
-        self.iam_token_manager = Some(iam_token_manager);
-    }
+    //todo: check where to use it
+    // Update the IAM token manager for this client
+    // async fn update_iam_token_manager(
+    //     &mut self,
+    //     iam_token_manager: Arc<crate::iam::IAMTokenManager>,
+    // ) {
+    //     self.iam_token_manager = Some(iam_token_manager);
+    // }
 }
 
 fn load_cmd(code: &[u8]) -> Cmd {
