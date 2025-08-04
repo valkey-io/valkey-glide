@@ -23,7 +23,7 @@ dependencies {
     shadow group: 'org.apache.commons', name: 'commons-lang3', version: '3.13.0'
 
     // Apache Commons Pool 2 for Jedis compatibility layer
-    implementation group: 'org.apache.commons', name: 'commons-pool2', version: '2.12.0'
+    implementation group: 'org.apache.commons', name: 'commons-pool2', version: '2.12.1'
 
     implementation group: 'io.netty', name: 'netty-handler', version: '4.1.121.Final'
     // https://github.com/netty/netty/wiki/Native-transports
