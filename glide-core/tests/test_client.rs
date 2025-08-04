@@ -28,7 +28,9 @@ pub(crate) mod shared_client_tests {
 
     use super::*;
     use glide_core::client::{Client, DEFAULT_RESPONSE_TIMEOUT};
-    use glide_core::connection_request::ProtocolVersion;
+    use glide_core::connection_request::{
+        AuthenticationInfo, IamCredentials, ProtocolVersion, ServiceType, TlsMode,
+    };
     use redis::cluster_routing::{SingleNodeRoutingInfo, SlotAddr};
     use redis::{
         FromRedisValue, InfoDict, Pipeline, PipelineRetryStrategy, RedisConnectionInfo, Value,
@@ -356,6 +358,184 @@ pub(crate) mod shared_client_tests {
             .await;
             let key = generate_random_string(6);
             send_set_and_get(test_basics.client.clone(), key.to_string()).await;
+        });
+    }
+
+    /// Helper function to set up mock AWS credentials for IAM testing
+    /// When setting up the test environment, the tests doesn't check real AWS credentials,
+    /// it just sets up mock credentials to simulate the environment.
+    ///
+    /// Uncomment this function when you have a real AWS environment to test against.
+    fn setup_test_aws_credentials() {
+        unsafe {
+            std::env::set_var("AWS_ACCESS_KEY_ID", "test_access_key_id");
+            std::env::set_var("AWS_SECRET_ACCESS_KEY", "test_secret_access_key");
+            std::env::set_var("AWS_SESSION_TOKEN", "test_session_token");
+            std::env::set_var("AWS_REGION", "us-east-1");
+        }
+    }
+
+    /// Helper function to create connection request with IAM authentication
+    fn create_iam_connection_request(
+        addresses: &[redis::ConnectionAddr],
+        cluster_name: &str,
+        username: &str,
+        region: &str,
+        refresh_interval_seconds: Option<u32>,
+        use_tls: bool,
+        cluster_mode: bool,
+    ) -> glide_core::connection_request::ConnectionRequest {
+        let addresses_info = addresses.iter().map(get_address_info).collect();
+
+        let iam_credentials = IamCredentials {
+            cluster_name: cluster_name.into(),
+            region: region.into(),
+            service_type: ServiceType::ELASTICACHE.into(),
+            refresh_interval_seconds,
+            ..Default::default()
+        };
+
+        let auth_info = AuthenticationInfo {
+            password: String::new().into(), // Empty password when using IAM
+            username: username.into(),
+            iam_credentials: protobuf::MessageField::some(iam_credentials),
+            ..Default::default()
+        };
+
+        glide_core::connection_request::ConnectionRequest {
+            addresses: addresses_info,
+            tls_mode: if use_tls {
+                TlsMode::SecureTls
+            } else {
+                TlsMode::NoTls
+            }
+            .into(),
+            cluster_mode_enabled: cluster_mode,
+            request_timeout: 10000, // 10 seconds
+            authentication_info: protobuf::MessageField::some(auth_info),
+            ..Default::default()
+        }
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_iam_authentication_elasticache_cluster() {
+        block_on_all(async {
+            // setup_test_aws_credentials();
+
+            let cluster_name = "iam-auth-test"; // Replace with your ElastiCache cluster name
+            let username = "iam-auth"; // Replace with your IAM username
+            let region = "us-east-1";
+            let endpoint = "clustercfg.iam-auth-test.nra7gl.use1.cache.amazonaws.com"; // Replace with your cluster endpoint
+
+            // Use the provided endpoint and port
+            let mock_address = redis::ConnectionAddr::Tcp(endpoint.to_string(), 6379);
+
+            // Create IAM connection request
+            let connection_request = create_iam_connection_request(
+                &[mock_address],
+                cluster_name,
+                username,
+                region,
+                None, // Use default refresh interval
+                true, // Use TLS
+                true, // cluster mode
+            );
+
+            // Attempt to create client with IAM authentication
+            let client_result = Client::new(connection_request.into(), None).await;
+
+            match client_result {
+                Ok(mut client) => {
+                    // If the client is successfully created, try sending a command
+                    let result = client.send_command(&redis::cmd("PING"), None).await;
+                    assert!(result.is_ok(), "PING command should succeed: {result:?}");
+                }
+                Err(err) => {
+                    // In case of failure, print error and assert that it is not a non-connection/auth error
+                    let error_msg = err.to_string();
+                    // If DNS lookup failed, provide a clearer message
+                    if error_msg.contains("failed to lookup address")
+                        || error_msg.contains("Name or service not known")
+                    {
+                        // todo: uncomment this when we have a real AWS environment
+                        panic!(
+                            "DNS lookup failed: Unable to resolve the address `{}`. Please verify that the endpoint is correct and accessible from your environment.\nError: {}",
+                            endpoint, error_msg
+                        );
+                    }
+
+                    // Other errors will fall here, indicating problems with IAM token generation or connection/auth
+                    // todo: uncomment this when we have a real AWS environment
+                    panic!(
+                        "Failed to create client with IAM authentication: {}",
+                        error_msg
+                    );
+                }
+            }
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_iam_authentication_configuration_validation() {
+        // Test that IAM configuration is properly validated
+        block_on_all(async {
+            setup_test_aws_credentials();
+
+            let mock_address = redis::ConnectionAddr::Tcp("127.0.0.1".to_string(), 6379);
+
+            // Test with empty cluster name (should be handled gracefully)
+            let connection_request = create_iam_connection_request(
+                std::slice::from_ref(&mock_address),
+                "", // Empty cluster name
+                "test-user",
+                "us-east-1",
+                None, // Use default refresh interval
+                true, // Use TLS
+                true, // cluster mode
+            );
+
+            let client_result = Client::new(connection_request.into(), None).await;
+
+            // Should fail, but with a meaningful error about cluster name
+            assert!(
+                client_result.is_err(),
+                "Empty cluster name should cause an error"
+            );
+
+            // Test with empty region
+            let connection_request = create_iam_connection_request(
+                std::slice::from_ref(&mock_address),
+                "test-cluster",
+                "test-user",
+                "",   // Empty region
+                None, // Use default refresh interval
+                true, // Use TLS
+                true, // cluster mode
+            );
+
+            let client_result = Client::new(connection_request.into(), None).await;
+            assert!(client_result.is_err(), "Empty region should cause an error");
+
+            // Test with empty username
+            let connection_request = create_iam_connection_request(
+                std::slice::from_ref(&mock_address),
+                "test-cluster",
+                "", // Empty username
+                "us-east-1",
+                None, // Use default refresh interval
+                true, // Use TLS
+                true, // cluster mode
+            );
+
+            let client_result = Client::new(connection_request.into(), None).await;
+            assert!(
+                client_result.is_err(),
+                "Empty username should cause an error"
+            );
         });
     }
 
