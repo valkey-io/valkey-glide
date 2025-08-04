@@ -331,7 +331,7 @@ def build_sync_client(
     # Build the FFI library
     build_args = ["cargo", "build"]
     if release:
-        build_args += ["--release", "--strip"]
+        build_args += ["--release"]
 
     run_command(
         build_args,
