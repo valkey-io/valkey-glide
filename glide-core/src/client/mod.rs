@@ -356,8 +356,9 @@ impl Client {
             }
         };
 
+        //todo: check what to do here
         // Now we can safely update the IAM token manager without holding the lock
-        if let Some(iam_manager) = lazy_iam_manager {
+        if let Some(_iam_manager) = lazy_iam_manager {
             // Transfer the IAM token manager from lazy client to main client
             // This is done safely using Arc without requiring unsafe code
             // Note: We can't call update_iam_token_manager here because self is &self, not &mut self
@@ -894,6 +895,8 @@ impl Client {
         }
     }
 
+    // todo: add option for changin service type in the request
+    //         
     /// Create an IAM token manager from authentication config if needed
     async fn create_iam_token_manager(
         auth_info: &crate::client::types::AuthenticationInfo,
@@ -904,8 +907,8 @@ impl Client {
                     iam_config.cluster_name.clone(),
                     username.clone(),
                     iam_config.region.clone(),
+                    crate::iam::ServiceType::ElastiCache, // Default to ElastiCache service type
                     iam_config.refresh_interval_minutes,
-                    None, // Default to ElastiCache service type
                 )
                 .await
                 {
