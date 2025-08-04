@@ -8,7 +8,7 @@ The Valkey GLIDE Python wrapper consists of both Python and Rust code. Rust bind
 ## 📁 Python Project Structure
 ---
 
-The python/ directory contains three separate components:
+The `python/` directory contains three separate components:
 
 
 #### 🔹 glide-async/
