@@ -191,6 +191,7 @@ pub enum ClientWrapper {
 pub struct LazyClient {
     config: ConnectionRequest,
     push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
+    iam_token_manager: Option<Arc<crate::iam::IAMTokenManager>>,
 }
 
 #[derive(Clone)]
@@ -199,6 +200,9 @@ pub struct Client {
     request_timeout: Duration,
     // Setting this counter to limit the inflight requests, in case of any queue is blocked, so we return error to the customer.
     inflight_requests_allowed: Arc<AtomicIsize>,
+    // IAM token manager for automatic credential refresh - simplified!
+    // todo: should it be Arc<RwLock<Option<crate::iam::IAMTokenManager>>> like before the change?
+    iam_token_manager: Option<Arc<crate::iam::IAMTokenManager>>,
 }
 
 async fn run_with_timeout<T>(
@@ -338,16 +342,35 @@ impl Client {
             }
         }
 
+        // Handle lazy client initialization
+        let (config, push_sender, lazy_iam_manager) = {
+            let mut guard = self.internal_client.write().await;
+            if let ClientWrapper::Lazy(lazy_client) = &mut *guard {
+                let config = lazy_client.config.clone();
+                let push_sender = lazy_client.push_sender.clone();
+                let lazy_iam_manager = lazy_client.iam_token_manager.clone();
+                (config, push_sender, lazy_iam_manager)
+            } else {
+                // Another thread initialized it while we were waiting
+                return Ok(guard.clone());
+            }
+        };
+
+        //todo: check what to do here
+        // Now we can safely update the IAM token manager without holding the lock
+        if let Some(_iam_manager) = lazy_iam_manager {
+            // Transfer the IAM token manager from lazy client to main client
+            // This is done safely using Arc without requiring unsafe code
+            // Note: We can't call update_iam_token_manager here because self is &self, not &mut self
+            // Instead, we'll handle this in the Client::new method or make the field mutable
+        }
+
+        // Continue with client initialization
+        let mut config = config;
+        config.lazy_connect = false;
+
         let mut guard = self.internal_client.write().await;
-
-        if let ClientWrapper::Lazy(lazy_client) = &mut *guard {
-            let mut config = lazy_client.config.clone();
-            let push_sender = lazy_client.push_sender.clone();
-
-            // When initializing the actual connection from a lazy client,
-            // the underlying connection attempt itself should not be lazy.
-            config.lazy_connect = false;
-
+        if let ClientWrapper::Lazy(_) = &*guard {
             // Create the appropriate client based on configuration
             let real_client = if config.cluster_mode_enabled {
                 // Create cluster client
@@ -781,7 +804,12 @@ impl Client {
         {
             Ok(result) => {
                 if immediate_auth {
-                    self.send_immediate_auth(password).await
+                    let routing = Some(RoutingInfo::MultiNode((
+                        MultipleNodeRoutingInfo::AllNodes,
+                        Some(ResponsePolicy::AllSucceeded),
+                    )));
+                    self.send_immediate_auth_with_password(routing, password)
+                        .await
                 } else {
                     result
                 }
@@ -793,33 +821,58 @@ impl Client {
         }
     }
 
-    async fn send_immediate_auth(&mut self, password: Option<String>) -> RedisResult<Value> {
-        match &password {
-            Some(pw) if pw.is_empty() => Err(RedisError::from((
-                ErrorKind::UserOperationError,
-                "Empty password provided for authentication",
-            ))),
-            None => Err(RedisError::from((
-                ErrorKind::UserOperationError,
-                "No password provided for authentication",
-            ))),
-            Some(password) => {
-                let routing = RoutingInfo::MultiNode((
-                    MultipleNodeRoutingInfo::AllNodes,
-                    Some(ResponsePolicy::AllSucceeded),
-                ));
-                let mut cmd = redis::cmd("AUTH");
-                if let Some(username) = self.get_username().await? {
-                    cmd.arg(username);
-                }
-                cmd.arg(password);
-                self.send_command(&cmd, Some(routing)).await
+    /// Send AUTH command using IAM token (preferred) or the provided password
+    /// This method is used when we have a specific password to authenticate with
+    async fn send_immediate_auth_with_password(
+        &mut self,
+        routing: Option<RoutingInfo>,
+        password: Option<String>,
+    ) -> RedisResult<Value> {
+        // Check if we have an IAM token manager first (takes precedence)
+        let token_option = if let Some(iam_manager) = &self.iam_token_manager {
+            Some(iam_manager.get_token().await)
+        } else {
+            None
+        };
+
+        // If we have an IAM token, use it for authentication
+        if let Some(token) = token_option {
+            let routing = routing.unwrap_or(RoutingInfo::MultiNode((
+                MultipleNodeRoutingInfo::AllNodes,
+                Some(ResponsePolicy::AllSucceeded),
+            )));
+            let mut cmd = redis::cmd("AUTH");
+            cmd.arg(&token);
+            return self.send_command(&cmd, Some(routing)).await;
+        }
+
+        // For password-based authentication, use the provided password
+        if let Some(password) = password {
+            let routing = routing.unwrap_or(RoutingInfo::MultiNode((
+                MultipleNodeRoutingInfo::AllNodes,
+                Some(ResponsePolicy::AllSucceeded),
+            )));
+
+            // Get username if we have one configured
+            let username = self.get_username().await.ok().flatten();
+
+            let mut cmd = redis::cmd("AUTH");
+            if let Some(username) = username {
+                cmd.arg(&username);
             }
+            cmd.arg(&password);
+            self.send_command(&cmd, Some(routing)).await
+        } else {
+            // No password provided and no IAM token - return error for immediate auth
+            Err(RedisError::from((
+                ErrorKind::AuthenticationFailed,
+                "Immediate authentication requested but no password or IAM token available",
+            )))
         }
     }
 
     /// Returns the username if one was configured during client creation. Otherwise, returns None.
-    async fn get_username(&mut self) -> RedisResult<Option<String>> {
+    pub async fn get_username(&mut self) -> RedisResult<Option<String>> {
         let client = self.get_or_initialize_client().await?;
 
         match client {
@@ -840,6 +893,49 @@ impl Client {
             ClientWrapper::Standalone(client) => Ok(client.get_username()),
             ClientWrapper::Lazy(_) => unreachable!("Lazy client should have been initialized"),
         }
+    }
+
+    // todo: add option for changin service type in the request
+    //         
+    /// Create an IAM token manager from authentication config if needed
+    async fn create_iam_token_manager(
+        auth_info: &crate::client::types::AuthenticationInfo,
+    ) -> Option<Arc<crate::iam::IAMTokenManager>> {
+        if let Some(iam_config) = &auth_info.iam_config {
+            if let Some(username) = &auth_info.username {
+                match crate::iam::IAMTokenManager::new(
+                    iam_config.cluster_name.clone(),
+                    username.clone(),
+                    iam_config.region.clone(),
+                    crate::iam::ServiceType::ElastiCache, // Default to ElastiCache service type
+                    iam_config.refresh_interval_minutes,
+                )
+                .await
+                {
+                    Ok(mut token_manager) => {
+                        token_manager.start_refresh_task();
+                        Some(Arc::new(token_manager))
+                    }
+                    Err(e) => {
+                        log_error("Failed to create IAM token manager", format!("{e}"));
+                        None
+                    }
+                }
+            } else {
+                log_error("IAM authentication requires a username", "");
+                None
+            }
+        } else {
+            None
+        }
+    }
+
+    /// Update the IAM token manager for this client
+    async fn update_iam_token_manager(
+        &mut self,
+        iam_token_manager: Arc<crate::iam::IAMTokenManager>,
+    ) {
+        self.iam_token_manager = Some(iam_token_manager);
     }
 }
 
@@ -1133,10 +1229,18 @@ impl Client {
         ));
 
         tokio::time::timeout(DEFAULT_CLIENT_CREATION_TIMEOUT, async move {
+            // Create IAM token manager if needed
+            let iam_token_manager = if let Some(auth_info) = &request.authentication_info {
+                Self::create_iam_token_manager(auth_info).await
+            } else {
+                None
+            };
+
             let internal_client = if request.lazy_connect {
                 ClientWrapper::Lazy(Box::new(LazyClient {
                     config: request,
                     push_sender,
+                    iam_token_manager: iam_token_manager.clone(),
                 }))
             } else if request.cluster_mode_enabled {
                 let client = create_cluster_client(request, push_sender)
@@ -1155,6 +1259,7 @@ impl Client {
                 internal_client: Arc::new(RwLock::new(internal_client)),
                 request_timeout,
                 inflight_requests_allowed,
+                iam_token_manager,
             })
         })
         .await
