@@ -6,9 +6,31 @@ use logger_core::{log_error, log_info};
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
+use thiserror::Error;
 use tokio::sync::{Notify, RwLock};
 use tokio::task::JoinHandle;
 use tokio::time::{MissedTickBehavior, interval};
+
+const MAX_REFRESH_INTERVAL: u32 = 720; // Maximum refresh interval in minutes (12 hours)
+const DEFAULT_REFRESH_INTERVAL: u32 = 11 * 60; // Default refresh interval (11 hours) in minutes
+
+/// Custom error type for IAM operations in Glide
+#[derive(Debug, Error)]
+pub enum GlideIAMError {
+    #[error(
+        "IAM authentication error: Invalid refresh interval. Must be between 0 and {max}, got: {actual}"
+    )]
+    InvalidRefreshInterval { max: u32, actual: u32 },
+
+    #[error("IAM authentication error: Failed to get AWS credentials: {0}")]
+    CredentialsError(String),
+
+    #[error("IAM authentication error: Token generation failed: {0}")]
+    TokenGenerationError(String),
+
+    #[error("IAM authentication error: {0}")]
+    Other(String),
+}
 
 // Service type configuration for IAM authentication
 #[derive(Clone, Debug)]
@@ -32,7 +54,7 @@ impl ServiceType {
         }
     }
 }
-
+#[derive(Clone, Debug)]
 /// Internal state for IAM token manager
 struct IamTokenState {
     /// AWS region for signing requests
@@ -49,10 +71,11 @@ struct IamTokenState {
     refresh_interval_minutes: u32,
 }
 
+#[derive(Debug)]
 /// IAM-based authentication token manager for ElastiCache/MemoryDB
 ///
 /// Manages automatic token refresh using AWS IAM credentials and SigV4 signing.
-/// Tokens are valid for 15 minutes and refreshed every 8 minutes by default.
+/// Tokens are valid for 15 minutes and refreshed every 11 hours by default.
 pub struct IAMTokenManager {
     /// Internal state protected by a single RwLock
     iam_token_state: Arc<RwLock<IamTokenState>>,
@@ -72,14 +95,28 @@ impl IAMTokenManager {
         region: String,
         service_type: ServiceType,
         refresh_interval_minutes: Option<u32>,
-    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<Self, GlideIAMError> {
+        // Validate refresh_interval_minutes is between 0 and 720 (12 hours)
+        let validated_refresh_interval = match refresh_interval_minutes {
+            Some(interval) => {
+                if interval > MAX_REFRESH_INTERVAL {
+                    return Err(GlideIAMError::InvalidRefreshInterval {
+                        max: MAX_REFRESH_INTERVAL,
+                        actual: interval,
+                    });
+                }
+                interval
+            }
+            None => DEFAULT_REFRESH_INTERVAL,
+        };
+
         let state = IamTokenState {
             region,
             cluster_name,
             username,
             service_type,
             cached_token: String::new(), // Will be set below
-            refresh_interval_minutes: refresh_interval_minutes.unwrap_or(8),
+            refresh_interval_minutes: validated_refresh_interval,
         };
 
         // Generate initial token using the state
@@ -173,14 +210,11 @@ impl IAMTokenManager {
         state_guard.cached_token.clone()
     }
 
-    // todo: test it works well
     /// This method creates an ElastiCache/MemoryDB authentication token using AWS IAM credentials
     /// and SigV4 signing. The generated token is valid for 15 minutes and includes the signed
     /// username for authentication. It is designed to be used in environments where secure
     /// authentication to AWS services is required.
-    async fn generate_token_static(
-        state: &IamTokenState,
-    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    async fn generate_token_static(state: &IamTokenState) -> Result<String, GlideIAMError> {
         // Load AWS credentials from the environment or AWS config files
         let config = aws_config::defaults(BehaviorVersion::latest())
             .region(aws_config::Region::new(state.region.to_string()))
@@ -188,17 +222,17 @@ impl IAMTokenManager {
             .await;
 
         // Get credentials provider from the loaded config
-        let credentials_provider = config
-            .credentials_provider()
-            .ok_or("No AWS credentials provider found")?;
+        let credentials_provider = config.credentials_provider().ok_or(GlideIAMError::Other(
+            "No AWS credentials provider found".to_string(),
+        ))?;
 
         // Retrieve credentials
         let creds = credentials_provider
             .provide_credentials()
             .await
-            .map_err(|e| format!("Failed to get AWS credentials: {e}"))?;
+            .map_err(|e| GlideIAMError::CredentialsError(e.to_string()))?;
 
-        // todo: why shouldn't it be a singleton? instead of creating a new one every time?
+        // todo: check about memoryDB auth as provider name. Do we care about it?
         // Create AWS identity from credentials
         let identity = Credentials::new(
             creds.access_key_id(),
@@ -233,7 +267,9 @@ impl IAMTokenManager {
             .time(signing_time)
             .settings(signing_settings)
             .build()
-            .map_err(|e| format!("Failed to build signing params: {e}"))?
+            .map_err(|e| {
+                GlideIAMError::TokenGenerationError(format!("Failed to build signing params: {e}"))
+            })?
             .into();
 
         // Create signable request
@@ -244,11 +280,15 @@ impl IAMTokenManager {
             std::iter::empty(),
             SignableBody::Bytes(b""),
         )
-        .map_err(|e| format!("Failed to create signable request: {e}"))?;
+        .map_err(|e| {
+            GlideIAMError::TokenGenerationError(format!("Failed to create signable request: {e}"))
+        })?;
 
         // Sign the request
         let (signing_instructions, _signature) = sign(signable_request, &signing_params)
-            .map_err(|e| format!("Failed to sign request: {e}"))?
+            .map_err(|e| {
+                GlideIAMError::TokenGenerationError(format!("Failed to sign request: {e}"))
+            })?
             .into_parts();
 
         // Build a temporary HTTP request to apply the signing instructions
@@ -257,7 +297,9 @@ impl IAMTokenManager {
             .uri(&request_url)
             .header("Host", &hostname)
             .body("")
-            .map_err(|e| format!("Failed to build temp HTTP request: {e}"))?;
+            .map_err(|e| {
+                GlideIAMError::TokenGenerationError(format!("Failed to build HTTP request: {e}"))
+            })?;
 
         // Apply the signing instructions to get the authorization header
         signing_instructions.apply_to_request_http1x(&mut temp_request);
@@ -266,9 +308,15 @@ impl IAMTokenManager {
         let auth_header = temp_request
             .headers()
             .get("authorization")
-            .ok_or("Authorization header not found in signed request")?
+            .ok_or(GlideIAMError::TokenGenerationError(
+                "Authorization header not found in signed request".to_string(),
+            ))?
             .to_str()
-            .map_err(|e| format!("Failed to convert authorization header to string: {e}"))?;
+            .map_err(|e| {
+                GlideIAMError::TokenGenerationError(format!(
+                    "Failed to convert authorization header to string: {e}"
+                ))
+            })?;
 
         // The ElastiCache auth token format: username?query_params&Authorization=signature
         let token = format!(
@@ -282,7 +330,7 @@ impl IAMTokenManager {
     }
 
     /// Force refresh the token immediately
-    pub async fn refresh_token(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn refresh_token(&self) -> Result<(), GlideIAMError> {
         let new_token = {
             let state_guard = self.iam_token_state.read().await;
             Self::generate_token_static(&state_guard).await?
@@ -402,9 +450,7 @@ mod tests {
             "Token generation should succeed with valid credentials"
         );
 
-        // todo: add this into create_test_state
         let token = result.unwrap();
-
         // Save token to JSON file for inspection
         let state = create_test_state(region, cluster_name, username, service_type);
         save_token_to_file(
@@ -777,7 +823,7 @@ mod tests {
             username.clone(),
             region.clone(),
             ServiceType::ElastiCache, // Service type is now required
-            None,                     // Should default to 8 minutes
+            None,                     // Should default to 11 hours
         )
         //todo: fix the default to 11 hours
         .await
@@ -798,5 +844,61 @@ mod tests {
             token.contains("Action=connect"),
             "Token should contain Action=connect"
         );
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_iam_token_manager_refresh_interval_validation() {
+        initialize_test_environment(); // Ensure test environment is clean
+        setup_test_credentials();
+
+        let cluster_name = "test-cluster".to_string();
+        let username = "test-user".to_string();
+        let region = "us-east-1".to_string();
+
+        // Test valid refresh intervals
+        let valid_intervals = [0, 1, 360, 720]; // 0 minutes, 1 minute, 6 hours, 12 hours
+        for interval in valid_intervals {
+            let result = IAMTokenManager::new(
+                cluster_name.clone(),
+                username.clone(),
+                region.clone(),
+                ServiceType::ElastiCache,
+                Some(interval),
+            )
+            .await;
+
+            assert!(
+                result.is_ok(),
+                "IAMTokenManager creation should succeed with valid interval: {interval}"
+            );
+        }
+
+        // Test invalid refresh intervals (greater than 720)
+        let invalid_intervals = [721, 1000, 1440]; // 12 hours + 1 minute, ~16.7 hours, 24 hours
+        for interval in invalid_intervals {
+            let result = IAMTokenManager::new(
+                cluster_name.clone(),
+                username.clone(),
+                region.clone(),
+                ServiceType::ElastiCache,
+                Some(interval),
+            )
+            .await;
+
+            assert!(
+                result.is_err(),
+                "IAMTokenManager creation should fail with invalid interval: {interval}"
+            );
+
+            let error = result.unwrap_err();
+            match error {
+                GlideIAMError::InvalidRefreshInterval { max, actual } => {
+                    assert_eq!(max, 720, "Max value should be 720");
+                    assert_eq!(actual, interval, "Actual value should match input interval");
+                }
+                _ => panic!("Expected InvalidRefreshInterval error, got: {error:?}"),
+            }
+        }
     }
 }
