@@ -1476,6 +1476,355 @@ func (suite *GlideTestSuite) TestHRandField() {
 	})
 }
 
+// Hash field expiration tests (Valkey 9.0+)
+
+func (suite *GlideTestSuite) TestHSetEx_WithExpiration() {
+	suite.SkipIfServerVersionLowerThan("9.0.0", suite.T())
+
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		key := uuid.NewString()
+		fields := map[string]string{"field1": "value1", "field2": "value2"}
+
+		// Set fields with 10 second expiration
+		options := options.NewHSetExOptions().SetExpiry(options.NewExpiryIn(10 * time.Second))
+		result, err := client.HSetEx(context.Background(), key, fields, options)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), result)
+
+		// Verify fields were set
+		values, err := client.HMGet(context.Background(), key, []string{"field1", "field2"})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "value1", values[0].Value())
+		assert.Equal(suite.T(), "value2", values[1].Value())
+
+		// Verify TTL was set
+		ttls, err := client.HTtl(context.Background(), key, []string{"field1", "field2"})
+		assert.NoError(suite.T(), err)
+		assert.True(suite.T(), ttls[0] > 0 && ttls[0] <= 10)
+		assert.True(suite.T(), ttls[1] > 0 && ttls[1] <= 10)
+	})
+}
+
+func (suite *GlideTestSuite) TestHGetEx_WithExpiration() {
+	suite.SkipIfServerVersionLowerThan("9.0.0", suite.T())
+
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		key := uuid.NewString()
+		fields := map[string]string{"field1": "value1", "field2": "value2"}
+
+		// First set some fields
+		result, err := client.HSet(context.Background(), key, fields)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), result)
+
+		// Get fields and set 5 second expiration
+		options := options.NewHGetExOptions().SetExpiry(options.NewExpiryIn(5 * time.Second))
+		values, err := client.HGetEx(context.Background(), key, []string{"field1", "field2"}, options)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "value1", values[0].Value())
+		assert.Equal(suite.T(), "value2", values[1].Value())
+
+		// Verify TTL was set
+		ttls, err := client.HTtl(context.Background(), key, []string{"field1", "field2"})
+		assert.NoError(suite.T(), err)
+		assert.True(suite.T(), ttls[0] > 0 && ttls[0] <= 5)
+		assert.True(suite.T(), ttls[1] > 0 && ttls[1] <= 5)
+	})
+}
+
+func (suite *GlideTestSuite) TestHExpire_WithFields() {
+	suite.SkipIfServerVersionLowerThan("9.0.0", suite.T())
+
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		key := uuid.NewString()
+		fields := map[string]string{"field1": "value1", "field2": "value2"}
+
+		// First set some fields
+		result, err := client.HSet(context.Background(), key, fields)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), result)
+
+		// Set 30 second expiration on fields
+		expireResult, err := client.HExpire(context.Background(), key, 30*time.Second, []string{"field1", "field2"}, nil)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), expireResult[0]) // 1 means expiration was set
+		assert.Equal(suite.T(), int64(1), expireResult[1]) // 1 means expiration was set
+
+		// Verify TTL was set
+		ttls, err := client.HTtl(context.Background(), key, []string{"field1", "field2"})
+		assert.NoError(suite.T(), err)
+		assert.True(suite.T(), ttls[0] > 0 && ttls[0] <= 30)
+		assert.True(suite.T(), ttls[1] > 0 && ttls[1] <= 30)
+	})
+}
+
+func (suite *GlideTestSuite) TestHExpireAt_WithFields() {
+	suite.SkipIfServerVersionLowerThan("9.0.0", suite.T())
+
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		key := uuid.NewString()
+		fields := map[string]string{"field1": "value1", "field2": "value2"}
+
+		// First set some fields
+		result, err := client.HSet(context.Background(), key, fields)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), result)
+
+		// Set expiration using Unix timestamp (60 seconds from now)
+		futureTime := time.Now().Add(60 * time.Second)
+		expireResult, err := client.HExpireAt(context.Background(), key, futureTime, []string{"field1", "field2"}, nil)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), expireResult[0]) // 1 means expiration was set
+		assert.Equal(suite.T(), int64(1), expireResult[1]) // 1 means expiration was set
+
+		// Verify TTL was set (should be around 60 seconds)
+		ttls, err := client.HTtl(context.Background(), key, []string{"field1", "field2"})
+		assert.NoError(suite.T(), err)
+		assert.True(suite.T(), ttls[0] > 50 && ttls[0] <= 60)
+		assert.True(suite.T(), ttls[1] > 50 && ttls[1] <= 60)
+	})
+}
+
+func (suite *GlideTestSuite) TestHPExpire_WithFields() {
+	suite.SkipIfServerVersionLowerThan("9.0.0", suite.T())
+
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		key := uuid.NewString()
+		fields := map[string]string{"field1": "value1", "field2": "value2"}
+
+		// First set some fields
+		result, err := client.HSet(context.Background(), key, fields)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), result)
+
+		// Set 30 second expiration on fields
+		expireResult, err := client.HPExpire(context.Background(), key, 30*time.Second, []string{"field1", "field2"}, nil)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), expireResult[0]) // 1 means expiration was set
+		assert.Equal(suite.T(), int64(1), expireResult[1]) // 1 means expiration was set
+
+		// Verify TTL was set (in milliseconds)
+		ttls, err := client.HPTtl(context.Background(), key, []string{"field1", "field2"})
+		assert.NoError(suite.T(), err)
+		assert.True(suite.T(), ttls[0] > 20000 && ttls[0] <= 30000)
+		assert.True(suite.T(), ttls[1] > 20000 && ttls[1] <= 30000)
+	})
+}
+
+func (suite *GlideTestSuite) TestHPExpireAt_WithFields() {
+	suite.SkipIfServerVersionLowerThan("9.0.0", suite.T())
+
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		key := uuid.NewString()
+		fields := map[string]string{"field1": "value1", "field2": "value2"}
+
+		// First set some fields
+		result, err := client.HSet(context.Background(), key, fields)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), result)
+
+		// Set expiration using Unix timestamp (60 seconds from now)
+		futureTime := time.Now().Add(60 * time.Second)
+		expireResult, err := client.HPExpireAt(context.Background(), key, futureTime, []string{"field1", "field2"}, nil)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), expireResult[0]) // 1 means expiration was set
+		assert.Equal(suite.T(), int64(1), expireResult[1]) // 1 means expiration was set
+
+		// Verify TTL was set (should be around 60000 milliseconds)
+		ttls, err := client.HPTtl(context.Background(), key, []string{"field1", "field2"})
+		assert.NoError(suite.T(), err)
+		assert.True(suite.T(), ttls[0] > 50000 && ttls[0] <= 60000)
+		assert.True(suite.T(), ttls[1] > 50000 && ttls[1] <= 60000)
+	})
+}
+
+func (suite *GlideTestSuite) TestHPersist_RemoveExpiration() {
+	suite.SkipIfServerVersionLowerThan("9.0.0", suite.T())
+
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		key := uuid.NewString()
+		fields := map[string]string{"field1": "value1", "field2": "value2"}
+
+		// Set fields with expiration
+		options := options.NewHSetExOptions().SetExpiry(options.NewExpiryIn(60 * time.Second))
+		result, err := client.HSetEx(context.Background(), key, fields, options)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), result)
+
+		// Verify expiration is set
+		ttls, err := client.HTtl(context.Background(), key, []string{"field1", "field2"})
+		assert.NoError(suite.T(), err)
+		assert.True(suite.T(), ttls[0] > 0)
+		assert.True(suite.T(), ttls[1] > 0)
+
+		// Remove expiration from fields
+		persistResult, err := client.HPersist(context.Background(), key, []string{"field1", "field2"})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), persistResult[0]) // 1 means expiration was removed
+		assert.Equal(suite.T(), int64(1), persistResult[1]) // 1 means expiration was removed
+
+		// Verify expiration is removed
+		ttls, err = client.HTtl(context.Background(), key, []string{"field1", "field2"})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(-1), ttls[0]) // -1 means field exists but has no expiration
+		assert.Equal(suite.T(), int64(-1), ttls[1]) // -1 means field exists but has no expiration
+	})
+}
+
+func (suite *GlideTestSuite) TestHTtl_WithExpiringFields() {
+	suite.SkipIfServerVersionLowerThan("9.0.0", suite.T())
+
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		key := uuid.NewString()
+		fields := map[string]string{"field1": "value1", "field2": "value2", "field3": "value3"}
+
+		// Set fields with expiration
+		options := options.NewHSetExOptions().SetExpiry(options.NewExpiryIn(60 * time.Second))
+		result, err := client.HSetEx(context.Background(), key, fields, options)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), result)
+
+		// Get TTL for fields
+		ttls, err := client.HTtl(context.Background(), key, []string{"field1", "field2", "field3"})
+		assert.NoError(suite.T(), err)
+		assert.True(suite.T(), ttls[0] > 0 && ttls[0] <= 60)
+		assert.True(suite.T(), ttls[1] > 0 && ttls[1] <= 60)
+		assert.True(suite.T(), ttls[2] > 0 && ttls[2] <= 60)
+
+		// Test non-existent field
+		ttls, err = client.HTtl(context.Background(), key, []string{"nonexistent"})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(-2), ttls[0]) // -2 means field doesn't exist
+
+		// Test field without expiration
+		result2, err := client.HSet(context.Background(), key, map[string]string{"field4": "value4"})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), result2)
+		ttls, err = client.HTtl(context.Background(), key, []string{"field4"})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(-1), ttls[0]) // -1 means field exists but has no expiration
+	})
+}
+
+func (suite *GlideTestSuite) TestHPTtl_WithExpiringFields() {
+	suite.SkipIfServerVersionLowerThan("9.0.0", suite.T())
+
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		key := uuid.NewString()
+		fields := map[string]string{"field1": "value1", "field2": "value2"}
+
+		// Set fields with expiration in milliseconds
+		expireResult, err := client.HPExpire(context.Background(), key, 60*time.Second, []string{"field1", "field2"}, nil)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(-2), expireResult[0]) // -2 means field doesn't exist, so set it first
+		assert.Equal(suite.T(), int64(-2), expireResult[1])
+
+		// First set the fields
+		result2, err := client.HSet(context.Background(), key, fields)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), result2)
+
+		// Now set expiration
+		expireResult2, err := client.HPExpire(context.Background(), key, 60*time.Second, []string{"field1", "field2"}, nil)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), expireResult2[0]) // 1 means expiration was set
+		assert.Equal(suite.T(), int64(1), expireResult2[1])
+
+		// Get TTL for fields in milliseconds
+		ttls, err := client.HPTtl(context.Background(), key, []string{"field1", "field2"})
+		assert.NoError(suite.T(), err)
+		assert.True(suite.T(), ttls[0] > 50000 && ttls[0] <= 60000)
+		assert.True(suite.T(), ttls[1] > 50000 && ttls[1] <= 60000)
+
+		// Test non-existent field
+		ttls, err = client.HPTtl(context.Background(), key, []string{"nonexistent"})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(-2), ttls[0]) // -2 means field doesn't exist
+	})
+}
+
+func (suite *GlideTestSuite) TestHExpireTime_WithExpiringFields() {
+	suite.SkipIfServerVersionLowerThan("9.0.0", suite.T())
+
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		key := uuid.NewString()
+		fields := map[string]string{"field1": "value1", "field2": "value2"}
+
+		// First set some fields
+		result, err := client.HSet(context.Background(), key, fields)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), result)
+
+		// Set expiration using Unix timestamp (60 seconds from now)
+		futureTime := time.Now().Add(60 * time.Second)
+		expireResult, err := client.HExpireAt(context.Background(), key, futureTime, []string{"field1", "field2"}, nil)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), expireResult[0]) // 1 means expiration was set
+		assert.Equal(suite.T(), int64(1), expireResult[1])
+
+		// Get expiration time for fields
+		expireTimes, err := client.HExpireTime(context.Background(), key, []string{"field1", "field2"})
+		assert.NoError(suite.T(), err)
+		futureTimestamp := futureTime.Unix()
+		assert.True(suite.T(), expireTimes[0] >= futureTimestamp-10 && expireTimes[0] <= futureTimestamp+10)
+		assert.True(suite.T(), expireTimes[1] >= futureTimestamp-10 && expireTimes[1] <= futureTimestamp+10)
+
+		// Test non-existent field
+		expireTimes, err = client.HExpireTime(context.Background(), key, []string{"nonexistent"})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(-2), expireTimes[0]) // -2 means field doesn't exist
+
+		// Test field without expiration
+		result3, err := client.HSet(context.Background(), key, map[string]string{"field3": "value3"})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), result3)
+		expireTimes, err = client.HExpireTime(context.Background(), key, []string{"field3"})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(-1), expireTimes[0]) // -1 means field exists but has no expiration
+	})
+}
+
+func (suite *GlideTestSuite) TestHPExpireTime_WithExpiringFields() {
+	suite.SkipIfServerVersionLowerThan("9.0.0", suite.T())
+
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		key := uuid.NewString()
+		fields := map[string]string{"field1": "value1", "field2": "value2"}
+
+		// First set some fields
+		result, err := client.HSet(context.Background(), key, fields)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), result)
+
+		// Set expiration using Unix timestamp (60 seconds from now)
+		futureTime := time.Now().Add(60 * time.Second)
+		expireResult, err := client.HPExpireAt(context.Background(), key, futureTime, []string{"field1", "field2"}, nil)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), expireResult[0]) // 1 means expiration was set
+		assert.Equal(suite.T(), int64(1), expireResult[1])
+
+		// Get expiration time for fields in milliseconds
+		expireTimes, err := client.HPExpireTime(context.Background(), key, []string{"field1", "field2"})
+		assert.NoError(suite.T(), err)
+		futureTimestampMs := futureTime.UnixMilli()
+		assert.True(suite.T(), expireTimes[0] >= futureTimestampMs-10000 && expireTimes[0] <= futureTimestampMs+10000)
+		assert.True(suite.T(), expireTimes[1] >= futureTimestampMs-10000 && expireTimes[1] <= futureTimestampMs+10000)
+
+		// Test non-existent field
+		expireTimes, err = client.HPExpireTime(context.Background(), key, []string{"nonexistent"})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(-2), expireTimes[0]) // -2 means field doesn't exist
+
+		// Test field without expiration
+		result2, err := client.HSet(context.Background(), key, map[string]string{"field3": "value3"})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), result2)
+		expireTimes, err = client.HPExpireTime(context.Background(), key, []string{"field3"})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(-1), expireTimes[0]) // -1 means field exists but has no expiration
+	})
+}
+
 func (suite *GlideTestSuite) TestLPushLPop_WithExistingKey() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		list := []string{"value4", "value3", "value2", "value1"}

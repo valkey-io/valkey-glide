@@ -1,0 +1,290 @@
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+
+// Package options provides configuration options for hash field expiration commands.
+// Available in Valkey 9.0 and above.
+package options
+
+import (
+	"errors"
+	"time"
+
+	"github.com/valkey-io/valkey-glide/go/v2/constants"
+	"github.com/valkey-io/valkey-glide/go/v2/internal/utils"
+)
+
+// HSetExOptions represents optional arguments for the HSETEX command.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/hsetex/
+type HSetExOptions struct {
+	ConditionalSet constants.ConditionalSet
+	Expiry         *Expiry
+}
+
+// NewHSetExOptions creates a new HSetExOptions instance.
+func NewHSetExOptions() *HSetExOptions {
+	return &HSetExOptions{}
+}
+
+// SetConditionalSet sets the conditional set option.
+func (opts *HSetExOptions) SetConditionalSet(conditionalSet constants.ConditionalSet) *HSetExOptions {
+	opts.ConditionalSet = conditionalSet
+	return opts
+}
+
+// SetExpiry sets the expiry options.
+func (opts *HSetExOptions) SetExpiry(expiry *Expiry) *HSetExOptions {
+	opts.Expiry = expiry
+	return opts
+}
+
+// ToArgs converts the options to command arguments.
+func (opts *HSetExOptions) ToArgs() ([]string, error) {
+	args := []string{}
+
+	// Add conditional set options
+	switch opts.ConditionalSet {
+	case constants.OnlyIfDoesNotExist:
+		args = append(args, "NX")
+	case constants.OnlyIfExists:
+		args = append(args, "XX")
+	case constants.OnlyIfFieldsDoNotExist:
+		args = append(args, "FNX")
+	case constants.OnlyIfAllFieldsExist:
+		args = append(args, "FXX")
+	}
+
+	// Add expiry options
+	if opts.Expiry != nil {
+		switch opts.Expiry.Type {
+		case constants.Seconds:
+			args = append(args, "EX", utils.IntToString(int64(opts.Expiry.Duration)))
+		case constants.Milliseconds:
+			args = append(args, "PX", utils.IntToString(int64(opts.Expiry.Duration)))
+		case constants.UnixSeconds:
+			args = append(args, "EXAT", utils.IntToString(int64(opts.Expiry.GetTime())))
+		case constants.UnixMilliseconds:
+			args = append(args, "PXAT", utils.IntToString(int64(opts.Expiry.GetTime())))
+		case constants.KeepExisting:
+			args = append(args, "KEEPTTL")
+		}
+	}
+
+	return args, nil
+}
+
+// HGetExOptions represents optional arguments for the HGETEX command.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/hgetex/
+type HGetExOptions struct {
+	Expiry *Expiry
+}
+
+// NewHGetExOptions creates a new HGetExOptions instance.
+func NewHGetExOptions() *HGetExOptions {
+	return &HGetExOptions{}
+}
+
+// SetExpiry sets the expiry options.
+func (opts *HGetExOptions) SetExpiry(expiry *Expiry) *HGetExOptions {
+	opts.Expiry = expiry
+	return opts
+}
+
+// ToArgs converts the options to command arguments.
+func (opts *HGetExOptions) ToArgs() ([]string, error) {
+	args := []string{}
+
+	// Add expiry options
+	if opts.Expiry != nil {
+		switch opts.Expiry.Type {
+		case constants.Seconds:
+			args = append(args, "EX", utils.IntToString(int64(opts.Expiry.Duration)))
+		case constants.Milliseconds:
+			args = append(args, "PX", utils.IntToString(int64(opts.Expiry.Duration)))
+		case constants.UnixSeconds:
+			args = append(args, "EXAT", utils.IntToString(int64(opts.Expiry.GetTime())))
+		case constants.UnixMilliseconds:
+			args = append(args, "PXAT", utils.IntToString(int64(opts.Expiry.GetTime())))
+		case constants.Persist:
+			args = append(args, "PERSIST")
+		}
+	}
+
+	return args, nil
+}
+
+// HExpireOptions represents optional arguments for hash field expiration commands.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/hexpire/
+type HExpireOptions struct {
+	ExpireCondition constants.ExpireCondition
+}
+
+// NewHExpireOptions creates a new HExpireOptions instance.
+func NewHExpireOptions() *HExpireOptions {
+	return &HExpireOptions{}
+}
+
+// SetExpireCondition sets the expire condition.
+func (opts *HExpireOptions) SetExpireCondition(condition constants.ExpireCondition) *HExpireOptions {
+	opts.ExpireCondition = condition
+	return opts
+}
+
+// ToArgs converts the options to command arguments.
+func (opts *HExpireOptions) ToArgs() ([]string, error) {
+	args := []string{}
+
+	// Add expire condition options
+	switch opts.ExpireCondition {
+	case constants.HasNoExpiry:
+		args = append(args, "NX")
+	case constants.HasExistingExpiry:
+		args = append(args, "XX")
+	case constants.NewExpiryGreaterThanCurrent:
+		args = append(args, "GT")
+	case constants.NewExpiryLessThanCurrent:
+		args = append(args, "LT")
+	}
+
+	return args, nil
+}
+
+// Helper functions for building command arguments
+
+// buildFieldsArgs builds the FIELDS portion of hash field expiration commands.
+func buildFieldsArgs(fields []string) []string {
+	if len(fields) == 0 {
+		return []string{}
+	}
+
+	args := []string{"FIELDS", utils.IntToString(int64(len(fields)))}
+	args = append(args, fields...)
+	return args
+}
+
+// BuildHSetExArgs builds arguments for HSETEX command.
+func BuildHSetExArgs(key string, fieldsAndValues map[string]string, options *HSetExOptions) ([]string, error) {
+	if len(fieldsAndValues) == 0 {
+		return nil, errors.New("fieldsAndValues map cannot be empty")
+	}
+
+	args := []string{key}
+
+	if options != nil {
+		optionArgs, err := options.ToArgs()
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, optionArgs...)
+	}
+
+	// Add FIELDS keyword and count
+	args = append(args, "FIELDS", utils.IntToString(int64(len(fieldsAndValues))))
+
+	// Add field-value pairs
+	for field, value := range fieldsAndValues {
+		args = append(args, field, value)
+	}
+
+	return args, nil
+}
+
+// BuildHGetExArgs builds arguments for HGETEX command.
+func BuildHGetExArgs(key string, fields []string, options *HGetExOptions) ([]string, error) {
+	if len(fields) == 0 {
+		return nil, errors.New("fields array cannot be empty")
+	}
+
+	args := []string{key}
+
+	if options != nil {
+		optionArgs, err := options.ToArgs()
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, optionArgs...)
+	}
+
+	// Add FIELDS portion
+	args = append(args, buildFieldsArgs(fields)...)
+
+	return args, nil
+}
+
+// BuildHExpireArgs builds arguments for HEXPIRE/HEXPIREAT/HPEXPIRE/HPEXPIREAT commands.
+// Accepts either time.Duration (for relative expiration) or time.Time (for absolute expiration).
+// The useMilliseconds flag determines whether to convert to milliseconds (true) or seconds (false).
+func BuildHExpireArgs(
+	key string,
+	expireTime interface{},
+	fields []string,
+	options *HExpireOptions,
+	useMilliseconds bool,
+) ([]string, error) {
+	if len(fields) == 0 {
+		return nil, errors.New("fields array cannot be empty")
+	}
+
+	var timeValue int64
+	switch t := expireTime.(type) {
+	case time.Duration:
+		if useMilliseconds {
+			timeValue = t.Milliseconds()
+		} else {
+			timeValue = int64(t.Seconds())
+		}
+	case time.Time:
+		if useMilliseconds {
+			timeValue = t.UnixMilli()
+		} else {
+			timeValue = t.Unix()
+		}
+	default:
+		return nil, errors.New("expireTime must be either time.Duration or time.Time")
+	}
+
+	args := []string{key, utils.IntToString(timeValue)}
+
+	if options != nil {
+		optionArgs, err := options.ToArgs()
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, optionArgs...)
+	}
+
+	// Add FIELDS portion
+	args = append(args, buildFieldsArgs(fields)...)
+
+	return args, nil
+}
+
+// BuildHPersistArgs builds arguments for HPERSIST command.
+func BuildHPersistArgs(key string, fields []string) ([]string, error) {
+	if len(fields) == 0 {
+		return nil, errors.New("fields array cannot be empty")
+	}
+
+	args := []string{key}
+	args = append(args, buildFieldsArgs(fields)...)
+	return args, nil
+}
+
+// BuildHTTLAndExpireTimeArgs builds arguments for hash field TTL and expiration time query commands.
+// Supports HTTL, HPTTL, HEXPIRETIME, and HPEXPIRETIME commands that check existing time information.
+func BuildHTTLAndExpireTimeArgs(key string, fields []string) ([]string, error) {
+	if len(fields) == 0 {
+		return nil, errors.New("fields array cannot be empty")
+	}
+
+	args := []string{key}
+	args = append(args, buildFieldsArgs(fields)...)
+	return args, nil
+}
