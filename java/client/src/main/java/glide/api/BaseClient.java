@@ -40,6 +40,7 @@ import static command_request.CommandRequestOuterClass.RequestType.HDel;
 import static command_request.CommandRequestOuterClass.RequestType.HExists;
 import static command_request.CommandRequestOuterClass.RequestType.HExpire;
 import static command_request.CommandRequestOuterClass.RequestType.HExpireAt;
+import static command_request.CommandRequestOuterClass.RequestType.HExpireTime;
 import static command_request.CommandRequestOuterClass.RequestType.HGet;
 import static command_request.CommandRequestOuterClass.RequestType.HGetAll;
 import static command_request.CommandRequestOuterClass.RequestType.HGetex;
@@ -50,6 +51,8 @@ import static command_request.CommandRequestOuterClass.RequestType.HLen;
 import static command_request.CommandRequestOuterClass.RequestType.HMGet;
 import static command_request.CommandRequestOuterClass.RequestType.HPExpire;
 import static command_request.CommandRequestOuterClass.RequestType.HPExpireAt;
+import static command_request.CommandRequestOuterClass.RequestType.HPExpireTime;
+import static command_request.CommandRequestOuterClass.RequestType.HPTtl;
 import static command_request.CommandRequestOuterClass.RequestType.HPersist;
 import static command_request.CommandRequestOuterClass.RequestType.HRandField;
 import static command_request.CommandRequestOuterClass.RequestType.HScan;
@@ -1412,6 +1415,59 @@ public abstract class BaseClient
                 new ArgsBuilder().add(key).add("FIELDS").add(fields.length).add(fields).toArray();
         return commandManager.submitNewCommand(
                 HTtl, arguments, response -> castArray(handleArrayResponse(response), Long.class));
+    }
+
+    @Override
+    public CompletableFuture<Long[]> hpttl(@NonNull String key, @NonNull String[] fields) {
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {key}, new String[] {"FIELDS", String.valueOf(fields.length)}, fields);
+        return commandManager.submitNewCommand(
+                HPTtl, arguments, response -> castArray(handleArrayResponse(response), Long.class));
+    }
+
+    @Override
+    public CompletableFuture<Long[]> hpttl(@NonNull GlideString key, @NonNull GlideString[] fields) {
+        GlideString[] arguments =
+                new ArgsBuilder().add(key).add("FIELDS").add(fields.length).add(fields).toArray();
+        return commandManager.submitNewCommand(
+                HPTtl, arguments, response -> castArray(handleArrayResponse(response), Long.class));
+    }
+
+    @Override
+    public CompletableFuture<Long[]> hexpiretime(@NonNull String key, @NonNull String[] fields) {
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {key}, new String[] {"FIELDS", String.valueOf(fields.length)}, fields);
+        return commandManager.submitNewCommand(
+                HExpireTime, arguments, response -> castArray(handleArrayResponse(response), Long.class));
+    }
+
+    @Override
+    public CompletableFuture<Long[]> hexpiretime(
+            @NonNull GlideString key, @NonNull GlideString[] fields) {
+        GlideString[] arguments =
+                new ArgsBuilder().add(key).add("FIELDS").add(fields.length).add(fields).toArray();
+        return commandManager.submitNewCommand(
+                HExpireTime, arguments, response -> castArray(handleArrayResponse(response), Long.class));
+    }
+
+    @Override
+    public CompletableFuture<Long[]> hpexpiretime(@NonNull String key, @NonNull String[] fields) {
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {key}, new String[] {"FIELDS", String.valueOf(fields.length)}, fields);
+        return commandManager.submitNewCommand(
+                HPExpireTime, arguments, response -> castArray(handleArrayResponse(response), Long.class));
+    }
+
+    @Override
+    public CompletableFuture<Long[]> hpexpiretime(
+            @NonNull GlideString key, @NonNull GlideString[] fields) {
+        GlideString[] arguments =
+                new ArgsBuilder().add(key).add("FIELDS").add(fields.length).add(fields).toArray();
+        return commandManager.submitNewCommand(
+                HPExpireTime, arguments, response -> castArray(handleArrayResponse(response), Long.class));
     }
 
     @Override
