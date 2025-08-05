@@ -369,14 +369,51 @@ where
 #[doc(hidden)]
 pub const MANAGEMENT_CONN_NAME: &str = "glide_management_connection";
 
+/// Check if the current user has permission to execute CLIENT SETNAME command (async version).
+/// This prevents ACL permission errors during cluster connection setup.
+async fn has_client_setname_permission<C>(conn: &mut C) -> bool 
+where
+    C: ConnectionLike + Send + 'static,
+{
+    // Try to execute ACL DRYRUN to test if CLIENT SETNAME is allowed
+    // First, get the current username
+    let username = match crate::cmd("ACL").arg("WHOAMI").query_async::<C, String>(conn).await {
+        Ok(user) => user,
+        Err(_) => {
+            // If ACL WHOAMI fails, assume we're not using ACL or it's an older server
+            // In this case, try the command anyway as it likely won't fail
+            return true;
+        }
+    };
+
+    // Use ACL DRYRUN to test CLIENT SETNAME command
+    match crate::cmd("ACL").arg("DRYRUN").arg(&username).arg("CLIENT").arg("SETNAME").query_async::<C, String>(conn).await {
+        Ok(result) => result == "OK",
+        Err(_) => {
+            // If ACL DRYRUN is not available or fails, assume permission exists
+            // This handles older Redis/Valkey versions or non-ACL setups
+            true
+        }
+    }
+}
+
 async fn setup_management_connection<C>(conn: &mut C) -> RedisResult<()>
 where
     C: ConnectionLike + Connect + Send + 'static,
 {
-    crate::cmd("CLIENT")
-        .arg(&["SETNAME", MANAGEMENT_CONN_NAME])
-        .query_async(conn)
-        .await?;
+    // Only set the connection name if the user has permission
+    if has_client_setname_permission(conn).await {
+        crate::cmd("CLIENT")
+            .arg(&["SETNAME", MANAGEMENT_CONN_NAME])
+            .query_async(conn)
+            .await?;
+    } else {
+        // Log a warning that we couldn't set the management connection name
+        tracing::warn!(
+            "CLIENT SETNAME command not executed: user lacks +client|setname permission. \
+            Management connection will not have a descriptive name."
+        );
+    }
     Ok(())
 }
 
