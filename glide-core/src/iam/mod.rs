@@ -2,7 +2,7 @@ use aws_config::BehaviorVersion;
 use aws_credential_types::{Credentials, provider::ProvideCredentials};
 use aws_sigv4::http_request::{SignableBody, SignableRequest, SigningSettings, sign};
 use aws_sigv4::sign::v4;
-use logger_core::{log_error, log_info};
+use logger_core::{log_error, log_info, log_warn};
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
@@ -11,8 +11,13 @@ use tokio::sync::{Notify, RwLock};
 use tokio::task::JoinHandle;
 use tokio::time::{MissedTickBehavior, interval};
 
-const MAX_REFRESH_INTERVAL: u32 = 720; // Maximum refresh interval in minutes (12 hours)
-const DEFAULT_REFRESH_INTERVAL: u32 = 11 * 60; // Default refresh interval (11 hours) in minutes
+/// Maximum refresh interval in seconds (12 hours)
+const MAX_REFRESH_INTERVAL_SECONDS: u32 = 12 * 60 * 60; // 43200 seconds
+/// Default refresh interval in seconds (14 minutes)
+const DEFAULT_REFRESH_INTERVAL_SECONDS: u32 = 14 * 60; // 840 seconds
+/// Warning threshold for refresh interval in seconds (15 minutes)
+/// Setting refresh intervals above this value may have performance consequences
+const WARNING_REFRESH_INTERVAL_SECONDS: u32 = 15 * 60; // 900 seconds
 
 /// Custom error type for IAM operations in Glide
 #[derive(Debug, Error)]
@@ -67,8 +72,8 @@ struct IamTokenState {
     service_type: ServiceType,
     /// Currently cached auth token
     cached_token: String,
-    /// Token refresh interval in minutes
-    refresh_interval_minutes: u32,
+    /// Token refresh interval in seconds
+    refresh_interval_seconds: u32,
 }
 
 #[derive(Debug)]
@@ -89,25 +94,51 @@ pub struct IAMTokenManager {
 
 impl IAMTokenManager {
     /// Create a new IAM token manager
+    ///
+    /// # Arguments
+    /// * `cluster_name` - The ElastiCache/MemoryDB cluster name
+    /// * `username` - Username for authentication
+    /// * `region` - AWS region
+    /// * `service_type` - Service type (ElastiCache or MemoryDB)
+    /// * `refresh_interval_seconds` - Optional refresh interval in seconds. Defaults to 14 minutes (840 seconds).
+    ///   Maximum allowed is 12 hours (43200 seconds). Values above 15 minutes (900 seconds) will log a warning
+    ///   about potential performance consequences.
     pub async fn new(
         cluster_name: String,
         username: String,
         region: String,
         service_type: ServiceType,
-        refresh_interval_minutes: Option<u32>,
+        refresh_interval_seconds: Option<u32>,
     ) -> Result<Self, GlideIAMError> {
-        // Validate refresh_interval_minutes is between 0 and 720 (12 hours)
-        let validated_refresh_interval = match refresh_interval_minutes {
+        // Validate refresh_interval_seconds is between 0 and 43200 (12 hours)
+        let validated_refresh_interval = match refresh_interval_seconds {
             Some(interval) => {
-                if interval > MAX_REFRESH_INTERVAL {
+                if interval >= MAX_REFRESH_INTERVAL_SECONDS {
                     return Err(GlideIAMError::InvalidRefreshInterval {
-                        max: MAX_REFRESH_INTERVAL,
+                        max: MAX_REFRESH_INTERVAL_SECONDS,
                         actual: interval,
                     });
                 }
+
+                // Log warning if interval is above 15 minutes
+                if interval >= WARNING_REFRESH_INTERVAL_SECONDS {
+                    log_warn(
+                        "IAM token refresh interval warning",
+                        format!(
+                            "Refresh interval of {} seconds ({}min) exceeds recommended maximum of {} seconds ({}min). \
+                            This may impact performance and increase the risk of token expiration. \
+                            Consider using a shorter interval for better reliability.",
+                            interval,
+                            interval / 60,
+                            WARNING_REFRESH_INTERVAL_SECONDS,
+                            WARNING_REFRESH_INTERVAL_SECONDS / 60
+                        ),
+                    );
+                }
+
                 interval
             }
-            None => DEFAULT_REFRESH_INTERVAL,
+            None => DEFAULT_REFRESH_INTERVAL_SECONDS,
         };
 
         let state = IamTokenState {
@@ -116,7 +147,7 @@ impl IAMTokenManager {
             username,
             service_type,
             cached_token: String::new(), // Will be set below
-            refresh_interval_minutes: validated_refresh_interval,
+            refresh_interval_seconds: validated_refresh_interval,
         };
 
         // Generate initial token using the state
@@ -142,49 +173,66 @@ impl IAMTokenManager {
         let iam_token_state = Arc::clone(&self.iam_token_state);
         let shutdown_notify = Arc::clone(&self.shutdown_notify);
 
-        let task = tokio::spawn(async move {
-            // Get refresh interval from state
-            let refresh_interval = {
-                let state_guard = iam_token_state.read().await;
-                Duration::from_secs(state_guard.refresh_interval_minutes as u64 * 60)
-            };
-
-            let mut interval_timer = interval(refresh_interval);
-            interval_timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
-
-            // Skip the first tick since we already have an initial token
-            interval_timer.tick().await;
-
-            loop {
-                tokio::select! {
-                    _ = interval_timer.tick() => {
-                        // Get current state for token generation
-                    let token_result = {
-                        let state_guard = iam_token_state.read().await;
-                        Self::generate_token_static(&state_guard).await
-                    };
-
-                    match token_result {
-                            Ok(new_token) => {
-                                let mut state_guard = iam_token_state.write().await;
-                                state_guard.cached_token = new_token;
-                                log_info("IAM token refreshed successfully", "");
-                            }
-                            Err(e) => {
-                                log_error("Failed to refresh IAM token", format!("{e}"));
-                                // Continue running - temporary failures shouldn't stop the task
-                            }
-                        }
-                    }
-                    _ = shutdown_notify.notified() => {
-                        log_info("IAM token refresh task shutting down", "");
-                        break;
-                    }
-                }
-            }
-        });
+        let task = tokio::spawn(Self::token_refresh_task(iam_token_state, shutdown_notify));
 
         self.refresh_task = Some(task);
+    }
+
+    /// Background token refresh task implementation
+    ///
+    /// This function runs in a separate tokio task and periodically refreshes the IAM token
+    /// based on the configured refresh interval. It handles graceful shutdown and continues
+    /// running even if individual refresh attempts fail.
+    async fn token_refresh_task(
+        iam_token_state: Arc<RwLock<IamTokenState>>,
+        shutdown_notify: Arc<Notify>,
+    ) {
+        // Get refresh interval from state
+        let refresh_interval = {
+            let state_guard = iam_token_state.read().await;
+            Duration::from_secs(state_guard.refresh_interval_seconds as u64)
+        };
+
+        let mut interval_timer = interval(refresh_interval);
+        interval_timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
+
+        // Skip the first tick since we already have an initial token
+        interval_timer.tick().await;
+
+        loop {
+            tokio::select! {
+                _ = interval_timer.tick() => {
+                    Self::handle_token_refresh(&iam_token_state).await;
+                }
+                _ = shutdown_notify.notified() => {
+                    log_info("IAM token refresh task shutting down", "");
+                    break;
+                }
+            }
+        }
+    }
+
+    /// Handle a single token refresh attempt
+    ///
+    /// This function attempts to generate a new token and update the cached token.
+    /// If the refresh fails, it logs an error but doesn't stop the refresh task.
+    async fn handle_token_refresh(iam_token_state: &Arc<RwLock<IamTokenState>>) {
+        // Get current state for token generation
+        let token_result = {
+            let state_guard = iam_token_state.read().await;
+            Self::generate_token_static(&state_guard).await
+        };
+
+        match token_result {
+            Ok(new_token) => {
+                Self::set_cached_token_static(iam_token_state, new_token).await;
+                log_info("IAM token refreshed successfully", "");
+            }
+            Err(e) => {
+                log_error("Failed to refresh IAM token", format!("{e}"));
+                // Continue running - temporary failures shouldn't stop the task
+            }
+        }
     }
 
     /// Stop the background refresh task gracefully
@@ -197,11 +245,18 @@ impl IAMTokenManager {
         }
     }
 
-    // todo: change all `self.cached_token = token` to `set_cached_token(token)`
+    /// Set a new cached token (static version for use in background tasks)
+    async fn set_cached_token_static(
+        iam_token_state: &Arc<RwLock<IamTokenState>>,
+        new_token: String,
+    ) {
+        let mut state_guard = iam_token_state.write().await;
+        state_guard.cached_token = new_token;
+    }
+
     /// Set a new cached token
     async fn set_cached_token(&self, new_token: String) {
-        let mut state_guard = self.iam_token_state.write().await;
-        state_guard.cached_token = new_token;
+        Self::set_cached_token_static(&self.iam_token_state, new_token).await;
     }
 
     /// Get the current cached token
@@ -392,7 +447,7 @@ mod tests {
             "cluster_name": state.cluster_name,
             "username": state.username,
             "service_type": format!("{:?}", state.service_type),
-            "refresh_interval_minutes": state.refresh_interval_minutes,
+            "refresh_interval_seconds": state.refresh_interval_seconds,
             "timestamp": std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
@@ -426,8 +481,8 @@ mod tests {
             cluster_name: cluster_name.to_string(),
             username: username.to_string(),
             service_type,
-            cached_token: String::new(),       // Not used for saving
-            refresh_interval_minutes: 11 * 60, // Default value 11 hours
+            cached_token: String::new(), // Not used for saving
+            refresh_interval_seconds: DEFAULT_REFRESH_INTERVAL_SECONDS, // Default value 14 minutes in seconds
         }
     }
 
@@ -812,7 +867,6 @@ mod tests {
     async fn test_iam_token_manager_defaults() {
         initialize_test_environment(); // Ensure test environment is clean
         setup_test_credentials();
-
         let cluster_name = "test-cluster".to_string();
         let username = "test-user".to_string();
         let region = "us-east-1".to_string();
@@ -823,9 +877,8 @@ mod tests {
             username.clone(),
             region.clone(),
             ServiceType::ElastiCache, // Service type is now required
-            None,                     // Should default to 11 hours
+            None,                     // Should default to 14 mins
         )
-        //todo: fix the default to 11 hours
         .await
         .unwrap();
 
@@ -856,8 +909,8 @@ mod tests {
         let username = "test-user".to_string();
         let region = "us-east-1".to_string();
 
-        // Test valid refresh intervals
-        let valid_intervals = [0, 1, 360, 720]; // 0 minutes, 1 minute, 6 hours, 12 hours
+        // Test valid refresh intervals in seconds
+        let valid_intervals = [0, 60, 900, 21600, 43199]; // 0 seconds, 1 minute, 15 minutes, 6 hours, 12 hours
         for interval in valid_intervals {
             let result = IAMTokenManager::new(
                 cluster_name.clone(),
@@ -870,12 +923,12 @@ mod tests {
 
             assert!(
                 result.is_ok(),
-                "IAMTokenManager creation should succeed with valid interval: {interval}"
+                "IAMTokenManager creation should succeed with valid interval: {interval} seconds"
             );
         }
 
-        // Test invalid refresh intervals (greater than 720)
-        let invalid_intervals = [721, 1000, 1440]; // 12 hours + 1 minute, ~16.7 hours, 24 hours
+        // Test invalid refresh intervals (greater than 43200 seconds / 12 hours)
+        let invalid_intervals = [43200, 86400, 172800]; // 12 hours, 24 hours, 48 hours
         for interval in invalid_intervals {
             let result = IAMTokenManager::new(
                 cluster_name.clone(),
@@ -888,13 +941,16 @@ mod tests {
 
             assert!(
                 result.is_err(),
-                "IAMTokenManager creation should fail with invalid interval: {interval}"
+                "IAMTokenManager creation should fail with invalid interval: {interval} seconds"
             );
 
             let error = result.unwrap_err();
             match error {
                 GlideIAMError::InvalidRefreshInterval { max, actual } => {
-                    assert_eq!(max, 720, "Max value should be 720");
+                    assert_eq!(
+                        max, MAX_REFRESH_INTERVAL_SECONDS,
+                        "Max value should be 43200 seconds"
+                    );
                     assert_eq!(actual, interval, "Actual value should match input interval");
                 }
                 _ => panic!("Expected InvalidRefreshInterval error, got: {error:?}"),
