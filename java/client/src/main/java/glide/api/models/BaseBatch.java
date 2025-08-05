@@ -58,6 +58,7 @@ import static command_request.CommandRequestOuterClass.RequestType.HDel;
 import static command_request.CommandRequestOuterClass.RequestType.HExists;
 import static command_request.CommandRequestOuterClass.RequestType.HExpire;
 import static command_request.CommandRequestOuterClass.RequestType.HExpireAt;
+import static command_request.CommandRequestOuterClass.RequestType.HExpireTime;
 import static command_request.CommandRequestOuterClass.RequestType.HGet;
 import static command_request.CommandRequestOuterClass.RequestType.HGetAll;
 import static command_request.CommandRequestOuterClass.RequestType.HGetex;
@@ -68,6 +69,8 @@ import static command_request.CommandRequestOuterClass.RequestType.HLen;
 import static command_request.CommandRequestOuterClass.RequestType.HMGet;
 import static command_request.CommandRequestOuterClass.RequestType.HPExpire;
 import static command_request.CommandRequestOuterClass.RequestType.HPExpireAt;
+import static command_request.CommandRequestOuterClass.RequestType.HPExpireTime;
+import static command_request.CommandRequestOuterClass.RequestType.HPTtl;
 import static command_request.CommandRequestOuterClass.RequestType.HPersist;
 import static command_request.CommandRequestOuterClass.RequestType.HRandField;
 import static command_request.CommandRequestOuterClass.RequestType.HScan;
@@ -1074,6 +1077,83 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
         checkTypeOrThrow(key);
         protobufBatch.addCommands(
                 buildCommand(HTtl, newArgsBuilder().add(key).add("FIELDS").add(fields.length).add(fields)));
+        return getThis();
+    }
+
+    /**
+     * Returns the remaining time to live of hash fields that have a timeout, in milliseconds.
+     *
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/hpttl/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param fields The fields to get the TTL for.
+     * @return Command Response - An array of TTL values in milliseconds for the specified fields:
+     *     <ul>
+     *       <li>For fields with a timeout, returns the remaining TTL in milliseconds.
+     *       <li>For fields that exist but have no associated expire, returns <code>-1</code>.
+     *       <li>For fields that do not exist, returns <code>-2</code>.
+     *     </ul>
+     */
+    public <ArgType> T hpttl(@NonNull ArgType key, @NonNull ArgType[] fields) {
+        checkTypeOrThrow(key);
+        protobufBatch.addCommands(
+                buildCommand(
+                        HPTtl, newArgsBuilder().add(key).add("FIELDS").add(fields.length).add(fields)));
+        return getThis();
+    }
+
+    /**
+     * Returns the absolute Unix timestamp (in seconds) at which the given hash fields will expire.
+     *
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, using any other
+     *     type will throw {@link IllegalArgumentException}.
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/hexpiretime/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param fields The fields to get the expiration timestamp for.
+     * @return Command Response - An array of expiration timestamps in seconds for the specified
+     *     fields:
+     *     <ul>
+     *       <li>For fields with a timeout, returns the absolute Unix timestamp in seconds.
+     *       <li>For fields that exist but have no associated expire, returns <code>-1</code>.
+     *       <li>For fields that do not exist, returns <code>-2</code>.
+     *     </ul>
+     */
+    public <ArgType> T hexpiretime(@NonNull ArgType key, @NonNull ArgType[] fields) {
+        checkTypeOrThrow(key);
+        protobufBatch.addCommands(
+                buildCommand(
+                        HExpireTime, newArgsBuilder().add(key).add("FIELDS").add(fields.length).add(fields)));
+        return getThis();
+    }
+
+    /**
+     * Returns the absolute Unix timestamp (in milliseconds) at which the given hash fields will
+     * expire.
+     *
+     * @apiNote When in cluster mode, all <code>key</code>s and <code>fields</code> must map to the
+     *     same hash slot.
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, using any other
+     *     type will throw {@link IllegalArgumentException}.
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/hpexpiretime/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param fields The fields to get the expiration timestamp for.
+     * @return Command Response - An array of expiration timestamps in milliseconds for the specified
+     *     fields:
+     *     <ul>
+     *       <li>For fields with a timeout, returns the absolute Unix timestamp in milliseconds.
+     *       <li>For fields that exist but have no associated expire, returns <code>-1</code>.
+     *       <li>For fields that do not exist, returns <code>-2</code>.
+     *     </ul>
+     */
+    public <ArgType> T hpexpiretime(@NonNull ArgType key, @NonNull ArgType[] fields) {
+        checkTypeOrThrow(key);
+        protobufBatch.addCommands(
+                buildCommand(
+                        HPExpireTime, newArgsBuilder().add(key).add("FIELDS").add(fields.length).add(fields)));
         return getThis();
     }
 
