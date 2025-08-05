@@ -75,6 +75,7 @@ import static command_request.CommandRequestOuterClass.RequestType.HSet;
 import static command_request.CommandRequestOuterClass.RequestType.HSetNX;
 import static command_request.CommandRequestOuterClass.RequestType.HSetex;
 import static command_request.CommandRequestOuterClass.RequestType.HStrlen;
+import static command_request.CommandRequestOuterClass.RequestType.HTtl;
 import static command_request.CommandRequestOuterClass.RequestType.HVals;
 import static command_request.CommandRequestOuterClass.RequestType.Incr;
 import static command_request.CommandRequestOuterClass.RequestType.IncrBy;
@@ -1050,6 +1051,29 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
                                 .add("FIELDS")
                                 .add(fields.length)
                                 .add(fields)));
+        return getThis();
+    }
+
+    /**
+     * Returns the remaining time to live of hash fields that have a timeout, in seconds.
+     *
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/httl/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param fields The fields to get the TTL for.
+     * @return Command Response - An array of <code>Long</code> values, each corresponding to a field:
+     *     <ul>
+     *       <li>TTL in seconds if the field exists and has a timeout.
+     *       <li><code>-1</code> if the field exists but has no associated expire.
+     *       <li><code>-2</code> if the field does not exist.
+     *     </ul>
+     */
+    public <ArgType> T httl(@NonNull ArgType key, @NonNull ArgType[] fields) {
+        checkTypeOrThrow(key);
+        protobufBatch.addCommands(
+                buildCommand(HTtl, newArgsBuilder().add(key).add("FIELDS").add(fields.length).add(fields)));
         return getThis();
     }
 

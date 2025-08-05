@@ -1220,4 +1220,54 @@ public interface HashBaseCommands {
             long unixMilliseconds,
             GlideString[] fields,
             HashFieldExpirationOptions options);
+
+    /**
+     * Returns the remaining time to live of hash fields that have a timeout, in seconds.
+     *
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/httl/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param fields The fields to get the TTL for.
+     * @return An array of <code>Long</code> values, each corresponding to a field:
+     *     <ul>
+     *       <li>TTL in seconds if the field exists and has a timeout.
+     *       <li><code>-1</code> if the field exists but has no associated expire.
+     *       <li><code>-2</code> if the field does not exist.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * // Get TTL for hash fields
+     * Long[] ttls = client.httl("my_hash", new String[] {"field1", "field2", "field3"}).get();
+     * assert ttls[0] > 0; // field1 has TTL
+     * assert ttls[1] == -1; // field2 exists but has no expiration
+     * assert ttls[2] == -2; // field3 does not exist
+     * }</pre>
+     */
+    CompletableFuture<Long[]> httl(String key, String[] fields);
+
+    /**
+     * Returns the remaining time to live of hash fields that have a timeout, in seconds.
+     *
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/httl/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param fields The fields to get the TTL for.
+     * @return An array of <code>Long</code> values, each corresponding to a field:
+     *     <ul>
+     *       <li>TTL in seconds if the field exists and has a timeout.
+     *       <li><code>-1</code> if the field exists but has no associated expire.
+     *       <li><code>-2</code> if the field does not exist.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * // Get TTL for hash fields
+     * Long[] ttls = client.httl(gs("my_hash"), new GlideString[] {gs("field1"), gs("field2"), gs("field3")}).get();
+     * assert ttls[0] > 0; // field1 has TTL
+     * assert ttls[1] == -1; // field2 exists but has no expiration
+     * assert ttls[2] == -2; // field3 does not exist
+     * }</pre>
+     */
+    CompletableFuture<Long[]> httl(GlideString key, GlideString[] fields);
 }

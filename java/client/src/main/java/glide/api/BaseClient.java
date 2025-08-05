@@ -57,6 +57,7 @@ import static command_request.CommandRequestOuterClass.RequestType.HSet;
 import static command_request.CommandRequestOuterClass.RequestType.HSetNX;
 import static command_request.CommandRequestOuterClass.RequestType.HSetex;
 import static command_request.CommandRequestOuterClass.RequestType.HStrlen;
+import static command_request.CommandRequestOuterClass.RequestType.HTtl;
 import static command_request.CommandRequestOuterClass.RequestType.HVals;
 import static command_request.CommandRequestOuterClass.RequestType.Incr;
 import static command_request.CommandRequestOuterClass.RequestType.IncrBy;
@@ -1394,6 +1395,23 @@ public abstract class BaseClient
                         .toArray();
         return commandManager.submitNewCommand(
                 HPExpireAt, arguments, response -> castArray(handleArrayResponse(response), Boolean.class));
+    }
+
+    @Override
+    public CompletableFuture<Long[]> httl(@NonNull String key, @NonNull String[] fields) {
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {key}, new String[] {"FIELDS", String.valueOf(fields.length)}, fields);
+        return commandManager.submitNewCommand(
+                HTtl, arguments, response -> castArray(handleArrayResponse(response), Long.class));
+    }
+
+    @Override
+    public CompletableFuture<Long[]> httl(@NonNull GlideString key, @NonNull GlideString[] fields) {
+        GlideString[] arguments =
+                new ArgsBuilder().add(key).add("FIELDS").add(fields.length).add(fields).toArray();
+        return commandManager.submitNewCommand(
+                HTtl, arguments, response -> castArray(handleArrayResponse(response), Long.class));
     }
 
     @Override
