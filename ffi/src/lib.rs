@@ -316,33 +316,15 @@ pub struct CommandError {
 ///   actual level that was set by the logger. For other operations, this field may
 ///   be ignored when there's an error.
 ///
-/// # Memory Management
+/// # Safety
 ///
 /// The returned `LogResult` must be freed using [`free_log_result`] to avoid memory leaks.
 /// This will properly deallocate both the struct itself and any error message it contains.
-///
-/// # Safety
 ///
 /// - The `log_error` field must either be null or point to a valid, null-terminated C string
 /// - The struct must be freed exactly once using [`free_log_result`]
 /// - The error string must not be accessed after the struct has been freed
 /// - The `level` field is only meaningful when `log_error` is null (success case)
-///
-/// # Example Usage Pattern
-///
-/// ```c
-/// LogResult* result = init(level_ptr, file_name);
-/// if (result != NULL) {
-///     if (result->log_error != NULL) {
-///         // Handle error case
-///         printf("Operation failed: %s\n", result->log_error);
-///     } else {
-///         // Success case - use the level
-///         printf("Logger initialized with level: %d\n", result->level);
-///     }
-///     free_log_result(result);
-/// }
-/// ```
 #[repr(C)]
 pub struct LogResult {
     pub log_error: *mut c_char,
@@ -1940,7 +1922,7 @@ pub(crate) unsafe fn create_cmd(ptr: *const CmdInfo) -> Result<Cmd, String> {
 /// * `ptr` must be able to be safely casted to a valid [`BatchInfo`].
 /// * `cmds` in a referred [`BatchInfo`] structure must not be `null`.
 /// * `cmds` in a referred [`BatchInfo`] structure must point to `cmd_count` consecutive [`CmdInfo`] pointers.
-///   They must be able to safely casted to a valid to a slice of the corresponding type via [`from_raw_parts`]. See the safety documentation of [`from_raw_parts`].
+///   They must be able to be safely casted to a valid to a slice of the corresponding type via [`from_raw_parts`]. See the safety documentation of [`from_raw_parts`].
 /// * Every pointer stored in `cmds` must not be `null` and must point to a valid [`CmdInfo`] structure.
 /// * All data in referred [`CmdInfo`] structure(s) should be valid. See the safety documentation of [`create_cmd`].
 pub(crate) unsafe fn create_pipeline(ptr: *const BatchInfo) -> Result<Pipeline, String> {
@@ -2697,12 +2679,14 @@ impl From<Level> for logger_core::Level {
 ///
 /// # Safety
 ///
+///  The returned pointer must be freed using [`free_log_result`].
+///
 /// * `identifier` must be a valid, non-null pointer to a null-terminated UTF-8 encoded C string.
 /// * `message` must be a valid, non-null pointer to a null-terminated UTF-8 encoded C string.
 ///
 /// # Note
 ///
-/// The caller (Python, etc.) is responsible for filtering log messages according to the logger's current log level.
+/// The caller (Python Sync wrapper, Go wrapper, etc.) is responsible for filtering log messages according to the logger's current log level.
 /// This function will log any message it receives.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn log(
@@ -2713,7 +2697,7 @@ pub unsafe extern "C" fn log(
     let id_str = match unsafe { CStr::from_ptr(identifier).to_str() } {
         Ok(s) => s,
         Err(err) => {
-            let c_err = CString::new(format!("Log identifier error: {err}"))
+            let c_err = CString::new(format!("Log identifier contains invalid UTF-8: {err}"))
                 .unwrap_or_default()
                 .into_raw();
             return Box::into_raw(Box::new(LogResult {
@@ -2726,7 +2710,7 @@ pub unsafe extern "C" fn log(
     let msg_str = match unsafe { CStr::from_ptr(message).to_str() } {
         Ok(s) => s,
         Err(err) => {
-            let c_err = CString::new(format!("Log message error: {err}"))
+            let c_err = CString::new(format!("Log message contains invalid UTF-8: {err}"))
                 .unwrap_or_default()
                 .into_raw();
             return Box::into_raw(Box::new(LogResult {
@@ -2746,9 +2730,9 @@ pub unsafe extern "C" fn log(
 
 /// Initializes the logger with the provided log level and optional log file path.
 ///
-/// This function provides proper error handling instead of panicking on invalid input.
 /// Success is indicated by a `LogResult` with a null `log_error` field and the actual
-/// log level set in the `level` field.
+/// log level set in the `level` field. Failure is indicated by a `LogResult` with a non-null
+/// `log_error` field containing an error message, and the `level` field should be ignored.
 ///
 /// # Parameters
 ///
@@ -2761,9 +2745,10 @@ pub unsafe extern "C" fn log(
 /// - Success: `log_error` is null, `level` contains the actual log level that was set
 /// - Error: `log_error` contains the error message, `level` should be ignored
 ///
-/// The returned pointer must be freed using [`free_log_result`].
 ///
 /// # Safety
+///
+/// The returned pointer must be freed using [`free_log_result`].
 ///
 /// * `level` may be null. If not null, it must point to a valid instance of the `Level` enum.
 /// * `file_name` may be null. If not null, it must point to a valid, null-terminated C string.
@@ -2783,7 +2768,7 @@ pub unsafe extern "C" fn init(level: *const Level, file_name: *const c_char) -> 
             Ok(file_str) => Some(file_str),
             Err(err) => {
                 let c_err = CString::new(format!("File name contains invalid UTF-8: {err}"))
-                    .unwrap_or_else(|_| CString::new("File name contains invalid UTF-8").unwrap())
+                    .unwrap_or_default()
                     .into_raw();
                 return Box::into_raw(Box::new(LogResult {
                     log_error: c_err,
