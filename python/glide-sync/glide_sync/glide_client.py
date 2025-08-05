@@ -18,10 +18,7 @@ from glide_shared.exceptions import (
 from glide_shared.protobuf.command_request_pb2 import RequestType
 from glide_shared.routes import Route, build_protobuf_route
 
-from .config import (
-    GlideClientConfiguration,
-    GlideClusterClientConfiguration,
-)
+from .config import GlideClientConfiguration, GlideClusterClientConfiguration
 from .logger import Level, Logger
 from .sync_commands.cluster_commands import ClusterCommands
 from .sync_commands.core import CoreCommands

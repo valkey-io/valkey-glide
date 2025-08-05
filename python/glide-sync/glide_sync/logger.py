@@ -5,7 +5,7 @@ from __future__ import annotations
 import traceback
 from enum import Enum
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 from cffi import FFI
 
@@ -33,27 +33,46 @@ class Logger:
     If none of these functions are called, the first log attempt will initialize a new logger with default configuration.
     """
 
-    _instance = None
+    _instance: Logger | None = None
+    _ffi: FFI
+    _lib: Any
     logger_level: Level = Level.OFF
 
     def __init__(self, level: Optional[Level] = None, file_name: Optional[str] = None):
-        self._ffi: FFI
-        self._lib: Any
-        self._init_ffi()
-
+        Logger._init_ffi()
         c_level = (
-            self._ffi.new("Level*", level.value)
+            Logger._ffi.new("Level*", level.value)
             if level is not None
-            else self._ffi.NULL
+            else Logger._ffi.NULL
         )
         c_file_name = (
-            self._ffi.new("char[]", file_name.encode(ENCODING))
+            Logger._ffi.new("char[]", file_name.encode(ENCODING))
             if file_name
-            else self._ffi.NULL
+            else Logger._ffi.NULL
         )
 
-        logger_level = self._lib.init(c_level, c_file_name)
-        Logger.logger_level = Level(logger_level)
+        # Handle the LogResult* return type
+        result_ptr = Logger._lib.init(c_level, c_file_name)
+
+        # Check if result_ptr is not null
+        if result_ptr != Logger._ffi.NULL:
+            try:
+                # Check if there's an error message
+                if result_ptr.log_error != Logger._ffi.NULL:
+                    error_str = cast(
+                        bytes, Logger._ffi.string(result_ptr.log_error)
+                    ).decode(ENCODING)
+                    print(f"Logger initialization failed: {error_str}")
+                else:
+                    # Success case - use the level from the result
+                    Logger.logger_level = Level(result_ptr.level)
+
+            finally:
+                # Always free the result
+                Logger._lib.free_log_result(result_ptr)
+        else:
+            print("Logger initialization failed: init function returned null")
+            Logger.logger_level = Level.WARN
 
     @classmethod
     def init(cls, level: Optional[Level] = None, file_name: Optional[str] = None):
@@ -72,7 +91,7 @@ class Logger:
                 Otherwise, logs will be printed to the console.
         """
         if cls._instance is None:
-            cls._instance = cls(level, file_name)
+            cls._instance = Logger(level, file_name)
 
     @classmethod
     def log(
@@ -92,34 +111,52 @@ class Logger:
             err (Optional[Exception]): The exception or error to log.
         """
         if not cls._instance:
-            cls._instance = cls(None)
+            cls._instance = Logger(None)
         if log_level.value > Logger.logger_level.value:
             return
         if err:
             message = f"{message}: {traceback.format_exception(err)}"
-        c_identifier = cls._ffi.new("char[]", log_identifier.encode(ENCODING))
-        c_message = cls._ffi.new("char[]", message.encode(ENCODING))
-        cls._lib.log(log_level.value, c_identifier, c_message)
+        c_identifier = Logger._ffi.new("char[]", log_identifier.encode(ENCODING))
+        c_message = Logger._ffi.new("char[]", message.encode(ENCODING))
+        result_ptr = Logger._lib.log(log_level.value, c_identifier, c_message)
+        # Check if result_ptr is not null
+        if result_ptr != Logger._ffi.NULL:
+            # Check if there's an error message
+            if result_ptr.log_error != Logger._ffi.NULL:
+                error_str = cast(
+                    bytes, Logger._ffi.string(result_ptr.log_error)
+                ).decode(ENCODING)
+                print(f"FFI log error: {error_str}")
+
+            # Free the entire result - this will internally free the error string
+            Logger._lib.free_log_result(result_ptr)
 
     @classmethod
     def _init_ffi(cls):
-        cls._ffi = FFI()
-        cls._ffi.cdef(
-            """
-            typedef enum {
-                Error = 0,
-                Warn = 1,
-                Info = 2,
-                Debug = 3,
-                Trace = 4,
-                Off = 5
-            } Level;
+        if cls._ffi is None:
+            cls._ffi = FFI()
+            cls._ffi.cdef(
+                """
+                typedef enum {
+                    ERROR = 0,
+                    WARN = 1,
+                    INFO = 2,
+                    DEBUG = 3,
+                    TRACE = 4,
+                    OFF = 5
+                } Level;
 
-            Level init(const Level* level, const char* file_name);
-            void log(Level level, const char* identifier, const char* message);
-        """
-        )
-        cls._lib = cls._ffi.dlopen(str(LIB_FILE.resolve()))
+                typedef struct {
+                    char* log_error;
+                    Level level;
+                } LogResult;
+
+                LogResult* init(const Level* level, const char* file_name);
+                LogResult* log(Level level, const char* identifier, const char* message);
+                void free_log_result(LogResult* result);
+                """
+            )
+            cls._lib = cls._ffi.dlopen(str(LIB_FILE.resolve()))
 
     @classmethod
     def set_logger_config(
