@@ -1091,4 +1091,66 @@ public interface HashBaseCommands {
      */
     CompletableFuture<Boolean[]> hpexpire(
             GlideString key, long milliseconds, GlideString[] fields, HashFieldExpirationOptions options);
+
+    /**
+     * Sets expiration time for hash fields, in seconds, using an absolute Unix timestamp. Creates the
+     * hash if it doesn't exist. If a field is already expired, it will be deleted rather than
+     * expired.
+     *
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/hexpireat/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param unixSeconds The expiration time to set for the fields, as a Unix timestamp in seconds.
+     * @param fields The fields to set expiration for.
+     * @param options The expiration options.
+     * @return An array of <code>Boolean</code> values, each corresponding to a field:
+     *     <ul>
+     *       <li><code>true</code> if the expiration time was successfully set for the field.
+     *       <li><code>false</code> if the field does not exist or the expiration time was not set due
+     *           to the condition not being met.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * // Set expiration for fields at Unix timestamp 1672531200 (January 1, 2023)
+     * HashFieldExpirationOptions options = HashFieldExpirationOptions.builder()
+     *     .expirationConditionOnlyIfNoExpiry()
+     *     .build();
+     * Boolean[] results = client.hexpireat("my_hash", 1672531200L, new String[] {"field1", "field2"}, options).get();
+     * assert Arrays.equals(results, new Boolean[] {true, true}); // Both fields had expiration set
+     * }</pre>
+     */
+    CompletableFuture<Boolean[]> hexpireat(
+            String key, long unixSeconds, String[] fields, HashFieldExpirationOptions options);
+
+    /**
+     * Sets expiration time for hash fields, in seconds, using an absolute Unix timestamp. Creates the
+     * hash if it doesn't exist. If a field is already expired, it will be deleted rather than
+     * expired.
+     *
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/hexpireat/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param unixSeconds The expiration time to set for the fields, as a Unix timestamp in seconds.
+     * @param fields The fields to set expiration for.
+     * @param options The expiration options.
+     * @return An array of <code>Boolean</code> values, each corresponding to a field:
+     *     <ul>
+     *       <li><code>true</code> if the expiration time was successfully set for the field.
+     *       <li><code>false</code> if the field does not exist or the expiration time was not set due
+     *           to the condition not being met.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * // Set expiration for fields at Unix timestamp 1672531200 (January 1, 2023)
+     * HashFieldExpirationOptions options = HashFieldExpirationOptions.builder()
+     *     .expirationConditionOnlyIfNoExpiry()
+     *     .build();
+     * Boolean[] results = client.hexpireat(gs("my_hash"), 1672531200L, new GlideString[] {gs("field1"), gs("field2")}, options).get();
+     * assert Arrays.equals(results, new Boolean[] {true, true}); // Both fields had expiration set
+     * }</pre>
+     */
+    CompletableFuture<Boolean[]> hexpireat(
+            GlideString key, long unixSeconds, GlideString[] fields, HashFieldExpirationOptions options);
 }

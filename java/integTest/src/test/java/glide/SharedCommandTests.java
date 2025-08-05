@@ -2462,6 +2462,196 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void hexpireat_basic_functionality(BaseClient client) {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0"),
+                "Hash field expiration commands require Valkey 9.0.0 or higher");
+
+        String key = "test_hexpireat_basic_" + UUID.randomUUID();
+
+        // First set some fields using regular hset
+        Map<String, String> fieldValueMap = new LinkedHashMap<>();
+        fieldValueMap.put("field1", "value1");
+        fieldValueMap.put("field2", "value2");
+        client.hset(key, fieldValueMap).get();
+
+        // Test HEXPIREAT with Unix timestamp in seconds (future timestamp)
+        long futureTimestamp = System.currentTimeMillis() / 1000 + 60; // 60 seconds from now
+        HashFieldExpirationOptions options =
+                HashFieldExpirationOptions.builder().expirationConditionOnlyIfNoExpiry().build();
+
+        String[] fields = {"field1", "field2", "nonexistent"};
+        Boolean[] result = client.hexpireat(key, futureTimestamp, fields, options).get();
+
+        assertEquals(3, result.length);
+        assertTrue(result[0]); // field1 should have expiry set
+        assertTrue(result[1]); // field2 should have expiry set
+        assertFalse(result[2]); // nonexistent field should return false
+
+        // Clean up
+        client.del(new String[] {key}).get();
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void hexpireat_with_conditional_options(BaseClient client) {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0"),
+                "Hash field expiration commands require Valkey 9.0.0 or higher");
+
+        String key = "test_hexpireat_conditional_" + UUID.randomUUID();
+
+        // First set some fields using regular hset
+        Map<String, String> fieldValueMap = new LinkedHashMap<>();
+        fieldValueMap.put("field1", "value1");
+        fieldValueMap.put("field2", "value2");
+        client.hset(key, fieldValueMap).get();
+
+        long futureTimestamp = System.currentTimeMillis() / 1000 + 60; // 60 seconds from now
+
+        // Test NX condition (only if no expiry)
+        HashFieldExpirationOptions nxOptions =
+                HashFieldExpirationOptions.builder().expirationConditionOnlyIfNoExpiry().build();
+
+        String[] fields = {"field1", "field2"};
+        Boolean[] result = client.hexpireat(key, futureTimestamp, fields, nxOptions).get();
+
+        assertEquals(2, result.length);
+        assertTrue(result[0]); // field1 should have expiry set (no previous expiry)
+        assertTrue(result[1]); // field2 should have expiry set (no previous expiry)
+
+        // Test XX condition (only if has expiry) - should work now since fields have expiry
+        HashFieldExpirationOptions xxOptions =
+                HashFieldExpirationOptions.builder().expirationConditionOnlyIfHasExpiry().build();
+
+        long newFutureTimestamp = System.currentTimeMillis() / 1000 + 120; // 120 seconds from now
+        result = client.hexpireat(key, newFutureTimestamp, fields, xxOptions).get();
+
+        assertEquals(2, result.length);
+        assertTrue(result[0]); // field1 should have expiry updated (had previous expiry)
+        assertTrue(result[1]); // field2 should have expiry updated (had previous expiry)
+
+        // Clean up
+        client.del(new String[] {key}).get();
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void hexpireat_immediate_deletion(BaseClient client) {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0"),
+                "Hash field expiration commands require Valkey 9.0.0 or higher");
+
+        String key = "test_hexpireat_immediate_" + UUID.randomUUID();
+
+        // First set some fields using regular hset
+        Map<String, String> fieldValueMap = new LinkedHashMap<>();
+        fieldValueMap.put("field1", "value1");
+        fieldValueMap.put("field2", "value2");
+        client.hset(key, fieldValueMap).get();
+
+        // Test HEXPIREAT with past timestamp (should delete immediately)
+        long pastTimestamp = System.currentTimeMillis() / 1000 - 60; // 60 seconds ago
+        HashFieldExpirationOptions options = HashFieldExpirationOptions.builder().build();
+
+        String[] fields = {"field1", "field2"};
+        Boolean[] result = client.hexpireat(key, pastTimestamp, fields, options).get();
+
+        assertEquals(2, result.length);
+        assertTrue(result[0]); // field1 should be deleted
+        assertTrue(result[1]); // field2 should be deleted
+
+        // Verify fields are deleted
+        String[] getResult = client.hmget(key, fields).get();
+        assertEquals(2, getResult.length);
+        assertNull(getResult[0]); // field1 should be null (deleted)
+        assertNull(getResult[1]); // field2 should be null (deleted)
+
+        // Clean up
+        client.del(new String[] {key}).get();
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void hexpireat_binary_parameters(BaseClient client) {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0"),
+                "Hash field expiration commands require Valkey 9.0.0 or higher");
+
+        GlideString key = gs("test_hexpireat_binary_" + UUID.randomUUID());
+
+        // First set some fields using regular hset
+        Map<GlideString, GlideString> fieldValueMap = new LinkedHashMap<>();
+        fieldValueMap.put(gs("field1"), gs("value1"));
+        fieldValueMap.put(gs("field2"), gs("value2"));
+        client.hset(key, fieldValueMap).get();
+
+        // Test HEXPIREAT with Unix timestamp in seconds (future timestamp)
+        long futureTimestamp = System.currentTimeMillis() / 1000 + 60; // 60 seconds from now
+        HashFieldExpirationOptions options =
+                HashFieldExpirationOptions.builder().expirationConditionOnlyIfNoExpiry().build();
+
+        GlideString[] fields = {gs("field1"), gs("field2")};
+        Boolean[] result = client.hexpireat(key, futureTimestamp, fields, options).get();
+
+        assertEquals(2, result.length);
+        assertTrue(result[0]); // field1 should have expiry set
+        assertTrue(result[1]); // field2 should have expiry set
+
+        // Clean up
+        client.del(new GlideString[] {key}).get();
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClientsWithAtomic")
+    public void hexpireat_batch_functionality(BaseClient client, boolean isAtomic) {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0"),
+                "Hash field expiration commands require Valkey 9.0.0 or higher");
+
+        boolean isCluster = client instanceof GlideClusterClient;
+        String key = "test_hexpireat_batch_" + UUID.randomUUID();
+
+        // First set some fields using regular hset
+        Map<String, String> fieldValueMap = new LinkedHashMap<>();
+        fieldValueMap.put("field1", "value1");
+        fieldValueMap.put("field2", "value2");
+        fieldValueMap.put("field3", "value3");
+        client.hset(key, fieldValueMap).get();
+
+        // Create batch with HEXPIREAT command
+        long futureTimestamp = System.currentTimeMillis() / 1000 + 60; // 60 seconds from now
+        BaseBatch batch = isCluster ? new ClusterBatch(isAtomic) : new Batch(isAtomic);
+
+        HashFieldExpirationOptions options =
+                HashFieldExpirationOptions.builder().expirationConditionOnlyIfNoExpiry().build();
+
+        String[] fields = {"field1", "field2", "nonexistent"};
+        batch.hexpireat(key, futureTimestamp, fields, options);
+
+        Object[] result =
+                isCluster
+                        ? ((GlideClusterClient) client).exec((ClusterBatch) batch, false).get()
+                        : ((GlideClient) client).exec((Batch) batch, false).get();
+
+        assertEquals(1, result.length);
+        Boolean[] hexpireatResult = (Boolean[]) result[0];
+        assertEquals(3, hexpireatResult.length);
+        assertTrue(hexpireatResult[0]); // field1 should have expiry set
+        assertTrue(hexpireatResult[1]); // field2 should have expiry set
+        assertFalse(hexpireatResult[2]); // nonexistent field should return false
+
+        // Clean up
+        client.del(new String[] {key}).get();
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void hexists_existing_field_non_existing_field_non_existing_key(BaseClient client) {
         String key = UUID.randomUUID().toString();
         String field1 = UUID.randomUUID().toString();
