@@ -1153,4 +1153,71 @@ public interface HashBaseCommands {
      */
     CompletableFuture<Boolean[]> hexpireat(
             GlideString key, long unixSeconds, GlideString[] fields, HashFieldExpirationOptions options);
+
+    /**
+     * Sets expiration time for hash fields, using an absolute Unix timestamp in milliseconds. <code>
+     * HPEXPIREAT</code> has the same effect and semantic as <code>HEXPIREAT</code>, but the Unix time
+     * at which the field will expire is specified in milliseconds instead of seconds.
+     *
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/hpexpireat/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param unixMilliseconds The expiration time to set for the fields, as a Unix timestamp in
+     *     milliseconds.
+     * @param fields An array of hash field names for which to set the expiration.
+     * @param options Optional conditions and configurations for the expiration. See {@link
+     *     HashFieldExpirationOptions}.
+     * @return An array of <code>Boolean</code> values indicating the result for each field:<br>
+     *     - <code>true</code> if the expiration time was successfully set.<br>
+     *     - <code>false</code> if the expiration time was not set (e.g., field doesn't exist, or the
+     *     operation was skipped due to provided conditions).<br>
+     *     If <code>unixMilliseconds</code> is in the past, the field will be deleted rather than
+     *     expired.
+     * @example
+     *     <pre>{@code
+     * // Set expiration for hash fields to January 1, 2024 00:00:00 UTC (in milliseconds)
+     * HashFieldExpirationOptions options = HashFieldExpirationOptions.builder()
+     *     .expirationConditionOnlyIfNoExpiry()
+     *     .build();
+     * Boolean[] results = client.hpexpireat("my_hash", 1672531200000L, new String[] {"field1", "field2"}, options).get();
+     * assert Arrays.equals(results, new Boolean[] {true, true}); // Both fields had expiration set
+     * }</pre>
+     */
+    CompletableFuture<Boolean[]> hpexpireat(
+            String key, long unixMilliseconds, String[] fields, HashFieldExpirationOptions options);
+
+    /**
+     * Sets expiration time for hash fields, using an absolute Unix timestamp in milliseconds. <code>
+     * HPEXPIREAT</code> has the same effect and semantic as <code>HEXPIREAT</code>, but the Unix time
+     * at which the field will expire is specified in milliseconds instead of seconds.
+     *
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/hpexpireat/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param unixMilliseconds The expiration time to set for the fields, as a Unix timestamp in
+     *     milliseconds.
+     * @param fields An array of hash field names for which to set the expiration.
+     * @param options Optional conditions and configurations for the expiration. See {@link
+     *     HashFieldExpirationOptions}.
+     * @return An array of <code>Boolean</code> values indicating the result for each field:<br>
+     *     - <code>true</code> if the expiration time was successfully set.<br>
+     *     - <code>false</code> if the expiration time was not set (e.g., field doesn't exist, or the
+     *     operation was skipped due to provided conditions).<br>
+     *     If <code>unixMilliseconds</code> is in the past, the field will be deleted rather than
+     *     expired.
+     * @example
+     *     <pre>{@code
+     * // Set expiration for hash fields to January 1, 2024 00:00:00 UTC (in milliseconds)
+     * HashFieldExpirationOptions options = HashFieldExpirationOptions.builder()
+     *     .expirationConditionOnlyIfNoExpiry()
+     *     .build();
+     * Boolean[] results = client.hpexpireat(gs("my_hash"), 1672531200000L, new GlideString[] {gs("field1"), gs("field2")}, options).get();
+     * assert Arrays.equals(results, new Boolean[] {true, true}); // Both fields had expiration set
+     * }</pre>
+     */
+    CompletableFuture<Boolean[]> hpexpireat(
+            GlideString key,
+            long unixMilliseconds,
+            GlideString[] fields,
+            HashFieldExpirationOptions options);
 }
