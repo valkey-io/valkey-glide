@@ -86,6 +86,9 @@ public class TestUtilities {
                                     .addresses(seedNodes)
                                     .requestTimeout(2000)
                                     .lazyConnect(lazyConnect)
+                                    // Explicitly set no credentials for dedicated clusters to avoid
+                                    // authentication issues from environment or global state
+                                    .credentials(null)
                                     .build())
                     .get();
         } else {
@@ -97,6 +100,9 @@ public class TestUtilities {
                                     .addresses(nodeAddresses)
                                     .requestTimeout(2000)
                                     .lazyConnect(lazyConnect)
+                                    // Explicitly set no credentials for dedicated clusters to avoid
+                                    // authentication issues from environment or global state
+                                    .credentials(null)
                                     .build())
                     .get();
         }
