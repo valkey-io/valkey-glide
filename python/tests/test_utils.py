@@ -1,5 +1,9 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+import glob
+import os
+from pathlib import Path
+
 from glide.logger import Level, Logger
 from glide_sync import LogLevel as SyncLogLevel
 from glide_sync.logger import Logger as SyncLogger
@@ -9,6 +13,15 @@ from tests.utils.utils import (
     DEFAULT_TEST_LOG_LEVEL,
     compare_maps,
 )
+
+CURR_DIR = Path(__file__).resolve().parent
+PYTHON_DIR = CURR_DIR.parent
+LOG_DIR = PYTHON_DIR / "glide-logs"
+
+
+def find_log_files(prefix: str) -> list[str]:
+    pattern = os.path.join(LOG_DIR, f"{prefix}*")
+    return glob.glob(pattern)
 
 
 class TestLogger:
@@ -35,6 +48,28 @@ class TestLogger:
         # Revert to the tests default log level
         SyncLogger.set_logger_config(DEFAULT_SYNC_TEST_LOG_LEVEL)
         assert SyncLogger.logger_level == DEFAULT_SYNC_TEST_LOG_LEVEL
+
+    def test_sync_logger_init_is_idempotent(self):
+        # Clean up any existing files before test
+        for prefix in ("first.log", "second.log"):
+            for f in find_log_files(prefix):
+                os.remove(f)
+
+        # Initialize once with first.log
+        SyncLogger.init(level=SyncLogLevel.INFO, file_name="first.log")
+        SyncLogger.log(SyncLogLevel.INFO, "test", "Message after first init")
+        logger1 = SyncLogger._instance
+        level1 = SyncLogger.logger_level
+
+        # Re-run init with second.log (should NOT reconfigure)
+        SyncLogger.init(level=SyncLogLevel.DEBUG, file_name="second.log")
+        SyncLogger.log(SyncLogLevel.INFO, "test", "Message after second init")
+        logger2 = SyncLogger._instance
+        level2 = SyncLogger.logger_level
+
+        # Assert singleton and level didn't change
+        assert logger1 is logger2
+        assert level1 == level2
 
 
 class TestCompareMaps:
