@@ -184,6 +184,7 @@ enum RequestType {
     HExpire                        = 619;
     HPersist                       = 620;
     HPExpire                       = 621;
+    HExpireAt                      = 622;
 
     //// HyperLogLog commands
 
