@@ -49,6 +49,7 @@ import static command_request.CommandRequestOuterClass.RequestType.HKeys;
 import static command_request.CommandRequestOuterClass.RequestType.HLen;
 import static command_request.CommandRequestOuterClass.RequestType.HMGet;
 import static command_request.CommandRequestOuterClass.RequestType.HPExpire;
+import static command_request.CommandRequestOuterClass.RequestType.HPExpireAt;
 import static command_request.CommandRequestOuterClass.RequestType.HPersist;
 import static command_request.CommandRequestOuterClass.RequestType.HRandField;
 import static command_request.CommandRequestOuterClass.RequestType.HScan;
@@ -1358,6 +1359,41 @@ public abstract class BaseClient
                         .toArray();
         return commandManager.submitNewCommand(
                 HExpireAt, arguments, response -> castArray(handleArrayResponse(response), Boolean.class));
+    }
+
+    @Override
+    public CompletableFuture<Boolean[]> hpexpireat(
+            @NonNull String key,
+            long unixMilliseconds,
+            @NonNull String[] fields,
+            @NonNull HashFieldExpirationOptions options) {
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {key, String.valueOf(unixMilliseconds)},
+                        options.toArgs(),
+                        new String[] {"FIELDS", String.valueOf(fields.length)},
+                        fields);
+        return commandManager.submitNewCommand(
+                HPExpireAt, arguments, response -> castArray(handleArrayResponse(response), Boolean.class));
+    }
+
+    @Override
+    public CompletableFuture<Boolean[]> hpexpireat(
+            @NonNull GlideString key,
+            long unixMilliseconds,
+            @NonNull GlideString[] fields,
+            @NonNull HashFieldExpirationOptions options) {
+        GlideString[] arguments =
+                new ArgsBuilder()
+                        .add(key)
+                        .add(unixMilliseconds)
+                        .add(options.toArgs())
+                        .add("FIELDS")
+                        .add(fields.length)
+                        .add(fields)
+                        .toArray();
+        return commandManager.submitNewCommand(
+                HPExpireAt, arguments, response -> castArray(handleArrayResponse(response), Boolean.class));
     }
 
     @Override

@@ -67,6 +67,7 @@ import static command_request.CommandRequestOuterClass.RequestType.HKeys;
 import static command_request.CommandRequestOuterClass.RequestType.HLen;
 import static command_request.CommandRequestOuterClass.RequestType.HMGet;
 import static command_request.CommandRequestOuterClass.RequestType.HPExpire;
+import static command_request.CommandRequestOuterClass.RequestType.HPExpireAt;
 import static command_request.CommandRequestOuterClass.RequestType.HPersist;
 import static command_request.CommandRequestOuterClass.RequestType.HRandField;
 import static command_request.CommandRequestOuterClass.RequestType.HScan;
@@ -1005,6 +1006,46 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
                         newArgsBuilder()
                                 .add(key)
                                 .add(unixSeconds)
+                                .add(options.toArgs())
+                                .add("FIELDS")
+                                .add(fields.length)
+                                .add(fields)));
+        return getThis();
+    }
+
+    /**
+     * Sets expiration time for hash fields, using an absolute Unix timestamp in milliseconds. <code>
+     * HPEXPIREAT</code> has the same effect and semantic as <code>HEXPIREAT</code>, but the Unix time
+     * at which the field will expire is specified in milliseconds instead of seconds. See {@link
+     * #hexpireat(Object, long, Object[], HashFieldExpirationOptions)} for more details.
+     *
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/hpexpireat/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param unixMilliseconds The expiration time to set for the fields, as a Unix timestamp in
+     *     milliseconds.
+     * @param fields The fields to set expiration for.
+     * @param options The expiration options.
+     * @return Command response - An array of <code>Boolean</code> values, each corresponding to a
+     *     field:
+     *     <ul>
+     *       <li><code>true</code> if the expiration time was successfully set for the field.
+     *       <li><code>false</code> if the field does not exist or the expiration time was not set due
+     *           to the condition not being met.
+     *     </ul>
+     */
+    public <ArgType> T hpexpireat(
+            @NonNull ArgType key,
+            long unixMilliseconds,
+            @NonNull ArgType[] fields,
+            @NonNull HashFieldExpirationOptions options) {
+        checkTypeOrThrow(key);
+        protobufBatch.addCommands(
+                buildCommand(
+                        HPExpireAt,
+                        newArgsBuilder()
+                                .add(key)
+                                .add(unixMilliseconds)
                                 .add(options.toArgs())
                                 .add("FIELDS")
                                 .add(fields.length)
