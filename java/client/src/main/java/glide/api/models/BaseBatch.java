@@ -57,6 +57,7 @@ import static command_request.CommandRequestOuterClass.RequestType.GetRange;
 import static command_request.CommandRequestOuterClass.RequestType.HDel;
 import static command_request.CommandRequestOuterClass.RequestType.HExists;
 import static command_request.CommandRequestOuterClass.RequestType.HExpire;
+import static command_request.CommandRequestOuterClass.RequestType.HExpireAt;
 import static command_request.CommandRequestOuterClass.RequestType.HGet;
 import static command_request.CommandRequestOuterClass.RequestType.HGetAll;
 import static command_request.CommandRequestOuterClass.RequestType.HGetex;
@@ -966,6 +967,44 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
                         newArgsBuilder()
                                 .add(key)
                                 .add(milliseconds)
+                                .add(options.toArgs())
+                                .add("FIELDS")
+                                .add(fields.length)
+                                .add(fields)));
+        return getThis();
+    }
+
+    /**
+     * Sets expiration time for hash fields, in seconds, using an absolute Unix timestamp. Creates the
+     * hash if it doesn't exist. If a field is already expired, it will be deleted rather than
+     * expired.
+     *
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/hexpireat/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param unixSeconds The expiration time to set for the fields, as a Unix timestamp in seconds.
+     * @param fields The fields to set expiration for.
+     * @param options The expiration options.
+     * @return Command response - An array of <code>Boolean</code> values, each corresponding to a
+     *     field:
+     *     <ul>
+     *       <li><code>true</code> if the expiration time was successfully set for the field.
+     *       <li><code>false</code> if the field does not exist or the expiration time was not set due
+     *           to the condition not being met.
+     *     </ul>
+     */
+    public <ArgType> T hexpireat(
+            @NonNull ArgType key,
+            long unixSeconds,
+            @NonNull ArgType[] fields,
+            @NonNull HashFieldExpirationOptions options) {
+        checkTypeOrThrow(key);
+        protobufBatch.addCommands(
+                buildCommand(
+                        HExpireAt,
+                        newArgsBuilder()
+                                .add(key)
+                                .add(unixSeconds)
                                 .add(options.toArgs())
                                 .add("FIELDS")
                                 .add(fields.length)
