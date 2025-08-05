@@ -2838,6 +2838,220 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void httl_basic_functionality(BaseClient client) {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0"),
+                "Hash field expiration commands require Valkey 9.0.0 or higher");
+
+        String key = "test_httl_basic_" + UUID.randomUUID();
+
+        // First set some fields with expiration using hsetex
+        Map<String, String> fieldValueMap = new LinkedHashMap<>();
+        fieldValueMap.put("field1", "value1");
+        fieldValueMap.put("field2", "value2");
+        fieldValueMap.put("field3", "value3");
+
+        HashFieldExpirationOptions setOptions =
+                HashFieldExpirationOptions.builder()
+                        .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
+                        .build();
+        client.hsetex(key, fieldValueMap, setOptions).get();
+
+        // Set one field without expiration using regular hset
+        client.hset(key, Map.of("field4", "value4")).get();
+
+        // Test HTTL - get TTL for fields
+        String[] fields = {"field1", "field2", "field3", "field4", "nonexistent"};
+        Long[] result = client.httl(key, fields).get();
+
+        assertEquals(5, result.length);
+        assertTrue(result[0] > 0 && result[0] <= 60); // field1 should have TTL
+        assertTrue(result[1] > 0 && result[1] <= 60); // field2 should have TTL
+        assertTrue(result[2] > 0 && result[2] <= 60); // field3 should have TTL
+        assertEquals(-1L, (long) result[3]); // field4 has no expiration
+        assertEquals(-2L, (long) result[4]); // nonexistent field
+
+        // Clean up
+        client.del(new String[] {key}).get();
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void httl_nonexistent_key(BaseClient client) {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0"),
+                "Hash field expiration commands require Valkey 9.0.0 or higher");
+
+        String key = "test_httl_nonexistent_" + UUID.randomUUID();
+
+        // Test HTTL on non-existent key
+        String[] fields = {"field1", "field2"};
+        Long[] result = client.httl(key, fields).get();
+
+        assertEquals(2, result.length);
+        assertEquals(-2L, (long) result[0]); // field doesn't exist
+        assertEquals(-2L, (long) result[1]); // field doesn't exist
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void httl_expired_fields(BaseClient client) {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0"),
+                "Hash field expiration commands require Valkey 9.0.0 or higher");
+
+        String key = "test_httl_expired_" + UUID.randomUUID();
+
+        // Set fields with very short expiration (1 second)
+        Map<String, String> fieldValueMap = new LinkedHashMap<>();
+        fieldValueMap.put("field1", "value1");
+        fieldValueMap.put("field2", "value2");
+
+        HashFieldExpirationOptions setOptions =
+                HashFieldExpirationOptions.builder()
+                        .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(1L))
+                        .build();
+        client.hsetex(key, fieldValueMap, setOptions).get();
+
+        // Wait for fields to expire
+        Thread.sleep(1100);
+
+        // Test HTTL on expired fields
+        String[] fields = {"field1", "field2"};
+        Long[] result = client.httl(key, fields).get();
+
+        assertEquals(2, result.length);
+        assertEquals(-2L, (long) result[0]); // field1 should be expired/deleted
+        assertEquals(-2L, (long) result[1]); // field2 should be expired/deleted
+
+        // Clean up
+        client.del(new String[] {key}).get();
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void httl_mixed_fields(BaseClient client) {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0"),
+                "Hash field expiration commands require Valkey 9.0.0 or higher");
+
+        String key = "test_httl_mixed_" + UUID.randomUUID();
+
+        // Set some fields with expiration
+        Map<String, String> fieldValueMapWithExpiry = new LinkedHashMap<>();
+        fieldValueMapWithExpiry.put("field1", "value1");
+        fieldValueMapWithExpiry.put("field2", "value2");
+
+        HashFieldExpirationOptions setOptions =
+                HashFieldExpirationOptions.builder()
+                        .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(120L))
+                        .build();
+        client.hsetex(key, fieldValueMapWithExpiry, setOptions).get();
+
+        // Set some fields without expiration using regular hset
+        Map<String, String> fieldValueMapNoExpiry = new LinkedHashMap<>();
+        fieldValueMapNoExpiry.put("field3", "value3");
+        fieldValueMapNoExpiry.put("field4", "value4");
+        client.hset(key, fieldValueMapNoExpiry).get();
+
+        // Test HTTL on mixed fields
+        String[] fields = {"field1", "field2", "field3", "field4", "nonexistent"};
+        Long[] result = client.httl(key, fields).get();
+
+        assertEquals(5, result.length);
+        assertTrue(result[0] > 0 && result[0] <= 120); // field1 has TTL
+        assertTrue(result[1] > 0 && result[1] <= 120); // field2 has TTL
+        assertEquals(-1L, (long) result[2]); // field3 has no expiration
+        assertEquals(-1L, (long) result[3]); // field4 has no expiration
+        assertEquals(-2L, (long) result[4]); // nonexistent field
+
+        // Clean up
+        client.del(new String[] {key}).get();
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void httl_binary_functionality(BaseClient client) {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0"),
+                "Hash field expiration commands require Valkey 9.0.0 or higher");
+
+        GlideString key = gs("test_httl_binary_" + UUID.randomUUID());
+
+        // First set some fields with expiration using hsetex
+        Map<GlideString, GlideString> fieldValueMap = new LinkedHashMap<>();
+        fieldValueMap.put(gs("field1"), gs("value1"));
+        fieldValueMap.put(gs("field2"), gs("value2"));
+
+        HashFieldExpirationOptions setOptions =
+                HashFieldExpirationOptions.builder()
+                        .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
+                        .build();
+        client.hsetex(key, fieldValueMap, setOptions).get();
+
+        // Test HTTL with binary parameters
+        GlideString[] fields = {gs("field1"), gs("field2"), gs("nonexistent")};
+        Long[] result = client.httl(key, fields).get();
+
+        assertEquals(3, result.length);
+        assertTrue(result[0] > 0 && result[0] <= 60); // field1 should have TTL
+        assertTrue(result[1] > 0 && result[1] <= 60); // field2 should have TTL
+        assertEquals(-2L, (long) result[2]); // nonexistent field
+
+        // Clean up
+        client.del(new GlideString[] {key}).get();
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClientsWithAtomic")
+    public void httl_batch_functionality(BaseClient client, boolean isAtomic) {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0"),
+                "Hash field expiration commands require Valkey 9.0.0 or higher");
+
+        boolean isCluster = client instanceof GlideClusterClient;
+        String key = "test_httl_batch_" + UUID.randomUUID();
+
+        // First set some fields with expiration using hsetex
+        Map<String, String> fieldValueMap = new LinkedHashMap<>();
+        fieldValueMap.put("field1", "value1");
+        fieldValueMap.put("field2", "value2");
+
+        HashFieldExpirationOptions setOptions =
+                HashFieldExpirationOptions.builder()
+                        .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
+                        .build();
+        client.hsetex(key, fieldValueMap, setOptions).get();
+
+        // Test HTTL in batch
+        BaseBatch<?> batch = isCluster ? new ClusterBatch(isAtomic) : new Batch(isAtomic);
+        String[] fields = {"field1", "field2", "nonexistent"};
+        batch.httl(key, fields);
+
+        Object[] result =
+                isCluster
+                        ? ((GlideClusterClient) client).exec((ClusterBatch) batch, false).get()
+                        : ((GlideClient) client).exec((Batch) batch, false).get();
+
+        assertEquals(1, result.length);
+        Long[] httlResult = (Long[]) result[0];
+        assertEquals(3, httlResult.length);
+        assertTrue(httlResult[0] > 0 && httlResult[0] <= 60); // field1 should have TTL
+        assertTrue(httlResult[1] > 0 && httlResult[1] <= 60); // field2 should have TTL
+        assertEquals(-2L, (long) httlResult[2]); // nonexistent field
+
+        // Clean up
+        client.del(new String[] {key}).get();
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void hexists_existing_field_non_existing_field_non_existing_key(BaseClient client) {
         String key = UUID.randomUUID().toString();
         String field1 = UUID.randomUUID().toString();
