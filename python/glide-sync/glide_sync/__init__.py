@@ -78,6 +78,7 @@ from glide_shared import (
     LexBoundary,
     Limit,
     ListDirection,
+    LoggerError,
     MaxId,
     MinId,
     NodeAddress,
@@ -275,10 +276,12 @@ __all__ = [
     "ConnectionError",
     "ExecAbortError",
     "GlideError",
-    "Logger",
-    "LogLevel",
     "RequestError",
     "TimeoutError",
+    "LoggerError",
+    # Logger
+    "Logger",
+    "LogLevel",
     # Ft
     "DataType",
     "DistanceMetricType",

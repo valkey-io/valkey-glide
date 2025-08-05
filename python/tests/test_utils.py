@@ -37,6 +37,24 @@ class TestLogger:
         Logger.set_logger_config(DEFAULT_TEST_LOG_LEVEL)
         assert Logger.logger_level == DEFAULT_TEST_LOG_LEVEL.value
 
+    def test_init_does_not_override_existing_logger(self):
+        # Initialize first with set_logger_config to change the existing logger config
+        Logger.set_logger_config(level=Level.INFO)
+        logger1 = Logger._instance
+        level1 = Logger.logger_level
+
+        # Initialize the logger with init (should not change the existing logger)
+        Logger.init(level=Level.DEBUG)
+        logger2 = Logger._instance
+        level2 = Logger.logger_level
+
+        # Assert singleton and level didn't change
+        assert logger1 is logger2
+        assert level1 == level2
+
+        # Revert the logger back to the default test log level
+        Logger.set_logger_config(DEFAULT_TEST_LOG_LEVEL)
+
     def test_init_sync_logger(self):
         # The logger is already configured in the conftest file, so calling init again shouldn't modify the log level
         SyncLogger.init(SyncLogLevel.ERROR)
@@ -49,27 +67,23 @@ class TestLogger:
         SyncLogger.set_logger_config(DEFAULT_SYNC_TEST_LOG_LEVEL)
         assert SyncLogger.logger_level == DEFAULT_SYNC_TEST_LOG_LEVEL
 
-    def test_sync_logger_init_is_idempotent(self):
-        # Clean up any existing files before test
-        for prefix in ("first.log", "second.log"):
-            for f in find_log_files(prefix):
-                os.remove(f)
-
-        # Initialize once with first.log
-        SyncLogger.init(level=SyncLogLevel.INFO, file_name="first.log")
-        SyncLogger.log(SyncLogLevel.INFO, "test", "Message after first init")
+    def test_sync_init_does_not_override_existing_logger(self):
+        # Initialize first with set_logger_config to change the existing logger config
+        SyncLogger.set_logger_config(level=SyncLogLevel.INFO)
         logger1 = SyncLogger._instance
         level1 = SyncLogger.logger_level
 
-        # Re-run init with second.log (should NOT reconfigure)
-        SyncLogger.init(level=SyncLogLevel.DEBUG, file_name="second.log")
-        SyncLogger.log(SyncLogLevel.INFO, "test", "Message after second init")
+        # Initialize the logger with init (should not change the existing logger)
+        SyncLogger.init(level=SyncLogLevel.DEBUG)
         logger2 = SyncLogger._instance
         level2 = SyncLogger.logger_level
 
         # Assert singleton and level didn't change
         assert logger1 is logger2
         assert level1 == level2
+
+        # Revert the logger back to the default test log level
+        SyncLogger.set_logger_config(DEFAULT_SYNC_TEST_LOG_LEVEL)
 
 
 class TestCompareMaps:

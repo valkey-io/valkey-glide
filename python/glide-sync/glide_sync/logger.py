@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Optional, cast
 
 from cffi import FFI
+from glide_shared.exceptions import LoggerError
 
 ENCODING = "utf-8"
 CURR_DIR = Path(__file__).resolve().parent
@@ -34,8 +35,8 @@ class Logger:
     """
 
     _instance: Logger | None = None
-    _ffi: FFI
-    _lib: Any
+    _ffi: FFI = None  # type: ignore
+    _lib: Any = None  # type: ignore
     logger_level: Level = Level.OFF
 
     def __init__(self, level: Optional[Level] = None, file_name: Optional[str] = None):
@@ -51,28 +52,22 @@ class Logger:
             else Logger._ffi.NULL
         )
 
-        # Handle the LogResult* return type
         result_ptr = Logger._lib.init(c_level, c_file_name)
 
-        # Check if result_ptr is not null
         if result_ptr != Logger._ffi.NULL:
             try:
-                # Check if there's an error message
                 if result_ptr.log_error != Logger._ffi.NULL:
                     error_str = cast(
                         bytes, Logger._ffi.string(result_ptr.log_error)
                     ).decode(ENCODING)
-                    print(f"Logger initialization failed: {error_str}")
+                    raise LoggerError(f"Logger initialization failed: {error_str}")
                 else:
-                    # Success case - use the level from the result
                     Logger.logger_level = Level(result_ptr.level)
 
             finally:
-                # Always free the result
                 Logger._lib.free_log_result(result_ptr)
         else:
-            print("Logger initialization failed: init function returned null")
-            Logger.logger_level = Level.WARN
+            raise LoggerError("Logger init received a null pointer")
 
     @classmethod
     def init(cls, level: Optional[Level] = None, file_name: Optional[str] = None):
@@ -91,7 +86,7 @@ class Logger:
                 Otherwise, logs will be printed to the console.
         """
         if cls._instance is None:
-            cls._instance = Logger(level, file_name)
+            cls._instance = cls(level, file_name)
 
     @classmethod
     def log(
@@ -111,7 +106,7 @@ class Logger:
             err (Optional[Exception]): The exception or error to log.
         """
         if not cls._instance:
-            cls._instance = Logger(None)
+            cls._instance = cls(None)
         if log_level.value > Logger.logger_level.value:
             return
         if err:
@@ -119,17 +114,42 @@ class Logger:
         c_identifier = Logger._ffi.new("char[]", log_identifier.encode(ENCODING))
         c_message = Logger._ffi.new("char[]", message.encode(ENCODING))
         result_ptr = Logger._lib.log(log_level.value, c_identifier, c_message)
-        # Check if result_ptr is not null
-        if result_ptr != Logger._ffi.NULL:
-            # Check if there's an error message
-            if result_ptr.log_error != Logger._ffi.NULL:
-                error_str = cast(
-                    bytes, Logger._ffi.string(result_ptr.log_error)
-                ).decode(ENCODING)
-                print(f"FFI log error: {error_str}")
 
-            # Free the entire result - this will internally free the error string
-            Logger._lib.free_log_result(result_ptr)
+        if result_ptr != Logger._ffi.NULL:
+            try:
+                if result_ptr.log_error != Logger._ffi.NULL:
+                    error_str = cast(
+                        bytes, Logger._ffi.string(result_ptr.log_error)
+                    ).decode(ENCODING)
+
+                    # If the log failed due to invalid provided identifier or message,
+                    # Log the FFI log error using logger_core directly
+                    error_identifier = Logger._ffi.new(
+                        "char[]", "Logger.log".encode(ENCODING)
+                    )
+                    error_message = Logger._ffi.new(
+                        "char[]", f"FFI log error: {error_str}".encode(ENCODING)
+                    )
+                    error_result_ptr = Logger._lib.log(
+                        Level.ERROR.value, error_identifier, error_message
+                    )
+                    if error_result_ptr != Logger._ffi.NULL:
+                        Logger._lib.free_log_result(error_result_ptr)
+
+            finally:
+                Logger._lib.free_log_result(result_ptr)
+
+        else:
+            # Log the null pointer error using logger_core directly
+            error_identifier = Logger._ffi.new("char[]", "Logger.log".encode(ENCODING))
+            error_message = Logger._ffi.new(
+                "char[]", "FFI Log function returned a null pointer".encode(ENCODING)
+            )
+            error_result_ptr = Logger._lib.log(
+                Level.ERROR.value, error_identifier, error_message
+            )
+            if error_result_ptr != Logger._ffi.NULL:
+                Logger._lib.free_log_result(error_result_ptr)
 
     @classmethod
     def _init_ffi(cls):
@@ -172,4 +192,4 @@ class Logger:
             file_name (Optional[str]): If provided the target of the logs will be the file mentioned.
                 Otherwise, logs will be printed to the console.
         """
-        Logger._instance = Logger(level, file_name)
+        Logger._instance = cls(level, file_name)
