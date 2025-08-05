@@ -1031,4 +1031,64 @@ public interface HashBaseCommands {
      * }</pre>
      */
     CompletableFuture<Boolean[]> hpersist(GlideString key, GlideString[] fields);
+
+    /**
+     * Sets expiration time for hash fields, in milliseconds. Creates the hash if it doesn't exist. If
+     * a field is already expired, it will be deleted rather than expired.
+     *
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/hpexpire/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param milliseconds The expiration time to set for the fields, in milliseconds.
+     * @param fields The fields to set expiration for.
+     * @param options The expiration options.
+     * @return An array of <code>Boolean</code> values, each corresponding to a field:
+     *     <ul>
+     *       <li><code>true</code> if the expiration time was successfully set for the field.
+     *       <li><code>false</code> if the field does not exist or the expiration time was not set due
+     *           to the condition not being met.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * // Set expiration for fields in 5000 milliseconds (5 seconds)
+     * HashFieldExpirationOptions options = HashFieldExpirationOptions.builder()
+     *     .expirationConditionOnlyIfNoExpiry()
+     *     .build();
+     * Boolean[] results = client.hpexpire("my_hash", 5000L, new String[] {"field1", "field2"}, options).get();
+     * assert Arrays.equals(results, new Boolean[] {true, true}); // Both fields had expiration set
+     * }</pre>
+     */
+    CompletableFuture<Boolean[]> hpexpire(
+            String key, long milliseconds, String[] fields, HashFieldExpirationOptions options);
+
+    /**
+     * Sets expiration time for hash fields, in milliseconds. Creates the hash if it doesn't exist. If
+     * a field is already expired, it will be deleted rather than expired.
+     *
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/hpexpire/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param milliseconds The expiration time to set for the fields, in milliseconds.
+     * @param fields The fields to set expiration for.
+     * @param options The expiration options.
+     * @return An array of <code>Boolean</code> values, each corresponding to a field:
+     *     <ul>
+     *       <li><code>true</code> if the expiration time was successfully set for the field.
+     *       <li><code>false</code> if the field does not exist or the expiration time was not set due
+     *           to the condition not being met.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * // Set expiration for fields in 5000 milliseconds (5 seconds)
+     * HashFieldExpirationOptions options = HashFieldExpirationOptions.builder()
+     *     .expirationConditionOnlyIfNoExpiry()
+     *     .build();
+     * Boolean[] results = client.hpexpire(gs("my_hash"), 5000L, new GlideString[] {gs("field1"), gs("field2")}, options).get();
+     * assert Arrays.equals(results, new Boolean[] {true, true}); // Both fields had expiration set
+     * }</pre>
+     */
+    CompletableFuture<Boolean[]> hpexpire(
+            GlideString key, long milliseconds, GlideString[] fields, HashFieldExpirationOptions options);
 }
