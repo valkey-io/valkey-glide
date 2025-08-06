@@ -7,43 +7,8 @@ import (
 	"fmt"
 )
 
-// ExampleWithSpan demonstrates storing and retrieving span pointers from context
-func ExampleWithSpan() {
-	// Create a mock span pointer
-	spanPtr := uint64(12345)
-
-	// Store span in context
-	ctx := WithSpan(context.Background(), spanPtr)
-
-	// Retrieve span from context
-	retrievedSpan := DefaultSpanFromContext(ctx)
-
-	fmt.Println(retrievedSpan)
-
-	// Output: 12345
-}
-
-// ExampleDefaultSpanFromContext demonstrates the default span extraction function
-func ExampleDefaultSpanFromContext() {
-	// Test with context containing a span
-	spanPtr := uint64(54321)
-	ctx := WithSpan(context.Background(), spanPtr)
-
-	// Extract span using default function
-	extractedSpan := DefaultSpanFromContext(ctx)
-	fmt.Println(extractedSpan)
-
-	// Test with context without span
-	emptyCtx := context.Background()
-	noSpan := DefaultSpanFromContext(emptyCtx)
-	fmt.Println(noSpan)
-
-	// Output: 54321
-	// 0
-}
-
-// ExampleOpenTelemetry_CreateSpan demonstrates creating and ending spans
-func ExampleOpenTelemetry_CreateSpan() {
+// ExampleOpenTelemetry demonstrates creating parent spans and using them with Valkey commands
+func ExampleOpenTelemetry() {
 	// Initialize OpenTelemetry with file exporter for demonstration
 	config := OpenTelemetryConfig{
 		Traces: &OpenTelemetryTracesConfig{
@@ -59,18 +24,21 @@ func ExampleOpenTelemetry_CreateSpan() {
 		// This is expected behavior in the test environment
 	}
 
-	// Create a span
-	spanPtr, err := GetOtelInstance().CreateSpan("example-operation")
+	// Create a parent span for the user operation
+	spanPtr, err := GetOtelInstance().CreateSpan("user-operation")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 		return
 	}
 	defer GetOtelInstance().EndSpan(spanPtr)
 
-	// Use the span with a client operation
+	// Get a Valkey client
 	client := getExampleClient()
+	
+	// Add the span to context - this creates parent-child relationship
 	ctx := WithSpan(context.Background(), spanPtr)
 
+	// Execute a Valkey command - this will create a child span under "user-operation"
 	result, err := client.Set(ctx, "example:key", "example_value")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -78,6 +46,4 @@ func ExampleOpenTelemetry_CreateSpan() {
 	}
 
 	fmt.Println(result)
-
-	// Output: OK
 }
