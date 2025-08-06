@@ -38,7 +38,7 @@ pub enum GlideIAMError {
 }
 
 // Service type configuration for IAM authentication
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ServiceType {
     ElastiCache,
     MemoryDB,
@@ -59,8 +59,9 @@ impl ServiceType {
         }
     }
 }
+
+// Internal state structure for IAM token management
 #[derive(Clone, Debug)]
-/// Internal state for IAM token manager
 struct IamTokenState {
     /// AWS region for signing requests
     region: String,
@@ -70,8 +71,6 @@ struct IamTokenState {
     username: String,
     /// Service type (ElastiCache or MemoryDB)
     service_type: ServiceType,
-    /// Currently cached auth token
-    cached_token: String,
     /// Token refresh interval in seconds
     refresh_interval_seconds: u32,
 }
@@ -80,10 +79,13 @@ struct IamTokenState {
 /// IAM-based authentication token manager for ElastiCache/MemoryDB
 ///
 /// Manages automatic token refresh using AWS IAM credentials and SigV4 signing.
-/// Tokens are valid for 15 minutes and refreshed every 11 hours by default.
+/// Tokens are valid for 15 minutes and refreshed every 8 minutes by default.
 pub struct IAMTokenManager {
-    /// Internal state protected by a single RwLock
-    iam_token_state: Arc<RwLock<IamTokenState>>,
+    /// Currently cached auth token (protected by RwLock)
+    cached_token: Arc<RwLock<String>>,
+
+    /// IAM token state containing all configuration
+    iam_token_state: IamTokenState,
 
     /// Background refresh task handle
     refresh_task: Option<JoinHandle<()>>,
@@ -146,19 +148,15 @@ impl IAMTokenManager {
             cluster_name,
             username,
             service_type,
-            cached_token: String::new(), // Will be set below
             refresh_interval_seconds: validated_refresh_interval,
         };
 
         // Generate initial token using the state
         let initial_token = Self::generate_token_static(&state).await?;
 
-        // Update the state with the initial token
-        let mut state = state;
-        state.cached_token = initial_token;
-
         Ok(Self {
-            iam_token_state: Arc::new(RwLock::new(state)),
+            cached_token: Arc::new(RwLock::new(initial_token)),
+            iam_token_state: state,
             refresh_task: None,
             shutdown_notify: Arc::new(Notify::new()),
         })
@@ -170,10 +168,15 @@ impl IAMTokenManager {
             return; // Task already running
         }
 
-        let iam_token_state = Arc::clone(&self.iam_token_state);
+        let iam_token_state = self.iam_token_state.clone();
+        let cached_token = Arc::clone(&self.cached_token);
         let shutdown_notify = Arc::clone(&self.shutdown_notify);
 
-        let task = tokio::spawn(Self::token_refresh_task(iam_token_state, shutdown_notify));
+        let task = tokio::spawn(Self::token_refresh_task(
+            iam_token_state,
+            cached_token,
+            shutdown_notify,
+        ));
 
         self.refresh_task = Some(task);
     }
@@ -184,14 +187,12 @@ impl IAMTokenManager {
     /// based on the configured refresh interval. It handles graceful shutdown and continues
     /// running even if individual refresh attempts fail.
     async fn token_refresh_task(
-        iam_token_state: Arc<RwLock<IamTokenState>>,
+        iam_token_state: IamTokenState,
+        cached_token: Arc<RwLock<String>>,
         shutdown_notify: Arc<Notify>,
     ) {
         // Get refresh interval from state
-        let refresh_interval = {
-            let state_guard = iam_token_state.read().await;
-            Duration::from_secs(state_guard.refresh_interval_seconds as u64)
-        };
+        let refresh_interval = Duration::from_secs(iam_token_state.refresh_interval_seconds as u64);
 
         let mut interval_timer = interval(refresh_interval);
         interval_timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
@@ -202,7 +203,7 @@ impl IAMTokenManager {
         loop {
             tokio::select! {
                 _ = interval_timer.tick() => {
-                    Self::handle_token_refresh(&iam_token_state).await;
+                    Self::handle_token_refresh(&iam_token_state, &cached_token).await;
                 }
                 _ = shutdown_notify.notified() => {
                     log_info("IAM token refresh task shutting down", "");
@@ -216,16 +217,16 @@ impl IAMTokenManager {
     ///
     /// This function attempts to generate a new token and update the cached token.
     /// If the refresh fails, it logs an error but doesn't stop the refresh task.
-    async fn handle_token_refresh(iam_token_state: &Arc<RwLock<IamTokenState>>) {
-        // Get current state for token generation
-        let token_result = {
-            let state_guard = iam_token_state.read().await;
-            Self::generate_token_static(&state_guard).await
-        };
+    async fn handle_token_refresh(
+        iam_token_state: &IamTokenState,
+        cached_token: &Arc<RwLock<String>>,
+    ) {
+        // Generate new token using the state
+        let token_result = Self::generate_token_static(iam_token_state).await;
 
         match token_result {
             Ok(new_token) => {
-                Self::set_cached_token_static(iam_token_state, new_token).await;
+                Self::set_cached_token_static(cached_token, new_token).await;
                 log_info("IAM token refreshed successfully", "");
             }
             Err(e) => {
@@ -246,23 +247,20 @@ impl IAMTokenManager {
     }
 
     /// Set a new cached token (static version for use in background tasks)
-    async fn set_cached_token_static(
-        iam_token_state: &Arc<RwLock<IamTokenState>>,
-        new_token: String,
-    ) {
-        let mut state_guard = iam_token_state.write().await;
-        state_guard.cached_token = new_token;
+    async fn set_cached_token_static(cached_token: &Arc<RwLock<String>>, new_token: String) {
+        let mut token_guard = cached_token.write().await;
+        *token_guard = new_token;
     }
 
     /// Set a new cached token
     async fn set_cached_token(&self, new_token: String) {
-        Self::set_cached_token_static(&self.iam_token_state, new_token).await;
+        Self::set_cached_token_static(&self.cached_token, new_token).await;
     }
 
     /// Get the current cached token
     pub async fn get_token(&self) -> String {
-        let state_guard = self.iam_token_state.read().await;
-        state_guard.cached_token.clone()
+        let token_guard = self.cached_token.read().await;
+        token_guard.clone()
     }
 
     /// This method creates an ElastiCache/MemoryDB authentication token using AWS IAM credentials
@@ -294,7 +292,7 @@ impl IAMTokenManager {
             creds.secret_access_key(),
             creds.session_token().map(|s| s.to_string()),
             None,
-            "elasticache-auth",
+            state.service_type.service_name(),
         );
 
         // Calculate the current time for signing
@@ -386,13 +384,8 @@ impl IAMTokenManager {
 
     /// Force refresh the token immediately
     pub async fn refresh_token(&self) -> Result<(), GlideIAMError> {
-        let new_token = {
-            let state_guard = self.iam_token_state.read().await;
-            Self::generate_token_static(&state_guard).await?
-        };
-
+        let new_token = Self::generate_token_static(&self.iam_token_state).await?;
         self.set_cached_token(new_token).await;
-
         Ok(())
     }
 }
@@ -481,7 +474,6 @@ mod tests {
             cluster_name: cluster_name.to_string(),
             username: username.to_string(),
             service_type,
-            cached_token: String::new(), // Not used for saving
             refresh_interval_seconds: DEFAULT_REFRESH_INTERVAL_SECONDS, // Default value 14 minutes in seconds
         }
     }
@@ -753,7 +745,7 @@ mod tests {
         );
 
         // Wait at least 1 second to ensure timestamp difference in AWS SigV4 signing
-        sleep(Duration::from_secs(10)).await;
+        sleep(Duration::from_secs(1)).await;
 
         let refresh_result = manager.refresh_token().await;
         assert!(refresh_result.is_ok(), "Token refresh should succeed");

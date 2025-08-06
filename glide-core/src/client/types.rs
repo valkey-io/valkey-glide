@@ -8,6 +8,7 @@ use std::time::Duration;
 
 #[cfg(feature = "proto")]
 use crate::connection_request as protobuf;
+use crate::iam::ServiceType;
 
 #[derive(Default, Clone, Debug)]
 pub struct ConnectionRequest {
@@ -39,7 +40,8 @@ pub struct AuthenticationInfo {
 pub struct IamAuthenticationConfig {
     pub cluster_name: String,
     pub region: String,
-    pub refresh_interval_minutes: Option<u32>,
+    pub service_type: ServiceType,
+    pub refresh_interval_seconds: Option<u32>,
 }
 
 #[derive(Default, Clone, Copy, Debug)]
@@ -166,16 +168,22 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
                 ) => {
                     let cluster_name = chars_to_string_option(&iam_creds.cluster_name)?;
                     let region = chars_to_string_option(&iam_creds.region)?;
-                    let username = chars_to_string_option(&iam_creds.username);
-                    let refresh_interval_minutes = iam_creds.refresh_interval_minutes;
+                    // Map proto enum -> your ServiceType
+                    let service_type = match iam_creds.service_type.enum_value() {
+                        Ok(protobuf::ServiceType::MEMORYDB) => ServiceType::MemoryDB,
+                        _ => ServiceType::ElastiCache,
+                    };
+
+                    let refresh_interval_seconds = iam_creds.refresh_interval_seconds;
 
                     Some(AuthenticationInfo {
                         password: None,
-                        username,
+                        username: None,
                         iam_config: Some(IamAuthenticationConfig {
                             cluster_name,
                             region,
-                            refresh_interval_minutes,
+                            service_type,
+                            refresh_interval_seconds,
                         }),
                     })
                 }
