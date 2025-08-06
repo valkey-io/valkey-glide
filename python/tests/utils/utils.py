@@ -424,19 +424,21 @@ def check_function_stats_response(
     assert expected == response.get(b"engines")
 
 
-async def set_new_acl_username_with_password(
-    client: TGlideClient, username: str, password: str
+def set_new_acl_username_with_password(
+    client: TAnyGlideClient, username: str, password: str
 ):
     """
-    Sets a new ACL user with the provided password
+    Sets a new ACL user with the provided password.
+    When passing a sync client, this returns the reuslt of the ACL SETUSER command.
+    When passing an async client, this returns a coroutine that should be awaited.
     """
     try:
-        if isinstance(client, GlideClient):
-            await client.custom_command(
+        if isinstance(client, (GlideClient, SyncGlideClient)):
+            return client.custom_command(
                 ["ACL", "SETUSER", username, "ON", f">{password}", "~*", "&*", "+@all"]
             )
-        elif isinstance(client, GlideClusterClient):
-            await client.custom_command(
+        elif isinstance(client, (GlideClusterClient, SyncGlideClusterClient)):
+            return client.custom_command(
                 ["ACL", "SETUSER", username, "ON", f">{password}", "~*", "&*", "+@all"],
                 route=AllNodes(),
             )
@@ -444,17 +446,18 @@ async def set_new_acl_username_with_password(
         raise RuntimeError(f"Failed to set ACL user: {e}")
 
 
-async def delete_acl_username_and_password(client: TGlideClient, username: str):
+def delete_acl_username_and_password(client: TAnyGlideClient, username: str):
     """
-    Deletes the username and its password from the ACL list
+    Deletes the username and its password from the ACL list.
+    Sets a new ACL user with the provided password.
+    When passing a sync client, this returns the reuslt of the ACL DELUSER command.
+    When passing an async client, this returns a coroutine that should be awaited.
     """
-    if isinstance(client, GlideClient):
-        return await client.custom_command(["ACL", "DELUSER", username])
+    if isinstance(client, (GlideClient, SyncGlideClient)):
+        return client.custom_command(["ACL", "DELUSER", username])
 
-    elif isinstance(client, GlideClusterClient):
-        return await client.custom_command(
-            ["ACL", "DELUSER", username], route=AllNodes()
-        )
+    elif isinstance(client, (GlideClusterClient, SyncGlideClusterClient)):
+        return client.custom_command(["ACL", "DELUSER", username], route=AllNodes())
 
 
 def create_client_config(
