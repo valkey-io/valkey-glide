@@ -42,6 +42,7 @@ import javax.net.ssl.SSLSocketFactory;
 import redis.clients.jedis.args.BitCountOption;
 import redis.clients.jedis.args.BitOP;
 import redis.clients.jedis.args.ExpiryOption;
+import redis.clients.jedis.commands.ProtocolCommand;
 import redis.clients.jedis.params.BitPosParams;
 import redis.clients.jedis.params.GetExParams;
 import redis.clients.jedis.params.ScanParams;
@@ -613,6 +614,28 @@ public final class Jedis implements Closeable {
      */
     public boolean isClosed() {
         return closed;
+    }
+
+    /**
+     * Connect to the Valkey server.
+     *
+     * <p><strong>Note:</strong> This method is provided for Jedis API compatibility only. In the
+     * Valkey GLIDE compatibility layer, connections are established automatically during object
+     * construction. This method performs no operation since the underlying GLIDE client is already
+     * connected when the Jedis object is created successfully.
+     *
+     * <p>Unlike the original Jedis client which uses lazy connection initialization, this
+     * compatibility layer uses eager connection establishment for better error handling and
+     * simplified resource management.
+     *
+     * @throws JedisException if the connection is already closed
+     * @see #isClosed()
+     * @see #close()
+     */
+    public void connect() {
+        checkNotClosed();
+        // No implementation required - connection is established in constructor.
+        // This method exists solely for Jedis API compatibility.
     }
 
     /**
@@ -3793,6 +3816,144 @@ public final class Jedis implements Closeable {
             return glideClient.pfmerge(new String(destKey, VALKEY_CHARSET), stringSourceKeys).get();
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("PFMERGE operation failed", e);
+        }
+    }
+
+    // ========== sendCommand Methods ==========
+
+    /**
+     * Sends a Redis command using the GLIDE client with full compatibility to original Jedis.
+     *
+     * <p>This method provides complete compatibility with the original Jedis sendCommand
+     * functionality by using GLIDE's customCommand directly.
+     *
+     * <p><b>Compatibility Note:</b> This method provides full compatibility with original Jedis
+     * sendCommand behavior. All Redis commands and their optional arguments are supported through
+     * GLIDE's customCommand.
+     *
+     * @param cmd the Redis command to execute
+     * @param args the command arguments as byte arrays
+     * @return the command response from GLIDE customCommand
+     * @throws JedisException if the command fails or is not supported
+     * @throws UnsupportedOperationException if the command is not supported in the compatibility
+     *     layer
+     */
+    public Object sendCommand(ProtocolCommand cmd, byte[]... args) {
+        checkNotClosed();
+
+        // Check if it's a Protocol.Command (standard Redis commands)
+        if (cmd instanceof Protocol.Command) {
+            Protocol.Command command = (Protocol.Command) cmd;
+            try {
+                return executeProtocolCommandWithByteArgs(command.name(), args);
+            } catch (Exception e) {
+                throw new JedisException("Command execution failed: " + command.name(), e);
+            }
+        }
+
+        // Future expansion: Add support for other ProtocolCommand implementations
+        throw new UnsupportedOperationException(
+                "ProtocolCommand type "
+                        + cmd.getClass().getSimpleName()
+                        + " is not supported in GLIDE compatibility layer. "
+                        + "Supported types: Protocol.Command. Use specific typed methods instead.");
+    }
+
+    /**
+     * Sends a command to the Redis server with string arguments.
+     *
+     * <p><b>Compatibility Note:</b> This method provides full compatibility with original Jedis
+     * sendCommand functionality. All Redis commands and their optional arguments are supported.
+     *
+     * @param cmd the Redis command to execute
+     * @param args the command arguments as strings
+     * @return the command response from GLIDE customCommand
+     * @throws JedisException if the command fails or is not supported
+     * @throws UnsupportedOperationException if the command is not supported in the compatibility
+     *     layer
+     */
+    public Object sendCommand(ProtocolCommand cmd, String... args) {
+        checkNotClosed();
+
+        // Check if it's a Protocol.Command (standard Redis commands)
+        if (cmd instanceof Protocol.Command) {
+            Protocol.Command command = (Protocol.Command) cmd;
+            try {
+                return executeProtocolCommandWithStringArgs(command.name(), args);
+            } catch (Exception e) {
+                throw new JedisException("Command execution failed: " + command.name(), e);
+            }
+        }
+
+        // Future expansion: Add support for other ProtocolCommand implementations
+        throw new UnsupportedOperationException(
+                "ProtocolCommand type "
+                        + cmd.getClass().getSimpleName()
+                        + " is not supported in GLIDE compatibility layer. "
+                        + "Supported types: Protocol.Command. Use specific typed methods instead.");
+    }
+
+    /**
+     * Sends a command to the Redis server without arguments.
+     *
+     * <p><b>Compatibility Note:</b> This method provides full compatibility with original Jedis
+     * sendCommand functionality. All Redis commands are supported.
+     *
+     * @param cmd the Redis command to execute
+     * @return the command response from GLIDE customCommand
+     * @throws JedisException if the command fails or is not supported
+     * @throws UnsupportedOperationException if the command is not supported in the compatibility
+     *     layer
+     */
+    public Object sendCommand(ProtocolCommand cmd) {
+        return sendCommand(cmd, new byte[0][]);
+    }
+
+    /**
+     * Executes a Redis command using GLIDE's string customCommand for optimal performance. This
+     * avoids unnecessary string→byte[]→GlideString conversions.
+     *
+     * @param commandName the Redis command name
+     * @param args the command arguments as strings
+     * @return the command response from GLIDE customCommand
+     * @throws Exception if the command execution fails
+     */
+    private Object executeProtocolCommandWithStringArgs(String commandName, String... args)
+            throws Exception {
+        // Convert command and args to String array for GLIDE's customCommand(String[])
+        String[] stringArgs = new String[args.length + 1];
+        stringArgs[0] = commandName;
+        System.arraycopy(args, 0, stringArgs, 1, args.length);
+
+        try {
+            return glideClient.customCommand(stringArgs).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("Command " + commandName + " execution failed", e);
+        }
+    }
+
+    /**
+     * Executes a Redis command using GLIDE's binary customCommand for byte array arguments. This
+     * preserves binary data integrity for commands that need exact byte representation.
+     *
+     * @param commandName the Redis command name
+     * @param args the command arguments as byte arrays
+     * @return the command response from GLIDE customCommand
+     * @throws Exception if the command execution fails
+     */
+    private Object executeProtocolCommandWithByteArgs(String commandName, byte[]... args)
+            throws Exception {
+        // Convert command and args to GlideString array for GLIDE's customCommand(GlideString[])
+        GlideString[] glideArgs = new GlideString[args.length + 1];
+        glideArgs[0] = GlideString.of(commandName);
+        for (int i = 0; i < args.length; i++) {
+            glideArgs[i + 1] = GlideString.of(args[i]);
+        }
+
+        try {
+            return glideClient.customCommand(glideArgs).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("Command " + commandName + " execution failed", e);
         }
     }
 }
