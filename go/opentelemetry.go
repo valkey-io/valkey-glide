@@ -84,7 +84,7 @@ type OpenTelemetryConfig struct {
 	//   - spanPtr: A span pointer (uint64) obtained from CreateSpan() or 0 if no parent span is found
 	//
 	// If this function is not provided or returns 0, Glide will create independent spans
-	// as it currently does. If the function panics, Glide will gracefully fallback to creating 
+	// as it currently does. If the function panics, Glide will gracefully fallback to creating
 	// independent spans.
 	//
 	// Example implementation:
