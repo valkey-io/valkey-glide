@@ -191,7 +191,7 @@ pub enum ClientWrapper {
 pub struct LazyClient {
     config: ConnectionRequest,
     push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
-    iam_token_manager: Option<Arc<crate::iam::IAMTokenManager>>,
+    iam_token_manager: Option<Arc<tokio::sync::RwLock<crate::iam::IAMTokenManager>>>,
 }
 
 #[derive(Clone)]
@@ -200,9 +200,8 @@ pub struct Client {
     request_timeout: Duration,
     // Setting this counter to limit the inflight requests, in case of any queue is blocked, so we return error to the customer.
     inflight_requests_allowed: Arc<AtomicIsize>,
-    // IAM token manager for automatic credential refresh - simplified!
-    // todo: should it be Arc<RwLock<Option<crate::iam::IAMTokenManager>>> like before the change?
-    iam_token_manager: Option<Arc<crate::iam::IAMTokenManager>>,
+    // IAM token manager for automatic credential refresh
+    iam_token_manager: Arc<RwLock<Option<Arc<tokio::sync::RwLock<crate::iam::IAMTokenManager>>>>>,
 }
 
 async fn run_with_timeout<T>(
@@ -356,13 +355,11 @@ impl Client {
             }
         };
 
-        //todo: check what to do here
         // Now we can safely update the IAM token manager without holding the lock
-        if let Some(_iam_manager) = lazy_iam_manager {
+        if let Some(iam_manager) = lazy_iam_manager {
             // Transfer the IAM token manager from lazy client to main client
-            // This is done safely using Arc without requiring unsafe code
-            // Note: We can't call update_iam_token_manager here because self is &self, not &mut self
-            // Instead, we'll handle this in the Client::new method or make the field mutable
+            // This is done safely using Arc and RwLock without requiring unsafe code
+            self.update_iam_token_manager(iam_manager).await;
         }
 
         // Continue with client initialization
@@ -829,12 +826,17 @@ impl Client {
         password: Option<String>,
     ) -> RedisResult<Value> {
         // Check if we have an IAM token manager first (takes precedence)
-        let token_option = if let Some(iam_manager) = &self.iam_token_manager {
-            Some(iam_manager.get_token().await)
-        } else {
-            None
-        };
+        let token_option = {
+            let iam_manager_guard = self.iam_token_manager.read().await;
+            if let Some(iam_manager) = iam_manager_guard.as_ref() {
+                let token = iam_manager.read().await.get_token().await;
+                Some(token)
+            } else {
+                None
+            }
+        }; // Guard is dropped here
 
+        // todo: check about the syntax here
         // If we have an IAM token, use it for authentication
         if let Some(token) = token_option {
             let routing = routing.unwrap_or(RoutingInfo::MultiNode((
@@ -895,33 +897,32 @@ impl Client {
         }
     }
 
-    // todo: add option for changin service type in the request
     /// Create an IAM token manager from authentication config if needed
     async fn create_iam_token_manager(
         auth_info: &crate::client::types::AuthenticationInfo,
-    ) -> Option<Arc<crate::iam::IAMTokenManager>> {
+    ) -> Option<Arc<tokio::sync::RwLock<crate::iam::IAMTokenManager>>> {
         if let Some(iam_config) = &auth_info.iam_config {
             if let Some(username) = &auth_info.username {
                 match crate::iam::IAMTokenManager::new(
                     iam_config.cluster_name.clone(),
                     username.clone(),
                     iam_config.region.clone(),
-                    crate::iam::ServiceType::ElastiCache, // Default to ElastiCache service type
-                    iam_config.refresh_interval_minutes,
+                    iam_config.service_type.clone(),
+                    iam_config.refresh_interval_seconds,
                 )
                 .await
                 {
                     Ok(mut token_manager) => {
                         token_manager.start_refresh_task();
-                        Some(Arc::new(token_manager))
+                        Some(Arc::new(tokio::sync::RwLock::new(token_manager)))
                     }
                     Err(e) => {
-                        log_error("Failed to create IAM token manager", format!("{e}"));
+                        eprintln!("Failed to create IAM token manager: {e}");
                         None
                     }
                 }
             } else {
-                log_error("IAM authentication requires a username", "");
+                eprintln!("IAM authentication requires a username");
                 None
             }
         } else {
@@ -929,14 +930,14 @@ impl Client {
         }
     }
 
-    //todo: check where to use it
-    // Update the IAM token manager for this client
-    // async fn update_iam_token_manager(
-    //     &mut self,
-    //     iam_token_manager: Arc<crate::iam::IAMTokenManager>,
-    // ) {
-    //     self.iam_token_manager = Some(iam_token_manager);
-    // }
+    /// Update the IAM token manager for this client
+    async fn update_iam_token_manager(
+        &self,
+        iam_token_manager: Arc<tokio::sync::RwLock<crate::iam::IAMTokenManager>>,
+    ) {
+        let mut guard = self.iam_token_manager.write().await;
+        *guard = Some(iam_token_manager);
+    }
 }
 
 fn load_cmd(code: &[u8]) -> Cmd {
@@ -1259,7 +1260,7 @@ impl Client {
                 internal_client: Arc::new(RwLock::new(internal_client)),
                 request_timeout,
                 inflight_requests_allowed,
-                iam_token_manager,
+                iam_token_manager: Arc::new(RwLock::new(iam_token_manager)),
             })
         })
         .await
