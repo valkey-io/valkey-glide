@@ -11,6 +11,8 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Mapping, Union, cast
 
 import pytest
+from glide_shared.commands.batch import Batch, ClusterBatch
+from glide_shared.commands.batch_options import ClusterBatchOptions
 from glide_shared.commands.bitmap import (
     BitFieldGet,
     BitFieldIncrBy,
@@ -8652,6 +8654,25 @@ class TestCommands:
             == key1.encode()
         )
 
+        batch = ClusterBatch(is_atomic=True)
+
+        batch.fcall(func_name, keys=keys, arguments=[])
+        batch.fcall_ro(func_name, keys=keys, arguments=[])
+
+        # check response from a routed batch request
+        result = glide_sync_client.exec(
+            batch, options=ClusterBatchOptions(route=route), raise_on_error=True
+        )
+        assert result is not None
+        assert result[0] == key1.encode()
+        assert result[1] == key1.encode()
+
+        # if no route given, GLIDE should detect it automatically
+        result = glide_sync_client.exec(batch, raise_on_error=True)
+        assert result is not None
+        assert result[0] == key1.encode()
+        assert result[1] == key1.encode()
+
         assert glide_sync_client.function_flush(FlushMode.SYNC, route) is OK
 
     @pytest.mark.skip_if_version_below("7.0.0")
@@ -9425,6 +9446,57 @@ class TestCommands:
         assert glide_sync_client.sadd(lcs_non_string_key, ["Hello", "world"]) == 2
         with pytest.raises(RequestError):
             glide_sync_client.lcs_idx(key1, lcs_non_string_key)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_watch(self, glide_sync_client: GlideClient):
+        # watched key didn't change outside of batch before batch execution, batch will execute
+        assert glide_sync_client.set("key1", "original_value") == OK
+        assert glide_sync_client.watch(["key1"]) == OK
+        batch = Batch(is_atomic=True)
+        batch.set("key1", "batch_value")
+        batch.get("key1")
+        assert glide_sync_client.exec(batch, raise_on_error=True) is not None
+
+        # watched key changed outside of batch before batch execution, batch will not execute
+        assert glide_sync_client.set("key1", "original_value") == OK
+        assert glide_sync_client.watch(["key1"]) == OK
+        batch = Batch(is_atomic=True)
+        batch.set("key1", "batch_value")
+        assert glide_sync_client.set("key1", "standalone_value") == OK
+        batch.get("key1")
+        assert glide_sync_client.exec(batch, raise_on_error=True) is None
+
+        # empty list not supported
+        with pytest.raises(RequestError):
+            glide_sync_client.watch([])
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_unwatch(self, glide_sync_client: GlideClient):
+        # watched key unwatched before batch execution even if changed
+        # outside of batch, batch will still execute
+        assert glide_sync_client.set("key1", "original_value") == OK
+        assert glide_sync_client.watch(["key1"]) == OK
+        batch = Batch(is_atomic=True)
+        batch.set("key1", "batch_value")
+        assert glide_sync_client.set("key1", "standalone_value") == OK
+        batch.get("key1")
+        assert glide_sync_client.unwatch() == OK
+        result = glide_sync_client.exec(batch, raise_on_error=True)
+        assert result is not None
+        assert isinstance(result, list)
+        assert len(result) == 2
+        assert result[0] == "OK"
+        assert result[1] == b"batch_value"
+
+        # UNWATCH returns OK when there no watched keys
+        assert glide_sync_client.unwatch() == OK
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_unwatch_with_route(self, glide_sync_client: GlideClusterClient):
+        assert glide_sync_client.unwatch(RandomNode()) == OK
 
     @pytest.mark.skip_if_version_below("6.0.6")
     @pytest.mark.parametrize("cluster_mode", [True, False])

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Dict, List, Mapping, Optional, cast
 
+from glide_shared.commands.batch import ClusterBatch
+from glide_shared.commands.batch_options import ClusterBatchOptions
 from glide_shared.commands.core_options import (
     FlushMode,
     FunctionRestorePolicy,
@@ -17,6 +19,7 @@ from glide_shared.constants import (
     TFunctionStatsSingleNodeResponse,
     TResult,
 )
+from glide_shared.exceptions import RequestError
 from glide_shared.protobuf.command_request_pb2 import RequestType
 from glide_shared.routes import Route
 
@@ -24,6 +27,124 @@ from .core import CoreCommands
 
 
 class ClusterCommands(CoreCommands):
+
+    def exec(
+        self,
+        batch: ClusterBatch,
+        raise_on_error: bool,
+        options: Optional[ClusterBatchOptions] = None,
+    ) -> Optional[List[TResult]]:
+        """
+        Executes a batch by processing the queued commands.
+
+        **Routing Behavior:**
+
+        - If a `route` is specified in `ClusterBatchOptions`, the entire batch is sent
+          to the specified node.
+        - If no `route` is specified:
+            - **Atomic batches (Transactions):** Routed to the slot owner of the
+              first key in the batch. If no key is found, the request is sent to a random node.
+            - **Non-atomic batches (Pipelines):** Each command is routed to the node
+              owning the corresponding key's slot. If no key is present, routing follows the
+              command's request policy. Multi-node commands are automatically split and
+              dispatched to the appropriate nodes.
+
+        **Behavior notes:**
+
+        - **Atomic Batches (Transactions):** All key-based commands must map to the
+          same hash slot. If keys span different slots, the transaction will fail. If the
+          transaction fails due to a `WATCH` command, `EXEC` will return `None`.
+
+        **Retry and Redirection:**
+
+        - If a redirection error occurs:
+            - **Atomic batches (Transactions):** The entire transaction will be
+              redirected.
+            - **Non-atomic batches:** Only commands that encountered redirection
+              errors will be redirected.
+        - Retries for failures will be handled according to the configured `BatchRetryStrategy`.
+
+        Args:
+            batch (ClusterBatch): A `ClusterBatch` containing the commands to execute.
+            raise_on_error (bool): Determines how errors are handled within the batch response.
+                When set to `True`, the first encountered error in the batch will be raised as an
+                exception of type `RequestError` after all retries and reconnections have been
+                executed.
+                When set to `False`, errors will be included as part of the batch response,
+                allowing the caller to process both successful and failed commands together. In this case,
+                error details will be provided as instances of `RequestError`.
+            options (Optional[ClusterBatchOptions]): A `ClusterBatchOptions` object containing execution options.
+
+        Returns:
+            Optional[List[TResult]]: An array of results, where each entry
+                corresponds to a command's execution result.
+
+        See Also:
+            [Valkey Transactions (Atomic Batches)](https://valkey.io/docs/topics/transactions/)
+            [Valkey Pipelines (Non-Atomic Batches)](https://valkey.io/docs/topics/pipelining/)
+
+        Examples:
+            # Atomic batch (transaction): all keys must share the same hash slot
+            >>> options = ClusterBatchOptions(timeout=1000)  # Set a timeout of 1000 milliseconds
+            >>> atomic_batch = ClusterBatch(is_atomic=True)
+            >>> atomic_batch.set("key", "1")
+            >>> atomic_batch.incr("key")
+            >>> atomic_batch.get("key")
+            >>> atomic_result = cluster_client.exec(atomic_batch, False, options)
+            >>> print(f"Atomic Batch Result: {atomic_result}")
+            # Output: Atomic Batch Result: [OK, 2, 2]
+
+            # Non-atomic batch (pipeline): keys may span different hash slots
+            >>> retry_strategy = BatchRetryStrategy(retry_server_error=True, retry_connection_error=False)
+            >>> pipeline_options = ClusterBatchOptions(retry_strategy=retry_strategy)
+            >>> non_atomic_batch = ClusterBatch(is_atomic=False)
+            >>> non_atomic_batch.set("key1", "value1")
+            >>> non_atomic_batch.set("key2", "value2")
+            >>> non_atomic_batch.get("key1")
+            >>> non_atomic_batch.get("key2")
+            >>> non_atomic_result = cluster_client.exec(non_atomic_batch, False, pipeline_options)
+            >>> print(f"Non-Atomic Batch Result: {non_atomic_result}")
+            # Output: Non-Atomic Batch Result: [OK, OK, value1, value2]
+        """
+        commands = batch.commands[:]
+
+        if (
+            batch.is_atomic
+            and options
+            and options.retry_strategy
+            and (
+                options.retry_strategy.retry_server_error
+                or options.retry_strategy.retry_connection_error
+            )
+        ):
+            raise RequestError(
+                "Retry strategies are not supported for atomic batches (transactions). "
+            )
+
+        # Extract values to make the _execute_batch call cleaner
+        retry_server_error = (
+            options.retry_strategy.retry_server_error
+            if options and options.retry_strategy
+            else False
+        )
+        retry_connection_error = (
+            options.retry_strategy.retry_connection_error
+            if options and options.retry_strategy
+            else False
+        )
+        route = options.route if options else None
+        timeout = options.timeout if options else None
+
+        return self._execute_batch(
+            commands,
+            batch.is_atomic,
+            raise_on_error,
+            retry_server_error,
+            retry_connection_error,
+            route,
+            timeout,
+        )
+
     def custom_command(
         self, command_args: List[TEncodable], route: Optional[Route] = None
     ) -> TClusterResponse[TResult]:
@@ -969,4 +1090,27 @@ class ClusterCommands(CoreCommands):
         return cast(
             int,
             self._execute_command(RequestType.Wait, args, route),
+        )
+
+    def unwatch(self, route: Optional[Route] = None) -> TOK:
+        """
+        Flushes all the previously watched keys for a transaction. Executing a transaction will
+        automatically flush all previously watched keys.
+
+        See [valkey.io](https://valkey.io/commands/unwatch) for more details.
+
+        Args:
+            route (Optional[Route]): The command will be routed to all primary nodes, unless `route` is provided,
+                in which case the client will route the command to the nodes defined by `route`.
+
+        Returns:
+            TOK: A simple "OK" response.
+
+        Examples:
+            >>> client.unwatch()
+                'OK'
+        """
+        return cast(
+            TOK,
+            self._execute_command(RequestType.UnWatch, [], route),
         )
