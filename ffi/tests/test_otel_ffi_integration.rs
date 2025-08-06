@@ -258,7 +258,8 @@ fn test_create_otel_span_with_parent_invalid_inputs() {
     let mut fallback_span_ptrs = vec![child_with_null_parent];
 
     for invalid_parent_ptr in invalid_parent_ptrs {
-        let child_span_ptr = unsafe { create_otel_span_with_parent(RequestType::Set, invalid_parent_ptr) };
+        let child_span_ptr =
+            unsafe { create_otel_span_with_parent(RequestType::Set, invalid_parent_ptr) };
         assert_ne!(
             child_span_ptr, 0,
             "Invalid parent 0x{invalid_parent_ptr:x} should fallback to independent span",
@@ -478,7 +479,8 @@ fn test_error_handling_and_logging() {
     assert_eq!(long_named_span, 0, "Long name should return 0");
 
     // 4. Invalid parent for child span
-    let child_with_invalid_parent = unsafe { create_otel_span_with_parent(RequestType::Get, 0xDEADBEEF) };
+    let child_with_invalid_parent =
+        unsafe { create_otel_span_with_parent(RequestType::Get, 0xDEADBEEF) };
     assert_ne!(
         child_with_invalid_parent, 0,
         "Invalid parent should fallback to independent span"
@@ -733,14 +735,16 @@ fn test_batch_span_concurrent_creation() {
                     counter_clone.fetch_add(1, Ordering::SeqCst);
 
                     // Create batch span with parent
-                    let batch_span_ptr = unsafe { create_batch_otel_span_with_parent(parent_span_ptr) };
+                    let batch_span_ptr =
+                        unsafe { create_batch_otel_span_with_parent(parent_span_ptr) };
                     if batch_span_ptr != 0 {
                         thread_spans.push(batch_span_ptr);
                         counter_clone.fetch_add(1, Ordering::SeqCst);
 
                         // Create a few command spans under the batch
-                        let cmd_span_ptr =
-                            unsafe { create_otel_span_with_parent(RequestType::Set, batch_span_ptr) };
+                        let cmd_span_ptr = unsafe {
+                            create_otel_span_with_parent(RequestType::Set, batch_span_ptr)
+                        };
                         if cmd_span_ptr != 0 {
                             thread_spans.push(cmd_span_ptr);
                             counter_clone.fetch_add(1, Ordering::SeqCst);

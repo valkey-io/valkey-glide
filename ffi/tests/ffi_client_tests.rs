@@ -331,7 +331,8 @@ fn test_create_otel_span_with_parent() {
     );
 
     // Test creating a child span with invalid parent (garbage pointer)
-    let child_span_ptr_garbage = unsafe { create_otel_span_with_parent(RequestType::Get, 0xDEADBEEF) };
+    let child_span_ptr_garbage =
+        unsafe { create_otel_span_with_parent(RequestType::Get, 0xDEADBEEF) };
     assert_ne!(
         child_span_ptr_garbage, 0,
         "Child span creation with garbage parent should fallback to independent span"

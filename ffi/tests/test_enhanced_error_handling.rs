@@ -35,7 +35,8 @@ fn test_enhanced_error_handling() {
     );
 
     // Test 6: create_otel_span_with_parent with garbage parent should fallback to independent span
-    let child_with_garbage_parent = unsafe { create_otel_span_with_parent(RequestType::Get, 0xDEADBEEF) };
+    let child_with_garbage_parent =
+        unsafe { create_otel_span_with_parent(RequestType::Get, 0xDEADBEEF) };
     assert_ne!(
         child_with_garbage_parent, 0,
         "Garbage parent should fallback to independent span"
@@ -50,7 +51,8 @@ fn test_enhanced_error_handling() {
     );
 
     // Test 8: create_otel_span_with_parent with valid parent should succeed
-    let child_with_valid_parent = unsafe { create_otel_span_with_parent(RequestType::Set, valid_span_ptr) };
+    let child_with_valid_parent =
+        unsafe { create_otel_span_with_parent(RequestType::Set, valid_span_ptr) };
     assert_ne!(child_with_valid_parent, 0, "Valid parent should succeed");
 
     // Test 9: drop_otel_span with null pointer should not crash

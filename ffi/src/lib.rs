@@ -728,8 +728,8 @@ fn create_client_internal(
     };
 
     let client = runtime
-    .block_on(GlideClient::new(ConnectionRequest::from(request), tx))
-    .map_err(|err| err.to_string())?;
+        .block_on(GlideClient::new(ConnectionRequest::from(request), tx))
+        .map_err(|err| err.to_string())?;
 
     // Create the client adapter that will be returned and used as conn_ptr
     let core = Arc::new(CommandExecutionCore {
