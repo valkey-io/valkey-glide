@@ -90,7 +90,7 @@ async def acl_glide_client(
     """
     Client fot tests that use a server pre-configured with an ACL user.
     This function first uses the management client to register the USERNAME with INITIAL_PASSWORD,so that
-    the client would be ablt to connect.
+    the client would be able to connect.
     It then returns a client with this USERNAME and INITIAL_PASSWORD already set as its ServerCredentials.
     """
 
