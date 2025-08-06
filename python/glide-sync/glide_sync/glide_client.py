@@ -220,6 +220,12 @@ class BaseClient(CoreCommands):
                 unsigned long arg_count, const size_t *args, const unsigned long* args_len,
                 const unsigned char* route_bytes, size_t route_bytes_len, uint64_t span_ptr
             );
+            CommandResult* update_connection_password(
+                const void* client_adapter_ptr,
+                uintptr_t request_id,
+                const char* password,
+                bool immediate_authentication
+            );
         """
         )
 
@@ -400,6 +406,60 @@ class BaseClient(CoreCommands):
             route_ptr,
             len(route_bytes),
             0,  # Span pointer (0 for no tracing)
+        )
+        return self._handle_cmd_result(result)
+
+    def _update_connection_password(
+        self,
+        password: Optional[str],
+        immediate_auth: bool = False,
+    ) -> TResult:
+        """
+        Update the current connection password with a new password.
+
+        Note:
+            This method updates the client's internal password configuration and does
+            not perform password rotation on the server side.
+
+        This method is useful in scenarios where the server password has changed or when
+        utilizing short-lived passwords for enhanced security. It allows the client to
+        update its password to reconnect upon disconnection without the need to recreate
+        the client instance. This ensures that the internal reconnection mechanism can
+        handle reconnection seamlessly, preventing the loss of in-flight commands.
+
+        Args:
+            password (`Optional[str]`): The new password to use for the connection,
+                if `None` the password will be removed.
+            immediate_auth (`bool`):
+                `True`: The client will authenticate immediately with the new password against all connections, Using `AUTH`
+                command. If password supplied is an empty string, auth will not be performed and warning will be returned.
+                The default is `False`.
+
+        Returns:
+            TOK: A simple OK response. If `immediate_auth=True` returns OK if the reauthenticate succeed.
+
+        Example:
+            >>> client.update_connection_password("new_password", immediate_auth=True)
+            'OK'
+        """
+        if self._is_closed:
+            raise ClosingError("Client is closed.")
+        client_adapter_ptr = self._core_client
+        if client_adapter_ptr == self._ffi.NULL:
+            raise ValueError("Invalid client pointer.")
+
+        # Prepare C string for password
+        c_password = (
+            self._ffi.new("char[]", password.encode(ENCODING))
+            if password is not None
+            else self._ffi.new("char[]", b"")
+        )
+
+        result = self._lib.update_connection_password(
+            client_adapter_ptr,
+            0,  # Request ID (0 for sync use)
+            c_password,
+            immediate_auth,
         )
         return self._handle_cmd_result(result)
 
