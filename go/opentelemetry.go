@@ -56,12 +56,12 @@ import (
 //				Endpoint: "http://localhost:4318/v1/metrics",
 //			},
 //			FlushIntervalMs: &interval, // Optional, defaults to 5000, e.g. interval := int64(1000)
-//			SpanFromContext: func(ctx context.Context) (uint64, bool) {
+//			SpanFromContext: func(ctx context.Context) uint64 {
 //				// Extract span pointer from context for parent-child span relationships
 //				if spanPtr, ok := ctx.Value(glide.SpanContextKey).(uint64); ok && spanPtr != 0 {
-//					return spanPtr, true
+//					return spanPtr
 //				}
-//				return 0, false
+//				return 0
 //			},
 //		}
 //		err := glide.GetOtelInstance().Init(config)
@@ -82,22 +82,21 @@ type OpenTelemetryConfig struct {
 	//
 	// The function should return:
 	//   - spanPtr: A span pointer (uint64) obtained from CreateSpan() or 0 if no parent span is found
-	//   - found: true if a valid parent span was found in the context, false otherwise
 	//
-	// If this function is not provided or returns found=false, Glide will create independent spans
-	// as it currently does. If the function panics or returns invalid data, Glide will gracefully
-	// fallback to creating independent spans.
+	// If this function is not provided or returns 0, Glide will create independent spans
+	// as it currently does. If the function panics, Glide will gracefully fallback to creating 
+	// independent spans.
 	//
 	// Example implementation:
-	//   SpanFromContext: func(ctx context.Context) (uint64, bool) {
+	//   SpanFromContext: func(ctx context.Context) uint64 {
 	//       if spanPtr, ok := ctx.Value(glide.SpanContextKey).(uint64); ok && spanPtr != 0 {
-	//           return spanPtr, true
+	//           return spanPtr
 	//       }
-	//       return 0, false
+	//       return 0
 	//   }
 	//
 	// Note: This function must be thread-safe as it may be called concurrently from multiple goroutines.
-	SpanFromContext func(ctx context.Context) (spanPtr uint64, found bool)
+	SpanFromContext func(ctx context.Context) (spanPtr uint64)
 }
 
 // OpenTelemetryTracesConfig represents the configuration for exporting OpenTelemetry traces.
@@ -448,8 +447,7 @@ func WithSpan(ctx context.Context, spanPtr uint64) context.Context {
 //   - ctx: The context to extract the span pointer from
 //
 // Returns:
-//   - spanPtr: The span pointer if found, 0 otherwise
-//   - found: true if a valid span pointer was found, false otherwise
+//   - spanPtr: The span pointer if found, 0 if no parent span is available
 //
 // Example usage:
 //
@@ -460,19 +458,19 @@ func WithSpan(ctx context.Context, spanPtr uint64) context.Context {
 //		},
 //		SpanFromContext: glide.DefaultSpanFromContext,
 //	}
-func DefaultSpanFromContext(ctx context.Context) (uint64, bool) {
+func DefaultSpanFromContext(ctx context.Context) uint64 {
 	if ctx == nil {
-		return 0, false
+		return 0
 	}
 	if spanPtr, ok := ctx.Value(SpanContextKey).(uint64); ok && spanPtr != 0 {
-		return spanPtr, true
+		return spanPtr
 	}
-	return 0, false
+	return 0
 }
 
 // extractSpanPointer is an internal method that safely extracts parent span pointer from context
 // using the configured SpanFromContext function. It includes error handling and fallback logic.
-func (o *OpenTelemetry) extractSpanPointer(ctx context.Context) (uint64, bool) {
+func (o *OpenTelemetry) extractSpanPointer(ctx context.Context) uint64 {
 	// Thread-safe access to configuration
 	configMutex.RLock()
 	spanFromContextFunc := otelConfig.SpanFromContext
@@ -480,230 +478,22 @@ func (o *OpenTelemetry) extractSpanPointer(ctx context.Context) (uint64, bool) {
 
 	// If no SpanFromContext function is configured, return no parent span
 	if spanFromContextFunc == nil {
-		return 0, false
+		return 0
 	}
 
 	// Call the user-provided function with panic recovery
-	defer func() {
-		if r := recover(); r != nil {
-			log.Printf("SpanFromContext function panicked: %v, falling back to independent span creation", r)
-		}
-	}()
-
-	spanPtr, found := spanFromContextFunc(ctx)
-
-	// Validate the returned span pointer
-	if found && spanPtr == 0 {
-		log.Printf("SpanFromContext returned found=true but spanPtr=0, treating as not found")
-		return 0, false
-	}
-
-	return spanPtr, found
-}
-
-// Span Context Attachment Usage Examples
-//
-// The following examples demonstrate how to use the SpanFromContext functionality
-// to create parent-child span relationships for end-to-end tracing.
-
-/*
-Example 1: Basic Parent-Child Span Relationship
-
-	package main
-
-	import (
-		"context"
-		"log"
-
-		"github.com/valkey-io/valkey-glide/go/v2"
-		"github.com/valkey-io/valkey-glide/go/v2/config"
-	)
-
-	func main() {
-		// Initialize Glide OpenTelemetry with SpanFromContext
-		otelConfig := glide.OpenTelemetryConfig{
-			Traces: &glide.OpenTelemetryTracesConfig{
-				Endpoint:         "http://localhost:4318/v1/traces",
-				SamplePercentage: 100, // Sample all requests for demo
-			},
-			// Use the default span extraction function
-			SpanFromContext: glide.DefaultSpanFromContext,
-		}
-
-		err := glide.GetOtelInstance().Init(otelConfig)
-		if err != nil {
-			log.Fatalf("Failed to initialize OpenTelemetry: %v", err)
-		}
-
-		// Create Glide client
-		clientConfig := &config.GlideClientConfiguration{
-			Addresses: []config.NodeAddress{{Host: "localhost", Port: 6379}},
-		}
-
-		client, err := glide.NewGlideClient(context.Background(), clientConfig)
-		if err != nil {
-			log.Fatalf("Failed to create client: %v", err)
-		}
-		defer client.Close()
-
-		// Create a parent span for the entire operation
-		parentSpanPtr, err := glide.GetOtelInstance().CreateSpan("user-operation")
-		if err != nil {
-			log.Printf("Failed to create span: %v", err)
-			return
-		}
-		defer glide.GetOtelInstance().EndSpan(parentSpanPtr)
-
-		// Store the parent span in context
-		ctx := glide.WithSpan(context.Background(), parentSpanPtr)
-
-		// All Glide operations will now be children of the parent span
-		result, err := client.Get(ctx, "user:123:profile")
-		if err != nil {
-			log.Printf("Error: %v", err)
-		} else {
-			log.Printf("Profile: %v", result.Value())
-		}
-
-		// Another child operation
-		err = client.Set(ctx, "user:123:last_seen", "2024-01-15T10:30:00Z")
-		if err != nil {
-			log.Printf("Error: %v", err)
-		}
-	}
-
-Example 2: Custom SpanFromContext Implementation
-
-	// Custom context key type for type safety
-	type spanContextKey struct{}
-
-	// Custom span extraction function
-	func customSpanFromContext(ctx context.Context) (uint64, bool) {
-		if spanPtr, ok := ctx.Value(spanContextKey{}).(uint64); ok && spanPtr != 0 {
-			return spanPtr, true
-		}
-		return 0, false
-	}
-
-	// Custom helper function to store spans
-	func withCustomSpan(ctx context.Context, spanPtr uint64) context.Context {
-		return context.WithValue(ctx, spanContextKey{}, spanPtr)
-	}
-
-	func main() {
-		// Initialize with custom SpanFromContext function
-		otelConfig := glide.OpenTelemetryConfig{
-			Traces: &glide.OpenTelemetryTracesConfig{
-				Endpoint:         "http://localhost:4318/v1/traces",
-				SamplePercentage: 10,
-			},
-			SpanFromContext: customSpanFromContext,
-		}
-
-		// ... rest of initialization ...
-
-		// Use custom helper function
-		ctx := withCustomSpan(context.Background(), parentSpanPtr)
-
-		// Operations will use the custom context extraction
-		result, err := client.Get(ctx, "key")
-	}
-
-Example 3: Batch Operations with Parent Context
-
-	func processBatchOperations(ctx context.Context, client *glide.GlideClient, userID string) error {
-		// Create a parent span for the batch operation
-		batchSpanPtr, err := glide.GetOtelInstance().CreateSpan("batch-user-operations")
-		if err != nil {
-			return err
-		}
-		defer glide.GetOtelInstance().EndSpan(batchSpanPtr)
-
-		// Store the batch span in context
-		batchCtx := glide.WithSpan(ctx, batchSpanPtr)
-
-		// Create a batch of operations
-		batch := glide.NewBatch()
-		batch.Incr("user:" + userID + ":login_count")
-		batch.SAdd("active_users", userID)
-		batch.Expire("user:" + userID + ":session", 3600)
-
-		// Execute batch - all operations will be children of "batch-user-operations"
-		results, err := client.Exec(batchCtx, batch, false)
-		if err != nil {
-			return err
-		}
-
-		log.Printf("Batch results: %v", results)
-		return nil
-	}
-
-Example 4: Error Handling and Fallback Behavior
-
-	// SpanFromContext function with error handling
-	func robustSpanFromContext(ctx context.Context) (uint64, bool) {
+	var spanPtr uint64
+	func() {
 		defer func() {
 			if r := recover(); r != nil {
-				log.Printf("Panic in SpanFromContext: %v", r)
+				log.Printf("SpanFromContext function panicked: %v, falling back to independent span creation", r)
+				spanPtr = 0
 			}
 		}()
+		spanPtr = spanFromContextFunc(ctx)
+	}()
 
-		// Multiple extraction strategies
-		if spanPtr, ok := ctx.Value(glide.SpanContextKey).(uint64); ok && spanPtr != 0 {
-			return spanPtr, true
-		}
+	return spanPtr
+}
 
-		// Define the same key type for extraction
-		type parentSpanKey struct{}
-		if spanPtr, ok := ctx.Value(parentSpanKey{}).(uint64); ok && spanPtr != 0 {
-			return spanPtr, true
-		}
-
-		return 0, false
-	}
-
-	func main() {
-		otelConfig := glide.OpenTelemetryConfig{
-			Traces: &glide.OpenTelemetryTracesConfig{
-				Endpoint:         "http://localhost:4318/v1/traces",
-				SamplePercentage: 5,
-			},
-			SpanFromContext: robustSpanFromContext,
-		}
-
-		// ... initialization ...
-
-		// Even if SpanFromContext fails, operations will continue with independent spans
-		result, err := client.Get(context.Background(), "key")
-	}
-
-Expected Trace Hierarchy:
-
-With proper span context attachment, your exported traces will show hierarchical relationships:
-
-	user-operation (parent span)
-	├── GET user:123:profile (child span)
-	└── SET user:123:last_seen (child span)
-	batch-user-operations (parent span)
-	└── Batch (child span)
-	    ├── INCR user:123:login_count (child span)
-	    ├── SADD active_users (child span)
-	    └── EXPIRE user:123:session (child span)
-
-This provides complete end-to-end visibility of how database operations fit within
-larger business operation contexts.
-
-Configuration Validation:
-
-The SpanFromContext function is optional and backward compatible:
-- If not provided, Glide creates independent spans (current behavior)
-- If provided but returns found=false, Glide creates independent spans
-- If the function panics, Glide logs the error and creates independent spans
-- Invalid span pointers (0 when found=true) are treated as not found
-
-Thread Safety:
-
-The SpanFromContext function must be thread-safe as it may be called concurrently
-from multiple goroutines. The function should not modify shared state without
-proper synchronization.
-*/
+// For runnable examples demonstrating OpenTelemetry usage, see the examples in opentelemetry_examples_test.go

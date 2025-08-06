@@ -293,7 +293,7 @@ func (client *baseClient) executeCommandWithRoute(
 	otelInstance := GetOtelInstance()
 	if otelInstance != nil && otelInstance.shouldSample() {
 		// Check if there's a parent span in the context
-		if parentSpanPtr, found := otelInstance.extractSpanPointer(ctx); found {
+		if parentSpanPtr := otelInstance.extractSpanPointer(ctx); parentSpanPtr != 0 {
 			// Create child span with parent
 			spanPtr = otelInstance.createSpanWithParent(requestType, parentSpanPtr)
 		} else {
@@ -423,7 +423,7 @@ func (client *baseClient) executeBatch(
 	otelInstance := GetOtelInstance()
 	if otelInstance != nil && otelInstance.shouldSample() {
 		// Check if there's a parent span in the context
-		if parentSpanPtr, found := otelInstance.extractSpanPointer(ctx); found {
+		if parentSpanPtr := otelInstance.extractSpanPointer(ctx); parentSpanPtr != 0 {
 			// Create child batch span with parent
 			// Since we don't have create_batch_otel_span_with_parent, we create a named child span
 			// using the parent span pointer to establish the parent-child relationship
