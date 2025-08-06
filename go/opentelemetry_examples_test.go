@@ -34,7 +34,7 @@ func ExampleOpenTelemetry() {
 
 	// Get a Valkey client
 	client := getExampleClient()
-	
+
 	// Add the span to context - this creates parent-child relationship
 	ctx := WithSpan(context.Background(), spanPtr)
 
