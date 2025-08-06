@@ -728,8 +728,8 @@ fn create_client_internal(
     };
 
     let client = runtime
-        .block_on(GlideClient::new(ConnectionRequest::from(request), tx))
-        .map_err(|err| err.to_string())?;
+    .block_on(GlideClient::new(ConnectionRequest::from(request), tx))
+    .map_err(|err| err.to_string())?;
 
     // Create the client adapter that will be returned and used as conn_ptr
     let core = Arc::new(CommandExecutionCore {
@@ -2041,7 +2041,7 @@ pub extern "C" fn create_batch_otel_span() -> u64 {
 /// * `parent_span_ptr` must be a valid pointer to a [`Arc<GlideSpan>`] span created by [`create_otel_span`], [`create_named_otel_span`], or [`create_batch_otel_span`], or 0.
 /// * If `parent_span_ptr` is 0 or invalid, the function will create an independent batch span as fallback.
 #[unsafe(no_mangle)]
-pub extern "C" fn create_batch_otel_span_with_parent(parent_span_ptr: u64) -> u64 {
+pub unsafe extern "C" fn create_batch_otel_span_with_parent(parent_span_ptr: u64) -> u64 {
     let command_name = "Batch";
 
     // Handle parent span pointer validation with graceful fallback
@@ -2201,7 +2201,7 @@ pub unsafe extern "C" fn create_named_otel_span(span_name: *const c_char) -> u64
 /// * `parent_span_ptr` must be a valid pointer to a [`Arc<GlideSpan>`] span created by [`create_otel_span`], [`create_named_otel_span`], or [`create_batch_otel_span`], or 0.
 /// * If `parent_span_ptr` is 0 or invalid, the function will create an independent span as fallback.
 #[unsafe(no_mangle)]
-pub extern "C" fn create_otel_span_with_parent(
+pub unsafe extern "C" fn create_otel_span_with_parent(
     request_type: RequestType,
     parent_span_ptr: u64,
 ) -> u64 {

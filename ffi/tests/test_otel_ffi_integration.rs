@@ -194,7 +194,7 @@ fn test_create_otel_span_with_parent_valid_inputs() {
     let mut child_span_ptrs = Vec::new();
 
     for request_type in request_types {
-        let child_span_ptr = create_otel_span_with_parent(request_type, parent_span_ptr);
+        let child_span_ptr = unsafe { create_otel_span_with_parent(request_type, parent_span_ptr) };
         assert_ne!(
             child_span_ptr, 0,
             "Child span creation should succeed for {request_type:?}",
@@ -241,7 +241,7 @@ fn test_create_otel_span_with_parent_invalid_inputs() {
     logger_core::init(Some(logger_core::Level::Debug), None);
 
     // Test with null parent (should fallback to independent span)
-    let child_with_null_parent = create_otel_span_with_parent(RequestType::Get, 0);
+    let child_with_null_parent = unsafe { create_otel_span_with_parent(RequestType::Get, 0) };
     assert_ne!(
         child_with_null_parent, 0,
         "Null parent should fallback to independent span"
@@ -258,7 +258,7 @@ fn test_create_otel_span_with_parent_invalid_inputs() {
     let mut fallback_span_ptrs = vec![child_with_null_parent];
 
     for invalid_parent_ptr in invalid_parent_ptrs {
-        let child_span_ptr = create_otel_span_with_parent(RequestType::Set, invalid_parent_ptr);
+        let child_span_ptr = unsafe { create_otel_span_with_parent(RequestType::Set, invalid_parent_ptr) };
         assert_ne!(
             child_span_ptr, 0,
             "Invalid parent 0x{invalid_parent_ptr:x} should fallback to independent span",
@@ -272,7 +272,7 @@ fn test_create_otel_span_with_parent_invalid_inputs() {
     assert_ne!(valid_parent_ptr, 0, "Valid parent creation should succeed");
 
     let child_with_invalid_request =
-        create_otel_span_with_parent(RequestType::InvalidRequest, valid_parent_ptr);
+        unsafe { create_otel_span_with_parent(RequestType::InvalidRequest, valid_parent_ptr) };
     assert_eq!(
         child_with_invalid_request, 0,
         "Invalid request type should return 0 even with valid parent"
@@ -353,7 +353,7 @@ fn test_ffi_functions_concurrent_access() {
 
                     // Only create child span if parent was successfully created
                     let child_span_ptr =
-                        create_otel_span_with_parent(RequestType::Get, named_span_ptr);
+                        unsafe { create_otel_span_with_parent(RequestType::Get, named_span_ptr) };
                     if child_span_ptr != 0 {
                         thread_spans.push(child_span_ptr);
                         counter_clone.fetch_add(1, Ordering::SeqCst);
@@ -403,8 +403,8 @@ fn test_span_hierarchy_creation() {
     assert_ne!(root_span_ptr, 0, "Root span creation should succeed");
 
     // Create first level children
-    let child1_ptr = create_otel_span_with_parent(RequestType::Get, root_span_ptr);
-    let child2_ptr = create_otel_span_with_parent(RequestType::Set, root_span_ptr);
+    let child1_ptr = unsafe { create_otel_span_with_parent(RequestType::Get, root_span_ptr) };
+    let child2_ptr = unsafe { create_otel_span_with_parent(RequestType::Set, root_span_ptr) };
 
     assert_ne!(child1_ptr, 0, "Child1 span creation should succeed");
     assert_ne!(child2_ptr, 0, "Child2 span creation should succeed");
@@ -414,8 +414,8 @@ fn test_span_hierarchy_creation() {
     );
 
     // Create second level children (grandchildren)
-    let grandchild1_ptr = create_otel_span_with_parent(RequestType::Del, child1_ptr);
-    let grandchild2_ptr = create_otel_span_with_parent(RequestType::Exists, child2_ptr);
+    let grandchild1_ptr = unsafe { create_otel_span_with_parent(RequestType::Del, child1_ptr) };
+    let grandchild2_ptr = unsafe { create_otel_span_with_parent(RequestType::Exists, child2_ptr) };
 
     assert_ne!(
         grandchild1_ptr, 0,
@@ -478,7 +478,7 @@ fn test_error_handling_and_logging() {
     assert_eq!(long_named_span, 0, "Long name should return 0");
 
     // 4. Invalid parent for child span
-    let child_with_invalid_parent = create_otel_span_with_parent(RequestType::Get, 0xDEADBEEF);
+    let child_with_invalid_parent = unsafe { create_otel_span_with_parent(RequestType::Get, 0xDEADBEEF) };
     assert_ne!(
         child_with_invalid_parent, 0,
         "Invalid parent should fallback to independent span"
@@ -584,7 +584,7 @@ fn test_create_batch_otel_span_with_parent_valid_inputs() {
     assert_ne!(parent_span_ptr, 0, "Parent span creation should succeed");
 
     // Create batch span with parent
-    let batch_span_ptr = create_batch_otel_span_with_parent(parent_span_ptr);
+    let batch_span_ptr = unsafe { create_batch_otel_span_with_parent(parent_span_ptr) };
     assert_ne!(
         batch_span_ptr, 0,
         "create_batch_otel_span_with_parent should succeed"
@@ -623,7 +623,7 @@ fn test_create_batch_otel_span_with_parent_invalid_inputs() {
     logger_core::init(Some(logger_core::Level::Debug), None);
 
     // Test with null parent (should fallback to independent batch span)
-    let batch_with_null_parent = create_batch_otel_span_with_parent(0);
+    let batch_with_null_parent = unsafe { create_batch_otel_span_with_parent(0) };
     assert_ne!(
         batch_with_null_parent, 0,
         "Null parent should fallback to independent batch span"
@@ -640,7 +640,7 @@ fn test_create_batch_otel_span_with_parent_invalid_inputs() {
     let mut fallback_batch_spans = vec![batch_with_null_parent];
 
     for invalid_parent_ptr in invalid_parent_ptrs {
-        let batch_span_ptr = create_batch_otel_span_with_parent(invalid_parent_ptr);
+        let batch_span_ptr = unsafe { create_batch_otel_span_with_parent(invalid_parent_ptr) };
         assert_ne!(
             batch_span_ptr, 0,
             "Invalid parent 0x{invalid_parent_ptr:x} should fallback to independent batch span",
@@ -666,13 +666,13 @@ fn test_batch_span_hierarchy() {
     assert_ne!(root_span_ptr, 0, "Root span creation should succeed");
 
     // Create batch span as child of root
-    let batch_span_ptr = create_batch_otel_span_with_parent(root_span_ptr);
+    let batch_span_ptr = unsafe { create_batch_otel_span_with_parent(root_span_ptr) };
     assert_ne!(batch_span_ptr, 0, "Batch span creation should succeed");
 
     // Create individual command spans as children of batch span
-    let cmd1_span_ptr = create_otel_span_with_parent(RequestType::Set, batch_span_ptr);
-    let cmd2_span_ptr = create_otel_span_with_parent(RequestType::Get, batch_span_ptr);
-    let cmd3_span_ptr = create_otel_span_with_parent(RequestType::Del, batch_span_ptr);
+    let cmd1_span_ptr = unsafe { create_otel_span_with_parent(RequestType::Set, batch_span_ptr) };
+    let cmd2_span_ptr = unsafe { create_otel_span_with_parent(RequestType::Get, batch_span_ptr) };
+    let cmd3_span_ptr = unsafe { create_otel_span_with_parent(RequestType::Del, batch_span_ptr) };
 
     assert_ne!(cmd1_span_ptr, 0, "Command 1 span creation should succeed");
     assert_ne!(cmd2_span_ptr, 0, "Command 2 span creation should succeed");
@@ -733,14 +733,14 @@ fn test_batch_span_concurrent_creation() {
                     counter_clone.fetch_add(1, Ordering::SeqCst);
 
                     // Create batch span with parent
-                    let batch_span_ptr = create_batch_otel_span_with_parent(parent_span_ptr);
+                    let batch_span_ptr = unsafe { create_batch_otel_span_with_parent(parent_span_ptr) };
                     if batch_span_ptr != 0 {
                         thread_spans.push(batch_span_ptr);
                         counter_clone.fetch_add(1, Ordering::SeqCst);
 
                         // Create a few command spans under the batch
                         let cmd_span_ptr =
-                            create_otel_span_with_parent(RequestType::Set, batch_span_ptr);
+                            unsafe { create_otel_span_with_parent(RequestType::Set, batch_span_ptr) };
                         if cmd_span_ptr != 0 {
                             thread_spans.push(cmd_span_ptr);
                             counter_clone.fetch_add(1, Ordering::SeqCst);
@@ -787,21 +787,21 @@ fn test_batch_span_error_handling() {
     // Test batch span creation with various error conditions
 
     // 1. Create batch span with null parent (should fallback)
-    let batch_with_null = create_batch_otel_span_with_parent(0);
+    let batch_with_null = unsafe { create_batch_otel_span_with_parent(0) };
     assert_ne!(
         batch_with_null, 0,
         "Batch with null parent should fallback to independent span"
     );
 
     // 2. Create batch span with invalid parent (should fallback)
-    let batch_with_invalid = create_batch_otel_span_with_parent(0xDEADBEEF);
+    let batch_with_invalid = unsafe { create_batch_otel_span_with_parent(0xDEADBEEF) };
     assert_ne!(
         batch_with_invalid, 0,
         "Batch with invalid parent should fallback to independent span"
     );
 
     // 3. Create batch span with misaligned parent (should fallback)
-    let batch_with_misaligned = create_batch_otel_span_with_parent(0x1001);
+    let batch_with_misaligned = unsafe { create_batch_otel_span_with_parent(0x1001) };
     assert_ne!(
         batch_with_misaligned, 0,
         "Batch with misaligned parent should fallback to independent span"
