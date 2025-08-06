@@ -23,18 +23,18 @@ type HSetExOptions struct {
 }
 
 // NewHSetExOptions creates a new HSetExOptions instance.
-func NewHSetExOptions() *HSetExOptions {
-	return &HSetExOptions{}
+func NewHSetExOptions() HSetExOptions {
+	return HSetExOptions{}
 }
 
 // SetConditionalSet sets the conditional set option.
-func (opts *HSetExOptions) SetConditionalSet(conditionalSet constants.ConditionalSet) *HSetExOptions {
+func (opts HSetExOptions) SetConditionalSet(conditionalSet constants.ConditionalSet) HSetExOptions {
 	opts.ConditionalSet = conditionalSet
 	return opts
 }
 
 // SetExpiry sets the expiry options.
-func (opts *HSetExOptions) SetExpiry(expiry *Expiry) *HSetExOptions {
+func (opts HSetExOptions) SetExpiry(expiry *Expiry) HSetExOptions {
 	opts.Expiry = expiry
 	return opts
 }
@@ -84,12 +84,12 @@ type HGetExOptions struct {
 }
 
 // NewHGetExOptions creates a new HGetExOptions instance.
-func NewHGetExOptions() *HGetExOptions {
-	return &HGetExOptions{}
+func NewHGetExOptions() HGetExOptions {
+	return HGetExOptions{}
 }
 
 // SetExpiry sets the expiry options.
-func (opts *HGetExOptions) SetExpiry(expiry *Expiry) *HGetExOptions {
+func (opts HGetExOptions) SetExpiry(expiry *Expiry) HGetExOptions {
 	opts.Expiry = expiry
 	return opts
 }
@@ -127,12 +127,12 @@ type HExpireOptions struct {
 }
 
 // NewHExpireOptions creates a new HExpireOptions instance.
-func NewHExpireOptions() *HExpireOptions {
-	return &HExpireOptions{}
+func NewHExpireOptions() HExpireOptions {
+	return HExpireOptions{}
 }
 
 // SetExpireCondition sets the expire condition.
-func (opts *HExpireOptions) SetExpireCondition(condition constants.ExpireCondition) *HExpireOptions {
+func (opts HExpireOptions) SetExpireCondition(condition constants.ExpireCondition) HExpireOptions {
 	opts.ExpireCondition = condition
 	return opts
 }
@@ -170,20 +170,18 @@ func buildFieldsArgs(fields []string) []string {
 }
 
 // BuildHSetExArgs builds arguments for HSETEX command.
-func BuildHSetExArgs(key string, fieldsAndValues map[string]string, options *HSetExOptions) ([]string, error) {
+func BuildHSetExArgs(key string, fieldsAndValues map[string]string, options HSetExOptions) ([]string, error) {
 	if len(fieldsAndValues) == 0 {
 		return nil, errors.New("fieldsAndValues map cannot be empty")
 	}
 
 	args := []string{key}
 
-	if options != nil {
-		optionArgs, err := options.ToArgs()
-		if err != nil {
-			return nil, err
-		}
-		args = append(args, optionArgs...)
+	optionArgs, err := options.ToArgs()
+	if err != nil {
+		return nil, err
 	}
+	args = append(args, optionArgs...)
 
 	// Add FIELDS keyword and count
 	args = append(args, "FIELDS", utils.IntToString(int64(len(fieldsAndValues))))
@@ -197,20 +195,18 @@ func BuildHSetExArgs(key string, fieldsAndValues map[string]string, options *HSe
 }
 
 // BuildHGetExArgs builds arguments for HGETEX command.
-func BuildHGetExArgs(key string, fields []string, options *HGetExOptions) ([]string, error) {
+func BuildHGetExArgs(key string, fields []string, options HGetExOptions) ([]string, error) {
 	if len(fields) == 0 {
 		return nil, errors.New("fields array cannot be empty")
 	}
 
 	args := []string{key}
 
-	if options != nil {
-		optionArgs, err := options.ToArgs()
-		if err != nil {
-			return nil, err
-		}
-		args = append(args, optionArgs...)
+	optionArgs, err := options.ToArgs()
+	if err != nil {
+		return nil, err
 	}
+	args = append(args, optionArgs...)
 
 	// Add FIELDS portion
 	args = append(args, buildFieldsArgs(fields)...)
@@ -225,7 +221,7 @@ func BuildHExpireArgs(
 	key string,
 	expireTime interface{},
 	fields []string,
-	options *HExpireOptions,
+	options HExpireOptions,
 	useMilliseconds bool,
 ) ([]string, error) {
 	if len(fields) == 0 {
@@ -252,13 +248,11 @@ func BuildHExpireArgs(
 
 	args := []string{key, utils.IntToString(timeValue)}
 
-	if options != nil {
-		optionArgs, err := options.ToArgs()
-		if err != nil {
-			return nil, err
-		}
-		args = append(args, optionArgs...)
+	optionArgs, err := options.ToArgs()
+	if err != nil {
+		return nil, err
 	}
+	args = append(args, optionArgs...)
 
 	// Add FIELDS portion
 	args = append(args, buildFieldsArgs(fields)...)

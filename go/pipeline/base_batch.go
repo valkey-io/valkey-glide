@@ -894,7 +894,7 @@ func (b *BaseBatch[T]) HRandFieldWithCountWithValues(key string, count int64) *T
 //	The number of fields that were added or updated.
 //
 // [valkey.io]: https://valkey.io/commands/hsetex/
-func (b *BaseBatch[T]) HSetEx(key string, fieldsAndValues map[string]string, opts *options.HSetExOptions) *T {
+func (b *BaseBatch[T]) HSetEx(key string, fieldsAndValues map[string]string, opts options.HSetExOptions) *T {
 	args, err := options.BuildHSetExArgs(key, fieldsAndValues, opts)
 	if err != nil {
 		return b.addError("HSetEx", err)
@@ -924,7 +924,7 @@ func (b *BaseBatch[T]) HSetEx(key string, fieldsAndValues map[string]string, opt
 //	If key does not exist, returns an empty string array.
 //
 // [valkey.io]: https://valkey.io/commands/hgetex/
-func (b *BaseBatch[T]) HGetEx(key string, fields []string, opts *options.HGetExOptions) *T {
+func (b *BaseBatch[T]) HGetEx(key string, fields []string, opts options.HGetExOptions) *T {
 	args, err := options.BuildHGetExArgs(key, fields, opts)
 	if err != nil {
 		return b.addError("HGetEx", err)
@@ -963,7 +963,7 @@ func (b *BaseBatch[T]) HGetEx(key string, fields []string, opts *options.HGetExO
 //	1 if expiration was set, 0 if expiration was not set (field doesn't exist or condition not met), -2 if field doesn't exist.
 //
 // [valkey.io]: https://valkey.io/commands/hexpire/
-func (b *BaseBatch[T]) HExpire(key string, expireTime time.Duration, fields []string, opts *options.HExpireOptions) *T {
+func (b *BaseBatch[T]) HExpire(key string, expireTime time.Duration, fields []string, opts options.HExpireOptions) *T {
 	args, err := options.BuildHExpireArgs(key, expireTime, fields, opts, false)
 	if err != nil {
 		return b.addError("HExpire", err)
@@ -994,7 +994,7 @@ func (b *BaseBatch[T]) HExpire(key string, expireTime time.Duration, fields []st
 //	1 if expiration was set, 0 if expiration was not set (field doesn't exist or condition not met), -2 if field doesn't exist.
 //
 // [valkey.io]: https://valkey.io/commands/hexpireat/
-func (b *BaseBatch[T]) HExpireAt(key string, expireTime time.Time, fields []string, opts *options.HExpireOptions) *T {
+func (b *BaseBatch[T]) HExpireAt(key string, expireTime time.Time, fields []string, opts options.HExpireOptions) *T {
 	args, err := options.BuildHExpireArgs(key, expireTime, fields, opts, false)
 	if err != nil {
 		return b.addError("HExpireAt", err)
@@ -1024,7 +1024,7 @@ func (b *BaseBatch[T]) HExpireAt(key string, expireTime time.Time, fields []stri
 //	1 if expiration was set, 0 if expiration was not set (field doesn't exist or condition not met), -2 if field doesn't exist.
 //
 // [valkey.io]: https://valkey.io/commands/hpexpire/
-func (b *BaseBatch[T]) HPExpire(key string, expireTime time.Duration, fields []string, opts *options.HExpireOptions) *T {
+func (b *BaseBatch[T]) HPExpire(key string, expireTime time.Duration, fields []string, opts options.HExpireOptions) *T {
 	args, err := options.BuildHExpireArgs(key, expireTime, fields, opts, true)
 	if err != nil {
 		return b.addError("HPExpire", err)
@@ -1055,7 +1055,7 @@ func (b *BaseBatch[T]) HPExpire(key string, expireTime time.Duration, fields []s
 //	1 if expiration was set, 0 if expiration was not set (field doesn't exist or condition not met), -2 if field doesn't exist.
 //
 // [valkey.io]: https://valkey.io/commands/hpexpireat/
-func (b *BaseBatch[T]) HPExpireAt(key string, expireTime time.Time, fields []string, opts *options.HExpireOptions) *T {
+func (b *BaseBatch[T]) HPExpireAt(key string, expireTime time.Time, fields []string, opts options.HExpireOptions) *T {
 	args, err := options.BuildHExpireArgs(key, expireTime, fields, opts, true)
 	if err != nil {
 		return b.addError("HPExpireAt", err)

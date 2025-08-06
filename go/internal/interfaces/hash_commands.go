@@ -57,16 +57,16 @@ type HashCommands interface {
 
 	HRandFieldWithCountWithValues(ctx context.Context, key string, count int64) ([][]string, error)
 
-	HSetEx(ctx context.Context, key string, fieldsAndValues map[string]string, options *options.HSetExOptions) (int64, error)
+	HSetEx(ctx context.Context, key string, fieldsAndValues map[string]string, options options.HSetExOptions) (int64, error)
 
-	HGetEx(ctx context.Context, key string, fields []string, options *options.HGetExOptions) ([]models.Result[string], error)
+	HGetEx(ctx context.Context, key string, fields []string, options options.HGetExOptions) ([]models.Result[string], error)
 
 	HExpire(
 		ctx context.Context,
 		key string,
 		expireTime time.Duration,
 		fields []string,
-		options *options.HExpireOptions,
+		options options.HExpireOptions,
 	) ([]int64, error)
 
 	HExpireAt(
@@ -74,7 +74,7 @@ type HashCommands interface {
 		key string,
 		expireTime time.Time,
 		fields []string,
-		options *options.HExpireOptions,
+		options options.HExpireOptions,
 	) ([]int64, error)
 
 	HPExpire(
@@ -82,7 +82,7 @@ type HashCommands interface {
 		key string,
 		expireTime time.Duration,
 		fields []string,
-		options *options.HExpireOptions,
+		options options.HExpireOptions,
 	) ([]int64, error)
 
 	HPExpireAt(
@@ -90,7 +90,7 @@ type HashCommands interface {
 		key string,
 		expireTime time.Time,
 		fields []string,
-		options *options.HExpireOptions,
+		options options.HExpireOptions,
 	) ([]int64, error)
 
 	HPersist(ctx context.Context, key string, fields []string) ([]int64, error)

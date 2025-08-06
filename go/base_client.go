@@ -1838,7 +1838,7 @@ func (client *baseClient) HSetEx(
 	ctx context.Context,
 	key string,
 	fieldsAndValues map[string]string,
-	opts *options.HSetExOptions,
+	opts options.HSetExOptions,
 ) (int64, error) {
 	args, err := options.BuildHSetExArgs(key, fieldsAndValues, opts)
 	if err != nil {
@@ -1880,7 +1880,7 @@ func (client *baseClient) HGetEx(
 	ctx context.Context,
 	key string,
 	fields []string,
-	opts *options.HGetExOptions,
+	opts options.HGetExOptions,
 ) ([]models.Result[string], error) {
 	args, err := options.BuildHGetExArgs(key, fields, opts)
 	if err != nil {
@@ -1932,7 +1932,7 @@ func (client *baseClient) HExpire(
 	key string,
 	expireTime time.Duration,
 	fields []string,
-	opts *options.HExpireOptions,
+	opts options.HExpireOptions,
 ) ([]int64, error) {
 	args, err := options.BuildHExpireArgs(key, expireTime, fields, opts, false)
 	if err != nil {
@@ -1976,7 +1976,7 @@ func (client *baseClient) HExpireAt(
 	key string,
 	expireTime time.Time,
 	fields []string,
-	opts *options.HExpireOptions,
+	opts options.HExpireOptions,
 ) ([]int64, error) {
 	args, err := options.BuildHExpireArgs(key, expireTime, fields, opts, false)
 	if err != nil {
@@ -2019,7 +2019,7 @@ func (client *baseClient) HPExpire(
 	key string,
 	expireTime time.Duration,
 	fields []string,
-	opts *options.HExpireOptions,
+	opts options.HExpireOptions,
 ) ([]int64, error) {
 	args, err := options.BuildHExpireArgs(key, expireTime, fields, opts, true)
 	if err != nil {
@@ -2063,7 +2063,7 @@ func (client *baseClient) HPExpireAt(
 	key string,
 	expireTime time.Time,
 	fields []string,
-	opts *options.HExpireOptions,
+	opts options.HExpireOptions,
 ) ([]int64, error) {
 	args, err := options.BuildHExpireArgs(key, expireTime, fields, opts, true)
 	if err != nil {

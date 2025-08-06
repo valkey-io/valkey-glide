@@ -876,7 +876,13 @@ func ExampleClient_HExpire() {
 	client.HSet(context.Background(), "my_hash", fields)
 
 	// Set 30 second expiration on fields
-	result, err := client.HExpire(context.Background(), "my_hash", 30*time.Second, []string{"field1", "field2"}, nil)
+	result, err := client.HExpire(
+		context.Background(),
+		"my_hash",
+		30*time.Second,
+		[]string{"field1", "field2"},
+		options.HExpireOptions{},
+	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
@@ -900,7 +906,13 @@ func ExampleClusterClient_HExpire() {
 	client.HSet(context.Background(), "my_hash", fields)
 
 	// Set 30 second expiration on fields
-	result, err := client.HExpire(context.Background(), "my_hash", 30*time.Second, []string{"field1", "field2"}, nil)
+	result, err := client.HExpire(
+		context.Background(),
+		"my_hash",
+		30*time.Second,
+		[]string{"field1", "field2"},
+		options.HExpireOptions{},
+	)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}

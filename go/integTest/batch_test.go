@@ -1253,7 +1253,7 @@ func CreateHashTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer strin
 		)
 
 		// Test HExpire - Set expiration on existing fields
-		batch.HExpire(expiryKey, 30*time.Second, []string{"field1", "field2"}, nil)
+		batch.HExpire(expiryKey, 30*time.Second, []string{"field1", "field2"}, options.HExpireOptions{})
 		testData = append(
 			testData,
 			CommandTestData{ExpectedResponse: []int64{1, 1}, TestName: "HExpire(expiryKey, 30s, [field1, field2])"},
@@ -1275,7 +1275,7 @@ func CreateHashTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer strin
 		testData = append(testData, CommandTestData{ExpectedResponse: []int64{1}, TestName: "HPersist(expiryKey, [field1])"})
 
 		// Test HPExpire - Set expiration in milliseconds
-		batch.HPExpire(expiryKey, 5*time.Second, []string{"field2"}, nil)
+		batch.HPExpire(expiryKey, 5*time.Second, []string{"field2"}, options.HExpireOptions{})
 		testData = append(
 			testData,
 			CommandTestData{ExpectedResponse: []int64{1}, TestName: "HPExpire(expiryKey, 5s, [field2])"},
@@ -1294,7 +1294,7 @@ func CreateHashTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer strin
 
 		// Test HExpireAt - Set expiration using Unix timestamp
 		futureTime := time.Now().Add(60 * time.Second)
-		batch.HExpireAt(expiryKey, futureTime, []string{"field3"}, nil)
+		batch.HExpireAt(expiryKey, futureTime, []string{"field3"}, options.HExpireOptions{})
 		testData = append(
 			testData,
 			CommandTestData{ExpectedResponse: []int64{1}, TestName: "HExpireAt(expiryKey, futureTime, [field3])"},
@@ -1302,7 +1302,7 @@ func CreateHashTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer strin
 
 		// Test HPExpireAt - Set expiration using Unix timestamp in milliseconds
 		futureTimeMs := time.Now().Add(60 * time.Second)
-		batch.HPExpireAt(expiryKey, futureTimeMs, []string{"field3"}, nil)
+		batch.HPExpireAt(expiryKey, futureTimeMs, []string{"field3"}, options.HExpireOptions{})
 		testData = append(
 			testData,
 			CommandTestData{ExpectedResponse: []int64{1}, TestName: "HPExpireAt(expiryKey, futureTimeMs, [field3])"},
