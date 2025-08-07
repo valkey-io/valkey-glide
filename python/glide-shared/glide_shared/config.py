@@ -84,11 +84,14 @@ class BackoffStrategy:
     successful.
     The client will attempt to reconnect indefinitely.
 
+    All time values (factor) are specified in milliseconds.
+
     Attributes:
         num_of_retries (int): Number of retry attempts that the client should perform when disconnected from the server,
             where the time between retries increases. Once the retries have reached the maximum value, the time between
             retries will remain constant until a reconnect attempt is succesful.
         factor (int): The multiplier that will be applied to the waiting time between each retry.
+            This value is specified in milliseconds.
         exponent_base (int): The exponent base configured for the strategy.
         jitter_percent (Optional[int]): The Jitter percent on the calculated duration. If not set, a default value will be used.
     """

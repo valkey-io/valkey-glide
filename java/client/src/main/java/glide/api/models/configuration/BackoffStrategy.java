@@ -17,12 +17,14 @@ import lombok.ToString;
  * <p>Once the maximum value is reached, that will remain the time between retry attempts until a
  * reconnect attempt is successful. The client will attempt to reconnect indefinitely.
  *
+ * <p>All time values (factor) are specified in milliseconds.
+ *
  * @example
  *     <pre>{@code
  * BackoffStrategy reconnectionConfiguration = BackoffStrategy.builder()
  *     .numOfRetries(5)
  *     .exponentBase(2)
- *     .factor(3)
+ *     .factor(100)  // 100 milliseconds base delay
  *     .jitterPercent(20)
  *     .build()
  * }</pre>
@@ -38,7 +40,8 @@ public class BackoffStrategy {
      */
     @NonNull private final Integer numOfRetries;
 
-    /** The multiplier that will be applied to the waiting time between each retry. */
+    /** The multiplier that will be applied to the waiting time between each retry.
+     * This value is specified in milliseconds. */
     @NonNull private final Integer factor;
 
     /** The exponent base configured for the strategy. */

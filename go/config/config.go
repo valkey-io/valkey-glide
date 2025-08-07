@@ -166,6 +166,8 @@ func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest
 // Once the maximum retry interval is reached, that interval will be reused for all subsequent retries until
 // a successful connection is established. The client retries indefinitely.
 //
+// All time values (factor) are specified in milliseconds.
+//
 // If no strategy is explicitly provided, a default backoff strategy will be used.
 type BackoffStrategy struct {
 	// Number of retry attempts that the client should perform when disconnected from the server, where the time
@@ -173,6 +175,7 @@ type BackoffStrategy struct {
 	// constant until a reconnect attempt is successful.
 	numOfRetries int
 	// The multiplier that will be applied to the waiting time between each retry.
+	// This value is specified in milliseconds.
 	factor int
 	// The exponent base configured for the strategy.
 	exponentBase int

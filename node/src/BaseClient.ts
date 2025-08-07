@@ -585,7 +585,7 @@ export type ReadFrom =
  * - **Reconnection Strategy**: Customize how the client should attempt reconnections using `connectionBackoff`.
  *   - `numberOfRetries`: The maximum number of retry attempts with increasing delays.
  *     - After this limit is reached, the retry interval becomes constant.
- *   - `factor`: A multiplier applied to the base delay between retries (e.g., `500` means a 500ms base delay).
+ *   - `factor`: A multiplier applied to the base delay between retries, specified in milliseconds (e.g., `500` means a 500ms base delay).
  *   - `exponentBase`: The exponential growth factor for delays (e.g., `2` means the delay doubles with each retry).
  *  - `jitterPercent`: An optional percentage of jitter to add to the delay (e.g., `30` means the final delay will vary randomly between 70% and 130% of the calculated delay).
  *
@@ -707,6 +707,9 @@ export interface BaseClientConfiguration {
      * and rand(...) applies a jitter of up to `jitterPercent`% to introduce randomness and reduce retry storms.
      * The client will attempt to reconnect indefinitely. Once the maximum value is reached, that will remain the time between retry attempts until a
      * reconnect attempt is successful.
+     * 
+     * All time values (factor) are specified in milliseconds.
+     * 
      * If not set, a default backoff strategy will be used.
      */
     connectionBackoff?: {
@@ -718,6 +721,7 @@ export interface BaseClientConfiguration {
         numberOfRetries: number;
         /**
          * The multiplier that will be applied to the waiting time between each retry.
+         * This value is specified in milliseconds.
          * Value must be an integer.
          */
         factor: number;
