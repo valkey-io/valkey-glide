@@ -1,22 +1,63 @@
 import json
 import random
 import string
-from typing import Any, Dict, List, Mapping, Optional, Set, TypeVar, Union, cast
+from concurrent.futures import ThreadPoolExecutor
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    List,
+    Mapping,
+    Optional,
+    Set,
+    TypeVar,
+    Union,
+    cast,
+)
 
 import pytest
-from packaging import version
-
-from glide.async_commands.core import InfoSection
-from glide.constants import (
+from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
+from glide.logger import Level as logLevel
+from glide_shared.commands.core_options import InfoSection
+from glide_shared.config import (
+    AdvancedGlideClientConfiguration,
+    AdvancedGlideClusterClientConfiguration,
+    BackoffStrategy,
+    GlideClientConfiguration,
+    GlideClusterClientConfiguration,
+    NodeAddress,
+    ProtocolVersion,
+    ReadFrom,
+    ServerCredentials,
+    TlsAdvancedConfiguration,
+)
+from glide_shared.constants import (
     TClusterResponse,
     TFunctionListResponse,
     TFunctionStatsSingleNodeResponse,
     TResult,
 )
-from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
-from glide.routes import AllNodes
+from glide_shared.routes import AllNodes
+from glide_sync import GlideClient as SyncGlideClient
+from glide_sync import GlideClusterClient as SyncGlideClusterClient
+from glide_sync import TGlideClient as TSyncGlideClient
+from glide_sync.config import GlideClientConfiguration as SyncGlideClientConfiguration
+from glide_sync.config import (
+    GlideClusterClientConfiguration as SyncGlideClusterClientConfiguration,
+)
+from packaging import version
+
+from tests.utils.cluster import ValkeyCluster
+
+TAnyGlideClient = Union[TGlideClient, TSyncGlideClient]
 
 T = TypeVar("T")
+DEFAULT_TEST_LOG_LEVEL = logLevel.OFF
+USERNAME = "username"
+INITIAL_PASSWORD = "initial_password"
+NEW_PASSWORD = "new_secure_password"
+WRONG_PASSWORD = "wrong_password"
+
 
 version_str = ""
 
@@ -81,11 +122,17 @@ def get_random_string(length):
 
 
 async def check_if_server_version_lt(client: TGlideClient, min_version: str) -> bool:
-    # TODO: change to pytest fixture after sync client is implemented
     global version_str
     if not version_str:
         info = parse_info_response(await client.info([InfoSection.SERVER]))
         version_str = info.get("valkey_version") or info.get("redis_version")  # type: ignore
+    assert version_str is not None, "Server version not found in INFO response"
+    return version.parse(version_str) < version.parse(min_version)
+
+
+def sync_check_if_server_version_lt(client: TSyncGlideClient, min_version: str) -> bool:
+    info = parse_info_response(client.info([InfoSection.SERVER]))
+    version_str = info.get("valkey_version") or info.get("redis_version")
     assert version_str is not None, "Server version not found in INFO response"
     return version.parse(version_str) < version.parse(min_version)
 
@@ -377,19 +424,21 @@ def check_function_stats_response(
     assert expected == response.get(b"engines")
 
 
-async def set_new_acl_username_with_password(
-    client: TGlideClient, username: str, password: str
+def set_new_acl_username_with_password(
+    client: TAnyGlideClient, username: str, password: str
 ):
     """
-    Sets a new ACL user with the provided password
+    Sets a new ACL user with the provided password.
+    When passing a sync client, this returns the reuslt of the ACL SETUSER command.
+    When passing an async client, this returns a coroutine that should be awaited.
     """
     try:
-        if isinstance(client, GlideClient):
-            await client.custom_command(
+        if isinstance(client, (GlideClient, SyncGlideClient)):
+            return client.custom_command(
                 ["ACL", "SETUSER", username, "ON", f">{password}", "~*", "&*", "+@all"]
             )
-        elif isinstance(client, GlideClusterClient):
-            await client.custom_command(
+        elif isinstance(client, (GlideClusterClient, SyncGlideClusterClient)):
+            return client.custom_command(
                 ["ACL", "SETUSER", username, "ON", f">{password}", "~*", "&*", "+@all"],
                 route=AllNodes(),
             )
@@ -397,14 +446,219 @@ async def set_new_acl_username_with_password(
         raise RuntimeError(f"Failed to set ACL user: {e}")
 
 
-async def delete_acl_username_and_password(client: TGlideClient, username: str):
+def delete_acl_username_and_password(client: TAnyGlideClient, username: str):
     """
-    Deletes the username and its password from the ACL list
+    Deletes the username and its password from the ACL list.
+    Sets a new ACL user with the provided password.
+    When passing a sync client, this returns the reuslt of the ACL DELUSER command.
+    When passing an async client, this returns a coroutine that should be awaited.
     """
-    if isinstance(client, GlideClient):
-        return await client.custom_command(["ACL", "DELUSER", username])
+    if isinstance(client, (GlideClient, SyncGlideClient)):
+        return client.custom_command(["ACL", "DELUSER", username])
 
-    elif isinstance(client, GlideClusterClient):
-        return await client.custom_command(
-            ["ACL", "DELUSER", username], route=AllNodes()
+    elif isinstance(client, (GlideClusterClient, SyncGlideClusterClient)):
+        return client.custom_command(["ACL", "DELUSER", username], route=AllNodes())
+
+
+def create_client_config(
+    request,
+    cluster_mode: bool,
+    credentials: Optional[ServerCredentials] = None,
+    database_id: int = 0,
+    addresses: Optional[List[NodeAddress]] = None,
+    client_name: Optional[str] = None,
+    protocol: ProtocolVersion = ProtocolVersion.RESP3,
+    timeout: Optional[int] = 1000,
+    connection_timeout: Optional[int] = 1000,
+    cluster_mode_pubsub: Optional[
+        GlideClusterClientConfiguration.PubSubSubscriptions
+    ] = None,
+    standalone_mode_pubsub: Optional[
+        GlideClientConfiguration.PubSubSubscriptions
+    ] = None,
+    inflight_requests_limit: Optional[int] = None,
+    read_from: ReadFrom = ReadFrom.PRIMARY,
+    client_az: Optional[str] = None,
+    reconnect_strategy: Optional[BackoffStrategy] = None,
+    valkey_cluster: Optional[ValkeyCluster] = None,
+    use_tls: Optional[bool] = None,
+    tls_insecure: Optional[bool] = None,
+    lazy_connect: Optional[bool] = False,
+) -> Union[GlideClusterClientConfiguration, GlideClientConfiguration]:
+    if use_tls is not None:
+        use_tls = use_tls
+    else:
+        use_tls = request.config.getoption("--tls")
+    tls_adv_conf = TlsAdvancedConfiguration(use_insecure_tls=tls_insecure)
+    if cluster_mode:
+        valkey_cluster = valkey_cluster or pytest.valkey_cluster  # type: ignore
+        assert type(valkey_cluster) is ValkeyCluster
+        assert database_id == 0
+        k = min(3, len(valkey_cluster.nodes_addr))
+        seed_nodes = random.sample(valkey_cluster.nodes_addr, k=k)
+        return GlideClusterClientConfiguration(
+            addresses=seed_nodes if addresses is None else addresses,
+            use_tls=use_tls,
+            credentials=credentials,
+            client_name=client_name,
+            protocol=protocol,
+            request_timeout=timeout,
+            pubsub_subscriptions=cluster_mode_pubsub,
+            inflight_requests_limit=inflight_requests_limit,
+            read_from=read_from,
+            client_az=client_az,
+            advanced_config=AdvancedGlideClusterClientConfiguration(
+                connection_timeout, tls_config=tls_adv_conf
+            ),
+            lazy_connect=lazy_connect,
+        )
+    else:
+        valkey_cluster = valkey_cluster or pytest.standalone_cluster  # type: ignore
+        assert type(valkey_cluster) is ValkeyCluster
+        return GlideClientConfiguration(
+            addresses=(valkey_cluster.nodes_addr if addresses is None else addresses),
+            use_tls=use_tls,
+            credentials=credentials,
+            database_id=database_id,
+            client_name=client_name,
+            protocol=protocol,
+            request_timeout=timeout,
+            pubsub_subscriptions=standalone_mode_pubsub,
+            inflight_requests_limit=inflight_requests_limit,
+            read_from=read_from,
+            client_az=client_az,
+            advanced_config=AdvancedGlideClientConfiguration(
+                connection_timeout, tls_config=tls_adv_conf
+            ),
+            reconnect_strategy=reconnect_strategy,
+            lazy_connect=lazy_connect,
+        )
+
+
+def create_sync_client_config(
+    request,
+    cluster_mode: bool,
+    credentials: Optional[ServerCredentials] = None,
+    database_id: int = 0,
+    addresses: Optional[List[NodeAddress]] = None,
+    client_name: Optional[str] = None,
+    protocol: ProtocolVersion = ProtocolVersion.RESP3,
+    timeout: Optional[int] = 1000,
+    connection_timeout: Optional[int] = 1000,
+    read_from: ReadFrom = ReadFrom.PRIMARY,
+    client_az: Optional[str] = None,
+    reconnect_strategy: Optional[BackoffStrategy] = None,
+    valkey_cluster: Optional[ValkeyCluster] = None,
+    use_tls: Optional[bool] = None,
+    tls_insecure: Optional[bool] = None,
+    lazy_connect: Optional[bool] = False,
+) -> Union[SyncGlideClusterClientConfiguration, SyncGlideClientConfiguration]:
+    if use_tls is not None:
+        use_tls = use_tls
+    else:
+        use_tls = request.config.getoption("--tls")
+    tls_adv_conf = TlsAdvancedConfiguration(use_insecure_tls=tls_insecure)
+    if cluster_mode:
+        valkey_cluster = valkey_cluster or pytest.valkey_cluster  # type: ignore
+        assert type(valkey_cluster) is ValkeyCluster
+        assert database_id == 0
+        k = min(3, len(valkey_cluster.nodes_addr))
+        seed_nodes = random.sample(valkey_cluster.nodes_addr, k=k)
+        return SyncGlideClusterClientConfiguration(
+            addresses=seed_nodes if addresses is None else addresses,
+            use_tls=use_tls,
+            credentials=credentials,
+            client_name=client_name,
+            protocol=protocol,
+            request_timeout=timeout,
+            read_from=read_from,
+            client_az=client_az,
+            advanced_config=AdvancedGlideClusterClientConfiguration(
+                connection_timeout, tls_config=tls_adv_conf
+            ),
+            lazy_connect=lazy_connect,
+        )
+    else:
+        valkey_cluster = valkey_cluster or pytest.standalone_cluster  # type: ignore
+        assert type(valkey_cluster) is ValkeyCluster
+        return SyncGlideClientConfiguration(
+            addresses=(valkey_cluster.nodes_addr if addresses is None else addresses),
+            use_tls=use_tls,
+            credentials=credentials,
+            database_id=database_id,
+            client_name=client_name,
+            protocol=protocol,
+            request_timeout=timeout,
+            read_from=read_from,
+            client_az=client_az,
+            advanced_config=AdvancedGlideClientConfiguration(
+                connection_timeout, tls_config=tls_adv_conf
+            ),
+            reconnect_strategy=reconnect_strategy,
+            lazy_connect=lazy_connect,
+        )
+
+
+def run_sync_func_with_timeout_in_thread(
+    func: Callable, timeout: float, on_timeout=None
+):
+    """
+    Executes a synchronous function in a separate thread with a timeout.
+
+    If the function does not complete within the given timeout, a TimeoutError is raised,
+    and an optional `on_timeout` callback is invoked. Otherwise, the result of `func` is returned.
+
+    Intended primarily for use in tests of blocking synchronous commands where there's
+    a need to prevent the test suite from hanging indefinitely.
+    """
+    executor = ThreadPoolExecutor(max_workers=1)
+    try:
+        future = executor.submit(func)
+        try:
+            return future.result(timeout=timeout)
+        except Exception:
+            if on_timeout:
+                on_timeout()
+            raise TimeoutError("Function did not return within timeout")
+    finally:
+        # Shutdown with cancel_futures=True to prevent hanging
+        executor.shutdown(wait=False, cancel_futures=True)
+
+
+def auth_client(client: TAnyGlideClient, password: str, username: str = "default"):
+    """
+    Authenticates the given TGlideClient server connected.
+    When passing a sync client, this returns the result of the AUTH command.
+    When passing an async client, this returns a coroutine that should be awaited.
+    """
+    if isinstance(client, (GlideClient, SyncGlideClient)):
+        return client.custom_command(["AUTH", username, password])
+    elif isinstance(client, (GlideClusterClient, SyncGlideClusterClient)):
+        return client.custom_command(["AUTH", username, password], route=AllNodes())
+
+
+def config_set_new_password(client: TAnyGlideClient, password):
+    """
+    Sets a new password for the given TGlideClient server connected.
+    This function updates the server to require a new password.
+    When passing a sync client, this returns the reuslt of the CONFIG SET command.
+    When passing an async client, this returns a coroutine that should be awaited.
+    """
+    if isinstance(client, (GlideClient, SyncGlideClient)):
+        return client.config_set({"requirepass": password})
+    elif isinstance(client, (GlideClusterClient, SyncGlideClusterClient)):
+        return client.config_set({"requirepass": password}, route=AllNodes())
+
+
+def kill_connections(client: TAnyGlideClient):
+    """
+    Kills all connections to the given TGlideClient server connected.
+        When passing a sync client, this returns the reuslt of the CLIENT KILL command.
+        When passing an async client, this returns a coroutine that should be awaited.
+    """
+    if isinstance(client, (GlideClient, SyncGlideClient)):
+        return client.custom_command(["CLIENT", "KILL", "TYPE", "normal"])
+    elif isinstance(client, (GlideClusterClient, SyncGlideClusterClient)):
+        return client.custom_command(
+            ["CLIENT", "KILL", "TYPE", "normal"], route=AllNodes()
         )
