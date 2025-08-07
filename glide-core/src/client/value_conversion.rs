@@ -1374,7 +1374,7 @@ fn convert_flat_array_to_array_of_pairs(
     array: Vec<Value>,
     value_expected_return_type: Option<ExpectedReturnType>,
 ) -> RedisResult<Value> {
-    if array.len() % 2 != 0 {
+    if !array.len().is_multiple_of(2) {
         return Err((
             ErrorKind::TypeError,
             "Response has odd number of items, and cannot be converted to an array of key-value pairs"
