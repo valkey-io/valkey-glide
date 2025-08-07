@@ -2188,7 +2188,7 @@ public class SharedCommandTests {
 
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClientsAndBooleans")
+    @MethodSource("getClientsWithAtomic")
     public void hpersist_batch(BaseClient client, boolean isAtomic) {
         assumeTrue(
                 SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0"),
