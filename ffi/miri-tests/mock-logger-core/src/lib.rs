@@ -17,7 +17,6 @@ pub fn log<Message: AsRef<str>, Identifier: AsRef<str>>(
     _log_identifier: Identifier,
     _message: Message,
 ) {
-    // No-op for Miri
 }
 
 pub fn log_trace<Message: AsRef<str>, Identifier: AsRef<str>>(
