@@ -1,22 +1,28 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package redis.clients.jedis.resps;
 
-import java.util.Collections;
 import java.util.Map;
 import redis.clients.jedis.StreamEntryID;
 
-/** StreamPendingSummary compatibility stub for Valkey GLIDE wrapper. */
+/**
+ * Stream pending summary compatibility class for Valkey GLIDE. Based on original Jedis
+ * StreamPendingSummary.
+ */
 public class StreamPendingSummary {
     private final long total;
     private final StreamEntryID minId;
     private final StreamEntryID maxId;
     private final Map<String, Long> consumerMessageCount;
 
-    public StreamPendingSummary() {
-        this.total = 0;
-        this.minId = new StreamEntryID(0, 0);
-        this.maxId = new StreamEntryID(0, 0);
-        this.consumerMessageCount = Collections.emptyMap();
+    public StreamPendingSummary(
+            long total,
+            StreamEntryID minId,
+            StreamEntryID maxId,
+            Map<String, Long> consumerMessageCount) {
+        this.total = total;
+        this.minId = minId;
+        this.maxId = maxId;
+        this.consumerMessageCount = consumerMessageCount;
     }
 
     public long getTotal() {

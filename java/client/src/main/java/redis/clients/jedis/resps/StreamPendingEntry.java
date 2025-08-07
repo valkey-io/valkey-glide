@@ -3,18 +3,22 @@ package redis.clients.jedis.resps;
 
 import redis.clients.jedis.StreamEntryID;
 
-/** StreamPendingEntry compatibility stub for Valkey GLIDE wrapper. */
+/**
+ * Stream pending entry compatibility class for Valkey GLIDE. Based on original Jedis
+ * StreamPendingEntry.
+ */
 public class StreamPendingEntry {
     private final StreamEntryID id;
     private final String consumerName;
     private final long idleTime;
     private final long deliveredTimes;
 
-    public StreamPendingEntry() {
-        this.id = new StreamEntryID(0, 0);
-        this.consumerName = "";
-        this.idleTime = 0;
-        this.deliveredTimes = 0;
+    public StreamPendingEntry(
+            StreamEntryID id, String consumerName, long idleTime, long deliveredTimes) {
+        this.id = id;
+        this.consumerName = consumerName;
+        this.idleTime = idleTime;
+        this.deliveredTimes = deliveredTimes;
     }
 
     public StreamEntryID getID() {

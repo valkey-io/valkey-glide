@@ -1,7 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package redis.clients.jedis;
 
-/** Module compatibility class for Valkey GLIDE wrapper. Represents a Redis module. */
+/** Module compatibility class for Valkey GLIDE. Based on original Jedis Module. */
 public class Module {
 
     private final String name;
@@ -21,21 +21,25 @@ public class Module {
     }
 
     @Override
-    public String toString() {
-        return "Module{name='" + name + "', version=" + version + "}";
-    }
+    public boolean equals(Object o) {
+        if (o == null) return false;
+        if (o == this) return true;
+        if (!(o instanceof Module)) return false;
 
-    @Override
-    public boolean equals(Object obj) {
-        if (this == obj) return true;
-        if (obj == null || getClass() != obj.getClass()) return false;
-
-        Module module = (Module) obj;
-        return version == module.version && java.util.Objects.equals(name, module.name);
+        Module module = (Module) o;
+        if (version != module.version) return false;
+        return name != null ? name.equals(module.name) : module.name == null;
     }
 
     @Override
     public int hashCode() {
-        return java.util.Objects.hash(name, version);
+        int result = name != null ? name.hashCode() : 0;
+        result = 31 * result + version;
+        return result;
+    }
+
+    @Override
+    public String toString() {
+        return "Module{" + "name='" + name + '\'' + ", version=" + version + '}';
     }
 }

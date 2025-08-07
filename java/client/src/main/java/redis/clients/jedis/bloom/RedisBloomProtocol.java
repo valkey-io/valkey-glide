@@ -3,19 +3,30 @@ package redis.clients.jedis.bloom;
 
 import java.nio.charset.StandardCharsets;
 import redis.clients.jedis.args.Rawable;
+import redis.clients.jedis.commands.ProtocolCommand;
 
-/** RedisBloomProtocol compatibility stub for Valkey GLIDE wrapper. */
+/**
+ * Redis Bloom filter protocol commands and keywords for Valkey GLIDE compatibility layer. Based on
+ * original Jedis RedisBloomProtocol.
+ */
 public class RedisBloomProtocol {
 
-    public enum BloomFilterCommand implements Rawable {
-        BF_ADD,
-        BF_EXISTS,
-        BF_RESERVE;
+    public enum BloomFilterCommand implements ProtocolCommand {
+        RESERVE("BF.RESERVE"),
+        ADD("BF.ADD"),
+        MADD("BF.MADD"),
+        EXISTS("BF.EXISTS"),
+        MEXISTS("BF.MEXISTS"),
+        INSERT("BF.INSERT"),
+        SCANDUMP("BF.SCANDUMP"),
+        LOADCHUNK("BF.LOADCHUNK"),
+        CARD("BF.CARD"),
+        INFO("BF.INFO");
 
         private final byte[] raw;
 
-        private BloomFilterCommand() {
-            raw = name().getBytes(StandardCharsets.UTF_8);
+        BloomFilterCommand(String alt) {
+            raw = alt.getBytes(StandardCharsets.UTF_8);
         }
 
         @Override
@@ -24,15 +35,24 @@ public class RedisBloomProtocol {
         }
     }
 
-    public enum CuckooFilterCommand implements Rawable {
-        CF_ADD,
-        CF_EXISTS,
-        CF_RESERVE;
+    public enum CuckooFilterCommand implements ProtocolCommand {
+        RESERVE("CF.RESERVE"),
+        ADD("CF.ADD"),
+        ADDNX("CF.ADDNX"),
+        INSERT("CF.INSERT"),
+        INSERTNX("CF.INSERTNX"),
+        EXISTS("CF.EXISTS"),
+        MEXISTS("CF.MEXISTS"),
+        DEL("CF.DEL"),
+        COUNT("CF.COUNT"),
+        SCANDUMP("CF.SCANDUMP"),
+        LOADCHUNK("CF.LOADCHUNK"),
+        INFO("CF.INFO");
 
         private final byte[] raw;
 
-        private CuckooFilterCommand() {
-            raw = name().getBytes(StandardCharsets.UTF_8);
+        CuckooFilterCommand(String alt) {
+            raw = alt.getBytes(StandardCharsets.UTF_8);
         }
 
         @Override
@@ -41,15 +61,18 @@ public class RedisBloomProtocol {
         }
     }
 
-    public enum CountMinSketchCommand implements Rawable {
-        CMS_INITBYDIM,
-        CMS_INCRBY,
-        CMS_QUERY;
+    public enum CountMinSketchCommand implements ProtocolCommand {
+        INITBYDIM("CMS.INITBYDIM"),
+        INITBYPROB("CMS.INITBYPROB"),
+        INCRBY("CMS.INCRBY"),
+        QUERY("CMS.QUERY"),
+        MERGE("CMS.MERGE"),
+        INFO("CMS.INFO");
 
         private final byte[] raw;
 
-        private CountMinSketchCommand() {
-            raw = name().getBytes(StandardCharsets.UTF_8);
+        CountMinSketchCommand(String alt) {
+            raw = alt.getBytes(StandardCharsets.UTF_8);
         }
 
         @Override
@@ -58,15 +81,19 @@ public class RedisBloomProtocol {
         }
     }
 
-    public enum TopKCommand implements Rawable {
-        TOPK_RESERVE,
-        TOPK_ADD,
-        TOPK_QUERY;
+    public enum TopKCommand implements ProtocolCommand {
+        RESERVE("TOPK.RESERVE"),
+        ADD("TOPK.ADD"),
+        INCRBY("TOPK.INCRBY"),
+        QUERY("TOPK.QUERY"),
+        COUNT("TOPK.COUNT"),
+        LIST("TOPK.LIST"),
+        INFO("TOPK.INFO");
 
         private final byte[] raw;
 
-        private TopKCommand() {
-            raw = name().getBytes(StandardCharsets.UTF_8);
+        TopKCommand(String alt) {
+            raw = alt.getBytes(StandardCharsets.UTF_8);
         }
 
         @Override
@@ -75,14 +102,51 @@ public class RedisBloomProtocol {
         }
     }
 
-    public enum TDigestCommand implements Rawable {
-        TDIGEST_CREATE,
-        TDIGEST_ADD,
-        TDIGEST_QUANTILE;
+    public enum TDigestCommand implements ProtocolCommand {
+        CREATE,
+        INFO,
+        ADD,
+        RESET,
+        MERGE,
+        CDF,
+        QUANTILE,
+        MIN,
+        MAX,
+        TRIMMED_MEAN,
+        RANK,
+        REVRANK,
+        BYRANK,
+        BYREVRANK;
 
         private final byte[] raw;
 
-        private TDigestCommand() {
+        TDigestCommand() {
+            raw = ("TDIGEST." + name()).getBytes(StandardCharsets.UTF_8);
+        }
+
+        @Override
+        public byte[] getRaw() {
+            return raw;
+        }
+    }
+
+    public enum RedisBloomKeyword implements Rawable {
+        CAPACITY,
+        ERROR,
+        NOCREATE,
+        EXPANSION,
+        NONSCALING,
+        BUCKETSIZE,
+        MAXITERATIONS,
+        ITEMS,
+        WEIGHTS,
+        COMPRESSION,
+        OVERRIDE,
+        WITHCOUNT;
+
+        private final byte[] raw;
+
+        RedisBloomKeyword() {
             raw = name().getBytes(StandardCharsets.UTF_8);
         }
 

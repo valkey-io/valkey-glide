@@ -1,42 +1,31 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package redis.clients.jedis.resps;
 
-import java.util.Collections;
-import java.util.List;
+import java.util.Map;
 
-/** CommandDocument compatibility stub for Valkey GLIDE wrapper. */
+/**
+ * Command document compatibility class for Valkey GLIDE. Based on original Jedis CommandDocument.
+ */
 public class CommandDocument {
-    private final String summary;
-    private final String since;
-    private final String group;
-    private final String complexity;
-    private final List<String> history;
+    private final Map<String, Object> document;
 
-    public CommandDocument() {
-        this.summary = "";
-        this.since = "";
-        this.group = "";
-        this.complexity = "";
-        this.history = Collections.emptyList();
+    public CommandDocument(Map<String, Object> map) {
+        this.document = map;
+    }
+
+    public Map<String, Object> getDocument() {
+        return document;
     }
 
     public String getSummary() {
-        return summary;
+        return (String) document.get("summary");
     }
 
     public String getSince() {
-        return since;
+        return (String) document.get("since");
     }
 
     public String getGroup() {
-        return group;
-    }
-
-    public String getComplexity() {
-        return complexity;
-    }
-
-    public List<String> getHistory() {
-        return history;
+        return (String) document.get("group");
     }
 }

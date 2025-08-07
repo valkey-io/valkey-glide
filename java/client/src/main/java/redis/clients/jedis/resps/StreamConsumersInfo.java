@@ -1,33 +1,18 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package redis.clients.jedis.resps;
 
-/** StreamConsumersInfo compatibility stub for Valkey GLIDE wrapper. */
-public class StreamConsumersInfo {
-    private final String name;
-    private final long idle;
-    private final long pending;
-    private final long inactive;
+import java.util.Map;
 
-    public StreamConsumersInfo(String name) {
-        this.name = name;
-        this.idle = 0;
-        this.pending = 0;
-        this.inactive = 0;
-    }
+/**
+ * Stream consumers information compatibility class for Valkey GLIDE. Based on original Jedis
+ * StreamConsumersInfo.
+ *
+ * @deprecated Use {@link StreamConsumerInfo}.
+ */
+@Deprecated
+public class StreamConsumersInfo extends StreamConsumerInfo {
 
-    public String getName() {
-        return name;
-    }
-
-    public long getIdle() {
-        return idle;
-    }
-
-    public long getPending() {
-        return pending;
-    }
-
-    public long getInactive() {
-        return inactive;
+    public StreamConsumersInfo(Map<String, Object> map) {
+        super(map);
     }
 }

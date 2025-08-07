@@ -1,60 +1,44 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package redis.clients.jedis.resps;
 
-import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
-/** CommandInfo compatibility stub for Valkey GLIDE wrapper. */
+/**
+ * Command information compatibility class for Valkey GLIDE. Based on original Jedis CommandInfo.
+ */
 public class CommandInfo {
-    private final long arity;
-    private final List<String> flags;
-    private final long firstKey;
-    private final long lastKey;
-    private final long step;
-    private final List<String> aclCategories;
-    private final List<String> tips;
-    private final List<String> subcommands;
+    private final Map<String, Object> commandInfo;
 
-    public CommandInfo() {
-        this.arity = 0;
-        this.flags = Collections.emptyList();
-        this.firstKey = 0;
-        this.lastKey = 0;
-        this.step = 0;
-        this.aclCategories = Collections.emptyList();
-        this.tips = Collections.emptyList();
-        this.subcommands = Collections.emptyList();
+    public CommandInfo(Map<String, Object> map) {
+        this.commandInfo = map;
     }
 
-    public long getArity() {
-        return arity;
+    public Map<String, Object> getCommandInfo() {
+        return commandInfo;
+    }
+
+    public String getName() {
+        return (String) commandInfo.get("name");
+    }
+
+    public int getArity() {
+        return (Integer) commandInfo.get("arity");
     }
 
     public List<String> getFlags() {
-        return flags;
+        return (List<String>) commandInfo.get("flags");
     }
 
-    public long getFirstKey() {
-        return firstKey;
+    public int getFirstKeyPos() {
+        return (Integer) commandInfo.get("first_key_pos");
     }
 
-    public long getLastKey() {
-        return lastKey;
+    public int getLastKeyPos() {
+        return (Integer) commandInfo.get("last_key_pos");
     }
 
-    public long getStep() {
-        return step;
-    }
-
-    public List<String> getAclCategories() {
-        return aclCategories;
-    }
-
-    public List<String> getTips() {
-        return tips;
-    }
-
-    public List<String> getSubcommands() {
-        return subcommands;
+    public int getKeyStepCount() {
+        return (Integer) commandInfo.get("key_step_count");
     }
 }
