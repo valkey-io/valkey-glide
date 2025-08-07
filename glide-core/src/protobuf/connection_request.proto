@@ -21,13 +21,9 @@ enum TlsMode {
 }
 
 message AuthenticationInfo {
-    ServerCredentials server_credentials = 1;
-    optional IamCredentials iam_credentials = 2;
-}
-
-message ServerCredentials {
     string password = 1;
     string username = 2;
+    optional IamCredentials iam_credentials = 3;
 }
 
 enum ServiceType {
@@ -39,7 +35,6 @@ message IamCredentials {
     string cluster_name = 1;
     string region = 2;
     ServiceType service_type = 3;
-    // null / missing means “use default”; otherwise interpreted as seconds
     optional uint32 refresh_interval_seconds = 4;
 }
 

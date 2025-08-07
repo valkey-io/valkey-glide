@@ -567,19 +567,11 @@ fn set_connection_info_to_connection_request(
 ) {
     connection_request.protocol = convert_to_protobuf_protocol(connection_info.protocol).into();
     if connection_info.password.is_some() {
-        let server_credentials = connection_request::ServerCredentials {
-            password: connection_info.password.unwrap().into(),
-            username: connection_info.username.unwrap_or_default().into(),
-            ..Default::default()
-        };
-
         connection_request.authentication_info =
             protobuf::MessageField(Some(Box::new(AuthenticationInfo {
-                credentials: Some(
-                    connection_request::authentication_info::Credentials::ServerCredentials(
-                        server_credentials,
-                    ),
-                ),
+                password: connection_info.password.unwrap().into(),
+                username: connection_info.username.unwrap_or_default().into(),
+                iam_credentials: protobuf::MessageField::none(),
                 ..Default::default()
             })));
     }
