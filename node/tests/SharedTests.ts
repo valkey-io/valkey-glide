@@ -4171,6 +4171,7 @@ export function runBaseTests(config: {
                 await expect(
                     client.scriptShow("non existing sha1"),
                 ).rejects.toThrow(RequestError);
+                script.release();
             }, protocol);
         },
         config.timeout,
