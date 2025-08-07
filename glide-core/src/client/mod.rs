@@ -944,8 +944,8 @@ async fn create_cluster_client(
     // However, this approach would leave the application unaware that the subscriptions were not applied, requiring the user to analyze logs to identify the issue.
     // Instead, we explicitly check the engine version here and fail the connection creation if it is incompatible with sharded subscriptions.
 
-    if let Some(pubsub_subscriptions) = redis_connection_info.pubsub_subscriptions {
-        if pubsub_subscriptions.contains_key(&redis::PubSubSubscriptionKind::Sharded) {
+    if let Some(pubsub_subscriptions) = redis_connection_info.pubsub_subscriptions
+        && pubsub_subscriptions.contains_key(&redis::PubSubSubscriptionKind::Sharded) {
             let info_res = con
                 .route_command(
                     redis::cmd("INFO").arg("SERVER"),
@@ -978,7 +978,6 @@ async fn create_cluster_client(
                 }
             }
         }
-    }
 
     Ok(con)
 }
