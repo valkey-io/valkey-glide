@@ -429,7 +429,7 @@ func (client *baseClient) executeBatch(
 			// using the parent span pointer to establish the parent-child relationship
 			spanPtr = otelInstance.createBatchSpanWithParent(parentSpanPtr)
 		} else {
-			// Create independent batch span (current behavior)
+			// Create independent batch span
 			spanPtr = otelInstance.createBatchSpan()
 		}
 		defer otelInstance.dropSpan(spanPtr)
