@@ -84,8 +84,6 @@ class BackoffStrategy:
     successful.
     The client will attempt to reconnect indefinitely.
 
-    All time values (factor) are specified in milliseconds.
-
     Attributes:
         num_of_retries (int): Number of retry attempts that the client should perform when disconnected from the server,
             where the time between retries increases. Once the retries have reached the maximum value, the time between

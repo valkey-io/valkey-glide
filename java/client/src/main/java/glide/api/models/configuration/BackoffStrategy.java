@@ -17,8 +17,6 @@ import lombok.ToString;
  * <p>Once the maximum value is reached, that will remain the time between retry attempts until a
  * reconnect attempt is successful. The client will attempt to reconnect indefinitely.
  *
- * <p>All time values (factor) are specified in milliseconds.
- *
  * @example
  *     <pre>{@code
  * BackoffStrategy reconnectionConfiguration = BackoffStrategy.builder()

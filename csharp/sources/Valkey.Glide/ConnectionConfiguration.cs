@@ -36,8 +36,6 @@ public abstract class ConnectionConfiguration
     /// <para />
     /// Once the maximum value is reached, that will remain the time between retry attempts until a
     /// reconnect attempt is successful. The client will attempt to reconnect indefinitely.
-    /// <para />
-    /// All time values (factor) are specified in milliseconds.
     /// </summary>
     /// <param name="numberOfRetries"><inheritdoc cref="NumberOfRetries" path="/summary" /></param>
     /// <param name="factor"><inheritdoc cref="Factor" path="/summary" /></param>

@@ -707,9 +707,6 @@ export interface BaseClientConfiguration {
      * and rand(...) applies a jitter of up to `jitterPercent`% to introduce randomness and reduce retry storms.
      * The client will attempt to reconnect indefinitely. Once the maximum value is reached, that will remain the time between retry attempts until a
      * reconnect attempt is successful.
-     * 
-     * All time values (factor) are specified in milliseconds.
-     * 
      * If not set, a default backoff strategy will be used.
      */
     connectionBackoff?: {
