@@ -8,12 +8,14 @@ use glide_core::{
 use miri_tests::{
     ClientType, ConnectionResponse, PushKind, close_client, create_client, free_connection_response,
 };
+use miri_tests::{Level, LogResult, free_log_result, init, log};
 use miri_tests::{
     create_batch_otel_span, create_batch_otel_span_with_parent, create_named_otel_span,
     create_otel_span, create_otel_span_with_parent, drop_otel_span,
 };
 use protobuf::Message;
-use std::ffi::CString;
+use std::ffi::{CStr, CString, c_char};
+use std::ptr;
 
 fn create_connection_request(port: u16) -> Vec<u8> {
     let host = "localhost";
@@ -37,6 +39,21 @@ unsafe extern "C-unwind" fn pubsub_callback(
     _pattern_len: i64,
 ) {
 }
+
+fn get_logger_error_message(log_result: &LogResult) -> Option<String> {
+    if log_result.log_error.is_null() {
+        None
+    } else {
+        unsafe {
+            CStr::from_ptr(log_result.log_error)
+                .to_str()
+                .ok()
+                .map(|s| s.to_string())
+        }
+    }
+}
+
+/// Create_client
 
 #[test]
 fn create_client_test() {
@@ -148,7 +165,8 @@ fn test_create_otel_span_with_parent_miri() {
     );
 
     // Test with invalid parent pointer (should fallback to independent span)
-    let child_invalid_parent = unsafe { create_otel_span_with_parent(RequestType::Exists, 0xDEADBEEF) };
+    let child_invalid_parent =
+        unsafe { create_otel_span_with_parent(RequestType::Exists, 0xDEADBEEF) };
     assert_ne!(
         child_invalid_parent, 0,
         "Child span with invalid parent should fallback"
@@ -273,4 +291,90 @@ fn test_span_from_pointer_functionality_miri() {
 fn create_named_otel_span_safe(name: &str) -> u64 {
     let span_name = CString::new(name).expect("CString::new failed");
     unsafe { create_named_otel_span(span_name.as_ptr()) }
+}
+
+/// Logger tests
+#[test]
+fn test_init_logger_with_valid_level() {
+    unsafe {
+        let level = Level::INFO;
+        let log_result_ptr = init(&level, ptr::null());
+        assert!(!log_result_ptr.is_null());
+
+        let log_result = &*log_result_ptr;
+        assert!(log_result.log_error.is_null());
+
+        free_log_result(log_result_ptr);
+    }
+}
+
+#[test]
+fn test_init_logger_with_invalid_utf8_filename() {
+    unsafe {
+        let level = Level::INFO;
+        let invalid_utf8 = vec![0xFF, 0xFE, 0xFD, 0x00];
+
+        let log_result_ptr = init(&level, invalid_utf8.as_ptr() as *const c_char);
+        assert!(!log_result_ptr.is_null());
+
+        let log_result = &*log_result_ptr;
+        assert!(!log_result.log_error.is_null());
+
+        // Check that the error message contains the expected text
+        let error_message = get_logger_error_message(log_result);
+        assert!(error_message.is_some());
+        let error_text = error_message.unwrap();
+        assert!(error_text.contains("File name contains invalid UTF-8"));
+
+        free_log_result(log_result_ptr);
+    }
+}
+
+#[test]
+fn test_log_with_valid_inputs() {
+    unsafe {
+        let level = Level::INFO;
+        let init_result_ptr = init(&level, ptr::null());
+        free_log_result(init_result_ptr);
+
+        let identifier = CString::new("test_identifier").unwrap();
+        let message = CString::new("This is a test log message").unwrap();
+
+        let log_result_ptr = log(Level::INFO, identifier.as_ptr(), message.as_ptr());
+        assert!(!log_result_ptr.is_null());
+
+        let log_result = &*log_result_ptr;
+        assert!(log_result.log_error.is_null());
+
+        free_log_result(log_result_ptr);
+    }
+}
+
+#[test]
+fn test_log_with_invalid_utf8_message() {
+    unsafe {
+        let level = Level::INFO;
+        let init_result_ptr = init(&level, ptr::null());
+        free_log_result(init_result_ptr);
+
+        let identifier = CString::new("valid_identifier").unwrap();
+        let invalid_utf8 = vec![0xFF, 0xFE, 0xFD, 0x00];
+
+        let log_result_ptr = log(
+            Level::ERROR,
+            identifier.as_ptr(),
+            invalid_utf8.as_ptr() as *const c_char,
+        );
+        assert!(!log_result_ptr.is_null());
+
+        let log_result = &*log_result_ptr;
+        assert!(!log_result.log_error.is_null());
+
+        let error_message = get_logger_error_message(log_result);
+        assert!(error_message.is_some());
+        let error_text = error_message.unwrap();
+        assert!(error_text.contains("Log message contains invalid UTF-8"));
+
+        free_log_result(log_result_ptr);
+    }
 }

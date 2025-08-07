@@ -2778,10 +2778,8 @@ pub unsafe extern "C" fn init(level: *const Level, file_name: *const c_char) -> 
         }
     };
 
-    // Initialize the logger and get the actual level that was set
     let logger_level = logger_core::init(level_option, file_name_option);
 
-    // Return success with the actual level
     Box::into_raw(Box::new(LogResult {
         log_error: std::ptr::null_mut(),
         level: logger_level.into(),
