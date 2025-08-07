@@ -43,6 +43,8 @@ import redis.clients.jedis.args.BitCountOption;
 import redis.clients.jedis.args.BitOP;
 import redis.clients.jedis.args.ExpiryOption;
 import redis.clients.jedis.commands.ProtocolCommand;
+import redis.clients.jedis.exceptions.JedisConnectionException;
+import redis.clients.jedis.exceptions.JedisException;
 import redis.clients.jedis.params.BitPosParams;
 import redis.clients.jedis.params.GetExParams;
 import redis.clients.jedis.params.ScanParams;
@@ -194,6 +196,16 @@ public final class Jedis implements Closeable {
                         .socketTimeoutMillis(timeout)
                         .connectionTimeoutMillis(timeout)
                         .build());
+    }
+
+    /**
+     * Create a new Jedis instance with host and port from HostAndPort and configuration.
+     *
+     * @param hostAndPort the host and port
+     * @param config the jedis client configuration
+     */
+    public Jedis(HostAndPort hostAndPort, JedisClientConfig config) {
+        this(hostAndPort.getHost(), hostAndPort.getPort(), config);
     }
 
     /**
@@ -2630,10 +2642,10 @@ public final class Jedis implements Closeable {
                     for (Object key : keysArray) {
                         keys.add(key != null ? key.toString().getBytes(VALKEY_CHARSET) : null);
                     }
-                    return new ScanResult<>(newCursor.getBytes(VALKEY_CHARSET), keys);
+                    return new ScanResult<>(newCursor, keys);
                 }
             }
-            return new ScanResult<>("0".getBytes(VALKEY_CHARSET), Collections.emptyList());
+            return new ScanResult<>("0", Collections.emptyList());
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("SCAN operation failed", e);
         }
@@ -2661,10 +2673,10 @@ public final class Jedis implements Closeable {
                     for (Object key : keysArray) {
                         keys.add(key != null ? key.toString().getBytes(VALKEY_CHARSET) : null);
                     }
-                    return new ScanResult<>(newCursor.getBytes(VALKEY_CHARSET), keys);
+                    return new ScanResult<>(newCursor, keys);
                 }
             }
-            return new ScanResult<>("0".getBytes(VALKEY_CHARSET), Collections.emptyList());
+            return new ScanResult<>("0", Collections.emptyList());
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("SCAN operation failed", e);
         }
@@ -2759,10 +2771,10 @@ public final class Jedis implements Closeable {
                     for (Object key : keysArray) {
                         keys.add(key != null ? key.toString().getBytes(VALKEY_CHARSET) : null);
                     }
-                    return new ScanResult<>(newCursor.getBytes(VALKEY_CHARSET), keys);
+                    return new ScanResult<>(newCursor, keys);
                 }
             }
-            return new ScanResult<>("0".getBytes(VALKEY_CHARSET), Collections.emptyList());
+            return new ScanResult<>("0", Collections.emptyList());
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("SCAN operation failed", e);
         }

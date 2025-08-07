@@ -5,11 +5,7 @@ import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SSLSocketFactory;
 
-/**
- * Jedis client configuration interface for compatibility with existing Jedis code. This interface
- * provides the same configuration options as Jedis while mapping them to appropriate Valkey GLIDE
- * configurations.
- */
+/** JedisClientConfig compatibility interface for Valkey GLIDE wrapper. */
 public interface JedisClientConfig {
 
     /**
@@ -17,91 +13,115 @@ public interface JedisClientConfig {
      *
      * @return connection timeout
      */
-    int getConnectionTimeoutMillis();
+    default int getConnectionTimeoutMillis() {
+        return 2000;
+    }
 
     /**
      * Get the socket timeout in milliseconds.
      *
      * @return socket timeout
      */
-    int getSocketTimeoutMillis();
+    default int getSocketTimeoutMillis() {
+        return 2000;
+    }
 
     /**
      * Get the blocking socket timeout in milliseconds.
      *
      * @return blocking socket timeout
      */
-    int getBlockingSocketTimeoutMillis();
+    default int getBlockingSocketTimeoutMillis() {
+        return 0;
+    }
 
     /**
      * Get the username for authentication.
      *
      * @return username
      */
-    String getUser();
+    default String getUser() {
+        return null;
+    }
 
     /**
      * Get the password for authentication.
      *
      * @return password
      */
-    String getPassword();
+    default String getPassword() {
+        return null;
+    }
 
     /**
-     * Get the database number to select.
+     * Get the database number.
      *
      * @return database number
      */
-    int getDatabase();
+    default int getDatabase() {
+        return 0;
+    }
 
     /**
      * Get the client name.
      *
      * @return client name
      */
-    String getClientName();
+    default String getClientName() {
+        return null;
+    }
 
     /**
-     * Check if SSL/TLS is enabled.
+     * Check if SSL is enabled.
      *
      * @return true if SSL is enabled
      */
-    boolean isSsl();
+    default boolean isSsl() {
+        return false;
+    }
 
     /**
      * Get the SSL socket factory.
      *
      * @return SSL socket factory
      */
-    SSLSocketFactory getSslSocketFactory();
+    default SSLSocketFactory getSslSocketFactory() {
+        return null;
+    }
 
     /**
      * Get the SSL parameters.
      *
      * @return SSL parameters
      */
-    SSLParameters getSslParameters();
+    default SSLParameters getSslParameters() {
+        return null;
+    }
 
     /**
-     * Get the hostname verifier.
+     * Get the hostname verifier for SSL connections.
      *
      * @return hostname verifier
      */
-    HostnameVerifier getHostnameVerifier();
+    default HostnameVerifier getHostnameVerifier() {
+        return null;
+    }
 
     /**
      * Get the Redis protocol version.
      *
      * @return protocol version
      */
-    RedisProtocol getRedisProtocol();
+    default RedisProtocol getRedisProtocol() {
+        return RedisProtocol.getDefault();
+    }
 
     /**
-     * Check if the client should send a CLIENT SETNAME command.
+     * Check if client name is set.
      *
-     * @return true if client name should be sent
+     * @return true if client name is set
      */
-    default boolean isClientNameSent() {
+    default boolean isClientNameSet() {
         return getClientName() != null;
     }
 }

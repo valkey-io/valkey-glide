@@ -9,46 +9,58 @@ import redis.clients.jedis.commands.ProtocolCommand;
  * Redis protocol utilities and command definitions.
  *
  * <p>This class provides compatibility with original Jedis Protocol class, containing essential
- * Redis commands and protocol utilities.
- *
- * <p><b>Compatibility Note:</b> This is a subset of the original Jedis Protocol class, containing
- * only the most commonly used commands that are supported by the GLIDE compatibility layer.
+ * constants and command definitions for Redis protocol operations.
  */
-public final class Protocol {
+public class Protocol {
+
+    /** Default Redis host */
+    public static final String DEFAULT_HOST = "localhost";
+
+    /** Default Redis port */
+    public static final int DEFAULT_PORT = 6379;
+
+    /** Default database index */
+    public static final int DEFAULT_DATABASE = 0;
+
+    /** Default timeout in milliseconds */
+    public static final int DEFAULT_TIMEOUT = 2000;
 
     /**
      * Redis protocol commands enum.
      *
-     * <p>This enum contains Redis commands that can be used with the sendCommand method. All commands
-     * are supported through customCommand fallback for maximum compatibility.
+     * <p><b>Compatibility Note:</b> This is a subset of the original Jedis Protocol class, containing
+     * only the most commonly used commands that are supported by the GLIDE compatibility layer.
      */
-    public static enum Command implements ProtocolCommand {
-        // Basic commands
+    public enum Command implements ProtocolCommand {
+        // String commands
         PING,
         SET,
         GET,
-        EXISTS,
-        DEL,
-        TYPE,
-        ECHO,
-
-        // String commands
-        MGET,
-        MSET,
+        GETSET,
+        SETNX,
         SETEX,
         PSETEX,
-        SETNX,
-        GETSET,
-        GETDEL,
-        APPEND,
-        STRLEN,
+        MGET,
+        MSET,
+        MSETNX,
         INCR,
         INCRBY,
         INCRBYFLOAT,
         DECR,
         DECRBY,
+        APPEND,
+        SUBSTR,
+        STRLEN,
 
-        // Key expiration and management
+        // Key commands
+        DEL,
+        UNLINK,
+        EXISTS,
+        TYPE,
+        KEYS,
+        RANDOMKEY,
+        RENAME,
+        RENAMENX,
         EXPIRE,
         EXPIREAT,
         PEXPIRE,
@@ -56,132 +68,128 @@ public final class Protocol {
         TTL,
         PTTL,
         PERSIST,
-        RENAME,
-        RENAMENX,
-        MOVE,
-        RANDOMKEY,
-
-        // Key operations
-        RESTORE,
-        DUMP,
-        MIGRATE,
-        COPY,
-        TOUCH,
-        UNLINK,
+        SORT,
 
         // Hash commands
-        HGET,
         HSET,
-        HMGET,
+        HGET,
+        HSETNX,
         HMSET,
-        HGETALL,
-        HKEYS,
-        HVALS,
-        HLEN,
-        HEXISTS,
-        HDEL,
+        HMGET,
         HINCRBY,
         HINCRBYFLOAT,
-        HSETNX,
+        HEXISTS,
+        HDEL,
+        HLEN,
+        HKEYS,
+        HVALS,
+        HGETALL,
         HSTRLEN,
 
         // List commands
-        LPUSH,
         RPUSH,
-        LPOP,
-        RPOP,
+        LPUSH,
         LLEN,
         LRANGE,
+        LTRIM,
         LINDEX,
         LSET,
         LREM,
-        LTRIM,
+        LPOP,
+        RPOP,
+        BLPOP,
+        BRPOP,
+        RPOPLPUSH,
+        BRPOPLPUSH,
         LINSERT,
         LPUSHX,
         RPUSHX,
 
         // Set commands
         SADD,
-        SREM,
         SMEMBERS,
+        SREM,
+        SPOP,
         SCARD,
         SISMEMBER,
-        SMISMEMBER,
-        SINTER,
-        SUNION,
-        SDIFF,
-        SPOP,
         SRANDMEMBER,
+        SINTER,
+        SINTERSTORE,
+        SUNION,
+        SUNIONSTORE,
+        SDIFF,
+        SDIFFSTORE,
         SMOVE,
+        SSCAN,
 
-        // Sorted set commands
+        // Sorted Set commands
         ZADD,
-        ZREM,
-        ZCARD,
-        ZCOUNT,
         ZRANGE,
-        ZRANGEBYSCORE,
+        ZREM,
+        ZINCRBY,
         ZRANK,
         ZREVRANK,
+        ZREVRANGE,
+        ZCARD,
         ZSCORE,
-        ZINCRBY,
+        ZMULTI,
+        ZCOUNT,
+        ZRANGEBYSCORE,
+        ZREVRANGEBYSCORE,
+        ZREMRANGEBYRANK,
+        ZREMRANGEBYSCORE,
+        ZUNIONSTORE,
+        ZINTERSTORE,
+        ZSCAN,
 
-        // Bit operations
-        SETBIT,
-        GETBIT,
-        BITCOUNT,
-        BITPOS,
-        BITOP,
-        BITFIELD,
+        // Connection commands
+        QUIT,
+        AUTH,
+        SELECT,
+        ECHO,
 
-        // HyperLogLog
-        PFADD,
-        PFCOUNT,
-        PFMERGE,
+        // Server commands
+        FLUSHDB,
+        FLUSHALL,
+        SAVE,
+        BGSAVE,
+        BGREWRITEAOF,
+        LASTSAVE,
+        SHUTDOWN,
+        INFO,
+        MONITOR,
+        SLAVEOF,
+        CONFIG,
+        DBSIZE,
+        TIME,
+        ROLE,
 
-        // Pub/Sub
-        PUBLISH,
-        SUBSCRIBE,
-        UNSUBSCRIBE,
-        PSUBSCRIBE,
-        PUNSUBSCRIBE,
-
-        // Transactions
+        // Transaction commands
         MULTI,
         EXEC,
         DISCARD,
         WATCH,
         UNWATCH,
 
-        // Connection
-        AUTH,
-        SELECT,
-        QUIT,
-        PING_CONNECTION,
+        // Pub/Sub commands
+        SUBSCRIBE,
+        UNSUBSCRIBE,
+        PSUBSCRIBE,
+        PUNSUBSCRIBE,
+        PUBLISH,
+        PUBSUB,
 
-        // Server
-        INFO,
-        CONFIG,
-        FLUSHDB,
-        FLUSHALL,
-        DBSIZE,
-        TIME,
-        LASTSAVE,
-
-        // Scripting
+        // Script commands
         EVAL,
         EVALSHA,
         SCRIPT,
 
-        // Streams (basic support)
-        XADD,
-        XREAD,
-        XLEN,
-        XDEL;
+        // Cluster commands
+        CLUSTER;
 
         private final byte[] raw;
 
-        private Command() {
+        Command() {
             raw = name().getBytes(StandardCharsets.UTF_8);
         }
 
@@ -191,20 +199,96 @@ public final class Protocol {
         }
     }
 
-    /** Protocol keywords for Redis commands. Stub implementation for compilation compatibility. */
+    /** Redis protocol keywords enum. */
     public enum Keyword implements Rawable {
-        // Add common keywords as needed
-        EX,
-        PX,
-        NX,
-        XX,
-        KEEPTTL,
+        AGGREGATE,
+        ALPHA,
+        ASC,
+        BY,
+        DESC,
         GET,
-        SET;
+        LIMIT,
+        MESSAGE,
+        NO,
+        NOSORT,
+        PMESSAGE,
+        PSUBSCRIBE,
+        PUNSUBSCRIBE,
+        OK,
+        ONE,
+        QUEUED,
+        SET,
+        STORE,
+        SUBSCRIBE,
+        UNSUBSCRIBE,
+        WEIGHTS,
+        WITHSCORES,
+        RESETSTAT,
+        RESET,
+        FLUSH,
+        EXISTS,
+        LOAD,
+        KILL,
+        LEN,
+        REFCOUNT,
+        ENCODING,
+        IDLETIME,
+        GETNAME,
+        SETNAME,
+        LIST,
+        MATCH,
+        COUNT,
+        PING,
+        PONG,
+        UNLOAD,
+        REPLACE,
+        KEYS,
+        PAUSE,
+        DOCTOR,
+        BLOCK,
+        NOACK,
+        STREAMS,
+        KEY,
+        CREATE,
+        CONSUMERGROUP,
+        DELCONSUMER,
+        DESTROY,
+        SETID,
+        IDLE,
+        TIME,
+        RETRYCOUNT,
+        FORCE,
+        JUSTID,
+        MAXLEN,
+        APPROXIMATELY,
+        MINID,
+        LIMIT_LOWER,
+        LIMIT_UPPER,
+        WITHDIST,
+        WITHCOORD,
+        WITHHASH,
+        STOREDIST,
+        STORE_LOWER,
+        STORE_UPPER,
+        ANY,
+        FROMMEMBER,
+        FROMLONLAT,
+        BYRADIUS,
+        BYBOX,
+        ASC_LOWER,
+        DESC_LOWER,
+        COUNT_LOWER,
+        WITHCOUNT,
+        WITHHASH_LOWER,
+        WITHCOORD_LOWER,
+        WITHDIST_LOWER,
+        WITHCODE,
+        WITHMATCHLEN,
+        IDX;
 
         private final byte[] raw;
 
-        private Keyword() {
+        Keyword() {
             raw = name().getBytes(StandardCharsets.UTF_8);
         }
 
@@ -214,19 +298,35 @@ public final class Protocol {
         }
     }
 
-    /**
-     * Protocol cluster keywords for Redis cluster commands. Stub implementation for compilation
-     * compatibility.
-     */
+    /** Redis protocol cluster keywords enum. */
     public enum ClusterKeyword implements Rawable {
-        // Add cluster keywords as needed
+        ADDSLOTS,
+        DELSLOTS,
+        FLUSHSLOTS,
+        FORGET,
+        MEET,
         NODES,
+        REPLICATE,
+        RESET,
+        SAVECONFIG,
+        SETSLOT,
+        SLAVES,
+        REPLICAS,
         SLOTS,
-        INFO;
+        IMPORTING,
+        MIGRATING,
+        STABLE,
+        NODE,
+        CALL,
+        COUNTKEYSINSLOT,
+        GETKEYSINSLOT,
+        INFO,
+        KEYSLOT,
+        MYID;
 
         private final byte[] raw;
 
-        private ClusterKeyword() {
+        ClusterKeyword() {
             raw = name().getBytes(StandardCharsets.UTF_8);
         }
 

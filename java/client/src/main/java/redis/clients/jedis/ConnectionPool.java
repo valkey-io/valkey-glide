@@ -1,32 +1,33 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package redis.clients.jedis;
 
-/**
- * ConnectionPool compatibility stub for Valkey GLIDE wrapper. This class exists only for
- * compilation compatibility.
- *
- * <p>NOTE: Connection pooling is not used in GLIDE compatibility layer. GLIDE handles connection
- * management internally.
- */
-public abstract class ConnectionPool implements AutoCloseable {
+import redis.clients.jedis.util.Pool;
 
-    protected boolean closed = false;
-
-    /** Stub method for compilation compatibility. */
-    public abstract Connection getResource();
-
-    /** Stub method for compilation compatibility. */
-    public abstract void returnResource(Connection connection);
-
-    /** Stub method for compilation compatibility. */
-    public abstract void returnBrokenResource(Connection connection);
+/** ConnectionPool compatibility stub for Valkey GLIDE wrapper. */
+public class ConnectionPool extends Pool<Connection> {
 
     @Override
-    public void close() {
-        closed = true;
+    public Connection getResource() {
+        return new Connection();
     }
 
+    @Override
+    public void returnResource(Connection resource) {
+        // Stub implementation
+    }
+
+    @Override
+    public void returnBrokenResource(Connection resource) {
+        // Stub implementation
+    }
+
+    @Override
+    public void destroy() {
+        // Stub implementation
+    }
+
+    @Override
     public boolean isClosed() {
-        return closed;
+        return false;
     }
 }

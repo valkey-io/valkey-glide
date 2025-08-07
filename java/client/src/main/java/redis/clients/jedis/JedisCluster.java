@@ -6,15 +6,22 @@ import glide.api.models.ClusterValue;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.RequestRoutingConfiguration;
 import java.io.Closeable;
+import java.util.Collections;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import redis.clients.jedis.commands.ProtocolCommand;
+import redis.clients.jedis.exceptions.JedisConnectionException;
+import redis.clients.jedis.exceptions.JedisException;
 
 /**
  * JedisCluster compatibility wrapper for Valkey GLIDE cluster client. This class provides a
  * Jedis-like cluster API while using Valkey GLIDE underneath.
  */
 public final class JedisCluster implements Closeable {
+
+    /** Default maximum attempts for cluster operations */
+    public static final int DEFAULT_MAX_ATTEMPTS = 5;
 
     private final GlideClusterClient glideClusterClient;
     private final JedisClientConfig config;
@@ -82,6 +89,19 @@ public final class JedisCluster implements Closeable {
      */
     public JedisCluster(Set<HostAndPort> nodes, String user, String password) {
         this(nodes, DefaultJedisClientConfig.builder().user(user).password(password).build());
+    }
+
+    /**
+     * Create a JedisCluster with connection configuration.
+     *
+     * @param nodes cluster nodes
+     * @param config client configuration
+     * @param maxAttempts maximum retry attempts
+     * @param poolConfig connection pool configuration
+     */
+    public JedisCluster(
+            Set<HostAndPort> nodes, JedisClientConfig config, int maxAttempts, Object poolConfig) {
+        this(nodes, config);
     }
 
     // ========== Basic Redis Commands ==========
@@ -327,11 +347,10 @@ public final class JedisCluster implements Closeable {
     }
 
     /** Get cluster nodes information. TODO: Implement cluster topology retrieval via GLIDE */
-    public Object getClusterNodes() {
+    public Map<String, ConnectionPool> getClusterNodes() {
         checkNotClosed();
-        // TODO: Implement via GLIDE cluster client
-        throw new UnsupportedOperationException(
-                "getClusterNodes not yet implemented in compatibility layer");
+        // Return empty map for compatibility
+        return Collections.emptyMap();
     }
 
     /** Check if the connection is not closed and throw exception if it is. */

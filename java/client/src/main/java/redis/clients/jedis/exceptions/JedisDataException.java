@@ -1,8 +1,6 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package redis.clients.jedis.exceptions;
 
-import redis.clients.jedis.JedisException;
-
 /**
  * JedisDataException compatibility class for Valkey GLIDE wrapper. Thrown when Redis returns an
  * error response.
