@@ -2,27 +2,11 @@
 package redis.clients.jedis.timeseries;
 
 import java.util.List;
+import java.util.Map;
 
-/** TSKeyedElements compatibility stub for Valkey GLIDE wrapper. */
-public class TSKeyedElements {
-    private final String key;
-    private final List<TSElement> value;
+public class TSKeyedElements extends TSKeyValue<List<TSElement>> {
 
-    public TSKeyedElements(String key, List<TSElement> value) {
-        this.key = key;
-        this.value = value;
-    }
-
-    public String getKey() {
-        return key;
-    }
-
-    public List<TSElement> getValue() {
-        return value;
-    }
-
-    @Override
-    public String toString() {
-        return "TSKeyedElements{key='" + key + "', value=" + value + "}";
-    }
+  public TSKeyedElements(String key, Map<String, String> labels, List<TSElement> elements) {
+    super(key, labels, elements);
+  }
 }

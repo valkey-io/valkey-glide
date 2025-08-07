@@ -2,8 +2,10 @@
 package redis.clients.jedis.search;
 
 import java.util.List;
+import java.util.Map;
+import redis.clients.jedis.Builder;
 
-/** SearchResult compatibility stub for Valkey GLIDE wrapper. */
+/** SearchResult compatibility class for Valkey GLIDE wrapper. */
 public class SearchResult {
     private final long totalResults;
     private final List<Document> documents;
@@ -26,23 +28,40 @@ public class SearchResult {
         return "SearchResult{totalResults=" + totalResults + ", documents=" + documents + "}";
     }
 
-    /** SearchResultBuilder compatibility stub. */
-    public static class SearchResultBuilder {
-        private long totalResults = 0;
-        private List<Document> documents = java.util.Collections.emptyList();
+    /** SearchResultBuilder compatibility class. */
+    public static class SearchResultBuilder extends Builder<SearchResult> {
+        private final boolean hasContent;
+        private final boolean hasScores;
+        private final boolean hasPayloads;
+        private final boolean decode;
+        private final Map<String, Boolean> isFieldDecode;
 
-        public SearchResultBuilder totalResults(long totalResults) {
-            this.totalResults = totalResults;
-            return this;
+        public SearchResultBuilder() {
+            this(false, false, false, false);
         }
 
-        public SearchResultBuilder documents(List<Document> documents) {
-            this.documents = documents;
-            return this;
+        public SearchResultBuilder(
+                boolean hasContent, boolean hasScores, boolean hasPayloads, boolean decode) {
+            this.hasContent = hasContent;
+            this.hasScores = hasScores;
+            this.hasPayloads = hasPayloads;
+            this.decode = decode;
+            this.isFieldDecode = null;
         }
 
-        public SearchResult build() {
-            return new SearchResult(totalResults, documents);
+        public SearchResultBuilder(
+                boolean hasContent, boolean hasScores, boolean decode, Map<String, Boolean> isFieldDecode) {
+            this.hasContent = hasContent;
+            this.hasScores = hasScores;
+            this.hasPayloads = false;
+            this.decode = decode;
+            this.isFieldDecode = isFieldDecode;
+        }
+
+        @Override
+        public SearchResult build(Object data) {
+            // Simple stub implementation
+            return new SearchResult(0, java.util.Collections.emptyList());
         }
     }
 }

@@ -1,127 +1,122 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package redis.clients.jedis;
 
+import java.util.function.Supplier;
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SSLSocketFactory;
+import redis.clients.jedis.authentication.AuthXManager;
 
 /** JedisClientConfig compatibility interface for Valkey GLIDE wrapper. */
 public interface JedisClientConfig {
 
+    default RedisProtocol getRedisProtocol() {
+        return null;
+    }
+
     /**
-     * Get the connection timeout in milliseconds.
-     *
-     * @return connection timeout
+     * @return Connection timeout in milliseconds
      */
     default int getConnectionTimeoutMillis() {
-        return 2000;
+        return Protocol.DEFAULT_TIMEOUT;
     }
 
     /**
-     * Get the socket timeout in milliseconds.
-     *
-     * @return socket timeout
+     * @return Socket timeout in milliseconds
      */
     default int getSocketTimeoutMillis() {
-        return 2000;
+        return Protocol.DEFAULT_TIMEOUT;
     }
 
     /**
-     * Get the blocking socket timeout in milliseconds.
-     *
-     * @return blocking socket timeout
+     * @return Socket timeout (in milliseconds) to use during blocking operation. Default is '0',
+     *     which means to block forever.
      */
     default int getBlockingSocketTimeoutMillis() {
         return 0;
     }
 
     /**
-     * Get the username for authentication.
-     *
-     * @return username
+     * @return Redis ACL user
      */
     default String getUser() {
         return null;
     }
 
-    /**
-     * Get the password for authentication.
-     *
-     * @return password
-     */
     default String getPassword() {
         return null;
     }
 
-    /**
-     * Get the database number.
-     *
-     * @return database number
-     */
-    default int getDatabase() {
-        return 0;
+    // TODO: return null
+    default Supplier<RedisCredentials> getCredentialsProvider() {
+        return new DefaultRedisCredentialsProvider(
+                new DefaultRedisCredentials(getUser(), getPassword()));
     }
 
-    /**
-     * Get the client name.
-     *
-     * @return client name
-     */
+    default AuthXManager getAuthXManager() {
+        return null;
+    }
+
+    default int getDatabase() {
+        return Protocol.DEFAULT_DATABASE;
+    }
+
     default String getClientName() {
         return null;
     }
 
     /**
-     * Check if SSL is enabled.
-     *
-     * @return true if SSL is enabled
+     * @return {@code true} - to create TLS connection(s). {@code false} - otherwise.
      */
     default boolean isSsl() {
         return false;
     }
 
-    /**
-     * Get the SSL socket factory.
-     *
-     * @return SSL socket factory
-     */
     default SSLSocketFactory getSslSocketFactory() {
         return null;
     }
 
-    /**
-     * Get the SSL parameters.
-     *
-     * @return SSL parameters
-     */
     default SSLParameters getSslParameters() {
         return null;
     }
 
     /**
-     * Get the hostname verifier for SSL connections.
+     * {@link JedisClientConfig#isSsl()}, {@link JedisClientConfig#getSslSocketFactory()} and {@link
+     * JedisClientConfig#getSslParameters()} will be ignored if {@link
+     * JedisClientConfig#getSslOptions() this} is set.
      *
-     * @return hostname verifier
+     * @return ssl options
      */
+    default SslOptions getSslOptions() {
+        return null;
+    }
+
     default HostnameVerifier getHostnameVerifier() {
         return null;
     }
 
-    /**
-     * Get the Redis protocol version.
-     *
-     * @return protocol version
-     */
-    default RedisProtocol getRedisProtocol() {
-        return RedisProtocol.getDefault();
+    default HostAndPortMapper getHostAndPortMapper() {
+        return null;
     }
 
     /**
-     * Check if client name is set.
+     * Execute READONLY command to connections.
      *
-     * @return true if client name is set
+     * <p>READONLY command is specific to Redis Cluster replica nodes. So this config param is only
+     * intended for Redis Cluster connections.
+     *
+     * @return {@code true} - to execute READONLY command to connection(s). {@code false} - otherwise.
      */
-    default boolean isClientNameSet() {
-        return getClientName() != null;
+    default boolean isReadOnlyForRedisClusterReplicas() {
+        return false;
+    }
+
+    /**
+     * Modify the behavior of internally executing CLIENT SETINFO command.
+     *
+     * @return CLIENT SETINFO config
+     */
+    default ClientSetInfoConfig getClientSetInfoConfig() {
+        return ClientSetInfoConfig.DEFAULT;
     }
 }

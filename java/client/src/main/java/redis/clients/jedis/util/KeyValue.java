@@ -1,26 +1,15 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package redis.clients.jedis.util;
 
-/** KeyValue compatibility stub for Valkey GLIDE wrapper. */
-public class KeyValue<K, V> {
-    private final K key;
-    private final V value;
+import java.util.AbstractMap.SimpleImmutableEntry;
 
-    public KeyValue(K key, V value) {
-        this.key = key;
-        this.value = value;
-    }
+public class KeyValue<K, V> extends SimpleImmutableEntry<K, V> {
 
-    public K getKey() {
-        return key;
-    }
+  public KeyValue(K key, V value) {
+    super(key, value);
+  }
 
-    public V getValue() {
-        return value;
-    }
-
-    @Override
-    public String toString() {
-        return "KeyValue{key=" + key + ", value=" + value + "}";
-    }
+  public static <K, V> KeyValue<K, V> of(K key, V value) {
+    return new KeyValue<>(key, value);
+  }
 }
