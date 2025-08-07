@@ -3956,4 +3956,37 @@ public final class Jedis implements Closeable {
             throw new JedisException("Command " + commandName + " execution failed", e);
         }
     }
+
+    // ===== MISSING METHODS FOR REDIS JDBC DRIVER COMPATIBILITY =====
+
+    /**
+     * Constructor with Connection (compatibility stub). NOTE: Connection is not used in GLIDE
+     * compatibility layer.
+     */
+    public Jedis(Connection connection) {
+        // Extract host/port from connection for GLIDE client creation
+        this(connection.getHost(), connection.getPort());
+    }
+
+    /**
+     * Send a blocking command to Redis server. Uses the same implementation as sendCommand since
+     * GLIDE handles blocking internally.
+     */
+    public Object sendBlockingCommand(ProtocolCommand cmd, String... args) {
+        return sendCommand(cmd, args);
+    }
+
+    /**
+     * Send a blocking command to Redis server with byte arrays. Uses the same implementation as
+     * sendCommand since GLIDE handles blocking internally.
+     */
+    public Object sendBlockingCommand(ProtocolCommand cmd, byte[]... args) {
+        return sendCommand(cmd, args);
+    }
+
+    /** Get the current database index. NOTE: GLIDE manages database selection internally. */
+    public int getDB() {
+        // TODO: Track database selection in compatibility layer
+        return 0; // Default database for now
+    }
 }

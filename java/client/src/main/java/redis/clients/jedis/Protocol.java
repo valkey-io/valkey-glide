@@ -2,6 +2,7 @@
 package redis.clients.jedis;
 
 import java.nio.charset.StandardCharsets;
+import redis.clients.jedis.args.Rawable;
 import redis.clients.jedis.commands.ProtocolCommand;
 
 /**
@@ -181,6 +182,51 @@ public final class Protocol {
         private final byte[] raw;
 
         private Command() {
+            raw = name().getBytes(StandardCharsets.UTF_8);
+        }
+
+        @Override
+        public byte[] getRaw() {
+            return raw;
+        }
+    }
+
+    /** Protocol keywords for Redis commands. Stub implementation for compilation compatibility. */
+    public enum Keyword implements Rawable {
+        // Add common keywords as needed
+        EX,
+        PX,
+        NX,
+        XX,
+        KEEPTTL,
+        GET,
+        SET;
+
+        private final byte[] raw;
+
+        private Keyword() {
+            raw = name().getBytes(StandardCharsets.UTF_8);
+        }
+
+        @Override
+        public byte[] getRaw() {
+            return raw;
+        }
+    }
+
+    /**
+     * Protocol cluster keywords for Redis cluster commands. Stub implementation for compilation
+     * compatibility.
+     */
+    public enum ClusterKeyword implements Rawable {
+        // Add cluster keywords as needed
+        NODES,
+        SLOTS,
+        INFO;
+
+        private final byte[] raw;
+
+        private ClusterKeyword() {
             raw = name().getBytes(StandardCharsets.UTF_8);
         }
 

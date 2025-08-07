@@ -8,6 +8,7 @@ import glide.api.models.configuration.RequestRoutingConfiguration;
 import java.io.Closeable;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import redis.clients.jedis.commands.ProtocolCommand;
 
 /**
  * JedisCluster compatibility wrapper for Valkey GLIDE cluster client. This class provides a
@@ -278,6 +279,59 @@ public final class JedisCluster implements Closeable {
      */
     protected GlideClusterClient getGlideClusterClient() {
         return glideClusterClient;
+    }
+
+    // ===== MISSING METHODS FOR REDIS JDBC DRIVER COMPATIBILITY =====
+
+    /** Send command to cluster. Base method for cluster command execution. */
+    public Object sendCommand(ProtocolCommand cmd, String... args) {
+        checkNotClosed();
+        try {
+            // Convert ProtocolCommand to string and execute
+            String commandName = new String(cmd.getRaw());
+            String[] fullArgs = new String[args.length + 1];
+            fullArgs[0] = commandName;
+            System.arraycopy(args, 0, fullArgs, 1, args.length);
+
+            return glideClusterClient.customCommand(fullArgs).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException(
+                    "Cluster command " + new String(cmd.getRaw()) + " execution failed", e);
+        }
+    }
+
+    /**
+     * Send command with sample key for cluster routing. Uses GLIDE cluster client which handles
+     * routing automatically.
+     */
+    public Object sendCommand(String sampleKey, ProtocolCommand cmd, String... args) {
+        // GLIDE cluster client handles routing automatically, so we can ignore sampleKey
+        return sendCommand(cmd, args);
+    }
+
+    /**
+     * Send blocking command with sample key for cluster routing. Uses GLIDE cluster client which
+     * handles routing and blocking automatically.
+     */
+    public Object sendBlockingCommand(String sampleKey, ProtocolCommand cmd, String... args) {
+        // GLIDE cluster client handles routing automatically, so we can ignore sampleKey
+        return sendCommand(cmd, args);
+    }
+
+    /**
+     * Send blocking command to cluster. Uses the same implementation as sendCommand since GLIDE
+     * handles blocking internally.
+     */
+    public Object sendBlockingCommand(ProtocolCommand cmd, String... args) {
+        return sendCommand(cmd, args);
+    }
+
+    /** Get cluster nodes information. TODO: Implement cluster topology retrieval via GLIDE */
+    public Object getClusterNodes() {
+        checkNotClosed();
+        // TODO: Implement via GLIDE cluster client
+        throw new UnsupportedOperationException(
+                "getClusterNodes not yet implemented in compatibility layer");
     }
 
     /** Check if the connection is not closed and throw exception if it is. */
