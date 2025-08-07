@@ -38,8 +38,10 @@ public class BackoffStrategy {
      */
     @NonNull private final Integer numOfRetries;
 
-    /** The multiplier that will be applied to the waiting time between each retry.
-     * This value is specified in milliseconds. */
+    /**
+     * The multiplier that will be applied to the waiting time between each retry. This value is
+     * specified in milliseconds.
+     */
     @NonNull private final Integer factor;
 
     /** The exponent base configured for the strategy. */
