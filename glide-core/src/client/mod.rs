@@ -945,39 +945,40 @@ async fn create_cluster_client(
     // Instead, we explicitly check the engine version here and fail the connection creation if it is incompatible with sharded subscriptions.
 
     if let Some(pubsub_subscriptions) = redis_connection_info.pubsub_subscriptions
-        && pubsub_subscriptions.contains_key(&redis::PubSubSubscriptionKind::Sharded) {
-            let info_res = con
-                .route_command(
-                    redis::cmd("INFO").arg("SERVER"),
-                    RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random),
-                )
-                .await?;
-            let info_dict: InfoDict = FromRedisValue::from_redis_value(&info_res)?;
-            match info_dict.get::<String>("redis_version") {
-                Some(version) => match (Versioning::new(version), Versioning::new("7.0")) {
-                    (Some(server_ver), Some(min_ver)) => {
-                        if server_ver < min_ver {
-                            return Err(RedisError::from((
-                                ErrorKind::InvalidClientConfig,
-                                "Sharded subscriptions provided, but the engine version is < 7.0",
-                            )));
-                        }
-                    }
-                    _ => {
+        && pubsub_subscriptions.contains_key(&redis::PubSubSubscriptionKind::Sharded)
+    {
+        let info_res = con
+            .route_command(
+                redis::cmd("INFO").arg("SERVER"),
+                RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random),
+            )
+            .await?;
+        let info_dict: InfoDict = FromRedisValue::from_redis_value(&info_res)?;
+        match info_dict.get::<String>("redis_version") {
+            Some(version) => match (Versioning::new(version), Versioning::new("7.0")) {
+                (Some(server_ver), Some(min_ver)) => {
+                    if server_ver < min_ver {
                         return Err(RedisError::from((
-                            ErrorKind::ResponseError,
-                            "Failed to parse engine version",
+                            ErrorKind::InvalidClientConfig,
+                            "Sharded subscriptions provided, but the engine version is < 7.0",
                         )));
                     }
-                },
+                }
                 _ => {
                     return Err(RedisError::from((
                         ErrorKind::ResponseError,
-                        "Could not determine engine version from INFO result",
+                        "Failed to parse engine version",
                     )));
                 }
+            },
+            _ => {
+                return Err(RedisError::from((
+                    ErrorKind::ResponseError,
+                    "Could not determine engine version from INFO result",
+                )));
             }
         }
+    }
 
     Ok(con)
 }

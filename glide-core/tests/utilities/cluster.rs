@@ -260,10 +260,11 @@ pub async fn create_cluster_client(
     };
 
     if let Some(redis_connection_info) = &configuration.connection_info
-        && redis_connection_info.password.is_some() {
-            assert!(!configuration.shared_server);
-            setup_acl_for_cluster(&addresses, redis_connection_info).await;
-        }
+        && redis_connection_info.password.is_some()
+    {
+        assert!(!configuration.shared_server);
+        setup_acl_for_cluster(&addresses, redis_connection_info).await;
+    }
     configuration.cluster_mode = ClusterMode::Enabled;
     configuration.request_timeout = configuration.request_timeout.or(Some(10000));
     let connection_request = create_connection_request(&addresses, &configuration);

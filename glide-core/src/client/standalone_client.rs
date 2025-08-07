@@ -305,16 +305,17 @@ impl StandaloneClient {
             // Attempt to get a connection and retrieve the replica's AZ.
             if let Ok(connection) = replica.get_connection().await
                 && let Some(replica_az) = connection.get_az().as_deref()
-                && replica_az == client_az {
-                        // Update `latest_used_replica` with the index of this replica.
-                        let _ = latest_read_replica_index.compare_exchange_weak(
-                            initial_index,
-                            index,
-                            Ordering::Relaxed,
-                            Ordering::Relaxed,
-                        );
-                        return replica;
-                    }
+                && replica_az == client_az
+            {
+                // Update `latest_used_replica` with the index of this replica.
+                let _ = latest_read_replica_index.compare_exchange_weak(
+                    initial_index,
+                    index,
+                    Ordering::Relaxed,
+                    Ordering::Relaxed,
+                );
+                return replica;
+            }
         }
     }
 
@@ -341,25 +342,27 @@ impl StandaloneClient {
             // Attempt to get a connection and retrieve the replica's AZ.
             if let Ok(connection) = replica.get_connection().await
                 && let Some(replica_az) = connection.get_az().as_deref()
-                && replica_az == client_az {
-                        // Update `latest_used_replica` with the index of this replica.
-                        let _ = latest_read_replica_index.compare_exchange_weak(
-                            initial_index,
-                            index,
-                            Ordering::Relaxed,
-                            Ordering::Relaxed,
-                        );
-                        return replica;
-                    }
+                && replica_az == client_az
+            {
+                // Update `latest_used_replica` with the index of this replica.
+                let _ = latest_read_replica_index.compare_exchange_weak(
+                    initial_index,
+                    index,
+                    Ordering::Relaxed,
+                    Ordering::Relaxed,
+                );
+                return replica;
+            }
         }
 
         // Step 2: Check if primary is in the same AZ
         let primary = self.get_primary_connection();
         if let Ok(connection) = primary.get_connection().await
             && let Some(primary_az) = connection.get_az().as_deref()
-            && primary_az == client_az {
-                    return primary;
-                }
+            && primary_az == client_az
+        {
+            return primary;
+        }
 
         // Step 3: Fall back to any available replica using round-robin
         self.round_robin_read_from_replica(latest_read_replica_index)
