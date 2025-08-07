@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.*;
 import redis.clients.jedis.Jedis;
+import redis.clients.jedis.Protocol;
 import redis.clients.jedis.args.BitOP;
 import redis.clients.jedis.params.BitPosParams;
 import redis.clients.jedis.params.GetExParams;
@@ -196,7 +197,21 @@ public class JedisTest {
             TEST_KEY_PREFIX + "copy_dest",
             TEST_KEY_PREFIX + "expiretime",
             TEST_KEY_PREFIX + "pexpiretime",
-            TEST_KEY_PREFIX + "expire_option"
+            TEST_KEY_PREFIX + "expire_option",
+            // sendCommand test keys
+            TEST_KEY_PREFIX + "sendcmd_basic",
+            TEST_KEY_PREFIX + "sendcmd_string",
+            TEST_KEY_PREFIX + "sendcmd_multi1",
+            TEST_KEY_PREFIX + "sendcmd_multi2",
+            TEST_KEY_PREFIX + "sendcmd_multi3",
+            TEST_KEY_PREFIX + "sendcmd_numeric",
+            TEST_KEY_PREFIX + "sendcmd_expire",
+            TEST_KEY_PREFIX + "sendcmd_hash",
+            TEST_KEY_PREFIX + "sendcmd_list",
+            TEST_KEY_PREFIX + "sendcmd_set",
+            TEST_KEY_PREFIX + "sendcmd_binary",
+            TEST_KEY_PREFIX + "sendcmd_optional",
+            TEST_KEY_PREFIX + "sendcmd_nx"
         };
 
         jedis.del(keysToDelete);
@@ -1394,5 +1409,325 @@ public class JedisTest {
         String message = "test_message";
         String pingWithMessage = jedis.ping(message);
         assertEquals(message, pingWithMessage, "PING with message should return the message");
+    }
+
+    @Test
+    @Order(101)
+    @DisplayName("sendCommand - Basic Commands")
+    void testSendCommandBasic() {
+        String key = TEST_KEY_PREFIX + "sendcmd_basic";
+        String value = "test_value";
+
+        // Test SET command via sendCommand with byte arrays
+        Object setResult = jedis.sendCommand(Protocol.Command.SET, key.getBytes(), value.getBytes());
+        assertEquals("OK", setResult.toString(), "SET via sendCommand should return OK");
+
+        // Test GET command via sendCommand with byte arrays
+        Object getResult = jedis.sendCommand(Protocol.Command.GET, key.getBytes());
+        assertNotNull(getResult, "GET via sendCommand should return the value");
+        // Note: GLIDE may return different types (String vs byte[]), so we convert to string for
+        // comparison
+        assertEquals(
+                value, getResult.toString(), "GET via sendCommand should return the correct value");
+
+        // Test PING command via sendCommand with no arguments
+        Object pingResult = jedis.sendCommand(Protocol.Command.PING);
+        assertEquals("PONG", pingResult.toString(), "PING via sendCommand should return PONG");
+    }
+
+    @Test
+    @Order(102)
+    @DisplayName("sendCommand - String Arguments")
+    void testSendCommandStringArgs() {
+        String key = TEST_KEY_PREFIX + "sendcmd_string";
+        String value = "string_value";
+
+        // Test SET command via sendCommand with string arguments
+        Object setResult = jedis.sendCommand(Protocol.Command.SET, key, value);
+        assertEquals("OK", setResult.toString(), "SET via sendCommand with strings should return OK");
+
+        // Test GET command via sendCommand with string arguments
+        Object getResult = jedis.sendCommand(Protocol.Command.GET, key);
+        assertEquals(
+                value,
+                getResult.toString(),
+                "GET via sendCommand with strings should return the correct value");
+
+        // Test EXISTS command via sendCommand with string arguments
+        Object existsResult = jedis.sendCommand(Protocol.Command.EXISTS, key);
+        assertEquals(
+                1L,
+                ((Number) existsResult).longValue(),
+                "EXISTS via sendCommand should return 1 for existing key");
+    }
+
+    @Test
+    @Order(103)
+    @DisplayName("sendCommand - Multiple Arguments")
+    void testSendCommandMultipleArgs() {
+        String key1 = TEST_KEY_PREFIX + "sendcmd_multi1";
+        String key2 = TEST_KEY_PREFIX + "sendcmd_multi2";
+        String key3 = TEST_KEY_PREFIX + "sendcmd_multi3";
+        String value1 = "value1";
+        String value2 = "value2";
+        String value3 = "value3";
+
+        // Set up test data using regular methods
+        jedis.set(key1, value1);
+        jedis.set(key2, value2);
+        jedis.set(key3, value3);
+
+        // Test MGET command via sendCommand
+        Object mgetResult = jedis.sendCommand(Protocol.Command.MGET, key1, key2, key3);
+        assertNotNull(mgetResult, "MGET via sendCommand should return results");
+        // MGET returns an array/list, verify it contains our values
+        assertTrue(mgetResult.toString().contains(value1), "MGET result should contain value1");
+        assertTrue(mgetResult.toString().contains(value2), "MGET result should contain value2");
+        assertTrue(mgetResult.toString().contains(value3), "MGET result should contain value3");
+
+        // Test DEL command via sendCommand with multiple keys
+        Object delResult = jedis.sendCommand(Protocol.Command.DEL, key1, key2, key3);
+        assertEquals(
+                3L,
+                ((Number) delResult).longValue(),
+                "DEL via sendCommand should return 3 for three deleted keys");
+    }
+
+    @Test
+    @Order(104)
+    @DisplayName("sendCommand - Numeric Commands")
+    void testSendCommandNumeric() {
+        String key = TEST_KEY_PREFIX + "sendcmd_numeric";
+
+        // Test INCR command via sendCommand
+        Object incrResult = jedis.sendCommand(Protocol.Command.INCR, key);
+        assertEquals(
+                1L,
+                ((Number) incrResult).longValue(),
+                "INCR via sendCommand should return 1 for first increment");
+
+        // Test INCRBY command via sendCommand
+        Object incrbyResult = jedis.sendCommand(Protocol.Command.INCRBY, key, "5");
+        assertEquals(
+                6L, ((Number) incrbyResult).longValue(), "INCRBY via sendCommand should return 6 (1+5)");
+
+        // Test DECR command via sendCommand
+        Object decrResult = jedis.sendCommand(Protocol.Command.DECR, key);
+        assertEquals(
+                5L, ((Number) decrResult).longValue(), "DECR via sendCommand should return 5 (6-1)");
+    }
+
+    @Test
+    @Order(105)
+    @DisplayName("sendCommand - Expiration Commands")
+    void testSendCommandExpiration() {
+        String key = TEST_KEY_PREFIX + "sendcmd_expire";
+        String value = "expire_value";
+
+        // Set up test data
+        jedis.set(key, value);
+
+        // Test EXPIRE command via sendCommand
+        Object expireResult = jedis.sendCommand(Protocol.Command.EXPIRE, key, "60");
+        assertEquals(
+                1L,
+                ((Number) expireResult).longValue(),
+                "EXPIRE via sendCommand should return 1 for successful expiration");
+
+        // Test TTL command via sendCommand
+        Object ttlResult = jedis.sendCommand(Protocol.Command.TTL, key);
+        long ttl = ((Number) ttlResult).longValue();
+        assertTrue(ttl > 0 && ttl <= 60, "TTL via sendCommand should return a value between 1 and 60");
+
+        // Test PERSIST command via sendCommand
+        Object persistResult = jedis.sendCommand(Protocol.Command.PERSIST, key);
+        assertEquals(
+                1L,
+                ((Number) persistResult).longValue(),
+                "PERSIST via sendCommand should return 1 for successful persist");
+
+        // Verify TTL is now -1 (no expiration)
+        Object ttlAfterPersist = jedis.sendCommand(Protocol.Command.TTL, key);
+        assertEquals(-1L, ((Number) ttlAfterPersist).longValue(), "TTL should be -1 after PERSIST");
+    }
+
+    @Test
+    @Order(106)
+    @DisplayName("sendCommand - Hash Commands")
+    void testSendCommandHash() {
+        String key = TEST_KEY_PREFIX + "sendcmd_hash";
+        String field1 = "field1";
+        String field2 = "field2";
+        String value1 = "value1";
+        String value2 = "value2";
+
+        // Test HSET command via sendCommand
+        Object hsetResult = jedis.sendCommand(Protocol.Command.HSET, key, field1, value1);
+        assertEquals(
+                1L,
+                ((Number) hsetResult).longValue(),
+                "HSET via sendCommand should return 1 for new field");
+
+        // Test HGET command via sendCommand
+        Object hgetResult = jedis.sendCommand(Protocol.Command.HGET, key, field1);
+        assertEquals(
+                value1,
+                hgetResult.toString(),
+                "HGET via sendCommand should return the correct field value");
+
+        // Test HMSET command via sendCommand (note: HMSET is deprecated but still supported)
+        Object hmsetResult = jedis.sendCommand(Protocol.Command.HMSET, key, field2, value2);
+        assertEquals("OK", hmsetResult.toString(), "HMSET via sendCommand should return OK");
+
+        // Test HGETALL command via sendCommand
+        Object hgetallResult = jedis.sendCommand(Protocol.Command.HGETALL, key);
+        assertNotNull(hgetallResult, "HGETALL via sendCommand should return all fields and values");
+        String hgetallStr = hgetallResult.toString();
+        assertTrue(hgetallStr.contains(field1), "HGETALL result should contain field1");
+        assertTrue(hgetallStr.contains(value1), "HGETALL result should contain value1");
+        assertTrue(hgetallStr.contains(field2), "HGETALL result should contain field2");
+        assertTrue(hgetallStr.contains(value2), "HGETALL result should contain value2");
+    }
+
+    @Test
+    @Order(107)
+    @DisplayName("sendCommand - List Commands")
+    void testSendCommandList() {
+        String key = TEST_KEY_PREFIX + "sendcmd_list";
+        String value1 = "item1";
+        String value2 = "item2";
+        String value3 = "item3";
+
+        // Test LPUSH command via sendCommand
+        Object lpushResult = jedis.sendCommand(Protocol.Command.LPUSH, key, value1, value2);
+        assertEquals(
+                2L,
+                ((Number) lpushResult).longValue(),
+                "LPUSH via sendCommand should return 2 for list length");
+
+        // Test RPUSH command via sendCommand
+        Object rpushResult = jedis.sendCommand(Protocol.Command.RPUSH, key, value3);
+        assertEquals(
+                3L,
+                ((Number) rpushResult).longValue(),
+                "RPUSH via sendCommand should return 3 for list length");
+
+        // Test LLEN command via sendCommand
+        Object llenResult = jedis.sendCommand(Protocol.Command.LLEN, key);
+        assertEquals(
+                3L,
+                ((Number) llenResult).longValue(),
+                "LLEN via sendCommand should return 3 for list length");
+
+        // Test LRANGE command via sendCommand
+        Object lrangeResult = jedis.sendCommand(Protocol.Command.LRANGE, key, "0", "-1");
+        assertNotNull(lrangeResult, "LRANGE via sendCommand should return list elements");
+        String lrangeStr = lrangeResult.toString();
+        assertTrue(lrangeStr.contains(value1), "LRANGE result should contain value1");
+        assertTrue(lrangeStr.contains(value2), "LRANGE result should contain value2");
+        assertTrue(lrangeStr.contains(value3), "LRANGE result should contain value3");
+    }
+
+    @Test
+    @Order(108)
+    @DisplayName("sendCommand - Set Commands")
+    void testSendCommandSet() {
+        String key = TEST_KEY_PREFIX + "sendcmd_set";
+        String member1 = "member1";
+        String member2 = "member2";
+        String member3 = "member3";
+
+        // Test SADD command via sendCommand
+        Object saddResult = jedis.sendCommand(Protocol.Command.SADD, key, member1, member2, member3);
+        assertEquals(
+                3L,
+                ((Number) saddResult).longValue(),
+                "SADD via sendCommand should return 3 for three new members");
+
+        // Test SCARD command via sendCommand
+        Object scardResult = jedis.sendCommand(Protocol.Command.SCARD, key);
+        assertEquals(
+                3L,
+                ((Number) scardResult).longValue(),
+                "SCARD via sendCommand should return 3 for set cardinality");
+
+        // Test SISMEMBER command via sendCommand
+        Object sismemberResult = jedis.sendCommand(Protocol.Command.SISMEMBER, key, member1);
+        // SISMEMBER returns 1 for member exists, 0 for not exists
+        assertEquals(
+                1L,
+                ((Number) sismemberResult).longValue(),
+                "SISMEMBER via sendCommand should return 1 for existing member");
+
+        // Test SMEMBERS command via sendCommand
+        Object smembersResult = jedis.sendCommand(Protocol.Command.SMEMBERS, key);
+        assertNotNull(smembersResult, "SMEMBERS via sendCommand should return all set members");
+        String smembersStr = smembersResult.toString();
+        assertTrue(smembersStr.contains(member1), "SMEMBERS result should contain member1");
+        assertTrue(smembersStr.contains(member2), "SMEMBERS result should contain member2");
+        assertTrue(smembersStr.contains(member3), "SMEMBERS result should contain member3");
+    }
+
+    @Test
+    @Order(109)
+    @DisplayName("sendCommand - Binary Data")
+    void testSendCommandBinaryData() {
+        String key = TEST_KEY_PREFIX + "sendcmd_binary";
+        byte[] binaryValue = {0x00, 0x01, 0x02, 0x03, (byte) 0xFF};
+
+        // Test SET command via sendCommand with binary data
+        Object setResult = jedis.sendCommand(Protocol.Command.SET, key.getBytes(), binaryValue);
+        assertEquals(
+                "OK", setResult.toString(), "SET via sendCommand with binary data should return OK");
+
+        // Test GET command via sendCommand with binary data
+        Object getResult = jedis.sendCommand(Protocol.Command.GET, key.getBytes());
+        assertNotNull(getResult, "GET via sendCommand with binary data should return the binary value");
+
+        // For binary data, we can't easily compare the exact bytes due to potential encoding
+        // differences
+        // in GLIDE's response processing, but we can verify that we got a non-null response
+        // and that the key exists
+        Object existsResult = jedis.sendCommand(Protocol.Command.EXISTS, key.getBytes());
+        assertEquals(1L, ((Number) existsResult).longValue(), "Key with binary data should exist");
+    }
+
+    @Test
+    @Order(110)
+    @DisplayName("sendCommand - Optional Arguments")
+    void testSendCommandOptionalArgs() {
+        String key = TEST_KEY_PREFIX + "sendcmd_optional";
+        String value = "optional_value";
+
+        // Test SET command with optional arguments (EX for expiration)
+        Object setExResult = jedis.sendCommand(Protocol.Command.SET, key, value, "EX", "60");
+        assertEquals(
+                "OK", setExResult.toString(), "SET via sendCommand with EX option should return OK");
+
+        // Verify the key was set with expiration
+        Object ttlResult = jedis.sendCommand(Protocol.Command.TTL, key);
+        long ttl = ((Number) ttlResult).longValue();
+        assertTrue(ttl > 0 && ttl <= 60, "TTL should be between 1 and 60 seconds");
+
+        // Verify the value was set correctly
+        Object getResult = jedis.sendCommand(Protocol.Command.GET, key);
+        assertEquals(value, getResult.toString(), "GET should return the correct value");
+
+        // Test SET command with NX option (only if not exists)
+        String key2 = TEST_KEY_PREFIX + "sendcmd_nx";
+        Object setNxResult = jedis.sendCommand(Protocol.Command.SET, key2, value, "NX");
+        assertEquals(
+                "OK",
+                setNxResult.toString(),
+                "SET via sendCommand with NX option should return OK for new key");
+
+        // Test SET command with NX option on existing key (should return null)
+        Object setNxExistingResult = jedis.sendCommand(Protocol.Command.SET, key2, "new_value", "NX");
+        assertNull(setNxExistingResult, "SET with NX on existing key should return null");
+
+        // Verify the original value wasn't changed
+        Object getKey2Result = jedis.sendCommand(Protocol.Command.GET, key2);
+        assertEquals(
+                value, getKey2Result.toString(), "Original value should be unchanged after failed NX");
     }
 }
