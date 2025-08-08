@@ -1,6 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package redis.clients.jedis.timeseries;
 
+import java.util.Collections;
 import java.util.Map;
 import redis.clients.jedis.util.KeyValue;
 
@@ -14,6 +15,7 @@ public class TSKeyValue<V> extends KeyValue<String, V> {
     }
 
     public Map<String, String> getLabels() {
-        return labels;
+        return Collections.unmodifiableMap(
+                labels); // ✅ Return unmodifiable view to prevent external modification
     }
 }

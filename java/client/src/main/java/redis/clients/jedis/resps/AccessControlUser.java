@@ -3,6 +3,7 @@ package redis.clients.jedis.resps;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 public class AccessControlUser {
@@ -20,7 +21,8 @@ public class AccessControlUser {
     }
 
     public List<String> getFlags() {
-        return flags;
+        return Collections.unmodifiableList(
+                flags); // ✅ Return unmodifiable view to prevent external modification
     }
 
     public void addKey(String key) {
@@ -28,7 +30,8 @@ public class AccessControlUser {
     }
 
     public List<String> getKeys() {
-        return keys;
+        return Collections.unmodifiableList(
+                keys); // ✅ Return unmodifiable view to prevent external modification
     }
 
     public void addKeys(String keys) {
@@ -42,7 +45,8 @@ public class AccessControlUser {
     }
 
     public List<String> getPassword() {
-        return passwords;
+        return Collections.unmodifiableList(
+                passwords); // ✅ Return unmodifiable view to prevent external modification
     }
 
     public void addChannel(String channel) {
@@ -50,7 +54,8 @@ public class AccessControlUser {
     }
 
     public List<String> getChannels() {
-        return channels;
+        return Collections.unmodifiableList(
+                channels); // ✅ Return unmodifiable view to prevent external modification
     }
 
     public void addChannels(String channels) {

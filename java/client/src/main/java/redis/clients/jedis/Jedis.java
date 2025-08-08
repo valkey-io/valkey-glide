@@ -699,7 +699,6 @@ public final class Jedis implements Closeable {
      */
     public void connect() {
         checkNotClosed();
-        System.out.println("Inside connect");
         this.ensureInitialized();
         // No implementation required - connection is established in constructor.
         // This method exists solely for Jedis API compatibility.
@@ -3912,7 +3911,6 @@ public final class Jedis implements Closeable {
      */
     public Object sendCommand(ProtocolCommand cmd, byte[]... args) {
         checkNotClosed();
-        System.out.println("Inside send command");
         // Check if it's a Protocol.Command (standard Redis commands)
         if (cmd instanceof Protocol.Command) {
             Protocol.Command command = (Protocol.Command) cmd;
@@ -3946,7 +3944,6 @@ public final class Jedis implements Closeable {
      */
     public Object sendCommand(ProtocolCommand cmd, String... args) {
         checkNotClosed();
-        System.out.println("Inside send command");
         // Check if it's a Protocol.Command (standard Redis commands)
         if (cmd instanceof Protocol.Command) {
             Protocol.Command command = (Protocol.Command) cmd;
@@ -3992,7 +3989,6 @@ public final class Jedis implements Closeable {
      */
     private Object executeProtocolCommandWithStringArgs(String commandName, String... args)
             throws Exception {
-        System.out.println("Inside send command");
         // Convert command and args to String array for GLIDE's customCommand(String[])
         String[] stringArgs = new String[args.length + 1];
         stringArgs[0] = commandName;
@@ -4016,7 +4012,6 @@ public final class Jedis implements Closeable {
      */
     private Object executeProtocolCommandWithByteArgs(String commandName, byte[]... args)
             throws Exception {
-        System.out.println("Inside send command");
         // Convert command and args to GlideString array for GLIDE's customCommand(GlideString[])
         GlideString[] glideArgs = new GlideString[args.length + 1];
         glideArgs[0] = GlideString.of(commandName);
