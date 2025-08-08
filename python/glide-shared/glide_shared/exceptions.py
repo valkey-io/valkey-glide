@@ -64,6 +64,14 @@ class ConfigurationError(RequestError):
     """
 
 
+class LoggerError(GlideError):
+    """
+    Errors that are thrown when the logger has an error initializing.
+    """
+
+    pass
+
+
 def get_request_error_class(
     error_type: Optional[RequestErrorType.ValueType],
 ) -> Type[RequestError]:
