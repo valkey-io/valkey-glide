@@ -90,12 +90,17 @@ public final class Jedis implements Closeable {
     /** Character encoding used for string-to-byte conversions in Valkey operations. */
     private static final Charset VALKEY_CHARSET = StandardCharsets.UTF_8;
 
-    private final GlideClient glideClient;
+    private volatile GlideClient glideClient; // Changed from final to volatile for lazy init
     private final boolean isPooled;
-    private final String resourceId;
+    private volatile String resourceId; // Changed from final to volatile for lazy init
     private final JedisClientConfig config;
     private JedisPool parentPool;
     private volatile boolean closed = false;
+    private volatile boolean lazyInitialized = false; // New field to track initialization
+
+    // Store connection parameters for lazy initialization (nullable for pooled connections)
+    private final String host;
+    private final int port;
 
     /** Create a new Jedis instance with default localhost:6379 connection. */
     public Jedis() {
@@ -131,6 +136,8 @@ public final class Jedis implements Closeable {
      * @param config the jedis client configuration
      */
     public Jedis(String host, int port, JedisClientConfig config) {
+        this.host = host;
+        this.port = port;
         this.isPooled = false;
         this.parentPool = null;
         this.config = config;
@@ -138,14 +145,54 @@ public final class Jedis implements Closeable {
         // Validate configuration
         ConfigurationMapper.validateConfiguration(config);
 
-        // Map Jedis config to GLIDE config
-        GlideClientConfiguration glideConfig = ConfigurationMapper.mapToGlideConfig(host, port, config);
+        // Defer GlideClient creation until first Redis operation (lazy initialization)
+        // This solves DataGrip compatibility issues with native library loading
+        this.glideClient = null;
+        this.resourceId = null;
+        this.lazyInitialized = false;
+    }
 
+    /**
+     * Lazy initialization of GlideClient. This defers native library loading until actually needed
+     * for Redis operations. Solves DataGrip compatibility issues where JDBC driver loading fails due
+     * to native library restrictions in IDE environments.
+     */
+    private synchronized void ensureInitialized() {
+        if (lazyInitialized) {
+            return;
+        }
+
+        // Skip initialization for pooled connections (already initialized)
+        if (isPooled) {
+            lazyInitialized = true;
+            return;
+        }
+        int i = 0;
         try {
+            // Map Jedis config to GLIDE config
+
+            GlideClientConfiguration glideConfig =
+                    ConfigurationMapper.mapToGlideConfig(host, port, config);
+            i++;
             this.glideClient = GlideClient.createClient(glideConfig).get();
+            i++;
             this.resourceId = ResourceLifecycleManager.getInstance().registerResource(this);
+            i++;
+            this.lazyInitialized = true;
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisConnectionException("Failed to create GLIDE client", e);
+        } catch (RuntimeException e) {
+            // Handle native library loading issues (like in DataGrip)
+            if (e.getMessage() != null && e.getMessage().contains("native")) {
+                throw new JedisConnectionException(
+                        "Native library loading failed - this may be due to environment restrictions (e.g.,"
+                                + " DataGrip). "
+                                + i
+                                + "Error: "
+                                + e.getMessage(),
+                        e);
+            }
+            throw e;
         }
     }
 
@@ -216,11 +263,14 @@ public final class Jedis implements Closeable {
      * @param config the client configuration
      */
     protected Jedis(GlideClient glideClient, JedisPool pool, JedisClientConfig config) {
+        this.host = null; // Not needed for pooled connections
+        this.port = 0; // Not needed for pooled connections
         this.glideClient = glideClient;
         this.isPooled = true;
         this.parentPool = pool;
         this.config = config;
         this.resourceId = ResourceLifecycleManager.getInstance().registerResource(this);
+        this.lazyInitialized = true; // Already initialized for pooled connections
     }
 
     /**
@@ -235,6 +285,7 @@ public final class Jedis implements Closeable {
      */
     public String set(String key, String value) {
         checkNotClosed();
+        ensureInitialized(); // Lazy initialization
         try {
             return glideClient.set(key, value).get();
         } catch (InterruptedException | ExecutionException e) {
@@ -496,6 +547,7 @@ public final class Jedis implements Closeable {
      */
     public String get(final String key) {
         checkNotClosed();
+        ensureInitialized(); // Lazy initialization
         try {
             return glideClient.get(key).get();
         } catch (InterruptedException | ExecutionException e) {
@@ -529,6 +581,7 @@ public final class Jedis implements Closeable {
      */
     public String ping() {
         checkNotClosed();
+        ensureInitialized(); // Lazy initialization
         try {
             return glideClient.ping().get();
         } catch (InterruptedException | ExecutionException e) {
@@ -646,6 +699,8 @@ public final class Jedis implements Closeable {
      */
     public void connect() {
         checkNotClosed();
+        System.out.println("Inside connect");
+        this.ensureInitialized();
         // No implementation required - connection is established in constructor.
         // This method exists solely for Jedis API compatibility.
     }
@@ -670,11 +725,15 @@ public final class Jedis implements Closeable {
         }
 
         closed = true;
-        ResourceLifecycleManager.getInstance().unregisterResource(resourceId);
+
+        // Only unregister if we were actually initialized
+        if (resourceId != null) {
+            ResourceLifecycleManager.getInstance().unregisterResource(resourceId);
+        }
 
         if (isPooled && parentPool != null) {
             parentPool.returnResource(this);
-        } else {
+        } else if (glideClient != null) { // Only close if initialized
             try {
                 glideClient.close();
             } catch (Exception e) {
@@ -689,6 +748,7 @@ public final class Jedis implements Closeable {
      * @return the GLIDE client
      */
     protected GlideClient getGlideClient() {
+        ensureInitialized(); // Lazy initialization
         return glideClient;
     }
 
@@ -3852,7 +3912,7 @@ public final class Jedis implements Closeable {
      */
     public Object sendCommand(ProtocolCommand cmd, byte[]... args) {
         checkNotClosed();
-
+        System.out.println("Inside send command");
         // Check if it's a Protocol.Command (standard Redis commands)
         if (cmd instanceof Protocol.Command) {
             Protocol.Command command = (Protocol.Command) cmd;
@@ -3886,7 +3946,7 @@ public final class Jedis implements Closeable {
      */
     public Object sendCommand(ProtocolCommand cmd, String... args) {
         checkNotClosed();
-
+        System.out.println("Inside send command");
         // Check if it's a Protocol.Command (standard Redis commands)
         if (cmd instanceof Protocol.Command) {
             Protocol.Command command = (Protocol.Command) cmd;
@@ -3932,6 +3992,7 @@ public final class Jedis implements Closeable {
      */
     private Object executeProtocolCommandWithStringArgs(String commandName, String... args)
             throws Exception {
+        System.out.println("Inside send command");
         // Convert command and args to String array for GLIDE's customCommand(String[])
         String[] stringArgs = new String[args.length + 1];
         stringArgs[0] = commandName;
@@ -3955,6 +4016,7 @@ public final class Jedis implements Closeable {
      */
     private Object executeProtocolCommandWithByteArgs(String commandName, byte[]... args)
             throws Exception {
+        System.out.println("Inside send command");
         // Convert command and args to GlideString array for GLIDE's customCommand(GlideString[])
         GlideString[] glideArgs = new GlideString[args.length + 1];
         glideArgs[0] = GlideString.of(commandName);
