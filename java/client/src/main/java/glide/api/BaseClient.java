@@ -38,18 +38,29 @@ import static command_request.CommandRequestOuterClass.RequestType.GetEx;
 import static command_request.CommandRequestOuterClass.RequestType.GetRange;
 import static command_request.CommandRequestOuterClass.RequestType.HDel;
 import static command_request.CommandRequestOuterClass.RequestType.HExists;
+import static command_request.CommandRequestOuterClass.RequestType.HExpire;
+import static command_request.CommandRequestOuterClass.RequestType.HExpireAt;
+import static command_request.CommandRequestOuterClass.RequestType.HExpireTime;
 import static command_request.CommandRequestOuterClass.RequestType.HGet;
 import static command_request.CommandRequestOuterClass.RequestType.HGetAll;
+import static command_request.CommandRequestOuterClass.RequestType.HGetex;
 import static command_request.CommandRequestOuterClass.RequestType.HIncrBy;
 import static command_request.CommandRequestOuterClass.RequestType.HIncrByFloat;
 import static command_request.CommandRequestOuterClass.RequestType.HKeys;
 import static command_request.CommandRequestOuterClass.RequestType.HLen;
 import static command_request.CommandRequestOuterClass.RequestType.HMGet;
+import static command_request.CommandRequestOuterClass.RequestType.HPExpire;
+import static command_request.CommandRequestOuterClass.RequestType.HPExpireAt;
+import static command_request.CommandRequestOuterClass.RequestType.HPExpireTime;
+import static command_request.CommandRequestOuterClass.RequestType.HPTtl;
+import static command_request.CommandRequestOuterClass.RequestType.HPersist;
 import static command_request.CommandRequestOuterClass.RequestType.HRandField;
 import static command_request.CommandRequestOuterClass.RequestType.HScan;
 import static command_request.CommandRequestOuterClass.RequestType.HSet;
 import static command_request.CommandRequestOuterClass.RequestType.HSetNX;
+import static command_request.CommandRequestOuterClass.RequestType.HSetex;
 import static command_request.CommandRequestOuterClass.RequestType.HStrlen;
+import static command_request.CommandRequestOuterClass.RequestType.HTtl;
 import static command_request.CommandRequestOuterClass.RequestType.HVals;
 import static command_request.CommandRequestOuterClass.RequestType.Incr;
 import static command_request.CommandRequestOuterClass.RequestType.IncrBy;
@@ -217,6 +228,7 @@ import glide.api.models.PubSubMessage;
 import glide.api.models.Script;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.GetExOptions;
+import glide.api.models.commands.HashFieldExpirationOptions;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
 import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
@@ -1166,6 +1178,296 @@ public abstract class BaseClient
             @NonNull GlideString key, @NonNull GlideString field, @NonNull GlideString value) {
         return commandManager.submitNewCommand(
                 HSetNX, new GlideString[] {key, field, value}, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> hsetex(
+            @NonNull String key,
+            @NonNull Map<String, String> fieldValueMap,
+            @NonNull HashFieldExpirationOptions options) {
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {key},
+                        options.toArgs(),
+                        new String[] {"FIELDS", String.valueOf(fieldValueMap.size())},
+                        convertMapToKeyValueStringArray(fieldValueMap));
+        return commandManager.submitNewCommand(HSetex, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> hsetex(
+            @NonNull GlideString key,
+            @NonNull Map<GlideString, GlideString> fieldValueMap,
+            @NonNull HashFieldExpirationOptions options) {
+        GlideString[] arguments =
+                new ArgsBuilder()
+                        .add(key)
+                        .add(options.toArgs())
+                        .add("FIELDS")
+                        .add(fieldValueMap.size())
+                        .add(convertMapToKeyValueGlideStringArray(fieldValueMap))
+                        .toArray();
+        return commandManager.submitNewCommand(HSetex, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<String[]> hgetex(
+            @NonNull String key, @NonNull String[] fields, @NonNull HashFieldExpirationOptions options) {
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {key},
+                        options.toArgs(),
+                        new String[] {"FIELDS", String.valueOf(fields.length)},
+                        fields);
+        return commandManager.submitNewCommand(
+                HGetex, arguments, response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<GlideString[]> hgetex(
+            @NonNull GlideString key,
+            @NonNull GlideString[] fields,
+            @NonNull HashFieldExpirationOptions options) {
+        GlideString[] arguments =
+                new ArgsBuilder()
+                        .add(key)
+                        .add(options.toArgs())
+                        .add("FIELDS")
+                        .add(fields.length)
+                        .add(fields)
+                        .toArray();
+        return commandManager.submitNewCommand(
+                HGetex,
+                arguments,
+                response -> castArray(handleArrayOrNullResponseBinary(response), GlideString.class));
+    }
+
+    @Override
+    public CompletableFuture<Boolean[]> hexpire(
+            @NonNull String key,
+            long seconds,
+            @NonNull String[] fields,
+            @NonNull HashFieldExpirationOptions options) {
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {key, String.valueOf(seconds)},
+                        options.toArgs(),
+                        new String[] {"FIELDS", String.valueOf(fields.length)},
+                        fields);
+        return commandManager.submitNewCommand(
+                HExpire, arguments, response -> castArray(handleArrayResponse(response), Boolean.class));
+    }
+
+    @Override
+    public CompletableFuture<Boolean[]> hexpire(
+            @NonNull GlideString key,
+            long seconds,
+            @NonNull GlideString[] fields,
+            @NonNull HashFieldExpirationOptions options) {
+        GlideString[] arguments =
+                new ArgsBuilder()
+                        .add(key)
+                        .add(seconds)
+                        .add(options.toArgs())
+                        .add("FIELDS")
+                        .add(fields.length)
+                        .add(fields)
+                        .toArray();
+        return commandManager.submitNewCommand(
+                HExpire, arguments, response -> castArray(handleArrayResponse(response), Boolean.class));
+    }
+
+    @Override
+    public CompletableFuture<Boolean[]> hpersist(@NonNull String key, @NonNull String[] fields) {
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {key}, new String[] {"FIELDS", String.valueOf(fields.length)}, fields);
+        return commandManager.submitNewCommand(
+                HPersist, arguments, response -> castArray(handleArrayResponse(response), Boolean.class));
+    }
+
+    @Override
+    public CompletableFuture<Boolean[]> hpersist(
+            @NonNull GlideString key, @NonNull GlideString[] fields) {
+        GlideString[] arguments =
+                new ArgsBuilder().add(key).add("FIELDS").add(fields.length).add(fields).toArray();
+        return commandManager.submitNewCommand(
+                HPersist, arguments, response -> castArray(handleArrayResponse(response), Boolean.class));
+    }
+
+    @Override
+    public CompletableFuture<Boolean[]> hpexpire(
+            @NonNull String key,
+            long milliseconds,
+            @NonNull String[] fields,
+            @NonNull HashFieldExpirationOptions options) {
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {key, String.valueOf(milliseconds)},
+                        options.toArgs(),
+                        new String[] {"FIELDS", String.valueOf(fields.length)},
+                        fields);
+        return commandManager.submitNewCommand(
+                HPExpire, arguments, response -> castArray(handleArrayResponse(response), Boolean.class));
+    }
+
+    @Override
+    public CompletableFuture<Boolean[]> hpexpire(
+            @NonNull GlideString key,
+            long milliseconds,
+            @NonNull GlideString[] fields,
+            @NonNull HashFieldExpirationOptions options) {
+        GlideString[] arguments =
+                new ArgsBuilder()
+                        .add(key)
+                        .add(milliseconds)
+                        .add(options.toArgs())
+                        .add("FIELDS")
+                        .add(fields.length)
+                        .add(fields)
+                        .toArray();
+        return commandManager.submitNewCommand(
+                HPExpire, arguments, response -> castArray(handleArrayResponse(response), Boolean.class));
+    }
+
+    @Override
+    public CompletableFuture<Boolean[]> hexpireat(
+            @NonNull String key,
+            long unixSeconds,
+            @NonNull String[] fields,
+            @NonNull HashFieldExpirationOptions options) {
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {key, String.valueOf(unixSeconds)},
+                        options.toArgs(),
+                        new String[] {"FIELDS", String.valueOf(fields.length)},
+                        fields);
+        return commandManager.submitNewCommand(
+                HExpireAt, arguments, response -> castArray(handleArrayResponse(response), Boolean.class));
+    }
+
+    @Override
+    public CompletableFuture<Boolean[]> hexpireat(
+            @NonNull GlideString key,
+            long unixSeconds,
+            @NonNull GlideString[] fields,
+            @NonNull HashFieldExpirationOptions options) {
+        GlideString[] arguments =
+                new ArgsBuilder()
+                        .add(key)
+                        .add(unixSeconds)
+                        .add(options.toArgs())
+                        .add("FIELDS")
+                        .add(fields.length)
+                        .add(fields)
+                        .toArray();
+        return commandManager.submitNewCommand(
+                HExpireAt, arguments, response -> castArray(handleArrayResponse(response), Boolean.class));
+    }
+
+    @Override
+    public CompletableFuture<Boolean[]> hpexpireat(
+            @NonNull String key,
+            long unixMilliseconds,
+            @NonNull String[] fields,
+            @NonNull HashFieldExpirationOptions options) {
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {key, String.valueOf(unixMilliseconds)},
+                        options.toArgs(),
+                        new String[] {"FIELDS", String.valueOf(fields.length)},
+                        fields);
+        return commandManager.submitNewCommand(
+                HPExpireAt, arguments, response -> castArray(handleArrayResponse(response), Boolean.class));
+    }
+
+    @Override
+    public CompletableFuture<Boolean[]> hpexpireat(
+            @NonNull GlideString key,
+            long unixMilliseconds,
+            @NonNull GlideString[] fields,
+            @NonNull HashFieldExpirationOptions options) {
+        GlideString[] arguments =
+                new ArgsBuilder()
+                        .add(key)
+                        .add(unixMilliseconds)
+                        .add(options.toArgs())
+                        .add("FIELDS")
+                        .add(fields.length)
+                        .add(fields)
+                        .toArray();
+        return commandManager.submitNewCommand(
+                HPExpireAt, arguments, response -> castArray(handleArrayResponse(response), Boolean.class));
+    }
+
+    @Override
+    public CompletableFuture<Long[]> httl(@NonNull String key, @NonNull String[] fields) {
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {key}, new String[] {"FIELDS", String.valueOf(fields.length)}, fields);
+        return commandManager.submitNewCommand(
+                HTtl, arguments, response -> castArray(handleArrayResponse(response), Long.class));
+    }
+
+    @Override
+    public CompletableFuture<Long[]> httl(@NonNull GlideString key, @NonNull GlideString[] fields) {
+        GlideString[] arguments =
+                new ArgsBuilder().add(key).add("FIELDS").add(fields.length).add(fields).toArray();
+        return commandManager.submitNewCommand(
+                HTtl, arguments, response -> castArray(handleArrayResponse(response), Long.class));
+    }
+
+    @Override
+    public CompletableFuture<Long[]> hpttl(@NonNull String key, @NonNull String[] fields) {
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {key}, new String[] {"FIELDS", String.valueOf(fields.length)}, fields);
+        return commandManager.submitNewCommand(
+                HPTtl, arguments, response -> castArray(handleArrayResponse(response), Long.class));
+    }
+
+    @Override
+    public CompletableFuture<Long[]> hpttl(@NonNull GlideString key, @NonNull GlideString[] fields) {
+        GlideString[] arguments =
+                new ArgsBuilder().add(key).add("FIELDS").add(fields.length).add(fields).toArray();
+        return commandManager.submitNewCommand(
+                HPTtl, arguments, response -> castArray(handleArrayResponse(response), Long.class));
+    }
+
+    @Override
+    public CompletableFuture<Long[]> hexpiretime(@NonNull String key, @NonNull String[] fields) {
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {key}, new String[] {"FIELDS", String.valueOf(fields.length)}, fields);
+        return commandManager.submitNewCommand(
+                HExpireTime, arguments, response -> castArray(handleArrayResponse(response), Long.class));
+    }
+
+    @Override
+    public CompletableFuture<Long[]> hexpiretime(
+            @NonNull GlideString key, @NonNull GlideString[] fields) {
+        GlideString[] arguments =
+                new ArgsBuilder().add(key).add("FIELDS").add(fields.length).add(fields).toArray();
+        return commandManager.submitNewCommand(
+                HExpireTime, arguments, response -> castArray(handleArrayResponse(response), Long.class));
+    }
+
+    @Override
+    public CompletableFuture<Long[]> hpexpiretime(@NonNull String key, @NonNull String[] fields) {
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {key}, new String[] {"FIELDS", String.valueOf(fields.length)}, fields);
+        return commandManager.submitNewCommand(
+                HPExpireTime, arguments, response -> castArray(handleArrayResponse(response), Long.class));
+    }
+
+    @Override
+    public CompletableFuture<Long[]> hpexpiretime(
+            @NonNull GlideString key, @NonNull GlideString[] fields) {
+        GlideString[] arguments =
+                new ArgsBuilder().add(key).add("FIELDS").add(fields.length).add(fields).toArray();
+        return commandManager.submitNewCommand(
+                HPExpireTime, arguments, response -> castArray(handleArrayResponse(response), Long.class));
     }
 
     @Override
