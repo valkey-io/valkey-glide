@@ -173,6 +173,7 @@ type BackoffStrategy struct {
 	// constant until a reconnect attempt is successful.
 	numOfRetries int
 	// The multiplier that will be applied to the waiting time between each retry.
+	// This value is specified in milliseconds.
 	factor int
 	// The exponent base configured for the strategy.
 	exponentBase int
