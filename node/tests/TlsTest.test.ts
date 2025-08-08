@@ -37,7 +37,7 @@ describe("tls GlideClusterClient", () => {
             true,
             TLS_OPTIONS,
         );
-    }, 40000);
+    }, TIMEOUT);
 
     afterEach(async () => {
         await flushAndCloseClient(
@@ -99,7 +99,7 @@ describe("tls GlideClient", () => {
             true,
             TLS_OPTIONS,
         );
-    }, 40000);
+    }, TIMEOUT);
 
     afterEach(async () => {
         await flushAndCloseClient(
