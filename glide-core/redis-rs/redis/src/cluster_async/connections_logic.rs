@@ -359,7 +359,7 @@ where
     if read_from_replicas {
         // If READONLY is sent to primary nodes, it will have no effect
         crate::cmd("READONLY")
-            .query_async(&mut conn_details.conn)
+            .query_async::<_, ()>(&mut conn_details.conn)
             .await?;
     }
 
@@ -375,7 +375,7 @@ where
 {
     crate::cmd("CLIENT")
         .arg(&["SETNAME", MANAGEMENT_CONN_NAME])
-        .query_async(conn)
+        .query_async::<_, ()>(conn)
         .await?;
     Ok(())
 }
