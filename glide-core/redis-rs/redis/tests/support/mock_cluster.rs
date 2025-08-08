@@ -14,8 +14,8 @@ use std::{
 };
 
 use {
-    once_cell::sync::Lazy,
     redis::{IntoConnectionInfo, RedisResult, Value},
+    std::sync::LazyLock,
 };
 
 #[cfg(feature = "cluster-async")]
@@ -88,8 +88,8 @@ pub fn get_mock_connection_with_port(name: &str, id: usize, port: u16) -> MockCo
     }
 }
 
-static MOCK_CONN_BEHAVIORS: Lazy<RwLock<HashMap<String, MockConnectionBehavior>>> =
-    Lazy::new(Default::default);
+static MOCK_CONN_BEHAVIORS: LazyLock<RwLock<HashMap<String, MockConnectionBehavior>>> =
+    LazyLock::new(Default::default);
 
 fn get_behaviors() -> std::sync::RwLockWriteGuard<'static, HashMap<String, MockConnectionBehavior>>
 {

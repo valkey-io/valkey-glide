@@ -68,7 +68,7 @@ mod tests {
     use crate::command_request::{Command, CommandRequest, RequestType};
     use crate::command_request::{command, command_request};
     use bytes::BufMut;
-    use rand::{Rng, distributions::Alphanumeric};
+    use rand::{Rng, distr::Alphanumeric};
     use rstest::rstest;
 
     fn write_length(buffer: &mut BytesMut, length: u32) {
@@ -161,7 +161,7 @@ mod tests {
     }
 
     fn generate_random_string(length: usize) -> String {
-        rand::thread_rng()
+        rand::rng()
             .sample_iter(&Alphanumeric)
             .take(length)
             .map(char::from)
