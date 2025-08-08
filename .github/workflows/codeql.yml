@@ -69,6 +69,7 @@ jobs:
                   cd glide-core
                   cargo build --release
 
+            # Go Build
             - name: Install protoc-gen-go
               if: matrix.language == 'go'
               shell: bash
@@ -137,6 +138,7 @@ jobs:
                   dotnet build sources/Valkey.Glide/Valkey.Glide.csproj --configuration Lint --framework net8.0
                   dotnet build tests/Valkey.Glide.UnitTests/Valkey.Glide.UnitTests.csproj --configuration Debug --framework net8.0
 
+            # Java/Kotlin Build
             - name: Build Java/Kotlin components
               if: matrix.language == 'java-kotlin'
               shell: bash
