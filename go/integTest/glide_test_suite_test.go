@@ -124,6 +124,8 @@ func (suite *GlideTestSuite) SetupSuite() {
 				Endpoint: validEndpointMetrics,
 			},
 			FlushIntervalMs: &intervalMs,
+			// Configure SpanFromContext to enable parent-child span relationships
+			SpanFromContext: glide.DefaultSpanFromContext,
 		}
 		err := glide.GetOtelInstance().Init(openTelemetryConfig)
 		assert.NoError(suite.T(), err)
