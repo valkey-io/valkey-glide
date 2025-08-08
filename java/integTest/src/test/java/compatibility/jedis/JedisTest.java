@@ -61,6 +61,7 @@ public class JedisTest {
     void setup() {
         // Create GLIDE Jedis compatibility layer instance
         jedis = new Jedis(redisHost, redisPort);
+        jedis.connect();
         assertNotNull(jedis, "GLIDE Jedis instance should be created successfully");
     }
 
