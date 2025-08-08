@@ -1,0 +1,6 @@
+[package]
+name = "mock-logger-core"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]

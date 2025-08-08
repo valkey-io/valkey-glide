@@ -17,6 +17,12 @@ pub struct GlideSpan;
 #[derive(Debug)]
 pub struct TraceError;
 
+impl fmt::Display for TraceError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "trace error")
+    }
+}
+
 impl GlideSpan {
     pub fn add_span(&self, _name: &str) -> Result<GlideSpan, TraceError> {
         Ok(GlideSpan)
@@ -76,11 +82,15 @@ pub struct GlideOpenTelemetry;
 
 impl GlideOpenTelemetry {
     pub fn initialise(_config: GlideOpenTelemetryConfig) -> Result<(), GlideOTELError> {
-        todo!()
+        Ok(())
     }
 
     pub fn new_span(_name: &str) -> GlideSpan {
-        todo!()
+        GlideSpan
+    }
+
+    pub unsafe fn span_from_pointer(_ptr: u64) -> Result<GlideSpan, TraceError> {
+        Ok(GlideSpan)
     }
 }
 
@@ -91,5 +101,3 @@ impl fmt::Display for GlideOTELError {
         write!(f, "error")
     }
 }
-
-
