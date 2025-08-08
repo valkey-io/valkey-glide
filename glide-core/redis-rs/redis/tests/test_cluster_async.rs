@@ -1370,7 +1370,10 @@ mod cluster_async {
     async fn do_failover(
         redis: &mut redis::aio::MultiplexedConnection,
     ) -> Result<(), anyhow::Error> {
-        cmd("CLUSTER").arg("FAILOVER").query_async::<_, ()>(redis).await?;
+        cmd("CLUSTER")
+            .arg("FAILOVER")
+            .query_async::<_, ()>(redis)
+            .await?;
         Ok(())
     }
 
