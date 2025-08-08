@@ -696,11 +696,11 @@ pub(crate) async fn setup_test_basics_internal(configuration: &TestConfiguration
         get_shared_server_address(configuration.use_tls)
     };
 
-    if let Some(redis_connection_info) = &configuration.connection_info {
-        if redis_connection_info.password.is_some() {
-            assert!(!configuration.shared_server);
-            setup_acl(&connection_addr, redis_connection_info).await;
-        }
+    if let Some(redis_connection_info) = &configuration.connection_info
+        && redis_connection_info.password.is_some()
+    {
+        assert!(!configuration.shared_server);
+        setup_acl(&connection_addr, redis_connection_info).await;
     }
     let mut connection_request = create_connection_request(&[connection_addr], configuration);
     connection_request.cluster_mode_enabled = false;

@@ -324,7 +324,7 @@ mod cluster_async {
             cmd("SET")
                 .arg("test")
                 .arg("test_data")
-                .query_async(&mut connection)
+                .query_async::<_, ()>(&mut connection)
                 .await?;
             let res: String = cmd("GET")
                 .arg("test")
@@ -1328,7 +1328,7 @@ mod cluster_async {
             let mut pipe = redis::pipe();
             pipe.add_command(cmd("SET").arg("test").arg("test_data").clone());
             pipe.add_command(cmd("SET").arg("{test}3").arg("test_data3").clone());
-            pipe.query_async(&mut connection).await?;
+            pipe.query_async::<_, ()>(&mut connection).await?;
             let res: String = connection.get("test").await?;
             assert_eq!(res, "test_data");
             let res: String = connection.get("{test}3").await?;
@@ -1370,7 +1370,10 @@ mod cluster_async {
     async fn do_failover(
         redis: &mut redis::aio::MultiplexedConnection,
     ) -> Result<(), anyhow::Error> {
-        cmd("CLUSTER").arg("FAILOVER").query_async(redis).await?;
+        cmd("CLUSTER")
+            .arg("FAILOVER")
+            .query_async::<_, ()>(redis)
+            .await?;
         Ok(())
     }
 
@@ -1416,7 +1419,7 @@ mod cluster_async {
                         tokio::time::timeout(std::time::Duration::from_secs(3), async {
                             Ok(redis::Cmd::new()
                                 .arg("FLUSHALL")
-                                .query_async(&mut conn)
+                                .query_async::<_, ()>(&mut conn)
                                 .await?)
                         })
                         .await
@@ -1462,7 +1465,7 @@ mod cluster_async {
                             .arg(&key)
                             .arg(i)
                             .clone()
-                            .query_async(&mut connection)
+                            .query_async::<_, ()>(&mut connection)
                             .await?;
                         let res: i32 = cmd("GET")
                             .arg(key)
@@ -1476,7 +1479,7 @@ mod cluster_async {
                 }
             })
             .collect::<stream::FuturesUnordered<_>>()
-            .try_collect()
+            .try_collect::<()>()
             .await
             .unwrap_or_else(|e| panic!("{e}"));
 
@@ -4163,7 +4166,7 @@ mod cluster_async {
             cmd("SET")
                 .arg("test")
                 .arg("test_data")
-                .query_async(&mut connection)
+                .query_async::<_, ()>(&mut connection)
                 .await?;
             let res: String = cmd("GET")
                 .arg("test")
@@ -6213,7 +6216,7 @@ mod cluster_async {
                 cmd("SET")
                     .arg("test")
                     .arg("test_data")
-                    .query_async(&mut connection)
+                    .query_async::<_, ()>(&mut connection)
                     .await?;
                 let res: String = cmd("GET")
                     .arg("test")

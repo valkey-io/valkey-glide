@@ -583,7 +583,7 @@ mod standalone_client_tests {
             lazy_client_config.lazy_connect = true;
 
             let mut lazy_client_connection_request_pb = utilities::create_connection_request(
-                &[dedicated_server_address.clone()],
+                std::slice::from_ref(&dedicated_server_address),
                 &lazy_client_config,
             );
             lazy_client_connection_request_pb.cluster_mode_enabled = false;

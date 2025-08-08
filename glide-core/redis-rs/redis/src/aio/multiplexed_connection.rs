@@ -750,7 +750,7 @@ impl MultiplexedConnection {
         }
         let mut cmd = cmd("SUBSCRIBE");
         cmd.arg(channel_name.clone());
-        cmd.query_async(self).await?;
+        cmd.query_async::<_, ()>(self).await?;
         Ok(())
     }
 
@@ -764,7 +764,7 @@ impl MultiplexedConnection {
         }
         let mut cmd = cmd("UNSUBSCRIBE");
         cmd.arg(channel_name);
-        cmd.query_async(self).await?;
+        cmd.query_async::<_, ()>(self).await?;
         Ok(())
     }
 
@@ -778,7 +778,7 @@ impl MultiplexedConnection {
         }
         let mut cmd = cmd("PSUBSCRIBE");
         cmd.arg(channel_pattern.clone());
-        cmd.query_async(self).await?;
+        cmd.query_async::<_, ()>(self).await?;
         Ok(())
     }
 
@@ -792,7 +792,7 @@ impl MultiplexedConnection {
         }
         let mut cmd = cmd("PUNSUBSCRIBE");
         cmd.arg(channel_pattern);
-        cmd.query_async(self).await?;
+        cmd.query_async::<_, ()>(self).await?;
         Ok(())
     }
 
