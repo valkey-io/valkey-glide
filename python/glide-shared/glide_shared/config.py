@@ -50,7 +50,7 @@ class ReadFrom(Enum):
     """
     AZ_AFFINITY = ProtobufReadFrom.AZAffinity
     """
-    Spread the read requests between replicas in the same client's AZ (Aviliablity zone) in a round robin manner,
+    Spread the read requests between replicas in the same client's AZ (Availability zone) in a round robin manner,
     falling back to other replicas or the primary if needed
     """
     AZ_AFFINITY_REPLICAS_AND_PRIMARY = ProtobufReadFrom.AZAffinityReplicasAndPrimary
@@ -87,7 +87,7 @@ class BackoffStrategy:
     Attributes:
         num_of_retries (int): Number of retry attempts that the client should perform when disconnected from the server,
             where the time between retries increases. Once the retries have reached the maximum value, the time between
-            retries will remain constant until a reconnect attempt is succesful.
+            retries will remain constant until a reconnect attempt is successful.
         factor (int): The multiplier that will be applied to the waiting time between each retry.
         exponent_base (int): The exponent base configured for the strategy.
         jitter_percent (Optional[int]): The Jitter percent on the calculated duration. If not set, a default value will be used.
@@ -447,7 +447,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
 
     class PubSubChannelModes(IntEnum):
         """
-        Describes pubsub subsciption modes.
+        Describes pubsub subscription modes.
         See [valkey.io](https://valkey.io/docs/topics/pubsub/) for more details
         """
 
@@ -464,7 +464,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
             channels_and_patterns (Dict[GlideClientConfiguration.PubSubChannelModes, Set[str]]):
                 Channels and patterns by modes.
             callback (Optional[Callable[[PubSubMsg, Any], None]]):
-                Optional callback to accept the incomming messages.
+                Optional callback to accept the incoming messages.
             context (Any):
                 Arbitrary context to pass to the callback.
         """
@@ -622,7 +622,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
 
     class PubSubChannelModes(IntEnum):
         """
-        Describes pubsub subsciption modes.
+        Describes pubsub subscription modes.
         See [valkey.io](https://valkey.io/docs/topics/pubsub/) for more details
         """
 

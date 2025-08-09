@@ -163,9 +163,9 @@ async def client_cleanup(
     ] = None,
 ):
     """
-    This function tries its best to clear state assosiated with client
+    This function tries its best to clear state associated with client
     Its explicitly calls client.close() and deletes the object
-    In addition, it tries to clean up cluster mode subsciptions since it was found the closing the client via close() is
+    In addition, it tries to clean up cluster mode subscriptions since it was found the closing the client via close() is
     not enough.
     Note that unsubscribing is not feasible in the current implementation since its unknown on which node the subs
     are configured

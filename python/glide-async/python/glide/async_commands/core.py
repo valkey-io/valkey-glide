@@ -6659,7 +6659,7 @@ class CoreCommands(Protocol):
         Throws WrongConfiguration in cases:
 
             1. No pubsub subscriptions are configured for the client
-            2. Callback is configured with the pubsub subsciptions
+            2. Callback is configured with the pubsub subscriptions
 
         See [valkey.io](https://valkey.io/docs/topics/pubsub/) for more details.
 
@@ -6677,7 +6677,7 @@ class CoreCommands(Protocol):
         Throws WrongConfiguration in cases:
 
             1. No pubsub subscriptions are configured for the client
-            2. Callback is configured with the pubsub subsciptions
+            2. Callback is configured with the pubsub subscriptions
 
         See [valkey.io](https://valkey.io/docs/topics/pubsub/) for more details.
 
