@@ -13,6 +13,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SSLSocketFactory;
+import redis.clients.jedis.exceptions.JedisException;
 
 /**
  * JedisPool compatibility wrapper for Valkey GLIDE client. This class provides a Jedis-like
