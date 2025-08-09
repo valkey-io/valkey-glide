@@ -167,7 +167,7 @@ jobs:
               continue-on-error: true
               uses: actions/upload-artifact@v4
               with:
-                  name: test-report-go-${{ matrix.go }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ matrix.host.RUNNER }}
+                  name: test-report-go-${{ matrix.go }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ matrix.host.OS }}-${{ matrix.host.ARCH }}
                   path: |
                       utils/clusters/**
                       benchmarks/results/**
@@ -440,7 +440,7 @@ jobs:
               continue-on-error: true
               uses: actions/upload-artifact@v4
               with:
-                  name: test-report-go-long-timeout-${{ matrix.go }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ matrix.host.RUNNER }}
+                  name: test-report-go-long-timeout-${{ matrix.go }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ matrix.host.OS }}-${{ matrix.host.ARCH }}
                   path: |
                       utils/clusters/**
                       benchmarks/results/**
