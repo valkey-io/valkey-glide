@@ -7,9 +7,10 @@ use std::{
 
 use glide_core::{
     client::{
-        AuthenticationInfo, ConnectionRequest, ConnectionRetryStrategy, NodeAddress,
+        AuthenticationInfo, ConnectionRequest, ConnectionRetryStrategy, IamAuthenticationConfig, NodeAddress,
         ReadFrom as coreReadFrom, TlsMode,
     },
+    iam::ServiceType,
     request_type::RequestType,
 };
 use redis::{
@@ -115,6 +116,20 @@ pub(crate) unsafe fn create_connection_request(
             Some(AuthenticationInfo {
                 username: unsafe { ptr_to_opt_str(config.authentication_info.username) },
                 password: unsafe { ptr_to_opt_str(config.authentication_info.password) },
+                iam_config: if !config.authentication_info.iam_config.cluster_name.is_null() {
+                    Some(IamAuthenticationConfig {
+                        cluster_name: unsafe { ptr_to_str(config.authentication_info.iam_config.cluster_name) },
+                        region: unsafe { ptr_to_str(config.authentication_info.iam_config.region) },
+                        service_type: config.authentication_info.iam_config.service_type.into(),
+                        refresh_interval_seconds: if config.authentication_info.iam_config.has_refresh_interval_seconds {
+                            Some(config.authentication_info.iam_config.refresh_interval_seconds)
+                        } else {
+                            None
+                        },
+                    })
+                } else {
+                    None
+                },
             })
         } else {
             None
@@ -203,6 +218,34 @@ pub enum ReadFromStrategy {
     AZAffinityReplicasAndPrimary,
 }
 
+/// A mirror of [`ServiceType`] adopted for FFI.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub enum ServiceTypeFFI {
+    ElastiCache,
+    MemoryDB,
+}
+
+impl From<ServiceTypeFFI> for ServiceType {
+    fn from(service_type: ServiceTypeFFI) -> Self {
+        match service_type {
+            ServiceTypeFFI::ElastiCache => ServiceType::ElastiCache,
+            ServiceTypeFFI::MemoryDB => ServiceType::MemoryDB,
+        }
+    }
+}
+
+/// A mirror of [`IamAuthenticationConfig`] adopted for FFI.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct IamConfig {
+    pub cluster_name: *const c_char,
+    pub region: *const c_char,
+    pub service_type: ServiceTypeFFI,
+    pub has_refresh_interval_seconds: bool,
+    pub refresh_interval_seconds: u32,
+}
+
 /// A mirror of [`AuthenticationInfo`] adopted for FFI.
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
@@ -211,6 +254,8 @@ pub struct Credentials {
     pub username: *const c_char,
     /// zero pointer is valid, means no password is given (`None`)
     pub password: *const c_char,
+    /// null pointer means no IAM, otherwise points to an IamConfig
+    pub iam_config: IamConfig,
 }
 
 #[repr(C)]

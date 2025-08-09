@@ -8,6 +8,7 @@ use std::time::Duration;
 
 #[cfg(feature = "proto")]
 use crate::connection_request as protobuf;
+use crate::iam::ServiceType;
 
 #[derive(Default, Clone, Debug)]
 pub struct ConnectionRequest {
@@ -32,6 +33,15 @@ pub struct ConnectionRequest {
 pub struct AuthenticationInfo {
     pub username: Option<String>,
     pub password: Option<String>,
+    pub iam_config: Option<IamAuthenticationConfig>,
+}
+
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub struct IamAuthenticationConfig {
+    pub cluster_name: String,
+    pub region: String,
+    pub service_type: ServiceType,
+    pub refresh_interval_seconds: Option<u32>,
 }
 
 #[derive(Default, Clone, Copy, Debug)]
@@ -133,14 +143,32 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
         });
 
         let client_name = chars_to_string_option(&value.client_name);
-        let authentication_info = value.authentication_info.0.and_then(|authentication_info| {
+        let authentication_info = value.authentication_info.0.map(|authentication_info| {
             let password = chars_to_string_option(&authentication_info.password);
             let username = chars_to_string_option(&authentication_info.username);
-            if password.is_none() && username.is_none() {
-                return None;
-            }
+            let iam_config = authentication_info.iam_credentials.0.map(|iam_creds| {
+                let cluster_name =
+                    chars_to_string_option(&iam_creds.cluster_name).unwrap_or_default();
+                let region = chars_to_string_option(&iam_creds.region).unwrap_or_default();
+                let service_type = match iam_creds.service_type.enum_value() {
+                    Ok(protobuf::ServiceType::MEMORYDB) => ServiceType::MemoryDB,
+                    _ => ServiceType::ElastiCache,
+                };
+                let refresh_interval_seconds = iam_creds.refresh_interval_seconds;
 
-            Some(AuthenticationInfo { password, username })
+                IamAuthenticationConfig {
+                    cluster_name,
+                    region,
+                    service_type,
+                    refresh_interval_seconds,
+                }
+            });
+
+            AuthenticationInfo {
+                password,
+                username,
+                iam_config,
+            }
         });
 
         let database_id = value.database_id as i64;

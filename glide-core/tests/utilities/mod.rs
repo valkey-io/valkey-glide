@@ -571,6 +571,7 @@ fn set_connection_info_to_connection_request(
             protobuf::MessageField(Some(Box::new(AuthenticationInfo {
                 password: connection_info.password.unwrap().into(),
                 username: connection_info.username.unwrap_or_default().into(),
+                iam_credentials: protobuf::MessageField::none(),
                 ..Default::default()
             })));
     }
@@ -618,7 +619,7 @@ pub async fn setup_acl(addr: &ConnectionAddr, connection_info: &RedisConnectionI
     connection.send_packed_command(&cmd).await.unwrap();
 }
 
-#[derive(Eq, PartialEq, Default, Clone, Debug)]
+#[derive(Eq, PartialEq, Default, Clone)]
 pub enum ClusterMode {
     #[default]
     Disabled,
@@ -662,11 +663,11 @@ pub fn create_connection_request(
         connection_request.client_az = client_az.deref().into();
     }
     connection_request.lazy_connect = configuration.lazy_connect;
-    connection_request.protocol = configuration.protocol.into();
+
     connection_request
 }
 
-#[derive(Default, Clone, Debug)]
+#[derive(Default, Clone)]
 pub struct TestConfiguration {
     pub use_tls: bool,
     pub connection_retry_strategy: Option<connection_request::ConnectionRetryStrategy>,
