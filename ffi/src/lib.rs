@@ -2724,7 +2724,7 @@ pub unsafe extern "C" fn log(
 
     Box::into_raw(Box::new(LogResult {
         log_error: std::ptr::null_mut(),
-        level: Level::OFF, // Level is not meaningful for log operations, but set a default
+        level, // Level is not meaningful for log operations, but set a default
     }))
 }
 

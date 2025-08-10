@@ -63,6 +63,8 @@ class ConfigurationError(RequestError):
     Errors that are thrown when a request cannot be completed in current configuration settings.
     """
 
+    pass
+
 
 class LoggerError(GlideError):
     """

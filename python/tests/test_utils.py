@@ -12,6 +12,7 @@ from tests.utils.utils import (
     DEFAULT_SYNC_TEST_LOG_LEVEL,
     DEFAULT_TEST_LOG_LEVEL,
     compare_maps,
+    get_random_string,
 )
 
 CURR_DIR = Path(__file__).resolve().parent
@@ -37,22 +38,28 @@ class TestLogger:
         Logger.set_logger_config(DEFAULT_TEST_LOG_LEVEL)
         assert Logger.logger_level == DEFAULT_TEST_LOG_LEVEL.value
 
-    def test_init_does_not_override_existing_logger(self):
-        # Initialize first with set_logger_config to change the existing logger config
-        Logger.set_logger_config(level=Level.INFO)
-        logger1 = Logger._instance
-        level1 = Logger.logger_level
+    def test_log_writes_to_file(self):
+        filename = get_random_string(10) + ".log"
+        Logger.set_logger_config(Level.INFO, filename)
+        Logger.log(Level.INFO, "test", "test log message")
 
-        # Initialize the logger with init (should not change the existing logger)
-        Logger.init(level=Level.DEBUG)
-        logger2 = Logger._instance
-        level2 = Logger.logger_level
+        matched_files = find_log_files(filename)
+        assert (
+            len(matched_files) == 1
+        ), f"Expected exactly one log file with prefix '{filename}', found {len(matched_files)}"
 
-        # Assert singleton and level didn't change
-        assert logger1 is logger2
-        assert level1 == level2
+        log_file = matched_files[0]
 
-        # Revert the logger back to the default test log level
+        with open(log_file, "r", encoding="utf-8") as f:
+            contents = f.read()
+            assert (
+                "test log message" in contents
+            ), "Log message not found in the log file"
+
+        # Clean up the file
+        os.remove(log_file)
+
+        # Reset logger config to default
         Logger.set_logger_config(DEFAULT_TEST_LOG_LEVEL)
 
     def test_init_sync_logger(self):
@@ -67,22 +74,28 @@ class TestLogger:
         SyncLogger.set_logger_config(DEFAULT_SYNC_TEST_LOG_LEVEL)
         assert SyncLogger.logger_level == DEFAULT_SYNC_TEST_LOG_LEVEL
 
-    def test_sync_init_does_not_override_existing_logger(self):
-        # Initialize first with set_logger_config to change the existing logger config
-        SyncLogger.set_logger_config(level=SyncLogLevel.INFO)
-        logger1 = SyncLogger._instance
-        level1 = SyncLogger.logger_level
+    def test_sync_log_writes_to_file(self):
+        filename = get_random_string(10) + ".log"
+        SyncLogger.set_logger_config(SyncLogLevel.INFO, filename)
+        SyncLogger.log(SyncLogLevel.INFO, "test", "test log message")
 
-        # Initialize the logger with init (should not change the existing logger)
-        SyncLogger.init(level=SyncLogLevel.DEBUG)
-        logger2 = SyncLogger._instance
-        level2 = SyncLogger.logger_level
+        matched_files = find_log_files(filename)
+        assert (
+            len(matched_files) == 1
+        ), f"Expected exactly one log file with prefix '{filename}', found {len(matched_files)}"
 
-        # Assert singleton and level didn't change
-        assert logger1 is logger2
-        assert level1 == level2
+        log_file = matched_files[0]
 
-        # Revert the logger back to the default test log level
+        with open(log_file, "r", encoding="utf-8") as f:
+            contents = f.read()
+            assert (
+                "test log message" in contents
+            ), "Log message not found in the log file"
+
+        # Clean up the file
+        os.remove(log_file)
+
+        # Reset logger config to default
         SyncLogger.set_logger_config(DEFAULT_SYNC_TEST_LOG_LEVEL)
 
 

@@ -73,7 +73,7 @@ class Logger:
     def init(cls, level: Optional[Level] = None, file_name: Optional[str] = None):
         """
         Initialize a logger if it wasn't initialized before - this method is meant to be used when there is no intention to
-        replace an existing logger.
+        replace an existing logger. Otherwise, use `set_logger_config` for overriding the existing logger configs.
         The logger will filter all logs with a level lower than the given level.
         If given a file_name argument, will write the logs to files postfixed with file_name. If file_name isn't provided,
         the logs will be written to the console.
@@ -125,10 +125,10 @@ class Logger:
                     # If the log failed due to invalid provided identifier or message,
                     # Log the FFI log error using logger_core directly
                     error_identifier = Logger._ffi.new(
-                        "char[]", "Logger.log".encode(ENCODING)
+                        "char[]", "Logger".encode(ENCODING)
                     )
                     error_message = Logger._ffi.new(
-                        "char[]", f"FFI log error: {error_str}".encode(ENCODING)
+                        "char[]", f"log error: {error_str}".encode(ENCODING)
                     )
                     error_result_ptr = Logger._lib.log(
                         Level.ERROR.value, error_identifier, error_message
@@ -141,9 +141,9 @@ class Logger:
 
         else:
             # Log the null pointer error using logger_core directly
-            error_identifier = Logger._ffi.new("char[]", "Logger.log".encode(ENCODING))
+            error_identifier = Logger._ffi.new("char[]", "Logger".encode(ENCODING))
             error_message = Logger._ffi.new(
-                "char[]", "FFI Log function returned a null pointer".encode(ENCODING)
+                "char[]", "Log function returned a null pointer".encode(ENCODING)
             )
             error_result_ptr = Logger._lib.log(
                 Level.ERROR.value, error_identifier, error_message

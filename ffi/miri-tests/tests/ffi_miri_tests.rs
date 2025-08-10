@@ -165,8 +165,7 @@ fn test_create_otel_span_with_parent_miri() {
     );
 
     // Test with invalid parent pointer (should fallback to independent span)
-    let child_invalid_parent =
-        unsafe { create_otel_span_with_parent(RequestType::Exists, 0xDEADBEEF) };
+    let child_invalid_parent = unsafe { create_otel_span_with_parent(RequestType::Exists, 0xDEADBEEF) };
     assert_ne!(
         child_invalid_parent, 0,
         "Child span with invalid parent should fallback"
