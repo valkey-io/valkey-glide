@@ -7,8 +7,8 @@ use std::{
 
 use glide_core::{
     client::{
-        AuthenticationInfo, ConnectionRequest, ConnectionRetryStrategy, IamAuthenticationConfig, NodeAddress,
-        ReadFrom as coreReadFrom, TlsMode,
+        AuthenticationInfo, ConnectionRequest, ConnectionRetryStrategy, IamAuthenticationConfig,
+        NodeAddress, ReadFrom as coreReadFrom, TlsMode,
     },
     iam::ServiceType,
     request_type::RequestType,
@@ -118,11 +118,22 @@ pub(crate) unsafe fn create_connection_request(
                 password: unsafe { ptr_to_opt_str(config.authentication_info.password) },
                 iam_config: if !config.authentication_info.iam_config.cluster_name.is_null() {
                     Some(IamAuthenticationConfig {
-                        cluster_name: unsafe { ptr_to_str(config.authentication_info.iam_config.cluster_name) },
+                        cluster_name: unsafe {
+                            ptr_to_str(config.authentication_info.iam_config.cluster_name)
+                        },
                         region: unsafe { ptr_to_str(config.authentication_info.iam_config.region) },
                         service_type: config.authentication_info.iam_config.service_type.into(),
-                        refresh_interval_seconds: if config.authentication_info.iam_config.has_refresh_interval_seconds {
-                            Some(config.authentication_info.iam_config.refresh_interval_seconds)
+                        refresh_interval_seconds: if config
+                            .authentication_info
+                            .iam_config
+                            .has_refresh_interval_seconds
+                        {
+                            Some(
+                                config
+                                    .authentication_info
+                                    .iam_config
+                                    .refresh_interval_seconds,
+                            )
                         } else {
                             None
                         },

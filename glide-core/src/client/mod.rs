@@ -801,12 +801,7 @@ impl Client {
         {
             Ok(result) => {
                 if immediate_auth {
-                    let routing = Some(RoutingInfo::MultiNode((
-                        MultipleNodeRoutingInfo::AllNodes,
-                        Some(ResponsePolicy::AllSucceeded),
-                    )));
-                    self.send_immediate_auth_with_password(routing, password)
-                        .await
+                    self.send_immediate_auth_with_password(password).await
                 } else {
                     result
                 }
@@ -822,7 +817,6 @@ impl Client {
     /// This method is used when we have a specific password to authenticate with
     async fn send_immediate_auth_with_password(
         &mut self,
-        routing: Option<RoutingInfo>,
         password: Option<String>,
     ) -> RedisResult<Value> {
         // Check if we have an IAM token manager first (takes precedence)
@@ -836,13 +830,12 @@ impl Client {
             }
         }; // Guard is dropped here
 
-        // todo: check about the syntax here
         // If we have an IAM token, use it for authentication
         if let Some(token) = token_option {
-            let routing = routing.unwrap_or(RoutingInfo::MultiNode((
+            let routing = RoutingInfo::MultiNode((
                 MultipleNodeRoutingInfo::AllNodes,
                 Some(ResponsePolicy::AllSucceeded),
-            )));
+            ));
             let mut cmd = redis::cmd("AUTH");
             cmd.arg(&token);
             return self.send_command(&cmd, Some(routing)).await;
@@ -850,10 +843,10 @@ impl Client {
 
         // For password-based authentication, use the provided password
         if let Some(password) = password {
-            let routing = routing.unwrap_or(RoutingInfo::MultiNode((
+            let routing = RoutingInfo::MultiNode((
                 MultipleNodeRoutingInfo::AllNodes,
                 Some(ResponsePolicy::AllSucceeded),
-            )));
+            ));
 
             // Get username if we have one configured
             let username = self.get_username().await.ok().flatten();
