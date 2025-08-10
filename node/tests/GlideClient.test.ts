@@ -1695,6 +1695,7 @@ describe("GlideClient", () => {
             } finally {
                 // If script wasn't killed, and it didn't time out - it blocks the server and cause the
                 // test to fail. Wait for the script to complete (we cannot kill it)
+                longScript.release();
                 expect(await promise).toContain("Timed out");
                 client1.close();
                 client2.close();
