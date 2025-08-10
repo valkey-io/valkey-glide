@@ -28,12 +28,12 @@ from glide_shared.commands.bitmap import (
 from glide_shared.commands.command_args import Limit, ListDirection, OrderBy
 from glide_shared.commands.core_options import (
     ConditionalChange,
-    FieldConditionalChange,
     ExpireOptions,
-    ExpiryType,
-    ExpirySet,
     ExpiryGetEx,
+    ExpirySet,
+    ExpiryType,
     ExpiryTypeGetEx,
+    FieldConditionalChange,
     FlushMode,
     FunctionRestorePolicy,
     InfoSection,
@@ -1026,7 +1026,7 @@ class TestCommands:
         assert glide_sync_client.set(key, "value") == OK
         with pytest.raises(RequestError):
             glide_sync_client.hsetnx(key, field, "value")
-    
+
     @pytest.mark.skip_if_version_below("9.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

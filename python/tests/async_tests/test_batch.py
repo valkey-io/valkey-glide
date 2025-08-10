@@ -34,9 +34,9 @@ from glide_shared.commands.bitmap import (
 from glide_shared.commands.command_args import Limit, ListDirection, OrderBy
 from glide_shared.commands.core_options import (
     ExpiryGetEx,
-    ExpiryTypeGetEx,
     ExpirySet,
     ExpiryType,
+    ExpiryTypeGetEx,
     FlushMode,
     FunctionRestorePolicy,
     InfoSection,
