@@ -17,10 +17,13 @@ from glide_sync import TGlideClient as TSyncGlideClient
 
 from tests.utils.cluster import ValkeyCluster
 from tests.utils.utils import (
+    INITIAL_PASSWORD,
     NEW_PASSWORD,
+    USERNAME,
     auth_client,
     config_set_new_password,
     create_sync_client_config,
+    set_new_acl_username_with_password,
 )
 
 
@@ -35,6 +38,60 @@ def glide_sync_client(
     yield client
     sync_test_teardown(request, cluster_mode, protocol)
     client.close()
+
+
+@pytest.fixture(scope="function")
+def management_sync_client(
+    request,
+    cluster_mode: bool,
+    protocol: ProtocolVersion,
+) -> Generator[TSyncGlideClient, None, None]:
+    """Get async socket client for tests, used to manage the state when tests are on the client ability to connect"""
+    client = create_sync_client(
+        request, cluster_mode, protocol=protocol, lazy_connect=False
+    )
+    try:
+        yield client
+    finally:
+        # Close the client first, then run teardown
+        client.close()
+        # Run teardown which has its own robust error handling
+        sync_test_teardown(request, cluster_mode, protocol)
+
+
+@pytest.fixture(scope="function")
+def acl_glide_sync_client(
+    request,
+    cluster_mode: bool,
+    protocol: ProtocolVersion,
+    management_sync_client: TSyncGlideClient,
+) -> Generator[TSyncGlideClient, None, None]:
+    """
+    Client fot tests that use a server pre-configured with an ACL user.
+    This function first uses the management client to register the USERNAME with INITIAL_PASSWORD,so that
+    the client would be able to connect.
+    It then returns a client with this USERNAME and INITIAL_PASSWORD already set as its ServerCredentials.
+    """
+
+    set_new_acl_username_with_password(
+        management_sync_client, USERNAME, INITIAL_PASSWORD
+    )
+
+    client = create_sync_client(
+        request,
+        cluster_mode,
+        protocol=protocol,
+        credentials=ServerCredentials(username=USERNAME, password=INITIAL_PASSWORD),
+        request_timeout=2000,
+        lazy_connect=False,
+    )
+    try:
+        yield client
+    finally:
+        # Close the client first, then run teardown
+        client.close()
+        # Run teardown which has its own robust error handling
+        sync_test_teardown(request, cluster_mode, protocol)
 
 
 def create_sync_client(
