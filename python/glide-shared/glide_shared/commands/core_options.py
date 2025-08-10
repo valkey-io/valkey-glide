@@ -35,6 +35,15 @@ class ConditionalChange(Enum):
     ONLY_IF_DOES_NOT_EXIST = "NX"
     """ Only set key / add elements that does not already exist. Equivalent to `NX` in the Valkey API. """
 
+class FieldConditionalChange(Enum):
+    """
+    A condition to the `HSETEX` command.
+    """
+
+    ONLY_IF_EXISTS = "FXX"
+    """ Only set the fields if all of them already exist. Equivalent to `FNX` in the Valkey API """
+    ONLY_IF_DOES_NOT_EXIST = "FNX"
+    """ Only set the fields if none of them already exist. Equivalent to `FNX` in the Valkey API """
 
 @dataclass
 class OnlyIfEqual:

@@ -13,6 +13,7 @@ from glide_shared.commands.bitmap import (
 from glide_shared.commands.command_args import Limit, ListDirection, ObjectType, OrderBy
 from glide_shared.commands.core_options import (
     ConditionalChange,
+    FieldConditionalChange,
     ExpireOptions,
     ExpiryGetEx,
     ExpirySet,
@@ -730,19 +731,23 @@ class CoreCommands(Protocol):
         expiry: Optional[ExpirySet] = None,
     ) -> int:
         """
-        Sets the specified fields to their respective values in the hash stored at `key` with optional expiration.
-
-        This method allows setting hash fields while also applying an expiration time to the hash key.
-
+        Sets the specified fields to their respective values in the hash stored at <code>key</code>
+        with optional expiration and conditional options.
+        Since Valkey 9.0 and above.
+        
+        See [valkey.io](https://valkey.io/commands/hsetex/) for more details.
+        
         Args:
             key (TEncodable): The key of the hash.
             field_value_map (Mapping[TEncodable, TEncodable]): A field-value map consisting of fields and their corresponding
                 values to be set in the hash stored at the specified key.
+            conditional_options (Optional[FieldConditionalChange], optional): Conditional setting options
+                Equivalent to ['FNX' | 'FXX']. Defaults to None. 
             expiry (Optional[ExpirySet], optional): Set expiration for the hash key.
                 Equivalent to [`EX` | `PX` | `EXAT` | `PXAT` | `KEEPTTL`]. Defaults to None.
 
         Returns:
-            int: The number of fields that were added to the hash.
+            int: 1 if all the fields were set, 0 otherwise.
 
         Example:
             >>> await client.hsetex(
@@ -750,7 +755,7 @@ class CoreCommands(Protocol):
             ...     {"field": "value", "field2": "value2"},
             ...     expiry=ExpirySet(ExpiryType.SEC, 60)
             ... )
-                2 # Indicates that 2 fields were successfully set in the hash "my_hash" with a 60-second expiration.
+                1 # Indicates that all the fields were set.
         """
         args: List[TEncodable] = [key]
 
