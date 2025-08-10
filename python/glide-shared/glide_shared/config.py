@@ -89,6 +89,7 @@ class BackoffStrategy:
             where the time between retries increases. Once the retries have reached the maximum value, the time between
             retries will remain constant until a reconnect attempt is succesful.
         factor (int): The multiplier that will be applied to the waiting time between each retry.
+            This value is specified in milliseconds.
         exponent_base (int): The exponent base configured for the strategy.
         jitter_percent (Optional[int]): The Jitter percent on the calculated duration. If not set, a default value will be used.
     """
