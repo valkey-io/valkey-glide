@@ -12,10 +12,10 @@ from glide_shared.commands.bitmap import (
 from glide_shared.commands.command_args import Limit, ListDirection, OrderBy
 from glide_shared.commands.core_options import (
     ConditionalChange,
-    FieldConditionalChange,
     ExpireOptions,
     ExpiryGetEx,
     ExpirySet,
+    FieldConditionalChange,
     InsertPosition,
     OnlyIfEqual,
     UpdateOptions,
@@ -697,7 +697,7 @@ class CoreCommands(Protocol):
             int,
             self._execute_command(RequestType.HSet, field_value_list),
         )
-    
+
     def hsetex(
         self,
         key: TEncodable,
@@ -709,15 +709,15 @@ class CoreCommands(Protocol):
         Sets the specified fields to their respective values in the hash stored at <code>key</code>
         with optional expiration and conditional options.
         Since Valkey 9.0 and above.
-        
+
         See [valkey.io](https://valkey.io/commands/hsetex/) for more details.
-        
+
         Args:
             key (TEncodable): The key of the hash.
             field_value_map (Mapping[TEncodable, TEncodable]): A field-value map consisting of fields and their corresponding
                 values to be set in the hash stored at the specified key.
             conditional_options (Optional[FieldConditionalChange], optional): Conditional setting options
-                Equivalent to ['FNX' | 'FXX']. Defaults to None. 
+                Equivalent to ['FNX' | 'FXX']. Defaults to None.
             expiry (Optional[ExpirySet], optional): Set expiration for the hash key.
                 Equivalent to [`EX` | `PX` | `EXAT` | `PXAT` | `KEEPTTL`]. Defaults to None.
 
@@ -751,7 +751,6 @@ class CoreCommands(Protocol):
             int,
             self._execute_command(RequestType.HSetex, args),
         )
-
 
     def hget(self, key: TEncodable, field: TEncodable) -> Optional[bytes]:
         """
