@@ -301,6 +301,36 @@ pub struct CommandError {
     pub command_error_type: RequestErrorType,
 }
 
+/// Represents the result of a logging operation.
+///
+/// This struct is used to communicate both success/failure status and relevant data
+/// across the FFI boundary. For initialization operations, it contains the log level
+/// that was set. For other operations, it primarily indicates success or failure.
+///
+/// # Fields
+///
+/// - `log_error`: A pointer to a null-terminated C string containing an error message.
+///   This field is `null` if the operation succeeded, or points to an error description
+///   if the operation failed.
+/// - `level`: The log level value. For initialization operations, this contains the
+///   actual level that was set by the logger. For other operations, this field may
+///   be ignored when there's an error.
+///
+/// # Safety
+///
+/// The returned `LogResult` must be freed using [`free_log_result`] to avoid memory leaks.
+/// This will properly deallocate both the struct itself and any error message it contains.
+///
+/// - The `log_error` field must either be null or point to a valid, null-terminated C string
+/// - The struct must be freed exactly once using [`free_log_result`]
+/// - The error string must not be accessed after the struct has been freed
+/// - The `level` field is only meaningful when `log_error` is null (success case)
+#[repr(C)]
+pub struct LogResult {
+    pub log_error: *mut c_char,
+    pub level: Level,
+}
+
 /// Represents the result of executing a command, either a successful response or an error.
 ///
 /// This is the  return type for FFI functions that execute commands synchronously (e.g. with a SyncClient).
@@ -2599,5 +2629,184 @@ fn create_child_span(span: Option<&GlideSpan>, name: &str) -> Result<GlideSpan, 
         Err(error_msg) => Err(format!(
             "Opentelemetry failed to create child span with name `{name}`. Error: {error_msg:?}"
         )),
+    }
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Level {
+    ERROR = 0,
+    WARN = 1,
+    INFO = 2,
+    DEBUG = 3,
+    TRACE = 4,
+    OFF = 5,
+}
+
+impl From<logger_core::Level> for Level {
+    fn from(level: logger_core::Level) -> Self {
+        match level {
+            logger_core::Level::Error => Level::ERROR,
+            logger_core::Level::Warn => Level::WARN,
+            logger_core::Level::Info => Level::INFO,
+            logger_core::Level::Debug => Level::DEBUG,
+            logger_core::Level::Trace => Level::TRACE,
+            logger_core::Level::Off => Level::OFF,
+        }
+    }
+}
+
+impl From<Level> for logger_core::Level {
+    fn from(level: Level) -> Self {
+        match level {
+            Level::ERROR => logger_core::Level::Error,
+            Level::WARN => logger_core::Level::Warn,
+            Level::INFO => logger_core::Level::Info,
+            Level::DEBUG => logger_core::Level::Debug,
+            Level::TRACE => logger_core::Level::Trace,
+            Level::OFF => logger_core::Level::Off,
+        }
+    }
+}
+
+/// Logs a message using the logger backend.
+///
+/// # Parameters
+///
+/// * `level` - The severity level of the current message (e.g., Error, Warn, Info).
+/// * `identifier` - A pointer to a null-terminated C string identifying the source of the log message.
+/// * `message` - A pointer to a null-terminated C string containing the actual log message.
+///
+/// # Safety
+///
+///  The returned pointer must be freed using [`free_log_result`].
+///
+/// * `identifier` must be a valid, non-null pointer to a null-terminated UTF-8 encoded C string.
+/// * `message` must be a valid, non-null pointer to a null-terminated UTF-8 encoded C string.
+///
+/// # Note
+///
+/// The caller (Python Sync wrapper, Go wrapper, etc.) is responsible for filtering log messages according to the logger's current log level.
+/// This function will log any message it receives.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn log(
+    level: Level,
+    identifier: *const c_char,
+    message: *const c_char,
+) -> *mut LogResult {
+    let id_str = match unsafe { CStr::from_ptr(identifier).to_str() } {
+        Ok(s) => s,
+        Err(err) => {
+            let c_err = CString::new(format!("Log identifier contains invalid UTF-8: {err}"))
+                .unwrap_or_default()
+                .into_raw();
+            return Box::into_raw(Box::new(LogResult {
+                log_error: c_err,
+                level: Level::OFF, // Default value, should be ignored when there's an error
+            }));
+        }
+    };
+
+    let msg_str = match unsafe { CStr::from_ptr(message).to_str() } {
+        Ok(s) => s,
+        Err(err) => {
+            let c_err = CString::new(format!("Log message contains invalid UTF-8: {err}"))
+                .unwrap_or_default()
+                .into_raw();
+            return Box::into_raw(Box::new(LogResult {
+                log_error: c_err,
+                level: Level::OFF, // Default value, should be ignored when there's an error
+            }));
+        }
+    };
+
+    logger_core::log(level.into(), id_str, msg_str);
+
+    Box::into_raw(Box::new(LogResult {
+        log_error: std::ptr::null_mut(),
+        level, // Level is not meaningful for log operations, but set a default
+    }))
+}
+
+/// Initializes the logger with the provided log level and optional log file path.
+///
+/// Success is indicated by a `LogResult` with a null `log_error` field and the actual
+/// log level set in the `level` field. Failure is indicated by a `LogResult` with a non-null
+/// `log_error` field containing an error message, and the `level` field should be ignored.
+///
+/// # Parameters
+///
+/// * `level` - A pointer to a `Level` enum value that sets the maximum log level. If null, a WARN level will be used.
+/// * `file_name` - A pointer to a null-terminated C string representing the desired log file path.
+///
+/// # Returns
+///
+/// A pointer to a `LogResult` struct containing either:
+/// - Success: `log_error` is null, `level` contains the actual log level that was set
+/// - Error: `log_error` contains the error message, `level` should be ignored
+///
+///
+/// # Safety
+///
+/// The returned pointer must be freed using [`free_log_result`].
+///
+/// * `level` may be null. If not null, it must point to a valid instance of the `Level` enum.
+/// * `file_name` may be null. If not null, it must point to a valid, null-terminated C string.
+///   If the string contains invalid UTF-8, an error will be returned instead of panicking.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn init(level: *const Level, file_name: *const c_char) -> *mut LogResult {
+    let level_option = if level.is_null() {
+        None
+    } else {
+        Some(unsafe { *level }.into())
+    };
+
+    let file_name_option = if file_name.is_null() {
+        None
+    } else {
+        match unsafe { CStr::from_ptr(file_name).to_str() } {
+            Ok(file_str) => Some(file_str),
+            Err(err) => {
+                let c_err = CString::new(format!("File name contains invalid UTF-8: {err}"))
+                    .unwrap_or_default()
+                    .into_raw();
+                return Box::into_raw(Box::new(LogResult {
+                    log_error: c_err,
+                    level: Level::OFF, // Default value, should be ignored when there's an error
+                }));
+            }
+        }
+    };
+
+    let logger_level = logger_core::init(level_option, file_name_option);
+
+    Box::into_raw(Box::new(LogResult {
+        log_error: std::ptr::null_mut(),
+        level: logger_level.into(),
+    }))
+}
+
+/// Frees a log result.
+///
+/// This function deallocates a `LogResult` struct and any error message it contains.
+///
+/// # Parameters
+///
+/// * `result_ptr` - A pointer to the `LogResult` to free, or null.
+///
+/// # Safety
+///
+/// * `result_ptr` must be a valid pointer to a `LogResult` returned by [`log`] or [`init`], or null.
+/// * This function must be called exactly once for each `LogResult`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn free_log_result(result_ptr: *mut LogResult) {
+    if result_ptr.is_null() {
+        return;
+    }
+    unsafe {
+        let result = Box::from_raw(result_ptr);
+        if !result.log_error.is_null() {
+            free_c_string(result.log_error);
+        }
     }
 }

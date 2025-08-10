@@ -14,9 +14,11 @@ from glide_shared.exceptions import ClosingError
 from glide_sync import GlideClient as SyncGlideClient
 from glide_sync import GlideClusterClient as SyncGlideClusterClient
 from glide_sync import TGlideClient as TSyncGlideClient
+from glide_sync.logger import Logger
 
 from tests.utils.cluster import ValkeyCluster
 from tests.utils.utils import (
+    DEFAULT_SYNC_TEST_LOG_LEVEL,
     INITIAL_PASSWORD,
     NEW_PASSWORD,
     USERNAME,
@@ -25,6 +27,8 @@ from tests.utils.utils import (
     create_sync_client_config,
     set_new_acl_username_with_password,
 )
+
+Logger.set_logger_config(DEFAULT_SYNC_TEST_LOG_LEVEL)
 
 
 @pytest.fixture(scope="function")

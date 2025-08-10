@@ -78,6 +78,7 @@ from glide_shared import (
     LexBoundary,
     Limit,
     ListDirection,
+    LoggerError,
     MaxId,
     MinId,
     NodeAddress,
@@ -146,6 +147,8 @@ from glide_shared import (
 
 from .config import GlideClientConfiguration, GlideClusterClientConfiguration
 from .glide_client import GlideClient, GlideClusterClient, TGlideClient
+from .logger import Level as LogLevel
+from .logger import Logger
 
 __all__ = [
     # Client
@@ -275,6 +278,10 @@ __all__ = [
     "GlideError",
     "RequestError",
     "TimeoutError",
+    "LoggerError",
+    # Logger
+    "Logger",
+    "LogLevel",
     # Ft
     "DataType",
     "DistanceMetricType",

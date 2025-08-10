@@ -63,6 +63,16 @@ class ConfigurationError(RequestError):
     Errors that are thrown when a request cannot be completed in current configuration settings.
     """
 
+    pass
+
+
+class LoggerError(GlideError):
+    """
+    Errors that are thrown when the logger has an error initializing.
+    """
+
+    pass
+
 
 def get_request_error_class(
     error_type: Optional[RequestErrorType.ValueType],
