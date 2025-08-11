@@ -1,12 +1,9 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import os
-import platform
 import sys
-from pathlib import Path
 from typing import List, Optional, Union
 
-from cffi import FFI
 from glide_shared.config import BaseClientConfiguration
 from glide_shared.constants import OK, TEncodable, TResult
 from glide_shared.exceptions import (
@@ -18,6 +15,7 @@ from glide_shared.exceptions import (
 from glide_shared.protobuf.command_request_pb2 import RequestType
 from glide_shared.routes import Route, build_protobuf_route
 
+from ._glide_ffi import _GlideFFI
 from .config import GlideClientConfiguration, GlideClusterClientConfiguration
 from .logger import Level, Logger
 from .sync_commands.cluster_commands import ClusterCommands
@@ -30,32 +28,6 @@ else:
     from typing_extensions import Self
 
 ENCODING = "utf-8"
-CURR_DIR = Path(__file__).resolve().parent
-
-
-def find_libglide_ffi(lib_dir: Path) -> Path:
-    """
-    Searches for the correct shared library file depending on the OS.
-    """
-    possible_names = {
-        "Linux": "libglide_ffi.so",
-        "Darwin": "libglide_ffi.dylib",
-        "Windows": "glide_ffi.dll",
-    }
-
-    system = platform.system()
-    lib_name = possible_names.get(system)
-    if not lib_name:
-        raise RuntimeError(f"Unsupported platform: {system}")
-
-    lib_path = lib_dir / lib_name
-    if not lib_path.exists():
-        raise FileNotFoundError(f"Could not find {lib_name} in {lib_dir}")
-
-    return lib_path
-
-
-LIB_FILE = find_libglide_ffi(CURR_DIR)
 
 
 # Enum values must match the Rust definition
@@ -70,6 +42,9 @@ class BaseClient(CoreCommands):
         """
         To create a new client, use the `create` classmethod
         """
+        self._glide_ffi = _GlideFFI()
+        self._ffi = self._glide_ffi.ffi
+        self._lib = self._glide_ffi.lib
         self._config: BaseClientConfiguration = config
         self._is_closed: bool = False
 
@@ -82,7 +57,6 @@ class BaseClient(CoreCommands):
                 "Configuration must be an instance of the sync version of GlideClientConfiguration or GlideClusterClientConfiguration, imported from glide_sync.config."
             )
         self = cls(config)
-        self._init_ffi()
         self._config = config
         self._is_closed = False
 
@@ -103,8 +77,14 @@ class BaseClient(CoreCommands):
                 "_type": self._ffi.cast("ClientTypeEnum", FFIClientTypeEnum.Sync),
             },
         )
+        pubsub_callback = self._ffi.cast(
+            "PubSubCallback", 0
+        )  # PubSub not yet implementet for Sync Python
         client_response_ptr = self._lib.create_client(
-            conn_req_bytes, len(conn_req_bytes), client_type
+            conn_req_bytes,
+            len(conn_req_bytes),
+            client_type,
+            pubsub_callback,
         )
 
         Logger.log(Level.INFO, "connection info", "new connection established")
@@ -130,108 +110,6 @@ class BaseClient(CoreCommands):
             self._lib.free_connection_response(client_response_ptr)
         else:
             raise ClosingError("Failed to create client, response pointer is NULL.")
-
-    def _init_ffi(self):
-        self._ffi = FFI()
-
-        # Define the CommandResponse struct and related types
-        self._ffi.cdef(
-            """
-            struct CommandResponse {
-                int response_type;
-                long int_value;
-                double float_value;
-                bool bool_value;
-                char* string_value;
-                long string_value_len;
-                struct CommandResponse* array_value;
-                long array_value_len;
-                struct CommandResponse* map_key;
-                struct CommandResponse* map_value;
-                struct CommandResponse* sets_value;
-                long sets_value_len;
-            };
-
-            typedef struct CommandResponse CommandResponse;
-
-            typedef enum {
-                Null = 0,
-                Int = 1,
-                Float = 2,
-                Bool = 3,
-                String = 4,
-                Array = 5,
-                Map = 6,
-                Sets = 7
-            } ResponseType;
-
-            typedef void (*SuccessCallback)(uintptr_t index_ptr, const CommandResponse* message);
-            typedef void (*FailureCallback)(uintptr_t index_ptr, const char* error_message, int error_type);
-
-            typedef struct {
-                const void* conn_ptr;
-                const char* connection_error_message;
-            } ConnectionResponse;
-
-            typedef struct {
-                const char* command_error_message;
-                int command_error_type;
-            } CommandError;
-
-            typedef struct {
-                CommandResponse* response;
-                CommandError* command_error;
-            } CommandResult;
-
-            typedef enum {
-                Async = 0,
-                Sync = 1
-            } ClientTypeEnum;
-
-            typedef struct {
-                SuccessCallback success_callback;
-                FailureCallback failure_callback;
-            } AsyncClient;
-
-            typedef struct {
-                int _type;  // Enum to differentiate between Async and Sync
-                union {
-                    struct {
-                        void (*success_callback)(uintptr_t, const void*);
-                        void (*failure_callback)(uintptr_t, const char*, int);
-                    } async_client;
-                };
-            } ClientType;
-
-            // Function declarations
-            const ConnectionResponse* create_client(
-                const uint8_t* connection_request_bytes,
-                size_t connection_request_len,
-                const ClientType* client_type  // Pass by pointer
-            );
-            void close_client(const void* client_adapter_ptr);
-            void free_connection_response(ConnectionResponse* connection_response_ptr);
-            char* get_response_type_string(int response_type);
-            void free_response_type_string(char* response_string);
-            void free_command_response(CommandResponse* command_response_ptr);
-            void free_error_message(char* error_message);
-            void free_command_result(CommandResult* command_result_ptr);
-            CommandResult* command(
-                const void* client_adapter_ptr, uintptr_t channel, int command_type,
-                unsigned long arg_count, const size_t *args, const unsigned long* args_len,
-                const unsigned char* route_bytes, size_t route_bytes_len, uint64_t span_ptr
-            );
-            CommandResult* update_connection_password(
-                const void* client_adapter_ptr,
-                uintptr_t request_id,
-                const char* password,
-                bool immediate_authentication
-            );
-        """
-        )
-
-        # Load the shared library (adjust the path to your compiled Rust library)
-        self._lib = self._ffi.dlopen(str(LIB_FILE.resolve()))
 
     def _handle_response(self, message):
         if message == self._ffi.NULL:
