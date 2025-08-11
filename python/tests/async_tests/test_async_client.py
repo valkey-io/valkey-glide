@@ -9944,7 +9944,7 @@ class TestClusterRoutes:
                     ),
                 )
                 next_result_cursor = str(next_result[result_cursor_index])
-                
+
                 # Validate cursor format and ensure it's different from previous
                 if not next_result_cursor or next_result_cursor == result_cursor:
                     # If cursor is invalid or hasn't changed, break to avoid infinite loop
@@ -9958,7 +9958,10 @@ class TestClusterRoutes:
                 result_cursor = next_result_cursor
             except (RequestError, ClosingError) as e:
                 # Handle connection errors and invalid cursor errors
-                if "invalid cursor" in str(e).lower() or "channel closed" in str(e).lower():
+                if (
+                    "invalid cursor" in str(e).lower()
+                    or "channel closed" in str(e).lower()
+                ):
                     # If we get invalid cursor or connection error, stop iteration
                     break
                 else:
@@ -10074,7 +10077,7 @@ class TestClusterRoutes:
                     ),
                 )
                 next_result_cursor = str(next_result[result_cursor_index])
-                
+
                 # Validate cursor format and ensure it's different from previous
                 if not next_result_cursor or next_result_cursor == result_cursor:
                     # If cursor is invalid or hasn't changed, break to avoid infinite loop
@@ -10090,7 +10093,10 @@ class TestClusterRoutes:
                 result_cursor = next_result_cursor
             except (RequestError, ClosingError) as e:
                 # Handle connection errors and invalid cursor errors
-                if "invalid cursor" in str(e).lower() or "channel closed" in str(e).lower():
+                if (
+                    "invalid cursor" in str(e).lower()
+                    or "channel closed" in str(e).lower()
+                ):
                     # If we get invalid cursor or connection error, stop iteration
                     break
                 else:
@@ -10214,7 +10220,7 @@ class TestClusterRoutes:
                     ),
                 )
                 next_result_cursor = str(next_result[result_cursor_index])
-                
+
                 # Validate cursor format and ensure it's different from previous
                 if not next_result_cursor or next_result_cursor == result_cursor:
                     # If cursor is invalid or hasn't changed, break to avoid infinite loop
@@ -10230,7 +10236,10 @@ class TestClusterRoutes:
                 result_cursor = next_result_cursor
             except (RequestError, ClosingError) as e:
                 # Handle connection errors and invalid cursor errors
-                if "invalid cursor" in str(e).lower() or "channel closed" in str(e).lower():
+                if (
+                    "invalid cursor" in str(e).lower()
+                    or "channel closed" in str(e).lower()
+                ):
                     # If we get invalid cursor or connection error, stop iteration
                     break
                 else:
