@@ -25,4 +25,4 @@ runs:
 
               # Set environment variable to prevent cargo-zigbuild from auto-detecting malformed targets
               # This will be available for subsequent steps in the workflow
-              echo "CARGO_ZIGBUILD_TARGET=\"$TARGET\"" >> $GITHUB_ENV
+              echo "CARGO_ZIGBUILD_TARGET=$TARGET" >> $GITHUB_ENV
