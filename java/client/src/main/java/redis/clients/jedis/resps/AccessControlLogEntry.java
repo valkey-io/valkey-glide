@@ -25,7 +25,7 @@ public class AccessControlLogEntry implements Serializable {
     public static final String TIMESTAMP_CREATED = "timestamp-created";
     public static final String TIMESTAMP_LAST_UPDATED = "timestamp-last-updated";
 
-    private long count;
+    private final long count;
     private final String reason;
     private final String context;
     private final String object;
