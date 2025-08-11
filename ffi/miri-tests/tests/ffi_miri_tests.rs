@@ -8,7 +8,7 @@ use glide_core::{
 use miri_tests::{
     ClientType, ConnectionResponse, PushKind, close_client, create_client, free_connection_response,
 };
-use miri_tests::{Level, LogResult, free_log_result, init, log};
+use miri_tests::{Level, LogResult, free_log_result, glide_log, init};
 use miri_tests::{
     create_batch_otel_span, create_batch_otel_span_with_parent, create_named_otel_span,
     create_otel_span, create_otel_span_with_parent, drop_otel_span,
@@ -165,7 +165,8 @@ fn test_create_otel_span_with_parent_miri() {
     );
 
     // Test with invalid parent pointer (should fallback to independent span)
-    let child_invalid_parent = unsafe { create_otel_span_with_parent(RequestType::Exists, 0xDEADBEEF) };
+    let child_invalid_parent =
+        unsafe { create_otel_span_with_parent(RequestType::Exists, 0xDEADBEEF) };
     assert_ne!(
         child_invalid_parent, 0,
         "Child span with invalid parent should fallback"
@@ -339,7 +340,7 @@ fn test_log_with_valid_inputs() {
         let identifier = CString::new("test_identifier").unwrap();
         let message = CString::new("This is a test log message").unwrap();
 
-        let log_result_ptr = log(Level::INFO, identifier.as_ptr(), message.as_ptr());
+        let log_result_ptr = glide_log(Level::INFO, identifier.as_ptr(), message.as_ptr());
         assert!(!log_result_ptr.is_null());
 
         let log_result = &*log_result_ptr;
@@ -359,7 +360,7 @@ fn test_log_with_invalid_utf8_message() {
         let identifier = CString::new("valid_identifier").unwrap();
         let invalid_utf8 = vec![0xFF, 0xFE, 0xFD, 0x00];
 
-        let log_result_ptr = log(
+        let log_result_ptr = glide_log(
             Level::ERROR,
             identifier.as_ptr(),
             invalid_utf8.as_ptr() as *const c_char,

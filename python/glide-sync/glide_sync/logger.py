@@ -113,7 +113,7 @@ class Logger:
             message = f"{message}: {traceback.format_exception(err)}"
         c_identifier = Logger._ffi.new("char[]", log_identifier.encode(ENCODING))
         c_message = Logger._ffi.new("char[]", message.encode(ENCODING))
-        result_ptr = Logger._lib.log(log_level.value, c_identifier, c_message)
+        result_ptr = Logger._lib.glide_log(log_level.value, c_identifier, c_message)
 
         if result_ptr != Logger._ffi.NULL:
             try:
@@ -130,7 +130,7 @@ class Logger:
                     error_message = Logger._ffi.new(
                         "char[]", f"log error: {error_str}".encode(ENCODING)
                     )
-                    error_result_ptr = Logger._lib.log(
+                    error_result_ptr = Logger._lib.glide_log(
                         Level.ERROR.value, error_identifier, error_message
                     )
                     if error_result_ptr != Logger._ffi.NULL:
@@ -145,7 +145,7 @@ class Logger:
             error_message = Logger._ffi.new(
                 "char[]", "Log function returned a null pointer".encode(ENCODING)
             )
-            error_result_ptr = Logger._lib.log(
+            error_result_ptr = Logger._lib.glide_log(
                 Level.ERROR.value, error_identifier, error_message
             )
             if error_result_ptr != Logger._ffi.NULL:
@@ -172,7 +172,7 @@ class Logger:
                 } LogResult;
 
                 LogResult* init(const Level* level, const char* file_name);
-                LogResult* log(Level level, const char* identifier, const char* message);
+                LogResult* glide_log(Level level, const char* identifier, const char* message);
                 void free_log_result(LogResult* result);
                 """
             )

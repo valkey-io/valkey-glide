@@ -2689,7 +2689,7 @@ impl From<Level> for logger_core::Level {
 /// The caller (Python Sync wrapper, Go wrapper, etc.) is responsible for filtering log messages according to the logger's current log level.
 /// This function will log any message it receives.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn log(
+pub unsafe extern "C" fn glide_log(
     level: Level,
     identifier: *const c_char,
     message: *const c_char,
@@ -2796,7 +2796,7 @@ pub unsafe extern "C" fn init(level: *const Level, file_name: *const c_char) -> 
 ///
 /// # Safety
 ///
-/// * `result_ptr` must be a valid pointer to a `LogResult` returned by [`log`] or [`init`], or null.
+/// * `result_ptr` must be a valid pointer to a `LogResult` returned by [`glide_log`] or [`init`], or null.
 /// * This function must be called exactly once for each `LogResult`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn free_log_result(result_ptr: *mut LogResult) {
