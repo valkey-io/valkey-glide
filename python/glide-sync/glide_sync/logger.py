@@ -5,10 +5,11 @@ from __future__ import annotations
 import traceback
 from enum import Enum
 from pathlib import Path
-from typing import Any, Optional, cast
+from typing import Optional, cast
 
-from cffi import FFI
 from glide_shared.exceptions import LoggerError
+
+from ._glide_ffi import _GlideFFI
 
 ENCODING = "utf-8"
 CURR_DIR = Path(__file__).resolve().parent
@@ -35,12 +36,12 @@ class Logger:
     """
 
     _instance: Logger | None = None
-    _ffi: FFI = None  # type: ignore
-    _lib: Any = None  # type: ignore
+    _glide_ffi = _GlideFFI()
+    _ffi = _glide_ffi.ffi
+    _lib = _glide_ffi.lib
     logger_level: Level = Level.OFF
 
     def __init__(self, level: Optional[Level] = None, file_name: Optional[str] = None):
-        Logger._init_ffi()
         c_level = (
             Logger._ffi.new("Level*", level.value)
             if level is not None
@@ -150,33 +151,6 @@ class Logger:
             )
             if error_result_ptr != Logger._ffi.NULL:
                 Logger._lib.free_log_result(error_result_ptr)
-
-    @classmethod
-    def _init_ffi(cls):
-        if cls._ffi is None:
-            cls._ffi = FFI()
-            cls._ffi.cdef(
-                """
-                typedef enum {
-                    ERROR = 0,
-                    WARN = 1,
-                    INFO = 2,
-                    DEBUG = 3,
-                    TRACE = 4,
-                    OFF = 5
-                } Level;
-
-                typedef struct {
-                    char* log_error;
-                    Level level;
-                } LogResult;
-
-                LogResult* init(const Level* level, const char* file_name);
-                LogResult* glide_log(Level level, const char* identifier, const char* message);
-                void free_log_result(LogResult* result);
-                """
-            )
-            cls._lib = cls._ffi.dlopen(str(LIB_FILE.resolve()))
 
     @classmethod
     def set_logger_config(

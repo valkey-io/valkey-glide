@@ -43,9 +43,7 @@ EXCLUDED_API_FUNCTIONS = {
         "init_callback",
         "get_statistics",
     ],
-    "sync_only": [
-        "find_libglide_ffi",
-    ],
+    "sync_only": [],
 }
 
 EXCLUDED_API_FILENAMES = {
@@ -54,7 +52,7 @@ EXCLUDED_API_FILENAMES = {
         "glide_json.py",
         "opentelemetry.py",
     ],
-    "sync_only": [],
+    "sync_only": ["_glide_ffi.py"],
 }
 
 EXCLUDED_TESTS = {
