@@ -9,6 +9,7 @@
 
 #### Operational Enhancements
 * FFI: Add MIRI tests to CI ([#4506](https://github.com/valkey-io/valkey-glide/pull/4506))
+* CORE/FFI/GO - SpanFromContext implementation ([#4507](https://github.com/valkey-io/valkey-glide/pull/4507))
 
 ## 2.0 (2025-06-18)
 
