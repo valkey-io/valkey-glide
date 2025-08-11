@@ -52,34 +52,69 @@ public class StandaloneClientTests {
         GlideClient client = GlideClient.createClient(commonClientConfig().build()).get();
 
         String password = "TEST_AUTH";
-        client.configSet(Map.of("requirepass", password)).get();
+        GlideClient auth_client = null;
+        
+        try {
+            // Ensure clean state by resetting password first
+            try {
+                client.configSet(Map.of("requirepass", "")).get();
+            } catch (Exception e) {
+                // Ignore errors in case auth is already disabled
+            }
 
-        // Creation of a new client without a password should fail
-        ExecutionException exception =
-                assertThrows(
-                        ExecutionException.class,
-                        () -> GlideClient.createClient(commonClientConfig().build()).get());
-        assertInstanceOf(ClosingException.class, exception.getCause());
+            client.configSet(Map.of("requirepass", password)).get();
 
-        // Creation of a new client with credentials
-        GlideClient auth_client =
-                GlideClient.createClient(
-                                commonClientConfig()
-                                        .credentials(ServerCredentials.builder().password(password).build())
-                                        .build())
-                        .get();
+            // Creation of a new client without a password should fail
+            ExecutionException exception =
+                    assertThrows(
+                            ExecutionException.class,
+                            () -> GlideClient.createClient(commonClientConfig().build()).get());
+            assertInstanceOf(ClosingException.class, exception.getCause());
 
-        String key = getRandomString(10);
-        String value = getRandomString(10);
+            // Creation of a new client with credentials
+            auth_client =
+                    GlideClient.createClient(
+                                    commonClientConfig()
+                                            .credentials(ServerCredentials.builder().password(password).build())
+                                            .build())
+                            .get();
 
-        assertEquals(OK, auth_client.set(key, value).get());
-        assertEquals(value, auth_client.get(key).get());
+            String key = getRandomString(10);
+            String value = getRandomString(10);
 
-        // Reset password
-        client.configSet(Map.of("requirepass", "")).get();
-
-        auth_client.close();
-        client.close();
+            assertEquals(OK, auth_client.set(key, value).get());
+            assertEquals(value, auth_client.get(key).get());
+        } finally {
+            // Always reset password even if test fails
+            try {
+                if (auth_client != null) {
+                    auth_client.configSet(Map.of("requirepass", "")).get();
+                    auth_client.close();
+                } else {
+                    // Try with the original client if auth_client creation failed
+                    client.configSet(Map.of("requirepass", "")).get();
+                }
+            } catch (Exception e) {
+                // Try alternative reset method if the above fails
+                try {
+                    GlideClient reset_client =
+                            GlideClient.createClient(
+                                            commonClientConfig()
+                                                    .credentials(ServerCredentials.builder().password(password).build())
+                                                    .build())
+                                    .get();
+                    reset_client.configSet(Map.of("requirepass", "")).get();
+                    reset_client.close();
+                } catch (Exception e2) {
+                    // Last resort - ignore but log the issue
+                    System.err.println("Warning: Failed to reset authentication state: " + e2.getMessage());
+                }
+            }
+            
+            if (client != null) {
+                client.close();
+            }
+        }
     }
 
     @SneakyThrows
@@ -224,6 +259,13 @@ public class StandaloneClientTests {
 
         GlideClient adminClient = GlideClient.createClient(commonClientConfig().build()).get();
         try (var testClient = GlideClient.createClient(commonClientConfig().build()).get()) {
+            // Ensure clean state by resetting password first
+            try {
+                adminClient.configSet(Map.of("requirepass", "")).get();
+            } catch (Exception e) {
+                // Ignore errors in case auth is already disabled
+            }
+            
             // validate that we can use the client
             assertNotNull(testClient.info().get());
 
@@ -239,7 +281,23 @@ public class StandaloneClientTests {
             // But using something else password returns OK
             assertEquals(OK, testClient.updateConnectionPassword(notThePwd, true).get());
         } finally {
-            adminClient.configSet(Map.of("requirepass", "")).get();
+            try {
+                adminClient.configSet(Map.of("requirepass", "")).get();
+            } catch (Exception e) {
+                // If reset fails, try with authenticated client
+                try {
+                    GlideClient reset_client =
+                            GlideClient.createClient(
+                                            commonClientConfig()
+                                                    .credentials(ServerCredentials.builder().password(notThePwd).build())
+                                                    .build())
+                                    .get();
+                    reset_client.configSet(Map.of("requirepass", "")).get();
+                    reset_client.close();
+                } catch (Exception e2) {
+                    System.err.println("Warning: Failed to reset authentication state: " + e2.getMessage());
+                }
+            }
             adminClient.close();
         }
     }
@@ -290,7 +348,11 @@ public class StandaloneClientTests {
             assertNotNull(testClient.info().get());
 
         } finally {
-            deleteAclUser(adminClient, username);
+            try {
+                deleteAclUser(adminClient, username);
+            } catch (Exception e) {
+                System.err.println("Warning: Failed to delete ACL test user: " + e.getMessage());
+            }
             adminClient.close();
         }
     }

@@ -54,35 +54,70 @@ public class ClusterClientTests {
         GlideClusterClient client =
                 GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
 
+        // Ensure clean state by resetting password first
+        try {
+            client.customCommand(new String[] {"CONFIG", "SET", "requirepass", ""}).get();
+        } catch (Exception e) {
+            // Ignore errors in case auth is already disabled
+        }
+
         String password = "TEST_AUTH";
-        client.customCommand(new String[] {"CONFIG", "SET", "requirepass", password}).get();
+        GlideClusterClient auth_client = null;
+        
+        try {
+            client.customCommand(new String[] {"CONFIG", "SET", "requirepass", password}).get();
 
-        // Creation of a new client without a password should fail
-        ExecutionException exception =
-                assertThrows(
-                        ExecutionException.class,
-                        () -> GlideClusterClient.createClient(commonClusterClientConfig().build()).get());
-        assertInstanceOf(ClosingException.class, exception.getCause());
+            // Creation of a new client without a password should fail
+            ExecutionException exception =
+                    assertThrows(
+                            ExecutionException.class,
+                            () -> GlideClusterClient.createClient(commonClusterClientConfig().build()).get());
+            assertInstanceOf(ClosingException.class, exception.getCause());
 
-        // Creation of a new client with credentials
-        GlideClusterClient auth_client =
-                GlideClusterClient.createClient(
-                                commonClusterClientConfig()
-                                        .credentials(ServerCredentials.builder().password(password).build())
-                                        .build())
-                        .get();
+            // Creation of a new client with credentials
+            auth_client =
+                    GlideClusterClient.createClient(
+                                    commonClusterClientConfig()
+                                            .credentials(ServerCredentials.builder().password(password).build())
+                                            .build())
+                            .get();
 
-        String key = getRandomString(10);
-        String value = getRandomString(10);
+            String key = getRandomString(10);
+            String value = getRandomString(10);
 
-        assertEquals(OK, auth_client.set(key, value).get());
-        assertEquals(value, auth_client.get(key).get());
-
-        // Reset password
-        client.customCommand(new String[] {"CONFIG", "SET", "requirepass", ""}).get();
-
-        auth_client.close();
-        client.close();
+            assertEquals(OK, auth_client.set(key, value).get());
+            assertEquals(value, auth_client.get(key).get());
+        } finally {
+            // Always reset password even if test fails
+            try {
+                if (auth_client != null) {
+                    auth_client.customCommand(new String[] {"CONFIG", "SET", "requirepass", ""}).get();
+                    auth_client.close();
+                } else {
+                    // Try with the original client if auth_client creation failed
+                    client.customCommand(new String[] {"CONFIG", "SET", "requirepass", ""}).get();
+                }
+            } catch (Exception e) {
+                // Try alternative reset method if the above fails
+                try {
+                    GlideClusterClient reset_client =
+                            GlideClusterClient.createClient(
+                                            commonClusterClientConfig()
+                                                    .credentials(ServerCredentials.builder().password(password).build())
+                                                    .build())
+                                    .get();
+                    reset_client.customCommand(new String[] {"CONFIG", "SET", "requirepass", ""}).get();
+                    reset_client.close();
+                } catch (Exception e2) {
+                    // Last resort - ignore but log the issue
+                    System.err.println("Warning: Failed to reset authentication state: " + e2.getMessage());
+                }
+            }
+            
+            if (client != null) {
+                client.close();
+            }
+        }
     }
 
     @SneakyThrows
@@ -93,50 +128,71 @@ public class ClusterClientTests {
 
         String username = "testuser";
         String password = "TEST_AUTH";
-        assertEquals(
-                OK,
-                client
-                        .customCommand(
-                                new String[] {
-                                    "ACL",
-                                    "SETUSER",
-                                    username,
-                                    "on",
-                                    "allkeys",
-                                    "+get",
-                                    "+cluster",
-                                    "+ping",
-                                    "+info",
-                                    "+client",
-                                    ">" + password,
-                                })
-                        .get()
-                        .getSingleValue());
+        GlideClusterClient testUserClient = null;
+        
+        try {
+            // Clean up any existing test user first
+            try {
+                client.customCommand(new String[] {"ACL", "DELUSER", username}).get();
+            } catch (Exception e) {
+                // Ignore if user doesn't exist
+            }
 
-        String key = getRandomString(10);
-        String value = getRandomString(10);
+            assertEquals(
+                    OK,
+                    client
+                            .customCommand(
+                                    new String[] {
+                                        "ACL",
+                                        "SETUSER",
+                                        username,
+                                        "on",
+                                        "allkeys",
+                                        "+get",
+                                        "+cluster",
+                                        "+ping",
+                                        "+info",
+                                        "+client",
+                                        ">" + password,
+                                    })
+                            .get()
+                            .getSingleValue());
 
-        assertEquals(OK, client.set(key, value).get());
+            String key = getRandomString(10);
+            String value = getRandomString(10);
 
-        // Creation of a new cluster client with credentials
-        GlideClusterClient testUserClient =
-                GlideClusterClient.createClient(
-                                commonClusterClientConfig()
-                                        .credentials(
-                                                ServerCredentials.builder().username(username).password(password).build())
-                                        .build())
-                        .get();
+            assertEquals(OK, client.set(key, value).get());
 
-        assertEquals(value, testUserClient.get(key).get());
+            // Creation of a new cluster client with credentials
+            testUserClient =
+                    GlideClusterClient.createClient(
+                                    commonClusterClientConfig()
+                                            .credentials(
+                                                    ServerCredentials.builder().username(username).password(password).build())
+                                            .build())
+                            .get();
 
-        ExecutionException executionException =
-                assertThrows(ExecutionException.class, () -> testUserClient.set("foo", "bar").get());
-        assertInstanceOf(RequestException.class, executionException.getCause());
+            assertEquals(value, testUserClient.get(key).get());
 
-        client.customCommand(new String[] {"ACL", "DELUSER", username}).get();
-
-        testUserClient.close();
-        client.close();
+            ExecutionException executionException =
+                    assertThrows(ExecutionException.class, () -> testUserClient.set("foo", "bar").get());
+            assertInstanceOf(RequestException.class, executionException.getCause());
+        } finally {
+            // Always clean up the test user even if test fails
+            try {
+                if (testUserClient != null) {
+                    testUserClient.close();
+                }
+                client.customCommand(new String[] {"ACL", "DELUSER", username}).get();
+            } catch (Exception e) {
+                // Log but don't fail if cleanup fails
+                System.err.println("Warning: Failed to clean up ACL test user: " + e.getMessage());
+            }
+            
+            if (client != null) {
+                client.close();
+            }
+        }
     }
 
     @SneakyThrows
