@@ -20,7 +20,7 @@ runs:
               fi
               pip3 install ziglang
               cargo install --locked cargo-zigbuild
-              
+
               # Set environment variables to prevent cargo-zigbuild from auto-detecting malformed targets
               # These will be available for subsequent steps in the workflow
               echo "CARGO_BUILD_TARGET=${{ inputs.target }}" >> $GITHUB_ENV
