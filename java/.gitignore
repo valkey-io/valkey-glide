@@ -12,3 +12,7 @@ gradle.properties
 
 # Ignore VSCode JUnit extension directories
 bin/
+
+# Downloaded build dependencies
+zig-linux-x86_64-*.tar.xz
+protoc-*.zip
