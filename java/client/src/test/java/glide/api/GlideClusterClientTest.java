@@ -83,6 +83,7 @@ import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
 import glide.managers.CommandManager;
 import glide.managers.GlideExceptionCheckedFunction;
+import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
@@ -3651,7 +3652,7 @@ public class GlideClusterClientTest {
 
         // verify
         assertEquals(testResponse, response);
-        assertEquals(value, payload);
+        assertArrayEquals(value, payload);
     }
 
     @SneakyThrows
@@ -3675,7 +3676,7 @@ public class GlideClusterClientTest {
 
         // verify
         assertEquals(testResponse, response);
-        assertEquals(value, payload);
+        assertArrayEquals(value, payload);
     }
 
     @SneakyThrows
@@ -3699,7 +3700,7 @@ public class GlideClusterClientTest {
 
         // verify
         assertEquals(testResponse, response);
-        assertEquals(value, payload);
+        assertArrayEquals(value, payload);
     }
 
     @SneakyThrows
@@ -3723,7 +3724,7 @@ public class GlideClusterClientTest {
 
         // verify
         assertEquals(testResponse, response);
-        assertEquals(value, payload);
+        assertArrayEquals(value, payload);
     }
 
     @SneakyThrows
