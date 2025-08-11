@@ -8,6 +8,10 @@ repositories {
     mavenLocal()
 }
 
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+}
+
 dependencies {
     // client
     implementation group: 'io.valkey', name: 'valkey-glide', version: project.ext.defaultReleaseVersion, classifier: osdetector.classifier
