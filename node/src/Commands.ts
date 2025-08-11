@@ -128,26 +128,26 @@ export function createGetRange(
 
 export type SetOptions = (
     | {
-          /**
-           * `onlyIfDoesNotExist` - Only set the key if it does not already exist.
-           * `NX` in the Valkey API.
-           *
-           * `onlyIfExists` - Only set the key if it already exists.
-           * `EX` in the Valkey API.
-           */
-          conditionalSet?: "onlyIfExists" | "onlyIfDoesNotExist";
-      }
+        /**
+         * `onlyIfDoesNotExist` - Only set the key if it does not already exist.
+         * `NX` in the Valkey API.
+         *
+         * `onlyIfExists` - Only set the key if it already exists.
+         * `EX` in the Valkey API.
+         */
+        conditionalSet?: "onlyIfExists" | "onlyIfDoesNotExist";
+    }
     | {
-          /**
-           * `onlyIfEqual` - Only set the key if the comparison value equals the current value of key.
-           * `IFEQ` in the Valkey API.
-           */
-          conditionalSet: "onlyIfEqual";
-          /**
-           * The value to compare the existing value with.
-           */
-          comparisonValue: GlideString;
-      }
+        /**
+         * `onlyIfEqual` - Only set the key if the comparison value equals the current value of key.
+         * `IFEQ` in the Valkey API.
+         */
+        conditionalSet: "onlyIfEqual";
+        /**
+         * The value to compare the existing value with.
+         */
+        comparisonValue: GlideString;
+    }
 ) & {
     /**
      * Return the old string stored at key, or nil if key did not exist. An error
@@ -175,11 +175,11 @@ export type SetOptions = (
      * Equivalent to `KEEPTTL` in the Valkey API.
      */
     expiry?:
-        | "keepExisting"
-        | {
-              type: TimeUnit;
-              count: number;
-          };
+    | "keepExisting"
+    | {
+        type: TimeUnit;
+        count: number;
+    };
 };
 
 /**
@@ -502,6 +502,251 @@ export function createHSetNX(
     value: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.HSetNX, [key, field, value]);
+}
+
+/**
+ * @internal
+ */
+export function createHSetEx(
+    key: GlideString,
+    fieldValueMap: HashDataType,
+    options?: HSetExOptions,
+): command_request.Command {
+    const args: GlideString[] = [key];
+
+    // Add conditional change options (NX | XX)
+    if (options?.conditionalChange) {
+        args.push(options.conditionalChange);
+    }
+
+    // Add field conditional change options (FNX | FXX)
+    if (options?.fieldConditionalChange) {
+        args.push(options.fieldConditionalChange);
+    }
+
+    // Add expiry options (EX | PX | EXAT | PXAT | KEEPTTL)
+    if (options?.expiry) {
+        if (options.expiry !== "KEEPTTL" && !Number.isInteger(options.expiry.count)) {
+            throw new Error(
+                `Received expiry '${JSON.stringify(
+                    options.expiry,
+                )}'. Count must be an integer`,
+            );
+        }
+
+        if (options.expiry === "KEEPTTL") {
+            args.push("KEEPTTL");
+        } else {
+            args.push(options.expiry.type, options.expiry.count.toString());
+        }
+    }
+
+    // Add FIELDS keyword and field count
+    args.push("FIELDS", fieldValueMap.length.toString());
+
+    // Add field-value pairs
+    fieldValueMap.forEach((fieldValueObject) => {
+        args.push(fieldValueObject.field, fieldValueObject.value);
+    });
+
+    return createCommand(RequestType.HSetex, args);
+}
+
+/**
+ * @internal
+ */
+export function createHGetEx(
+    key: GlideString,
+    fields: GlideString[],
+    options?: HGetExOptions,
+): command_request.Command {
+    const args: GlideString[] = [key];
+
+    // Add expiry options (EX | PX | EXAT | PXAT | KEEPTTL | PERSIST)
+    if (options?.expiry) {
+        if (options.expiry === "PERSIST") {
+            args.push("PERSIST");
+        } else if (options.expiry === "KEEPTTL") {
+            args.push("KEEPTTL");
+        } else {
+            if (!Number.isInteger(options.expiry.count)) {
+                throw new Error(
+                    `Received expiry '${JSON.stringify(
+                        options.expiry,
+                    )}'. Count must be an integer`,
+                );
+            }
+            args.push(options.expiry.type, options.expiry.count.toString());
+        }
+    }
+
+    // Add field names
+    args.push(...fields);
+
+    return createCommand(RequestType.HGetex, args);
+}
+
+/**
+ * @internal
+ */
+export function createHExpire(
+    key: GlideString,
+    seconds: number,
+    fields: GlideString[],
+    options?: HExpireOptions,
+): command_request.Command {
+    const args: GlideString[] = [key, seconds.toString()];
+
+    // Add condition options (NX | XX | GT | LT)
+    if (options?.condition) {
+        args.push(options.condition);
+    }
+
+    // Add field names
+    args.push(...fields);
+
+    return createCommand(RequestType.HExpire, args);
+}
+
+/**
+ * @internal
+ */
+export function createHPersist(
+    key: GlideString,
+    fields: GlideString[],
+): command_request.Command {
+    const args: GlideString[] = [key];
+
+    // Add field names
+    args.push(...fields);
+
+    return createCommand(RequestType.HPersist, args);
+}
+
+/**
+ * @internal
+ */
+export function createHPExpire(
+    key: GlideString,
+    milliseconds: number,
+    fields: GlideString[],
+    options?: HPExpireOptions,
+): command_request.Command {
+    const args: GlideString[] = [key, milliseconds.toString()];
+
+    // Add condition options (NX | XX | GT | LT)
+    if (options?.condition) {
+        args.push(options.condition);
+    }
+
+    // Add field names
+    args.push(...fields);
+
+    return createCommand(RequestType.HPExpire, args);
+}
+
+/**
+ * @internal
+ */
+export function createHExpireAt(
+    key: GlideString,
+    unixTimestampSeconds: number,
+    fields: GlideString[],
+    options?: HExpireAtOptions,
+): command_request.Command {
+    const args: GlideString[] = [key, unixTimestampSeconds.toString()];
+
+    // Add condition options (NX | XX | GT | LT)
+    if (options?.condition) {
+        args.push(options.condition);
+    }
+
+    // Add field names
+    args.push(...fields);
+
+    return createCommand(RequestType.HExpireAt, args);
+}
+
+/**
+ * @internal
+ */
+export function createHPExpireAt(
+    key: GlideString,
+    unixTimestampMilliseconds: number,
+    fields: GlideString[],
+    options?: HPExpireAtOptions,
+): command_request.Command {
+    const args: GlideString[] = [key, unixTimestampMilliseconds.toString()];
+
+    // Add condition options (NX | XX | GT | LT)
+    if (options?.condition) {
+        args.push(options.condition);
+    }
+
+    // Add field names
+    args.push(...fields);
+
+    return createCommand(RequestType.HPExpireAt, args);
+}
+
+/**
+ * @internal
+ */
+export function createHTtl(
+    key: GlideString,
+    fields: GlideString[],
+): command_request.Command {
+    const args: GlideString[] = [key];
+
+    // Add field names
+    args.push(...fields);
+
+    return createCommand(RequestType.HTtl, args);
+}
+
+/**
+ * @internal
+ */
+export function createHPTtl(
+    key: GlideString,
+    fields: GlideString[],
+): command_request.Command {
+    const args: GlideString[] = [key];
+
+    // Add field names
+    args.push(...fields);
+
+    return createCommand(RequestType.HPTtl, args);
+}
+
+/**
+ * @internal
+ */
+export function createHExpireTime(
+    key: GlideString,
+    fields: GlideString[],
+): command_request.Command {
+    const args: GlideString[] = [key];
+
+    // Add field names
+    args.push(...fields);
+
+    return createCommand(RequestType.HExpireTime, args);
+}
+
+/**
+ * @internal
+ */
+export function createHPExpireTime(
+    key: GlideString,
+    fields: GlideString[],
+): command_request.Command {
+    const args: GlideString[] = [key];
+
+    // Add field names
+    args.push(...fields);
+
+    return createCommand(RequestType.HPExpireTime, args);
 }
 
 /**
@@ -1467,7 +1712,7 @@ export function createZAdd(
         if (options.conditionalChange) {
             if (
                 options.conditionalChange ===
-                    ConditionalChange.ONLY_IF_DOES_NOT_EXIST &&
+                ConditionalChange.ONLY_IF_DOES_NOT_EXIST &&
                 options.updateOptions
             ) {
                 throw new Error(
@@ -1743,15 +1988,15 @@ export type Boundary<T> =
      *  Represents a specific boundary.
      */
     | {
-          /**
-           * The comparison value.
-           */
-          value: T;
-          /**
-           * Whether the value is inclusive. Defaults to `true`.
-           */
-          isInclusive?: boolean;
-      };
+        /**
+         * The comparison value.
+         */
+        value: T;
+        /**
+         * Whether the value is inclusive. Defaults to `true`.
+         */
+        isInclusive?: boolean;
+    };
 
 /**
  * Represents a range by index (rank) in a sorted set.
@@ -2118,21 +2363,21 @@ export function createZRank(
 
 export type StreamTrimOptions = (
     | {
-          /**
-           * Trim the stream according to entry ID.
-           * Equivalent to `MINID` in the Valkey API.
-           */
-          method: "minid";
-          threshold: GlideString;
-      }
+        /**
+         * Trim the stream according to entry ID.
+         * Equivalent to `MINID` in the Valkey API.
+         */
+        method: "minid";
+        threshold: GlideString;
+    }
     | {
-          /**
-           * Trim the stream according to length.
-           * Equivalent to `MAXLEN` in the Valkey API.
-           */
-          method: "maxlen";
-          threshold: number;
-      }
+        /**
+         * Trim the stream according to length.
+         * Equivalent to `MAXLEN` in the Valkey API.
+         */
+        method: "maxlen";
+        threshold: number;
+    }
 ) & {
     /**
      * If `true`, the stream will be trimmed exactly. Equivalent to `=` in the
@@ -3250,6 +3495,121 @@ export enum ConditionalChange {
      * Only add new elements. Don't update already existing elements. Equivalent to `NX` in the Valkey API.
      */
     ONLY_IF_DOES_NOT_EXIST = "NX",
+}
+
+/**
+ * Field conditional change options for hash field expiration commands.
+ * Used with HSETEX command to control field setting behavior.
+ */
+export enum HashFieldConditionalChange {
+    /**
+     * Only set fields if all of them already exist. Equivalent to `FXX` in the Valkey API.
+     */
+    ONLY_IF_ALL_EXIST = "FXX",
+
+    /**
+     * Only set fields if none of them already exist. Equivalent to `FNX` in the Valkey API.
+     */
+    ONLY_IF_NONE_EXIST = "FNX",
+}
+
+/**
+ * Expiry set options for hash field expiration commands.
+ * Supports setting expiration time in various formats.
+ */
+export type ExpirySet = {
+    type: TimeUnit;
+    count: number;
+} | "KEEPTTL";
+
+/**
+ * Optional arguments for the HSETEX command.
+ * 
+ * See https://valkey.io/commands/hsetex/ for more details.
+ */
+export interface HSetExOptions {
+    /** Options for handling existing hash objects. See {@link ConditionalChange}. */
+    conditionalChange?: ConditionalChange;
+    /** Options for handling existing fields. See {@link HashFieldConditionalChange}. */
+    fieldConditionalChange?: HashFieldConditionalChange;
+    /** Expiry settings for the fields. See {@link ExpirySet}. */
+    expiry?: ExpirySet;
+}
+
+/**
+ * Optional arguments for the HGETEX command.
+ * 
+ * See https://valkey.io/commands/hgetex/ for more details.
+ */
+export interface HGetExOptions {
+    /** Expiry settings for the fields. Can be an ExpirySet or "PERSIST" to remove expiration. */
+    expiry?: ExpirySet | "PERSIST";
+}
+
+/**
+ * Expiration condition options for hash field expiration commands.
+ * Used with HEXPIRE, HPEXPIRE, HEXPIREAT, and HPEXPIREAT commands to control expiration setting behavior.
+ */
+export enum HashExpirationCondition {
+    /**
+     * Only set expiration when field has no expiration. Equivalent to `NX` in the Valkey API.
+     */
+    ONLY_IF_NO_EXPIRY = "NX",
+
+    /**
+     * Only set expiration when field has existing expiration. Equivalent to `XX` in the Valkey API.
+     */
+    ONLY_IF_HAS_EXPIRY = "XX",
+
+    /**
+     * Only set expiration when new expiration is greater than current. Equivalent to `GT` in the Valkey API.
+     */
+    ONLY_IF_GREATER_THAN_CURRENT = "GT",
+
+    /**
+     * Only set expiration when new expiration is less than current. Equivalent to `LT` in the Valkey API.
+     */
+    ONLY_IF_LESS_THAN_CURRENT = "LT",
+}
+
+/**
+ * Optional arguments for the HEXPIRE command.
+ * 
+ * See https://valkey.io/commands/hexpire/ for more details.
+ */
+export interface HExpireOptions {
+    /** Condition for setting expiration. See {@link HashExpirationCondition}. */
+    condition?: HashExpirationCondition;
+}
+
+/**
+ * Optional arguments for the HPEXPIRE command.
+ * 
+ * See https://valkey.io/commands/hpexpire/ for more details.
+ */
+export interface HPExpireOptions {
+    /** Condition for setting expiration. See {@link HashExpirationCondition}. */
+    condition?: HashExpirationCondition;
+}
+
+/**
+ * Optional arguments for the HEXPIREAT command.
+ * 
+ * See https://valkey.io/commands/hexpireat/ for more details.
+ */
+export interface HExpireAtOptions {
+    /** Condition for setting expiration. See {@link HashExpirationCondition}. */
+    condition?: HashExpirationCondition;
+}
+
+/**
+ * Optional arguments for the HPEXPIREAT command.
+ * 
+ * See https://valkey.io/commands/hpexpireat/ for more details.
+ */
+export interface HPExpireAtOptions {
+    /** Condition for setting expiration. See {@link HashExpirationCondition}. */
+    condition?: HashExpirationCondition;
 }
 
 /**

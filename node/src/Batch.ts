@@ -35,7 +35,13 @@ import {
     GlideClusterClient, // eslint-disable-line @typescript-eslint/no-unused-vars
     GlideRecord,
     GlideString,
+    HExpireAtOptions,
+    HExpireOptions,
+    HGetExOptions,
+    HPExpireAtOptions,
+    HPExpireOptions,
     HScanOptions,
+    HSetExOptions,
     HashDataType,
     InfoOptions,
     InsertPosition,
@@ -120,18 +126,29 @@ import {
     createGetRange,
     createHDel,
     createHExists,
+    createHExpire,
+    createHExpireAt,
+    createHExpireTime,
     createHGet,
     createHGetAll,
+    createHGetEx,
     createHIncrBy,
     createHIncrByFloat,
     createHKeys,
     createHLen,
     createHMGet,
+    createHPExpire,
+    createHPExpireAt,
+    createHPExpireTime,
+    createHPTtl,
+    createHPersist,
     createHRandField,
     createHScan,
     createHSet,
+    createHSetEx,
     createHSetNX,
     createHStrlen,
+    createHTtl,
     createHVals,
     createIncr,
     createIncrBy,
@@ -262,7 +279,7 @@ import {
     createZScan,
     createZScore,
     createZUnion,
-    createZUnionStore,
+    createZUnionStore
 } from ".";
 import { command_request } from "../build-ts/ProtobufMessage";
 
@@ -295,7 +312,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      *     batch will be executed as an atomic `transaction`. If `false`, the batch will be
      *     executed as a non-atomic `pipeline`.
      */
-    constructor(public readonly isAtomic: boolean) {}
+    constructor(public readonly isAtomic: boolean) { }
 
     /**
      * Adds a command to the batch and returns the batch instance.
@@ -1029,6 +1046,232 @@ export class BaseBatch<T extends BaseBatch<T>> {
      */
     public hrandfieldWithValues(key: GlideString, count: number): T {
         return this.addAndReturn(createHRandField(key, count, true));
+    }
+
+    /**
+     * Sets the specified fields to their respective values in the hash stored at `key` with optional expiration.
+     * This command allows setting multiple field-value pairs with expiration times and conditional options.
+     *
+     * @see {@link https://valkey.io/commands/hsetex/|valkey.io} for details.
+     *
+     * @param key - The key of the hash.
+     * @param fieldsAndValues - A map or array of field-value pairs to set in the hash.
+     * @param options - (Optional) Additional parameters:
+     *   - `conditionalChange`: Options for handling existing hash objects (NX | XX).
+     *   - `fieldConditionalChange`: Options for handling existing fields (FNX | FXX).
+     *   - `expiry`: Expiry settings for the fields (EX | PX | EXAT | PXAT | KEEPTTL).
+     *
+     * Command Response - The number of fields that were added to the hash.
+     */
+    public hsetex(
+        key: GlideString,
+        fieldsAndValues: HashDataType | Record<string, GlideString>,
+        options?: HSetExOptions,
+    ): T {
+        return this.addAndReturn(
+            createHSetEx(
+                key,
+                convertFieldsAndValuesToHashDataType(fieldsAndValues),
+                options,
+            ),
+        );
+    }
+
+    /**
+     * Returns the values associated with the specified fields in the hash stored at `key` and optionally sets the expiration for the fields.
+     * @see {@link https://valkey.io/commands/hgetex/|valkey.io} for details.
+     *
+     * @param key - The key of the hash.
+     * @param fields - The fields in the hash stored at `key` to retrieve from the database.
+     * @param options - Optional arguments for the HGETEX command. See {@link HGetExOptions}.
+     * @returns Command response - An array of values associated with the given fields, in the same order as they are requested.
+     *     For every field that does not exist in the hash, a null value is returned.
+     *     If `key` does not exist, returns an array of null values.
+     */
+    public hgetex(
+        key: GlideString,
+        fields: GlideString[],
+        options?: HGetExOptions,
+    ): T {
+        return this.addAndReturn(createHGetEx(key, fields, options));
+    }
+
+    /**
+     * Sets expiration time for hash fields in seconds. Creates the hash if it doesn't exist.
+     * @see {@link https://valkey.io/commands/hexpire/|valkey.io} for details.
+     *
+     * @param key - The key of the hash.
+     * @param seconds - The expiration time in seconds.
+     * @param fields - The fields to set expiration for.
+     * @param options - Optional arguments for the HEXPIRE command. See {@link HExpireOptions}.
+     *
+     * Command Response - An array of boolean values indicating whether expiration was set for each field.
+     *     `true` if expiration was set, `false` if the field doesn't exist or the condition wasn't met.
+     */
+    public hexpire(
+        key: GlideString,
+        seconds: number,
+        fields: GlideString[],
+        options?: HExpireOptions,
+    ): T {
+        return this.addAndReturn(createHExpire(key, seconds, fields, options));
+    }
+
+    /**
+     * Removes the expiration time associated with each specified field, causing them to persist.
+     * @see {@link https://valkey.io/commands/hpersist/|valkey.io} for details.
+     *
+     * @param key - The key of the hash.
+     * @param fields - The fields in the hash to remove expiration from.
+     *
+     * Command Response - An array of boolean values indicating whether expiration was successfully removed for each field.
+     *     - `true` if the field's expiration was removed.
+     *     - `false` if the field does not exist or does not have an associated expiration.
+     */
+    public hpersist(
+        key: GlideString,
+        fields: GlideString[],
+    ): T {
+        return this.addAndReturn(createHPersist(key, fields));
+    }
+
+    /**
+     * Sets expiration time for hash fields in milliseconds. Creates the hash if it doesn't exist.
+     * @see {@link https://valkey.io/commands/hpexpire/|valkey.io} for details.
+     *
+     * @param key - The key of the hash.
+     * @param milliseconds - The expiration time in milliseconds.
+     * @param fields - The fields to set expiration for.
+     * @param options - Optional arguments for the HPEXPIRE command. See {@link HPExpireOptions}.
+     *
+     * Command Response - An array of boolean values indicating whether expiration was set for each field.
+     *     `true` if expiration was set, `false` if the field doesn't exist or the condition wasn't met.
+     */
+    public hpexpire(
+        key: GlideString,
+        milliseconds: number,
+        fields: GlideString[],
+        options?: HPExpireOptions,
+    ): T {
+        return this.addAndReturn(createHPExpire(key, milliseconds, fields, options));
+    }
+
+    /**
+     * Sets expiration time for hash fields using an absolute Unix timestamp in seconds. Creates the hash if it doesn't exist.
+     * @see {@link https://valkey.io/commands/hexpireat/|valkey.io} for details.
+     *
+     * @param key - The key of the hash.
+     * @param unixTimestampSeconds - The expiration time as a Unix timestamp in seconds.
+     * @param fields - The fields to set expiration for.
+     * @param options - Optional arguments for the HEXPIREAT command. See {@link HExpireAtOptions}.
+     *
+     * Command Response - An array of boolean values indicating whether expiration was set for each field.
+     *     `true` if expiration was set, `false` if the field doesn't exist or the condition wasn't met.
+     */
+    public hexpireat(
+        key: GlideString,
+        unixTimestampSeconds: number,
+        fields: GlideString[],
+        options?: HExpireAtOptions,
+    ): T {
+        return this.addAndReturn(createHExpireAt(key, unixTimestampSeconds, fields, options));
+    }
+
+    /**
+     * Sets expiration time for hash fields using an absolute Unix timestamp in milliseconds. Creates the hash if it doesn't exist.
+     * @see {@link https://valkey.io/commands/hpexpireat/|valkey.io} for details.
+     *
+     * @param key - The key of the hash.
+     * @param unixTimestampMilliseconds - The expiration time as a Unix timestamp in milliseconds.
+     * @param fields - The fields to set expiration for.
+     * @param options - Optional arguments for the HPEXPIREAT command. See {@link HPExpireAtOptions}.
+     *
+     * Command Response - An array of boolean values indicating whether expiration was set for each field.
+     *     `true` if expiration was set, `false` if the field doesn't exist or the condition wasn't met.
+     */
+    public hpexpireat(
+        key: GlideString,
+        unixTimestampMilliseconds: number,
+        fields: GlideString[],
+        options?: HPExpireAtOptions,
+    ): T {
+        return this.addAndReturn(createHPExpireAt(key, unixTimestampMilliseconds, fields, options));
+    }
+
+    /**
+     * Returns the remaining time to live of hash fields that have a timeout, in seconds.
+     * @see {@link https://valkey.io/commands/httl/|valkey.io} for details.
+     *
+     * @param key - The key of the hash.
+     * @param fields - The fields in the hash stored at `key` to retrieve the TTL for.
+     *
+     * Command Response - An array of TTL values in seconds for the specified fields.
+     *     - For fields with a timeout, returns the remaining time in seconds.
+     *     - For fields that exist but have no associated expire, returns -1.
+     *     - For fields that do not exist, returns -2.
+     */
+    public httl(
+        key: GlideString,
+        fields: GlideString[],
+    ): T {
+        return this.addAndReturn(createHTtl(key, fields));
+    }
+
+    /**
+     * Returns the absolute Unix timestamp (in seconds) at which hash fields will expire.
+     * @see {@link https://valkey.io/commands/hexpiretime/|valkey.io} for details.
+     *
+     * @param key - The key of the hash.
+     * @param fields - The list of fields to get the expiration timestamp for.
+     *
+     * Command Response - An array of expiration timestamps in seconds for the specified fields:
+     *     - For fields with a timeout, returns the absolute Unix timestamp in seconds.
+     *     - For fields without a timeout, returns -1.
+     *     - For fields that do not exist, returns -2.
+     */
+    public hexpiretime(
+        key: GlideString,
+        fields: GlideString[],
+    ): T {
+        return this.addAndReturn(createHExpireTime(key, fields));
+    }
+
+    /**
+     * Returns the absolute Unix timestamp (in milliseconds) at which hash fields will expire.
+     * @see {@link https://valkey.io/commands/hpexpiretime/|valkey.io} for details.
+     *
+     * @param key - The key of the hash.
+     * @param fields - The list of fields to get the expiration timestamp for.
+     *
+     * Command Response - An array of expiration timestamps in milliseconds for the specified fields:
+     *     - For fields with a timeout, returns the absolute Unix timestamp in milliseconds.
+     *     - For fields without a timeout, returns -1.
+     *     - For fields that do not exist, returns -2.
+     */
+    public hpexpiretime(
+        key: GlideString,
+        fields: GlideString[],
+    ): T {
+        return this.addAndReturn(createHPExpireTime(key, fields));
+    }
+
+    /**
+     * Returns the remaining time to live of hash fields that have a timeout, in milliseconds.
+     * @see {@link https://valkey.io/commands/hpttl/|valkey.io} for details.
+     *
+     * @param key - The key of the hash.
+     * @param fields - The list of fields to get the TTL for.
+     *
+     * Command Response - An array of TTL values in milliseconds for the specified fields:
+     *     - For fields with a timeout, returns the remaining TTL in milliseconds.
+     *     - For fields without a timeout, returns -1.
+     *     - For fields that do not exist, returns -2.
+     */
+    public hpttl(
+        key: GlideString,
+        fields: GlideString[],
+    ): T {
+        return this.addAndReturn(createHPTtl(key, fields));
     }
 
     /** Inserts all the specified values at the head of the list stored at `key`.
