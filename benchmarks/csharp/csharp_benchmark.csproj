@@ -18,7 +18,7 @@
   <ItemGroup>
     <PackageReference Include="CommandLineParser" Version="2.9.1" />
     <PackageReference Include="LinqStatistics" Version="2.3.0" />
-    <PackageReference Include="StackExchange.Redis" Version="2.8.47" />
+    <PackageReference Include="StackExchange.Redis" Version="2.8.58" />
   </ItemGroup>
 
   <!-- Workaround for https://github.com/dotnet/roslyn/issues/41640 -->
