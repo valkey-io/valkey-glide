@@ -555,7 +555,8 @@ public class CommandTests {
         String firstNodeInfo = getFirstEntryFromMultiValue(data);
         long valueBefore = getValueFromInfo(firstNodeInfo, "total_net_input_bytes");
 
-        var result = clusterClient.configResetStat().get();
+        // CONFIG RESETSTAT needs to be sent to all nodes in cluster mode
+        var result = clusterClient.configResetStat(ALL_NODES).get();
         assertEquals(OK, result);
 
         data = clusterClient.info(new Section[] {STATS}).get();
