@@ -21,11 +21,14 @@ import glide.api.models.commands.bitmap.BitFieldOptions.SignedEncoding;
 import glide.api.models.commands.bitmap.BitFieldOptions.UnsignedEncoding;
 import glide.api.models.commands.bitmap.BitmapIndexType;
 import glide.api.models.commands.bitmap.BitwiseOperation;
+import glide.api.models.commands.scan.HScanOptions;
+import glide.api.models.commands.scan.HScanOptionsBinary;
 import glide.api.models.commands.scan.ScanOptions;
 import glide.api.models.configuration.GlideClientConfiguration;
 import java.io.Closeable;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -4024,6 +4027,1089 @@ public final class Jedis implements Closeable {
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("Command " + commandName + " execution failed", e);
         }
+    }
+
+    // ===== HASH COMMANDS =====
+
+    /**
+     * Sets the specified field in the hash stored at key to value.
+     *
+     * @param key the key of the hash
+     * @param field the field in the hash
+     * @param value the value to set
+     * @return 1 if field is a new field in the hash and value was set, 0 if field already exists in
+     *     the hash and the value was updated
+     */
+    public long hset(String key, String field, String value) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            Map<String, String> fieldValueMap = new HashMap<>();
+            fieldValueMap.put(field, value);
+            return glideClient.hset(key, fieldValueMap).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HSET operation failed", e);
+        }
+    }
+
+    /**
+     * Sets the specified field in the hash stored at key to value (binary version).
+     *
+     * @param key the key of the hash
+     * @param field the field in the hash
+     * @param value the value to set
+     * @return 1 if field is a new field in the hash and value was set, 0 if field already exists in
+     *     the hash and the value was updated
+     */
+    public long hset(final byte[] key, final byte[] field, final byte[] value) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            Map<GlideString, GlideString> fieldValueMap = new HashMap<>();
+            fieldValueMap.put(GlideString.of(field), GlideString.of(value));
+            return glideClient.hset(GlideString.of(key), fieldValueMap).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HSET operation failed", e);
+        }
+    }
+
+    /**
+     * Sets the specified fields to their respective values in the hash stored at key.
+     *
+     * @param key the key of the hash
+     * @param hash a map of field-value pairs to set in the hash
+     * @return the number of fields that were added
+     */
+    public long hset(String key, Map<String, String> hash) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            return glideClient.hset(key, hash).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HSET operation failed", e);
+        }
+    }
+
+    /**
+     * Sets the specified fields to their respective values in the hash stored at key (binary
+     * version).
+     *
+     * @param key the key of the hash
+     * @param hash a map of field-value pairs to set in the hash
+     * @return the number of fields that were added
+     */
+    public long hset(final byte[] key, final Map<byte[], byte[]> hash) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            Map<GlideString, GlideString> glideHash = new HashMap<>();
+            for (Map.Entry<byte[], byte[]> entry : hash.entrySet()) {
+                glideHash.put(GlideString.of(entry.getKey()), GlideString.of(entry.getValue()));
+            }
+            return glideClient.hset(GlideString.of(key), glideHash).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HSET operation failed", e);
+        }
+    }
+
+    /**
+     * Returns the value associated with field in the hash stored at key.
+     *
+     * @param key the key of the hash
+     * @param field the field in the hash
+     * @return the value associated with field, or null when field is not present in the hash or key
+     *     does not exist
+     */
+    public String hget(String key, String field) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            return glideClient.hget(key, field).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HGET operation failed", e);
+        }
+    }
+
+    /**
+     * Returns the value associated with field in the hash stored at key (binary version).
+     *
+     * @param key the key of the hash
+     * @param field the field in the hash
+     * @return the value associated with field, or null when field is not present in the hash or key
+     *     does not exist
+     */
+    public byte[] hget(final byte[] key, final byte[] field) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            GlideString result = glideClient.hget(GlideString.of(key), GlideString.of(field)).get();
+            return result != null ? result.getBytes() : null;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HGET operation failed", e);
+        }
+    }
+
+    /**
+     * Sets the specified fields to their respective values in the hash stored at key. This command
+     * overwrites any specified fields already existing in the hash.
+     *
+     * @param key the key of the hash
+     * @param hash a map of field-value pairs to set in the hash
+     * @return "OK"
+     */
+    public String hmset(String key, Map<String, String> hash) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            glideClient.hset(key, hash).get();
+            return "OK";
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HMSET operation failed", e);
+        }
+    }
+
+    /**
+     * Sets the specified fields to their respective values in the hash stored at key (binary
+     * version).
+     *
+     * @param key the key of the hash
+     * @param hash a map of field-value pairs to set in the hash
+     * @return "OK"
+     */
+    public String hmset(final byte[] key, final Map<byte[], byte[]> hash) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            Map<GlideString, GlideString> glideHash = new HashMap<>();
+            for (Map.Entry<byte[], byte[]> entry : hash.entrySet()) {
+                glideHash.put(GlideString.of(entry.getKey()), GlideString.of(entry.getValue()));
+            }
+            glideClient.hset(GlideString.of(key), glideHash).get();
+            return "OK";
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HMSET operation failed", e);
+        }
+    }
+
+    /**
+     * Returns the values associated with the specified fields in the hash stored at key.
+     *
+     * @param key the key of the hash
+     * @param fields the fields in the hash
+     * @return a list of values associated with the given fields, in the same order as they are
+     *     requested
+     */
+    public List<String> hmget(String key, String... fields) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            String[] result = glideClient.hmget(key, fields).get();
+            return Arrays.asList(result);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HMGET operation failed", e);
+        }
+    }
+
+    /**
+     * Returns the values associated with the specified fields in the hash stored at key (binary
+     * version).
+     *
+     * @param key the key of the hash
+     * @param fields the fields in the hash
+     * @return a list of values associated with the given fields, in the same order as they are
+     *     requested
+     */
+    public List<byte[]> hmget(final byte[] key, final byte[]... fields) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            GlideString[] glideFields = new GlideString[fields.length];
+            for (int i = 0; i < fields.length; i++) {
+                glideFields[i] = GlideString.of(fields[i]);
+            }
+            GlideString[] result = glideClient.hmget(GlideString.of(key), glideFields).get();
+            List<byte[]> byteResult = new ArrayList<>();
+            for (GlideString gs : result) {
+                byteResult.add(gs != null ? gs.getBytes() : null);
+            }
+            return byteResult;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HMGET operation failed", e);
+        }
+    }
+
+    /**
+     * Returns all fields and values of the hash stored at key.
+     *
+     * @param key the key of the hash
+     * @return a map of fields and their values stored in the hash, or an empty map when key does not
+     *     exist
+     */
+    public Map<String, String> hgetAll(String key) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            return glideClient.hgetall(key).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HGETALL operation failed", e);
+        }
+    }
+
+    /**
+     * Returns all fields and values of the hash stored at key (binary version).
+     *
+     * @param key the key of the hash
+     * @return a map of fields and their values stored in the hash, or an empty map when key does not
+     *     exist
+     */
+    public Map<byte[], byte[]> hgetAll(final byte[] key) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            Map<GlideString, GlideString> result = glideClient.hgetall(GlideString.of(key)).get();
+            Map<byte[], byte[]> byteResult = new HashMap<>();
+            for (Map.Entry<GlideString, GlideString> entry : result.entrySet()) {
+                byteResult.put(entry.getKey().getBytes(), entry.getValue().getBytes());
+            }
+            return byteResult;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HGETALL operation failed", e);
+        }
+    }
+
+    /**
+     * Removes the specified fields from the hash stored at key.
+     *
+     * @param key the key of the hash
+     * @param fields the fields to remove from the hash
+     * @return the number of fields that were removed from the hash, not including specified but non
+     *     existing fields
+     */
+    public long hdel(String key, String... fields) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            return glideClient.hdel(key, fields).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HDEL operation failed", e);
+        }
+    }
+
+    /**
+     * Removes the specified fields from the hash stored at key (binary version).
+     *
+     * @param key the key of the hash
+     * @param fields the fields to remove from the hash
+     * @return the number of fields that were removed from the hash, not including specified but non
+     *     existing fields
+     */
+    public long hdel(final byte[] key, final byte[]... fields) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            GlideString[] glideFields = new GlideString[fields.length];
+            for (int i = 0; i < fields.length; i++) {
+                glideFields[i] = GlideString.of(fields[i]);
+            }
+            return glideClient.hdel(GlideString.of(key), glideFields).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HDEL operation failed", e);
+        }
+    }
+
+    /**
+     * Returns if field is an existing field in the hash stored at key.
+     *
+     * @param key the key of the hash
+     * @param field the field in the hash
+     * @return true if the hash contains field, false if the hash does not contain field, or key does
+     *     not exist
+     */
+    public boolean hexists(String key, String field) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            return glideClient.hexists(key, field).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HEXISTS operation failed", e);
+        }
+    }
+
+    /**
+     * Returns if field is an existing field in the hash stored at key (binary version).
+     *
+     * @param key the key of the hash
+     * @param field the field in the hash
+     * @return true if the hash contains field, false if the hash does not contain field, or key does
+     *     not exist
+     */
+    public boolean hexists(final byte[] key, final byte[] field) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            return glideClient.hexists(GlideString.of(key), GlideString.of(field)).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HEXISTS operation failed", e);
+        }
+    }
+
+    /**
+     * Returns the number of fields contained in the hash stored at key.
+     *
+     * @param key the key of the hash
+     * @return the number of fields in the hash, or 0 when key does not exist
+     */
+    public long hlen(String key) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            return glideClient.hlen(key).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HLEN operation failed", e);
+        }
+    }
+
+    /**
+     * Returns the number of fields contained in the hash stored at key (binary version).
+     *
+     * @param key the key of the hash
+     * @return the number of fields in the hash, or 0 when key does not exist
+     */
+    public long hlen(final byte[] key) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            return glideClient.hlen(GlideString.of(key)).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HLEN operation failed", e);
+        }
+    }
+
+    /**
+     * Returns all field names in the hash stored at key.
+     *
+     * @param key the key of the hash
+     * @return a set of field names in the hash, or an empty set when key does not exist
+     */
+    public Set<String> hkeys(String key) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            String[] keys = glideClient.hkeys(key).get();
+            return new HashSet<>(Arrays.asList(keys));
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HKEYS operation failed", e);
+        }
+    }
+
+    /**
+     * Returns all field names in the hash stored at key (binary version).
+     *
+     * @param key the key of the hash
+     * @return a set of field names in the hash, or an empty set when key does not exist
+     */
+    public Set<byte[]> hkeys(final byte[] key) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            GlideString[] keys = glideClient.hkeys(GlideString.of(key)).get();
+            Set<byte[]> byteKeys = new HashSet<>();
+            for (GlideString gs : keys) {
+                byteKeys.add(gs.getBytes());
+            }
+            return byteKeys;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HKEYS operation failed", e);
+        }
+    }
+
+    /**
+     * Returns all values in the hash stored at key.
+     *
+     * @param key the key of the hash
+     * @return a list of values in the hash, or an empty list when key does not exist
+     */
+    public List<String> hvals(String key) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            String[] values = glideClient.hvals(key).get();
+            return Arrays.asList(values);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HVALS operation failed", e);
+        }
+    }
+
+    /**
+     * Returns all values in the hash stored at key (binary version).
+     *
+     * @param key the key of the hash
+     * @return a list of values in the hash, or an empty list when key does not exist
+     */
+    public List<byte[]> hvals(final byte[] key) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            GlideString[] values = glideClient.hvals(GlideString.of(key)).get();
+            List<byte[]> byteValues = new ArrayList<>();
+            for (GlideString gs : values) {
+                byteValues.add(gs.getBytes());
+            }
+            return byteValues;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HVALS operation failed", e);
+        }
+    }
+
+    /**
+     * Increments the number stored at field in the hash stored at key by increment.
+     *
+     * @param key the key of the hash
+     * @param field the field in the hash
+     * @param value the increment value
+     * @return the value at field after the increment operation
+     */
+    public long hincrBy(String key, String field, long value) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            return glideClient.hincrBy(key, field, value).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HINCRBY operation failed", e);
+        }
+    }
+
+    /**
+     * Increments the number stored at field in the hash stored at key by increment (binary version).
+     *
+     * @param key the key of the hash
+     * @param field the field in the hash
+     * @param value the increment value
+     * @return the value at field after the increment operation
+     */
+    public long hincrBy(final byte[] key, final byte[] field, final long value) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            return glideClient.hincrBy(GlideString.of(key), GlideString.of(field), value).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HINCRBY operation failed", e);
+        }
+    }
+
+    /**
+     * Increment the specified field of a hash stored at key, and representing a floating point
+     * number, by the specified increment.
+     *
+     * @param key the key of the hash
+     * @param field the field in the hash
+     * @param value the increment value
+     * @return the value at field after the increment operation
+     */
+    public double hincrByFloat(String key, String field, double value) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            return glideClient.hincrByFloat(key, field, value).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HINCRBYFLOAT operation failed", e);
+        }
+    }
+
+    /**
+     * Increment the specified field of a hash stored at key, and representing a floating point
+     * number, by the specified increment (binary version).
+     *
+     * @param key the key of the hash
+     * @param field the field in the hash
+     * @param value the increment value
+     * @return the value at field after the increment operation
+     */
+    public double hincrByFloat(final byte[] key, final byte[] field, final double value) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            return glideClient.hincrByFloat(GlideString.of(key), GlideString.of(field), value).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HINCRBYFLOAT operation failed", e);
+        }
+    }
+
+    /**
+     * Sets field in the hash stored at key to value, only if field does not yet exist.
+     *
+     * @param key the key of the hash
+     * @param field the field in the hash
+     * @param value the value to set
+     * @return 1 if field is a new field in the hash and value was set, 0 if field already exists in
+     *     the hash and no operation was performed
+     */
+    public long hsetnx(String key, String field, String value) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            return glideClient.hsetnx(key, field, value).get() ? 1L : 0L;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HSETNX operation failed", e);
+        }
+    }
+
+    /**
+     * Sets field in the hash stored at key to value, only if field does not yet exist (binary
+     * version).
+     *
+     * @param key the key of the hash
+     * @param field the field in the hash
+     * @param value the value to set
+     * @return 1 if field is a new field in the hash and value was set, 0 if field already exists in
+     *     the hash and no operation was performed
+     */
+    public long hsetnx(final byte[] key, final byte[] field, final byte[] value) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            return glideClient
+                            .hsetnx(GlideString.of(key), GlideString.of(field), GlideString.of(value))
+                            .get()
+                    ? 1L
+                    : 0L;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HSETNX operation failed", e);
+        }
+    }
+
+    /**
+     * Returns the string length of the value associated with field in the hash stored at key.
+     *
+     * @param key the key of the hash
+     * @param field the field in the hash
+     * @return the string length of the value associated with field, or 0 when field is not present in
+     *     the hash or key does not exist
+     */
+    public long hstrlen(String key, String field) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            return glideClient.hstrlen(key, field).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HSTRLEN operation failed", e);
+        }
+    }
+
+    /**
+     * Returns the string length of the value associated with field in the hash stored at key (binary
+     * version).
+     *
+     * @param key the key of the hash
+     * @param field the field in the hash
+     * @return the string length of the value associated with field, or 0 when field is not present in
+     *     the hash or key does not exist
+     */
+    public long hstrlen(final byte[] key, final byte[] field) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            return glideClient.hstrlen(GlideString.of(key), GlideString.of(field)).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HSTRLEN operation failed", e);
+        }
+    }
+
+    /**
+     * Returns a random field from the hash value stored at key.
+     *
+     * @param key the key of the hash
+     * @return a random field from the hash, or null when key does not exist
+     */
+    public String hrandfield(String key) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            return glideClient.hrandfield(key).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HRANDFIELD operation failed", e);
+        }
+    }
+
+    /**
+     * Returns a random field from the hash value stored at key (binary version).
+     *
+     * @param key the key of the hash
+     * @return a random field from the hash, or null when key does not exist
+     */
+    public byte[] hrandfield(final byte[] key) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            GlideString result = glideClient.hrandfield(GlideString.of(key)).get();
+            return result != null ? result.getBytes() : null;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HRANDFIELD operation failed", e);
+        }
+    }
+
+    /**
+     * Returns an array of random fields from the hash value stored at key.
+     *
+     * @param key the key of the hash
+     * @param count the number of fields to return
+     * @return an array of random fields from the hash
+     */
+    public List<String> hrandfield(String key, long count) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            String[] fields = glideClient.hrandfieldWithCount(key, count).get();
+            return Arrays.asList(fields);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HRANDFIELD operation failed", e);
+        }
+    }
+
+    /**
+     * Returns an array of random fields from the hash value stored at key (binary version).
+     *
+     * @param key the key of the hash
+     * @param count the number of fields to return
+     * @return an array of random fields from the hash
+     */
+    public List<byte[]> hrandfield(final byte[] key, final long count) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            GlideString[] fields = glideClient.hrandfieldWithCount(GlideString.of(key), count).get();
+            List<byte[]> byteFields = new ArrayList<>();
+            for (GlideString gs : fields) {
+                byteFields.add(gs.getBytes());
+            }
+            return byteFields;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HRANDFIELD operation failed", e);
+        }
+    }
+
+    /**
+     * Returns an array of random field-value pairs from the hash value stored at key.
+     *
+     * @param key the key of the hash
+     * @param count the number of field-value pairs to return
+     * @return a list of field-value pairs from the hash
+     */
+    public List<Map.Entry<String, String>> hrandfieldWithValues(String key, long count) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            String[][] result = glideClient.hrandfieldWithCountWithValues(key, count).get();
+            List<Map.Entry<String, String>> entries = new ArrayList<>();
+            for (String[] pair : result) {
+                if (pair.length == 2) {
+                    entries.add(new AbstractMap.SimpleEntry<>(pair[0], pair[1]));
+                }
+            }
+            return entries;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HRANDFIELD operation failed", e);
+        }
+    }
+
+    /**
+     * Returns an array of random field-value pairs from the hash value stored at key (binary
+     * version).
+     *
+     * @param key the key of the hash
+     * @param count the number of field-value pairs to return
+     * @return a list of field-value pairs from the hash
+     */
+    public List<Map.Entry<byte[], byte[]>> hrandfieldWithValues(final byte[] key, final long count) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            GlideString[][] result =
+                    glideClient.hrandfieldWithCountWithValues(GlideString.of(key), count).get();
+            List<Map.Entry<byte[], byte[]>> entries = new ArrayList<>();
+            for (GlideString[] pair : result) {
+                if (pair.length == 2) {
+                    entries.add(new AbstractMap.SimpleEntry<>(pair[0].getBytes(), pair[1].getBytes()));
+                }
+            }
+            return entries;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HRANDFIELD operation failed", e);
+        }
+    }
+
+    /**
+     * Iterates fields of Hash types and their associated values.
+     *
+     * @param key the key of the hash
+     * @param cursor the cursor
+     * @return scan result with the cursor and the fields
+     */
+    public ScanResult<Map.Entry<String, String>> hscan(String key, String cursor) {
+        return hscan(key, cursor, new ScanParams());
+    }
+
+    /**
+     * Iterates fields of Hash types and their associated values (binary version).
+     *
+     * @param key the key of the hash
+     * @param cursor the cursor
+     * @return scan result with the cursor and the fields
+     */
+    public ScanResult<Map.Entry<byte[], byte[]>> hscan(final byte[] key, final byte[] cursor) {
+        return hscan(key, cursor, new ScanParams());
+    }
+
+    /**
+     * Iterates fields of Hash types and their associated values.
+     *
+     * @param key the key of the hash
+     * @param cursor the cursor
+     * @param params the scan parameters
+     * @return scan result with the cursor and the fields
+     */
+    public ScanResult<Map.Entry<String, String>> hscan(String key, String cursor, ScanParams params) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            HScanOptions options = convertScanParamsToHScanOptions(params);
+            Object[] result = glideClient.hscan(key, cursor, options).get();
+
+            String nextCursor = (String) result[0];
+            Object[] fieldsAndValues = (Object[]) result[1];
+
+            List<Map.Entry<String, String>> entries = new ArrayList<>();
+            for (int i = 0; i < fieldsAndValues.length; i += 2) {
+                String field = (String) fieldsAndValues[i];
+                String value = (String) fieldsAndValues[i + 1];
+                entries.add(new AbstractMap.SimpleEntry<>(field, value));
+            }
+
+            return new ScanResult<>(nextCursor, entries);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HSCAN operation failed", e);
+        }
+    }
+
+    /**
+     * Iterates fields of Hash types and their associated values (binary version).
+     *
+     * @param key the key of the hash
+     * @param cursor the cursor
+     * @param params the scan parameters
+     * @return scan result with the cursor and the fields
+     */
+    public ScanResult<Map.Entry<byte[], byte[]>> hscan(
+            final byte[] key, final byte[] cursor, final ScanParams params) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            HScanOptionsBinary options = convertScanParamsToHScanOptionsBinary(params);
+            Object[] result =
+                    glideClient.hscan(GlideString.of(key), GlideString.of(cursor), options).get();
+
+            String nextCursor = (String) result[0];
+            Object[] fieldsAndValues = (Object[]) result[1];
+
+            List<Map.Entry<byte[], byte[]>> entries = new ArrayList<>();
+            for (int i = 0; i < fieldsAndValues.length; i += 2) {
+                GlideString field = (GlideString) fieldsAndValues[i];
+                GlideString value = (GlideString) fieldsAndValues[i + 1];
+                entries.add(new AbstractMap.SimpleEntry<>(field.getBytes(), value.getBytes()));
+            }
+
+            return new ScanResult<>(nextCursor.getBytes(), entries);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HSCAN operation failed", e);
+        }
+    }
+
+    /**
+     * Iterates fields of Hash types without their values.
+     *
+     * @param key the key of the hash
+     * @param cursor the cursor
+     * @return scan result with the cursor and the field names
+     */
+    public ScanResult<String> hscanNoValues(String key, String cursor) {
+        return hscanNoValues(key, cursor, new ScanParams());
+    }
+
+    /**
+     * Iterates fields of Hash types without their values (binary version).
+     *
+     * @param key the key of the hash
+     * @param cursor the cursor
+     * @return scan result with the cursor and the field names
+     */
+    public ScanResult<byte[]> hscanNoValues(final byte[] key, final byte[] cursor) {
+        return hscanNoValues(key, cursor, new ScanParams());
+    }
+
+    /**
+     * Iterates fields of Hash types without their values.
+     *
+     * @param key the key of the hash
+     * @param cursor the cursor
+     * @param params the scan parameters
+     * @return scan result with the cursor and the field names
+     */
+    public ScanResult<String> hscanNoValues(String key, String cursor, ScanParams params) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            HScanOptions options = convertScanParamsToHScanOptions(params);
+            Object[] result = glideClient.hscan(key, cursor, options).get();
+
+            String nextCursor = (String) result[0];
+            Object[] fieldsAndValues = (Object[]) result[1];
+
+            List<String> fields = new ArrayList<>();
+            for (int i = 0; i < fieldsAndValues.length; i += 2) {
+                fields.add((String) fieldsAndValues[i]);
+            }
+
+            return new ScanResult<>(nextCursor, fields);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HSCAN operation failed", e);
+        }
+    }
+
+    /**
+     * Iterates fields of Hash types without their values (binary version).
+     *
+     * @param key the key of the hash
+     * @param cursor the cursor
+     * @param params the scan parameters
+     * @return scan result with the cursor and the field names
+     */
+    public ScanResult<byte[]> hscanNoValues(
+            final byte[] key, final byte[] cursor, final ScanParams params) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            HScanOptionsBinary options = convertScanParamsToHScanOptionsBinary(params);
+            Object[] result =
+                    glideClient.hscan(GlideString.of(key), GlideString.of(cursor), options).get();
+
+            String nextCursor = (String) result[0];
+            Object[] fieldsAndValues = (Object[]) result[1];
+
+            List<byte[]> fields = new ArrayList<>();
+            for (int i = 0; i < fieldsAndValues.length; i += 2) {
+                GlideString field = (GlideString) fieldsAndValues[i];
+                fields.add(field.getBytes());
+            }
+
+            return new ScanResult<>(nextCursor.getBytes(), fields);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HSCAN operation failed", e);
+        }
+    }
+
+    // Hash expiration commands (these may not be available in all Redis/Valkey versions)
+    // For now, implementing them as unsupported operations
+
+    /**
+     * Set expiry for hash field using relative time to expire (seconds). Note: This command may not
+     * be available in all Redis/Valkey versions.
+     *
+     * @param key hash
+     * @param seconds time to expire
+     * @param fields the fields to set expiration for
+     * @return list of results for each field
+     */
+    public List<Long> hexpire(String key, long seconds, String... fields) {
+        throw new UnsupportedOperationException("HEXPIRE command is not supported in this version");
+    }
+
+    /**
+     * Set expiry for hash field using relative time to expire (seconds) with condition. Note: This
+     * command may not be available in all Redis/Valkey versions.
+     *
+     * @param key hash
+     * @param seconds time to expire
+     * @param condition expiry condition
+     * @param fields the fields to set expiration for
+     * @return list of results for each field
+     */
+    public List<Long> hexpire(String key, long seconds, ExpiryOption condition, String... fields) {
+        throw new UnsupportedOperationException("HEXPIRE command is not supported in this version");
+    }
+
+    /**
+     * Set expiry for hash field using relative time to expire (milliseconds). Note: This command may
+     * not be available in all Redis/Valkey versions.
+     *
+     * @param key hash
+     * @param milliseconds time to expire
+     * @param fields the fields to set expiration for
+     * @return list of results for each field
+     */
+    public List<Long> hpexpire(String key, long milliseconds, String... fields) {
+        throw new UnsupportedOperationException("HPEXPIRE command is not supported in this version");
+    }
+
+    /**
+     * Set expiry for hash field using relative time to expire (milliseconds) with condition. Note:
+     * This command may not be available in all Redis/Valkey versions.
+     *
+     * @param key hash
+     * @param milliseconds time to expire
+     * @param condition expiry condition
+     * @param fields the fields to set expiration for
+     * @return list of results for each field
+     */
+    public List<Long> hpexpire(
+            String key, long milliseconds, ExpiryOption condition, String... fields) {
+        throw new UnsupportedOperationException("HPEXPIRE command is not supported in this version");
+    }
+
+    /**
+     * Set expiry for hash field using an absolute Unix timestamp (seconds). Note: This command may
+     * not be available in all Redis/Valkey versions.
+     *
+     * @param key hash
+     * @param unixTimeSeconds time to expire
+     * @param fields the fields to set expiration for
+     * @return list of results for each field
+     */
+    public List<Long> hexpireAt(String key, long unixTimeSeconds, String... fields) {
+        throw new UnsupportedOperationException("HEXPIREAT command is not supported in this version");
+    }
+
+    /**
+     * Set expiry for hash field using an absolute Unix timestamp (seconds) with condition. Note: This
+     * command may not be available in all Redis/Valkey versions.
+     *
+     * @param key hash
+     * @param unixTimeSeconds time to expire
+     * @param condition expiry condition
+     * @param fields the fields to set expiration for
+     * @return list of results for each field
+     */
+    public List<Long> hexpireAt(
+            String key, long unixTimeSeconds, ExpiryOption condition, String... fields) {
+        throw new UnsupportedOperationException("HEXPIREAT command is not supported in this version");
+    }
+
+    /**
+     * Set expiry for hash field using an absolute Unix timestamp (milliseconds). Note: This command
+     * may not be available in all Redis/Valkey versions.
+     *
+     * @param key hash
+     * @param unixTimeMillis time to expire
+     * @param fields the fields to set expiration for
+     * @return list of results for each field
+     */
+    public List<Long> hpexpireAt(String key, long unixTimeMillis, String... fields) {
+        throw new UnsupportedOperationException("HPEXPIREAT command is not supported in this version");
+    }
+
+    /**
+     * Set expiry for hash field using an absolute Unix timestamp (milliseconds) with condition. Note:
+     * This command may not be available in all Redis/Valkey versions.
+     *
+     * @param key hash
+     * @param unixTimeMillis time to expire
+     * @param condition expiry condition
+     * @param fields the fields to set expiration for
+     * @return list of results for each field
+     */
+    public List<Long> hpexpireAt(
+            String key, long unixTimeMillis, ExpiryOption condition, String... fields) {
+        throw new UnsupportedOperationException("HPEXPIREAT command is not supported in this version");
+    }
+
+    /**
+     * Returns the expiration time of a hash field as a Unix timestamp, in seconds. Note: This command
+     * may not be available in all Redis/Valkey versions.
+     *
+     * @param key hash
+     * @param fields the fields to get expiration time for
+     * @return list of expiration times for each field
+     */
+    public List<Long> hexpireTime(String key, String... fields) {
+        throw new UnsupportedOperationException("HEXPIRETIME command is not supported in this version");
+    }
+
+    /**
+     * Returns the expiration time of a hash field as a Unix timestamp, in milliseconds. Note: This
+     * command may not be available in all Redis/Valkey versions.
+     *
+     * @param key hash
+     * @param fields the fields to get expiration time for
+     * @return list of expiration times for each field
+     */
+    public List<Long> hpexpireTime(String key, String... fields) {
+        throw new UnsupportedOperationException(
+                "HPEXPIRETIME command is not supported in this version");
+    }
+
+    /**
+     * Returns the TTL in seconds of a hash field. Note: This command may not be available in all
+     * Redis/Valkey versions.
+     *
+     * @param key hash
+     * @param fields the fields to get TTL for
+     * @return list of TTL values for each field
+     */
+    public List<Long> httl(String key, String... fields) {
+        throw new UnsupportedOperationException("HTTL command is not supported in this version");
+    }
+
+    /**
+     * Returns the TTL in milliseconds of a hash field. Note: This command may not be available in all
+     * Redis/Valkey versions.
+     *
+     * @param key hash
+     * @param fields the fields to get TTL for
+     * @return list of TTL values for each field
+     */
+    public List<Long> hpttl(String key, String... fields) {
+        throw new UnsupportedOperationException("HPTTL command is not supported in this version");
+    }
+
+    /**
+     * Removes the expiration time for each specified field. Note: This command may not be available
+     * in all Redis/Valkey versions.
+     *
+     * @param key hash
+     * @param fields the fields to remove expiration for
+     * @return list of results for each field
+     */
+    public List<Long> hpersist(String key, String... fields) {
+        throw new UnsupportedOperationException("HPERSIST command is not supported in this version");
+    }
+
+    /** Helper method to convert Jedis ScanParams to GLIDE HScanOptions. */
+    private HScanOptions convertScanParamsToHScanOptions(ScanParams params) {
+        HScanOptions.HScanOptionsBuilder builder = HScanOptions.builder();
+
+        if (params.getMatchPattern() != null) {
+            builder.matchPattern(params.getMatchPattern());
+        }
+
+        if (params.getCount() != null) {
+            builder.count(params.getCount());
+        }
+
+        return builder.build();
+    }
+
+    /** Helper method to convert Jedis ScanParams to GLIDE HScanOptionsBinary. */
+    private HScanOptionsBinary convertScanParamsToHScanOptionsBinary(ScanParams params) {
+        HScanOptionsBinary.HScanOptionsBinaryBuilder builder = HScanOptionsBinary.builder();
+
+        if (params.getMatchPattern() != null) {
+            builder.matchPattern(GlideString.of(params.getMatchPattern()));
+        }
+
+        if (params.getCount() != null) {
+            builder.count(params.getCount());
+        }
+
+        return builder.build();
     }
 
     // ===== MISSING METHODS FOR REDIS JDBC DRIVER COMPATIBILITY =====
