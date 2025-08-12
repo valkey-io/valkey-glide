@@ -20,15 +20,6 @@ EXCLUDED_API_FUNCTIONS = {
         "invoke_script",
         "invoke_script_route",
         "script_kill",
-        # PubSub
-        "pubsub_shardchannels",
-        "pubsub_shardnumsub",
-        "pubsub_numsub",
-        "pubsub_numpat",
-        "publish",
-        "pubsub_channels",
-        "get_pubsub_message",
-        "try_get_pubsub_message",
         # scan
         "scan",
         "unwatch",
@@ -90,7 +81,6 @@ EXCLUDED_TESTS_FILENAMES = {
         "test_json.py",
         "test_opentelemetry.py",
         "test_batch.py",
-        "test_pubsub.py",
         "test_scan.py",
         "test_ft.py",
     ],
