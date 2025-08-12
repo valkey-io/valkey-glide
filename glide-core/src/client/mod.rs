@@ -5,7 +5,7 @@ mod types;
 use crate::cluster_scan_container::insert_cluster_scan_cursor;
 use crate::scripts_container::get_script;
 use futures::FutureExt;
-use logger_core::{log_error, log_info, log_warn};
+use logger_core::{log_debug, log_error, log_info, log_warn};
 use once_cell::sync::OnceCell;
 use redis::aio::ConnectionLike;
 use redis::cluster_async::ClusterConnection;
@@ -20,7 +20,7 @@ use redis::{
 pub use standalone_client::StandaloneClient;
 use std::io;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicIsize, Ordering};
+use std::sync::atomic::{AtomicI64, AtomicIsize, Ordering};
 use std::thread;
 use std::thread::JoinHandle;
 use std::time::Duration;
@@ -199,6 +199,8 @@ pub struct Client {
     request_timeout: Duration,
     // Setting this counter to limit the inflight requests, in case of any queue is blocked, so we return error to the customer.
     inflight_requests_allowed: Arc<AtomicIsize>,
+    // Track the current database index for reconnection purposes
+    current_database: Arc<AtomicI64>,
 }
 
 async fn run_with_timeout<T>(
@@ -426,6 +428,9 @@ impl Client {
                 .and_then(|value| convert_to_expected_type(value, expected_type))
             })
             .await?;
+
+            // Track database changes for SELECT commands
+            self.track_database_change_if_select(cmd, &value);
 
             Ok(value)
         })
@@ -748,6 +753,94 @@ impl Client {
     pub fn release_inflight_request(&self) -> isize {
         self.inflight_requests_allowed
             .fetch_add(1, Ordering::SeqCst)
+    }
+
+    /// Track database changes for SELECT commands.
+    /// Updates the current_database field if the command was a successful SELECT.
+    fn track_database_change_if_select(&self, cmd: &Cmd, result: &Value) {
+        // Check if this is a SELECT command
+        if let Some(command_bytes) = cmd.command() {
+            let command_str = String::from_utf8_lossy(&command_bytes);
+            if command_str.to_uppercase() == "SELECT" {
+                // Check if the command was successful (result should be "OK")
+                if matches!(result, Value::SimpleString(s) if s == "OK") {
+                    // Extract the database index from the command arguments
+                    if let Some(db_arg) = cmd.arg_idx(0) {
+                        if let Ok(db_str) = std::str::from_utf8(db_arg) {
+                            if let Ok(db_index) = db_str.parse::<i64>() {
+                                log_debug(
+                                    "track_database_change",
+                                    format!("Tracking database change to {}", db_index),
+                                );
+                                self.current_database.store(db_index, Ordering::SeqCst);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Get the current tracked database index.
+    pub(super) fn get_current_database(&self) -> i64 {
+        self.current_database.load(Ordering::SeqCst)
+    }
+
+    /// Ensure the connection is using the correct database.
+    /// This method checks if the current database matches the tracked database
+    /// and issues a SELECT command if needed (e.g., after reconnection).
+    async fn ensure_correct_database(&self, client_wrapper: &mut ClientWrapper) -> RedisResult<()> {
+        let tracked_db = self.get_current_database();
+        
+        // Only proceed if the tracked database is different from the initial one
+        // (which would indicate a SELECT was executed at some point)
+        if tracked_db != 0 { // 0 is typically the default database
+            match client_wrapper {
+                ClientWrapper::Standalone(client) => {
+                    // For standalone client, we need to ensure the database is correct
+                    // This is a simple approach - we could optimize by tracking connection state
+                    let mut select_cmd = redis::cmd("SELECT");
+                    select_cmd.arg(tracked_db);
+                    
+                    // Send SELECT command to ensure we're on the right database
+                    match client.send_command(&select_cmd).await {
+                        Ok(Value::SimpleString(s)) if s == "OK" => {
+                            log_debug(
+                                "ensure_correct_database",
+                                format!("Successfully restored database {}", tracked_db),
+                            );
+                        }
+                        Ok(_) => {
+                            log_warn(
+                                "ensure_correct_database",
+                                format!("Unexpected response to SELECT {}", tracked_db),
+                            );
+                        }
+                        Err(e) => {
+                            log_warn(
+                                "ensure_correct_database",
+                                format!("Failed to restore database {}: {}", tracked_db, e),
+                            );
+                            return Err(e);
+                        }
+                    }
+                }
+                ClientWrapper::Cluster { .. } => {
+                    // For cluster mode, database selection might not be supported
+                    // depending on the Redis configuration, so we'll just log
+                    log_debug(
+                        "ensure_correct_database",
+                        "Database restoration not implemented for cluster mode",
+                    );
+                }
+                ClientWrapper::Lazy(_) => {
+                    // Lazy client should have been initialized already
+                    unreachable!("Lazy client should have been initialized");
+                }
+            }
+        }
+        
+        Ok(())
     }
 
     /// Update the password used to authenticate with the servers.
@@ -1131,6 +1224,7 @@ impl Client {
         let inflight_requests_allowed = Arc::new(AtomicIsize::new(
             inflight_requests_limit.try_into().unwrap(),
         ));
+        let initial_database = request.database_id;
 
         tokio::time::timeout(DEFAULT_CLIENT_CREATION_TIMEOUT, async move {
             let internal_client = if request.lazy_connect {
@@ -1155,6 +1249,7 @@ impl Client {
                 internal_client: Arc::new(RwLock::new(internal_client)),
                 request_timeout,
                 inflight_requests_allowed,
+                current_database: Arc::new(AtomicI64::new(initial_database)),
             })
         })
         .await
