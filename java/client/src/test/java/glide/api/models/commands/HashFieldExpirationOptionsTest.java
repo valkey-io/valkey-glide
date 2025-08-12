@@ -9,9 +9,8 @@ public class HashFieldExpirationOptionsTest {
 
     @Test
     public void testConditionalChangeEnums() {
-        assertEquals("XX", HashFieldExpirationOptions.ConditionalChange.ONLY_IF_EXISTS.getValkeyApi());
-        assertEquals(
-                "NX", HashFieldExpirationOptions.ConditionalChange.ONLY_IF_DOES_NOT_EXIST.getValkeyApi());
+        assertEquals("XX", ConditionalChange.ONLY_IF_EXISTS.getValkeyApi());
+        assertEquals("NX", ConditionalChange.ONLY_IF_DOES_NOT_EXIST.getValkeyApi());
     }
 
     @Test
@@ -24,16 +23,10 @@ public class HashFieldExpirationOptionsTest {
 
     @Test
     public void testExpirationConditionEnums() {
-        assertEquals(
-                "NX", HashFieldExpirationOptions.ExpirationCondition.ONLY_IF_NO_EXPIRY.getValkeyApi());
-        assertEquals(
-                "XX", HashFieldExpirationOptions.ExpirationCondition.ONLY_IF_HAS_EXPIRY.getValkeyApi());
-        assertEquals(
-                "GT",
-                HashFieldExpirationOptions.ExpirationCondition.ONLY_IF_GREATER_THAN_CURRENT.getValkeyApi());
-        assertEquals(
-                "LT",
-                HashFieldExpirationOptions.ExpirationCondition.ONLY_IF_LESS_THAN_CURRENT.getValkeyApi());
+        assertEquals("NX", ExpireOptions.HAS_NO_EXPIRY.toArgs()[0]);
+        assertEquals("XX", ExpireOptions.HAS_EXISTING_EXPIRY.toArgs()[0]);
+        assertEquals("GT", ExpireOptions.NEW_EXPIRY_GREATER_THAN_CURRENT.toArgs()[0]);
+        assertEquals("LT", ExpireOptions.NEW_EXPIRY_LESS_THAN_CURRENT.toArgs()[0]);
     }
 
     @Test
@@ -96,7 +89,7 @@ public class HashFieldExpirationOptionsTest {
     public void testBasicOptionsToArgs() {
         HashFieldExpirationOptions options =
                 HashFieldExpirationOptions.builder()
-                        .conditionalChange(HashFieldExpirationOptions.ConditionalChange.ONLY_IF_EXISTS)
+                        .conditionalChange(ConditionalChange.ONLY_IF_EXISTS)
                         .fieldConditionalChange(
                                 HashFieldExpirationOptions.FieldConditionalChange.ONLY_IF_ALL_EXIST)
                         .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
@@ -114,8 +107,7 @@ public class HashFieldExpirationOptionsTest {
     public void testExpirationConditionToArgs() {
         HashFieldExpirationOptions options =
                 HashFieldExpirationOptions.builder()
-                        .expirationCondition(
-                                HashFieldExpirationOptions.ExpirationCondition.ONLY_IF_GREATER_THAN_CURRENT)
+                        .expirationCondition(ExpireOptions.NEW_EXPIRY_GREATER_THAN_CURRENT)
                         .build();
 
         String[] args = options.toArgs();
@@ -135,7 +127,7 @@ public class HashFieldExpirationOptionsTest {
         // Test conflicting conditional options: hash doesn't exist (NX) but all fields must exist (FXX)
         HashFieldExpirationOptions options =
                 HashFieldExpirationOptions.builder()
-                        .conditionalChange(HashFieldExpirationOptions.ConditionalChange.ONLY_IF_DOES_NOT_EXIST)
+                        .conditionalChange(ConditionalChange.ONLY_IF_DOES_NOT_EXIST)
                         .fieldConditionalChange(
                                 HashFieldExpirationOptions.FieldConditionalChange.ONLY_IF_ALL_EXIST)
                         .build();
@@ -150,7 +142,7 @@ public class HashFieldExpirationOptionsTest {
         // Test conflicting conditional options: hash must exist (XX) but no fields should exist (FNX)
         HashFieldExpirationOptions options =
                 HashFieldExpirationOptions.builder()
-                        .conditionalChange(HashFieldExpirationOptions.ConditionalChange.ONLY_IF_EXISTS)
+                        .conditionalChange(ConditionalChange.ONLY_IF_EXISTS)
                         .fieldConditionalChange(
                                 HashFieldExpirationOptions.FieldConditionalChange.ONLY_IF_NONE_EXIST)
                         .build();
@@ -197,7 +189,7 @@ public class HashFieldExpirationOptionsTest {
         // Test that PERSIST cannot be combined with conditional change options
         HashFieldExpirationOptions options =
                 HashFieldExpirationOptions.builder()
-                        .conditionalChange(HashFieldExpirationOptions.ConditionalChange.ONLY_IF_EXISTS)
+                        .conditionalChange(ConditionalChange.ONLY_IF_EXISTS)
                         .expiry(HashFieldExpirationOptions.ExpirySet.Persist())
                         .build();
 
@@ -232,7 +224,7 @@ public class HashFieldExpirationOptionsTest {
         // Test that PERSIST cannot be combined with expiration condition options
         HashFieldExpirationOptions options =
                 HashFieldExpirationOptions.builder()
-                        .expirationCondition(HashFieldExpirationOptions.ExpirationCondition.ONLY_IF_NO_EXPIRY)
+                        .expirationCondition(ExpireOptions.HAS_NO_EXPIRY)
                         .expiry(HashFieldExpirationOptions.ExpirySet.Persist())
                         .build();
 

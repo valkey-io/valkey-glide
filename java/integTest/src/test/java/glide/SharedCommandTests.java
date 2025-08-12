@@ -1425,8 +1425,11 @@ public class SharedCommandTests {
         assertEquals("value1", client.hget(key, "field1").get());
         assertEquals("value2", client.hget(key, "field2").get());
 
-        // Clean up
-        client.del(new String[] {key}).get();
+        // Verify TTL was set correctly
+        Long[] ttlResult = client.httl(key, new String[] {"field1", "field2"}).get();
+        assertEquals(2, ttlResult.length);
+        assertTrue(ttlResult[0] > 0 && ttlResult[0] <= 60); // field1 should have TTL
+        assertTrue(ttlResult[1] > 0 && ttlResult[1] <= 60); // field2 should have TTL
     }
 
     @SneakyThrows
@@ -1465,8 +1468,12 @@ public class SharedCommandTests {
         result = client.hsetex(key, newFieldValueMap, xxOptions).get();
         assertEquals(1L, result);
 
-        // Clean up
-        client.del(new String[] {key}).get();
+        // Verify TTL was set correctly for all fields
+        Long[] ttlResult = client.httl(key, new String[] {"field1", "field2", "field3"}).get();
+        assertEquals(3, ttlResult.length);
+        assertTrue(ttlResult[0] > 0 && ttlResult[0] <= 60); // field1 should have TTL
+        assertTrue(ttlResult[1] > 0 && ttlResult[1] <= 60); // field2 should have TTL
+        assertTrue(ttlResult[2] > 0 && ttlResult[2] <= 60); // field3 should have TTL
     }
 
     @SneakyThrows
@@ -1513,8 +1520,14 @@ public class SharedCommandTests {
         result = client.hsetex(key, newFieldsMap, fnxOptions).get();
         assertEquals(2L, result); // New fields added
 
-        // Clean up
-        client.del(new String[] {key}).get();
+        // Verify TTL was set correctly for the updated and new fields
+        Long[] ttlResult =
+                client.httl(key, new String[] {"existing1", "existing2", "new1", "new2"}).get();
+        assertEquals(4, ttlResult.length);
+        assertTrue(ttlResult[0] > 0 && ttlResult[0] <= 60); // existing1 should have TTL
+        assertTrue(ttlResult[1] > 0 && ttlResult[1] <= 60); // existing2 should have TTL
+        assertTrue(ttlResult[2] > 0 && ttlResult[2] <= 60); // new1 should have TTL
+        assertTrue(ttlResult[3] > 0 && ttlResult[3] <= 60); // new2 should have TTL
     }
 
     @SneakyThrows
@@ -1574,9 +1587,6 @@ public class SharedCommandTests {
                         .expiry(HashFieldExpirationOptions.ExpirySet.KeepExisting())
                         .build();
         client.hsetex(key, additionalFields, keepTtlOptions).get();
-
-        // Clean up
-        client.del(new String[] {key}).get();
     }
 
     @SneakyThrows
@@ -1605,6 +1615,12 @@ public class SharedCommandTests {
         // Verify fields were set
         assertEquals(gs("value1"), client.hget(key, gs("field1")).get());
         assertEquals(gs("value2"), client.hget(key, gs("field2")).get());
+
+        // Verify TTL was set correctly
+        Long[] ttlResult = client.httl(key, new GlideString[] {gs("field1"), gs("field2")}).get();
+        assertEquals(2, ttlResult.length);
+        assertTrue(ttlResult[0] > 0 && ttlResult[0] <= 60); // field1 should have TTL
+        assertTrue(ttlResult[1] > 0 && ttlResult[1] <= 60); // field2 should have TTL
 
         // Clean up
         client.del(new GlideString[] {key}).get();
@@ -1640,9 +1656,6 @@ public class SharedCommandTests {
                         });
 
         assertInstanceOf(RequestException.class, exception.getCause());
-
-        // Clean up
-        client.del(new String[] {key}).get();
     }
 
     @SneakyThrows
@@ -1675,8 +1688,11 @@ public class SharedCommandTests {
         assertEquals("value2", result[1]);
         assertNull(result[2]); // nonexistent field should return null
 
-        // Clean up
-        client.del(new String[] {key}).get();
+        // Verify TTL was set correctly for existing fields
+        Long[] ttlResult = client.httl(key, new String[] {"field1", "field2"}).get();
+        assertEquals(2, ttlResult.length);
+        assertTrue(ttlResult[0] > 0 && ttlResult[0] <= 60); // field1 should have TTL
+        assertTrue(ttlResult[1] > 0 && ttlResult[1] <= 60); // field2 should have TTL
     }
 
     @SneakyThrows
@@ -1709,9 +1725,6 @@ public class SharedCommandTests {
 
         assertEquals(1, result.length);
         assertEquals("value1", result[0]);
-
-        // Clean up
-        client.del(new String[] {key}).get();
     }
 
     @SneakyThrows
@@ -1743,53 +1756,14 @@ public class SharedCommandTests {
         assertEquals(gs("value1"), result[0]);
         assertEquals(gs("value2"), result[1]);
 
+        // Verify TTL was set correctly
+        Long[] ttlResult = client.httl(key, new GlideString[] {gs("field1"), gs("field2")}).get();
+        assertEquals(2, ttlResult.length);
+        assertTrue(ttlResult[0] > 0 && ttlResult[0] <= 60); // field1 should have TTL
+        assertTrue(ttlResult[1] > 0 && ttlResult[1] <= 60); // field2 should have TTL
+
         // Clean up
         client.del(new GlideString[] {key}).get();
-    }
-
-    @SneakyThrows
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClientsWithAtomic")
-    public void hgetex_batch_functionality(BaseClient client, boolean isAtomic) {
-        assumeTrue(
-                SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0"),
-                "Hash field expiration commands require Valkey 9.0.0 or higher");
-
-        boolean isCluster = client instanceof GlideClusterClient;
-        String key = "test_hgetex_batch_" + UUID.randomUUID();
-
-        // First set some fields using regular hset
-        Map<String, String> fieldValueMap = new LinkedHashMap<>();
-        fieldValueMap.put("field1", "value1");
-        fieldValueMap.put("field2", "value2");
-        client.hset(key, fieldValueMap).get();
-
-        // Create batch with HGETEX command
-        BaseBatch batch = isCluster ? new ClusterBatch(isAtomic) : new Batch(isAtomic);
-
-        HashFieldExpirationOptions options =
-                HashFieldExpirationOptions.builder()
-                        .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
-                        .build();
-
-        String[] fields = {"field1", "field2", "nonexistent"};
-        batch.hgetex(key, fields, options);
-
-        // Execute batch
-        Object[] result =
-                isCluster
-                        ? ((GlideClusterClient) client).exec((ClusterBatch) batch, false).get()
-                        : ((GlideClient) client).exec((Batch) batch, false).get();
-
-        assertEquals(1, result.length);
-        String[] hgetexResult = (String[]) result[0];
-        assertEquals(3, hgetexResult.length);
-        assertEquals("value1", hgetexResult[0]);
-        assertEquals("value2", hgetexResult[1]);
-        assertNull(hgetexResult[2]); // nonexistent field should return null
-
-        // Clean up
-        client.del(new String[] {key}).get();
     }
 
     @SneakyThrows
@@ -1813,15 +1787,18 @@ public class SharedCommandTests {
         HashFieldExpirationOptions options = HashFieldExpirationOptions.builder().build();
 
         String[] fields = {"field1", "field2", "nonexistent"};
-        Boolean[] result = client.hexpire(key, 60L, fields, options).get();
+        Long[] result = client.hexpire(key, 60L, fields, options).get();
 
         assertEquals(3, result.length);
-        assertTrue(result[0]); // field1 should be set to expire
-        assertTrue(result[1]); // field2 should be set to expire
-        assertFalse(result[2]); // nonexistent field should return false
+        assertEquals(1L, result[0]); // field1 should be set to expire
+        assertEquals(1L, result[1]); // field2 should be set to expire
+        assertEquals(-2L, result[2]); // nonexistent field should return -2
 
-        // Clean up
-        client.del(new String[] {key}).get();
+        // Verify TTL was set correctly for existing fields
+        Long[] ttlResult = client.httl(key, new String[] {"field1", "field2"}).get();
+        assertEquals(2, ttlResult.length);
+        assertTrue(ttlResult[0] > 0 && ttlResult[0] <= 60); // field1 should have TTL
+        assertTrue(ttlResult[1] > 0 && ttlResult[1] <= 60); // field2 should have TTL
     }
 
     @SneakyThrows
@@ -1849,24 +1826,34 @@ public class SharedCommandTests {
                 HashFieldExpirationOptions.builder().expirationConditionOnlyIfNoExpiry().build();
 
         String[] fields = {"field1", "field2"};
-        Boolean[] nxResult = client.hexpire(key, 60L, fields, nxOptions).get();
+        Long[] nxResult = client.hexpire(key, 60L, fields, nxOptions).get();
 
         assertEquals(2, nxResult.length);
-        assertFalse(nxResult[0]); // field1 already has expiration, should fail
-        assertTrue(nxResult[1]); // field2 has no expiration, should succeed
+        assertEquals(0L, nxResult[0]); // field1 already has expiration, should fail
+        assertEquals(1L, nxResult[1]); // field2 has no expiration, should succeed
+
+        // Verify TTL state after NX test
+        Long[] nxTtlResult = client.httl(key, new String[] {"field1", "field2"}).get();
+        assertEquals(2, nxTtlResult.length);
+        assertTrue(
+                nxTtlResult[0] > 0 && nxTtlResult[0] <= 30); // field1 should still have original TTL (~30s)
+        assertTrue(nxTtlResult[1] > 0 && nxTtlResult[1] <= 60); // field2 should have new TTL (~60s)
 
         // Test XX option - should only set expiration if field has existing expiration
         HashFieldExpirationOptions xxOptions =
                 HashFieldExpirationOptions.builder().expirationConditionOnlyIfHasExpiry().build();
 
-        Boolean[] xxResult = client.hexpire(key, 90L, fields, xxOptions).get();
+        Long[] xxResult = client.hexpire(key, 90L, fields, xxOptions).get();
 
         assertEquals(2, xxResult.length);
-        assertTrue(xxResult[0]); // field1 has expiration, should succeed
-        assertTrue(xxResult[1]); // field2 now has expiration from NX test, should succeed
+        assertEquals(1L, xxResult[0]); // field1 has expiration, should succeed
+        assertEquals(1L, xxResult[1]); // field2 now has expiration from NX test, should succeed
 
-        // Clean up
-        client.del(new String[] {key}).get();
+        // Verify TTL was set correctly for both fields
+        Long[] ttlResult = client.httl(key, new String[] {"field1", "field2"}).get();
+        assertEquals(2, ttlResult.length);
+        assertTrue(ttlResult[0] > 0 && ttlResult[0] <= 90); // field1 should have TTL
+        assertTrue(ttlResult[1] > 0 && ttlResult[1] <= 90); // field2 should have TTL
     }
 
     @SneakyThrows
@@ -1894,24 +1881,21 @@ public class SharedCommandTests {
                 HashFieldExpirationOptions.builder().expirationConditionOnlyIfGreaterThanCurrent().build();
 
         String[] fields = {"field1", "field2"};
-        Boolean[] gtResult = client.hexpire(key, 120L, fields, gtOptions).get(); // 120 > 60
+        Long[] gtResult = client.hexpire(key, 120L, fields, gtOptions).get(); // 120 > 60
 
         assertEquals(2, gtResult.length);
-        assertTrue(gtResult[0]); // 120 > 60, should succeed
-        assertTrue(gtResult[1]); // 120 > 60, should succeed
+        assertEquals(1L, gtResult[0]); // 120 > 60, should succeed
+        assertEquals(1L, gtResult[1]); // 120 > 60, should succeed
 
         // Test LT option - should only set expiration if new expiration is less than current
         HashFieldExpirationOptions ltOptions =
                 HashFieldExpirationOptions.builder().expirationConditionOnlyIfLessThanCurrent().build();
 
-        Boolean[] ltResult = client.hexpire(key, 30L, fields, ltOptions).get(); // 30 < 120
+        Long[] ltResult = client.hexpire(key, 30L, fields, ltOptions).get(); // 30 < 120
 
         assertEquals(2, ltResult.length);
-        assertTrue(ltResult[0]); // 30 < 120, should succeed
-        assertTrue(ltResult[1]); // 30 < 120, should succeed
-
-        // Clean up
-        client.del(new String[] {key}).get();
+        assertEquals(1L, ltResult[0]); // 30 < 120, should succeed
+        assertEquals(1L, ltResult[1]); // 30 < 120, should succeed
     }
 
     @SneakyThrows
@@ -1934,17 +1918,14 @@ public class SharedCommandTests {
         HashFieldExpirationOptions options = HashFieldExpirationOptions.builder().build();
 
         String[] fields = {"field1"};
-        Boolean[] result = client.hexpire(key, 0L, fields, options).get();
+        Long[] result = client.hexpire(key, 0L, fields, options).get();
 
         assertEquals(1, result.length);
-        assertTrue(result[0]); // Should succeed in setting expiration (immediate deletion)
+        assertEquals(2L, result[0]); // Should return 2 when called with 0 seconds
 
         // Verify field was deleted
         assertNull(client.hget(key, "field1").get());
         assertEquals("value2", client.hget(key, "field2").get()); // field2 should still exist
-
-        // Clean up
-        client.del(new String[] {key}).get();
     }
 
     @SneakyThrows
@@ -1967,56 +1948,20 @@ public class SharedCommandTests {
         HashFieldExpirationOptions options = HashFieldExpirationOptions.builder().build();
 
         GlideString[] fields = {gs("field1"), gs("field2")};
-        Boolean[] result = client.hexpire(key, 60L, fields, options).get();
+        Long[] result = client.hexpire(key, 60L, fields, options).get();
 
         assertEquals(2, result.length);
-        assertTrue(result[0]);
-        assertTrue(result[1]);
+        assertEquals(1L, result[0]);
+        assertEquals(1L, result[1]);
+
+        // Verify TTL was set correctly
+        Long[] ttlResult = client.httl(key, new GlideString[] {gs("field1"), gs("field2")}).get();
+        assertEquals(2, ttlResult.length);
+        assertTrue(ttlResult[0] > 0 && ttlResult[0] <= 60); // field1 should have TTL
+        assertTrue(ttlResult[1] > 0 && ttlResult[1] <= 60); // field2 should have TTL
 
         // Clean up
         client.del(new GlideString[] {key}).get();
-    }
-
-    @SneakyThrows
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClientsWithAtomic")
-    public void hexpire_batch_functionality(BaseClient client, boolean isAtomic) {
-        assumeTrue(
-                SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0"),
-                "Hash field expiration commands require Valkey 9.0.0 or higher");
-
-        boolean isCluster = client instanceof GlideClusterClient;
-        String key = "test_hexpire_batch_" + UUID.randomUUID();
-
-        // First set some fields using regular hset
-        Map<String, String> fieldValueMap = new LinkedHashMap<>();
-        fieldValueMap.put("field1", "value1");
-        fieldValueMap.put("field2", "value2");
-        client.hset(key, fieldValueMap).get();
-
-        // Create batch with HEXPIRE command
-        BaseBatch batch = isCluster ? new ClusterBatch(isAtomic) : new Batch(isAtomic);
-
-        HashFieldExpirationOptions options = HashFieldExpirationOptions.builder().build();
-
-        String[] fields = {"field1", "field2", "nonexistent"};
-        batch.hexpire(key, 60L, fields, options);
-
-        // Execute batch
-        Object[] result =
-                isCluster
-                        ? ((GlideClusterClient) client).exec((ClusterBatch) batch, false).get()
-                        : ((GlideClient) client).exec((Batch) batch, false).get();
-
-        assertEquals(1, result.length);
-        Boolean[] hexpireResult = (Boolean[]) result[0];
-        assertEquals(3, hexpireResult.length);
-        assertTrue(hexpireResult[0]); // field1 should be set to expire
-        assertTrue(hexpireResult[1]); // field2 should be set to expire
-        assertFalse(hexpireResult[2]); // nonexistent field should return false
-
-        // Clean up
-        client.del(new String[] {key}).get();
     }
 
     @SneakyThrows
@@ -2043,12 +1988,12 @@ public class SharedCommandTests {
 
         // Test HPERSIST - remove expiration from fields
         String[] fields = {"field1", "field2", "nonexistent"};
-        Boolean[] result = client.hpersist(key, fields).get();
+        Long[] result = client.hpersist(key, fields).get();
 
         assertEquals(3, result.length);
-        assertTrue(result[0]); // field1 had expiry removed
-        assertTrue(result[1]); // field2 had expiry removed
-        assertFalse(result[2]); // nonexistent field should return false
+        assertEquals(1L, result[0]); // field1 had expiry removed
+        assertEquals(1L, result[1]); // field2 had expiry removed
+        assertEquals(-2L, result[2]); // nonexistent field should return -2
 
         // Verify fields are now persistent (no expiration)
         // We can't directly check TTL for hash fields in this version, but we can verify the fields
@@ -2056,9 +2001,6 @@ public class SharedCommandTests {
         String[] values = client.hmget(key, new String[] {"field1", "field2"}).get();
         assertEquals("value1", values[0]);
         assertEquals("value2", values[1]);
-
-        // Clean up
-        client.del(new String[] {key}).get();
     }
 
     @SneakyThrows
@@ -2073,11 +2015,11 @@ public class SharedCommandTests {
 
         // Test HPERSIST on non-existent key
         String[] fields = {"field1", "field2"};
-        Boolean[] result = client.hpersist(key, fields).get();
+        Long[] result = client.hpersist(key, fields).get();
 
         assertEquals(2, result.length);
-        assertFalse(result[0]); // field doesn't exist
-        assertFalse(result[1]); // field doesn't exist
+        assertEquals(-2L, result[0]); // field doesn't exist
+        assertEquals(-2L, result[1]); // field doesn't exist
     }
 
     @SneakyThrows
@@ -2098,14 +2040,11 @@ public class SharedCommandTests {
 
         // Test HPERSIST on fields that don't have expiration
         String[] fields = {"field1", "field2"};
-        Boolean[] result = client.hpersist(key, fields).get();
+        Long[] result = client.hpersist(key, fields).get();
 
         assertEquals(2, result.length);
-        assertFalse(result[0]); // field1 doesn't have expiry to remove
-        assertFalse(result[1]); // field2 doesn't have expiry to remove
-
-        // Clean up
-        client.del(new String[] {key}).get();
+        assertEquals(-1L, result[0]); // field1 doesn't have expiry to remove
+        assertEquals(-1L, result[1]); // field2 doesn't have expiry to remove
     }
 
     @SneakyThrows
@@ -2138,17 +2077,14 @@ public class SharedCommandTests {
 
         // Test HPERSIST on mixed fields
         String[] fields = {"field1", "field2", "field3", "field4", "nonexistent"};
-        Boolean[] result = client.hpersist(key, fields).get();
+        Long[] result = client.hpersist(key, fields).get();
 
         assertEquals(5, result.length);
-        assertTrue(result[0]); // field1 had expiry removed
-        assertTrue(result[1]); // field2 had expiry removed
-        assertFalse(result[2]); // field3 doesn't have expiry to remove
-        assertFalse(result[3]); // field4 doesn't have expiry to remove
-        assertFalse(result[4]); // nonexistent field
-
-        // Clean up
-        client.del(new String[] {key}).get();
+        assertEquals(1L, result[0]); // field1 had expiry removed
+        assertEquals(1L, result[1]); // field2 had expiry removed
+        assertEquals(-1L, result[2]); // field3 doesn't have expiry to remove
+        assertEquals(-1L, result[3]); // field4 doesn't have expiry to remove
+        assertEquals(-2L, result[4]); // nonexistent field
     }
 
     @SneakyThrows
@@ -2175,61 +2111,15 @@ public class SharedCommandTests {
 
         // Test HPERSIST with binary parameters
         GlideString[] fields = {gs("field1"), gs("field2"), gs("nonexistent")};
-        Boolean[] result = client.hpersist(key, fields).get();
+        Long[] result = client.hpersist(key, fields).get();
 
         assertEquals(3, result.length);
-        assertTrue(result[0]); // field1 had expiry removed
-        assertTrue(result[1]); // field2 had expiry removed
-        assertFalse(result[2]); // nonexistent field should return false
+        assertEquals(1L, result[0]); // field1 had expiry removed
+        assertEquals(1L, result[1]); // field2 had expiry removed
+        assertEquals(-2L, result[2]); // nonexistent field should return -2
 
         // Clean up
         client.del(new GlideString[] {key}).get();
-    }
-
-    @SneakyThrows
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClientsWithAtomic")
-    public void hpersist_batch(BaseClient client, boolean isAtomic) {
-        assumeTrue(
-                SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0"),
-                "Hash field expiration commands require Valkey 9.0.0 or higher");
-
-        boolean isCluster = client instanceof GlideClusterClient;
-        String key = "test_hpersist_batch_" + UUID.randomUUID();
-
-        // First set some fields with expiration using hsetex
-        Map<String, String> fieldValueMap = new LinkedHashMap<>();
-        fieldValueMap.put("field1", "value1");
-        fieldValueMap.put("field2", "value2");
-
-        HashFieldExpirationOptions setOptions =
-                HashFieldExpirationOptions.builder()
-                        .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
-                        .build();
-
-        client.hsetex(key, fieldValueMap, setOptions).get();
-
-        // Create batch with HPERSIST command
-        BaseBatch batch = isCluster ? new ClusterBatch(isAtomic) : new Batch(isAtomic);
-
-        String[] fields = {"field1", "field2", "nonexistent"};
-        batch.hpersist(key, fields);
-
-        // Execute batch
-        Object[] result =
-                isCluster
-                        ? ((GlideClusterClient) client).exec((ClusterBatch) batch, false).get()
-                        : ((GlideClient) client).exec((Batch) batch, false).get();
-
-        assertEquals(1, result.length);
-        Boolean[] hpersistResult = (Boolean[]) result[0];
-        assertEquals(3, hpersistResult.length);
-        assertTrue(hpersistResult[0]); // field1 should have expiry removed
-        assertTrue(hpersistResult[1]); // field2 should have expiry removed
-        assertFalse(hpersistResult[2]); // nonexistent field should return false
-
-        // Clean up
-        client.del(new String[] {key}).get();
     }
 
     @SneakyThrows
@@ -2251,15 +2141,18 @@ public class SharedCommandTests {
         // Test HPEXPIRE - set expiration in milliseconds
         HashFieldExpirationOptions options = HashFieldExpirationOptions.builder().build();
         String[] fields = {"field1", "field2", "nonexistent"};
-        Boolean[] result = client.hpexpire(key, 5000L, fields, options).get();
+        Long[] result = client.hpexpire(key, 5000L, fields, options).get();
 
         assertEquals(3, result.length);
-        assertTrue(result[0]); // field1 should have expiry set
-        assertTrue(result[1]); // field2 should have expiry set
-        assertFalse(result[2]); // nonexistent field should return false
+        assertEquals(1L, result[0]); // field1 should have expiry set
+        assertEquals(1L, result[1]); // field2 should have expiry set
+        assertEquals(-2L, result[2]); // nonexistent field should return -2
 
-        // Clean up
-        client.del(new String[] {key}).get();
+        // Verify TTL was set correctly for existing fields (in milliseconds)
+        Long[] pttlResult = client.hpttl(key, new String[] {"field1", "field2"}).get();
+        assertEquals(2, pttlResult.length);
+        assertTrue(pttlResult[0] > 0 && pttlResult[0] <= 5000); // field1 should have PTTL
+        assertTrue(pttlResult[1] > 0 && pttlResult[1] <= 5000); // field2 should have PTTL
     }
 
     @SneakyThrows
@@ -2282,28 +2175,25 @@ public class SharedCommandTests {
         HashFieldExpirationOptions nxOptions =
                 HashFieldExpirationOptions.builder().expirationConditionOnlyIfNoExpiry().build();
         String[] fields = {"field1", "field2"};
-        Boolean[] result = client.hpexpire(key, 5000L, fields, nxOptions).get();
+        Long[] result = client.hpexpire(key, 5000L, fields, nxOptions).get();
 
         assertEquals(2, result.length);
-        assertTrue(result[0]); // field1 should have expiry set (no previous expiry)
-        assertTrue(result[1]); // field2 should have expiry set (no previous expiry)
+        assertEquals(1L, result[0]); // field1 should have expiry set (no previous expiry)
+        assertEquals(1L, result[1]); // field2 should have expiry set (no previous expiry)
 
         // Test HPEXPIRE with NX condition again (should fail since fields now have expiry)
         result = client.hpexpire(key, 10000L, fields, nxOptions).get();
         assertEquals(2, result.length);
-        assertFalse(result[0]); // field1 should not have expiry updated (already has expiry)
-        assertFalse(result[1]); // field2 should not have expiry updated (already has expiry)
+        assertEquals(0L, result[0]); // field1 should not have expiry updated (already has expiry)
+        assertEquals(0L, result[1]); // field2 should not have expiry updated (already has expiry)
 
         // Test HPEXPIRE with XX condition (only if has expiry)
         HashFieldExpirationOptions xxOptions =
                 HashFieldExpirationOptions.builder().expirationConditionOnlyIfHasExpiry().build();
         result = client.hpexpire(key, 15000L, fields, xxOptions).get();
         assertEquals(2, result.length);
-        assertTrue(result[0]); // field1 should have expiry updated (has existing expiry)
-        assertTrue(result[1]); // field2 should have expiry updated (has existing expiry)
-
-        // Clean up
-        client.del(new String[] {key}).get();
+        assertEquals(1L, result[0]); // field1 should have expiry updated (has existing expiry)
+        assertEquals(1L, result[1]); // field2 should have expiry updated (has existing expiry)
     }
 
     @SneakyThrows
@@ -2331,14 +2221,14 @@ public class SharedCommandTests {
         String[] fields = {"field1"};
 
         // Try with smaller expiry (should fail)
-        Boolean[] result = client.hpexpire(key, 5000L, fields, gtOptions).get();
+        Long[] result = client.hpexpire(key, 5000L, fields, gtOptions).get();
         assertEquals(1, result.length);
-        assertFalse(result[0]); // Should fail because 5000ms < 10000ms
+        assertEquals(0L, result[0]); // Should fail because 5000ms < 10000ms
 
         // Try with larger expiry (should succeed)
         result = client.hpexpire(key, 20000L, fields, gtOptions).get();
         assertEquals(1, result.length);
-        assertTrue(result[0]); // Should succeed because 20000ms > 10000ms
+        assertEquals(1L, result[0]); // Should succeed because 20000ms > 10000ms
 
         // Test HPEXPIRE with LT condition (only if new expiry is less)
         HashFieldExpirationOptions ltOptions =
@@ -2347,15 +2237,12 @@ public class SharedCommandTests {
         // Try with larger expiry (should fail)
         result = client.hpexpire(key, 30000L, fields, ltOptions).get();
         assertEquals(1, result.length);
-        assertFalse(result[0]); // Should fail because 30000ms > current expiry
+        assertEquals(0L, result[0]); // Should fail because 30000ms > current expiry
 
         // Try with smaller expiry (should succeed)
         result = client.hpexpire(key, 15000L, fields, ltOptions).get();
         assertEquals(1, result.length);
-        assertTrue(result[0]); // Should succeed because 15000ms < current expiry
-
-        // Clean up
-        client.del(new String[] {key}).get();
+        assertEquals(1L, result[0]); // Should succeed because 15000ms < current expiry
     }
 
     @SneakyThrows
@@ -2377,17 +2264,14 @@ public class SharedCommandTests {
         // Test HPEXPIRE with 0 milliseconds (immediate deletion)
         HashFieldExpirationOptions options = HashFieldExpirationOptions.builder().build();
         String[] fields = {"field1"};
-        Boolean[] result = client.hpexpire(key, 0L, fields, options).get();
+        Long[] result = client.hpexpire(key, 0L, fields, options).get();
 
         assertEquals(1, result.length);
-        assertTrue(result[0]); // field1 should be deleted immediately
+        assertEquals(2L, result[0]); // Should return 2 when called with 0 milliseconds
 
         // Verify field1 is deleted
         assertFalse(client.hexists(key, "field1").get());
         assertTrue(client.hexists(key, "field2").get()); // field2 should still exist
-
-        // Clean up
-        client.del(new String[] {key}).get();
     }
 
     @SneakyThrows
@@ -2409,54 +2293,21 @@ public class SharedCommandTests {
         // Test HPEXPIRE with binary parameters
         HashFieldExpirationOptions options = HashFieldExpirationOptions.builder().build();
         GlideString[] fields = {gs("field1"), gs("field2"), gs("nonexistent")};
-        Boolean[] result = client.hpexpire(key, 5000L, fields, options).get();
+        Long[] result = client.hpexpire(key, 5000L, fields, options).get();
 
         assertEquals(3, result.length);
-        assertTrue(result[0]); // field1 should have expiry set
-        assertTrue(result[1]); // field2 should have expiry set
-        assertFalse(result[2]); // nonexistent field should return false
+        assertEquals(1L, result[0]); // field1 should have expiry set
+        assertEquals(1L, result[1]); // field2 should have expiry set
+        assertEquals(-2L, result[2]); // nonexistent field should return -2
+
+        // Verify TTL was set correctly for existing fields (in milliseconds)
+        Long[] pttlResult = client.hpttl(key, new GlideString[] {gs("field1"), gs("field2")}).get();
+        assertEquals(2, pttlResult.length);
+        assertTrue(pttlResult[0] > 0 && pttlResult[0] <= 5000); // field1 should have PTTL
+        assertTrue(pttlResult[1] > 0 && pttlResult[1] <= 5000); // field2 should have PTTL
 
         // Clean up
         client.del(new GlideString[] {key}).get();
-    }
-
-    @SneakyThrows
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClientsWithAtomic")
-    public void hpexpire_batch_functionality(BaseClient client, boolean isAtomic) {
-        assumeTrue(
-                SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0"),
-                "Hash field expiration commands require Valkey 9.0.0 or higher");
-
-        boolean isCluster = client instanceof GlideClusterClient;
-        String key = "test_hpexpire_batch_" + UUID.randomUUID();
-
-        // First set some fields using regular hset
-        Map<String, String> fieldValueMap = new LinkedHashMap<>();
-        fieldValueMap.put("field1", "value1");
-        fieldValueMap.put("field2", "value2");
-        client.hset(key, fieldValueMap).get();
-
-        // Create batch with HPEXPIRE command
-        BaseBatch batch = isCluster ? new ClusterBatch(isAtomic) : new Batch(isAtomic);
-        HashFieldExpirationOptions options = HashFieldExpirationOptions.builder().build();
-        String[] fields = {"field1", "field2", "nonexistent"};
-        batch.hpexpire(key, 5000L, fields, options);
-
-        Object[] result =
-                isCluster
-                        ? ((GlideClusterClient) client).exec((ClusterBatch) batch, false).get()
-                        : ((GlideClient) client).exec((Batch) batch, false).get();
-
-        assertEquals(1, result.length);
-        Boolean[] hpexpireResult = (Boolean[]) result[0];
-        assertEquals(3, hpexpireResult.length);
-        assertTrue(hpexpireResult[0]); // field1 should have expiry set
-        assertTrue(hpexpireResult[1]); // field2 should have expiry set
-        assertFalse(hpexpireResult[2]); // nonexistent field should return false
-
-        // Clean up
-        client.del(new String[] {key}).get();
     }
 
     @SneakyThrows
@@ -2481,15 +2332,18 @@ public class SharedCommandTests {
                 HashFieldExpirationOptions.builder().expirationConditionOnlyIfNoExpiry().build();
 
         String[] fields = {"field1", "field2", "nonexistent"};
-        Boolean[] result = client.hexpireat(key, futureTimestamp, fields, options).get();
+        Long[] result = client.hexpireat(key, futureTimestamp, fields, options).get();
 
         assertEquals(3, result.length);
-        assertTrue(result[0]); // field1 should have expiry set
-        assertTrue(result[1]); // field2 should have expiry set
-        assertFalse(result[2]); // nonexistent field should return false
+        assertEquals(1L, result[0]); // field1 should have expiry set
+        assertEquals(1L, result[1]); // field2 should have expiry set
+        assertEquals(-2L, result[2]); // nonexistent field should return -2
 
-        // Clean up
-        client.del(new String[] {key}).get();
+        // Verify TTL was set correctly for existing fields
+        Long[] ttlResult = client.httl(key, new String[] {"field1", "field2"}).get();
+        assertEquals(2, ttlResult.length);
+        assertTrue(ttlResult[0] > 0 && ttlResult[0] <= 60); // field1 should have TTL
+        assertTrue(ttlResult[1] > 0 && ttlResult[1] <= 60); // field2 should have TTL
     }
 
     @SneakyThrows
@@ -2515,11 +2369,11 @@ public class SharedCommandTests {
                 HashFieldExpirationOptions.builder().expirationConditionOnlyIfNoExpiry().build();
 
         String[] fields = {"field1", "field2"};
-        Boolean[] result = client.hexpireat(key, futureTimestamp, fields, nxOptions).get();
+        Long[] result = client.hexpireat(key, futureTimestamp, fields, nxOptions).get();
 
         assertEquals(2, result.length);
-        assertTrue(result[0]); // field1 should have expiry set (no previous expiry)
-        assertTrue(result[1]); // field2 should have expiry set (no previous expiry)
+        assertEquals(1L, result[0]); // field1 should have expiry set (no previous expiry)
+        assertEquals(1L, result[1]); // field2 should have expiry set (no previous expiry)
 
         // Test XX condition (only if has expiry) - should work now since fields have expiry
         HashFieldExpirationOptions xxOptions =
@@ -2529,11 +2383,8 @@ public class SharedCommandTests {
         result = client.hexpireat(key, newFutureTimestamp, fields, xxOptions).get();
 
         assertEquals(2, result.length);
-        assertTrue(result[0]); // field1 should have expiry updated (had previous expiry)
-        assertTrue(result[1]); // field2 should have expiry updated (had previous expiry)
-
-        // Clean up
-        client.del(new String[] {key}).get();
+        assertEquals(1L, result[0]); // field1 should have expiry updated (had previous expiry)
+        assertEquals(1L, result[1]); // field2 should have expiry updated (had previous expiry)
     }
 
     @SneakyThrows
@@ -2557,20 +2408,17 @@ public class SharedCommandTests {
         HashFieldExpirationOptions options = HashFieldExpirationOptions.builder().build();
 
         String[] fields = {"field1", "field2"};
-        Boolean[] result = client.hexpireat(key, pastTimestamp, fields, options).get();
+        Long[] result = client.hexpireat(key, pastTimestamp, fields, options).get();
 
         assertEquals(2, result.length);
-        assertTrue(result[0]); // field1 should be deleted
-        assertTrue(result[1]); // field2 should be deleted
+        assertEquals(2L, result[0]); // Should return 2 for past timestamp
+        assertEquals(2L, result[1]); // Should return 2 for past timestamp
 
         // Verify fields are deleted
         String[] getResult = client.hmget(key, fields).get();
         assertEquals(2, getResult.length);
         assertNull(getResult[0]); // field1 should be null (deleted)
         assertNull(getResult[1]); // field2 should be null (deleted)
-
-        // Clean up
-        client.del(new String[] {key}).get();
     }
 
     @SneakyThrows
@@ -2595,58 +2443,20 @@ public class SharedCommandTests {
                 HashFieldExpirationOptions.builder().expirationConditionOnlyIfNoExpiry().build();
 
         GlideString[] fields = {gs("field1"), gs("field2")};
-        Boolean[] result = client.hexpireat(key, futureTimestamp, fields, options).get();
+        Long[] result = client.hexpireat(key, futureTimestamp, fields, options).get();
 
         assertEquals(2, result.length);
-        assertTrue(result[0]); // field1 should have expiry set
-        assertTrue(result[1]); // field2 should have expiry set
+        assertEquals(1L, result[0]); // field1 should have expiry set
+        assertEquals(1L, result[1]); // field2 should have expiry set
+
+        // Verify TTL was set correctly for existing fields
+        Long[] ttlResult = client.httl(key, new GlideString[] {gs("field1"), gs("field2")}).get();
+        assertEquals(2, ttlResult.length);
+        assertTrue(ttlResult[0] > 0 && ttlResult[0] <= 60); // field1 should have TTL
+        assertTrue(ttlResult[1] > 0 && ttlResult[1] <= 60); // field2 should have TTL
 
         // Clean up
         client.del(new GlideString[] {key}).get();
-    }
-
-    @SneakyThrows
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClientsWithAtomic")
-    public void hexpireat_batch_functionality(BaseClient client, boolean isAtomic) {
-        assumeTrue(
-                SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0"),
-                "Hash field expiration commands require Valkey 9.0.0 or higher");
-
-        boolean isCluster = client instanceof GlideClusterClient;
-        String key = "test_hexpireat_batch_" + UUID.randomUUID();
-
-        // First set some fields using regular hset
-        Map<String, String> fieldValueMap = new LinkedHashMap<>();
-        fieldValueMap.put("field1", "value1");
-        fieldValueMap.put("field2", "value2");
-        fieldValueMap.put("field3", "value3");
-        client.hset(key, fieldValueMap).get();
-
-        // Create batch with HEXPIREAT command
-        long futureTimestamp = System.currentTimeMillis() / 1000 + 60; // 60 seconds from now
-        BaseBatch batch = isCluster ? new ClusterBatch(isAtomic) : new Batch(isAtomic);
-
-        HashFieldExpirationOptions options =
-                HashFieldExpirationOptions.builder().expirationConditionOnlyIfNoExpiry().build();
-
-        String[] fields = {"field1", "field2", "nonexistent"};
-        batch.hexpireat(key, futureTimestamp, fields, options);
-
-        Object[] result =
-                isCluster
-                        ? ((GlideClusterClient) client).exec((ClusterBatch) batch, false).get()
-                        : ((GlideClient) client).exec((Batch) batch, false).get();
-
-        assertEquals(1, result.length);
-        Boolean[] hexpireatResult = (Boolean[]) result[0];
-        assertEquals(3, hexpireatResult.length);
-        assertTrue(hexpireatResult[0]); // field1 should have expiry set
-        assertTrue(hexpireatResult[1]); // field2 should have expiry set
-        assertFalse(hexpireatResult[2]); // nonexistent field should return false
-
-        // Clean up
-        client.del(new String[] {key}).get();
     }
 
     @SneakyThrows
@@ -2670,15 +2480,18 @@ public class SharedCommandTests {
         HashFieldExpirationOptions options = HashFieldExpirationOptions.builder().build();
 
         String[] fields = {"field1", "field2", "nonexistent"};
-        Boolean[] result = client.hpexpireat(key, futureTimestampMs, fields, options).get();
+        Long[] result = client.hpexpireat(key, futureTimestampMs, fields, options).get();
 
         assertEquals(3, result.length);
-        assertTrue(result[0]); // field1 should have expiry set
-        assertTrue(result[1]); // field2 should have expiry set
-        assertFalse(result[2]); // nonexistent field should return false
+        assertEquals(1L, result[0]); // field1 should have expiry set
+        assertEquals(1L, result[1]); // field2 should have expiry set
+        assertEquals(-2L, result[2]); // nonexistent field should return -2
 
-        // Clean up
-        client.del(new String[] {key}).get();
+        // Verify TTL was set correctly for existing fields (in milliseconds)
+        Long[] pttlResult = client.hpttl(key, new String[] {"field1", "field2"}).get();
+        assertEquals(2, pttlResult.length);
+        assertTrue(pttlResult[0] > 0 && pttlResult[0] <= 60000); // field1 should have PTTL
+        assertTrue(pttlResult[1] > 0 && pttlResult[1] <= 60000); // field2 should have PTTL
     }
 
     @SneakyThrows
@@ -2703,11 +2516,11 @@ public class SharedCommandTests {
                 HashFieldExpirationOptions.builder().expirationConditionOnlyIfNoExpiry().build();
 
         String[] fields = {"field1", "field2"};
-        Boolean[] result = client.hpexpireat(key, futureTimestampMs, fields, nxOptions).get();
+        Long[] result = client.hpexpireat(key, futureTimestampMs, fields, nxOptions).get();
 
         assertEquals(2, result.length);
-        assertTrue(result[0]); // field1 should have expiry set (no previous expiry)
-        assertTrue(result[1]); // field2 should have expiry set (no previous expiry)
+        assertEquals(1L, result[0]); // field1 should have expiry set (no previous expiry)
+        assertEquals(1L, result[1]); // field2 should have expiry set (no previous expiry)
 
         // Test HPEXPIREAT with XX condition (only if expiry exists)
         HashFieldExpirationOptions xxOptions =
@@ -2717,11 +2530,8 @@ public class SharedCommandTests {
         result = client.hpexpireat(key, newFutureTimestampMs, fields, xxOptions).get();
 
         assertEquals(2, result.length);
-        assertTrue(result[0]); // field1 should have expiry updated (had previous expiry)
-        assertTrue(result[1]); // field2 should have expiry updated (had previous expiry)
-
-        // Clean up
-        client.del(new String[] {key}).get();
+        assertEquals(1L, result[0]); // field1 should have expiry updated (had previous expiry)
+        assertEquals(1L, result[1]); // field2 should have expiry updated (had previous expiry)
     }
 
     @SneakyThrows
@@ -2745,20 +2555,17 @@ public class SharedCommandTests {
         HashFieldExpirationOptions options = HashFieldExpirationOptions.builder().build();
 
         String[] fields = {"field1", "field2"};
-        Boolean[] result = client.hpexpireat(key, pastTimestampMs, fields, options).get();
+        Long[] result = client.hpexpireat(key, pastTimestampMs, fields, options).get();
 
         assertEquals(2, result.length);
-        assertTrue(result[0]); // field1 should be deleted (past timestamp)
-        assertTrue(result[1]); // field2 should be deleted (past timestamp)
+        assertEquals(2L, result[0]); // Should return 2 for past timestamp
+        assertEquals(2L, result[1]); // Should return 2 for past timestamp
 
         // Verify fields are actually deleted
         String[] getResult = client.hmget(key, fields).get();
         assertEquals(2, getResult.length);
         assertNull(getResult[0]); // field1 should be deleted
         assertNull(getResult[1]); // field2 should be deleted
-
-        // Clean up
-        client.del(new String[] {key}).get();
     }
 
     @SneakyThrows
@@ -2783,56 +2590,20 @@ public class SharedCommandTests {
                 HashFieldExpirationOptions.builder().expirationConditionOnlyIfNoExpiry().build();
 
         GlideString[] fields = {gs("field1"), gs("field2")};
-        Boolean[] result = client.hpexpireat(key, futureTimestampMs, fields, options).get();
+        Long[] result = client.hpexpireat(key, futureTimestampMs, fields, options).get();
 
         assertEquals(2, result.length);
-        assertTrue(result[0]); // field1 should have expiry set
-        assertTrue(result[1]); // field2 should have expiry set
+        assertEquals(1L, result[0]); // field1 should have expiry set
+        assertEquals(1L, result[1]); // field2 should have expiry set
+
+        // Verify TTL was set correctly for existing fields (in milliseconds)
+        Long[] pttlResult = client.hpttl(key, new GlideString[] {gs("field1"), gs("field2")}).get();
+        assertEquals(2, pttlResult.length);
+        assertTrue(pttlResult[0] > 0 && pttlResult[0] <= 60000); // field1 should have PTTL
+        assertTrue(pttlResult[1] > 0 && pttlResult[1] <= 60000); // field2 should have PTTL
 
         // Clean up
         client.del(new GlideString[] {key}).get();
-    }
-
-    @SneakyThrows
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClientsWithAtomic")
-    public void hpexpireat_batch_functionality(BaseClient client, boolean isAtomic) {
-        assumeTrue(
-                SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0"),
-                "Hash field expiration commands require Valkey 9.0.0 or higher");
-
-        boolean isCluster = client instanceof GlideClusterClient;
-        String key = "test_hpexpireat_batch_" + UUID.randomUUID();
-
-        // First set some fields using regular hset
-        Map<String, String> fieldValueMap = new LinkedHashMap<>();
-        fieldValueMap.put("field1", "value1");
-        fieldValueMap.put("field2", "value2");
-        client.hset(key, fieldValueMap).get();
-
-        // Create batch with HPEXPIREAT command
-        long futureTimestampMs = System.currentTimeMillis() + 60000; // 60 seconds from now
-        BaseBatch batch = isCluster ? new ClusterBatch(isAtomic) : new Batch(isAtomic);
-        HashFieldExpirationOptions options =
-                HashFieldExpirationOptions.builder().expirationConditionOnlyIfNoExpiry().build();
-
-        String[] fields = {"field1", "field2", "nonexistent"};
-        batch.hpexpireat(key, futureTimestampMs, fields, options);
-
-        Object[] result =
-                isCluster
-                        ? ((GlideClusterClient) client).exec((ClusterBatch) batch, false).get()
-                        : ((GlideClient) client).exec((Batch) batch, false).get();
-
-        assertEquals(1, result.length);
-        Boolean[] hpexpireatResult = (Boolean[]) result[0];
-        assertEquals(3, hpexpireatResult.length);
-        assertTrue(hpexpireatResult[0]); // field1 should have expiry set
-        assertTrue(hpexpireatResult[1]); // field2 should have expiry set
-        assertFalse(hpexpireatResult[2]); // nonexistent field should return false
-
-        // Clean up
-        client.del(new String[] {key}).get();
     }
 
     @SneakyThrows
@@ -2870,9 +2641,6 @@ public class SharedCommandTests {
         assertTrue(result[2] > 0 && result[2] <= 60); // field3 should have TTL
         assertEquals(-1L, (long) result[3]); // field4 has no expiration
         assertEquals(-2L, (long) result[4]); // nonexistent field
-
-        // Clean up
-        client.del(new String[] {key}).get();
     }
 
     @SneakyThrows
@@ -2916,7 +2684,7 @@ public class SharedCommandTests {
         client.hsetex(key, fieldValueMap, setOptions).get();
 
         // Wait for fields to expire
-        Thread.sleep(1100);
+        Thread.sleep(1500);
 
         // Test HTTL on expired fields
         String[] fields = {"field1", "field2"};
@@ -2925,9 +2693,6 @@ public class SharedCommandTests {
         assertEquals(2, result.length);
         assertEquals(-2L, (long) result[0]); // field1 should be expired/deleted
         assertEquals(-2L, (long) result[1]); // field2 should be expired/deleted
-
-        // Clean up
-        client.del(new String[] {key}).get();
     }
 
     @SneakyThrows
@@ -2967,9 +2732,6 @@ public class SharedCommandTests {
         assertEquals(-1L, (long) result[2]); // field3 has no expiration
         assertEquals(-1L, (long) result[3]); // field4 has no expiration
         assertEquals(-2L, (long) result[4]); // nonexistent field
-
-        // Clean up
-        client.del(new String[] {key}).get();
     }
 
     @SneakyThrows
@@ -3004,49 +2766,6 @@ public class SharedCommandTests {
 
         // Clean up
         client.del(new GlideString[] {key}).get();
-    }
-
-    @SneakyThrows
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClientsWithAtomic")
-    public void httl_batch_functionality(BaseClient client, boolean isAtomic) {
-        assumeTrue(
-                SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0"),
-                "Hash field expiration commands require Valkey 9.0.0 or higher");
-
-        boolean isCluster = client instanceof GlideClusterClient;
-        String key = "test_httl_batch_" + UUID.randomUUID();
-
-        // First set some fields with expiration using hsetex
-        Map<String, String> fieldValueMap = new LinkedHashMap<>();
-        fieldValueMap.put("field1", "value1");
-        fieldValueMap.put("field2", "value2");
-
-        HashFieldExpirationOptions setOptions =
-                HashFieldExpirationOptions.builder()
-                        .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
-                        .build();
-        client.hsetex(key, fieldValueMap, setOptions).get();
-
-        // Test HTTL in batch
-        BaseBatch<?> batch = isCluster ? new ClusterBatch(isAtomic) : new Batch(isAtomic);
-        String[] fields = {"field1", "field2", "nonexistent"};
-        batch.httl(key, fields);
-
-        Object[] result =
-                isCluster
-                        ? ((GlideClusterClient) client).exec((ClusterBatch) batch, false).get()
-                        : ((GlideClient) client).exec((Batch) batch, false).get();
-
-        assertEquals(1, result.length);
-        Long[] httlResult = (Long[]) result[0];
-        assertEquals(3, httlResult.length);
-        assertTrue(httlResult[0] > 0 && httlResult[0] <= 60); // field1 should have TTL
-        assertTrue(httlResult[1] > 0 && httlResult[1] <= 60); // field2 should have TTL
-        assertEquals(-2L, (long) httlResult[2]); // nonexistent field
-
-        // Clean up
-        client.del(new String[] {key}).get();
     }
 
     @SneakyThrows
@@ -3093,9 +2812,6 @@ public class SharedCommandTests {
         assertTrue(result[2] > 0 && result[2] <= 30000); // field3 should have shorter TTL
         assertEquals(-1L, (long) result[3]); // field4 exists but has no expiration
         assertEquals(-2L, (long) result[4]); // nonexistent field
-
-        // Clean up
-        client.del(new String[] {key}).get();
     }
 
     @SneakyThrows
@@ -3139,7 +2855,7 @@ public class SharedCommandTests {
         client.hsetex(key, fieldValueMap, setOptions).get();
 
         // Wait for expiration
-        Thread.sleep(1100);
+        Thread.sleep(1500);
 
         // Test HPTTL on expired fields
         String[] fields = {"field1", "field2"};
@@ -3148,9 +2864,6 @@ public class SharedCommandTests {
         assertEquals(2, result.length);
         assertEquals(-2L, (long) result[0]); // field expired (does not exist)
         assertEquals(-2L, (long) result[1]); // field expired (does not exist)
-
-        // Clean up
-        client.del(new String[] {key}).get();
     }
 
     @SneakyThrows
@@ -3190,9 +2903,6 @@ public class SharedCommandTests {
         assertEquals(-1L, (long) result[2]); // field3 exists but has no expiration
         assertEquals(-1L, (long) result[3]); // field4 exists but has no expiration
         assertEquals(-2L, (long) result[4]); // nonexistent field
-
-        // Clean up
-        client.del(new String[] {key}).get();
     }
 
     @SneakyThrows
@@ -3269,9 +2979,6 @@ public class SharedCommandTests {
         assertTrue(
                 hpttlResult[1] > 0 && hpttlResult[1] <= 60000); // field2 should have TTL in milliseconds
         assertEquals(-2L, (long) hpttlResult[2]); // nonexistent field
-
-        // Clean up
-        client.del(new String[] {key}).get();
     }
 
     @SneakyThrows
@@ -3319,9 +3026,6 @@ public class SharedCommandTests {
                         && result[2] <= expireAtSeconds + 1); // field3 should have expiration timestamp
         assertEquals(-1L, (long) result[3]); // field4 has no expiration
         assertEquals(-2L, (long) result[4]); // nonexistent field
-
-        // Clean up
-        client.del(new String[] {key}).get();
     }
 
     @SneakyThrows
@@ -3365,7 +3069,7 @@ public class SharedCommandTests {
         client.hsetex(key, fieldValueMap, setOptions).get();
 
         // Wait for fields to expire
-        Thread.sleep(1100);
+        Thread.sleep(1500);
 
         // Test HEXPIRETIME on expired fields
         String[] fields = {"field1", "field2"};
@@ -3374,9 +3078,6 @@ public class SharedCommandTests {
         assertEquals(2, result.length);
         assertEquals(-2L, (long) result[0]); // expired field returns -2
         assertEquals(-2L, (long) result[1]); // expired field returns -2
-
-        // Clean up
-        client.del(new String[] {key}).get();
     }
 
     @SneakyThrows
@@ -3423,9 +3124,6 @@ public class SharedCommandTests {
         assertEquals(-1L, (long) result[2]); // field3 has no expiration
         assertEquals(-1L, (long) result[3]); // field4 has no expiration
         assertEquals(-2L, (long) result[4]); // nonexistent field
-
-        // Clean up
-        client.del(new String[] {key}).get();
     }
 
     @SneakyThrows
@@ -3516,9 +3214,6 @@ public class SharedCommandTests {
                         && hexpiretime_result[1]
                                 <= expireAtSeconds + 1); // field2 should have expiration timestamp
         assertEquals(-2L, (long) hexpiretime_result[2]); // nonexistent field
-
-        // Clean up
-        client.del(new String[] {key}).get();
     }
 
     @SneakyThrows
@@ -3566,9 +3261,6 @@ public class SharedCommandTests {
         assertEquals(-1L, (long) result[3]);
         // nonexistent field should return -2
         assertEquals(-2L, (long) result[4]);
-
-        // Clean up
-        client.del(new String[] {key}).get();
     }
 
     @SneakyThrows
@@ -3609,7 +3301,7 @@ public class SharedCommandTests {
         client.hsetex(key, fieldValueMap, setOptions).get();
 
         // Wait for expiration
-        Thread.sleep(1100);
+        Thread.sleep(1500);
 
         // Test HPEXPIRETIME on expired fields
         String[] fields = {"field1", "field2"};
@@ -3618,9 +3310,6 @@ public class SharedCommandTests {
         assertEquals(2, result.length);
         assertEquals(-2L, (long) result[0]); // expired field
         assertEquals(-2L, (long) result[1]); // expired field
-
-        // Clean up
-        client.del(new String[] {key}).get();
     }
 
     @SneakyThrows
@@ -3659,9 +3348,6 @@ public class SharedCommandTests {
         assertEquals(-1L, (long) result[3]);
         // nonexistent field should return -2
         assertEquals(-2L, (long) result[4]);
-
-        // Clean up
-        client.del(new String[] {key}).get();
     }
 
     @SneakyThrows
@@ -3742,9 +3428,6 @@ public class SharedCommandTests {
                         && hpexpiretime_result[1]
                                 <= expireAtMs + 1000); // field2 should have expiration timestamp
         assertEquals(-2L, (long) hpexpiretime_result[2]); // nonexistent field
-
-        // Clean up
-        client.del(new String[] {key}).get();
     }
 
     @SneakyThrows

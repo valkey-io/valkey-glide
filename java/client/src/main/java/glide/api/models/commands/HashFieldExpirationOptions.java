@@ -29,30 +29,10 @@ public final class HashFieldExpirationOptions {
     private final FieldConditionalChange fieldConditionalChange;
 
     /** Expiration condition for HEXPIRE-like commands (NX/XX/GT/LT). */
-    private final ExpirationCondition expirationCondition;
+    private final ExpireOptions expirationCondition;
 
     /** Expiry configuration for the hash fields. */
     private final ExpirySet expiry;
-
-    /**
-     * Conditions which define whether hash operations should be performed based on hash existence.
-     */
-    @RequiredArgsConstructor
-    @Getter
-    public enum ConditionalChange {
-        /**
-         * Only perform operation if the hash already exists. Equivalent to <code>XX</code> in the
-         * Valkey API.
-         */
-        ONLY_IF_EXISTS("XX"),
-        /**
-         * Only perform operation if the hash does not exist. Equivalent to <code>NX</code> in the
-         * Valkey API.
-         */
-        ONLY_IF_DOES_NOT_EXIST("NX");
-
-        private final String valkeyApi;
-    }
 
     /** Field-specific conditions for HSETEX command. */
     @RequiredArgsConstructor
@@ -68,34 +48,6 @@ public final class HashFieldExpirationOptions {
          * API.
          */
         ONLY_IF_NONE_EXIST("FNX");
-
-        private final String valkeyApi;
-    }
-
-    /** Expiration conditions for HEXPIRE-like commands. */
-    @RequiredArgsConstructor
-    @Getter
-    public enum ExpirationCondition {
-        /**
-         * Only set expiration when field has no expiration. Equivalent to <code>NX</code> in the Valkey
-         * API.
-         */
-        ONLY_IF_NO_EXPIRY("NX"),
-        /**
-         * Only set expiration when field has existing expiration. Equivalent to <code>XX</code> in the
-         * Valkey API.
-         */
-        ONLY_IF_HAS_EXPIRY("XX"),
-        /**
-         * Only set expiration when new expiration is greater than current. Equivalent to <code>GT
-         * </code> in the Valkey API.
-         */
-        ONLY_IF_GREATER_THAN_CURRENT("GT"),
-        /**
-         * Only set expiration when new expiration is less than current. Equivalent to <code>LT</code>
-         * in the Valkey API.
-         */
-        ONLY_IF_LESS_THAN_CURRENT("LT");
 
         private final String valkeyApi;
     }
@@ -174,7 +126,7 @@ public final class HashFieldExpirationOptions {
 
         /**
          * Remove the time to live associated with the field. Equivalent to <code>PERSIST</code> in the
-         * Valkey API. This option is only available for HGETEX command.
+         * Valkey API.
          */
         public static ExpirySet Persist() {
             return new ExpirySet(PERSIST);
@@ -261,15 +213,15 @@ public final class HashFieldExpirationOptions {
         List<String> optionArgs = new ArrayList<>();
 
         if (conditionalChange != null) {
-            optionArgs.add(conditionalChange.valkeyApi);
+            optionArgs.add(conditionalChange.getValkeyApi());
         }
 
         if (fieldConditionalChange != null) {
-            optionArgs.add(fieldConditionalChange.valkeyApi);
+            optionArgs.add(fieldConditionalChange.getValkeyApi());
         }
 
         if (expirationCondition != null) {
-            optionArgs.add(expirationCondition.valkeyApi);
+            optionArgs.addAll(List.of(expirationCondition.toArgs()));
         }
 
         if (expiry != null) {
@@ -325,42 +277,42 @@ public final class HashFieldExpirationOptions {
         }
 
         /**
-         * Sets the expiration condition to {@link ExpirationCondition#ONLY_IF_NO_EXPIRY}.
+         * Sets the expiration condition to {@link ExpireOptions#HAS_NO_EXPIRY}.
          *
          * @return This builder instance
          */
         public HashFieldExpirationOptionsBuilder expirationConditionOnlyIfNoExpiry() {
-            this.expirationCondition = ExpirationCondition.ONLY_IF_NO_EXPIRY;
+            this.expirationCondition = ExpireOptions.HAS_NO_EXPIRY;
             return this;
         }
 
         /**
-         * Sets the expiration condition to {@link ExpirationCondition#ONLY_IF_HAS_EXPIRY}.
+         * Sets the expiration condition to {@link ExpireOptions#HAS_EXISTING_EXPIRY}.
          *
          * @return This builder instance
          */
         public HashFieldExpirationOptionsBuilder expirationConditionOnlyIfHasExpiry() {
-            this.expirationCondition = ExpirationCondition.ONLY_IF_HAS_EXPIRY;
+            this.expirationCondition = ExpireOptions.HAS_EXISTING_EXPIRY;
             return this;
         }
 
         /**
-         * Sets the expiration condition to {@link ExpirationCondition#ONLY_IF_GREATER_THAN_CURRENT}.
+         * Sets the expiration condition to {@link ExpireOptions#NEW_EXPIRY_GREATER_THAN_CURRENT}.
          *
          * @return This builder instance
          */
         public HashFieldExpirationOptionsBuilder expirationConditionOnlyIfGreaterThanCurrent() {
-            this.expirationCondition = ExpirationCondition.ONLY_IF_GREATER_THAN_CURRENT;
+            this.expirationCondition = ExpireOptions.NEW_EXPIRY_GREATER_THAN_CURRENT;
             return this;
         }
 
         /**
-         * Sets the expiration condition to {@link ExpirationCondition#ONLY_IF_LESS_THAN_CURRENT}.
+         * Sets the expiration condition to {@link ExpireOptions#NEW_EXPIRY_LESS_THAN_CURRENT}.
          *
          * @return This builder instance
          */
         public HashFieldExpirationOptionsBuilder expirationConditionOnlyIfLessThanCurrent() {
-            this.expirationCondition = ExpirationCondition.ONLY_IF_LESS_THAN_CURRENT;
+            this.expirationCondition = ExpireOptions.NEW_EXPIRY_LESS_THAN_CURRENT;
             return this;
         }
     }
