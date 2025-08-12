@@ -554,7 +554,7 @@ public class CommandTests {
         // Ensure some network activity has occurred to guarantee valueBefore > 0
         clusterClient.info(new Section[] {STATS}).get();
         clusterClient.info(new Section[] {STATS}).get();
-        
+
         var data = clusterClient.info(new Section[] {STATS}).get();
         String firstNodeInfo = getFirstEntryFromMultiValue(data);
         long valueBefore = getValueFromInfo(firstNodeInfo, "total_net_input_bytes");
