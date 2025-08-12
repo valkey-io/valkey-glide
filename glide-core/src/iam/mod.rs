@@ -60,6 +60,46 @@ impl ServiceType {
     }
 }
 
+fn validate_refresh_interval(refresh_interval_seconds: Option<u32>) -> Result<Option<u32>, GlideIAMError> {
+
+    match refresh_interval_seconds {
+        Some(0) => {
+            // Reject 0 as an invalid interval
+            Err(GlideIAMError::InvalidRefreshInterval {
+                max: MAX_REFRESH_INTERVAL_SECONDS,
+                actual: 0,
+            })
+        }
+        Some(interval) => {
+            if interval >= MAX_REFRESH_INTERVAL_SECONDS {
+                return Err(GlideIAMError::InvalidRefreshInterval {
+                    max: MAX_REFRESH_INTERVAL_SECONDS,
+                    actual: interval,
+                });
+            }
+
+            // Log warning if interval is above 15 minutes
+            if interval >= WARNING_REFRESH_INTERVAL_SECONDS {
+                log_warn(
+                    "IAM token refresh interval warning",
+                    format!(
+                        "Refresh interval of {} seconds ({}min) exceeds recommended maximum of {} seconds ({}min). \
+                        This may impact performance and increase the risk of token expiration. \
+                        Consider using a shorter interval for better reliability.",
+                        interval,
+                        interval / 60,
+                        WARNING_REFRESH_INTERVAL_SECONDS,
+                        WARNING_REFRESH_INTERVAL_SECONDS / 60
+                    ),
+                );
+            }
+
+            Ok(Some(interval))
+        }
+        None => Ok(Some(DEFAULT_REFRESH_INTERVAL_SECONDS)),
+    }
+}
+
 // Internal state structure for IAM token management
 #[derive(Clone, Debug)]
 struct IamTokenState {
@@ -113,42 +153,14 @@ impl IAMTokenManager {
         refresh_interval_seconds: Option<u32>,
     ) -> Result<Self, GlideIAMError> {
         // Validate refresh_interval_seconds is between 0 and 43200 (12 hours)
-        let validated_refresh_interval = match refresh_interval_seconds {
-            Some(interval) => {
-                if interval >= MAX_REFRESH_INTERVAL_SECONDS {
-                    return Err(GlideIAMError::InvalidRefreshInterval {
-                        max: MAX_REFRESH_INTERVAL_SECONDS,
-                        actual: interval,
-                    });
-                }
-
-                // Log warning if interval is above 15 minutes
-                if interval >= WARNING_REFRESH_INTERVAL_SECONDS {
-                    log_warn(
-                        "IAM token refresh interval warning",
-                        format!(
-                            "Refresh interval of {} seconds ({}min) exceeds recommended maximum of {} seconds ({}min). \
-                            This may impact performance and increase the risk of token expiration. \
-                            Consider using a shorter interval for better reliability.",
-                            interval,
-                            interval / 60,
-                            WARNING_REFRESH_INTERVAL_SECONDS,
-                            WARNING_REFRESH_INTERVAL_SECONDS / 60
-                        ),
-                    );
-                }
-
-                interval
-            }
-            None => DEFAULT_REFRESH_INTERVAL_SECONDS,
-        };
+           let validated_refresh_interval = validate_refresh_interval(refresh_interval_seconds)?;
 
         let state = IamTokenState {
             region,
             cluster_name,
             username,
             service_type,
-            refresh_interval_seconds: validated_refresh_interval,
+            refresh_interval_seconds: validated_refresh_interval.unwrap_or(DEFAULT_REFRESH_INTERVAL_SECONDS),
         };
 
         // Generate initial token using the state
@@ -902,7 +914,7 @@ mod tests {
         let region = "us-east-1".to_string();
 
         // Test valid refresh intervals in seconds
-        let valid_intervals = [0, 60, 900, 21600, 43199]; // 0 seconds, 1 minute, 15 minutes, 6 hours, 12 hours
+        let valid_intervals = [60, 900, 21600, 43199]; // 0 seconds, 1 minute, 15 minutes, 6 hours, 12 hours
         for interval in valid_intervals {
             let result = IAMTokenManager::new(
                 cluster_name.clone(),
@@ -920,7 +932,7 @@ mod tests {
         }
 
         // Test invalid refresh intervals (greater than 43200 seconds / 12 hours)
-        let invalid_intervals = [43200, 86400, 172800]; // 12 hours, 24 hours, 48 hours
+        let invalid_intervals = [0, 43200, 86400, 172800]; // 12 hours, 24 hours, 48 hours
         for interval in invalid_intervals {
             let result = IAMTokenManager::new(
                 cluster_name.clone(),
@@ -948,5 +960,107 @@ mod tests {
                 _ => panic!("Expected InvalidRefreshInterval error, got: {error:?}"),
             }
         }
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_iam_token_manager_generates_new_token_every_x_seconds() {
+        initialize_test_environment(); // Ensure test environment is clean
+        setup_test_credentials();
+
+        // Configurable refresh time constant (can be changed)
+        const REFRESH_TIME_SECONDS: u32 = 5;
+
+        let cluster_name = "test-cluster".to_string();
+        let username = "test-user".to_string();
+        let region = "us-east-1".to_string();
+
+        // Create IAMTokenManager with 5-second refresh interval
+        let mut manager = IAMTokenManager::new(
+            cluster_name.clone(),
+            username.clone(),
+            region.clone(),
+            ServiceType::ElastiCache,
+            Some(REFRESH_TIME_SECONDS),
+        )
+        .await
+        .unwrap();
+
+        // Get initial token
+        let initial_token = manager.get_token().await;
+        assert!(!initial_token.is_empty(), "Initial token should not be empty");
+
+        // Save initial token to JSON file for inspection
+        let state = create_test_state(&region, &cluster_name, &username, ServiceType::ElastiCache);
+        save_token_to_file(
+            "test_iam_token_manager_generates_new_token_every_5_seconds_initial",
+            &initial_token,
+            &state,
+        );
+
+        // Start the refresh task
+        manager.start_refresh_task();
+
+        // Wait for first refresh (5 seconds + small buffer)
+        sleep(Duration::from_secs(REFRESH_TIME_SECONDS as u64 + 1)).await;
+
+        let first_refresh_token = manager.get_token().await;
+        assert_ne!(
+            initial_token, first_refresh_token,
+            "Token should be different after first refresh interval"
+        );
+
+        // Save first refreshed token to JSON file for inspection
+        save_token_to_file(
+            "test_iam_token_manager_generates_new_token_every_5_seconds_first_refresh",
+            &first_refresh_token,
+            &state,
+        );
+
+        // Wait for second refresh (another 5 seconds + small buffer)
+        sleep(Duration::from_secs(REFRESH_TIME_SECONDS as u64 + 1)).await;
+
+        let second_refresh_token = manager.get_token().await;
+        assert_ne!(
+            first_refresh_token, second_refresh_token,
+            "Token should be different after second refresh interval"
+        );
+        assert_ne!(
+            initial_token, second_refresh_token,
+            "Second refresh token should be different from initial token"
+        );
+
+        // Save second refreshed token to JSON file for inspection
+        save_token_to_file(
+            "test_iam_token_manager_generates_new_token_every_5_seconds_second_refresh",
+            &second_refresh_token,
+            &state,
+        );
+
+        // Verify all tokens have the correct format
+        for (name, token) in [
+            ("initial", &initial_token),
+            ("first_refresh", &first_refresh_token),
+            ("second_refresh", &second_refresh_token),
+        ] {
+            assert!(
+                token.starts_with(&username),
+                "{name} token should start with username"
+            );
+            assert!(
+                token.contains("Action=connect"),
+                "{name} token should contain Action=connect"
+            );
+            assert!(
+                token.contains("X-Amz-Expires=900"),
+                "{name} token should contain 15-minute expiration"
+            );
+            assert!(
+                token.contains("Authorization="),
+                "{name} token should contain Authorization parameter"
+            );
+        }
+
+        // Stop the refresh task
     }
 }
