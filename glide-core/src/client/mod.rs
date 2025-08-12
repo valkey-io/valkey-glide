@@ -20,7 +20,7 @@ use redis::{
 pub use standalone_client::StandaloneClient;
 use std::io;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicI64, AtomicIsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, AtomicIsize, Ordering};
 use std::thread;
 use std::thread::JoinHandle;
 use std::time::Duration;
@@ -201,6 +201,10 @@ pub struct Client {
     inflight_requests_allowed: Arc<AtomicIsize>,
     // Track the current database index for reconnection purposes
     current_database: Arc<AtomicI64>,
+    // Flag to prevent recursion during database restoration
+    restoring_database: Arc<AtomicBool>,
+    // Track if database has been restored for current connection
+    database_restored_for_connection: Arc<AtomicBool>,
 }
 
 async fn run_with_timeout<T>(
@@ -386,13 +390,16 @@ impl Client {
         Box::pin(async move {
             let client = self.get_or_initialize_client().await?;
 
+            // Auto-restore database if needed (once per connection)
+            self.auto_restore_database_if_needed().await;
+
             let expected_type = expected_type_for_cmd(cmd);
             let request_timeout = match get_request_timeout(cmd, self.request_timeout) {
                 Ok(request_timeout) => request_timeout,
                 Err(err) => return Err(err),
             };
 
-            let value = run_with_timeout(request_timeout, async move {
+            let run_result = run_with_timeout(request_timeout, async move {
                 match client {
                     ClientWrapper::Standalone(mut client) => client.send_command(cmd).await,
                     ClientWrapper::Cluster {mut client } => {
@@ -426,8 +433,23 @@ impl Client {
                     ClientWrapper::Lazy(_) => unreachable!("Lazy client should have been initialized"),
                 }
                 .and_then(|value| convert_to_expected_type(value, expected_type))
-            })
-            .await?;
+            });
+
+            let result = run_result.await;
+            
+            // Check for connection errors that might indicate a reconnection
+            if let Err(ref e) = result {
+                if self.is_connection_error(e) {
+                    // Reset the restoration flag so we'll restore database on next command
+                    self.database_restored_for_connection.store(false, Ordering::SeqCst);
+                    log_debug(
+                        "send_command",
+                        "Connection error detected, will restore database on next command",
+                    );
+                }
+            }
+            
+            let value = result?;
 
             // Track database changes for SELECT commands
             self.track_database_change_if_select(cmd, &value);
@@ -773,6 +795,8 @@ impl Client {
                                     format!("Tracking database change to {}", db_index),
                                 );
                                 self.current_database.store(db_index, Ordering::SeqCst);
+                                // Reset the restoration flag since we have a new database
+                                self.database_restored_for_connection.store(false, Ordering::SeqCst);
                             }
                         }
                     }
@@ -781,66 +805,113 @@ impl Client {
         }
     }
 
-    /// Get the current tracked database index.
-    pub(super) fn get_current_database(&self) -> i64 {
-        self.current_database.load(Ordering::SeqCst)
+    /// Check if an error is likely a connection error that might indicate reconnection.
+    fn is_connection_error(&self, error: &RedisError) -> bool {
+        match error.kind() {
+            ErrorKind::IoError | ErrorKind::ClientError => true,
+            ErrorKind::ResponseError => {
+                // Some connection errors might be reported as response errors
+                let error_str = error.to_string().to_lowercase();
+                error_str.contains("connection") || 
+                error_str.contains("broken pipe") ||
+                error_str.contains("reset") ||
+                error_str.contains("timeout")
+            }
+            _ => false,
+        }
     }
 
-    /// Ensure the connection is using the correct database.
-    /// This method checks if the current database matches the tracked database
-    /// and issues a SELECT command if needed (e.g., after reconnection).
-    async fn ensure_correct_database(&self, client_wrapper: &mut ClientWrapper) -> RedisResult<()> {
+    /// Automatically restore database if needed after reconnection.
+    /// This method is called before each command and will restore the database
+    /// once per connection if a database change has been tracked.
+    async fn auto_restore_database_if_needed(&mut self) {
         let tracked_db = self.get_current_database();
         
-        // Only proceed if the tracked database is different from the initial one
-        // (which would indicate a SELECT was executed at some point)
-        if tracked_db != 0 { // 0 is typically the default database
-            match client_wrapper {
-                ClientWrapper::Standalone(client) => {
-                    // For standalone client, we need to ensure the database is correct
-                    // This is a simple approach - we could optimize by tracking connection state
-                    let mut select_cmd = redis::cmd("SELECT");
-                    select_cmd.arg(tracked_db);
-                    
-                    // Send SELECT command to ensure we're on the right database
-                    match client.send_command(&select_cmd).await {
-                        Ok(Value::SimpleString(s)) if s == "OK" => {
-                            log_debug(
-                                "ensure_correct_database",
-                                format!("Successfully restored database {}", tracked_db),
-                            );
-                        }
-                        Ok(_) => {
-                            log_warn(
-                                "ensure_correct_database",
-                                format!("Unexpected response to SELECT {}", tracked_db),
-                            );
-                        }
-                        Err(e) => {
-                            log_warn(
-                                "ensure_correct_database",
-                                format!("Failed to restore database {}: {}", tracked_db, e),
-                            );
-                            return Err(e);
-                        }
-                    }
+        // Only attempt restoration if:
+        // 1. We have a non-default database tracked
+        // 2. We haven't restored the database for this connection yet
+        // 3. We're not already in the restoration process
+        if tracked_db != 0 
+            && !self.database_restored_for_connection.load(Ordering::SeqCst)
+            && !self.restoring_database.load(Ordering::SeqCst) 
+        {
+            // Attempt restoration
+            match self.restore_database().await {
+                Ok(()) => {
+                    // Mark that we've restored the database for this connection
+                    self.database_restored_for_connection.store(true, Ordering::SeqCst);
                 }
-                ClientWrapper::Cluster { .. } => {
-                    // For cluster mode, database selection might not be supported
-                    // depending on the Redis configuration, so we'll just log
-                    log_debug(
-                        "ensure_correct_database",
-                        "Database restoration not implemented for cluster mode",
-                    );
-                }
-                ClientWrapper::Lazy(_) => {
-                    // Lazy client should have been initialized already
-                    unreachable!("Lazy client should have been initialized");
+                Err(_) => {
+                    // If restoration fails, we'll try again on the next command
+                    // Don't mark as restored so we can retry
                 }
             }
         }
+    }
+
+    /// Get the current tracked database index.
+    pub fn get_current_database(&self) -> i64 {
+        self.current_database.load(Ordering::SeqCst)
+    }
+
+    /// Manually restore the tracked database.
+    /// This method can be called after reconnection to ensure the correct database is selected.
+    pub async fn restore_database(&mut self) -> RedisResult<()> {
+        let tracked_db = self.get_current_database();
         
-        Ok(())
+        // Only attempt database restoration if we have a tracked database different from default
+        if tracked_db != 0 && !self.restoring_database.swap(true, Ordering::SeqCst) {
+            let client = self.get_or_initialize_client().await?;
+            
+            let result = match client {
+                ClientWrapper::Standalone(mut standalone_client) => {
+                    let mut select_cmd = redis::cmd("SELECT");
+                    select_cmd.arg(tracked_db);
+                    standalone_client.send_command(&select_cmd).await
+                }
+                ClientWrapper::Cluster { .. } => {
+                    log_debug(
+                        "restore_database",
+                        "Database restoration not supported in cluster mode",
+                    );
+                    Ok(Value::SimpleString("OK".to_string()))
+                }
+                ClientWrapper::Lazy(_) => {
+                    unreachable!("Lazy client should have been initialized");
+                }
+            };
+            
+            // Reset the flag
+            self.restoring_database.store(false, Ordering::SeqCst);
+            
+            match result {
+                Ok(Value::SimpleString(s)) if s == "OK" => {
+                    log_debug(
+                        "restore_database",
+                        format!("Successfully restored database {}", tracked_db),
+                    );
+                    Ok(())
+                }
+                Ok(_) => {
+                    log_warn(
+                        "restore_database",
+                        format!("Unexpected response when restoring database {}", tracked_db),
+                    );
+                    Ok(())
+                }
+                Err(e) => {
+                    log_warn(
+                        "restore_database",
+                        format!("Failed to restore database {}: {}", tracked_db, e),
+                    );
+                    Err(e)
+                }
+            }
+        } else {
+            // Reset the flag if we didn't do restoration
+            self.restoring_database.store(false, Ordering::SeqCst);
+            Ok(())
+        }
     }
 
     /// Update the password used to authenticate with the servers.
@@ -1250,6 +1321,8 @@ impl Client {
                 request_timeout,
                 inflight_requests_allowed,
                 current_database: Arc::new(AtomicI64::new(initial_database)),
+                restoring_database: Arc::new(AtomicBool::new(false)),
+                database_restored_for_connection: Arc::new(AtomicBool::new(true)), // Start as true for initial connection
             })
         })
         .await

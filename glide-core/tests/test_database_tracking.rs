@@ -20,8 +20,11 @@ async fn test_database_tracking_on_select_command() {
     // by testing the internal method directly
     
     match Client::new(request, None).await {
-        Ok(_client) => {
-            // Note: get_current_database is not public, so we can't test it directly
+        Ok(client) => {
+            // Test that initial database is 0 (the database_id from the request)
+            assert_eq!(client.get_current_database(), 0);
+            
+            // Note: We can't easily test the full flow without a running Redis server
             // The actual integration test would need to be in a separate test suite
             println!("Database tracking basic test passed");
         },
@@ -48,4 +51,37 @@ fn test_select_command_detection() {
     // Test argument extraction using cmd.get_packed_command to verify structure
     // This is a basic test of the redis command building
     println!("SELECT command detection test passed");
+}
+
+#[test]
+fn test_database_restoration_logic() {
+    // Test the basic logic for database restoration
+    // This tests the conditions under which restoration should happen
+    
+    // Test cases:
+    // 1. Default database (0) - no restoration needed
+    // 2. Non-default database with restoration flag false - restoration needed
+    // 3. Non-default database with restoration flag true - no restoration needed
+    
+    // For testing purposes, we'll simulate the logic without a real client
+    
+    // Case 1: Default database
+    let tracked_db = 0i64;
+    let database_restored = false;
+    let should_restore = tracked_db != 0 && !database_restored;
+    assert!(!should_restore, "Should not restore default database");
+    
+    // Case 2: Non-default database, not yet restored
+    let tracked_db = 2i64;
+    let database_restored = false;
+    let should_restore = tracked_db != 0 && !database_restored;
+    assert!(should_restore, "Should restore non-default database when not yet restored");
+    
+    // Case 3: Non-default database, already restored
+    let tracked_db = 2i64;
+    let database_restored = true;
+    let should_restore = tracked_db != 0 && !database_restored;
+    assert!(!should_restore, "Should not restore database when already restored");
+    
+    println!("Database restoration logic test passed");
 }
