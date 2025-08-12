@@ -7988,7 +7988,7 @@ public class SharedCommandTests {
         // Small delay to ensure all XCLAIM and XACK operations are fully processed
         // This addresses a race condition in standalone RESP2 mode where the final
         // XPENDING call might not see all expected pending messages immediately
-        Thread.sleep(10);
+        Thread.sleep(5);
 
         pending_results_extended =
                 client
