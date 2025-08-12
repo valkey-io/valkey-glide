@@ -67,8 +67,8 @@ import static command_request.CommandRequestOuterClass.RequestType.HMGet;
 import static command_request.CommandRequestOuterClass.RequestType.HRandField;
 import static command_request.CommandRequestOuterClass.RequestType.HScan;
 import static command_request.CommandRequestOuterClass.RequestType.HSet;
+import static command_request.CommandRequestOuterClass.RequestType.HSetEx;
 import static command_request.CommandRequestOuterClass.RequestType.HSetNX;
-import static command_request.CommandRequestOuterClass.RequestType.HSetex;
 import static command_request.CommandRequestOuterClass.RequestType.HStrlen;
 import static command_request.CommandRequestOuterClass.RequestType.HVals;
 import static command_request.CommandRequestOuterClass.RequestType.Incr;
@@ -2566,7 +2566,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Long>submitNewCommand(eq(HSetex), eq(expectedArgs), any()))
+        when(commandManager.<Long>submitNewCommand(eq(HSetEx), eq(expectedArgs), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -2612,7 +2612,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Long>submitNewCommand(eq(HSetex), eq(expectedArgs), any()))
+        when(commandManager.<Long>submitNewCommand(eq(HSetEx), eq(expectedArgs), any()))
                 .thenReturn(testResponse);
 
         // exercise

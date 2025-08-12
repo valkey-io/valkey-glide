@@ -61,7 +61,7 @@ import static command_request.CommandRequestOuterClass.RequestType.HExpireAt;
 import static command_request.CommandRequestOuterClass.RequestType.HExpireTime;
 import static command_request.CommandRequestOuterClass.RequestType.HGet;
 import static command_request.CommandRequestOuterClass.RequestType.HGetAll;
-import static command_request.CommandRequestOuterClass.RequestType.HGetex;
+import static command_request.CommandRequestOuterClass.RequestType.HGetEx;
 import static command_request.CommandRequestOuterClass.RequestType.HIncrBy;
 import static command_request.CommandRequestOuterClass.RequestType.HIncrByFloat;
 import static command_request.CommandRequestOuterClass.RequestType.HKeys;
@@ -75,8 +75,8 @@ import static command_request.CommandRequestOuterClass.RequestType.HPersist;
 import static command_request.CommandRequestOuterClass.RequestType.HRandField;
 import static command_request.CommandRequestOuterClass.RequestType.HScan;
 import static command_request.CommandRequestOuterClass.RequestType.HSet;
+import static command_request.CommandRequestOuterClass.RequestType.HSetEx;
 import static command_request.CommandRequestOuterClass.RequestType.HSetNX;
-import static command_request.CommandRequestOuterClass.RequestType.HSetex;
 import static command_request.CommandRequestOuterClass.RequestType.HStrlen;
 import static command_request.CommandRequestOuterClass.RequestType.HTtl;
 import static command_request.CommandRequestOuterClass.RequestType.HVals;
@@ -204,6 +204,7 @@ import static command_request.CommandRequestOuterClass.RequestType.ZScore;
 import static command_request.CommandRequestOuterClass.RequestType.ZUnion;
 import static command_request.CommandRequestOuterClass.RequestType.ZUnionStore;
 import static glide.api.commands.GenericBaseCommands.REPLACE_VALKEY_API;
+import static glide.api.commands.HashBaseCommands.FIELDS_VALKEY_API;
 import static glide.api.commands.HashBaseCommands.WITH_VALUES_VALKEY_API;
 import static glide.api.commands.ListBaseCommands.COUNT_FOR_LIST_VALKEY_API;
 import static glide.api.commands.ServerManagementCommands.VERSION_VALKEY_API;
@@ -834,11 +835,11 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
         checkTypeOrThrow(key);
         protobufBatch.addCommands(
                 buildCommand(
-                        HSetex,
+                        HSetEx,
                         newArgsBuilder()
                                 .add(key)
                                 .add(options.toArgs())
-                                .add("FIELDS")
+                                .add(FIELDS_VALKEY_API)
                                 .add(fieldValueMap.size())
                                 .add(flattenMapToGlideStringArray(fieldValueMap))));
         return getThis();
@@ -867,11 +868,11 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
         checkTypeOrThrow(key);
         protobufBatch.addCommands(
                 buildCommand(
-                        HGetex,
+                        HGetEx,
                         newArgsBuilder()
                                 .add(key)
                                 .add(options.toArgs())
-                                .add("FIELDS")
+                                .add(FIELDS_VALKEY_API)
                                 .add(fields.length)
                                 .add(fields)));
         return getThis();
@@ -910,7 +911,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
                                 .add(key)
                                 .add(seconds)
                                 .add(options.toArgs())
-                                .add("FIELDS")
+                                .add(FIELDS_VALKEY_API)
                                 .add(fields.length)
                                 .add(fields)));
         return getThis();
@@ -938,7 +939,8 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
         checkTypeOrThrow(key);
         protobufBatch.addCommands(
                 buildCommand(
-                        HPersist, newArgsBuilder().add(key).add("FIELDS").add(fields.length).add(fields)));
+                        HPersist,
+                        newArgsBuilder().add(key).add(FIELDS_VALKEY_API).add(fields.length).add(fields)));
         return getThis();
     }
 
@@ -973,7 +975,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
                                 .add(key)
                                 .add(milliseconds)
                                 .add(options.toArgs())
-                                .add("FIELDS")
+                                .add(FIELDS_VALKEY_API)
                                 .add(fields.length)
                                 .add(fields)));
         return getThis();
@@ -1011,7 +1013,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
                                 .add(key)
                                 .add(unixSeconds)
                                 .add(options.toArgs())
-                                .add("FIELDS")
+                                .add(FIELDS_VALKEY_API)
                                 .add(fields.length)
                                 .add(fields)));
         return getThis();
@@ -1051,7 +1053,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
                                 .add(key)
                                 .add(unixMilliseconds)
                                 .add(options.toArgs())
-                                .add("FIELDS")
+                                .add(FIELDS_VALKEY_API)
                                 .add(fields.length)
                                 .add(fields)));
         return getThis();
@@ -1076,7 +1078,8 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     public <ArgType> T httl(@NonNull ArgType key, @NonNull ArgType[] fields) {
         checkTypeOrThrow(key);
         protobufBatch.addCommands(
-                buildCommand(HTtl, newArgsBuilder().add(key).add("FIELDS").add(fields.length).add(fields)));
+                buildCommand(
+                        HTtl, newArgsBuilder().add(key).add(FIELDS_VALKEY_API).add(fields.length).add(fields)));
         return getThis();
     }
 
@@ -1133,8 +1136,6 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * Returns the absolute Unix timestamp (in milliseconds) at which the given hash fields will
      * expire.
      *
-     * @apiNote When in cluster mode, all <code>key</code>s and <code>fields</code> must map to the
-     *     same hash slot.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, using any other
      *     type will throw {@link IllegalArgumentException}.
      * @since Valkey 9.0 and above.

@@ -14,6 +14,7 @@ import static glide.api.models.commands.ScoreFilter.MIN;
 import glide.api.models.BaseBatch;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.GetExOptions;
+import glide.api.models.commands.HashFieldExpirationOptions;
 import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions.InfLexBound;
@@ -414,6 +415,44 @@ public class BatchTestUtilities {
                 .hscan(hashKey2, "0")
                 .hscan(hashKey2, "0", HScanOptions.builder().count(20L).build());
 
+        // Hash field expiration commands (Valkey 9.0.0+)
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0")) {
+            String hashKey3 = generateKey("HashKey", isAtomic);
+            HashFieldExpirationOptions expiryOptions =
+                    HashFieldExpirationOptions.builder()
+                            .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
+                            .build();
+
+            batch
+                    .hsetex(hashKey3, Map.of(field1, value1, field2, value2), expiryOptions)
+                    .hgetex(hashKey3, new String[] {field1, field2}, expiryOptions)
+                    .hexpire(
+                            hashKey3,
+                            60L,
+                            new String[] {field1, field2},
+                            HashFieldExpirationOptions.builder().build())
+                    .hpersist(hashKey3, new String[] {field1, field2})
+                    .hpexpire(
+                            hashKey3,
+                            60000L,
+                            new String[] {field1, field2},
+                            HashFieldExpirationOptions.builder().build())
+                    .hexpireat(
+                            hashKey3,
+                            System.currentTimeMillis() / 1000 + 60,
+                            new String[] {field1, field2},
+                            HashFieldExpirationOptions.builder().build())
+                    .hpexpireat(
+                            hashKey3,
+                            System.currentTimeMillis() + 60000,
+                            new String[] {field1, field2},
+                            HashFieldExpirationOptions.builder().build())
+                    .httl(hashKey3, new String[] {field1, field2})
+                    .hpttl(hashKey3, new String[] {field1, field2})
+                    .hexpiretime(hashKey3, new String[] {field1, field2})
+                    .hpexpiretime(hashKey3, new String[] {field1, field2});
+        }
+
         if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
             batch
                     .hscan(hashKey2, "0", HScanOptions.builder().count(20L).noValues(false).build())
@@ -448,6 +487,46 @@ public class BatchTestUtilities {
                         "0", new Object[] {field1, value1}
                     }, // hscan(hashKey2, "0", HScanOptions.builder().count(20L).build());
                 };
+
+        // Add expected results for hash field expiration commands (Valkey 9.0.0+)
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0")) {
+            result =
+                    concatenateArrays(
+                            result,
+                            new Object[] {
+                                2L, // hsetex(hashKey3, Map.of(field1, value1, field2, value2), expiryOptions)
+                                new String[] {
+                                    value1, value2
+                                }, // hgetex(hashKey3, new String[] {field1, field2}, expiryOptions)
+                                new Long[] {
+                                    1L, 1L
+                                }, // hexpire(hashKey3, 60L, new String[] {field1, field2}, options)
+                                new Long[] {1L, 1L}, // hpersist(hashKey3, new String[] {field1, field2})
+                                new Long[] {
+                                    1L, 1L
+                                }, // hpexpire(hashKey3, 60000L, new String[] {field1, field2}, options)
+                                new Long[] {
+                                    1L, 1L
+                                }, // hexpireat(hashKey3, timestamp, new String[] {field1, field2}, options)
+                                new Long[] {
+                                    1L, 1L
+                                }, // hpexpireat(hashKey3, timestamp, new String[] {field1, field2}, options)
+                                new Long[] {
+                                    -1L, -1L
+                                }, // httl(hashKey3, new String[] {field1, field2}) - persistent after hpersist
+                                new Long[] {
+                                    -1L, -1L
+                                }, // hpttl(hashKey3, new String[] {field1, field2}) - persistent after hpersist
+                                new Long[] {
+                                    -1L, -1L
+                                }, // hexpiretime(hashKey3, new String[] {field1, field2}) - persistent after
+                                // hpersist
+                                new Long[] {
+                                    -1L, -1L
+                                }, // hpexpiretime(hashKey3, new String[] {field1, field2}) - persistent after
+                                // hpersist
+                            });
+        }
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
             result =

@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
  * Unit tests for hash field expiration commands options and validation. Integration tests are in
  * the integTest module.
  */
-public class HashFieldExpirationCommandsTest {
+public class HashFieldExpirationOptionsCommandsTest {
 
     // Unit tests for HashFieldExpirationOptions validation
     @Test
