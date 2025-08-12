@@ -243,6 +243,18 @@ class BaseClient(CoreCommands):
             buffers,  # Ensure buffers stay alive
         )
 
+    def _to_c_route_ptr_and_len(self, route: Optional[Route]):
+        proto_route = build_protobuf_route(route)
+        if proto_route:
+            route_bytes = proto_route.SerializeToString()
+            route_ptr = self._ffi.from_buffer(route_bytes)
+            route_len = len(route_bytes)
+        else:
+            route_ptr = self._ffi.NULL
+            route_len = 0
+
+        return route_ptr, route_len
+
     def _handle_cmd_result(self, command_result):
         try:
             if command_result == self._ffi.NULL:
@@ -281,23 +293,17 @@ class BaseClient(CoreCommands):
         # Convert the arguments to C-compatible pointers
         c_args, c_lengths, buffers = self._to_c_strings(args)
 
-        proto_route = build_protobuf_route(route)
-        if proto_route:
-            route_bytes = proto_route.SerializeToString()
-            route_ptr = self._ffi.from_buffer(route_bytes)
-        else:
-            route_bytes = b""
-            route_ptr = self._ffi.NULL
+        route_ptr, route_len = self._to_c_route_ptr_and_len(route)
 
         result = self._lib.command(
-            client_adapter_ptr,  # Client pointer
-            1,  # Example channel (adjust as needed)
+            client_adapter_ptr,  # Pointer to the ClientAdapter from create_client()
+            1,  # Request ID - placeholder for sync clients (used for async callbacks)
             request_type,  # Request type (e.g., GET or SET)
             len(args),  # Number of arguments
             c_args,  # Array of argument pointers
             c_lengths,  # Array of argument lengths
-            route_ptr,
-            len(route_bytes),
+            route_ptr,  # Pointer to protobuf-encoded routing information (NULL if no routing)
+            route_len,  # Length of the routing data in bytes (0 if no routing)
             0,  # Span pointer (0 for no tracing)
         )
         return self._handle_cmd_result(result)
@@ -370,6 +376,7 @@ class BaseClient(CoreCommands):
         Execute a batch of commands synchronously using the FFI batch function.
         Accepts pre-extracted parameters from exec().
         """
+
         if self._is_closed:
             raise ClosingError(
                 "Unable to execute requests; the client is closed. Please create a new client."
@@ -559,6 +566,56 @@ class BaseClient(CoreCommands):
         )
 
         return route_info, refs + [route_info]
+
+    def _execute_script(
+        self,
+        script_hash: str,
+        keys: Optional[List[TEncodable]] = None,
+        args: Optional[List[TEncodable]] = None,
+        route: Optional[Route] = None,
+    ) -> TResult:
+
+        if self._is_closed:
+            raise ClosingError(
+                "Unable to execute requests; the client is closed. Please create a new client."
+            )
+
+        client_adapter_ptr = self._core_client
+        if client_adapter_ptr == self._ffi.NULL:
+            raise ValueError("Invalid client pointer.")
+
+        # Default to empty lists if None provided
+        if keys is None:
+            keys = []
+        if args is None:
+            args = []
+
+        # Convert keys to C-compatible format
+        keys_c_args, keys_c_lengths, keys_buffers = self._to_c_strings(keys)
+
+        # Convert args to C-compatible format
+        args_c_args, args_c_lengths, args_buffers = self._to_c_strings(args)
+
+        # Convert script hash to C string
+        hash_bytes = script_hash.encode(ENCODING)
+        hash_buffer = self._ffi.from_buffer(hash_bytes)
+
+        route_ptr, route_len = self._to_c_route_ptr_and_len(route)
+
+        result = self._lib.invoke_script(
+            client_adapter_ptr,  # Pointer to the ClientAdapter from create_client()
+            1,  # Request ID - placeholder for sync clients (used for async callbacks)
+            hash_buffer,  # Pointer to the script's SHA1 hash string
+            len(keys),  # num of keys
+            keys_c_args,  # keys (array of pointers)
+            keys_c_lengths,  # keys_len (array of lengths)
+            len(args),  # args_count
+            args_c_args,  # args (array of pointers)
+            args_c_lengths,  # args_len (array of lengths)
+            route_ptr,  # Pointer to protobuf-encoded routing information (NULL if no routing)
+            route_len,  # Length of the routing data in bytes (0 if no routing)
+        )
+        return self._handle_cmd_result(result)
 
     def close(self):
         if not self._is_closed:

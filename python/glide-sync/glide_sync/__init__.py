@@ -149,6 +149,7 @@ from .config import GlideClientConfiguration, GlideClusterClientConfiguration
 from .glide_client import GlideClient, GlideClusterClient, TGlideClient
 from .logger import Level as LogLevel
 from .logger import Logger
+from .script import Script
 from .sync_commands import ft, glide_json
 
 __all__ = [
@@ -314,4 +315,6 @@ __all__ = [
     "FtAggregateSortProperty",
     "FtProfileOptions",
     "QueryType",
+    # Script
+    "Script",
 ]
