@@ -9,6 +9,8 @@ import java.net.URI;
 import java.time.Duration;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import redis.clients.jedis.exceptions.JedisConnectionException;
+import redis.clients.jedis.exceptions.JedisException;
 
 // import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
 

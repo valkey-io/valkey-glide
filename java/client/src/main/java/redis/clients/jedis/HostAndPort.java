@@ -41,6 +41,26 @@ public class HostAndPort {
         return port;
     }
 
+    /** Parse host:port string into HostAndPort object. */
+    public static HostAndPort from(String hostAndPortStr) {
+        if (hostAndPortStr == null || hostAndPortStr.trim().isEmpty()) {
+            throw new IllegalArgumentException("Host and port string cannot be null or empty");
+        }
+
+        String[] parts = hostAndPortStr.split(":");
+        if (parts.length != 2) {
+            throw new IllegalArgumentException("Invalid host:port format: " + hostAndPortStr);
+        }
+
+        try {
+            String host = parts[0].trim();
+            int port = Integer.parseInt(parts[1].trim());
+            return new HostAndPort(host, port);
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("Invalid port number in: " + hostAndPortStr, e);
+        }
+    }
+
     @Override
     public boolean equals(Object obj) {
         if (this == obj) return true;
