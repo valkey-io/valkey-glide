@@ -427,6 +427,13 @@ class TestCommands:
         assert int(result[b"proto"]) == 3
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2])
+    def test_sync_allow_opt_in_to_resp2_protocol(self, glide_sync_client: TGlideClient):
+        result = cast(Dict[bytes, bytes], glide_sync_client.custom_command(["HELLO"]))
+
+        assert int(result[b"proto"]) == 2
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_conditional_set(self, glide_sync_client: TGlideClient):
         key = get_random_string(10)
