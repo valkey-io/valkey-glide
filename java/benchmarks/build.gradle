@@ -10,6 +10,10 @@ repositories {
     mavenLocal()
 }
 
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+}
+
 dependencies {
     version = System.getenv("GLIDE_RELEASE_VERSION") ?: project.ext.defaultReleaseVersion
 
