@@ -143,7 +143,7 @@ jobs:
               continue-on-error: true
               uses: actions/upload-artifact@v4
               with:
-                  name: node-test-reports-${{ matrix.host.OS }}-${{ matrix.host.ARCH }}-${{ matrix.node }}-${{ github.run_id }}
+                  name: node-test-reports-${{ matrix.node }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ matrix.host.OS }}-${{ matrix.host.ARCH }}
                   path: |
                       node/test-report*.html
 
@@ -377,7 +377,6 @@ jobs:
                   npm run test
 
             - name: Sanitize IMAGE variable
-              if: ${{ matrix.host.TARGET == 'x86_64-unknown-linux-musl' }}
               # Replace `:` in the variable otherwise it can't be used in `upload-artifact`
               run: echo "SANITIZED_IMAGE=${{ matrix.host.IMAGE }}" | sed -r 's/:/-/g' >> $GITHUB_ENV
 
