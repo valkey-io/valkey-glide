@@ -3006,8 +3006,11 @@ export class BaseClient {
      * @param seconds - The expiration time in seconds.
      * @param fields - The fields to set expiration for.
      * @param options - Optional parameters for the command.
-     * @returns A Promise that resolves to an array of boolean values indicating whether expiration was set for each field.
-     *          `true` if expiration was set, `false` if the field doesn't exist or the condition wasn't met.
+     * @returns A Promise that resolves to an array of numbers indicating the result for each field:
+     *          - `1` if expiration was set successfully
+     *          - `0` if the specified condition (NX, XX, GT, LT) was not met
+     *          - `-2` if the field does not exist or the key does not exist
+     *          - `2` when called with 0 seconds (field deleted)
      * 
      * @example
      * ```typescript
@@ -3039,7 +3042,7 @@ export class BaseClient {
         seconds: number,
         fields: GlideString[],
         options?: HExpireOptions,
-    ): Promise<boolean[]> {
+    ): Promise<number[]> {
         return this.createWritePromise(createHExpire(key, seconds, fields, options));
     }
 
@@ -3050,9 +3053,10 @@ export class BaseClient {
      * 
      * @param key - The key of the hash.
      * @param fields - The fields in the hash to remove expiration from.
-     * @returns An array of boolean values indicating whether expiration was successfully removed for each field.
-     *     - `true` if the field's expiration was removed.
-     *     - `false` if the field does not exist or does not have an associated expiration.
+     * @returns An array of numbers indicating the result for each field:
+     *     - `1` if the field's expiration was removed successfully.
+     *     - `-1` if the field exists but has no associated expiration.
+     *     - `-2` if the field does not exist or the key does not exist.
      * 
      * @example
      * ```typescript
@@ -3071,7 +3075,7 @@ export class BaseClient {
     public async hpersist(
         key: GlideString,
         fields: GlideString[],
-    ): Promise<boolean[]> {
+    ): Promise<number[]> {
         return this.createWritePromise(createHPersist(key, fields));
     }
 
@@ -3084,7 +3088,11 @@ export class BaseClient {
      * @param milliseconds - The expiration time in milliseconds.
      * @param fields - The fields to set expiration for.
      * @param options - Optional arguments for the HPEXPIRE command. See {@link HPExpireOptions}.
-     * @returns An array of boolean values indicating whether expiration was set for each field.
+     * @returns An array of numbers indicating the result for each field:
+     *          - `1` if expiration was set successfully
+     *          - `0` if the specified condition (NX, XX, GT, LT) was not met
+     *          - `-2` if the field does not exist or the key does not exist
+     *          - `2` when called with 0 milliseconds (field deleted)
      * 
      * @example
      * ```typescript
@@ -3114,7 +3122,7 @@ export class BaseClient {
         milliseconds: number,
         fields: GlideString[],
         options?: HPExpireOptions,
-    ): Promise<boolean[]> {
+    ): Promise<number[]> {
         return this.createWritePromise(createHPExpire(key, milliseconds, fields, options));
     }
 
@@ -3127,7 +3135,11 @@ export class BaseClient {
      * @param unixTimestampSeconds - The expiration time as a Unix timestamp in seconds.
      * @param fields - The fields to set expiration for.
      * @param options - Optional arguments for the HEXPIREAT command. See {@link HExpireAtOptions}.
-     * @returns An array of boolean values indicating whether expiration was set for each field.
+     * @returns An array of numbers indicating the result for each field:
+     *          - `1` if expiration was set successfully
+     *          - `0` if the specified condition (NX, XX, GT, LT) was not met
+     *          - `-2` if the field does not exist or the key does not exist
+     *          - `2` when called with 0 seconds (field deleted)
      * 
      * @example
      * ```typescript
@@ -3160,7 +3172,7 @@ export class BaseClient {
         unixTimestampSeconds: number,
         fields: GlideString[],
         options?: HExpireAtOptions,
-    ): Promise<boolean[]> {
+    ): Promise<number[]> {
         return this.createWritePromise(createHExpireAt(key, unixTimestampSeconds, fields, options));
     }
 
@@ -3173,7 +3185,11 @@ export class BaseClient {
      * @param unixTimestampMilliseconds - The expiration time as a Unix timestamp in milliseconds.
      * @param fields - The fields to set expiration for.
      * @param options - Optional arguments for the HPEXPIREAT command. See {@link HPExpireAtOptions}.
-     * @returns An array of boolean values indicating whether expiration was set for each field.
+     * @returns An array of numbers indicating the result for each field:
+     *          - `1` if expiration was set successfully
+     *          - `0` if the specified condition (NX, XX, GT, LT) was not met
+     *          - `-2` if the field does not exist or the key does not exist
+     *          - `2` when called with 0 milliseconds (field deleted)
      * 
      * @example
      * ```typescript
@@ -3206,7 +3222,7 @@ export class BaseClient {
         unixTimestampMilliseconds: number,
         fields: GlideString[],
         options?: HPExpireAtOptions,
-    ): Promise<boolean[]> {
+    ): Promise<number[]> {
         return this.createWritePromise(createHPExpireAt(key, unixTimestampMilliseconds, fields, options));
     }
 

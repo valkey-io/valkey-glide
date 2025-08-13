@@ -580,6 +580,9 @@ export function createHGetEx(
         }
     }
 
+    // Add FIELDS keyword and field count
+    args.push("FIELDS", fields.length.toString());
+
     // Add field names
     args.push(...fields);
 
@@ -602,6 +605,9 @@ export function createHExpire(
         args.push(options.condition);
     }
 
+    // Add FIELDS keyword and field count
+    args.push("FIELDS", fields.length.toString());
+
     // Add field names
     args.push(...fields);
 
@@ -616,6 +622,9 @@ export function createHPersist(
     fields: GlideString[],
 ): command_request.Command {
     const args: GlideString[] = [key];
+
+    // Add FIELDS keyword and field count
+    args.push("FIELDS", fields.length.toString());
 
     // Add field names
     args.push(...fields);
@@ -639,6 +648,9 @@ export function createHPExpire(
         args.push(options.condition);
     }
 
+    // Add FIELDS keyword and field count
+    args.push("FIELDS", fields.length.toString());
+
     // Add field names
     args.push(...fields);
 
@@ -660,6 +672,9 @@ export function createHExpireAt(
     if (options?.condition) {
         args.push(options.condition);
     }
+
+    // Add FIELDS keyword and field count
+    args.push("FIELDS", fields.length.toString());
 
     // Add field names
     args.push(...fields);
@@ -683,6 +698,9 @@ export function createHPExpireAt(
         args.push(options.condition);
     }
 
+    // Add FIELDS keyword and field count
+    args.push("FIELDS", fields.length.toString());
+
     // Add field names
     args.push(...fields);
 
@@ -697,6 +715,9 @@ export function createHTtl(
     fields: GlideString[],
 ): command_request.Command {
     const args: GlideString[] = [key];
+
+    // Add FIELDS keyword and field count
+    args.push("FIELDS", fields.length.toString());
 
     // Add field names
     args.push(...fields);
@@ -713,6 +734,9 @@ export function createHPTtl(
 ): command_request.Command {
     const args: GlideString[] = [key];
 
+    // Add FIELDS keyword and field count
+    args.push("FIELDS", fields.length.toString());
+
     // Add field names
     args.push(...fields);
 
@@ -728,6 +752,9 @@ export function createHExpireTime(
 ): command_request.Command {
     const args: GlideString[] = [key];
 
+    // Add FIELDS keyword and field count
+    args.push("FIELDS", fields.length.toString());
+
     // Add field names
     args.push(...fields);
 
@@ -742,6 +769,9 @@ export function createHPExpireTime(
     fields: GlideString[],
 ): command_request.Command {
     const args: GlideString[] = [key];
+
+    // Add FIELDS keyword and field count
+    args.push("FIELDS", fields.length.toString());
 
     // Add field names
     args.push(...fields);
