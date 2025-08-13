@@ -199,8 +199,6 @@ pub struct Client {
     request_timeout: Duration,
     // Setting this counter to limit the inflight requests, in case of any queue is blocked, so we return error to the customer.
     inflight_requests_allowed: Arc<AtomicIsize>,
-    // Store the original connection request to allow updating database_id for SELECT commands
-    pub connection_request: Arc<RwLock<ConnectionRequest>>,
 }
 
 async fn run_with_timeout<T>(
@@ -777,17 +775,14 @@ impl Client {
                             if let Ok(db_index) = db_str.parse::<i64>() {
                                 // Check if we're in standalone mode before updating database
                                 let client = self.internal_client.read().await;
-                                let is_standalone =
-                                    matches!(&*client, ClientWrapper::Standalone(_));
-                                drop(client);
-
-                                if is_standalone {
-                                    // Update the connection request's database_id for future reconnections
-                                    let mut config = self.connection_request.write().await;
-                                    config.database_id = db_index;
+                                if let ClientWrapper::Standalone(standalone_client) = &*client {
+                                    // Update the connection database for future reconnections
+                                    let _ = standalone_client
+                                        .update_connection_database(db_index)
+                                        .await;
                                     log_debug(
                                         "track_database_change",
-                                        format!("Updated connection database_id to {db_index}"),
+                                        format!("Updated connection database to {db_index}"),
                                     );
                                 }
                             }
@@ -1181,7 +1176,6 @@ impl Client {
         ));
 
         tokio::time::timeout(DEFAULT_CLIENT_CREATION_TIMEOUT, async move {
-            let connection_request_clone = request.clone();
             let internal_client = if request.lazy_connect {
                 ClientWrapper::Lazy(Box::new(LazyClient {
                     config: request,
@@ -1204,7 +1198,6 @@ impl Client {
                 internal_client: Arc::new(RwLock::new(internal_client)),
                 request_timeout,
                 inflight_requests_allowed,
-                connection_request: Arc::new(RwLock::new(connection_request_clone)),
             })
         })
         .await

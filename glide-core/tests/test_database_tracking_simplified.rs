@@ -3,9 +3,12 @@
 //! Simple unit tests for database tracking functionality.
 //! This tests the simplified approach where database changes are tracked in the connection configuration.
 
+mod utilities;
+
 use glide_core::client::{Client, ConnectionRequest, NodeAddress};
 use redis::cluster_routing::Routable;
 use redis::{Value, cmd};
+use std::time::Duration;
 
 /// Test the basic database tracking logic without requiring a Redis server
 #[tokio::test]
@@ -26,72 +29,96 @@ async fn test_database_tracking_logic() {
         .await
         .expect("Client creation should succeed with lazy connect");
 
-    // Verify that the connection request starts with database 0
-    {
-        let config = client.connection_request.read().await;
-        assert_eq!(config.database_id, 0);
-    }
+    // Test that the database tracking method doesn't crash
+    // In the real implementation, this will be called during send_command
+    use redis::Cmd;
+    let mut select_cmd = Cmd::new();
+    select_cmd.arg("SELECT").arg(3);
+    let success_response = Value::Okay;
+
+    // This should not panic - the actual database update will only happen
+    // when connected to a real standalone server
+    client
+        .track_database_change_if_select(&select_cmd, &success_response)
+        .await;
 
     println!("Database tracking simplified test passed");
 }
 
 /// Test reconnection behavior with database tracking
-/// This test requires a running Redis/Valkey server
+/// This test starts a real Redis server, connects a client, executes SELECT,
+/// forces disconnection, and verifies the database is preserved after reconnection
 #[tokio::test]
 async fn test_database_tracking_with_reconnection() {
-    // Skip this test if no server is available
-    if std::env::var("REDIS_URL").is_err() && std::env::var("VALKEY_URL").is_err() {
-        println!("Skipping reconnection test - no server URL provided");
-        return;
-    }
+    use crate::utilities::{
+        ClusterMode, TestConfiguration, kill_connection, setup_test_basics_internal,
+    };
 
-    let server_url = std::env::var("REDIS_URL")
-        .or_else(|_| std::env::var("VALKEY_URL"))
-        .unwrap_or_else(|_| "redis://localhost:6379".to_string());
-
-    // Parse the server URL to get host and port
-    let url = url::Url::parse(&server_url).expect("Invalid server URL");
-    let host = url.host_str().unwrap_or("localhost").to_string();
-    let port = url.port().unwrap_or(6379);
-
-    // Create a connection request starting with database 0
-    let request = ConnectionRequest {
-        addresses: vec![NodeAddress { host, port }],
-        database_id: 0,
-        lazy_connect: false, // Actually connect to test reconnection
+    let config = TestConfiguration {
+        use_tls: false,
+        cluster_mode: ClusterMode::Disabled,
+        shared_server: true,
+        database_id: 0, // Start in database 0
         ..Default::default()
     };
 
-    let client = match Client::new(request, None).await {
-        Ok(client) => client,
+    let test_basics = setup_test_basics_internal(&config).await;
+    let mut client = test_basics.client;
+
+    // Verify starting database is 0 by checking CLIENT INFO
+    let mut client_info_cmd = redis::cmd("CLIENT");
+    client_info_cmd.arg("INFO");
+    let initial_info: String = redis::FromRedisValue::from_redis_value(
+        &client.send_command(&client_info_cmd).await.unwrap(),
+    )
+    .unwrap();
+    assert!(initial_info.contains("db=0"), "Should start in database 0, got: {initial_info}");
+
+    // Execute SELECT 3 to change database
+    let mut select_cmd = redis::cmd("SELECT");
+    select_cmd.arg(3);
+    let select_result = client.send_command(&select_cmd).await.unwrap();
+    assert_eq!(select_result, Value::Okay, "SELECT command should succeed");
+
+    // Verify we're now in database 3
+    let db3_info: String = redis::FromRedisValue::from_redis_value(
+        &client.send_command(&client_info_cmd).await.unwrap(),
+    )
+    .unwrap();
+    assert!(db3_info.contains("db=3"), "Should be in database 3 after SELECT, got: {db3_info}");
+
+    // Force disconnection to trigger reconnection
+    kill_connection(&mut client).await;
+
+    // Wait a moment for the connection to be dropped
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    // Send another command - this should trigger reconnection
+    // The reconnection should automatically restore database 3
+    let reconnect_info_result = client.send_command(&client_info_cmd).await;
+
+    // Handle both possible outcomes: immediate reconnection or retry after failure
+    let reconnect_info: String = match reconnect_info_result {
+        Ok(response) => {
+            // Connection worked immediately (fast reconnection)
+            redis::FromRedisValue::from_redis_value(&response).unwrap()
+        }
         Err(_) => {
-            println!("Skipping reconnection test - cannot connect to server");
-            return;
+            // Connection failed as expected, retry to trigger reconnection
+            tokio::time::sleep(Duration::from_millis(500)).await;
+            let retry_response = client
+                .send_command(&client_info_cmd)
+                .await
+                .expect("Reconnection should succeed after retry");
+            redis::FromRedisValue::from_redis_value(&retry_response).unwrap()
         }
     };
 
-    // Verify starting database is 0
-    {
-        let config = client.connection_request.read().await;
-        assert_eq!(config.database_id, 0);
-    }
-
-    // Simulate a SELECT command to database 1 (this would normally be done through send_command)
-    // For this test, we'll directly call the tracking function to simulate a successful SELECT
-    use redis::Cmd;
-    let mut select_cmd = Cmd::new();
-    select_cmd.arg("SELECT").arg(1);
-    let success_response = Value::Okay;
-
-    client
-        .track_database_change_if_select(&select_cmd, &success_response)
-        .await;
-
-    // Verify that the connection request database_id was updated
-    {
-        let config = client.connection_request.read().await;
-        assert_eq!(config.database_id, 1);
-    }
+    // After reconnection, we should still be in database 3
+    assert!(
+        reconnect_info.contains("db=3"),
+        "Should be in database 3 after reconnection, got: {reconnect_info}"
+    );
 
     println!("Database tracking with reconnection test passed");
 }
