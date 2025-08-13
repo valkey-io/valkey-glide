@@ -50,6 +50,8 @@ import redis.clients.jedis.exceptions.JedisConnectionException;
 import redis.clients.jedis.exceptions.JedisException;
 import redis.clients.jedis.params.BitPosParams;
 import redis.clients.jedis.params.GetExParams;
+import redis.clients.jedis.params.HGetExParams;
+import redis.clients.jedis.params.HSetExParams;
 import redis.clients.jedis.params.ScanParams;
 import redis.clients.jedis.params.SetParams;
 import redis.clients.jedis.resps.ScanResult;
@@ -4739,6 +4741,334 @@ public final class Jedis implements Closeable {
     }
 
     /**
+     * Sets the specified field in the hash stored at key to value with expiration and existence conditions.
+     * Note: This command requires Redis 7.9+ and may not be available in all Redis/Valkey versions.
+     *
+     * @param key the key of the hash
+     * @param params the expiration and existence parameters
+     * @param field the field in the hash
+     * @param value the value to set
+     * @return 1 if field is a new field in the hash and value was set, 0 if field already exists
+     *     in the hash and the value was updated
+     */
+    public long hsetex(String key, HSetExParams params, String field, String value) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HSETEX");
+            args.add(key);
+            
+            // Add existence condition
+            if (params.getExistenceCondition() != null) {
+                args.add(params.getExistenceCondition().name());
+            }
+            
+            // Add expiration parameters
+            if (params.getExpirationType() != null) {
+                args.add(params.getExpirationType().name());
+                if (params.getExpirationValue() != null) {
+                    args.add(params.getExpirationValue().toString());
+                }
+            }
+            
+            args.add(field);
+            args.add(value);
+            
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            return result instanceof Long ? (Long) result : Long.parseLong(result.toString());
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HSETEX operation failed", e);
+        }
+    }
+
+    /**
+     * Sets the specified fields to their respective values in the hash stored at key with expiration and existence conditions.
+     * Note: This command requires Redis 7.9+ and may not be available in all Redis/Valkey versions.
+     *
+     * @param key the key of the hash
+     * @param params the expiration and existence parameters
+     * @param hash a map of field-value pairs to set in the hash
+     * @return the number of fields that were added
+     */
+    public long hsetex(String key, HSetExParams params, Map<String, String> hash) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HSETEX");
+            args.add(key);
+            
+            // Add existence condition
+            if (params.getExistenceCondition() != null) {
+                args.add(params.getExistenceCondition().name());
+            }
+            
+            // Add expiration parameters
+            if (params.getExpirationType() != null) {
+                args.add(params.getExpirationType().name());
+                if (params.getExpirationValue() != null) {
+                    args.add(params.getExpirationValue().toString());
+                }
+            }
+            
+            // Add field-value pairs
+            for (Map.Entry<String, String> entry : hash.entrySet()) {
+                args.add(entry.getKey());
+                args.add(entry.getValue());
+            }
+            
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            return result instanceof Long ? (Long) result : Long.parseLong(result.toString());
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HSETEX operation failed", e);
+        }
+    }
+
+    /**
+     * Retrieves the values associated with the specified fields in a hash stored at the given key
+     * and optionally sets their expiration.
+     * Note: This command requires Redis 7.9+ and may not be available in all Redis/Valkey versions.
+     *
+     * @param key the key of the hash
+     * @param params additional parameters for the HGETEX command
+     * @param fields the fields whose values are to be retrieved
+     * @return a list of the value associated with each field or nil if the field doesn't exist
+     */
+    public List<String> hgetex(String key, HGetExParams params, String... fields) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HGETEX");
+            args.add(key);
+            
+            // Add expiration parameters
+            if (params.getExpirationType() != null) {
+                args.add(params.getExpirationType().name());
+                if (params.getExpirationValue() != null) {
+                    args.add(params.getExpirationValue().toString());
+                }
+            }
+            
+            // Add fields
+            args.addAll(Arrays.asList(fields));
+            
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            if (result instanceof Object[]) {
+                Object[] resultArray = (Object[]) result;
+                List<String> stringResult = new ArrayList<>();
+                for (Object obj : resultArray) {
+                    stringResult.add(obj != null ? obj.toString() : null);
+                }
+                return stringResult;
+            }
+            return Arrays.asList(result != null ? result.toString() : null);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HGETEX operation failed", e);
+        }
+    }
+
+    /**
+     * Retrieves the values associated with the specified fields in the hash stored at the given key
+     * and then deletes those fields from the hash.
+     * Note: This command requires Redis 7.9+ and may not be available in all Redis/Valkey versions.
+     *
+     * @param key the key of the hash
+     * @param fields the fields whose values are to be retrieved and then deleted
+     * @return a list of values associated with the specified fields before they were deleted
+     */
+    public List<String> hgetdel(String key, String... fields) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HGETDEL");
+            args.add(key);
+            args.addAll(Arrays.asList(fields));
+            
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            if (result instanceof Object[]) {
+                Object[] resultArray = (Object[]) result;
+                List<String> stringResult = new ArrayList<>();
+                for (Object obj : resultArray) {
+                    stringResult.add(obj != null ? obj.toString() : null);
+                }
+                return stringResult;
+            }
+            return Arrays.asList(result != null ? result.toString() : null);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HGETDEL operation failed", e);
+        }
+    }
+
+    /**
+     * Sets the specified field in the hash stored at key to value with expiration and existence conditions (binary version).
+     * Note: This command requires Redis 7.9+ and may not be available in all Redis/Valkey versions.
+     *
+     * @param key the key of the hash
+     * @param params the expiration and existence parameters
+     * @param field the field in the hash
+     * @param value the value to set
+     * @return 1 if field is a new field in the hash and value was set, 0 if field already exists
+     *     in the hash and the value was updated
+     */
+    public long hsetex(byte[] key, HSetExParams params, byte[] field, byte[] value) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HSETEX");
+            args.add(new String(key));
+            
+            // Add existence condition
+            if (params.getExistenceCondition() != null) {
+                args.add(params.getExistenceCondition().name());
+            }
+            
+            // Add expiration parameters
+            if (params.getExpirationType() != null) {
+                args.add(params.getExpirationType().name());
+                if (params.getExpirationValue() != null) {
+                    args.add(params.getExpirationValue().toString());
+                }
+            }
+            
+            args.add(new String(field));
+            args.add(new String(value));
+            
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            return result instanceof Long ? (Long) result : Long.parseLong(result.toString());
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HSETEX operation failed", e);
+        }
+    }
+
+    /**
+     * Sets the specified fields to their respective values in the hash stored at key with expiration and existence conditions (binary version).
+     * Note: This command requires Redis 7.9+ and may not be available in all Redis/Valkey versions.
+     *
+     * @param key the key of the hash
+     * @param params the expiration and existence parameters
+     * @param hash a map of field-value pairs to set in the hash
+     * @return the number of fields that were added
+     */
+    public long hsetex(byte[] key, HSetExParams params, Map<byte[], byte[]> hash) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HSETEX");
+            args.add(new String(key));
+            
+            // Add existence condition
+            if (params.getExistenceCondition() != null) {
+                args.add(params.getExistenceCondition().name());
+            }
+            
+            // Add expiration parameters
+            if (params.getExpirationType() != null) {
+                args.add(params.getExpirationType().name());
+                if (params.getExpirationValue() != null) {
+                    args.add(params.getExpirationValue().toString());
+                }
+            }
+            
+            // Add field-value pairs
+            for (Map.Entry<byte[], byte[]> entry : hash.entrySet()) {
+                args.add(new String(entry.getKey()));
+                args.add(new String(entry.getValue()));
+            }
+            
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            return result instanceof Long ? (Long) result : Long.parseLong(result.toString());
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HSETEX operation failed", e);
+        }
+    }
+
+    /**
+     * Retrieves the values associated with the specified fields in a hash stored at the given key
+     * and optionally sets their expiration (binary version).
+     * Note: This command requires Redis 7.9+ and may not be available in all Redis/Valkey versions.
+     *
+     * @param key the key of the hash
+     * @param params additional parameters for the HGETEX command
+     * @param fields the fields whose values are to be retrieved
+     * @return a list of the value associated with each field or nil if the field doesn't exist
+     */
+    public List<byte[]> hgetex(byte[] key, HGetExParams params, byte[]... fields) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HGETEX");
+            args.add(new String(key));
+            
+            // Add expiration parameters
+            if (params.getExpirationType() != null) {
+                args.add(params.getExpirationType().name());
+                if (params.getExpirationValue() != null) {
+                    args.add(params.getExpirationValue().toString());
+                }
+            }
+            
+            // Add fields
+            for (byte[] field : fields) {
+                args.add(new String(field));
+            }
+            
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            if (result instanceof Object[]) {
+                Object[] resultArray = (Object[]) result;
+                List<byte[]> byteResult = new ArrayList<>();
+                for (Object obj : resultArray) {
+                    byteResult.add(obj != null ? obj.toString().getBytes() : null);
+                }
+                return byteResult;
+            }
+            return Arrays.asList(result != null ? result.toString().getBytes() : null);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HGETEX operation failed", e);
+        }
+    }
+
+    /**
+     * Retrieves the values associated with the specified fields in the hash stored at the given key
+     * and then deletes those fields from the hash (binary version).
+     * Note: This command requires Redis 7.9+ and may not be available in all Redis/Valkey versions.
+     *
+     * @param key the key of the hash
+     * @param fields the fields whose values are to be retrieved and then deleted
+     * @return a list of values associated with the specified fields before they were deleted
+     */
+    public List<byte[]> hgetdel(byte[] key, byte[]... fields) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HGETDEL");
+            args.add(new String(key));
+            for (byte[] field : fields) {
+                args.add(new String(field));
+            }
+            
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            if (result instanceof Object[]) {
+                Object[] resultArray = (Object[]) result;
+                List<byte[]> byteResult = new ArrayList<>();
+                for (Object obj : resultArray) {
+                    byteResult.add(obj != null ? obj.toString().getBytes() : null);
+                }
+                return byteResult;
+            }
+            return Arrays.asList(result != null ? result.toString().getBytes() : null);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HGETDEL operation failed", e);
+        }
+    }
+
+    /**
      * Iterates fields of Hash types and their associated values.
      *
      * @param key the key of the hash
@@ -4920,7 +5250,20 @@ public final class Jedis implements Closeable {
      * @return list of results for each field
      */
     public List<Long> hexpire(String key, long seconds, String... fields) {
-        throw new UnsupportedOperationException("HEXPIRE command is not supported in this version");
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HEXPIRE");
+            args.add(key);
+            args.add(String.valueOf(seconds));
+            args.addAll(Arrays.asList(fields));
+            
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            return convertToLongList(result);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HEXPIRE operation failed", e);
+        }
     }
 
     /**
@@ -4934,7 +5277,21 @@ public final class Jedis implements Closeable {
      * @return list of results for each field
      */
     public List<Long> hexpire(String key, long seconds, ExpiryOption condition, String... fields) {
-        throw new UnsupportedOperationException("HEXPIRE command is not supported in this version");
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HEXPIRE");
+            args.add(key);
+            args.add(String.valueOf(seconds));
+            args.add(condition.name());
+            args.addAll(Arrays.asList(fields));
+            
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            return convertToLongList(result);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HEXPIRE operation failed", e);
+        }
     }
 
     /**
@@ -4947,7 +5304,20 @@ public final class Jedis implements Closeable {
      * @return list of results for each field
      */
     public List<Long> hpexpire(String key, long milliseconds, String... fields) {
-        throw new UnsupportedOperationException("HPEXPIRE command is not supported in this version");
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HPEXPIRE");
+            args.add(key);
+            args.add(String.valueOf(milliseconds));
+            args.addAll(Arrays.asList(fields));
+            
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            return convertToLongList(result);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HPEXPIRE operation failed", e);
+        }
     }
 
     /**
@@ -4962,7 +5332,21 @@ public final class Jedis implements Closeable {
      */
     public List<Long> hpexpire(
             String key, long milliseconds, ExpiryOption condition, String... fields) {
-        throw new UnsupportedOperationException("HPEXPIRE command is not supported in this version");
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HPEXPIRE");
+            args.add(key);
+            args.add(String.valueOf(milliseconds));
+            args.add(condition.name());
+            args.addAll(Arrays.asList(fields));
+            
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            return convertToLongList(result);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HPEXPIRE operation failed", e);
+        }
     }
 
     /**
@@ -4975,7 +5359,20 @@ public final class Jedis implements Closeable {
      * @return list of results for each field
      */
     public List<Long> hexpireAt(String key, long unixTimeSeconds, String... fields) {
-        throw new UnsupportedOperationException("HEXPIREAT command is not supported in this version");
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HEXPIREAT");
+            args.add(key);
+            args.add(String.valueOf(unixTimeSeconds));
+            args.addAll(Arrays.asList(fields));
+            
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            return convertToLongList(result);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HEXPIREAT operation failed", e);
+        }
     }
 
     /**
@@ -4990,7 +5387,21 @@ public final class Jedis implements Closeable {
      */
     public List<Long> hexpireAt(
             String key, long unixTimeSeconds, ExpiryOption condition, String... fields) {
-        throw new UnsupportedOperationException("HEXPIREAT command is not supported in this version");
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HEXPIREAT");
+            args.add(key);
+            args.add(String.valueOf(unixTimeSeconds));
+            args.add(condition.name());
+            args.addAll(Arrays.asList(fields));
+            
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            return convertToLongList(result);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HEXPIREAT operation failed", e);
+        }
     }
 
     /**
@@ -5003,7 +5414,20 @@ public final class Jedis implements Closeable {
      * @return list of results for each field
      */
     public List<Long> hpexpireAt(String key, long unixTimeMillis, String... fields) {
-        throw new UnsupportedOperationException("HPEXPIREAT command is not supported in this version");
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HPEXPIREAT");
+            args.add(key);
+            args.add(String.valueOf(unixTimeMillis));
+            args.addAll(Arrays.asList(fields));
+            
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            return convertToLongList(result);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HPEXPIREAT operation failed", e);
+        }
     }
 
     /**
@@ -5018,7 +5442,21 @@ public final class Jedis implements Closeable {
      */
     public List<Long> hpexpireAt(
             String key, long unixTimeMillis, ExpiryOption condition, String... fields) {
-        throw new UnsupportedOperationException("HPEXPIREAT command is not supported in this version");
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HPEXPIREAT");
+            args.add(key);
+            args.add(String.valueOf(unixTimeMillis));
+            args.add(condition.name());
+            args.addAll(Arrays.asList(fields));
+            
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            return convertToLongList(result);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HPEXPIREAT operation failed", e);
+        }
     }
 
     /**
@@ -5030,7 +5468,19 @@ public final class Jedis implements Closeable {
      * @return list of expiration times for each field
      */
     public List<Long> hexpireTime(String key, String... fields) {
-        throw new UnsupportedOperationException("HEXPIRETIME command is not supported in this version");
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HEXPIRETIME");
+            args.add(key);
+            args.addAll(Arrays.asList(fields));
+            
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            return convertToLongList(result);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HEXPIRETIME operation failed", e);
+        }
     }
 
     /**
@@ -5042,8 +5492,19 @@ public final class Jedis implements Closeable {
      * @return list of expiration times for each field
      */
     public List<Long> hpexpireTime(String key, String... fields) {
-        throw new UnsupportedOperationException(
-                "HPEXPIRETIME command is not supported in this version");
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HPEXPIRETIME");
+            args.add(key);
+            args.addAll(Arrays.asList(fields));
+            
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            return convertToLongList(result);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HPEXPIRETIME operation failed", e);
+        }
     }
 
     /**
@@ -5055,7 +5516,19 @@ public final class Jedis implements Closeable {
      * @return list of TTL values for each field
      */
     public List<Long> httl(String key, String... fields) {
-        throw new UnsupportedOperationException("HTTL command is not supported in this version");
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HTTL");
+            args.add(key);
+            args.addAll(Arrays.asList(fields));
+            
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            return convertToLongList(result);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HTTL operation failed", e);
+        }
     }
 
     /**
@@ -5067,7 +5540,19 @@ public final class Jedis implements Closeable {
      * @return list of TTL values for each field
      */
     public List<Long> hpttl(String key, String... fields) {
-        throw new UnsupportedOperationException("HPTTL command is not supported in this version");
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HPTTL");
+            args.add(key);
+            args.addAll(Arrays.asList(fields));
+            
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            return convertToLongList(result);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HPTTL operation failed", e);
+        }
     }
 
     /**
@@ -5079,7 +5564,408 @@ public final class Jedis implements Closeable {
      * @return list of results for each field
      */
     public List<Long> hpersist(String key, String... fields) {
-        throw new UnsupportedOperationException("HPERSIST command is not supported in this version");
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HPERSIST");
+            args.add(key);
+            args.addAll(Arrays.asList(fields));
+            
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            return convertToLongList(result);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HPERSIST operation failed", e);
+        }
+    }
+
+    // Binary variants for hash expiration commands
+
+    /**
+     * Set expiry for hash field using relative time to expire (seconds) - binary version.
+     * Note: This command requires Redis 7.4+ and may not be available in all Redis/Valkey versions.
+     *
+     * @param key hash
+     * @param seconds time to expire
+     * @param fields the fields to set expiration for
+     * @return list of results for each field
+     */
+    public List<Long> hexpire(byte[] key, long seconds, byte[]... fields) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HEXPIRE");
+            args.add(new String(key));
+            args.add(String.valueOf(seconds));
+            for (byte[] field : fields) {
+                args.add(new String(field));
+            }
+            
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            return convertToLongList(result);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HEXPIRE operation failed", e);
+        }
+    }
+
+    /**
+     * Set expiry for hash field using relative time to expire (seconds) with condition - binary version.
+     * Note: This command requires Redis 7.4+ and may not be available in all Redis/Valkey versions.
+     *
+     * @param key hash
+     * @param seconds time to expire
+     * @param condition expiry condition
+     * @param fields the fields to set expiration for
+     * @return list of results for each field
+     */
+    public List<Long> hexpire(byte[] key, long seconds, ExpiryOption condition, byte[]... fields) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HEXPIRE");
+            args.add(new String(key));
+            args.add(String.valueOf(seconds));
+            args.add(condition.name());
+            for (byte[] field : fields) {
+                args.add(new String(field));
+            }
+            
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            return convertToLongList(result);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HEXPIRE operation failed", e);
+        }
+    }
+
+    /**
+     * Set expiry for hash field using relative time to expire (milliseconds) - binary version.
+     * Note: This command requires Redis 7.4+ and may not be available in all Redis/Valkey versions.
+     *
+     * @param key hash
+     * @param milliseconds time to expire
+     * @param fields the fields to set expiration for
+     * @return list of results for each field
+     */
+    public List<Long> hpexpire(byte[] key, long milliseconds, byte[]... fields) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HPEXPIRE");
+            args.add(new String(key));
+            args.add(String.valueOf(milliseconds));
+            for (byte[] field : fields) {
+                args.add(new String(field));
+            }
+            
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            return convertToLongList(result);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HPEXPIRE operation failed", e);
+        }
+    }
+
+    /**
+     * Set expiry for hash field using relative time to expire (milliseconds) with condition - binary version.
+     * Note: This command requires Redis 7.4+ and may not be available in all Redis/Valkey versions.
+     *
+     * @param key hash
+     * @param milliseconds time to expire
+     * @param condition expiry condition
+     * @param fields the fields to set expiration for
+     * @return list of results for each field
+     */
+    public List<Long> hpexpire(byte[] key, long milliseconds, ExpiryOption condition, byte[]... fields) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HPEXPIRE");
+            args.add(new String(key));
+            args.add(String.valueOf(milliseconds));
+            args.add(condition.name());
+            for (byte[] field : fields) {
+                args.add(new String(field));
+            }
+            
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            return convertToLongList(result);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HPEXPIRE operation failed", e);
+        }
+    }
+
+    /**
+     * Set expiry for hash field using an absolute Unix timestamp (seconds) - binary version.
+     * Note: This command requires Redis 7.4+ and may not be available in all Redis/Valkey versions.
+     *
+     * @param key hash
+     * @param unixTimeSeconds time to expire
+     * @param fields the fields to set expiration for
+     * @return list of results for each field
+     */
+    public List<Long> hexpireAt(byte[] key, long unixTimeSeconds, byte[]... fields) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HEXPIREAT");
+            args.add(new String(key));
+            args.add(String.valueOf(unixTimeSeconds));
+            for (byte[] field : fields) {
+                args.add(new String(field));
+            }
+            
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            return convertToLongList(result);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HEXPIREAT operation failed", e);
+        }
+    }
+
+    /**
+     * Set expiry for hash field using an absolute Unix timestamp (seconds) with condition - binary version.
+     * Note: This command requires Redis 7.4+ and may not be available in all Redis/Valkey versions.
+     *
+     * @param key hash
+     * @param unixTimeSeconds time to expire
+     * @param condition expiry condition
+     * @param fields the fields to set expiration for
+     * @return list of results for each field
+     */
+    public List<Long> hexpireAt(byte[] key, long unixTimeSeconds, ExpiryOption condition, byte[]... fields) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HEXPIREAT");
+            args.add(new String(key));
+            args.add(String.valueOf(unixTimeSeconds));
+            args.add(condition.name());
+            for (byte[] field : fields) {
+                args.add(new String(field));
+            }
+            
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            return convertToLongList(result);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HEXPIREAT operation failed", e);
+        }
+    }
+
+    /**
+     * Set expiry for hash field using an absolute Unix timestamp (milliseconds) - binary version.
+     * Note: This command requires Redis 7.4+ and may not be available in all Redis/Valkey versions.
+     *
+     * @param key hash
+     * @param unixTimeMillis time to expire
+     * @param fields the fields to set expiration for
+     * @return list of results for each field
+     */
+    public List<Long> hpexpireAt(byte[] key, long unixTimeMillis, byte[]... fields) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HPEXPIREAT");
+            args.add(new String(key));
+            args.add(String.valueOf(unixTimeMillis));
+            for (byte[] field : fields) {
+                args.add(new String(field));
+            }
+            
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            return convertToLongList(result);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HPEXPIREAT operation failed", e);
+        }
+    }
+
+    /**
+     * Set expiry for hash field using an absolute Unix timestamp (milliseconds) with condition - binary version.
+     * Note: This command requires Redis 7.4+ and may not be available in all Redis/Valkey versions.
+     *
+     * @param key hash
+     * @param unixTimeMillis time to expire
+     * @param condition expiry condition
+     * @param fields the fields to set expiration for
+     * @return list of results for each field
+     */
+    public List<Long> hpexpireAt(byte[] key, long unixTimeMillis, ExpiryOption condition, byte[]... fields) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HPEXPIREAT");
+            args.add(new String(key));
+            args.add(String.valueOf(unixTimeMillis));
+            args.add(condition.name());
+            for (byte[] field : fields) {
+                args.add(new String(field));
+            }
+            
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            return convertToLongList(result);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HPEXPIREAT operation failed", e);
+        }
+    }
+
+    /**
+     * Returns the expiration time of a hash field as a Unix timestamp, in seconds - binary version.
+     * Note: This command requires Redis 7.4+ and may not be available in all Redis/Valkey versions.
+     *
+     * @param key hash
+     * @param fields the fields to get expiration time for
+     * @return list of expiration times for each field
+     */
+    public List<Long> hexpireTime(byte[] key, byte[]... fields) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HEXPIRETIME");
+            args.add(new String(key));
+            for (byte[] field : fields) {
+                args.add(new String(field));
+            }
+            
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            return convertToLongList(result);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HEXPIRETIME operation failed", e);
+        }
+    }
+
+    /**
+     * Returns the expiration time of a hash field as a Unix timestamp, in milliseconds - binary version.
+     * Note: This command requires Redis 7.4+ and may not be available in all Redis/Valkey versions.
+     *
+     * @param key hash
+     * @param fields the fields to get expiration time for
+     * @return list of expiration times for each field
+     */
+    public List<Long> hpexpireTime(byte[] key, byte[]... fields) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HPEXPIRETIME");
+            args.add(new String(key));
+            for (byte[] field : fields) {
+                args.add(new String(field));
+            }
+            
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            return convertToLongList(result);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HPEXPIRETIME operation failed", e);
+        }
+    }
+
+    /**
+     * Returns the TTL in seconds of a hash field - binary version.
+     * Note: This command requires Redis 7.4+ and may not be available in all Redis/Valkey versions.
+     *
+     * @param key hash
+     * @param fields the fields to get TTL for
+     * @return list of TTL values for each field
+     */
+    public List<Long> httl(byte[] key, byte[]... fields) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HTTL");
+            args.add(new String(key));
+            for (byte[] field : fields) {
+                args.add(new String(field));
+            }
+            
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            return convertToLongList(result);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HTTL operation failed", e);
+        }
+    }
+
+    /**
+     * Returns the TTL in milliseconds of a hash field - binary version.
+     * Note: This command requires Redis 7.4+ and may not be available in all Redis/Valkey versions.
+     *
+     * @param key hash
+     * @param fields the fields to get TTL for
+     * @return list of TTL values for each field
+     */
+    public List<Long> hpttl(byte[] key, byte[]... fields) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HPTTL");
+            args.add(new String(key));
+            for (byte[] field : fields) {
+                args.add(new String(field));
+            }
+            
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            return convertToLongList(result);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HPTTL operation failed", e);
+        }
+    }
+
+    /**
+     * Removes the expiration time for each specified field - binary version.
+     * Note: This command requires Redis 7.4+ and may not be available in all Redis/Valkey versions.
+     *
+     * @param key hash
+     * @param fields the fields to remove expiration for
+     * @return list of results for each field
+     */
+    public List<Long> hpersist(byte[] key, byte[]... fields) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HPERSIST");
+            args.add(new String(key));
+            for (byte[] field : fields) {
+                args.add(new String(field));
+            }
+            
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            return convertToLongList(result);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HPERSIST operation failed", e);
+        }
+    }
+
+    /**
+     * Helper method to convert result to List<Long>.
+     */
+    private List<Long> convertToLongList(Object result) {
+        if (result instanceof Object[]) {
+            Object[] resultArray = (Object[]) result;
+            List<Long> longResult = new ArrayList<>();
+            for (Object obj : resultArray) {
+                if (obj instanceof Long) {
+                    longResult.add((Long) obj);
+                } else if (obj != null) {
+                    longResult.add(Long.parseLong(obj.toString()));
+                } else {
+                    longResult.add(null);
+                }
+            }
+            return longResult;
+        } else if (result instanceof Long) {
+            return Arrays.asList((Long) result);
+        } else if (result != null) {
+            return Arrays.asList(Long.parseLong(result.toString()));
+        }
+        return Arrays.asList((Long) null);
     }
 
     /** Helper method to convert Jedis ScanParams to GLIDE HScanOptions. */
