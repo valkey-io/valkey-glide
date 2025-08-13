@@ -79,3 +79,5 @@ runs:
         - name: Install zig
           if: ${{ contains(inputs.target, 'linux-gnu') }}
           uses: ./.github/workflows/install-zig
+          with:
+              target: ${{ inputs.target }}
