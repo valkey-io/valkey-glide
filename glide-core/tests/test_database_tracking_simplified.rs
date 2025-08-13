@@ -11,13 +11,15 @@ use redis::cluster_routing::Routable;
 #[tokio::test]
 async fn test_database_tracking_logic() {
     // Create a basic connection request starting with database 0
-    let mut request = ConnectionRequest::default();
-    request.addresses = vec![NodeAddress {
-        host: "localhost".to_string(),
-        port: 6379,
-    }];
-    request.database_id = 0;
-    request.lazy_connect = true; // Use lazy connect to avoid actual connection
+    let request = ConnectionRequest {
+        addresses: vec![NodeAddress {
+            host: "localhost".to_string(),
+            port: 6379,
+        }],
+        database_id: 0,
+        lazy_connect: true, // Use lazy connect to avoid actual connection
+        ..Default::default()
+    };
 
     // Create a client 
     let client = Client::new(request, None).await
@@ -36,8 +38,6 @@ async fn test_database_tracking_logic() {
 /// This test requires a running Redis/Valkey server
 #[tokio::test]
 async fn test_database_tracking_with_reconnection() {
-    use std::sync::Arc;
-    use tokio::sync::RwLock;
     
     // Skip this test if no server is available
     if std::env::var("REDIS_URL").is_err() && std::env::var("VALKEY_URL").is_err() {
@@ -55,10 +55,12 @@ async fn test_database_tracking_with_reconnection() {
     let port = url.port().unwrap_or(6379);
     
     // Create a connection request starting with database 0
-    let mut request = ConnectionRequest::default();
-    request.addresses = vec![NodeAddress { host, port }];
-    request.database_id = 0;
-    request.lazy_connect = false; // Actually connect to test reconnection
+    let request = ConnectionRequest {
+        addresses: vec![NodeAddress { host, port }],
+        database_id: 0,
+        lazy_connect: false, // Actually connect to test reconnection
+        ..Default::default()
+    };
     
     let client = match Client::new(request, None).await {
         Ok(client) => client,

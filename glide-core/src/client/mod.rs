@@ -758,7 +758,7 @@ impl Client {
 
     /// Track database changes for SELECT commands.
     /// Updates the connection request's database_id if the command was a successful SELECT in standalone mode.
-    async fn track_database_change_if_select(&self, cmd: &Cmd, result: &Value) {
+    pub async fn track_database_change_if_select(&self, cmd: &Cmd, result: &Value) {
         // Check if this is a SELECT command
         if let Some(command_bytes) = cmd.command() {
             let command_str = String::from_utf8_lossy(&command_bytes);
