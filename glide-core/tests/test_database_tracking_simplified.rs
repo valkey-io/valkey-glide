@@ -29,19 +29,9 @@ async fn test_database_tracking_logic() {
         .await
         .expect("Client creation should succeed with lazy connect");
 
-    // Test that the database tracking method doesn't crash
-    // In the real implementation, this will be called during send_command
-    use redis::Cmd;
-    let mut select_cmd = Cmd::new();
-    select_cmd.arg("SELECT").arg(3);
-    let success_response = Value::Okay;
-
-    // This should not panic - the actual database update will only happen
-    // when connected to a real standalone server
-    client
-        .track_database_change_if_select(&select_cmd, &success_response)
-        .await;
-
+    // Database tracking is now handled internally within send_command for standalone clients
+    // This test verifies the client can be created successfully with the tracking infrastructure
+    // The actual database tracking functionality is tested in test_database_tracking_with_reconnection
     println!("Database tracking simplified test passed");
 }
 
@@ -72,7 +62,10 @@ async fn test_database_tracking_with_reconnection() {
         &client.send_command(&client_info_cmd).await.unwrap(),
     )
     .unwrap();
-    assert!(initial_info.contains("db=0"), "Should start in database 0, got: {initial_info}");
+    assert!(
+        initial_info.contains("db=0"),
+        "Should start in database 0, got: {initial_info}"
+    );
 
     // Execute SELECT 3 to change database
     let mut select_cmd = redis::cmd("SELECT");
@@ -85,7 +78,10 @@ async fn test_database_tracking_with_reconnection() {
         &client.send_command(&client_info_cmd).await.unwrap(),
     )
     .unwrap();
-    assert!(db3_info.contains("db=3"), "Should be in database 3 after SELECT, got: {db3_info}");
+    assert!(
+        db3_info.contains("db=3"),
+        "Should be in database 3 after SELECT, got: {db3_info}"
+    );
 
     // Force disconnection to trigger reconnection
     kill_connection(&mut client).await;

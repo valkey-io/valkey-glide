@@ -428,9 +428,6 @@ impl Client {
 
             let value = result.await?;
 
-            // Track database changes for SELECT commands in standalone mode
-            self.track_database_change_if_select(cmd, &value).await;
-
             Ok(value)
         })
     }
@@ -752,45 +749,6 @@ impl Client {
     pub fn release_inflight_request(&self) -> isize {
         self.inflight_requests_allowed
             .fetch_add(1, Ordering::SeqCst)
-    }
-
-    /// Track database changes for SELECT commands.
-    /// Updates the connection request's database_id if the command was a successful SELECT in standalone mode.
-    pub async fn track_database_change_if_select(&self, cmd: &Cmd, result: &Value) {
-        // Check if this is a SELECT command
-        if let Some(command_bytes) = cmd.command() {
-            let command_str = String::from_utf8_lossy(&command_bytes);
-            if command_str.to_uppercase() == "SELECT" {
-                // Check if the command was successful (result should be Value::Okay)
-                if matches!(result, Value::Okay) {
-                    // Extract the database index from the command arguments
-                    let mut args = cmd.args_iter();
-                    args.next(); // Skip the command name "SELECT"
-                    if let Some(db_arg) = args.next() {
-                        let db_bytes = match db_arg {
-                            redis::Arg::Simple(bytes) => bytes,
-                            redis::Arg::Cursor => return, // Skip cursor arguments
-                        };
-                        if let Ok(db_str) = std::str::from_utf8(db_bytes) {
-                            if let Ok(db_index) = db_str.parse::<i64>() {
-                                // Check if we're in standalone mode before updating database
-                                let client = self.internal_client.read().await;
-                                if let ClientWrapper::Standalone(standalone_client) = &*client {
-                                    // Update the connection database for future reconnections
-                                    let _ = standalone_client
-                                        .update_connection_database(db_index)
-                                        .await;
-                                    log_debug(
-                                        "track_database_change",
-                                        format!("Updated connection database to {db_index}"),
-                                    );
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
     }
 
     /// Update the password used to authenticate with the servers.
