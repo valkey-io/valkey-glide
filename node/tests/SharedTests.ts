@@ -327,10 +327,10 @@ export function runBaseTests(config: {
                     client instanceof GlideClient
                         ? await client.info([InfoOptions.Commandstats])
                         : Object.values(
-                            await client.info({
-                                sections: [InfoOptions.Commandstats],
-                            }),
-                        ).join();
+                              await client.info({
+                                  sections: [InfoOptions.Commandstats],
+                              }),
+                          ).join();
                 expect(oldResult).toContain("cmdstat_set");
                 expect(await client.configResetStat()).toEqual("OK");
 
@@ -338,10 +338,10 @@ export function runBaseTests(config: {
                     client instanceof GlideClient
                         ? await client.info([InfoOptions.Commandstats])
                         : Object.values(
-                            await client.info({
-                                sections: [InfoOptions.Commandstats],
-                            }),
-                        ).join();
+                              await client.info({
+                                  sections: [InfoOptions.Commandstats],
+                              }),
+                          ).join();
                 expect(result).not.toContain("cmdstat_set");
             }, protocol);
         },
@@ -368,13 +368,13 @@ export function runBaseTests(config: {
                     const response =
                         client instanceof GlideClient
                             ? await client.exec(
-                                new Batch(isAtomic).lastsave(),
-                                isAtomic,
-                            )
+                                  new Batch(isAtomic).lastsave(),
+                                  isAtomic,
+                              )
                             : await client.exec(
-                                new ClusterBatch(isAtomic).lastsave(),
-                                isAtomic,
-                            );
+                                  new ClusterBatch(isAtomic).lastsave(),
+                                  isAtomic,
+                              );
 
                     expect(response?.[0]).toBeGreaterThan(yesterday);
                 }
@@ -2153,39 +2153,49 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hsetex basic functionality_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
-                if (cluster.checkIfServerVersionLessThan("9.0.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
 
-                const key = getRandomKey();
-                const field1 = getRandomKey();
-                const field2 = getRandomKey();
-                const value1 = getRandomKey();
-                const value2 = getRandomKey();
+                    const key = getRandomKey();
+                    const field1 = getRandomKey();
+                    const field2 = getRandomKey();
+                    const value1 = getRandomKey();
+                    const value2 = getRandomKey();
 
-                // Test basic HSETEX with expiry
-                const fieldValueMap = { [field1]: value1, [field2]: value2 };
-                expect(
-                    await client.hsetex(key, fieldValueMap, {
-                        expiry: { type: TimeUnit.Seconds, count: 60 },
-                    }),
-                ).toEqual(2);
+                    // Test basic HSETEX with expiry
+                    const fieldValueMap = {
+                        [field1]: value1,
+                        [field2]: value2,
+                    };
+                    expect(
+                        await client.hsetex(key, fieldValueMap, {
+                            expiry: { type: TimeUnit.Seconds, count: 60 },
+                        }),
+                    ).toEqual(2);
 
-                // Verify fields were set
-                expect(await client.hget(key, field1)).toEqual(value1);
-                expect(await client.hget(key, field2)).toEqual(value2);
+                    // Verify fields were set
+                    expect(await client.hget(key, field1)).toEqual(value1);
+                    expect(await client.hget(key, field2)).toEqual(value2);
 
-                // Test with KEEPTTL
-                const field3 = getRandomKey();
-                const value3 = getRandomKey();
-                expect(
-                    await client.hsetex(key, { [field3]: value3 }, {
-                        expiry: "KEEPTTL",
-                    }),
-                ).toEqual(1);
-                expect(await client.hget(key, field3)).toEqual(value3);
-            }, protocol);
+                    // Test with KEEPTTL
+                    const field3 = getRandomKey();
+                    const value3 = getRandomKey();
+                    expect(
+                        await client.hsetex(
+                            key,
+                            { [field3]: value3 },
+                            {
+                                expiry: "KEEPTTL",
+                            },
+                        ),
+                    ).toEqual(1);
+                    expect(await client.hget(key, field3)).toEqual(value3);
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -2193,66 +2203,73 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hsetex with conditional changes_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
-                if (cluster.checkIfServerVersionLessThan("9.0.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
 
-                const key = getRandomKey();
-                const field1 = getRandomKey();
-                const field2 = getRandomKey();
-                const value1 = getRandomKey();
-                const value2 = getRandomKey();
+                    const key = getRandomKey();
+                    const field1 = getRandomKey();
+                    const field2 = getRandomKey();
+                    const value1 = getRandomKey();
+                    const value2 = getRandomKey();
 
-                // Test with NX (only if hash doesn't exist)
-                expect(
-                    await client.hsetex(
-                        key,
-                        { [field1]: value1 },
-                        {
-                            conditionalChange: ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
-                            expiry: { type: TimeUnit.Seconds, count: 60 },
-                        },
-                    ),
-                ).toEqual(1);
+                    // Test with NX (only if hash doesn't exist)
+                    expect(
+                        await client.hsetex(
+                            key,
+                            { [field1]: value1 },
+                            {
+                                conditionalChange:
+                                    ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
+                                expiry: { type: TimeUnit.Seconds, count: 60 },
+                            },
+                        ),
+                    ).toEqual(1);
 
-                // Should not set because hash already exists
-                expect(
-                    await client.hsetex(
-                        key,
-                        { [field2]: value2 },
-                        {
-                            conditionalChange: ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
-                            expiry: { type: TimeUnit.Seconds, count: 60 },
-                        },
-                    ),
-                ).toEqual(0);
+                    // Should not set because hash already exists
+                    expect(
+                        await client.hsetex(
+                            key,
+                            { [field2]: value2 },
+                            {
+                                conditionalChange:
+                                    ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
+                                expiry: { type: TimeUnit.Seconds, count: 60 },
+                            },
+                        ),
+                    ).toEqual(0);
 
-                // Test with XX (only if hash exists)
-                const key2 = getRandomKey();
-                expect(
-                    await client.hsetex(
-                        key2,
-                        { [field1]: value1 },
-                        {
-                            conditionalChange: ConditionalChange.ONLY_IF_EXISTS,
-                            expiry: { type: TimeUnit.Seconds, count: 60 },
-                        },
-                    ),
-                ).toEqual(0);
+                    // Test with XX (only if hash exists)
+                    const key2 = getRandomKey();
+                    expect(
+                        await client.hsetex(
+                            key2,
+                            { [field1]: value1 },
+                            {
+                                conditionalChange:
+                                    ConditionalChange.ONLY_IF_EXISTS,
+                                expiry: { type: TimeUnit.Seconds, count: 60 },
+                            },
+                        ),
+                    ).toEqual(0);
 
-                // Should work because hash exists
-                expect(
-                    await client.hsetex(
-                        key,
-                        { [field2]: value2 },
-                        {
-                            conditionalChange: ConditionalChange.ONLY_IF_EXISTS,
-                            expiry: { type: TimeUnit.Seconds, count: 60 },
-                        },
-                    ),
-                ).toEqual(1);
-            }, protocol);
+                    // Should work because hash exists
+                    expect(
+                        await client.hsetex(
+                            key,
+                            { [field2]: value2 },
+                            {
+                                conditionalChange:
+                                    ConditionalChange.ONLY_IF_EXISTS,
+                                expiry: { type: TimeUnit.Seconds, count: 60 },
+                            },
+                        ),
+                    ).toEqual(1);
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -2260,58 +2277,66 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hsetex with field conditional changes_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
-                if (cluster.checkIfServerVersionLessThan("9.0.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
 
-                const key = getRandomKey();
-                const field1 = getRandomKey();
-                const field2 = getRandomKey();
-                const field3 = getRandomKey();
-                const value1 = getRandomKey();
-                const value2 = getRandomKey();
-                const value3 = getRandomKey();
+                    const key = getRandomKey();
+                    const field1 = getRandomKey();
+                    const field2 = getRandomKey();
+                    const field3 = getRandomKey();
+                    const value1 = getRandomKey();
+                    const value2 = getRandomKey();
+                    const value3 = getRandomKey();
 
-                // Set up initial fields
-                expect(await client.hset(key, { [field1]: value1 })).toEqual(1);
+                    // Set up initial fields
+                    expect(
+                        await client.hset(key, { [field1]: value1 }),
+                    ).toEqual(1);
 
-                // Test FXX (only if all fields exist)
-                expect(
-                    await client.hsetex(
-                        key,
-                        { [field1]: value2, [field2]: value2 },
-                        {
-                            fieldConditionalChange: HashFieldConditionalChange.ONLY_IF_ALL_EXIST,
-                            expiry: { type: TimeUnit.Seconds, count: 60 },
-                        },
-                    ),
-                ).toEqual(0); // field2 doesn't exist
+                    // Test FXX (only if all fields exist)
+                    expect(
+                        await client.hsetex(
+                            key,
+                            { [field1]: value2, [field2]: value2 },
+                            {
+                                fieldConditionalChange:
+                                    HashFieldConditionalChange.ONLY_IF_ALL_EXIST,
+                                expiry: { type: TimeUnit.Seconds, count: 60 },
+                            },
+                        ),
+                    ).toEqual(0); // field2 doesn't exist
 
-                // Test FNX (only if none of the fields exist)
-                expect(
-                    await client.hsetex(
-                        key,
-                        { [field2]: value2, [field3]: value3 },
-                        {
-                            fieldConditionalChange: HashFieldConditionalChange.ONLY_IF_NONE_EXIST,
-                            expiry: { type: TimeUnit.Seconds, count: 60 },
-                        },
-                    ),
-                ).toEqual(2); // both fields don't exist
+                    // Test FNX (only if none of the fields exist)
+                    expect(
+                        await client.hsetex(
+                            key,
+                            { [field2]: value2, [field3]: value3 },
+                            {
+                                fieldConditionalChange:
+                                    HashFieldConditionalChange.ONLY_IF_NONE_EXIST,
+                                expiry: { type: TimeUnit.Seconds, count: 60 },
+                            },
+                        ),
+                    ).toEqual(2); // both fields don't exist
 
-                // Should fail because field2 now exists
-                expect(
-                    await client.hsetex(
-                        key,
-                        { [field2]: value2, [field3]: value3 },
-                        {
-                            fieldConditionalChange: HashFieldConditionalChange.ONLY_IF_NONE_EXIST,
-                            expiry: { type: TimeUnit.Seconds, count: 60 },
-                        },
-                    ),
-                ).toEqual(0);
-            }, protocol);
+                    // Should fail because field2 now exists
+                    expect(
+                        await client.hsetex(
+                            key,
+                            { [field2]: value2, [field3]: value3 },
+                            {
+                                fieldConditionalChange:
+                                    HashFieldConditionalChange.ONLY_IF_NONE_EXIST,
+                                expiry: { type: TimeUnit.Seconds, count: 60 },
+                            },
+                        ),
+                    ).toEqual(0);
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -2319,54 +2344,82 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hsetex with different expiry types_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
-                if (cluster.checkIfServerVersionLessThan("9.0.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
 
-                const key = getRandomKey();
-                const field1 = getRandomKey();
-                const field2 = getRandomKey();
-                const field3 = getRandomKey();
-                const field4 = getRandomKey();
-                const value = getRandomKey();
+                    const key = getRandomKey();
+                    const field1 = getRandomKey();
+                    const field2 = getRandomKey();
+                    const field3 = getRandomKey();
+                    const field4 = getRandomKey();
+                    const value = getRandomKey();
 
-                // Test EX (seconds)
-                expect(
-                    await client.hsetex(key, { [field1]: value }, {
-                        expiry: { type: TimeUnit.Seconds, count: 1 },
-                    }),
-                ).toEqual(1);
+                    // Test EX (seconds)
+                    expect(
+                        await client.hsetex(
+                            key,
+                            { [field1]: value },
+                            {
+                                expiry: { type: TimeUnit.Seconds, count: 1 },
+                            },
+                        ),
+                    ).toEqual(1);
 
-                // Test PX (milliseconds)
-                expect(
-                    await client.hsetex(key, { [field2]: value }, {
-                        expiry: { type: TimeUnit.Milliseconds, count: 1000 },
-                    }),
-                ).toEqual(1);
+                    // Test PX (milliseconds)
+                    expect(
+                        await client.hsetex(
+                            key,
+                            { [field2]: value },
+                            {
+                                expiry: {
+                                    type: TimeUnit.Milliseconds,
+                                    count: 1000,
+                                },
+                            },
+                        ),
+                    ).toEqual(1);
 
-                // Test EXAT (Unix timestamp in seconds)
-                const futureTimestamp = Math.floor(Date.now() / 1000) + 60;
-                expect(
-                    await client.hsetex(key, { [field3]: value }, {
-                        expiry: { type: TimeUnit.UnixSeconds, count: futureTimestamp },
-                    }),
-                ).toEqual(1);
+                    // Test EXAT (Unix timestamp in seconds)
+                    const futureTimestamp = Math.floor(Date.now() / 1000) + 60;
+                    expect(
+                        await client.hsetex(
+                            key,
+                            { [field3]: value },
+                            {
+                                expiry: {
+                                    type: TimeUnit.UnixSeconds,
+                                    count: futureTimestamp,
+                                },
+                            },
+                        ),
+                    ).toEqual(1);
 
-                // Test PXAT (Unix timestamp in milliseconds)
-                const futureTimestampMs = Date.now() + 60000;
-                expect(
-                    await client.hsetex(key, { [field4]: value }, {
-                        expiry: { type: TimeUnit.UnixMilliseconds, count: futureTimestampMs },
-                    }),
-                ).toEqual(1);
+                    // Test PXAT (Unix timestamp in milliseconds)
+                    const futureTimestampMs = Date.now() + 60000;
+                    expect(
+                        await client.hsetex(
+                            key,
+                            { [field4]: value },
+                            {
+                                expiry: {
+                                    type: TimeUnit.UnixMilliseconds,
+                                    count: futureTimestampMs,
+                                },
+                            },
+                        ),
+                    ).toEqual(1);
 
-                // Verify all fields were set
-                expect(await client.hget(key, field1)).toEqual(value);
-                expect(await client.hget(key, field2)).toEqual(value);
-                expect(await client.hget(key, field3)).toEqual(value);
-                expect(await client.hget(key, field4)).toEqual(value);
-            }, protocol);
+                    // Verify all fields were set
+                    expect(await client.hget(key, field1)).toEqual(value);
+                    expect(await client.hget(key, field2)).toEqual(value);
+                    expect(await client.hget(key, field3)).toEqual(value);
+                    expect(await client.hget(key, field4)).toEqual(value);
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -2374,46 +2427,52 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hsetex with HashDataType and Record types_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
-                if (cluster.checkIfServerVersionLessThan("9.0.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
 
-                const key = getRandomKey();
-                const field1 = getRandomKey();
-                const field2 = getRandomKey();
-                const value1 = getRandomKey();
-                const value2 = getRandomKey();
+                    const key = getRandomKey();
+                    const field1 = getRandomKey();
+                    const field2 = getRandomKey();
+                    const value1 = getRandomKey();
+                    const value2 = getRandomKey();
 
-                // Test with Record<string, GlideString>
-                const recordMap: Record<string, GlideString> = {
-                    [field1]: value1,
-                    [field2]: Buffer.from(value2),
-                };
-                expect(
-                    await client.hsetex(key, recordMap, {
-                        expiry: { type: TimeUnit.Seconds, count: 60 },
-                    }),
-                ).toEqual(2);
+                    // Test with Record<string, GlideString>
+                    const recordMap: Record<string, GlideString> = {
+                        [field1]: value1,
+                        [field2]: Buffer.from(value2),
+                    };
+                    expect(
+                        await client.hsetex(key, recordMap, {
+                            expiry: { type: TimeUnit.Seconds, count: 60 },
+                        }),
+                    ).toEqual(2);
 
-                // Test with HashDataType
-                const hashDataType: HashDataType = [
-                    { field: Buffer.from(field1), value: Buffer.from(value1) },
-                    { field: field2, value: value2 },
-                ];
-                const key2 = getRandomKey();
-                expect(
-                    await client.hsetex(key2, hashDataType, {
-                        expiry: { type: TimeUnit.Seconds, count: 60 },
-                    }),
-                ).toEqual(2);
+                    // Test with HashDataType
+                    const hashDataType: HashDataType = [
+                        {
+                            field: Buffer.from(field1),
+                            value: Buffer.from(value1),
+                        },
+                        { field: field2, value: value2 },
+                    ];
+                    const key2 = getRandomKey();
+                    expect(
+                        await client.hsetex(key2, hashDataType, {
+                            expiry: { type: TimeUnit.Seconds, count: 60 },
+                        }),
+                    ).toEqual(2);
 
-                // Verify values
-                expect(await client.hget(key, field1)).toEqual(value1);
-                expect(await client.hget(key, field2)).toEqual(value2);
-                expect(await client.hget(key2, field1)).toEqual(value1);
-                expect(await client.hget(key2, field2)).toEqual(value2);
-            }, protocol);
+                    // Verify values
+                    expect(await client.hget(key, field1)).toEqual(value1);
+                    expect(await client.hget(key, field2)).toEqual(value2);
+                    expect(await client.hget(key2, field1)).toEqual(value1);
+                    expect(await client.hget(key2, field2)).toEqual(value2);
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -2421,30 +2480,41 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hsetex error handling_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
-                if (cluster.checkIfServerVersionLessThan("9.0.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
 
-                const key = getRandomKey();
-                const field = getRandomKey();
-                const value = getRandomKey();
+                    const key = getRandomKey();
+                    const field = getRandomKey();
+                    const value = getRandomKey();
 
-                // Test invalid expiry count (non-integer)
-                await expect(
-                    client.hsetex(key, { [field]: value }, {
-                        expiry: { type: TimeUnit.Seconds, count: 1.5 },
-                    }),
-                ).rejects.toThrow("Count must be an integer");
+                    // Test invalid expiry count (non-integer)
+                    await expect(
+                        client.hsetex(
+                            key,
+                            { [field]: value },
+                            {
+                                expiry: { type: TimeUnit.Seconds, count: 1.5 },
+                            },
+                        ),
+                    ).rejects.toThrow("Count must be an integer");
 
-                // Test with non-hash key
-                expect(await client.set(key, "string_value")).toEqual("OK");
-                await expect(
-                    client.hsetex(key, { [field]: value }, {
-                        expiry: { type: TimeUnit.Seconds, count: 60 },
-                    }),
-                ).rejects.toThrow(RequestError);
-            }, protocol);
+                    // Test with non-hash key
+                    expect(await client.set(key, "string_value")).toEqual("OK");
+                    await expect(
+                        client.hsetex(
+                            key,
+                            { [field]: value },
+                            {
+                                expiry: { type: TimeUnit.Seconds, count: 60 },
+                            },
+                        ),
+                    ).rejects.toThrow(RequestError);
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -2452,41 +2522,62 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hsetex with version compatibility and batch operations_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
-                // Skip test if server version is less than 9.0.0
-                if (cluster.checkIfServerVersionLessThan("9.0.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    // Skip test if server version is less than 9.0.0
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
 
-                const key1 = getRandomKey();
-                const key2 = getRandomKey();
-                const field1 = getRandomKey();
-                const field2 = getRandomKey();
-                const value1 = getRandomKey();
-                const value2 = getRandomKey();
+                    const key1 = getRandomKey();
+                    const key2 = getRandomKey();
+                    const field1 = getRandomKey();
+                    const field2 = getRandomKey();
+                    const value1 = getRandomKey();
+                    const value2 = getRandomKey();
 
-                // Test batch operations with HSETEX
-                const batch = client instanceof GlideClient ? new Batch(false) : new ClusterBatch(false);
+                    // Test batch operations with HSETEX
+                    const batch =
+                        client instanceof GlideClient
+                            ? new Batch(false)
+                            : new ClusterBatch(false);
 
-                batch.hsetex(key1, { [field1]: value1 }, {
-                    expiry: { type: TimeUnit.Seconds, count: 60 },
-                });
-                batch.hsetex(key2, { [field2]: value2 }, {
-                    expiry: { type: TimeUnit.Milliseconds, count: 60000 },
-                });
-                batch.hget(key1, field1);
-                batch.hget(key2, field2);
+                    batch.hsetex(
+                        key1,
+                        { [field1]: value1 },
+                        {
+                            expiry: { type: TimeUnit.Seconds, count: 60 },
+                        },
+                    );
+                    batch.hsetex(
+                        key2,
+                        { [field2]: value2 },
+                        {
+                            expiry: {
+                                type: TimeUnit.Milliseconds,
+                                count: 60000,
+                            },
+                        },
+                    );
+                    batch.hget(key1, field1);
+                    batch.hget(key2, field2);
 
-                const results = client instanceof GlideClient
-                    ? await client.exec(batch as Batch, false)
-                    : await (client as GlideClusterClient).exec(batch as ClusterBatch, false);
+                    const results =
+                        client instanceof GlideClient
+                            ? await client.exec(batch as Batch, false)
+                            : await (client as GlideClusterClient).exec(
+                                  batch as ClusterBatch,
+                                  false,
+                              );
 
-                expect(results).toHaveLength(4);
-                expect(results![0]).toBe(1); // hsetex result for key1
-                expect(results![1]).toBe(1); // hsetex result for key2
-                expect(results![2]).toBe(value1); // hget result for key1
-                expect(results![3]).toBe(value2); // hget result for key2
-            }, protocol);
+                    expect(results).toHaveLength(4);
+                    expect(results![0]).toBe(1); // hsetex result for key1
+                    expect(results![1]).toBe(1); // hsetex result for key2
+                    expect(results![2]).toBe(value1); // hget result for key1
+                    expect(results![3]).toBe(value2); // hget result for key2
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -2494,75 +2585,109 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hsetex with comprehensive parameter types and edge cases_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
-                // Skip test if server version is less than 9.0.0
-                if (cluster.checkIfServerVersionLessThan("9.0.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    // Skip test if server version is less than 9.0.0
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
 
-                const key = getRandomKey();
-                const field1 = getRandomKey();
-                const field2 = getRandomKey();
-                const value1 = getRandomKey();
-                const value2 = getRandomKey();
+                    const field1 = getRandomKey();
+                    const value1 = getRandomKey();
 
-                // Test with mixed GlideString types (Buffer and string)
-                const keyBuffer = Buffer.from(getRandomKey());
-                const fieldBuffer = Buffer.from(getRandomKey());
-                const valueBuffer = Buffer.from(getRandomKey());
+                    // Test with mixed GlideString types (Buffer and string)
+                    const keyBuffer = Buffer.from(getRandomKey());
+                    const fieldBuffer = Buffer.from(getRandomKey());
+                    const valueBuffer = Buffer.from(getRandomKey());
 
-                const result1 = await client.hsetex(keyBuffer, {
-                    [field1]: valueBuffer,
-                    [fieldBuffer.toString()]: value1
-                }, {
-                    expiry: { type: TimeUnit.Seconds, count: 60 },
-                });
-                expect(result1).toBe(2);
+                    const result1 = await client.hsetex(
+                        keyBuffer,
+                        {
+                            [field1]: valueBuffer,
+                            [fieldBuffer.toString()]: value1,
+                        },
+                        {
+                            expiry: { type: TimeUnit.Seconds, count: 60 },
+                        },
+                    );
+                    expect(result1).toBe(2);
 
-                // Verify values with different decoders
-                expect(await client.hget(keyBuffer, field1)).toBe(valueBuffer.toString());
-                expect(await client.hget(keyBuffer, field1, { decoder: Decoder.Bytes })).toEqual(valueBuffer);
-                expect(await client.hget(keyBuffer, fieldBuffer)).toBe(value1);
+                    // Verify values with different decoders
+                    expect(await client.hget(keyBuffer, field1)).toBe(
+                        valueBuffer.toString(),
+                    );
+                    expect(
+                        await client.hget(keyBuffer, field1, {
+                            decoder: Decoder.Bytes,
+                        }),
+                    ).toEqual(valueBuffer);
+                    expect(await client.hget(keyBuffer, fieldBuffer)).toBe(
+                        value1,
+                    );
 
-                // Test with empty field-value map
-                const result2 = await client.hsetex(getRandomKey(), {}, {
-                    expiry: { type: TimeUnit.Seconds, count: 60 },
-                });
-                expect(result2).toBe(0);
+                    // Test with empty field-value map
+                    const result2 = await client.hsetex(
+                        getRandomKey(),
+                        {},
+                        {
+                            expiry: { type: TimeUnit.Seconds, count: 60 },
+                        },
+                    );
+                    expect(result2).toBe(0);
 
-                // Test with very long field and value names
-                const longKey = getRandomKey();
-                const longField = "a".repeat(100);
-                const longValue = "b".repeat(100);
+                    // Test with very long field and value names
+                    const longKey = getRandomKey();
+                    const longField = "a".repeat(100);
+                    const longValue = "b".repeat(100);
 
-                const result3 = await client.hsetex(longKey, { [longField]: longValue }, {
-                    expiry: { type: TimeUnit.Seconds, count: 60 },
-                });
-                expect(result3).toBe(1);
-                expect(await client.hget(longKey, longField)).toBe(longValue);
+                    const result3 = await client.hsetex(
+                        longKey,
+                        { [longField]: longValue },
+                        {
+                            expiry: { type: TimeUnit.Seconds, count: 60 },
+                        },
+                    );
+                    expect(result3).toBe(1);
+                    expect(await client.hget(longKey, longField)).toBe(
+                        longValue,
+                    );
 
-                // Test with special characters
-                const specialKey = getRandomKey();
-                const specialField = "field:with:special:chars:!@#$%^&*()";
-                const specialValue = "value:with:special:chars:!@#$%^&*()";
+                    // Test with special characters
+                    const specialKey = getRandomKey();
+                    const specialField = "field:with:special:chars:!@#$%^&*()";
+                    const specialValue = "value:with:special:chars:!@#$%^&*()";
 
-                const result4 = await client.hsetex(specialKey, { [specialField]: specialValue }, {
-                    expiry: { type: TimeUnit.Seconds, count: 60 },
-                });
-                expect(result4).toBe(1);
-                expect(await client.hget(specialKey, specialField)).toBe(specialValue);
+                    const result4 = await client.hsetex(
+                        specialKey,
+                        { [specialField]: specialValue },
+                        {
+                            expiry: { type: TimeUnit.Seconds, count: 60 },
+                        },
+                    );
+                    expect(result4).toBe(1);
+                    expect(await client.hget(specialKey, specialField)).toBe(
+                        specialValue,
+                    );
 
-                // Test with Unicode characters
-                const unicodeKey = getRandomKey();
-                const unicodeField = "field_🚀_测试_🎉";
-                const unicodeValue = "value_🌟_测试_🎊";
+                    // Test with Unicode characters
+                    const unicodeKey = getRandomKey();
+                    const unicodeField = "field_🚀_测试_🎉";
+                    const unicodeValue = "value_🌟_测试_🎊";
 
-                const result5 = await client.hsetex(unicodeKey, { [unicodeField]: unicodeValue }, {
-                    expiry: { type: TimeUnit.Seconds, count: 60 },
-                });
-                expect(result5).toBe(1);
-                expect(await client.hget(unicodeKey, unicodeField)).toBe(unicodeValue);
-            }, protocol);
+                    const result5 = await client.hsetex(
+                        unicodeKey,
+                        { [unicodeField]: unicodeValue },
+                        {
+                            expiry: { type: TimeUnit.Seconds, count: 60 },
+                        },
+                    );
+                    expect(result5).toBe(1);
+                    expect(await client.hget(unicodeKey, unicodeField)).toBe(
+                        unicodeValue,
+                    );
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -2570,55 +2695,83 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hsetex Promise-based error handling and validation_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
-                // Skip test if server version is less than 9.0.0
-                if (cluster.checkIfServerVersionLessThan("9.0.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    // Skip test if server version is less than 9.0.0
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
 
-                const key = getRandomKey();
-                const field = getRandomKey();
-                const value = getRandomKey();
+                    const key = getRandomKey();
+                    const field = getRandomKey();
+                    const value = getRandomKey();
 
-                // Test Promise rejection for non-integer expiry count
-                let errorCaught = false;
-                try {
-                    await client.hsetex(key, { [field]: value }, {
-                        expiry: { type: TimeUnit.Seconds, count: 1.5 },
-                    });
-                } catch (error) {
-                    errorCaught = true;
-                    expect(error).toBeInstanceOf(Error);
-                    expect((error as Error).message).toContain("Count must be an integer");
-                }
-                expect(errorCaught).toBe(true);
+                    // Test Promise rejection for non-integer expiry count
+                    let errorCaught = false;
 
-                // Test Promise rejection when used on non-hash key
-                await client.set(key, "string_value");
+                    try {
+                        await client.hsetex(
+                            key,
+                            { [field]: value },
+                            {
+                                expiry: { type: TimeUnit.Seconds, count: 1.5 },
+                            },
+                        );
+                    } catch (error) {
+                        errorCaught = true;
+                        expect(error).toBeInstanceOf(Error);
+                        expect((error as Error).message).toContain(
+                            "Count must be an integer",
+                        );
+                    }
 
-                errorCaught = false;
-                try {
-                    await client.hsetex(key, { [field]: value }, {
-                        expiry: { type: TimeUnit.Seconds, count: 60 },
-                    });
-                } catch (error) {
-                    errorCaught = true;
-                    expect(error).toBeInstanceOf(RequestError);
-                }
-                expect(errorCaught).toBe(true);
+                    expect(errorCaught).toBe(true);
 
-                // Test batch operation error handling
-                const batch = client instanceof GlideClient ? new Batch(false) : new ClusterBatch(false);
-                batch.hsetex(key, { [field]: value }, {
-                    expiry: { type: TimeUnit.Seconds, count: 60 },
-                });
+                    // Test Promise rejection when used on non-hash key
+                    await client.set(key, "string_value");
 
-                const execPromise = client instanceof GlideClient
-                    ? client.exec(batch as Batch, false)
-                    : (client as GlideClusterClient).exec(batch as ClusterBatch, false);
+                    errorCaught = false;
 
-                await expect(execPromise).rejects.toThrow(RequestError);
-            }, protocol);
+                    try {
+                        await client.hsetex(
+                            key,
+                            { [field]: value },
+                            {
+                                expiry: { type: TimeUnit.Seconds, count: 60 },
+                            },
+                        );
+                    } catch (error) {
+                        errorCaught = true;
+                        expect(error).toBeInstanceOf(RequestError);
+                    }
+
+                    expect(errorCaught).toBe(true);
+
+                    // Test batch operation error handling
+                    const batch =
+                        client instanceof GlideClient
+                            ? new Batch(false)
+                            : new ClusterBatch(false);
+                    batch.hsetex(
+                        key,
+                        { [field]: value },
+                        {
+                            expiry: { type: TimeUnit.Seconds, count: 60 },
+                        },
+                    );
+
+                    const execPromise =
+                        client instanceof GlideClient
+                            ? client.exec(batch as Batch, false)
+                            : (client as GlideClusterClient).exec(
+                                  batch as ClusterBatch,
+                                  false,
+                              );
+
+                    await expect(execPromise).rejects.toThrow(RequestError);
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -2626,48 +2779,61 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hgetex basic functionality_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
-                if (cluster.checkIfServerVersionLessThan("9.0.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
 
-                const key = getRandomKey();
-                const field1 = getRandomKey();
-                const field2 = getRandomKey();
-                const field3 = getRandomKey();
-                const value1 = getRandomKey();
-                const value2 = getRandomKey();
+                    const key = getRandomKey();
+                    const field1 = getRandomKey();
+                    const field2 = getRandomKey();
+                    const field3 = getRandomKey();
+                    const value1 = getRandomKey();
+                    const value2 = getRandomKey();
 
-                // Set up hash with some fields
-                await client.hset(key, { [field1]: value1, [field2]: value2 });
+                    // Set up hash with some fields
+                    await client.hset(key, {
+                        [field1]: value1,
+                        [field2]: value2,
+                    });
 
-                // Test basic HGETEX without options
-                const result1 = await client.hgetex(key, [field1, field2, field3]);
-                expect(result1).toEqual([value1, value2, null]);
+                    // Test basic HGETEX without options
+                    const result1 = await client.hgetex(key, [
+                        field1,
+                        field2,
+                        field3,
+                    ]);
+                    expect(result1).toEqual([value1, value2, null]);
 
-                // Test HGETEX with expiry setting
-                const result2 = await client.hgetex(key, [field1, field2], {
-                    expiry: { type: TimeUnit.Seconds, count: 60 },
-                });
-                expect(result2).toEqual([value1, value2]);
+                    // Test HGETEX with expiry setting
+                    const result2 = await client.hgetex(key, [field1, field2], {
+                        expiry: { type: TimeUnit.Seconds, count: 60 },
+                    });
+                    expect(result2).toEqual([value1, value2]);
 
-                // Test HGETEX with PERSIST option
-                const result3 = await client.hgetex(key, [field1], {
-                    expiry: "PERSIST",
-                });
-                expect(result3).toEqual([value1]);
+                    // Test HGETEX with PERSIST option
+                    const result3 = await client.hgetex(key, [field1], {
+                        expiry: "PERSIST",
+                    });
+                    expect(result3).toEqual([value1]);
 
-                // Test HGETEX with KEEPTTL option
-                const result4 = await client.hgetex(key, [field1], {
-                    expiry: "KEEPTTL",
-                });
-                expect(result4).toEqual([value1]);
+                    // Test HGETEX with KEEPTTL option
+                    const result4 = await client.hgetex(key, [field1], {
+                        expiry: "KEEPTTL",
+                    });
+                    expect(result4).toEqual([value1]);
 
-                // Test HGETEX on non-existent key
-                const nonExistentKey = getRandomKey();
-                const result5 = await client.hgetex(nonExistentKey, [field1, field2]);
-                expect(result5).toEqual([null, null]);
-            }, protocol);
+                    // Test HGETEX on non-existent key
+                    const nonExistentKey = getRandomKey();
+                    const result5 = await client.hgetex(nonExistentKey, [
+                        field1,
+                        field2,
+                    ]);
+                    expect(result5).toEqual([null, null]);
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -2675,52 +2841,61 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hgetex with different expiry types_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
-                if (cluster.checkIfServerVersionLessThan("9.0.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
 
-                const key = getRandomKey();
-                const field1 = getRandomKey();
-                const field2 = getRandomKey();
-                const field3 = getRandomKey();
-                const field4 = getRandomKey();
-                const value = getRandomKey();
+                    const key = getRandomKey();
+                    const field1 = getRandomKey();
+                    const field2 = getRandomKey();
+                    const field3 = getRandomKey();
+                    const field4 = getRandomKey();
+                    const value = getRandomKey();
 
-                // Set up hash with fields
-                await client.hset(key, {
-                    [field1]: value,
-                    [field2]: value,
-                    [field3]: value,
-                    [field4]: value
-                });
+                    // Set up hash with fields
+                    await client.hset(key, {
+                        [field1]: value,
+                        [field2]: value,
+                        [field3]: value,
+                        [field4]: value,
+                    });
 
-                // Test EX (seconds)
-                const result1 = await client.hgetex(key, [field1], {
-                    expiry: { type: TimeUnit.Seconds, count: 60 },
-                });
-                expect(result1).toEqual([value]);
+                    // Test EX (seconds)
+                    const result1 = await client.hgetex(key, [field1], {
+                        expiry: { type: TimeUnit.Seconds, count: 60 },
+                    });
+                    expect(result1).toEqual([value]);
 
-                // Test PX (milliseconds)
-                const result2 = await client.hgetex(key, [field2], {
-                    expiry: { type: TimeUnit.Milliseconds, count: 60000 },
-                });
-                expect(result2).toEqual([value]);
+                    // Test PX (milliseconds)
+                    const result2 = await client.hgetex(key, [field2], {
+                        expiry: { type: TimeUnit.Milliseconds, count: 60000 },
+                    });
+                    expect(result2).toEqual([value]);
 
-                // Test EXAT (Unix timestamp in seconds)
-                const futureTimestamp = Math.floor(Date.now() / 1000) + 60;
-                const result3 = await client.hgetex(key, [field3], {
-                    expiry: { type: TimeUnit.UnixSeconds, count: futureTimestamp },
-                });
-                expect(result3).toEqual([value]);
+                    // Test EXAT (Unix timestamp in seconds)
+                    const futureTimestamp = Math.floor(Date.now() / 1000) + 60;
+                    const result3 = await client.hgetex(key, [field3], {
+                        expiry: {
+                            type: TimeUnit.UnixSeconds,
+                            count: futureTimestamp,
+                        },
+                    });
+                    expect(result3).toEqual([value]);
 
-                // Test PXAT (Unix timestamp in milliseconds)
-                const futureTimestampMs = Date.now() + 60000;
-                const result4 = await client.hgetex(key, [field4], {
-                    expiry: { type: TimeUnit.UnixMilliseconds, count: futureTimestampMs },
-                });
-                expect(result4).toEqual([value]);
-            }, protocol);
+                    // Test PXAT (Unix timestamp in milliseconds)
+                    const futureTimestampMs = Date.now() + 60000;
+                    const result4 = await client.hgetex(key, [field4], {
+                        expiry: {
+                            type: TimeUnit.UnixMilliseconds,
+                            count: futureTimestampMs,
+                        },
+                    });
+                    expect(result4).toEqual([value]);
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -2728,40 +2903,49 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hgetex with batch operations_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
-                if (cluster.checkIfServerVersionLessThan("9.0.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
 
-                const key1 = getRandomKey();
-                const key2 = getRandomKey();
-                const field1 = getRandomKey();
-                const field2 = getRandomKey();
-                const value1 = getRandomKey();
-                const value2 = getRandomKey();
+                    const key1 = getRandomKey();
+                    const key2 = getRandomKey();
+                    const field1 = getRandomKey();
+                    const field2 = getRandomKey();
+                    const value1 = getRandomKey();
+                    const value2 = getRandomKey();
 
-                // Set up hashes
-                await client.hset(key1, { [field1]: value1 });
-                await client.hset(key2, { [field2]: value2 });
+                    // Set up hashes
+                    await client.hset(key1, { [field1]: value1 });
+                    await client.hset(key2, { [field2]: value2 });
 
-                // Test batch operations with HGETEX
-                const batch = client instanceof GlideClient ? new Batch(false) : new ClusterBatch(false);
+                    // Test batch operations with HGETEX
+                    const batch =
+                        client instanceof GlideClient
+                            ? new Batch(false)
+                            : new ClusterBatch(false);
 
-                batch.hgetex(key1, [field1], {
-                    expiry: { type: TimeUnit.Seconds, count: 60 },
-                });
-                batch.hgetex(key2, [field2], {
-                    expiry: "PERSIST",
-                });
+                    batch.hgetex(key1, [field1], {
+                        expiry: { type: TimeUnit.Seconds, count: 60 },
+                    });
+                    batch.hgetex(key2, [field2], {
+                        expiry: "PERSIST",
+                    });
 
-                const results = await (client instanceof GlideClient
-                    ? client.exec(batch as Batch, false)
-                    : (client as GlideClusterClient).exec(batch as ClusterBatch, false));
+                    const results = await (client instanceof GlideClient
+                        ? client.exec(batch as Batch, false)
+                        : (client as GlideClusterClient).exec(
+                              batch as ClusterBatch,
+                              false,
+                          ));
 
-                expect(results).toHaveLength(2);
-                expect(results![0]).toEqual([value1]);
-                expect(results![1]).toEqual([value2]);
-            }, protocol);
+                    expect(results).toHaveLength(2);
+                    expect(results![0]).toEqual([value1]);
+                    expect(results![1]).toEqual([value2]);
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -2769,30 +2953,32 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hgetex error handling_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
-                if (cluster.checkIfServerVersionLessThan("9.0.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
 
-                const key = getRandomKey();
-                const field = getRandomKey();
-                const value = getRandomKey();
+                    const key = getRandomKey();
+                    const field = getRandomKey();
 
-                // Test invalid expiry count (non-integer)
-                await expect(
-                    client.hgetex(key, [field], {
-                        expiry: { type: TimeUnit.Seconds, count: 1.5 },
-                    }),
-                ).rejects.toThrow("Count must be an integer");
+                    // Test invalid expiry count (non-integer)
+                    await expect(
+                        client.hgetex(key, [field], {
+                            expiry: { type: TimeUnit.Seconds, count: 1.5 },
+                        }),
+                    ).rejects.toThrow("Count must be an integer");
 
-                // Test HGETEX on non-hash key
-                expect(await client.set(key, "string_value")).toEqual("OK");
-                await expect(
-                    client.hgetex(key, [field], {
-                        expiry: { type: TimeUnit.Seconds, count: 60 },
-                    }),
-                ).rejects.toThrow(RequestError);
-            }, protocol);
+                    // Test HGETEX on non-hash key
+                    expect(await client.set(key, "string_value")).toEqual("OK");
+                    await expect(
+                        client.hgetex(key, [field], {
+                            expiry: { type: TimeUnit.Seconds, count: 60 },
+                        }),
+                    ).rejects.toThrow(RequestError);
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -2800,67 +2986,85 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hgetex with comprehensive parameter types_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
-                if (cluster.checkIfServerVersionLessThan("9.0.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
 
-                const key = getRandomKey();
-                const keyBuffer = Buffer.from(getRandomKey());
-                const field1 = getRandomKey();
-                const fieldBuffer = Buffer.from(getRandomKey());
-                const value1 = getRandomKey();
-                const valueBuffer = Buffer.from(getRandomKey());
+                    const key = getRandomKey();
+                    const keyBuffer = Buffer.from(getRandomKey());
+                    const field1 = getRandomKey();
+                    const fieldBuffer = Buffer.from(getRandomKey());
+                    const value1 = getRandomKey();
+                    const valueBuffer = Buffer.from(getRandomKey());
 
-                // Set up hash with mixed types
-                await client.hset(keyBuffer, {
-                    [field1]: valueBuffer,
-                    [fieldBuffer.toString()]: value1
-                });
+                    // Set up hash with mixed types
+                    await client.hset(keyBuffer, {
+                        [field1]: valueBuffer,
+                        [fieldBuffer.toString()]: value1,
+                    });
 
-                // Test with Buffer keys and fields
-                const result1 = await client.hgetex(keyBuffer, [field1, fieldBuffer]);
-                expect(result1).toHaveLength(2);
-                expect(result1[0]).toEqual(valueBuffer);
-                expect(result1[1]).toEqual(value1);
+                    // Test with Buffer keys and fields
+                    const result1 = await client.hgetex(keyBuffer, [
+                        field1,
+                        fieldBuffer,
+                    ]);
+                    expect(result1).toHaveLength(2);
+                    expect(result1[0]).toEqual(valueBuffer);
+                    expect(result1[1]).toEqual(value1);
 
-                // Test with empty field array
-                const result2 = await client.hgetex(key, []);
-                expect(result2).toEqual([]);
+                    // Test with empty field array
+                    const result2 = await client.hgetex(key, []);
+                    expect(result2).toEqual([]);
 
-                // Test with large field names and values
-                const longKey = getRandomKey();
-                const longField = "f".repeat(100);
-                const longValue = "v".repeat(100);
+                    // Test with large field names and values
+                    const longKey = getRandomKey();
+                    const longField = "f".repeat(100);
+                    const longValue = "v".repeat(100);
 
-                await client.hset(longKey, { [longField]: longValue });
-                const result3 = await client.hgetex(longKey, [longField], {
-                    expiry: { type: TimeUnit.Seconds, count: 60 },
-                });
-                expect(result3).toEqual([longValue]);
+                    await client.hset(longKey, { [longField]: longValue });
+                    const result3 = await client.hgetex(longKey, [longField], {
+                        expiry: { type: TimeUnit.Seconds, count: 60 },
+                    });
+                    expect(result3).toEqual([longValue]);
 
-                // Test with special characters
-                const specialKey = getRandomKey();
-                const specialField = "field:with:special:chars:!@#$%^&*()";
-                const specialValue = "value:with:special:chars:!@#$%^&*()";
+                    // Test with special characters
+                    const specialKey = getRandomKey();
+                    const specialField = "field:with:special:chars:!@#$%^&*()";
+                    const specialValue = "value:with:special:chars:!@#$%^&*()";
 
-                await client.hset(specialKey, { [specialField]: specialValue });
-                const result4 = await client.hgetex(specialKey, [specialField], {
-                    expiry: { type: TimeUnit.Seconds, count: 60 },
-                });
-                expect(result4).toEqual([specialValue]);
+                    await client.hset(specialKey, {
+                        [specialField]: specialValue,
+                    });
+                    const result4 = await client.hgetex(
+                        specialKey,
+                        [specialField],
+                        {
+                            expiry: { type: TimeUnit.Seconds, count: 60 },
+                        },
+                    );
+                    expect(result4).toEqual([specialValue]);
 
-                // Test with Unicode characters
-                const unicodeKey = getRandomKey();
-                const unicodeField = "field_🚀_测试_🎉";
-                const unicodeValue = "value_🌟_测试_🎊";
+                    // Test with Unicode characters
+                    const unicodeKey = getRandomKey();
+                    const unicodeField = "field_🚀_测试_🎉";
+                    const unicodeValue = "value_🌟_测试_🎊";
 
-                await client.hset(unicodeKey, { [unicodeField]: unicodeValue });
-                const result5 = await client.hgetex(unicodeKey, [unicodeField], {
-                    expiry: { type: TimeUnit.Seconds, count: 60 },
-                });
-                expect(result5).toEqual([unicodeValue]);
-            }, protocol);
+                    await client.hset(unicodeKey, {
+                        [unicodeField]: unicodeValue,
+                    });
+                    const result5 = await client.hgetex(
+                        unicodeKey,
+                        [unicodeField],
+                        {
+                            expiry: { type: TimeUnit.Seconds, count: 60 },
+                        },
+                    );
+                    expect(result5).toEqual([unicodeValue]);
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -2868,47 +3072,63 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hexpire basic functionality_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
-                if (cluster.checkIfServerVersionLessThan("9.0.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
 
-                const key = getRandomKey();
-                const field1 = getRandomKey();
-                const field2 = getRandomKey();
-                const field3 = getRandomKey();
-                const value1 = getRandomKey();
-                const value2 = getRandomKey();
+                    const key = getRandomKey();
+                    const field1 = getRandomKey();
+                    const field2 = getRandomKey();
+                    const field3 = getRandomKey();
+                    const value1 = getRandomKey();
+                    const value2 = getRandomKey();
 
-                // Set up hash with some fields
-                await client.hset(key, { [field1]: value1, [field2]: value2 });
+                    // Set up hash with some fields
+                    await client.hset(key, {
+                        [field1]: value1,
+                        [field2]: value2,
+                    });
 
-                // Test basic HEXPIRE
-                const result1 = await client.hexpire(key, 60, [field1, field2, field3]);
-                expect(result1).toEqual([1, 1, -2]); // field3 doesn't exist
+                    // Test basic HEXPIRE
+                    const result1 = await client.hexpire(key, 60, [
+                        field1,
+                        field2,
+                        field3,
+                    ]);
+                    expect(result1).toEqual([1, 1, -2]); // field3 doesn't exist
 
-                // Verify fields still exist
-                expect(await client.hget(key, field1)).toEqual(value1);
-                expect(await client.hget(key, field2)).toEqual(value2);
+                    // Verify fields still exist
+                    expect(await client.hget(key, field1)).toEqual(value1);
+                    expect(await client.hget(key, field2)).toEqual(value2);
 
-                // Verify expiration was set using HTTL
-                const ttlResult = await client.httl(key, [field1, field2, field3]);
-                expect(ttlResult[0]).toBeGreaterThan(0); // field1 should have TTL
-                expect(ttlResult[0]).toBeLessThanOrEqual(60); // should be <= 60 seconds
-                expect(ttlResult[1]).toBeGreaterThan(0); // field2 should have TTL
-                expect(ttlResult[1]).toBeLessThanOrEqual(60); // should be <= 60 seconds
-                expect(ttlResult[2]).toEqual(-2); // field3 doesn't exist
+                    // Verify expiration was set using HTTL
+                    const ttlResult = await client.httl(key, [
+                        field1,
+                        field2,
+                        field3,
+                    ]);
+                    expect(ttlResult[0]).toBeGreaterThan(0); // field1 should have TTL
+                    expect(ttlResult[0]).toBeLessThanOrEqual(60); // should be <= 60 seconds
+                    expect(ttlResult[1]).toBeGreaterThan(0); // field2 should have TTL
+                    expect(ttlResult[1]).toBeLessThanOrEqual(60); // should be <= 60 seconds
+                    expect(ttlResult[2]).toEqual(-2); // field3 doesn't exist
 
-                // Test with 0 seconds (immediate deletion)
-                const result2 = await client.hexpire(key, 0, [field1]);
-                expect(result2).toEqual([2]);
-                expect(await client.hget(key, field1)).toEqual(null);
+                    // Test with 0 seconds (immediate deletion)
+                    const result2 = await client.hexpire(key, 0, [field1]);
+                    expect(result2).toEqual([2]);
+                    expect(await client.hget(key, field1)).toEqual(null);
 
-                // Test on non-existent key
-                const nonExistentKey = getRandomKey();
-                const result3 = await client.hexpire(nonExistentKey, 60, [field1]);
-                expect(result3).toEqual([-2]);
-            }, protocol);
+                    // Test on non-existent key
+                    const nonExistentKey = getRandomKey();
+                    const result3 = await client.hexpire(nonExistentKey, 60, [
+                        field1,
+                    ]);
+                    expect(result3).toEqual([-2]);
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -2916,64 +3136,84 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hexpire with conditions_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
-                if (cluster.checkIfServerVersionLessThan("9.0.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
 
-                const key = getRandomKey();
-                const field1 = getRandomKey();
-                const field2 = getRandomKey();
-                const value1 = getRandomKey();
-                const value2 = getRandomKey();
+                    const key = getRandomKey();
+                    const field1 = getRandomKey();
+                    const field2 = getRandomKey();
+                    const value1 = getRandomKey();
+                    const value2 = getRandomKey();
 
-                // Set up hash with some fields
-                await client.hset(key, { [field1]: value1, [field2]: value2 });
+                    // Set up hash with some fields
+                    await client.hset(key, {
+                        [field1]: value1,
+                        [field2]: value2,
+                    });
 
-                // Set initial expiration on field1
-                await client.hexpire(key, 120, [field1]);
+                    // Set initial expiration on field1
+                    await client.hexpire(key, 120, [field1]);
 
-                // Test NX condition (only if no expiry)
-                const result1 = await client.hexpire(key, 60, [field1, field2], {
-                    condition: HashExpirationCondition.ONLY_IF_NO_EXPIRY,
-                });
-                expect(result1).toEqual([0, 1]); // field1 already has expiry, field2 doesn't
+                    // Test NX condition (only if no expiry)
+                    const result1 = await client.hexpire(
+                        key,
+                        60,
+                        [field1, field2],
+                        {
+                            condition:
+                                HashExpirationCondition.ONLY_IF_NO_EXPIRY,
+                        },
+                    );
+                    expect(result1).toEqual([0, 1]); // field1 already has expiry, field2 doesn't
 
-                // Test XX condition (only if has expiry)
-                const result2 = await client.hexpire(key, 180, [field1, field2], {
-                    condition: HashExpirationCondition.ONLY_IF_HAS_EXPIRY,
-                });
-                expect(result2).toEqual([1, 1]); // both should have expiry now
+                    // Test XX condition (only if has expiry)
+                    const result2 = await client.hexpire(
+                        key,
+                        180,
+                        [field1, field2],
+                        {
+                            condition:
+                                HashExpirationCondition.ONLY_IF_HAS_EXPIRY,
+                        },
+                    );
+                    expect(result2).toEqual([1, 1]); // both should have expiry now
 
-                // Verify expiration was updated using HTTL
-                const ttlResult2 = await client.httl(key, [field1, field2]);
-                expect(ttlResult2[0]).toBeGreaterThan(0);
-                expect(ttlResult2[0]).toBeLessThanOrEqual(180);
-                expect(ttlResult2[1]).toBeGreaterThan(0);
-                expect(ttlResult2[1]).toBeLessThanOrEqual(180);
+                    // Verify expiration was updated using HTTL
+                    const ttlResult2 = await client.httl(key, [field1, field2]);
+                    expect(ttlResult2[0]).toBeGreaterThan(0);
+                    expect(ttlResult2[0]).toBeLessThanOrEqual(180);
+                    expect(ttlResult2[1]).toBeGreaterThan(0);
+                    expect(ttlResult2[1]).toBeLessThanOrEqual(180);
 
-                // Test GT condition (only if greater than current)
-                const result3 = await client.hexpire(key, 300, [field1], {
-                    condition: HashExpirationCondition.ONLY_IF_GREATER_THAN_CURRENT,
-                });
-                expect(result3).toEqual([1]); // 300 > 180
+                    // Test GT condition (only if greater than current)
+                    const result3 = await client.hexpire(key, 300, [field1], {
+                        condition:
+                            HashExpirationCondition.ONLY_IF_GREATER_THAN_CURRENT,
+                    });
+                    expect(result3).toEqual([1]); // 300 > 180
 
-                // Verify expiration was updated using HTTL
-                const ttlResult3 = await client.httl(key, [field1]);
-                expect(ttlResult3[0]).toBeGreaterThan(180); // Should be greater than previous TTL
-                expect(ttlResult3[0]).toBeLessThanOrEqual(300);
+                    // Verify expiration was updated using HTTL
+                    const ttlResult3 = await client.httl(key, [field1]);
+                    expect(ttlResult3[0]).toBeGreaterThan(180); // Should be greater than previous TTL
+                    expect(ttlResult3[0]).toBeLessThanOrEqual(300);
 
-                // Test LT condition (only if less than current)
-                const result4 = await client.hexpire(key, 150, [field1], {
-                    condition: HashExpirationCondition.ONLY_IF_LESS_THAN_CURRENT,
-                });
-                expect(result4).toEqual([1]); // 150 < 300
+                    // Test LT condition (only if less than current)
+                    const result4 = await client.hexpire(key, 150, [field1], {
+                        condition:
+                            HashExpirationCondition.ONLY_IF_LESS_THAN_CURRENT,
+                    });
+                    expect(result4).toEqual([1]); // 150 < 300
 
-                // Verify expiration was updated using HTTL
-                const ttlResult4 = await client.httl(key, [field1]);
-                expect(ttlResult4[0]).toBeGreaterThan(0);
-                expect(ttlResult4[0]).toBeLessThanOrEqual(150);
-            }, protocol);
+                    // Verify expiration was updated using HTTL
+                    const ttlResult4 = await client.httl(key, [field1]);
+                    expect(ttlResult4[0]).toBeGreaterThan(0);
+                    expect(ttlResult4[0]).toBeLessThanOrEqual(150);
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -2981,43 +3221,52 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hexpire batch operations_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
-                if (cluster.checkIfServerVersionLessThan("9.0.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
 
-                const key1 = getRandomKey();
-                const key2 = getRandomKey();
-                const field1 = getRandomKey();
-                const field2 = getRandomKey();
-                const value1 = getRandomKey();
-                const value2 = getRandomKey();
+                    const key1 = getRandomKey();
+                    const key2 = getRandomKey();
+                    const field1 = getRandomKey();
+                    const field2 = getRandomKey();
+                    const value1 = getRandomKey();
+                    const value2 = getRandomKey();
 
-                // Set up hashes
-                await client.hset(key1, { [field1]: value1 });
-                await client.hset(key2, { [field2]: value2 });
+                    // Set up hashes
+                    await client.hset(key1, { [field1]: value1 });
+                    await client.hset(key2, { [field2]: value2 });
 
-                // Test batch operations with HEXPIRE
-                const batch = client instanceof GlideClient ? new Batch(false) : new ClusterBatch(false);
-                batch.hexpire(key1, 60, [field1]);
-                batch.hexpire(key2, 120, [field2], {
-                    condition: HashExpirationCondition.ONLY_IF_NO_EXPIRY,
-                });
+                    // Test batch operations with HEXPIRE
+                    const batch =
+                        client instanceof GlideClient
+                            ? new Batch(false)
+                            : new ClusterBatch(false);
+                    batch.hexpire(key1, 60, [field1]);
+                    batch.hexpire(key2, 120, [field2], {
+                        condition: HashExpirationCondition.ONLY_IF_NO_EXPIRY,
+                    });
 
-                const results = await (client instanceof GlideClient
-                    ? client.exec(batch as Batch, false)
-                    : (client as GlideClusterClient).exec(batch as ClusterBatch, false));
-                expect(results).toEqual([[1], [1]]);
+                    const results = await (client instanceof GlideClient
+                        ? client.exec(batch as Batch, false)
+                        : (client as GlideClusterClient).exec(
+                              batch as ClusterBatch,
+                              false,
+                          ));
+                    expect(results).toEqual([[1], [1]]);
 
-                // Verify expiration was set using HTTL
-                const ttlResult1 = await client.httl(key1, [field1]);
-                expect(ttlResult1[0]).toBeGreaterThan(0);
-                expect(ttlResult1[0]).toBeLessThanOrEqual(60);
+                    // Verify expiration was set using HTTL
+                    const ttlResult1 = await client.httl(key1, [field1]);
+                    expect(ttlResult1[0]).toBeGreaterThan(0);
+                    expect(ttlResult1[0]).toBeLessThanOrEqual(60);
 
-                const ttlResult2 = await client.httl(key2, [field2]);
-                expect(ttlResult2[0]).toBeGreaterThan(0);
-                expect(ttlResult2[0]).toBeLessThanOrEqual(120);
-            }, protocol);
+                    const ttlResult2 = await client.httl(key2, [field2]);
+                    expect(ttlResult2[0]).toBeGreaterThan(0);
+                    expect(ttlResult2[0]).toBeLessThanOrEqual(120);
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -3025,26 +3274,29 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hexpire error handling_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
-                if (cluster.checkIfServerVersionLessThan("9.0.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
 
-                const key = getRandomKey();
-                const field = getRandomKey();
+                    const key = getRandomKey();
+                    const field = getRandomKey();
 
-                // Test HEXPIRE on non-hash key
-                expect(await client.set(key, "string_value")).toEqual("OK");
-                await expect(
-                    client.hexpire(key, 60, [field]),
-                ).rejects.toThrow(RequestError);
+                    // Test HEXPIRE on non-hash key
+                    expect(await client.set(key, "string_value")).toEqual("OK");
+                    await expect(
+                        client.hexpire(key, 60, [field]),
+                    ).rejects.toThrow(RequestError);
 
-                // Test with empty field array
-                const hashKey = getRandomKey();
-                await client.hset(hashKey, { [field]: "value" });
-                const result = await client.hexpire(hashKey, 60, []);
-                expect(result).toEqual([]);
-            }, protocol);
+                    // Test with empty field array
+                    const hashKey = getRandomKey();
+                    await client.hset(hashKey, { [field]: "value" });
+                    const result = await client.hexpire(hashKey, 60, []);
+                    expect(result).toEqual([]);
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -3052,65 +3304,84 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hexpire with comprehensive parameter types_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
-                if (cluster.checkIfServerVersionLessThan("9.0.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
 
-                const key = getRandomKey();
-                const keyBuffer = Buffer.from(getRandomKey());
-                const field1 = getRandomKey();
-                const fieldBuffer = Buffer.from(getRandomKey());
-                const value1 = getRandomKey();
-                const valueBuffer = Buffer.from(getRandomKey());
+                    const keyBuffer = Buffer.from(getRandomKey());
+                    const field1 = getRandomKey();
+                    const fieldBuffer = Buffer.from(getRandomKey());
+                    const value1 = getRandomKey();
+                    const valueBuffer = Buffer.from(getRandomKey());
 
-                // Set up hash with mixed types
-                await client.hset(keyBuffer, {
-                    [field1]: valueBuffer,
-                    [fieldBuffer.toString()]: value1
-                });
+                    // Set up hash with mixed types
+                    await client.hset(keyBuffer, {
+                        [field1]: valueBuffer,
+                        [fieldBuffer.toString()]: value1,
+                    });
 
-                // Test with Buffer keys and fields
-                const result1 = await client.hexpire(keyBuffer, 60, [field1, fieldBuffer]);
-                expect(result1).toEqual([1, 1]);
+                    // Test with Buffer keys and fields
+                    const result1 = await client.hexpire(keyBuffer, 60, [
+                        field1,
+                        fieldBuffer,
+                    ]);
+                    expect(result1).toEqual([1, 1]);
 
-                // Test with large field names
-                const longKey = getRandomKey();
-                const longField = "f".repeat(100);
-                const longValue = "v".repeat(100);
+                    // Test with large field names
+                    const longKey = getRandomKey();
+                    const longField = "f".repeat(100);
+                    const longValue = "v".repeat(100);
 
-                await client.hset(longKey, { [longField]: longValue });
-                const result2 = await client.hexpire(longKey, 60, [longField]);
-                expect(result2).toEqual([1]);
+                    await client.hset(longKey, { [longField]: longValue });
+                    const result2 = await client.hexpire(longKey, 60, [
+                        longField,
+                    ]);
+                    expect(result2).toEqual([1]);
 
-                // Test with special characters
-                const specialKey = getRandomKey();
-                const specialField = "field:with:special:chars:!@#$%^&*()";
-                const specialValue = "value:with:special:chars:!@#$%^&*()";
+                    // Test with special characters
+                    const specialKey = getRandomKey();
+                    const specialField = "field:with:special:chars:!@#$%^&*()";
+                    const specialValue = "value:with:special:chars:!@#$%^&*()";
 
-                await client.hset(specialKey, { [specialField]: specialValue });
-                const result3 = await client.hexpire(specialKey, 60, [specialField]);
-                expect(result3).toEqual([1]);
+                    await client.hset(specialKey, {
+                        [specialField]: specialValue,
+                    });
+                    const result3 = await client.hexpire(specialKey, 60, [
+                        specialField,
+                    ]);
+                    expect(result3).toEqual([1]);
 
-                // Verify expiration was set using HTTL
-                const ttlResult3 = await client.httl(specialKey, [specialField]);
-                expect(ttlResult3[0]).toBeGreaterThan(0);
-                expect(ttlResult3[0]).toBeLessThanOrEqual(60);
+                    // Verify expiration was set using HTTL
+                    const ttlResult3 = await client.httl(specialKey, [
+                        specialField,
+                    ]);
+                    expect(ttlResult3[0]).toBeGreaterThan(0);
+                    expect(ttlResult3[0]).toBeLessThanOrEqual(60);
 
-                // Test with Unicode characters
-                const unicodeKey = getRandomKey();
-                const unicodeField = "field_🚀_测试_🎉";
-                const unicodeValue = "value_🌟_测试_🎊";
+                    // Test with Unicode characters
+                    const unicodeKey = getRandomKey();
+                    const unicodeField = "field_🚀_测试_🎉";
+                    const unicodeValue = "value_🌟_测试_🎊";
 
-                await client.hset(unicodeKey, { [unicodeField]: unicodeValue });
-                const result4 = await client.hexpire(unicodeKey, 60, [unicodeField]);
-                expect(result4).toEqual([1]);
+                    await client.hset(unicodeKey, {
+                        [unicodeField]: unicodeValue,
+                    });
+                    const result4 = await client.hexpire(unicodeKey, 60, [
+                        unicodeField,
+                    ]);
+                    expect(result4).toEqual([1]);
 
-                // Verify expiration was set using HTTL
-                const ttlResult4 = await client.httl(unicodeKey, [unicodeField]);
-                expect(ttlResult4[0]).toBeGreaterThan(0);
-                expect(ttlResult4[0]).toBeLessThanOrEqual(60);
-            }, protocol);
+                    // Verify expiration was set using HTTL
+                    const ttlResult4 = await client.httl(unicodeKey, [
+                        unicodeField,
+                    ]);
+                    expect(ttlResult4[0]).toBeGreaterThan(0);
+                    expect(ttlResult4[0]).toBeLessThanOrEqual(60);
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -3118,43 +3389,55 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hpersist basic functionality_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
-                if (cluster.checkIfServerVersionLessThan("9.0.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
 
-                const key = getRandomKey();
-                const field1 = getRandomKey();
-                const field2 = getRandomKey();
-                const field3 = getRandomKey(); // non-existent field
-                const value1 = getRandomKey();
-                const value2 = getRandomKey();
+                    const key = getRandomKey();
+                    const field1 = getRandomKey();
+                    const field2 = getRandomKey();
+                    const field3 = getRandomKey(); // non-existent field
+                    const value1 = getRandomKey();
+                    const value2 = getRandomKey();
 
-                // Set up hash with fields
-                await client.hset(key, { [field1]: value1, [field2]: value2 });
+                    // Set up hash with fields
+                    await client.hset(key, {
+                        [field1]: value1,
+                        [field2]: value2,
+                    });
 
-                // Set expiration on fields
-                await client.hexpire(key, 60, [field1, field2]);
+                    // Set expiration on fields
+                    await client.hexpire(key, 60, [field1, field2]);
 
-                // Test basic HPERSIST
-                const result1 = await client.hpersist(key, [field1, field2, field3]);
-                expect(result1).toEqual([1, 1, -2]); // field3 doesn't exist
+                    // Test basic HPERSIST
+                    const result1 = await client.hpersist(key, [
+                        field1,
+                        field2,
+                        field3,
+                    ]);
+                    expect(result1).toEqual([1, 1, -2]); // field3 doesn't exist
 
-                // Verify fields still exist but no longer have expiration
-                expect(await client.hget(key, field1)).toEqual(value1);
-                expect(await client.hget(key, field2)).toEqual(value2);
+                    // Verify fields still exist but no longer have expiration
+                    expect(await client.hget(key, field1)).toEqual(value1);
+                    expect(await client.hget(key, field2)).toEqual(value2);
 
-                // Test on non-existent key
-                const nonExistentKey = getRandomKey();
-                const result2 = await client.hpersist(nonExistentKey, [field1]);
-                expect(result2).toEqual([false]);
+                    // Test on non-existent key
+                    const nonExistentKey = getRandomKey();
+                    const result2 = await client.hpersist(nonExistentKey, [
+                        field1,
+                    ]);
+                    expect(result2).toEqual([false]);
 
-                // Test on fields without expiration
-                const key2 = getRandomKey();
-                await client.hset(key2, { [field1]: value1 });
-                const result3 = await client.hpersist(key2, [field1]);
-                expect(result3).toEqual([false]); // field has no expiration to remove
-            }, protocol);
+                    // Test on fields without expiration
+                    const key2 = getRandomKey();
+                    await client.hset(key2, { [field1]: value1 });
+                    const result3 = await client.hpersist(key2, [field1]);
+                    expect(result3).toEqual([false]); // field has no expiration to remove
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -3162,34 +3445,43 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hpersist with batch operations_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
-                if (cluster.checkIfServerVersionLessThan("9.0.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
 
-                const key1 = getRandomKey();
-                const key2 = getRandomKey();
-                const field1 = getRandomKey();
-                const field2 = getRandomKey();
-                const value1 = getRandomKey();
-                const value2 = getRandomKey();
+                    const key1 = getRandomKey();
+                    const key2 = getRandomKey();
+                    const field1 = getRandomKey();
+                    const field2 = getRandomKey();
+                    const value1 = getRandomKey();
+                    const value2 = getRandomKey();
 
-                // Set up hashes with fields and expiration
-                await client.hset(key1, { [field1]: value1 });
-                await client.hset(key2, { [field2]: value2 });
-                await client.hexpire(key1, 60, [field1]);
-                await client.hexpire(key2, 120, [field2]);
+                    // Set up hashes with fields and expiration
+                    await client.hset(key1, { [field1]: value1 });
+                    await client.hset(key2, { [field2]: value2 });
+                    await client.hexpire(key1, 60, [field1]);
+                    await client.hexpire(key2, 120, [field2]);
 
-                // Test batch operations with HPERSIST
-                const batch = client instanceof GlideClient ? new Batch(false) : new ClusterBatch(false);
-                batch.hpersist(key1, [field1]);
-                batch.hpersist(key2, [field2]);
+                    // Test batch operations with HPERSIST
+                    const batch =
+                        client instanceof GlideClient
+                            ? new Batch(false)
+                            : new ClusterBatch(false);
+                    batch.hpersist(key1, [field1]);
+                    batch.hpersist(key2, [field2]);
 
-                const results = await (client instanceof GlideClient
-                    ? client.exec(batch as Batch, false)
-                    : (client as GlideClusterClient).exec(batch as ClusterBatch, false));
-                expect(results).toEqual([[true], [true]]);
-            }, protocol);
+                    const results = await (client instanceof GlideClient
+                        ? client.exec(batch as Batch, false)
+                        : (client as GlideClusterClient).exec(
+                              batch as ClusterBatch,
+                              false,
+                          ));
+                    expect(results).toEqual([[true], [true]]);
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -3197,26 +3489,29 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hpersist error handling_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
-                if (cluster.checkIfServerVersionLessThan("9.0.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
 
-                const key = getRandomKey();
-                const field = getRandomKey();
+                    const key = getRandomKey();
+                    const field = getRandomKey();
 
-                // Test HPERSIST on non-hash key
-                expect(await client.set(key, "string_value")).toEqual("OK");
-                await expect(
-                    client.hpersist(key, [field]),
-                ).rejects.toThrow(RequestError);
+                    // Test HPERSIST on non-hash key
+                    expect(await client.set(key, "string_value")).toEqual("OK");
+                    await expect(client.hpersist(key, [field])).rejects.toThrow(
+                        RequestError,
+                    );
 
-                // Test with empty field array
-                const hashKey = getRandomKey();
-                await client.hset(hashKey, { [field]: "value" });
-                const result = await client.hpersist(hashKey, []);
-                expect(result).toEqual([]);
-            }, protocol);
+                    // Test with empty field array
+                    const hashKey = getRandomKey();
+                    await client.hset(hashKey, { [field]: "value" });
+                    const result = await client.hpersist(hashKey, []);
+                    expect(result).toEqual([]);
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -3224,54 +3519,73 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hpersist with comprehensive parameter types_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
-                if (cluster.checkIfServerVersionLessThan("9.0.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
 
-                const key = getRandomKey();
-                const keyBuffer = Buffer.from(getRandomKey());
-                const field1 = getRandomKey();
-                const fieldBuffer = Buffer.from(getRandomKey());
-                const value = getRandomKey();
-                const valueBuffer = Buffer.from(getRandomKey());
+                    const keyBuffer = Buffer.from(getRandomKey());
+                    const field1 = getRandomKey();
+                    const fieldBuffer = Buffer.from(getRandomKey());
+                    const value = getRandomKey();
+                    const valueBuffer = Buffer.from(getRandomKey());
 
-                // Test with Buffer keys and fields
-                await client.hset(keyBuffer, { [field1]: value, [fieldBuffer.toString()]: valueBuffer });
-                await client.hexpire(keyBuffer, 60, [field1, fieldBuffer.toString()]);
-                const result1 = await client.hpersist(keyBuffer, [field1, fieldBuffer]);
-                expect(result1).toEqual([1, 1]);
+                    // Test with Buffer keys and fields
+                    await client.hset(keyBuffer, {
+                        [field1]: value,
+                        [fieldBuffer.toString()]: valueBuffer,
+                    });
+                    await client.hexpire(keyBuffer, 60, [
+                        field1,
+                        fieldBuffer.toString(),
+                    ]);
+                    const result1 = await client.hpersist(keyBuffer, [
+                        field1,
+                        fieldBuffer,
+                    ]);
+                    expect(result1).toEqual([1, 1]);
 
-                // Test with long field names and values
-                const longKey = getRandomKey();
-                const longField = "f".repeat(100);
-                const longValue = "v".repeat(100);
+                    // Test with long field names and values
+                    const longKey = getRandomKey();
+                    const longField = "f".repeat(100);
+                    const longValue = "v".repeat(100);
 
-                await client.hset(longKey, { [longField]: longValue });
-                await client.hexpire(longKey, 60, [longField]);
-                const result2 = await client.hpersist(longKey, [longField]);
-                expect(result2).toEqual([1]);
+                    await client.hset(longKey, { [longField]: longValue });
+                    await client.hexpire(longKey, 60, [longField]);
+                    const result2 = await client.hpersist(longKey, [longField]);
+                    expect(result2).toEqual([1]);
 
-                // Test with special characters
-                const specialKey = getRandomKey();
-                const specialField = "field:with:special:chars:!@#$%^&*()";
-                const specialValue = "value:with:special:chars:!@#$%^&*()";
+                    // Test with special characters
+                    const specialKey = getRandomKey();
+                    const specialField = "field:with:special:chars:!@#$%^&*()";
+                    const specialValue = "value:with:special:chars:!@#$%^&*()";
 
-                await client.hset(specialKey, { [specialField]: specialValue });
-                await client.hexpire(specialKey, 60, [specialField]);
-                const result3 = await client.hpersist(specialKey, [specialField]);
-                expect(result3).toEqual([1]);
+                    await client.hset(specialKey, {
+                        [specialField]: specialValue,
+                    });
+                    await client.hexpire(specialKey, 60, [specialField]);
+                    const result3 = await client.hpersist(specialKey, [
+                        specialField,
+                    ]);
+                    expect(result3).toEqual([1]);
 
-                // Test with Unicode characters
-                const unicodeKey = getRandomKey();
-                const unicodeField = "field_🚀_测试_🎉";
-                const unicodeValue = "value_🌟_测试_🎊";
+                    // Test with Unicode characters
+                    const unicodeKey = getRandomKey();
+                    const unicodeField = "field_🚀_测试_🎉";
+                    const unicodeValue = "value_🌟_测试_🎊";
 
-                await client.hset(unicodeKey, { [unicodeField]: unicodeValue });
-                await client.hexpire(unicodeKey, 60, [unicodeField]);
-                const result4 = await client.hpersist(unicodeKey, [unicodeField]);
-                expect(result4).toEqual([1]);
-            }, protocol);
+                    await client.hset(unicodeKey, {
+                        [unicodeField]: unicodeValue,
+                    });
+                    await client.hexpire(unicodeKey, 60, [unicodeField]);
+                    const result4 = await client.hpersist(unicodeKey, [
+                        unicodeField,
+                    ]);
+                    expect(result4).toEqual([1]);
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -3279,47 +3593,65 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hpexpire basic functionality_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
-                if (cluster.checkIfServerVersionLessThan("9.0.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
 
-                const key = getRandomKey();
-                const field1 = getRandomKey();
-                const field2 = getRandomKey();
-                const field3 = getRandomKey();
-                const value1 = getRandomKey();
-                const value2 = getRandomKey();
+                    const key = getRandomKey();
+                    const field1 = getRandomKey();
+                    const field2 = getRandomKey();
+                    const field3 = getRandomKey();
+                    const value1 = getRandomKey();
+                    const value2 = getRandomKey();
 
-                // Set up hash with some fields
-                await client.hset(key, { [field1]: value1, [field2]: value2 });
+                    // Set up hash with some fields
+                    await client.hset(key, {
+                        [field1]: value1,
+                        [field2]: value2,
+                    });
 
-                // Test basic HPEXPIRE
-                const result1 = await client.hpexpire(key, 60000, [field1, field2, field3]);
-                expect(result1).toEqual([1, 1, -2]); // field3 doesn't exist
+                    // Test basic HPEXPIRE
+                    const result1 = await client.hpexpire(key, 60000, [
+                        field1,
+                        field2,
+                        field3,
+                    ]);
+                    expect(result1).toEqual([1, 1, -2]); // field3 doesn't exist
 
-                // Verify fields still exist
-                expect(await client.hget(key, field1)).toEqual(value1);
-                expect(await client.hget(key, field2)).toEqual(value2);
+                    // Verify fields still exist
+                    expect(await client.hget(key, field1)).toEqual(value1);
+                    expect(await client.hget(key, field2)).toEqual(value2);
 
-                // Verify expiration was set using HPTTL
-                const pttlResult = await client.hpttl(key, [field1, field2, field3]);
-                expect(pttlResult[0]).toBeGreaterThan(0); // field1 should have TTL
-                expect(pttlResult[0]).toBeLessThanOrEqual(60000); // should be <= 60000 milliseconds
-                expect(pttlResult[1]).toBeGreaterThan(0); // field2 should have TTL
-                expect(pttlResult[1]).toBeLessThanOrEqual(60000); // should be <= 60000 milliseconds
-                expect(pttlResult[2]).toEqual(-2); // field3 doesn't exist
+                    // Verify expiration was set using HPTTL
+                    const pttlResult = await client.hpttl(key, [
+                        field1,
+                        field2,
+                        field3,
+                    ]);
+                    expect(pttlResult[0]).toBeGreaterThan(0); // field1 should have TTL
+                    expect(pttlResult[0]).toBeLessThanOrEqual(60000); // should be <= 60000 milliseconds
+                    expect(pttlResult[1]).toBeGreaterThan(0); // field2 should have TTL
+                    expect(pttlResult[1]).toBeLessThanOrEqual(60000); // should be <= 60000 milliseconds
+                    expect(pttlResult[2]).toEqual(-2); // field3 doesn't exist
 
-                // Test with 0 milliseconds (immediate deletion)
-                const result2 = await client.hpexpire(key, 0, [field1]);
-                expect(result2).toEqual([2]);
-                expect(await client.hget(key, field1)).toEqual(null);
+                    // Test with 0 milliseconds (immediate deletion)
+                    const result2 = await client.hpexpire(key, 0, [field1]);
+                    expect(result2).toEqual([2]);
+                    expect(await client.hget(key, field1)).toEqual(null);
 
-                // Test on non-existent key
-                const nonExistentKey = getRandomKey();
-                const result3 = await client.hpexpire(nonExistentKey, 60000, [field1]);
-                expect(result3).toEqual([-2]);
-            }, protocol);
+                    // Test on non-existent key
+                    const nonExistentKey = getRandomKey();
+                    const result3 = await client.hpexpire(
+                        nonExistentKey,
+                        60000,
+                        [field1],
+                    );
+                    expect(result3).toEqual([-2]);
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -3327,64 +3659,97 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hpexpire with conditions_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
-                if (cluster.checkIfServerVersionLessThan("9.0.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
 
-                const key = getRandomKey();
-                const field1 = getRandomKey();
-                const field2 = getRandomKey();
-                const value1 = getRandomKey();
-                const value2 = getRandomKey();
+                    const key = getRandomKey();
+                    const field1 = getRandomKey();
+                    const field2 = getRandomKey();
+                    const value1 = getRandomKey();
+                    const value2 = getRandomKey();
 
-                // Set up hash with some fields
-                await client.hset(key, { [field1]: value1, [field2]: value2 });
+                    // Set up hash with some fields
+                    await client.hset(key, {
+                        [field1]: value1,
+                        [field2]: value2,
+                    });
 
-                // Set initial expiration on field1
-                await client.hpexpire(key, 120000, [field1]);
+                    // Set initial expiration on field1
+                    await client.hpexpire(key, 120000, [field1]);
 
-                // Test NX condition (only if no expiry)
-                const result1 = await client.hpexpire(key, 60000, [field1, field2], {
-                    condition: HashExpirationCondition.ONLY_IF_NO_EXPIRY,
-                });
-                expect(result1).toEqual([0, 1]); // field1 already has expiry, field2 doesn't
+                    // Test NX condition (only if no expiry)
+                    const result1 = await client.hpexpire(
+                        key,
+                        60000,
+                        [field1, field2],
+                        {
+                            condition:
+                                HashExpirationCondition.ONLY_IF_NO_EXPIRY,
+                        },
+                    );
+                    expect(result1).toEqual([0, 1]); // field1 already has expiry, field2 doesn't
 
-                // Test XX condition (only if has expiry)
-                const result2 = await client.hpexpire(key, 180000, [field1, field2], {
-                    condition: HashExpirationCondition.ONLY_IF_HAS_EXPIRY,
-                });
-                expect(result2).toEqual([1, 1]); // both should have expiry now
+                    // Test XX condition (only if has expiry)
+                    const result2 = await client.hpexpire(
+                        key,
+                        180000,
+                        [field1, field2],
+                        {
+                            condition:
+                                HashExpirationCondition.ONLY_IF_HAS_EXPIRY,
+                        },
+                    );
+                    expect(result2).toEqual([1, 1]); // both should have expiry now
 
-                // Verify expiration was updated using HPTTL
-                const pttlResult2 = await client.hpttl(key, [field1, field2]);
-                expect(pttlResult2[0]).toBeGreaterThan(0);
-                expect(pttlResult2[0]).toBeLessThanOrEqual(180000);
-                expect(pttlResult2[1]).toBeGreaterThan(0);
-                expect(pttlResult2[1]).toBeLessThanOrEqual(180000);
+                    // Verify expiration was updated using HPTTL
+                    const pttlResult2 = await client.hpttl(key, [
+                        field1,
+                        field2,
+                    ]);
+                    expect(pttlResult2[0]).toBeGreaterThan(0);
+                    expect(pttlResult2[0]).toBeLessThanOrEqual(180000);
+                    expect(pttlResult2[1]).toBeGreaterThan(0);
+                    expect(pttlResult2[1]).toBeLessThanOrEqual(180000);
 
-                // Test GT condition (only if greater than current)
-                const result3 = await client.hpexpire(key, 300000, [field1], {
-                    condition: HashExpirationCondition.ONLY_IF_GREATER_THAN_CURRENT,
-                });
-                expect(result3).toEqual([1]); // 300000 > 180000
+                    // Test GT condition (only if greater than current)
+                    const result3 = await client.hpexpire(
+                        key,
+                        300000,
+                        [field1],
+                        {
+                            condition:
+                                HashExpirationCondition.ONLY_IF_GREATER_THAN_CURRENT,
+                        },
+                    );
+                    expect(result3).toEqual([1]); // 300000 > 180000
 
-                // Verify expiration was updated using HPTTL
-                const pttlResult3 = await client.hpttl(key, [field1]);
-                expect(pttlResult3[0]).toBeGreaterThan(180000); // Should be greater than previous TTL
-                expect(pttlResult3[0]).toBeLessThanOrEqual(300000);
+                    // Verify expiration was updated using HPTTL
+                    const pttlResult3 = await client.hpttl(key, [field1]);
+                    expect(pttlResult3[0]).toBeGreaterThan(180000); // Should be greater than previous TTL
+                    expect(pttlResult3[0]).toBeLessThanOrEqual(300000);
 
-                // Test LT condition (only if less than current)
-                const result4 = await client.hpexpire(key, 150000, [field1], {
-                    condition: HashExpirationCondition.ONLY_IF_LESS_THAN_CURRENT,
-                });
-                expect(result4).toEqual([1]); // 150000 < 300000
+                    // Test LT condition (only if less than current)
+                    const result4 = await client.hpexpire(
+                        key,
+                        150000,
+                        [field1],
+                        {
+                            condition:
+                                HashExpirationCondition.ONLY_IF_LESS_THAN_CURRENT,
+                        },
+                    );
+                    expect(result4).toEqual([1]); // 150000 < 300000
 
-                // Verify expiration was updated using HPTTL
-                const pttlResult4 = await client.hpttl(key, [field1]);
-                expect(pttlResult4[0]).toBeGreaterThan(0);
-                expect(pttlResult4[0]).toBeLessThanOrEqual(150000);
-            }, protocol);
+                    // Verify expiration was updated using HPTTL
+                    const pttlResult4 = await client.hpttl(key, [field1]);
+                    expect(pttlResult4[0]).toBeGreaterThan(0);
+                    expect(pttlResult4[0]).toBeLessThanOrEqual(150000);
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -3392,35 +3757,44 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hpexpire batch operations_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
-                if (cluster.checkIfServerVersionLessThan("9.0.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
 
-                const key1 = getRandomKey();
-                const key2 = getRandomKey();
-                const field1 = getRandomKey();
-                const field2 = getRandomKey();
-                const value1 = getRandomKey();
-                const value2 = getRandomKey();
+                    const key1 = getRandomKey();
+                    const key2 = getRandomKey();
+                    const field1 = getRandomKey();
+                    const field2 = getRandomKey();
+                    const value1 = getRandomKey();
+                    const value2 = getRandomKey();
 
-                // Set up hashes
-                await client.hset(key1, { [field1]: value1 });
-                await client.hset(key2, { [field2]: value2 });
+                    // Set up hashes
+                    await client.hset(key1, { [field1]: value1 });
+                    await client.hset(key2, { [field2]: value2 });
 
-                // Test batch operations with HPEXPIRE
-                const batch = client instanceof GlideClient ? new Batch(false) : new ClusterBatch(false);
-                batch.hpexpire(key1, 60000, [field1]);
-                batch.hpexpire(key2, 120000, [field2], {
-                    condition: HashExpirationCondition.ONLY_IF_NO_EXPIRY,
-                });
+                    // Test batch operations with HPEXPIRE
+                    const batch =
+                        client instanceof GlideClient
+                            ? new Batch(false)
+                            : new ClusterBatch(false);
+                    batch.hpexpire(key1, 60000, [field1]);
+                    batch.hpexpire(key2, 120000, [field2], {
+                        condition: HashExpirationCondition.ONLY_IF_NO_EXPIRY,
+                    });
 
-                const results = await (client instanceof GlideClient
-                    ? client.exec(batch as Batch, false)
-                    : (client as GlideClusterClient).exec(batch as ClusterBatch, false));
+                    const results = await (client instanceof GlideClient
+                        ? client.exec(batch as Batch, false)
+                        : (client as GlideClusterClient).exec(
+                              batch as ClusterBatch,
+                              false,
+                          ));
 
-                expect(results).toEqual([[true], [true]]);
-            }, protocol);
+                    expect(results).toEqual([[true], [true]]);
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -3428,26 +3802,29 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hpexpire error handling_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
-                if (cluster.checkIfServerVersionLessThan("9.0.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
 
-                const key = getRandomKey();
-                const field = getRandomKey();
+                    const key = getRandomKey();
+                    const field = getRandomKey();
 
-                // Test HPEXPIRE on non-hash key
-                expect(await client.set(key, "string_value")).toEqual("OK");
-                await expect(
-                    client.hpexpire(key, 60000, [field]),
-                ).rejects.toThrow(RequestError);
+                    // Test HPEXPIRE on non-hash key
+                    expect(await client.set(key, "string_value")).toEqual("OK");
+                    await expect(
+                        client.hpexpire(key, 60000, [field]),
+                    ).rejects.toThrow(RequestError);
 
-                // Test with empty field array
-                const hashKey = getRandomKey();
-                await client.hset(hashKey, { [field]: "value" });
-                const result = await client.hpexpire(hashKey, 60000, []);
-                expect(result).toEqual([]);
-            }, protocol);
+                    // Test with empty field array
+                    const hashKey = getRandomKey();
+                    await client.hset(hashKey, { [field]: "value" });
+                    const result = await client.hpexpire(hashKey, 60000, []);
+                    expect(result).toEqual([]);
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -3455,50 +3832,68 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hpexpire with comprehensive parameter types_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
-                if (cluster.checkIfServerVersionLessThan("9.0.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
 
-                const key = getRandomKey();
-                const keyBuffer = Buffer.from(getRandomKey());
-                const field1 = getRandomKey();
-                const fieldBuffer = Buffer.from(getRandomKey());
-                const value = getRandomKey();
-                const valueBuffer = Buffer.from(getRandomKey());
+                    const keyBuffer = Buffer.from(getRandomKey());
+                    const field1 = getRandomKey();
+                    const fieldBuffer = Buffer.from(getRandomKey());
+                    const value = getRandomKey();
+                    const valueBuffer = Buffer.from(getRandomKey());
 
-                // Test with Buffer keys and fields
-                await client.hset(keyBuffer, { [field1]: value, [fieldBuffer.toString()]: valueBuffer });
-                const result1 = await client.hpexpire(keyBuffer, 60000, [field1, fieldBuffer]);
-                expect(result1).toEqual([1, 1]);
+                    // Test with Buffer keys and fields
+                    await client.hset(keyBuffer, {
+                        [field1]: value,
+                        [fieldBuffer.toString()]: valueBuffer,
+                    });
+                    const result1 = await client.hpexpire(keyBuffer, 60000, [
+                        field1,
+                        fieldBuffer,
+                    ]);
+                    expect(result1).toEqual([1, 1]);
 
-                // Test with long field names and values
-                const longKey = getRandomKey();
-                const longField = "f".repeat(100);
-                const longValue = "v".repeat(100);
+                    // Test with long field names and values
+                    const longKey = getRandomKey();
+                    const longField = "f".repeat(100);
+                    const longValue = "v".repeat(100);
 
-                await client.hset(longKey, { [longField]: longValue });
-                const result2 = await client.hpexpire(longKey, 60000, [longField]);
-                expect(result2).toEqual([1]);
+                    await client.hset(longKey, { [longField]: longValue });
+                    const result2 = await client.hpexpire(longKey, 60000, [
+                        longField,
+                    ]);
+                    expect(result2).toEqual([1]);
 
-                // Test with special characters
-                const specialKey = getRandomKey();
-                const specialField = "field:with:special:chars:!@#$%^&*()";
-                const specialValue = "value:with:special:chars:!@#$%^&*()";
+                    // Test with special characters
+                    const specialKey = getRandomKey();
+                    const specialField = "field:with:special:chars:!@#$%^&*()";
+                    const specialValue = "value:with:special:chars:!@#$%^&*()";
 
-                await client.hset(specialKey, { [specialField]: specialValue });
-                const result3 = await client.hpexpire(specialKey, 60000, [specialField]);
-                expect(result3).toEqual([1]);
+                    await client.hset(specialKey, {
+                        [specialField]: specialValue,
+                    });
+                    const result3 = await client.hpexpire(specialKey, 60000, [
+                        specialField,
+                    ]);
+                    expect(result3).toEqual([1]);
 
-                // Test with Unicode characters
-                const unicodeKey = getRandomKey();
-                const unicodeField = "field_🚀_测试_🎉";
-                const unicodeValue = "value_🌟_测试_🎊";
+                    // Test with Unicode characters
+                    const unicodeKey = getRandomKey();
+                    const unicodeField = "field_🚀_测试_🎉";
+                    const unicodeValue = "value_🌟_测试_🎊";
 
-                await client.hset(unicodeKey, { [unicodeField]: unicodeValue });
-                const result4 = await client.hpexpire(unicodeKey, 60000, [unicodeField]);
-                expect(result4).toEqual([1]);
-            }, protocol);
+                    await client.hset(unicodeKey, {
+                        [unicodeField]: unicodeValue,
+                    });
+                    const result4 = await client.hpexpire(unicodeKey, 60000, [
+                        unicodeField,
+                    ]);
+                    expect(result4).toEqual([1]);
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -3506,56 +3901,89 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hexpireat basic functionality_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
-                if (cluster.checkIfServerVersionLessThan("9.0.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
 
-                const key = getRandomKey();
-                const field1 = getRandomKey();
-                const field2 = getRandomKey();
-                const field3 = getRandomKey();
-                const value1 = getRandomKey();
-                const value2 = getRandomKey();
+                    const key = getRandomKey();
+                    const field1 = getRandomKey();
+                    const field2 = getRandomKey();
+                    const field3 = getRandomKey();
+                    const value1 = getRandomKey();
+                    const value2 = getRandomKey();
 
-                // Set up hash with some fields
-                await client.hset(key, { [field1]: value1, [field2]: value2 });
+                    // Set up hash with some fields
+                    await client.hset(key, {
+                        [field1]: value1,
+                        [field2]: value2,
+                    });
 
-                // Test basic HEXPIREAT with future timestamp
-                const futureTimestamp = Math.floor(Date.now() / 1000) + 3600; // 1 hour from now
-                const result1 = await client.hexpireat(key, futureTimestamp, [field1, field2, field3]);
-                expect(result1).toEqual([1, 1, -2]); // field3 doesn't exist
+                    // Test basic HEXPIREAT with future timestamp
+                    const futureTimestamp =
+                        Math.floor(Date.now() / 1000) + 3600; // 1 hour from now
+                    const result1 = await client.hexpireat(
+                        key,
+                        futureTimestamp,
+                        [field1, field2, field3],
+                    );
+                    expect(result1).toEqual([1, 1, -2]); // field3 doesn't exist
 
-                // Verify fields still exist
-                expect(await client.hget(key, field1)).toEqual(value1);
-                expect(await client.hget(key, field2)).toEqual(value2);
+                    // Verify fields still exist
+                    expect(await client.hget(key, field1)).toEqual(value1);
+                    expect(await client.hget(key, field2)).toEqual(value2);
 
-                // Verify expiration was set using HTTL and HEXPIRETIME
-                const ttlResult = await client.httl(key, [field1, field2, field3]);
-                expect(ttlResult[0]).toBeGreaterThan(0); // field1 should have TTL
-                expect(ttlResult[0]).toBeLessThanOrEqual(3600); // should be <= 3600 seconds
-                expect(ttlResult[1]).toBeGreaterThan(0); // field2 should have TTL
-                expect(ttlResult[1]).toBeLessThanOrEqual(3600); // should be <= 3600 seconds
-                expect(ttlResult[2]).toEqual(-2); // field3 doesn't exist
+                    // Verify expiration was set using HTTL and HEXPIRETIME
+                    const ttlResult = await client.httl(key, [
+                        field1,
+                        field2,
+                        field3,
+                    ]);
+                    expect(ttlResult[0]).toBeGreaterThan(0); // field1 should have TTL
+                    expect(ttlResult[0]).toBeLessThanOrEqual(3600); // should be <= 3600 seconds
+                    expect(ttlResult[1]).toBeGreaterThan(0); // field2 should have TTL
+                    expect(ttlResult[1]).toBeLessThanOrEqual(3600); // should be <= 3600 seconds
+                    expect(ttlResult[2]).toEqual(-2); // field3 doesn't exist
 
-                const expireTimeResult = await client.hexpiretime(key, [field1, field2, field3]);
-                expect(expireTimeResult[0]).toBeGreaterThan(Math.floor(Date.now() / 1000)); // Should be in the future
-                expect(expireTimeResult[0]).toBeLessThanOrEqual(futureTimestamp); // Should be <= set timestamp
-                expect(expireTimeResult[1]).toBeGreaterThan(Math.floor(Date.now() / 1000)); // Should be in the future
-                expect(expireTimeResult[1]).toBeLessThanOrEqual(futureTimestamp); // Should be <= set timestamp
-                expect(expireTimeResult[2]).toEqual(-2); // field3 doesn't exist
+                    const expireTimeResult = await client.hexpiretime(key, [
+                        field1,
+                        field2,
+                        field3,
+                    ]);
+                    expect(expireTimeResult[0]).toBeGreaterThan(
+                        Math.floor(Date.now() / 1000),
+                    ); // Should be in the future
+                    expect(expireTimeResult[0]).toBeLessThanOrEqual(
+                        futureTimestamp,
+                    ); // Should be <= set timestamp
+                    expect(expireTimeResult[1]).toBeGreaterThan(
+                        Math.floor(Date.now() / 1000),
+                    ); // Should be in the future
+                    expect(expireTimeResult[1]).toBeLessThanOrEqual(
+                        futureTimestamp,
+                    ); // Should be <= set timestamp
+                    expect(expireTimeResult[2]).toEqual(-2); // field3 doesn't exist
 
-                // Test with past timestamp (immediate deletion)
-                const pastTimestamp = Math.floor(Date.now() / 1000) - 3600; // 1 hour ago
-                const result2 = await client.hexpireat(key, pastTimestamp, [field1]);
-                expect(result2).toEqual([1]);
-                expect(await client.hget(key, field1)).toEqual(null);
+                    // Test with past timestamp (immediate deletion)
+                    const pastTimestamp = Math.floor(Date.now() / 1000) - 3600; // 1 hour ago
+                    const result2 = await client.hexpireat(key, pastTimestamp, [
+                        field1,
+                    ]);
+                    expect(result2).toEqual([1]);
+                    expect(await client.hget(key, field1)).toEqual(null);
 
-                // Test on non-existent key
-                const nonExistentKey = getRandomKey();
-                const result3 = await client.hexpireat(nonExistentKey, futureTimestamp, [field1]);
-                expect(result3).toEqual([-2]);
-            }, protocol);
+                    // Test on non-existent key
+                    const nonExistentKey = getRandomKey();
+                    const result3 = await client.hexpireat(
+                        nonExistentKey,
+                        futureTimestamp,
+                        [field1],
+                    );
+                    expect(result3).toEqual([-2]);
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -3563,60 +3991,98 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hexpireat with conditions_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
-                if (cluster.checkIfServerVersionLessThan("9.0.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
 
-                const key = getRandomKey();
-                const field1 = getRandomKey();
-                const field2 = getRandomKey();
-                const value1 = getRandomKey();
-                const value2 = getRandomKey();
+                    const key = getRandomKey();
+                    const field1 = getRandomKey();
+                    const field2 = getRandomKey();
+                    const value1 = getRandomKey();
+                    const value2 = getRandomKey();
 
-                // Set up hash with some fields
-                await client.hset(key, { [field1]: value1, [field2]: value2 });
+                    // Set up hash with some fields
+                    await client.hset(key, {
+                        [field1]: value1,
+                        [field2]: value2,
+                    });
 
-                const futureTimestamp1 = Math.floor(Date.now() / 1000) + 3600; // 1 hour from now
-                const futureTimestamp2 = Math.floor(Date.now() / 1000) + 7200; // 2 hours from now
+                    const futureTimestamp1 =
+                        Math.floor(Date.now() / 1000) + 3600; // 1 hour from now
+                    const futureTimestamp2 =
+                        Math.floor(Date.now() / 1000) + 7200; // 2 hours from now
 
-                // Test NX condition (only if no expiry)
-                const result1 = await client.hexpireat(key, futureTimestamp1, [field1, field2], {
-                    condition: HashExpirationCondition.ONLY_IF_NO_EXPIRY,
-                });
-                expect(result1).toEqual([1, 1]);
+                    // Test NX condition (only if no expiry)
+                    const result1 = await client.hexpireat(
+                        key,
+                        futureTimestamp1,
+                        [field1, field2],
+                        {
+                            condition:
+                                HashExpirationCondition.ONLY_IF_NO_EXPIRY,
+                        },
+                    );
+                    expect(result1).toEqual([1, 1]);
 
-                // Test NX condition again (should fail because fields now have expiry)
-                const result2 = await client.hexpireat(key, futureTimestamp2, [field1, field2], {
-                    condition: HashExpirationCondition.ONLY_IF_NO_EXPIRY,
-                });
-                expect(result2).toEqual([0, 0]);
+                    // Test NX condition again (should fail because fields now have expiry)
+                    const result2 = await client.hexpireat(
+                        key,
+                        futureTimestamp2,
+                        [field1, field2],
+                        {
+                            condition:
+                                HashExpirationCondition.ONLY_IF_NO_EXPIRY,
+                        },
+                    );
+                    expect(result2).toEqual([0, 0]);
 
-                // Test XX condition (only if has expiry)
-                const result3 = await client.hexpireat(key, futureTimestamp2, [field1, field2], {
-                    condition: HashExpirationCondition.ONLY_IF_HAS_EXPIRY,
-                });
-                expect(result3).toEqual([1, 1]);
+                    // Test XX condition (only if has expiry)
+                    const result3 = await client.hexpireat(
+                        key,
+                        futureTimestamp2,
+                        [field1, field2],
+                        {
+                            condition:
+                                HashExpirationCondition.ONLY_IF_HAS_EXPIRY,
+                        },
+                    );
+                    expect(result3).toEqual([1, 1]);
 
-                // Verify expiration was updated using HTTL
-                const ttlResult3 = await client.httl(key, [field1, field2]);
-                expect(ttlResult3[0]).toBeGreaterThan(3600); // Should be greater than 1 hour
-                expect(ttlResult3[0]).toBeLessThanOrEqual(7200); // Should be <= 2 hours
-                expect(ttlResult3[1]).toBeGreaterThan(3600); // Should be greater than 1 hour
-                expect(ttlResult3[1]).toBeLessThanOrEqual(7200); // Should be <= 2 hours
+                    // Verify expiration was updated using HTTL
+                    const ttlResult3 = await client.httl(key, [field1, field2]);
+                    expect(ttlResult3[0]).toBeGreaterThan(3600); // Should be greater than 1 hour
+                    expect(ttlResult3[0]).toBeLessThanOrEqual(7200); // Should be <= 2 hours
+                    expect(ttlResult3[1]).toBeGreaterThan(3600); // Should be greater than 1 hour
+                    expect(ttlResult3[1]).toBeLessThanOrEqual(7200); // Should be <= 2 hours
 
-                // Test GT condition (only if greater than current)
-                const result4 = await client.hexpireat(key, futureTimestamp2, [field1], {
-                    condition: HashExpirationCondition.ONLY_IF_GREATER_THAN_CURRENT,
-                });
-                expect(result4).toEqual([1]);
+                    // Test GT condition (only if greater than current)
+                    const result4 = await client.hexpireat(
+                        key,
+                        futureTimestamp2,
+                        [field1],
+                        {
+                            condition:
+                                HashExpirationCondition.ONLY_IF_GREATER_THAN_CURRENT,
+                        },
+                    );
+                    expect(result4).toEqual([1]);
 
-                // Test LT condition (only if less than current)
-                const result5 = await client.hexpireat(key, futureTimestamp1, [field1], {
-                    condition: HashExpirationCondition.ONLY_IF_LESS_THAN_CURRENT,
-                });
-                expect(result5).toEqual([1]);
-            }, protocol);
+                    // Test LT condition (only if less than current)
+                    const result5 = await client.hexpireat(
+                        key,
+                        futureTimestamp1,
+                        [field1],
+                        {
+                            condition:
+                                HashExpirationCondition.ONLY_IF_LESS_THAN_CURRENT,
+                        },
+                    );
+                    expect(result5).toEqual([1]);
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -3624,38 +4090,49 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hexpireat batch operations_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
-                if (cluster.checkIfServerVersionLessThan("9.0.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
 
-                const key1 = getRandomKey();
-                const key2 = getRandomKey();
-                const field1 = getRandomKey();
-                const field2 = getRandomKey();
-                const value1 = getRandomKey();
-                const value2 = getRandomKey();
+                    const key1 = getRandomKey();
+                    const key2 = getRandomKey();
+                    const field1 = getRandomKey();
+                    const field2 = getRandomKey();
+                    const value1 = getRandomKey();
+                    const value2 = getRandomKey();
 
-                // Set up hashes
-                await client.hset(key1, { [field1]: value1 });
-                await client.hset(key2, { [field2]: value2 });
+                    // Set up hashes
+                    await client.hset(key1, { [field1]: value1 });
+                    await client.hset(key2, { [field2]: value2 });
 
-                const futureTimestamp1 = Math.floor(Date.now() / 1000) + 3600; // 1 hour from now
-                const futureTimestamp2 = Math.floor(Date.now() / 1000) + 7200; // 2 hours from now
+                    const futureTimestamp1 =
+                        Math.floor(Date.now() / 1000) + 3600; // 1 hour from now
+                    const futureTimestamp2 =
+                        Math.floor(Date.now() / 1000) + 7200; // 2 hours from now
 
-                // Test batch operations with HEXPIREAT
-                const batch = client instanceof GlideClient ? new Batch(false) : new ClusterBatch(false);
-                batch.hexpireat(key1, futureTimestamp1, [field1]);
-                batch.hexpireat(key2, futureTimestamp2, [field2], {
-                    condition: HashExpirationCondition.ONLY_IF_NO_EXPIRY,
-                });
+                    // Test batch operations with HEXPIREAT
+                    const batch =
+                        client instanceof GlideClient
+                            ? new Batch(false)
+                            : new ClusterBatch(false);
+                    batch.hexpireat(key1, futureTimestamp1, [field1]);
+                    batch.hexpireat(key2, futureTimestamp2, [field2], {
+                        condition: HashExpirationCondition.ONLY_IF_NO_EXPIRY,
+                    });
 
-                const results = await (client instanceof GlideClient
-                    ? client.exec(batch as Batch, false)
-                    : (client as GlideClusterClient).exec(batch as ClusterBatch, false));
+                    const results = await (client instanceof GlideClient
+                        ? client.exec(batch as Batch, false)
+                        : (client as GlideClusterClient).exec(
+                              batch as ClusterBatch,
+                              false,
+                          ));
 
-                expect(results).toEqual([[true], [true]]);
-            }, protocol);
+                    expect(results).toEqual([[true], [true]]);
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -3663,27 +4140,35 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hexpireat error handling_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
-                if (cluster.checkIfServerVersionLessThan("9.0.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
 
-                const key = getRandomKey();
-                const field = getRandomKey();
-                const futureTimestamp = Math.floor(Date.now() / 1000) + 3600;
+                    const key = getRandomKey();
+                    const field = getRandomKey();
+                    const futureTimestamp =
+                        Math.floor(Date.now() / 1000) + 3600;
 
-                // Test HEXPIREAT on non-hash key
-                expect(await client.set(key, "string_value")).toEqual("OK");
-                await expect(
-                    client.hexpireat(key, futureTimestamp, [field]),
-                ).rejects.toThrow(RequestError);
+                    // Test HEXPIREAT on non-hash key
+                    expect(await client.set(key, "string_value")).toEqual("OK");
+                    await expect(
+                        client.hexpireat(key, futureTimestamp, [field]),
+                    ).rejects.toThrow(RequestError);
 
-                // Test with empty field array
-                const hashKey = getRandomKey();
-                await client.hset(hashKey, { [field]: "value" });
-                const result = await client.hexpireat(hashKey, futureTimestamp, []);
-                expect(result).toEqual([]);
-            }, protocol);
+                    // Test with empty field array
+                    const hashKey = getRandomKey();
+                    await client.hset(hashKey, { [field]: "value" });
+                    const result = await client.hexpireat(
+                        hashKey,
+                        futureTimestamp,
+                        [],
+                    );
+                    expect(result).toEqual([]);
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -3691,51 +4176,77 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hexpireat with comprehensive parameter types_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
-                if (cluster.checkIfServerVersionLessThan("9.0.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
 
-                const key = getRandomKey();
-                const keyBuffer = Buffer.from(getRandomKey());
-                const field1 = getRandomKey();
-                const fieldBuffer = Buffer.from(getRandomKey());
-                const value = getRandomKey();
-                const valueBuffer = Buffer.from(getRandomKey());
-                const futureTimestamp = Math.floor(Date.now() / 1000) + 3600;
+                    const keyBuffer = Buffer.from(getRandomKey());
+                    const field1 = getRandomKey();
+                    const fieldBuffer = Buffer.from(getRandomKey());
+                    const value = getRandomKey();
+                    const valueBuffer = Buffer.from(getRandomKey());
+                    const futureTimestamp =
+                        Math.floor(Date.now() / 1000) + 3600;
 
-                // Test with Buffer keys and fields
-                await client.hset(keyBuffer, { [field1]: value, [fieldBuffer.toString()]: valueBuffer });
-                const result1 = await client.hexpireat(keyBuffer, futureTimestamp, [field1, fieldBuffer]);
-                expect(result1).toEqual([1, 1]);
+                    // Test with Buffer keys and fields
+                    await client.hset(keyBuffer, {
+                        [field1]: value,
+                        [fieldBuffer.toString()]: valueBuffer,
+                    });
+                    const result1 = await client.hexpireat(
+                        keyBuffer,
+                        futureTimestamp,
+                        [field1, fieldBuffer],
+                    );
+                    expect(result1).toEqual([1, 1]);
 
-                // Test with long field names and values
-                const longKey = getRandomKey();
-                const longField = "f".repeat(100);
-                const longValue = "v".repeat(100);
+                    // Test with long field names and values
+                    const longKey = getRandomKey();
+                    const longField = "f".repeat(100);
+                    const longValue = "v".repeat(100);
 
-                await client.hset(longKey, { [longField]: longValue });
-                const result2 = await client.hexpireat(longKey, futureTimestamp, [longField]);
-                expect(result2).toEqual([1]);
+                    await client.hset(longKey, { [longField]: longValue });
+                    const result2 = await client.hexpireat(
+                        longKey,
+                        futureTimestamp,
+                        [longField],
+                    );
+                    expect(result2).toEqual([1]);
 
-                // Test with special characters
-                const specialKey = getRandomKey();
-                const specialField = "field:with:special:chars:!@#$%^&*()";
-                const specialValue = "value:with:special:chars:!@#$%^&*()";
+                    // Test with special characters
+                    const specialKey = getRandomKey();
+                    const specialField = "field:with:special:chars:!@#$%^&*()";
+                    const specialValue = "value:with:special:chars:!@#$%^&*()";
 
-                await client.hset(specialKey, { [specialField]: specialValue });
-                const result3 = await client.hexpireat(specialKey, futureTimestamp, [specialField]);
-                expect(result3).toEqual([1]);
+                    await client.hset(specialKey, {
+                        [specialField]: specialValue,
+                    });
+                    const result3 = await client.hexpireat(
+                        specialKey,
+                        futureTimestamp,
+                        [specialField],
+                    );
+                    expect(result3).toEqual([1]);
 
-                // Test with Unicode characters
-                const unicodeKey = getRandomKey();
-                const unicodeField = "field_🚀_测试_🎉";
-                const unicodeValue = "value_🌟_测试_🎊";
+                    // Test with Unicode characters
+                    const unicodeKey = getRandomKey();
+                    const unicodeField = "field_🚀_测试_🎉";
+                    const unicodeValue = "value_🌟_测试_🎊";
 
-                await client.hset(unicodeKey, { [unicodeField]: unicodeValue });
-                const result4 = await client.hexpireat(unicodeKey, futureTimestamp, [unicodeField]);
-                expect(result4).toEqual([1]);
-            }, protocol);
+                    await client.hset(unicodeKey, {
+                        [unicodeField]: unicodeValue,
+                    });
+                    const result4 = await client.hexpireat(
+                        unicodeKey,
+                        futureTimestamp,
+                        [unicodeField],
+                    );
+                    expect(result4).toEqual([1]);
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -3743,56 +4254,86 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hpexpireat basic functionality_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
-                if (cluster.checkIfServerVersionLessThan("9.0.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
 
-                const key = getRandomKey();
-                const field1 = getRandomKey();
-                const field2 = getRandomKey();
-                const field3 = getRandomKey();
-                const value1 = getRandomKey();
-                const value2 = getRandomKey();
+                    const key = getRandomKey();
+                    const field1 = getRandomKey();
+                    const field2 = getRandomKey();
+                    const field3 = getRandomKey();
+                    const value1 = getRandomKey();
+                    const value2 = getRandomKey();
 
-                // Set up hash with fields
-                await client.hset(key, { [field1]: value1, [field2]: value2 });
+                    // Set up hash with fields
+                    await client.hset(key, {
+                        [field1]: value1,
+                        [field2]: value2,
+                    });
 
-                // Test basic HPEXPIREAT with future timestamp in milliseconds
-                const futureTimestamp = Date.now() + 3600000; // 1 hour from now
-                const result1 = await client.hpexpireat(key, futureTimestamp, [field1, field2, field3]);
-                expect(result1).toEqual([1, 1, -2]); // field3 doesn't exist
+                    // Test basic HPEXPIREAT with future timestamp in milliseconds
+                    const futureTimestamp = Date.now() + 3600000; // 1 hour from now
+                    const result1 = await client.hpexpireat(
+                        key,
+                        futureTimestamp,
+                        [field1, field2, field3],
+                    );
+                    expect(result1).toEqual([1, 1, -2]); // field3 doesn't exist
 
-                // Verify fields still exist and have expiration
-                expect(await client.hget(key, field1)).toEqual(value1);
-                expect(await client.hget(key, field2)).toEqual(value2);
+                    // Verify fields still exist and have expiration
+                    expect(await client.hget(key, field1)).toEqual(value1);
+                    expect(await client.hget(key, field2)).toEqual(value2);
 
-                // Verify expiration was set using HPTTL and HPEXPIRETIME
-                const pttlResult = await client.hpttl(key, [field1, field2, field3]);
-                expect(pttlResult[0]).toBeGreaterThan(0); // field1 should have TTL
-                expect(pttlResult[0]).toBeLessThanOrEqual(3600000); // should be <= 3600000 milliseconds
-                expect(pttlResult[1]).toBeGreaterThan(0); // field2 should have TTL
-                expect(pttlResult[1]).toBeLessThanOrEqual(3600000); // should be <= 3600000 milliseconds
-                expect(pttlResult[2]).toEqual(-2); // field3 doesn't exist
+                    // Verify expiration was set using HPTTL and HPEXPIRETIME
+                    const pttlResult = await client.hpttl(key, [
+                        field1,
+                        field2,
+                        field3,
+                    ]);
+                    expect(pttlResult[0]).toBeGreaterThan(0); // field1 should have TTL
+                    expect(pttlResult[0]).toBeLessThanOrEqual(3600000); // should be <= 3600000 milliseconds
+                    expect(pttlResult[1]).toBeGreaterThan(0); // field2 should have TTL
+                    expect(pttlResult[1]).toBeLessThanOrEqual(3600000); // should be <= 3600000 milliseconds
+                    expect(pttlResult[2]).toEqual(-2); // field3 doesn't exist
 
-                const pexpireTimeResult = await client.hpexpiretime(key, [field1, field2, field3]);
-                expect(pexpireTimeResult[0]).toBeGreaterThan(Date.now()); // Should be in the future
-                expect(pexpireTimeResult[0]).toBeLessThanOrEqual(futureTimestamp); // Should be <= set timestamp
-                expect(pexpireTimeResult[1]).toBeGreaterThan(Date.now()); // Should be in the future
-                expect(pexpireTimeResult[1]).toBeLessThanOrEqual(futureTimestamp); // Should be <= set timestamp
-                expect(pexpireTimeResult[2]).toEqual(-2); // field3 doesn't exist
+                    const pexpireTimeResult = await client.hpexpiretime(key, [
+                        field1,
+                        field2,
+                        field3,
+                    ]);
+                    expect(pexpireTimeResult[0]).toBeGreaterThan(Date.now()); // Should be in the future
+                    expect(pexpireTimeResult[0]).toBeLessThanOrEqual(
+                        futureTimestamp,
+                    ); // Should be <= set timestamp
+                    expect(pexpireTimeResult[1]).toBeGreaterThan(Date.now()); // Should be in the future
+                    expect(pexpireTimeResult[1]).toBeLessThanOrEqual(
+                        futureTimestamp,
+                    ); // Should be <= set timestamp
+                    expect(pexpireTimeResult[2]).toEqual(-2); // field3 doesn't exist
 
-                // Test with past timestamp (immediate deletion)
-                const pastTimestamp = Date.now() - 3600000; // 1 hour ago
-                const result2 = await client.hpexpireat(key, pastTimestamp, [field1]);
-                expect(result2).toEqual([1]);
-                expect(await client.hget(key, field1)).toEqual(null);
+                    // Test with past timestamp (immediate deletion)
+                    const pastTimestamp = Date.now() - 3600000; // 1 hour ago
+                    const result2 = await client.hpexpireat(
+                        key,
+                        pastTimestamp,
+                        [field1],
+                    );
+                    expect(result2).toEqual([1]);
+                    expect(await client.hget(key, field1)).toEqual(null);
 
-                // Test on non-existent key
-                const nonExistentKey = getRandomKey();
-                const result3 = await client.hpexpireat(nonExistentKey, futureTimestamp, [field1]);
-                expect(result3).toEqual([-2]);
-            }, protocol);
+                    // Test on non-existent key
+                    const nonExistentKey = getRandomKey();
+                    const result3 = await client.hpexpireat(
+                        nonExistentKey,
+                        futureTimestamp,
+                        [field1],
+                    );
+                    expect(result3).toEqual([-2]);
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -3800,65 +4341,104 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hpexpireat with conditions_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
-                if (cluster.checkIfServerVersionLessThan("9.0.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
 
-                const key = getRandomKey();
-                const field1 = getRandomKey();
-                const field2 = getRandomKey();
-                const value1 = getRandomKey();
-                const value2 = getRandomKey();
+                    const key = getRandomKey();
+                    const field1 = getRandomKey();
+                    const field2 = getRandomKey();
+                    const value1 = getRandomKey();
+                    const value2 = getRandomKey();
 
-                // Set up hash with fields
-                await client.hset(key, { [field1]: value1, [field2]: value2 });
+                    // Set up hash with fields
+                    await client.hset(key, {
+                        [field1]: value1,
+                        [field2]: value2,
+                    });
 
-                const futureTimestamp1 = Date.now() + 3600000; // 1 hour from now
-                const futureTimestamp2 = Date.now() + 7200000; // 2 hours from now
+                    const futureTimestamp1 = Date.now() + 3600000; // 1 hour from now
+                    const futureTimestamp2 = Date.now() + 7200000; // 2 hours from now
 
-                // Test NX condition (only if no expiry)
-                const result1 = await client.hpexpireat(key, futureTimestamp1, [field1, field2], {
-                    condition: HashExpirationCondition.ONLY_IF_NO_EXPIRY,
-                });
-                expect(result1).toEqual([1, 1]);
+                    // Test NX condition (only if no expiry)
+                    const result1 = await client.hpexpireat(
+                        key,
+                        futureTimestamp1,
+                        [field1, field2],
+                        {
+                            condition:
+                                HashExpirationCondition.ONLY_IF_NO_EXPIRY,
+                        },
+                    );
+                    expect(result1).toEqual([1, 1]);
 
-                // Test NX condition again (should fail because fields now have expiry)
-                const result2 = await client.hpexpireat(key, futureTimestamp2, [field1, field2], {
-                    condition: HashExpirationCondition.ONLY_IF_NO_EXPIRY,
-                });
-                expect(result2).toEqual([0, 0]);
+                    // Test NX condition again (should fail because fields now have expiry)
+                    const result2 = await client.hpexpireat(
+                        key,
+                        futureTimestamp2,
+                        [field1, field2],
+                        {
+                            condition:
+                                HashExpirationCondition.ONLY_IF_NO_EXPIRY,
+                        },
+                    );
+                    expect(result2).toEqual([0, 0]);
 
-                // Test XX condition (only if has expiry)
-                const result3 = await client.hpexpireat(key, futureTimestamp2, [field1, field2], {
-                    condition: HashExpirationCondition.ONLY_IF_HAS_EXPIRY,
-                });
-                expect(result3).toEqual([1, 1]);
+                    // Test XX condition (only if has expiry)
+                    const result3 = await client.hpexpireat(
+                        key,
+                        futureTimestamp2,
+                        [field1, field2],
+                        {
+                            condition:
+                                HashExpirationCondition.ONLY_IF_HAS_EXPIRY,
+                        },
+                    );
+                    expect(result3).toEqual([1, 1]);
 
-                // Verify expiration was updated using HPTTL
-                const pttlResult3 = await client.hpttl(key, [field1, field2]);
-                expect(pttlResult3[0]).toBeGreaterThan(3600000); // Should be greater than 1 hour
-                expect(pttlResult3[0]).toBeLessThanOrEqual(7200000); // Should be <= 2 hours
-                expect(pttlResult3[1]).toBeGreaterThan(3600000); // Should be greater than 1 hour
-                expect(pttlResult3[1]).toBeLessThanOrEqual(7200000); // Should be <= 2 hours
+                    // Verify expiration was updated using HPTTL
+                    const pttlResult3 = await client.hpttl(key, [
+                        field1,
+                        field2,
+                    ]);
+                    expect(pttlResult3[0]).toBeGreaterThan(3600000); // Should be greater than 1 hour
+                    expect(pttlResult3[0]).toBeLessThanOrEqual(7200000); // Should be <= 2 hours
+                    expect(pttlResult3[1]).toBeGreaterThan(3600000); // Should be greater than 1 hour
+                    expect(pttlResult3[1]).toBeLessThanOrEqual(7200000); // Should be <= 2 hours
 
-                // Test GT condition (only if greater than current)
-                const result4 = await client.hpexpireat(key, futureTimestamp2, [field1], {
-                    condition: HashExpirationCondition.ONLY_IF_GREATER_THAN_CURRENT,
-                });
-                expect(result4).toEqual([0]); // futureTimestamp2 is not greater than current expiry
+                    // Test GT condition (only if greater than current)
+                    const result4 = await client.hpexpireat(
+                        key,
+                        futureTimestamp2,
+                        [field1],
+                        {
+                            condition:
+                                HashExpirationCondition.ONLY_IF_GREATER_THAN_CURRENT,
+                        },
+                    );
+                    expect(result4).toEqual([0]); // futureTimestamp2 is not greater than current expiry
 
-                // Test LT condition (only if less than current)
-                const result5 = await client.hpexpireat(key, futureTimestamp1, [field1], {
-                    condition: HashExpirationCondition.ONLY_IF_LESS_THAN_CURRENT,
-                });
-                expect(result5).toEqual([1]); // futureTimestamp1 is less than current expiry
+                    // Test LT condition (only if less than current)
+                    const result5 = await client.hpexpireat(
+                        key,
+                        futureTimestamp1,
+                        [field1],
+                        {
+                            condition:
+                                HashExpirationCondition.ONLY_IF_LESS_THAN_CURRENT,
+                        },
+                    );
+                    expect(result5).toEqual([1]); // futureTimestamp1 is less than current expiry
 
-                // Verify expiration was updated using HPTTL
-                const pttlResult5 = await client.hpttl(key, [field1]);
-                expect(pttlResult5[0]).toBeGreaterThan(0);
-                expect(pttlResult5[0]).toBeLessThanOrEqual(3600000); // Should be <= 1 hour
-            }, protocol);
+                    // Verify expiration was updated using HPTTL
+                    const pttlResult5 = await client.hpttl(key, [field1]);
+                    expect(pttlResult5[0]).toBeGreaterThan(0);
+                    expect(pttlResult5[0]).toBeLessThanOrEqual(3600000); // Should be <= 1 hour
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -3866,41 +4446,50 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hpexpireat batch operations_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
-                if (cluster.checkIfServerVersionLessThan("9.0.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
 
-                const key1 = getRandomKey();
-                const key2 = getRandomKey();
-                const field1 = getRandomKey();
-                const field2 = getRandomKey();
-                const value1 = getRandomKey();
-                const value2 = getRandomKey();
+                    const key1 = getRandomKey();
+                    const key2 = getRandomKey();
+                    const field1 = getRandomKey();
+                    const field2 = getRandomKey();
+                    const value1 = getRandomKey();
+                    const value2 = getRandomKey();
 
-                // Set up hashes with fields
-                await client.hset(key1, { [field1]: value1 });
-                await client.hset(key2, { [field2]: value2 });
+                    // Set up hashes with fields
+                    await client.hset(key1, { [field1]: value1 });
+                    await client.hset(key2, { [field2]: value2 });
 
-                const futureTimestamp1 = Date.now() + 3600000; // 1 hour from now
-                const futureTimestamp2 = Date.now() + 7200000; // 2 hours from now
+                    const futureTimestamp1 = Date.now() + 3600000; // 1 hour from now
+                    const futureTimestamp2 = Date.now() + 7200000; // 2 hours from now
 
-                // Test batch operations with HPEXPIREAT
-                const batch = client instanceof GlideClient ? new Batch(false) : new ClusterBatch(false);
-                batch.hpexpireat(key1, futureTimestamp1, [field1]);
-                batch.hpexpireat(key2, futureTimestamp2, [field2], {
-                    condition: HashExpirationCondition.ONLY_IF_NO_EXPIRY,
-                });
+                    // Test batch operations with HPEXPIREAT
+                    const batch =
+                        client instanceof GlideClient
+                            ? new Batch(false)
+                            : new ClusterBatch(false);
+                    batch.hpexpireat(key1, futureTimestamp1, [field1]);
+                    batch.hpexpireat(key2, futureTimestamp2, [field2], {
+                        condition: HashExpirationCondition.ONLY_IF_NO_EXPIRY,
+                    });
 
-                const results = await (client instanceof GlideClient
-                    ? client.exec(batch as Batch, false)
-                    : (client as GlideClusterClient).exec(batch as ClusterBatch, false));
-                expect(results).toEqual([[true], [true]]);
+                    const results = await (client instanceof GlideClient
+                        ? client.exec(batch as Batch, false)
+                        : (client as GlideClusterClient).exec(
+                              batch as ClusterBatch,
+                              false,
+                          ));
+                    expect(results).toEqual([[true], [true]]);
 
-                // Verify fields still exist
-                expect(await client.hget(key1, field1)).toEqual(value1);
-                expect(await client.hget(key2, field2)).toEqual(value2);
-            }, protocol);
+                    // Verify fields still exist
+                    expect(await client.hget(key1, field1)).toEqual(value1);
+                    expect(await client.hget(key2, field2)).toEqual(value2);
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -3908,27 +4497,34 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hpexpireat error handling_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
-                if (cluster.checkIfServerVersionLessThan("9.0.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
 
-                const key = getRandomKey();
-                const field = getRandomKey();
-                const futureTimestamp = Date.now() + 3600000;
+                    const key = getRandomKey();
+                    const field = getRandomKey();
+                    const futureTimestamp = Date.now() + 3600000;
 
-                // Test HPEXPIREAT on non-hash key
-                expect(await client.set(key, "string_value")).toEqual("OK");
-                await expect(
-                    client.hpexpireat(key, futureTimestamp, [field]),
-                ).rejects.toThrow(RequestError);
+                    // Test HPEXPIREAT on non-hash key
+                    expect(await client.set(key, "string_value")).toEqual("OK");
+                    await expect(
+                        client.hpexpireat(key, futureTimestamp, [field]),
+                    ).rejects.toThrow(RequestError);
 
-                // Test with empty fields array
-                const hashKey = getRandomKey();
-                await client.hset(hashKey, { [field]: "value" });
-                const result = await client.hpexpireat(hashKey, futureTimestamp, []);
-                expect(result).toEqual([]);
-            }, protocol);
+                    // Test with empty fields array
+                    const hashKey = getRandomKey();
+                    await client.hset(hashKey, { [field]: "value" });
+                    const result = await client.hpexpireat(
+                        hashKey,
+                        futureTimestamp,
+                        [],
+                    );
+                    expect(result).toEqual([]);
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -3936,51 +4532,77 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hpexpireat with comprehensive parameter types_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
-                if (cluster.checkIfServerVersionLessThan("9.0.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
 
-                const field1 = getRandomKey();
-                const value = getRandomKey();
-                const futureTimestamp = Date.now() + 3600000; // 1 hour from now
+                    const field1 = getRandomKey();
+                    const value = getRandomKey();
+                    const futureTimestamp = Date.now() + 3600000; // 1 hour from now
 
-                // Test with Buffer keys and fields
-                const keyBuffer = Buffer.from(getRandomKey());
-                const fieldBuffer = Buffer.from(getRandomKey());
-                const valueBuffer = Buffer.from(getRandomKey());
+                    // Test with Buffer keys and fields
+                    const keyBuffer = Buffer.from(getRandomKey());
+                    const fieldBuffer = Buffer.from(getRandomKey());
+                    const valueBuffer = Buffer.from(getRandomKey());
 
-                await client.hset(keyBuffer, { [field1]: value, [fieldBuffer.toString()]: valueBuffer });
-                const result1 = await client.hpexpireat(keyBuffer, futureTimestamp, [field1, fieldBuffer]);
-                expect(result1).toEqual([1, 1]);
+                    await client.hset(keyBuffer, {
+                        [field1]: value,
+                        [fieldBuffer.toString()]: valueBuffer,
+                    });
+                    const result1 = await client.hpexpireat(
+                        keyBuffer,
+                        futureTimestamp,
+                        [field1, fieldBuffer],
+                    );
+                    expect(result1).toEqual([1, 1]);
 
-                // Test with very long key and field names
-                const longKey = "a".repeat(1000);
-                const longField = "b".repeat(1000);
-                const longValue = "c".repeat(1000);
+                    // Test with very long key and field names
+                    const longKey = "a".repeat(1000);
+                    const longField = "b".repeat(1000);
+                    const longValue = "c".repeat(1000);
 
-                await client.hset(longKey, { [longField]: longValue });
-                const result2 = await client.hpexpireat(longKey, futureTimestamp, [longField]);
-                expect(result2).toEqual([1]);
+                    await client.hset(longKey, { [longField]: longValue });
+                    const result2 = await client.hpexpireat(
+                        longKey,
+                        futureTimestamp,
+                        [longField],
+                    );
+                    expect(result2).toEqual([1]);
 
-                // Test with special characters
-                const specialKey = "key:with:special:chars";
-                const specialField = "field@with#special$chars";
-                const specialValue = "value%with&special*chars";
+                    // Test with special characters
+                    const specialKey = "key:with:special:chars";
+                    const specialField = "field@with#special$chars";
+                    const specialValue = "value%with&special*chars";
 
-                await client.hset(specialKey, { [specialField]: specialValue });
-                const result3 = await client.hpexpireat(specialKey, futureTimestamp, [specialField]);
-                expect(result3).toEqual([1]);
+                    await client.hset(specialKey, {
+                        [specialField]: specialValue,
+                    });
+                    const result3 = await client.hpexpireat(
+                        specialKey,
+                        futureTimestamp,
+                        [specialField],
+                    );
+                    expect(result3).toEqual([1]);
 
-                // Test with Unicode characters
-                const unicodeKey = "🔑key";
-                const unicodeField = "🏷️field";
-                const unicodeValue = "💎value";
+                    // Test with Unicode characters
+                    const unicodeKey = "🔑key";
+                    const unicodeField = "🏷️field";
+                    const unicodeValue = "💎value";
 
-                await client.hset(unicodeKey, { [unicodeField]: unicodeValue });
-                const result4 = await client.hpexpireat(unicodeKey, futureTimestamp, [unicodeField]);
-                expect(result4).toEqual([1]);
-            }, protocol);
+                    await client.hset(unicodeKey, {
+                        [unicodeField]: unicodeValue,
+                    });
+                    const result4 = await client.hpexpireat(
+                        unicodeKey,
+                        futureTimestamp,
+                        [unicodeField],
+                    );
+                    expect(result4).toEqual([1]);
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -3988,50 +4610,60 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `httl basic functionality_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
-                if (cluster.checkIfServerVersionLessThan("9.0.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
 
-                const key = getRandomKey();
-                const field1 = getRandomKey();
-                const field2 = getRandomKey();
-                const field3 = getRandomKey();
-                const value1 = getRandomKey();
-                const value2 = getRandomKey();
+                    const key = getRandomKey();
+                    const field1 = getRandomKey();
+                    const field2 = getRandomKey();
+                    const field3 = getRandomKey();
+                    const value1 = getRandomKey();
+                    const value2 = getRandomKey();
 
-                // Set up hash with fields
-                await client.hset(key, { [field1]: value1, [field2]: value2 });
+                    // Set up hash with fields
+                    await client.hset(key, {
+                        [field1]: value1,
+                        [field2]: value2,
+                    });
 
-                // Set expiration on fields
-                await client.hexpire(key, 60, [field1, field2]);
+                    // Set expiration on fields
+                    await client.hexpire(key, 60, [field1, field2]);
 
-                // Test basic HTTL
-                const result1 = await client.httl(key, [field1, field2, field3]);
-                expect(result1.length).toEqual(3);
-                expect(result1[0]).toBeGreaterThan(0); // field1 has TTL
-                expect(result1[1]).toBeGreaterThan(0); // field2 has TTL
-                expect(result1[2]).toEqual(-2); // field3 doesn't exist
+                    // Test basic HTTL
+                    const result1 = await client.httl(key, [
+                        field1,
+                        field2,
+                        field3,
+                    ]);
+                    expect(result1.length).toEqual(3);
+                    expect(result1[0]).toBeGreaterThan(0); // field1 has TTL
+                    expect(result1[1]).toBeGreaterThan(0); // field2 has TTL
+                    expect(result1[2]).toEqual(-2); // field3 doesn't exist
 
-                // Remove expiration from field1
-                await client.hpersist(key, [field1]);
+                    // Remove expiration from field1
+                    await client.hpersist(key, [field1]);
 
-                // Test HTTL after persist
-                const result2 = await client.httl(key, [field1, field2]);
-                expect(result2[0]).toEqual(-1); // field1 has no expiration
-                expect(result2[1]).toBeGreaterThan(0); // field2 still has TTL
+                    // Test HTTL after persist
+                    const result2 = await client.httl(key, [field1, field2]);
+                    expect(result2[0]).toEqual(-1); // field1 has no expiration
+                    expect(result2[1]).toBeGreaterThan(0); // field2 still has TTL
 
-                // Test on non-existent key
-                const nonExistentKey = getRandomKey();
-                const result3 = await client.httl(nonExistentKey, [field1]);
-                expect(result3).toEqual([-2]);
+                    // Test on non-existent key
+                    const nonExistentKey = getRandomKey();
+                    const result3 = await client.httl(nonExistentKey, [field1]);
+                    expect(result3).toEqual([-2]);
 
-                // Test on fields without expiration
-                const key2 = getRandomKey();
-                await client.hset(key2, { [field1]: value1 });
-                const result4 = await client.httl(key2, [field1]);
-                expect(result4).toEqual([-1]); // field has no expiration
-            }, protocol);
+                    // Test on fields without expiration
+                    const key2 = getRandomKey();
+                    await client.hset(key2, { [field1]: value1 });
+                    const result4 = await client.httl(key2, [field1]);
+                    expect(result4).toEqual([-1]); // field has no expiration
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -4039,43 +4671,48 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `httl with batch operations_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
-                if (cluster.checkIfServerVersionLessThan("9.0.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
 
-                const key1 = getRandomKey();
-                const key2 = getRandomKey();
-                const field1 = getRandomKey();
-                const field2 = getRandomKey();
-                const value1 = getRandomKey();
-                const value2 = getRandomKey();
+                    const key1 = getRandomKey();
+                    const key2 = getRandomKey();
+                    const field1 = getRandomKey();
+                    const field2 = getRandomKey();
+                    const value1 = getRandomKey();
+                    const value2 = getRandomKey();
 
-                // Set up hashes with fields and expiration
-                await client.hset(key1, { [field1]: value1 });
-                await client.hset(key2, { [field2]: value2 });
-                await client.hexpire(key1, 60, [field1]);
-                await client.hexpire(key2, 120, [field2]);
+                    // Set up hashes with fields and expiration
+                    await client.hset(key1, { [field1]: value1 });
+                    await client.hset(key2, { [field2]: value2 });
+                    await client.hexpire(key1, 60, [field1]);
+                    await client.hexpire(key2, 120, [field2]);
 
-                // Test batch operations with HTTL
-                if (client instanceof GlideClient) {
-                    const batch = new Batch(false);
-                    batch.httl(key1, [field1]);
-                    batch.httl(key2, [field2]);
-                    const results = await client.exec(batch, false);
-                    expect(results).not.toBeNull();
-                    expect(results![0]).toBeGreaterThan(0); // key1 field1 has TTL
-                    expect(results![1]).toBeGreaterThan(0); // key2 field2 has TTL
-                } else {
-                    const batch = new ClusterBatch(false);
-                    batch.httl(key1, [field1]);
-                    batch.httl(key2, [field2]);
-                    const results = await (client as GlideClusterClient).exec(batch, false);
-                    expect(results).not.toBeNull();
-                    expect(results![0]).toBeGreaterThan(0); // key1 field1 has TTL
-                    expect(results![1]).toBeGreaterThan(0); // key2 field2 has TTL
-                }
-            }, protocol);
+                    // Test batch operations with HTTL
+                    if (client instanceof GlideClient) {
+                        const batch = new Batch(false);
+                        batch.httl(key1, [field1]);
+                        batch.httl(key2, [field2]);
+                        const results = await client.exec(batch, false);
+                        expect(results).not.toBeNull();
+                        expect(results![0]).toBeGreaterThan(0); // key1 field1 has TTL
+                        expect(results![1]).toBeGreaterThan(0); // key2 field2 has TTL
+                    } else {
+                        const batch = new ClusterBatch(false);
+                        batch.httl(key1, [field1]);
+                        batch.httl(key2, [field2]);
+                        const results = await (
+                            client as GlideClusterClient
+                        ).exec(batch, false);
+                        expect(results).not.toBeNull();
+                        expect(results![0]).toBeGreaterThan(0); // key1 field1 has TTL
+                        expect(results![1]).toBeGreaterThan(0); // key2 field2 has TTL
+                    }
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -4083,26 +4720,29 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `httl error handling_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
-                if (cluster.checkIfServerVersionLessThan("9.0.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
 
-                const key = getRandomKey();
-                const field = getRandomKey();
+                    const key = getRandomKey();
+                    const field = getRandomKey();
 
-                // Test HTTL on non-hash key
-                expect(await client.set(key, "string_value")).toEqual("OK");
-                await expect(
-                    client.httl(key, [field]),
-                ).rejects.toThrow(RequestError);
+                    // Test HTTL on non-hash key
+                    expect(await client.set(key, "string_value")).toEqual("OK");
+                    await expect(client.httl(key, [field])).rejects.toThrow(
+                        RequestError,
+                    );
 
-                // Test HTTL with empty fields array
-                const hashKey = getRandomKey();
-                await client.hset(hashKey, { [field]: "value" });
-                const result = await client.httl(hashKey, []);
-                expect(result).toEqual([]);
-            }, protocol);
+                    // Test HTTL with empty fields array
+                    const hashKey = getRandomKey();
+                    await client.hset(hashKey, { [field]: "value" });
+                    const result = await client.httl(hashKey, []);
+                    expect(result).toEqual([]);
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -4110,55 +4750,75 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `httl with comprehensive parameter types_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
-                if (cluster.checkIfServerVersionLessThan("9.0.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
 
-                const field1 = getRandomKey();
-                const value = getRandomKey();
-                const keyBuffer = Buffer.from(getRandomKey());
-                const fieldBuffer = Buffer.from(getRandomKey());
-                const valueBuffer = Buffer.from(getRandomKey());
+                    const field1 = getRandomKey();
+                    const value = getRandomKey();
+                    const keyBuffer = Buffer.from(getRandomKey());
+                    const fieldBuffer = Buffer.from(getRandomKey());
+                    const valueBuffer = Buffer.from(getRandomKey());
 
-                // Test with Buffer keys and fields
-                await client.hset(keyBuffer, { [field1]: value, [fieldBuffer.toString()]: valueBuffer });
-                await client.hexpire(keyBuffer, 60, [field1, fieldBuffer.toString()]);
-                const result1 = await client.httl(keyBuffer, [field1, fieldBuffer]);
-                expect(result1.length).toEqual(2);
-                expect(result1[0]).toBeGreaterThan(0);
-                expect(result1[1]).toBeGreaterThan(0);
+                    // Test with Buffer keys and fields
+                    await client.hset(keyBuffer, {
+                        [field1]: value,
+                        [fieldBuffer.toString()]: valueBuffer,
+                    });
+                    await client.hexpire(keyBuffer, 60, [
+                        field1,
+                        fieldBuffer.toString(),
+                    ]);
+                    const result1 = await client.httl(keyBuffer, [
+                        field1,
+                        fieldBuffer,
+                    ]);
+                    expect(result1.length).toEqual(2);
+                    expect(result1[0]).toBeGreaterThan(0);
+                    expect(result1[1]).toBeGreaterThan(0);
 
-                // Test with long keys and fields
-                const longKey = "a".repeat(1000);
-                const longField = "b".repeat(1000);
-                const longValue = "c".repeat(1000);
+                    // Test with long keys and fields
+                    const longKey = "a".repeat(1000);
+                    const longField = "b".repeat(1000);
+                    const longValue = "c".repeat(1000);
 
-                await client.hset(longKey, { [longField]: longValue });
-                await client.hexpire(longKey, 60, [longField]);
-                const result2 = await client.httl(longKey, [longField]);
-                expect(result2[0]).toBeGreaterThan(0);
+                    await client.hset(longKey, { [longField]: longValue });
+                    await client.hexpire(longKey, 60, [longField]);
+                    const result2 = await client.httl(longKey, [longField]);
+                    expect(result2[0]).toBeGreaterThan(0);
 
-                // Test with special characters
-                const specialKey = "key:with:special:chars";
-                const specialField = "field@with#special$chars";
-                const specialValue = "value%with&special*chars";
+                    // Test with special characters
+                    const specialKey = "key:with:special:chars";
+                    const specialField = "field@with#special$chars";
+                    const specialValue = "value%with&special*chars";
 
-                await client.hset(specialKey, { [specialField]: specialValue });
-                await client.hexpire(specialKey, 60, [specialField]);
-                const result3 = await client.httl(specialKey, [specialField]);
-                expect(result3[0]).toBeGreaterThan(0);
+                    await client.hset(specialKey, {
+                        [specialField]: specialValue,
+                    });
+                    await client.hexpire(specialKey, 60, [specialField]);
+                    const result3 = await client.httl(specialKey, [
+                        specialField,
+                    ]);
+                    expect(result3[0]).toBeGreaterThan(0);
 
-                // Test with Unicode characters
-                const unicodeKey = "🔑key";
-                const unicodeField = "🏷️field";
-                const unicodeValue = "💎value";
+                    // Test with Unicode characters
+                    const unicodeKey = "🔑key";
+                    const unicodeField = "🏷️field";
+                    const unicodeValue = "💎value";
 
-                await client.hset(unicodeKey, { [unicodeField]: unicodeValue });
-                await client.hexpire(unicodeKey, 60, [unicodeField]);
-                const result4 = await client.httl(unicodeKey, [unicodeField]);
-                expect(result4[0]).toBeGreaterThan(0);
-            }, protocol);
+                    await client.hset(unicodeKey, {
+                        [unicodeField]: unicodeValue,
+                    });
+                    await client.hexpire(unicodeKey, 60, [unicodeField]);
+                    const result4 = await client.httl(unicodeKey, [
+                        unicodeField,
+                    ]);
+                    expect(result4[0]).toBeGreaterThan(0);
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -4166,51 +4826,70 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hexpiretime basic functionality_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
-                if (cluster.checkIfServerVersionLessThan("9.0.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
 
-                const key = getRandomKey();
-                const field1 = getRandomKey();
-                const field2 = getRandomKey();
-                const field3 = getRandomKey();
-                const value1 = getRandomKey();
-                const value2 = getRandomKey();
+                    const key = getRandomKey();
+                    const field1 = getRandomKey();
+                    const field2 = getRandomKey();
+                    const field3 = getRandomKey();
+                    const value1 = getRandomKey();
+                    const value2 = getRandomKey();
 
-                // Set up hash with fields
-                await client.hset(key, { [field1]: value1, [field2]: value2 });
+                    // Set up hash with fields
+                    await client.hset(key, {
+                        [field1]: value1,
+                        [field2]: value2,
+                    });
 
-                // Set expiration on fields using absolute timestamp
-                const futureTimestamp = Math.floor(Date.now() / 1000) + 3600; // 1 hour from now
-                await client.hexpireat(key, futureTimestamp, [field1, field2]);
+                    // Set expiration on fields using absolute timestamp
+                    const futureTimestamp =
+                        Math.floor(Date.now() / 1000) + 3600; // 1 hour from now
+                    await client.hexpireat(key, futureTimestamp, [
+                        field1,
+                        field2,
+                    ]);
 
-                // Test basic HEXPIRETIME
-                const result1 = await client.hexpiretime(key, [field1, field2, field3]);
-                expect(result1.length).toEqual(3);
-                expect(result1[0]).toBeGreaterThan(0); // field1 has expiration timestamp
-                expect(result1[1]).toBeGreaterThan(0); // field2 has expiration timestamp
-                expect(result1[2]).toEqual(-2); // field3 doesn't exist
+                    // Test basic HEXPIRETIME
+                    const result1 = await client.hexpiretime(key, [
+                        field1,
+                        field2,
+                        field3,
+                    ]);
+                    expect(result1.length).toEqual(3);
+                    expect(result1[0]).toBeGreaterThan(0); // field1 has expiration timestamp
+                    expect(result1[1]).toBeGreaterThan(0); // field2 has expiration timestamp
+                    expect(result1[2]).toEqual(-2); // field3 doesn't exist
 
-                // Remove expiration from field1
-                await client.hpersist(key, [field1]);
+                    // Remove expiration from field1
+                    await client.hpersist(key, [field1]);
 
-                // Test HEXPIRETIME after persist
-                const result2 = await client.hexpiretime(key, [field1, field2]);
-                expect(result2[0]).toEqual(-1); // field1 has no expiration
-                expect(result2[1]).toBeGreaterThan(0); // field2 still has expiration timestamp
+                    // Test HEXPIRETIME after persist
+                    const result2 = await client.hexpiretime(key, [
+                        field1,
+                        field2,
+                    ]);
+                    expect(result2[0]).toEqual(-1); // field1 has no expiration
+                    expect(result2[1]).toBeGreaterThan(0); // field2 still has expiration timestamp
 
-                // Test on non-existent key
-                const nonExistentKey = getRandomKey();
-                const result3 = await client.hexpiretime(nonExistentKey, [field1]);
-                expect(result3).toEqual([-2]);
+                    // Test on non-existent key
+                    const nonExistentKey = getRandomKey();
+                    const result3 = await client.hexpiretime(nonExistentKey, [
+                        field1,
+                    ]);
+                    expect(result3).toEqual([-2]);
 
-                // Test on fields without expiration
-                const key2 = getRandomKey();
-                await client.hset(key2, { [field1]: value1 });
-                const result4 = await client.hexpiretime(key2, [field1]);
-                expect(result4).toEqual([-1]); // field has no expiration
-            }, protocol);
+                    // Test on fields without expiration
+                    const key2 = getRandomKey();
+                    await client.hset(key2, { [field1]: value1 });
+                    const result4 = await client.hexpiretime(key2, [field1]);
+                    expect(result4).toEqual([-1]); // field has no expiration
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -4218,51 +4897,61 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hexpiretime with batch operations_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
-                if (cluster.checkIfServerVersionLessThan("9.0.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
 
-                const key = getRandomKey();
-                const field1 = getRandomKey();
-                const field2 = getRandomKey();
-                const value1 = getRandomKey();
-                const value2 = getRandomKey();
+                    const key = getRandomKey();
+                    const field1 = getRandomKey();
+                    const field2 = getRandomKey();
+                    const value1 = getRandomKey();
+                    const value2 = getRandomKey();
 
-                // Set up hash with fields
-                await client.hset(key, { [field1]: value1, [field2]: value2 });
+                    // Set up hash with fields
+                    await client.hset(key, {
+                        [field1]: value1,
+                        [field2]: value2,
+                    });
 
-                // Set expiration on fields
-                const futureTimestamp = Math.floor(Date.now() / 1000) + 3600; // 1 hour from now
-                await client.hexpireat(key, futureTimestamp, [field1, field2]);
+                    // Set expiration on fields
+                    const futureTimestamp =
+                        Math.floor(Date.now() / 1000) + 3600; // 1 hour from now
+                    await client.hexpireat(key, futureTimestamp, [
+                        field1,
+                        field2,
+                    ]);
 
-                // Test batch operations with HEXPIRETIME
-                if (client instanceof GlideClient) {
-                    const batch = new Batch(false);
-                    batch.hexpiretime(key, [field1, field2]);
-                    const results = await client.exec(batch, false);
-                    expect(results).not.toBeNull();
-                    const result = results![0] as number[];
-                    expect(result.length).toEqual(2);
-                    expect(result[0]).toBeGreaterThan(0);
-                    expect(result[1]).toBeGreaterThan(0);
-                }
+                    // Test batch operations with HEXPIRETIME
+                    if (client instanceof GlideClient) {
+                        const batch = new Batch(false);
+                        batch.hexpiretime(key, [field1, field2]);
+                        const results = await client.exec(batch, false);
+                        expect(results).not.toBeNull();
+                        const result = results![0] as number[];
+                        expect(result.length).toEqual(2);
+                        expect(result[0]).toBeGreaterThan(0);
+                        expect(result[1]).toBeGreaterThan(0);
+                    }
 
-                // Test error cases
-                const field = getRandomKey();
+                    // Test error cases
+                    const field = getRandomKey();
 
-                // Test HEXPIRETIME on non-hash key
-                expect(await client.set(key, "string_value")).toEqual("OK");
-                await expect(
-                    client.hexpiretime(key, [field]),
-                ).rejects.toThrow(RequestError);
+                    // Test HEXPIRETIME on non-hash key
+                    expect(await client.set(key, "string_value")).toEqual("OK");
+                    await expect(
+                        client.hexpiretime(key, [field]),
+                    ).rejects.toThrow(RequestError);
 
-                // Test HEXPIRETIME with empty fields array
-                const hashKey = getRandomKey();
-                await client.hset(hashKey, { [field]: "value" });
-                const result = await client.hexpiretime(hashKey, []);
-                expect(result).toEqual([]);
-            }, protocol);
+                    // Test HEXPIRETIME with empty fields array
+                    const hashKey = getRandomKey();
+                    await client.hset(hashKey, { [field]: "value" });
+                    const result = await client.hexpiretime(hashKey, []);
+                    expect(result).toEqual([]);
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -4270,55 +4959,73 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hpexpiretime basic functionality_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
-                if (cluster.checkIfServerVersionLessThan("9.0.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
 
-                const key = getRandomKey();
-                const field1 = getRandomKey();
-                const field2 = getRandomKey();
-                const field3 = getRandomKey();
-                const value1 = getRandomKey();
-                const value2 = getRandomKey();
+                    const key = getRandomKey();
+                    const field1 = getRandomKey();
+                    const field2 = getRandomKey();
+                    const field3 = getRandomKey();
+                    const value1 = getRandomKey();
+                    const value2 = getRandomKey();
 
-                // Set up hash with fields
-                await client.hset(key, { [field1]: value1, [field2]: value2 });
+                    // Set up hash with fields
+                    await client.hset(key, {
+                        [field1]: value1,
+                        [field2]: value2,
+                    });
 
-                // Set expiration on fields using absolute timestamp in milliseconds
-                const futureTimestampMs = Date.now() + 3600000; // 1 hour from now in milliseconds
-                await client.hpexpireat(key, futureTimestampMs, [field1, field2]);
+                    // Set expiration on fields using absolute timestamp in milliseconds
+                    const futureTimestampMs = Date.now() + 3600000; // 1 hour from now in milliseconds
+                    await client.hpexpireat(key, futureTimestampMs, [
+                        field1,
+                        field2,
+                    ]);
 
-                // Test basic HPEXPIRETIME
-                const result1 = await client.hpexpiretime(key, [field1, field2, field3]);
-                expect(result1.length).toEqual(3);
-                expect(result1[0]).toBeGreaterThan(0); // field1 has expiration timestamp in milliseconds
-                expect(result1[1]).toBeGreaterThan(0); // field2 has expiration timestamp in milliseconds
-                expect(result1[2]).toEqual(-2); // field3 doesn't exist
+                    // Test basic HPEXPIRETIME
+                    const result1 = await client.hpexpiretime(key, [
+                        field1,
+                        field2,
+                        field3,
+                    ]);
+                    expect(result1.length).toEqual(3);
+                    expect(result1[0]).toBeGreaterThan(0); // field1 has expiration timestamp in milliseconds
+                    expect(result1[1]).toBeGreaterThan(0); // field2 has expiration timestamp in milliseconds
+                    expect(result1[2]).toEqual(-2); // field3 doesn't exist
 
-                // Verify timestamp is in milliseconds (should be much larger than seconds)
-                expect(result1[0]).toBeGreaterThan(Date.now()); // Should be in the future
-                expect(result1[1]).toBeGreaterThan(Date.now()); // Should be in the future
+                    // Verify timestamp is in milliseconds (should be much larger than seconds)
+                    expect(result1[0]).toBeGreaterThan(Date.now()); // Should be in the future
+                    expect(result1[1]).toBeGreaterThan(Date.now()); // Should be in the future
 
-                // Remove expiration from field1
-                await client.hpersist(key, [field1]);
+                    // Remove expiration from field1
+                    await client.hpersist(key, [field1]);
 
-                // Test HPEXPIRETIME after persist
-                const result2 = await client.hpexpiretime(key, [field1, field2]);
-                expect(result2[0]).toEqual(-1); // field1 has no expiration
-                expect(result2[1]).toBeGreaterThan(0); // field2 still has expiration timestamp
+                    // Test HPEXPIRETIME after persist
+                    const result2 = await client.hpexpiretime(key, [
+                        field1,
+                        field2,
+                    ]);
+                    expect(result2[0]).toEqual(-1); // field1 has no expiration
+                    expect(result2[1]).toBeGreaterThan(0); // field2 still has expiration timestamp
 
-                // Test on non-existent key
-                const nonExistentKey = getRandomKey();
-                const result3 = await client.hpexpiretime(nonExistentKey, [field1]);
-                expect(result3).toEqual([-2]);
+                    // Test on non-existent key
+                    const nonExistentKey = getRandomKey();
+                    const result3 = await client.hpexpiretime(nonExistentKey, [
+                        field1,
+                    ]);
+                    expect(result3).toEqual([-2]);
 
-                // Test on fields without expiration
-                const key2 = getRandomKey();
-                await client.hset(key2, { [field1]: value1 });
-                const result4 = await client.hpexpiretime(key2, [field1]);
-                expect(result4).toEqual([-1]); // field has no expiration
-            }, protocol);
+                    // Test on fields without expiration
+                    const key2 = getRandomKey();
+                    await client.hset(key2, { [field1]: value1 });
+                    const result4 = await client.hpexpiretime(key2, [field1]);
+                    expect(result4).toEqual([-1]); // field has no expiration
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -4326,51 +5033,60 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hpexpiretime with batch operations_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
-                if (cluster.checkIfServerVersionLessThan("9.0.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
 
-                const key = getRandomKey();
-                const field1 = getRandomKey();
-                const field2 = getRandomKey();
-                const value1 = getRandomKey();
-                const value2 = getRandomKey();
+                    const key = getRandomKey();
+                    const field1 = getRandomKey();
+                    const field2 = getRandomKey();
+                    const value1 = getRandomKey();
+                    const value2 = getRandomKey();
 
-                // Set up hash with fields
-                await client.hset(key, { [field1]: value1, [field2]: value2 });
+                    // Set up hash with fields
+                    await client.hset(key, {
+                        [field1]: value1,
+                        [field2]: value2,
+                    });
 
-                // Set expiration on fields
-                const futureTimestampMs = Date.now() + 3600000; // 1 hour from now in milliseconds
-                await client.hpexpireat(key, futureTimestampMs, [field1, field2]);
+                    // Set expiration on fields
+                    const futureTimestampMs = Date.now() + 3600000; // 1 hour from now in milliseconds
+                    await client.hpexpireat(key, futureTimestampMs, [
+                        field1,
+                        field2,
+                    ]);
 
-                // Test batch operations with HPEXPIRETIME
-                if (client instanceof GlideClient) {
-                    const batch = new Batch(false);
-                    batch.hpexpiretime(key, [field1, field2]);
-                    const results = await client.exec(batch, false);
-                    expect(results).not.toBeNull();
-                    const result = results![0] as number[];
-                    expect(result.length).toEqual(2);
-                    expect(result[0]).toBeGreaterThan(0);
-                    expect(result[1]).toBeGreaterThan(0);
-                }
+                    // Test batch operations with HPEXPIRETIME
+                    if (client instanceof GlideClient) {
+                        const batch = new Batch(false);
+                        batch.hpexpiretime(key, [field1, field2]);
+                        const results = await client.exec(batch, false);
+                        expect(results).not.toBeNull();
+                        const result = results![0] as number[];
+                        expect(result.length).toEqual(2);
+                        expect(result[0]).toBeGreaterThan(0);
+                        expect(result[1]).toBeGreaterThan(0);
+                    }
 
-                // Test error cases
-                const field = getRandomKey();
+                    // Test error cases
+                    const field = getRandomKey();
 
-                // Test HPEXPIRETIME on non-hash key
-                expect(await client.set(key, "string_value")).toEqual("OK");
-                await expect(
-                    client.hpexpiretime(key, [field]),
-                ).rejects.toThrow(RequestError);
+                    // Test HPEXPIRETIME on non-hash key
+                    expect(await client.set(key, "string_value")).toEqual("OK");
+                    await expect(
+                        client.hpexpiretime(key, [field]),
+                    ).rejects.toThrow(RequestError);
 
-                // Test HPEXPIRETIME with empty fields array
-                const hashKey = getRandomKey();
-                await client.hset(hashKey, { [field]: "value" });
-                const result = await client.hpexpiretime(hashKey, []);
-                expect(result).toEqual([]);
-            }, protocol);
+                    // Test HPEXPIRETIME with empty fields array
+                    const hashKey = getRandomKey();
+                    await client.hset(hashKey, { [field]: "value" });
+                    const result = await client.hpexpiretime(hashKey, []);
+                    expect(result).toEqual([]);
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -4378,54 +5094,66 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hpttl basic functionality_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
-                if (cluster.checkIfServerVersionLessThan("9.0.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
 
-                const key = getRandomKey();
-                const field1 = getRandomKey();
-                const field2 = getRandomKey();
-                const field3 = getRandomKey();
-                const value1 = getRandomKey();
-                const value2 = getRandomKey();
+                    const key = getRandomKey();
+                    const field1 = getRandomKey();
+                    const field2 = getRandomKey();
+                    const field3 = getRandomKey();
+                    const value1 = getRandomKey();
+                    const value2 = getRandomKey();
 
-                // Set up hash with fields
-                await client.hset(key, { [field1]: value1, [field2]: value2 });
+                    // Set up hash with fields
+                    await client.hset(key, {
+                        [field1]: value1,
+                        [field2]: value2,
+                    });
 
-                // Set expiration on fields using HPEXPIRE (milliseconds)
-                await client.hpexpire(key, 60000, [field1, field2]);
+                    // Set expiration on fields using HPEXPIRE (milliseconds)
+                    await client.hpexpire(key, 60000, [field1, field2]);
 
-                // Test basic HPTTL
-                const result1 = await client.hpttl(key, [field1, field2, field3]);
-                expect(result1.length).toEqual(3);
-                expect(result1[0]).toBeGreaterThan(0); // field1 has TTL in milliseconds
-                expect(result1[1]).toBeGreaterThan(0); // field2 has TTL in milliseconds
-                expect(result1[2]).toEqual(-2); // field3 doesn't exist
+                    // Test basic HPTTL
+                    const result1 = await client.hpttl(key, [
+                        field1,
+                        field2,
+                        field3,
+                    ]);
+                    expect(result1.length).toEqual(3);
+                    expect(result1[0]).toBeGreaterThan(0); // field1 has TTL in milliseconds
+                    expect(result1[1]).toBeGreaterThan(0); // field2 has TTL in milliseconds
+                    expect(result1[2]).toEqual(-2); // field3 doesn't exist
 
-                // Verify TTL is in milliseconds (should be much larger than seconds)
-                expect(result1[0]).toBeGreaterThan(1000); // Should be > 1 second in ms
-                expect(result1[1]).toBeGreaterThan(1000); // Should be > 1 second in ms
+                    // Verify TTL is in milliseconds (should be much larger than seconds)
+                    expect(result1[0]).toBeGreaterThan(1000); // Should be > 1 second in ms
+                    expect(result1[1]).toBeGreaterThan(1000); // Should be > 1 second in ms
 
-                // Remove expiration from field1
-                await client.hpersist(key, [field1]);
+                    // Remove expiration from field1
+                    await client.hpersist(key, [field1]);
 
-                // Test HPTTL after persist
-                const result2 = await client.hpttl(key, [field1, field2]);
-                expect(result2[0]).toEqual(-1); // field1 has no expiration
-                expect(result2[1]).toBeGreaterThan(0); // field2 still has TTL
+                    // Test HPTTL after persist
+                    const result2 = await client.hpttl(key, [field1, field2]);
+                    expect(result2[0]).toEqual(-1); // field1 has no expiration
+                    expect(result2[1]).toBeGreaterThan(0); // field2 still has TTL
 
-                // Test on non-existent key
-                const nonExistentKey = getRandomKey();
-                const result3 = await client.hpttl(nonExistentKey, [field1]);
-                expect(result3).toEqual([-2]);
+                    // Test on non-existent key
+                    const nonExistentKey = getRandomKey();
+                    const result3 = await client.hpttl(nonExistentKey, [
+                        field1,
+                    ]);
+                    expect(result3).toEqual([-2]);
 
-                // Test on fields without expiration
-                const key2 = getRandomKey();
-                await client.hset(key2, { [field1]: value1 });
-                const result4 = await client.hpttl(key2, [field1]);
-                expect(result4).toEqual([-1]); // field has no expiration
-            }, protocol);
+                    // Test on fields without expiration
+                    const key2 = getRandomKey();
+                    await client.hset(key2, { [field1]: value1 });
+                    const result4 = await client.hpttl(key2, [field1]);
+                    expect(result4).toEqual([-1]); // field has no expiration
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -4433,43 +5161,48 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hpttl with batch operations_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
-                if (cluster.checkIfServerVersionLessThan("9.0.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
 
-                const key1 = getRandomKey();
-                const key2 = getRandomKey();
-                const field1 = getRandomKey();
-                const field2 = getRandomKey();
-                const value1 = getRandomKey();
-                const value2 = getRandomKey();
+                    const key1 = getRandomKey();
+                    const key2 = getRandomKey();
+                    const field1 = getRandomKey();
+                    const field2 = getRandomKey();
+                    const value1 = getRandomKey();
+                    const value2 = getRandomKey();
 
-                // Set up hashes with fields and expiration
-                await client.hset(key1, { [field1]: value1 });
-                await client.hset(key2, { [field2]: value2 });
-                await client.hpexpire(key1, 60000, [field1]);
-                await client.hpexpire(key2, 120000, [field2]);
+                    // Set up hashes with fields and expiration
+                    await client.hset(key1, { [field1]: value1 });
+                    await client.hset(key2, { [field2]: value2 });
+                    await client.hpexpire(key1, 60000, [field1]);
+                    await client.hpexpire(key2, 120000, [field2]);
 
-                // Test batch operations with HPTTL
-                if (client instanceof GlideClient) {
-                    const batch = new Batch(false);
-                    batch.hpttl(key1, [field1]);
-                    batch.hpttl(key2, [field2]);
-                    const results = await client.exec(batch, false);
-                    expect(results).not.toBeNull();
-                    expect(results![0]).toBeGreaterThan(0); // key1 field1 has TTL
-                    expect(results![1]).toBeGreaterThan(0); // key2 field2 has TTL
-                } else {
-                    const batch = new ClusterBatch(false);
-                    batch.hpttl(key1, [field1]);
-                    batch.hpttl(key2, [field2]);
-                    const results = await (client as GlideClusterClient).exec(batch, false);
-                    expect(results).not.toBeNull();
-                    expect(results![0]).toBeGreaterThan(0); // key1 field1 has TTL
-                    expect(results![1]).toBeGreaterThan(0); // key2 field2 has TTL
-                }
-            }, protocol);
+                    // Test batch operations with HPTTL
+                    if (client instanceof GlideClient) {
+                        const batch = new Batch(false);
+                        batch.hpttl(key1, [field1]);
+                        batch.hpttl(key2, [field2]);
+                        const results = await client.exec(batch, false);
+                        expect(results).not.toBeNull();
+                        expect(results![0]).toBeGreaterThan(0); // key1 field1 has TTL
+                        expect(results![1]).toBeGreaterThan(0); // key2 field2 has TTL
+                    } else {
+                        const batch = new ClusterBatch(false);
+                        batch.hpttl(key1, [field1]);
+                        batch.hpttl(key2, [field2]);
+                        const results = await (
+                            client as GlideClusterClient
+                        ).exec(batch, false);
+                        expect(results).not.toBeNull();
+                        expect(results![0]).toBeGreaterThan(0); // key1 field1 has TTL
+                        expect(results![1]).toBeGreaterThan(0); // key2 field2 has TTL
+                    }
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -4477,26 +5210,29 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hpttl error handling_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
-                if (cluster.checkIfServerVersionLessThan("9.0.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
 
-                const key = getRandomKey();
-                const field = getRandomKey();
+                    const key = getRandomKey();
+                    const field = getRandomKey();
 
-                // Test HPTTL on non-hash key
-                expect(await client.set(key, "string_value")).toEqual("OK");
-                await expect(
-                    client.hpttl(key, [field]),
-                ).rejects.toThrow(RequestError);
+                    // Test HPTTL on non-hash key
+                    expect(await client.set(key, "string_value")).toEqual("OK");
+                    await expect(client.hpttl(key, [field])).rejects.toThrow(
+                        RequestError,
+                    );
 
-                // Test HPTTL with empty fields array
-                const hashKey = getRandomKey();
-                await client.hset(hashKey, { [field]: "value" });
-                const result = await client.hpttl(hashKey, []);
-                expect(result).toEqual([]);
-            }, protocol);
+                    // Test HPTTL with empty fields array
+                    const hashKey = getRandomKey();
+                    await client.hset(hashKey, { [field]: "value" });
+                    const result = await client.hpttl(hashKey, []);
+                    expect(result).toEqual([]);
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -4504,55 +5240,75 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hpttl with comprehensive parameter types_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
-                if (cluster.checkIfServerVersionLessThan("9.0.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
 
-                const field1 = getRandomKey();
-                const value = getRandomKey();
-                const keyBuffer = Buffer.from(getRandomKey());
-                const fieldBuffer = Buffer.from(getRandomKey());
-                const valueBuffer = Buffer.from(getRandomKey());
+                    const field1 = getRandomKey();
+                    const value = getRandomKey();
+                    const keyBuffer = Buffer.from(getRandomKey());
+                    const fieldBuffer = Buffer.from(getRandomKey());
+                    const valueBuffer = Buffer.from(getRandomKey());
 
-                // Test with Buffer keys and fields
-                await client.hset(keyBuffer, { [field1]: value, [fieldBuffer.toString()]: valueBuffer });
-                await client.hpexpire(keyBuffer, 60000, [field1, fieldBuffer.toString()]);
-                const result1 = await client.hpttl(keyBuffer, [field1, fieldBuffer]);
-                expect(result1.length).toEqual(2);
-                expect(result1[0]).toBeGreaterThan(0);
-                expect(result1[1]).toBeGreaterThan(0);
+                    // Test with Buffer keys and fields
+                    await client.hset(keyBuffer, {
+                        [field1]: value,
+                        [fieldBuffer.toString()]: valueBuffer,
+                    });
+                    await client.hpexpire(keyBuffer, 60000, [
+                        field1,
+                        fieldBuffer.toString(),
+                    ]);
+                    const result1 = await client.hpttl(keyBuffer, [
+                        field1,
+                        fieldBuffer,
+                    ]);
+                    expect(result1.length).toEqual(2);
+                    expect(result1[0]).toBeGreaterThan(0);
+                    expect(result1[1]).toBeGreaterThan(0);
 
-                // Test with long keys and fields
-                const longKey = "a".repeat(1000);
-                const longField = "b".repeat(1000);
-                const longValue = "c".repeat(1000);
+                    // Test with long keys and fields
+                    const longKey = "a".repeat(1000);
+                    const longField = "b".repeat(1000);
+                    const longValue = "c".repeat(1000);
 
-                await client.hset(longKey, { [longField]: longValue });
-                await client.hpexpire(longKey, 60000, [longField]);
-                const result2 = await client.hpttl(longKey, [longField]);
-                expect(result2[0]).toBeGreaterThan(0);
+                    await client.hset(longKey, { [longField]: longValue });
+                    await client.hpexpire(longKey, 60000, [longField]);
+                    const result2 = await client.hpttl(longKey, [longField]);
+                    expect(result2[0]).toBeGreaterThan(0);
 
-                // Test with special characters
-                const specialKey = "key:with:special:chars";
-                const specialField = "field@with#special$chars";
-                const specialValue = "value%with&special*chars";
+                    // Test with special characters
+                    const specialKey = "key:with:special:chars";
+                    const specialField = "field@with#special$chars";
+                    const specialValue = "value%with&special*chars";
 
-                await client.hset(specialKey, { [specialField]: specialValue });
-                await client.hpexpire(specialKey, 60000, [specialField]);
-                const result3 = await client.hpttl(specialKey, [specialField]);
-                expect(result3[0]).toBeGreaterThan(0);
+                    await client.hset(specialKey, {
+                        [specialField]: specialValue,
+                    });
+                    await client.hpexpire(specialKey, 60000, [specialField]);
+                    const result3 = await client.hpttl(specialKey, [
+                        specialField,
+                    ]);
+                    expect(result3[0]).toBeGreaterThan(0);
 
-                // Test with Unicode characters
-                const unicodeKey = "🔑key";
-                const unicodeField = "🏷️field";
-                const unicodeValue = "💎value";
+                    // Test with Unicode characters
+                    const unicodeKey = "🔑key";
+                    const unicodeField = "🏷️field";
+                    const unicodeValue = "💎value";
 
-                await client.hset(unicodeKey, { [unicodeField]: unicodeValue });
-                await client.hpexpire(unicodeKey, 60000, [unicodeField]);
-                const result4 = await client.hpttl(unicodeKey, [unicodeField]);
-                expect(result4[0]).toBeGreaterThan(0);
-            }, protocol);
+                    await client.hset(unicodeKey, {
+                        [unicodeField]: unicodeValue,
+                    });
+                    await client.hpexpire(unicodeKey, 60000, [unicodeField]);
+                    const result4 = await client.hpttl(unicodeKey, [
+                        unicodeField,
+                    ]);
+                    expect(result4[0]).toBeGreaterThan(0);
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -8616,27 +9372,27 @@ export function runBaseTests(config: {
                 expect(
                     client instanceof GlideClient
                         ? await client.echo(message, {
-                            decoder: Decoder.String,
-                        })
+                              decoder: Decoder.String,
+                          })
                         : await client.echo(message, {
-                            decoder: Decoder.String,
-                        }),
+                              decoder: Decoder.String,
+                          }),
                 ).toEqual(message);
                 expect(
                     client instanceof GlideClient
                         ? await client.echo(message, { decoder: Decoder.Bytes })
                         : await client.echo(message, {
-                            decoder: Decoder.Bytes,
-                        }),
+                              decoder: Decoder.Bytes,
+                          }),
                 ).toEqual(Buffer.from(message));
                 expect(
                     client instanceof GlideClient
                         ? await client.echo(Buffer.from(message), {
-                            decoder: Decoder.String,
-                        })
+                              decoder: Decoder.String,
+                          })
                         : await client.echo(Buffer.from(message), {
-                            decoder: Decoder.String,
-                        }),
+                              decoder: Decoder.String,
+                          }),
                 ).toEqual(message);
                 expect(await client.echo(Buffer.from(message))).toEqual(
                     message,
@@ -10348,17 +11104,17 @@ export function runBaseTests(config: {
                     let response =
                         client instanceof GlideClient
                             ? await client.exec(
-                                new Batch(isAtomic).dump(key1),
-                                true,
-                                {
-                                    decoder: Decoder.Bytes,
-                                },
-                            )
+                                  new Batch(isAtomic).dump(key1),
+                                  true,
+                                  {
+                                      decoder: Decoder.Bytes,
+                                  },
+                              )
                             : await client.exec(
-                                new ClusterBatch(isAtomic).dump(key1),
-                                true,
-                                { decoder: Decoder.Bytes },
-                            );
+                                  new ClusterBatch(isAtomic).dump(key1),
+                                  true,
+                                  { decoder: Decoder.Bytes },
+                              );
                     expect(response?.[0]).not.toBeNull();
                     data = response?.[0] as Buffer;
 
@@ -10366,19 +11122,19 @@ export function runBaseTests(config: {
                     response =
                         client instanceof GlideClient
                             ? await client.exec(
-                                new Batch(isAtomic)
-                                    .restore(key4, 0, data)
-                                    .get(key4),
-                                true,
-                                { decoder: Decoder.String },
-                            )
+                                  new Batch(isAtomic)
+                                      .restore(key4, 0, data)
+                                      .get(key4),
+                                  true,
+                                  { decoder: Decoder.String },
+                              )
                             : await client.exec(
-                                new ClusterBatch(isAtomic)
-                                    .restore(key4, 0, data)
-                                    .get(key4),
-                                true,
-                                { decoder: Decoder.String },
-                            );
+                                  new ClusterBatch(isAtomic)
+                                      .restore(key4, 0, data)
+                                      .get(key4),
+                                  true,
+                                  { decoder: Decoder.String },
+                              );
                     expect(response?.[0]).toEqual("OK");
                     expect(response?.[1]).toEqual(value);
 
@@ -10386,19 +11142,19 @@ export function runBaseTests(config: {
                     response =
                         client instanceof GlideClient
                             ? await client.exec(
-                                new Batch(isAtomic)
-                                    .restore(key5, 0, data)
-                                    .get(key5),
-                                true,
-                                { decoder: Decoder.Bytes },
-                            )
+                                  new Batch(isAtomic)
+                                      .restore(key5, 0, data)
+                                      .get(key5),
+                                  true,
+                                  { decoder: Decoder.Bytes },
+                              )
                             : await client.exec(
-                                new ClusterBatch(isAtomic)
-                                    .restore(key5, 0, data)
-                                    .get(key5),
-                                true,
-                                { decoder: Decoder.Bytes },
-                            );
+                                  new ClusterBatch(isAtomic)
+                                      .restore(key5, 0, data)
+                                      .get(key5),
+                                  true,
+                                  { decoder: Decoder.Bytes },
+                              );
                     expect(response?.[0]).toEqual("OK");
                     expect(response?.[1]).toEqual(valueEncode);
                 }
@@ -10870,13 +11626,13 @@ export function runBaseTests(config: {
                 expiry: expiryVal as
                     | "keepExisting"
                     | {
-                        type:
-                        | TimeUnit.Seconds
-                        | TimeUnit.Milliseconds
-                        | TimeUnit.UnixSeconds
-                        | TimeUnit.UnixMilliseconds;
-                        count: number;
-                    },
+                          type:
+                              | TimeUnit.Seconds
+                              | TimeUnit.Milliseconds
+                              | TimeUnit.UnixSeconds
+                              | TimeUnit.UnixMilliseconds;
+                          count: number;
+                      },
                 conditionalSet: "onlyIfDoesNotExist",
             });
 
@@ -10897,13 +11653,13 @@ export function runBaseTests(config: {
                 expiry: expiryVal as
                     | "keepExisting"
                     | {
-                        type:
-                        | TimeUnit.Seconds
-                        | TimeUnit.Milliseconds
-                        | TimeUnit.UnixSeconds
-                        | TimeUnit.UnixMilliseconds;
-                        count: number;
-                    },
+                          type:
+                              | TimeUnit.Seconds
+                              | TimeUnit.Milliseconds
+                              | TimeUnit.UnixSeconds
+                              | TimeUnit.UnixMilliseconds;
+                          count: number;
+                      },
 
                 conditionalSet: "onlyIfExists",
                 returnOldValue: true,
@@ -10922,13 +11678,13 @@ export function runBaseTests(config: {
                     expiry: expiryVal as
                         | "keepExisting"
                         | {
-                            type:
-                            | TimeUnit.Seconds
-                            | TimeUnit.Milliseconds
-                            | TimeUnit.UnixSeconds
-                            | TimeUnit.UnixMilliseconds;
-                            count: number;
-                        },
+                              type:
+                                  | TimeUnit.Seconds
+                                  | TimeUnit.Milliseconds
+                                  | TimeUnit.UnixSeconds
+                                  | TimeUnit.UnixMilliseconds;
+                              count: number;
+                          },
                     conditionalSet: "onlyIfEqual",
                     comparisonValue: value, // Ensure it matches the current key's value
                 });
@@ -12408,7 +13164,7 @@ export function runBaseTests(config: {
                     for (let i = 0; i < fullResultMapArray.length; i += 2) {
                         expect(
                             (fullResultMapArray[i] as string) in
-                            expectedFullMap,
+                                expectedFullMap,
                         ).toEqual(true);
                     }
 
@@ -13333,23 +14089,23 @@ export function runBaseTests(config: {
                 expect(await client.xinfoGroups(Buffer.from(key))).toEqual(
                     cluster.checkIfServerVersionLessThan("7.0.0")
                         ? [
-                            {
-                                name: groupName1,
-                                consumers: 0,
-                                pending: 0,
-                                "last-delivered-id": "0-0",
-                            },
-                        ]
+                              {
+                                  name: groupName1,
+                                  consumers: 0,
+                                  pending: 0,
+                                  "last-delivered-id": "0-0",
+                              },
+                          ]
                         : [
-                            {
-                                name: groupName1,
-                                consumers: 0,
-                                pending: 0,
-                                "last-delivered-id": "0-0",
-                                "entries-read": null,
-                                lag: 0,
-                            },
-                        ],
+                              {
+                                  name: groupName1,
+                                  consumers: 0,
+                                  pending: 0,
+                                  "last-delivered-id": "0-0",
+                                  "entries-read": null,
+                                  lag: 0,
+                              },
+                          ],
                 );
 
                 expect(
@@ -13386,23 +14142,23 @@ export function runBaseTests(config: {
                 expect(await client.xinfoGroups(key)).toEqual(
                     cluster.checkIfServerVersionLessThan("7.0.0")
                         ? [
-                            {
-                                name: groupName1,
-                                consumers: 0,
-                                pending: 0,
-                                "last-delivered-id": "0-0",
-                            },
-                        ]
+                              {
+                                  name: groupName1,
+                                  consumers: 0,
+                                  pending: 0,
+                                  "last-delivered-id": "0-0",
+                              },
+                          ]
                         : [
-                            {
-                                name: groupName1,
-                                consumers: 0,
-                                pending: 0,
-                                "last-delivered-id": "0-0",
-                                "entries-read": null,
-                                lag: 3,
-                            },
-                        ],
+                              {
+                                  name: groupName1,
+                                  consumers: 0,
+                                  pending: 0,
+                                  "last-delivered-id": "0-0",
+                                  "entries-read": null,
+                                  lag: 3,
+                              },
+                          ],
                 );
 
                 const xreadgroup = await client.xreadgroup(
@@ -13427,23 +14183,23 @@ export function runBaseTests(config: {
                 expect(await client.xinfoGroups(key)).toEqual(
                     cluster.checkIfServerVersionLessThan("7.0.0")
                         ? [
-                            {
-                                name: groupName1,
-                                consumers: 1,
-                                pending: 3,
-                                "last-delivered-id": streamId3,
-                            },
-                        ]
+                              {
+                                  name: groupName1,
+                                  consumers: 1,
+                                  pending: 3,
+                                  "last-delivered-id": streamId3,
+                              },
+                          ]
                         : [
-                            {
-                                name: groupName1,
-                                consumers: 1,
-                                pending: 3,
-                                "last-delivered-id": streamId3,
-                                "entries-read": 3,
-                                lag: 0,
-                            },
-                        ],
+                              {
+                                  name: groupName1,
+                                  consumers: 1,
+                                  pending: 3,
+                                  "last-delivered-id": streamId3,
+                                  "entries-read": 3,
+                                  lag: 0,
+                              },
+                          ],
                 );
 
                 expect(await client.xack(key, groupName1, [streamId1])).toEqual(
@@ -13453,23 +14209,23 @@ export function runBaseTests(config: {
                 expect(await client.xinfoGroups(key)).toEqual(
                     cluster.checkIfServerVersionLessThan("7.0.0")
                         ? [
-                            {
-                                name: groupName1,
-                                consumers: 1,
-                                pending: 2,
-                                "last-delivered-id": streamId3,
-                            },
-                        ]
+                              {
+                                  name: groupName1,
+                                  consumers: 1,
+                                  pending: 2,
+                                  "last-delivered-id": streamId3,
+                              },
+                          ]
                         : [
-                            {
-                                name: groupName1,
-                                consumers: 1,
-                                pending: 2,
-                                "last-delivered-id": streamId3,
-                                "entries-read": 3,
-                                lag: 0,
-                            },
-                        ],
+                              {
+                                  name: groupName1,
+                                  consumers: 1,
+                                  pending: 2,
+                                  "last-delivered-id": streamId3,
+                                  "entries-read": 3,
+                                  lag: 0,
+                              },
+                          ],
                 );
 
                 // key exists, but it is not a stream
@@ -13693,16 +14449,16 @@ export function runBaseTests(config: {
                     Buffer.from(group),
                     cluster.checkIfServerVersionLessThan("6.2.0")
                         ? {
-                            start: InfBoundary.NegativeInfinity,
-                            end: InfBoundary.PositiveInfinity,
-                            count: 1,
-                        }
+                              start: InfBoundary.NegativeInfinity,
+                              end: InfBoundary.PositiveInfinity,
+                              count: 1,
+                          }
                         : {
-                            start: InfBoundary.NegativeInfinity,
-                            end: InfBoundary.PositiveInfinity,
-                            count: 1,
-                            minIdleTime: 42,
-                        },
+                              start: InfBoundary.NegativeInfinity,
+                              end: InfBoundary.PositiveInfinity,
+                              count: 1,
+                              minIdleTime: 42,
+                          },
                 );
                 result[0][2] = 0; // overwrite msec counter to avoid test flakyness
                 expect(result).toEqual([["0-1", "consumer", 0, 1]]);
@@ -14920,9 +15676,9 @@ export function runBaseTests(config: {
                             client instanceof GlideClient
                                 ? await client.exec(batch as Batch, true)
                                 : await client.exec(
-                                    batch as ClusterBatch,
-                                    true,
-                                );
+                                      batch as ClusterBatch,
+                                      true,
+                                  );
                         expect(result).toEqual(expectedResult);
                     }
 
@@ -14972,13 +15728,13 @@ export function runBaseTests(config: {
                 // Retry with a longer timeout
                 const result = isCluster
                     ? await (client as GlideClusterClient).exec(
-                        batch as ClusterBatch,
-                        true,
-                        { timeout: 1000 },
-                    )
+                          batch as ClusterBatch,
+                          true,
+                          { timeout: 1000 },
+                      )
                     : await (client as GlideClient).exec(batch as Batch, true, {
-                        timeout: 1000,
-                    });
+                          timeout: 1000,
+                      });
 
                 expect(result?.length).toBe(1);
             }, protocol);
@@ -15007,9 +15763,9 @@ export function runBaseTests(config: {
 
                 const result = isCluster
                     ? await (client as GlideClusterClient).exec(
-                        batch as ClusterBatch,
-                        false,
-                    )
+                          batch as ClusterBatch,
+                          false,
+                      )
                     : await (client as GlideClient).exec(batch as Batch, false);
 
                 expect(result?.length).toBe(4);
@@ -15182,9 +15938,9 @@ export function runCommonTests(config: {
                 const result = clusterMode
                     ? await client.exec(batch as ClusterTransaction, true)
                     : await (client as GlideClient).exec(
-                        batch as Transaction,
-                        true,
-                    );
+                          batch as Transaction,
+                          true,
+                      );
                 expect(result?.length).toBe(2);
                 expect(result?.[0]).toBe("OK");
                 expect(result?.[1]).toBe("hello");
