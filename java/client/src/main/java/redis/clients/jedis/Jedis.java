@@ -4163,8 +4163,17 @@ public final class Jedis implements Closeable {
         checkNotClosed();
         ensureInitialized();
         try {
-            glideClient.hset(key, hash).get();
-            return "OK";
+            // Use customCommand to execute HMSET and get the actual server response
+            List<String> args = new ArrayList<>();
+            args.add("HMSET");
+            args.add(key);
+            for (Map.Entry<String, String> entry : hash.entrySet()) {
+                args.add(entry.getKey());
+                args.add(entry.getValue());
+            }
+            
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            return result != null ? result.toString() : null;
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("HMSET operation failed", e);
         }
@@ -4182,12 +4191,17 @@ public final class Jedis implements Closeable {
         checkNotClosed();
         ensureInitialized();
         try {
-            Map<GlideString, GlideString> glideHash = new HashMap<>();
+            // Use customCommand to execute HMSET and get the actual server response
+            List<String> args = new ArrayList<>();
+            args.add("HMSET");
+            args.add(new String(key));
             for (Map.Entry<byte[], byte[]> entry : hash.entrySet()) {
-                glideHash.put(GlideString.of(entry.getKey()), GlideString.of(entry.getValue()));
+                args.add(new String(entry.getKey()));
+                args.add(new String(entry.getValue()));
             }
-            glideClient.hset(GlideString.of(key), glideHash).get();
-            return "OK";
+            
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            return result != null ? result.toString() : null;
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("HMSET operation failed", e);
         }

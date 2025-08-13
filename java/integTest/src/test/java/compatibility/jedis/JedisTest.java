@@ -2026,7 +2026,7 @@ public class JedisTest {
 
         // Test HMSET
         String result = jedis.hmset(key, testData);
-        assertEquals("OK", result, "HMSET should return OK");
+        assertEquals("OK", result, "HMSET should return OK"); // HMSET typically returns "OK"
 
         // Test HMGET - existing fields
         List<String> values = jedis.hmget(key, "field1", "field2", "field3");
