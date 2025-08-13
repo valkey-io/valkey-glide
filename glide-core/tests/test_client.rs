@@ -436,8 +436,8 @@ pub(crate) mod shared_client_tests {
                 username,
                 region,
                 ServiceType::ELASTICACHE,
-                None,  // Use default refresh interval
-                true,  // Use TLS
+                None, // Use default refresh interval
+                true, // Use TLS
                 true, // cluster mode
             );
 

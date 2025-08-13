@@ -355,16 +355,18 @@ impl Client {
             }
         };
 
-        // Now we can safely update the IAM token manager without holding the lock
-        if let Some(iam_manager) = lazy_iam_manager {
-            // Transfer the IAM token manager from lazy client to main client
-            // This is done safely using Arc and RwLock without requiring unsafe code
-            self.update_iam_token_manager(iam_manager).await;
-        }
-
         // Continue with client initialization
         let mut config = config;
         config.lazy_connect = false;
+
+        // If we have an IAM manager (either carried on the lazy client or already set),
+        // write the current token into the password so the first HELLO authenticates.
+        if let Some(ref iam_mgr) = lazy_iam_manager
+            && let Some(ref mut auth) = config.authentication_info
+        {
+            let token = iam_mgr.read().await.get_token().await;
+            auth.password = Some(token);
+        }
 
         let mut guard = self.internal_client.write().await;
         if let ClientWrapper::Lazy(_) = &*guard {
@@ -836,7 +838,14 @@ impl Client {
                 MultipleNodeRoutingInfo::AllNodes,
                 Some(ResponsePolicy::AllSucceeded),
             ));
+
+            // Get username configured in the client (from request)
+            let username = self.get_username().await.ok().flatten();
+
             let mut cmd = redis::cmd("AUTH");
+            if let Some(username) = username {
+                cmd.arg(&username);
+            }
             cmd.arg(&token);
             return self.send_command(&cmd, Some(routing)).await;
         }
@@ -890,9 +899,9 @@ impl Client {
         }
     }
 
-    /// Create an IAM token manager from authentication config if needed
     async fn create_iam_token_manager(
-        auth_info: &crate::client::types::AuthenticationInfo,
+        auth_info: &mut crate::client::types::AuthenticationInfo,
+        endpoint_host: String, // NEW - pass from request.addresses[0].host
     ) -> Option<Arc<tokio::sync::RwLock<crate::iam::IAMTokenManager>>> {
         if let Some(iam_config) = &auth_info.iam_config {
             if let Some(username) = &auth_info.username {
@@ -900,12 +909,15 @@ impl Client {
                     iam_config.cluster_name.clone(),
                     username.clone(),
                     iam_config.region.clone(),
+                    endpoint_host.clone(),
                     iam_config.service_type.clone(),
                     iam_config.refresh_interval_seconds,
                 )
                 .await
                 {
                     Ok(mut token_manager) => {
+                        let token = token_manager.get_token().await;
+                        auth_info.password = Some(token);
                         token_manager.start_refresh_task();
                         Some(Arc::new(tokio::sync::RwLock::new(token_manager)))
                     }
@@ -923,14 +935,14 @@ impl Client {
         }
     }
 
-    /// Update the IAM token manager for this client
-    async fn update_iam_token_manager(
-        &self,
-        iam_token_manager: Arc<tokio::sync::RwLock<crate::iam::IAMTokenManager>>,
-    ) {
-        let mut guard = self.iam_token_manager.write().await;
-        *guard = Some(iam_token_manager);
-    }
+    // Update the IAM token manager for this client
+    // async fn update_iam_token_manager(
+    //     &self,
+    //     iam_token_manager: Arc<tokio::sync::RwLock<crate::iam::IAMTokenManager>>,
+    // ) {
+    //     let mut guard = self.iam_token_manager.write().await;
+    //     *guard = Some(iam_token_manager);
+    // }
 }
 
 fn load_cmd(code: &[u8]) -> Cmd {
@@ -1205,7 +1217,7 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
 
 impl Client {
     pub async fn new(
-        request: ConnectionRequest,
+        mut request: ConnectionRequest, // <-- make this mutable
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
     ) -> Result<Self, ConnectionError> {
         const DEFAULT_CLIENT_CREATION_TIMEOUT: Duration = Duration::from_secs(10);
@@ -1224,11 +1236,28 @@ impl Client {
 
         tokio::time::timeout(DEFAULT_CLIENT_CREATION_TIMEOUT, async move {
             // Create IAM token manager if needed
-            let iam_token_manager = if let Some(auth_info) = &request.authentication_info {
-                Self::create_iam_token_manager(auth_info).await
+            let iam_token_manager = if let Some(auth_info) = &mut request.authentication_info {
+                Self::create_iam_token_manager(auth_info, request.addresses[0].host.clone()).await
             } else {
                 None
             };
+
+            // If we have IAM, inject the current token into the request so the builder uses
+            // HELLO 3 AUTH <user> <token> during the initial handshake.
+            if let (Some(auth), Some(token_manager)) =
+                (&mut request.authentication_info, &iam_token_manager)
+            {
+                // pull a fresh token
+                let token = token_manager.read().await.get_token().await;
+                // ensure username exists; IAM requires it
+                if auth.username.is_none() || auth.username.as_deref() == Some("") {
+                    return Err(ConnectionError::Cluster(RedisError::from((
+                        ErrorKind::InvalidClientConfig,
+                        "IAM authentication requires a non-empty username in AuthenticationInfo",
+                    ))));
+                }
+                auth.password = Some(token);
+            }
 
             let internal_client = if request.lazy_connect {
                 ClientWrapper::Lazy(Box::new(LazyClient {
