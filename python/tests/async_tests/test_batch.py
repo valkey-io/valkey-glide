@@ -34,6 +34,8 @@ from glide_shared.commands.bitmap import (
 from glide_shared.commands.command_args import Limit, ListDirection, OrderBy
 from glide_shared.commands.core_options import (
     ExpiryGetEx,
+    ExpirySet,
+    ExpiryType,
     ExpiryTypeGetEx,
     FlushMode,
     FunctionRestorePolicy,
@@ -138,6 +140,7 @@ async def batch_test(
     value2_bytes = value2.encode()
     value3 = get_random_string(5)
     value3_bytes = value3.encode()
+    exp = ExpirySet(ExpiryType.SEC, 20000)
     lib_name = f"mylib1C{get_random_string(5)}"
     func_name = f"myfunc1c{get_random_string(5)}"
     code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, True)
@@ -237,6 +240,7 @@ async def batch_test(
         value_bytes,
         value2,
         value2_bytes,
+        exp,
         args,
     )
 
@@ -826,6 +830,7 @@ async def helper2(
     value_bytes,
     value2,
     value2_bytes,
+    exp,
     args,
 ):
     transaction.incr(key3)
@@ -904,7 +909,9 @@ async def helper2(
     args.append([[key3_bytes, b"10.5"]])
     transaction.hstrlen(key4, key3)
     args.append(4)
-
+    if not await check_if_server_version_lt(glide_client, "9.0.0"):
+        transaction.hsetex(key4, {key: value, key2: value2}, exp)
+        args.append(1)
     transaction.client_getname()
     args.append(None)
 
