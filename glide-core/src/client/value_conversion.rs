@@ -1396,7 +1396,7 @@ fn is_array(val: Value) -> bool {
     matches!(val, Value::Array(_))
 }
 
-pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
+pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType<'_>> {
     let command = cmd.command()?;
 
     // TODO use enum to avoid mistakes

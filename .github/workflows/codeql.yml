@@ -68,27 +68,6 @@ jobs:
                   cargo build --release
 
             # Go Build
-            - name: Set up Go cache
-              if: matrix.language == 'go'
-              uses: actions/cache@v4
-              with:
-                  path: |
-                      ~/.cache/go-build
-                      ~/go/pkg/mod
-                      ~/go/bin
-                  key: ${{ runner.os }}-go-${{ hashFiles('go/go.mod', 'go/go.sum') }}-protoc-gen-go-v1.33.0
-                  restore-keys: |
-                      ${{ runner.os }}-go-
-
-            - name: Cache protoc binary
-              if: matrix.language == 'go'
-              uses: actions/cache@v4
-              with:
-                  path: /usr/local/bin/protoc
-                  key: ${{ runner.os }}-protoc-29.1
-                  restore-keys: |
-                      ${{ runner.os }}-protoc-
-
             - name: Install protoc-gen-go
               if: matrix.language == 'go'
               shell: bash
@@ -143,15 +122,6 @@ jobs:
                   go build ./... || echo "Go build failed due to missing Rust dependencies, but source code is available for CodeQL analysis"
 
             # Java/Kotlin Build
-            - name: Cache protoc binary for Java
-              if: matrix.language == 'java-kotlin'
-              uses: actions/cache@v4
-              with:
-                  path: /usr/local/bin/protoc
-                  key: ${{ runner.os }}-protoc-29.1
-                  restore-keys: |
-                      ${{ runner.os }}-protoc-
-
             - name: Build Java/Kotlin components
               if: matrix.language == 'java-kotlin'
               shell: bash
@@ -166,18 +136,6 @@ jobs:
                   else
                       echo "protoc already installed: $(protoc --version)"
                   fi
-
-            - name: Cache Gradle dependencies for Java/Kotlin
-              if: matrix.language == 'java-kotlin'
-              uses: actions/cache@v4
-              with:
-                  path: |
-                      ~/.gradle/caches
-                      ~/.gradle/wrapper
-                  key: ${{ runner.os }}-gradle-codeql-${{ hashFiles('java/**/*.gradle*', 'java/**/gradle-wrapper.properties') }}
-                  restore-keys: |
-                      ${{ runner.os }}-gradle-codeql-
-                      ${{ runner.os }}-gradle-
 
             - name: Compile Java/Kotlin components for CodeQL
               if: matrix.language == 'java-kotlin'
