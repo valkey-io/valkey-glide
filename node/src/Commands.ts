@@ -128,26 +128,26 @@ export function createGetRange(
 
 export type SetOptions = (
     | {
-        /**
-         * `onlyIfDoesNotExist` - Only set the key if it does not already exist.
-         * `NX` in the Valkey API.
-         *
-         * `onlyIfExists` - Only set the key if it already exists.
-         * `EX` in the Valkey API.
-         */
-        conditionalSet?: "onlyIfExists" | "onlyIfDoesNotExist";
-    }
+          /**
+           * `onlyIfDoesNotExist` - Only set the key if it does not already exist.
+           * `NX` in the Valkey API.
+           *
+           * `onlyIfExists` - Only set the key if it already exists.
+           * `EX` in the Valkey API.
+           */
+          conditionalSet?: "onlyIfExists" | "onlyIfDoesNotExist";
+      }
     | {
-        /**
-         * `onlyIfEqual` - Only set the key if the comparison value equals the current value of key.
-         * `IFEQ` in the Valkey API.
-         */
-        conditionalSet: "onlyIfEqual";
-        /**
-         * The value to compare the existing value with.
-         */
-        comparisonValue: GlideString;
-    }
+          /**
+           * `onlyIfEqual` - Only set the key if the comparison value equals the current value of key.
+           * `IFEQ` in the Valkey API.
+           */
+          conditionalSet: "onlyIfEqual";
+          /**
+           * The value to compare the existing value with.
+           */
+          comparisonValue: GlideString;
+      }
 ) & {
     /**
      * Return the old string stored at key, or nil if key did not exist. An error
@@ -175,11 +175,11 @@ export type SetOptions = (
      * Equivalent to `KEEPTTL` in the Valkey API.
      */
     expiry?:
-    | "keepExisting"
-    | {
-        type: TimeUnit;
-        count: number;
-    };
+        | "keepExisting"
+        | {
+              type: TimeUnit;
+              count: number;
+          };
 };
 
 /**
@@ -526,7 +526,10 @@ export function createHSetEx(
 
     // Add expiry options (EX | PX | EXAT | PXAT | KEEPTTL)
     if (options?.expiry) {
-        if (options.expiry !== "KEEPTTL" && !Number.isInteger(options.expiry.count)) {
+        if (
+            options.expiry !== "KEEPTTL" &&
+            !Number.isInteger(options.expiry.count)
+        ) {
             throw new Error(
                 `Received expiry '${JSON.stringify(
                     options.expiry,
@@ -576,6 +579,7 @@ export function createHGetEx(
                     )}'. Count must be an integer`,
                 );
             }
+
             args.push(options.expiry.type, options.expiry.count.toString());
         }
     }
@@ -1742,7 +1746,7 @@ export function createZAdd(
         if (options.conditionalChange) {
             if (
                 options.conditionalChange ===
-                ConditionalChange.ONLY_IF_DOES_NOT_EXIST &&
+                    ConditionalChange.ONLY_IF_DOES_NOT_EXIST &&
                 options.updateOptions
             ) {
                 throw new Error(
@@ -2018,15 +2022,15 @@ export type Boundary<T> =
      *  Represents a specific boundary.
      */
     | {
-        /**
-         * The comparison value.
-         */
-        value: T;
-        /**
-         * Whether the value is inclusive. Defaults to `true`.
-         */
-        isInclusive?: boolean;
-    };
+          /**
+           * The comparison value.
+           */
+          value: T;
+          /**
+           * Whether the value is inclusive. Defaults to `true`.
+           */
+          isInclusive?: boolean;
+      };
 
 /**
  * Represents a range by index (rank) in a sorted set.
@@ -2393,21 +2397,21 @@ export function createZRank(
 
 export type StreamTrimOptions = (
     | {
-        /**
-         * Trim the stream according to entry ID.
-         * Equivalent to `MINID` in the Valkey API.
-         */
-        method: "minid";
-        threshold: GlideString;
-    }
+          /**
+           * Trim the stream according to entry ID.
+           * Equivalent to `MINID` in the Valkey API.
+           */
+          method: "minid";
+          threshold: GlideString;
+      }
     | {
-        /**
-         * Trim the stream according to length.
-         * Equivalent to `MAXLEN` in the Valkey API.
-         */
-        method: "maxlen";
-        threshold: number;
-    }
+          /**
+           * Trim the stream according to length.
+           * Equivalent to `MAXLEN` in the Valkey API.
+           */
+          method: "maxlen";
+          threshold: number;
+      }
 ) & {
     /**
      * If `true`, the stream will be trimmed exactly. Equivalent to `=` in the
@@ -3547,14 +3551,16 @@ export enum HashFieldConditionalChange {
  * Expiry set options for hash field expiration commands.
  * Supports setting expiration time in various formats.
  */
-export type ExpirySet = {
-    type: TimeUnit;
-    count: number;
-} | "KEEPTTL";
+export type ExpirySet =
+    | {
+          type: TimeUnit;
+          count: number;
+      }
+    | "KEEPTTL";
 
 /**
  * Optional arguments for the HSETEX command.
- * 
+ *
  * See https://valkey.io/commands/hsetex/ for more details.
  */
 export interface HSetExOptions {
@@ -3568,7 +3574,7 @@ export interface HSetExOptions {
 
 /**
  * Optional arguments for the HGETEX command.
- * 
+ *
  * See https://valkey.io/commands/hgetex/ for more details.
  */
 export interface HGetExOptions {
@@ -3604,7 +3610,7 @@ export enum HashExpirationCondition {
 
 /**
  * Optional arguments for the HEXPIRE command.
- * 
+ *
  * See https://valkey.io/commands/hexpire/ for more details.
  */
 export interface HExpireOptions {
@@ -3614,7 +3620,7 @@ export interface HExpireOptions {
 
 /**
  * Optional arguments for the HPEXPIRE command.
- * 
+ *
  * See https://valkey.io/commands/hpexpire/ for more details.
  */
 export interface HPExpireOptions {
@@ -3624,7 +3630,7 @@ export interface HPExpireOptions {
 
 /**
  * Optional arguments for the HEXPIREAT command.
- * 
+ *
  * See https://valkey.io/commands/hexpireat/ for more details.
  */
 export interface HExpireAtOptions {
@@ -3634,7 +3640,7 @@ export interface HExpireAtOptions {
 
 /**
  * Optional arguments for the HPEXPIREAT command.
- * 
+ *
  * See https://valkey.io/commands/hpexpireat/ for more details.
  */
 export interface HPExpireAtOptions {

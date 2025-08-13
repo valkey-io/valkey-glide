@@ -279,7 +279,7 @@ import {
     createZScan,
     createZScore,
     createZUnion,
-    createZUnionStore
+    createZUnionStore,
 } from ".";
 import { command_request } from "../build-ts/ProtobufMessage";
 
@@ -312,7 +312,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      *     batch will be executed as an atomic `transaction`. If `false`, the batch will be
      *     executed as a non-atomic `pipeline`.
      */
-    constructor(public readonly isAtomic: boolean) { }
+    constructor(public readonly isAtomic: boolean) {}
 
     /**
      * Adds a command to the batch and returns the batch instance.
@@ -1132,10 +1132,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      *     - `-1` if the field exists but has no associated expiration.
      *     - `-2` if the field does not exist or the key does not exist.
      */
-    public hpersist(
-        key: GlideString,
-        fields: GlideString[],
-    ): T {
+    public hpersist(key: GlideString, fields: GlideString[]): T {
         return this.addAndReturn(createHPersist(key, fields));
     }
 
@@ -1157,7 +1154,9 @@ export class BaseBatch<T extends BaseBatch<T>> {
         fields: GlideString[],
         options?: HPExpireOptions,
     ): T {
-        return this.addAndReturn(createHPExpire(key, milliseconds, fields, options));
+        return this.addAndReturn(
+            createHPExpire(key, milliseconds, fields, options),
+        );
     }
 
     /**
@@ -1181,7 +1180,9 @@ export class BaseBatch<T extends BaseBatch<T>> {
         fields: GlideString[],
         options?: HExpireAtOptions,
     ): T {
-        return this.addAndReturn(createHExpireAt(key, unixTimestampSeconds, fields, options));
+        return this.addAndReturn(
+            createHExpireAt(key, unixTimestampSeconds, fields, options),
+        );
     }
 
     /**
@@ -1202,7 +1203,9 @@ export class BaseBatch<T extends BaseBatch<T>> {
         fields: GlideString[],
         options?: HPExpireAtOptions,
     ): T {
-        return this.addAndReturn(createHPExpireAt(key, unixTimestampMilliseconds, fields, options));
+        return this.addAndReturn(
+            createHPExpireAt(key, unixTimestampMilliseconds, fields, options),
+        );
     }
 
     /**
@@ -1217,10 +1220,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      *     - For fields that exist but have no associated expire, returns -1.
      *     - For fields that do not exist, returns -2.
      */
-    public httl(
-        key: GlideString,
-        fields: GlideString[],
-    ): T {
+    public httl(key: GlideString, fields: GlideString[]): T {
         return this.addAndReturn(createHTtl(key, fields));
     }
 
@@ -1236,10 +1236,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      *     - For fields without a timeout, returns -1.
      *     - For fields that do not exist, returns -2.
      */
-    public hexpiretime(
-        key: GlideString,
-        fields: GlideString[],
-    ): T {
+    public hexpiretime(key: GlideString, fields: GlideString[]): T {
         return this.addAndReturn(createHExpireTime(key, fields));
     }
 
@@ -1255,10 +1252,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      *     - For fields without a timeout, returns -1.
      *     - For fields that do not exist, returns -2.
      */
-    public hpexpiretime(
-        key: GlideString,
-        fields: GlideString[],
-    ): T {
+    public hpexpiretime(key: GlideString, fields: GlideString[]): T {
         return this.addAndReturn(createHPExpireTime(key, fields));
     }
 
@@ -1274,10 +1268,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      *     - For fields without a timeout, returns -1.
      *     - For fields that do not exist, returns -2.
      */
-    public hpttl(
-        key: GlideString,
-        fields: GlideString[],
-    ): T {
+    public hpttl(key: GlideString, fields: GlideString[]): T {
         return this.addAndReturn(createHPTtl(key, fields));
     }
 
