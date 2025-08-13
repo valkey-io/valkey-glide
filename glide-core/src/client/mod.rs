@@ -777,9 +777,10 @@ impl Client {
                             if let Ok(db_index) = db_str.parse::<i64>() {
                                 // Check if we're in standalone mode before updating database
                                 let client = self.internal_client.read().await;
-                                let is_standalone = matches!(&*client, ClientWrapper::Standalone(_));
+                                let is_standalone =
+                                    matches!(&*client, ClientWrapper::Standalone(_));
                                 drop(client);
-                                
+
                                 if is_standalone {
                                     // Update the connection request's database_id for future reconnections
                                     let mut config = self.connection_request.write().await;
