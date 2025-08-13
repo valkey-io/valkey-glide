@@ -763,8 +763,8 @@ impl Client {
         if let Some(command_bytes) = cmd.command() {
             let command_str = String::from_utf8_lossy(&command_bytes);
             if command_str.to_uppercase() == "SELECT" {
-                // Check if the command was successful (result should be "OK")
-                if matches!(result, Value::SimpleString(s) if s == "OK") {
+                // Check if the command was successful (result should be Value::Okay)
+                if matches!(result, Value::Okay) {
                     // Extract the database index from the command arguments
                     let mut args = cmd.args_iter();
                     args.next(); // Skip the command name "SELECT"
@@ -786,7 +786,7 @@ impl Client {
                                     config.database_id = db_index;
                                     log_debug(
                                         "track_database_change",
-                                        format!("Updated connection database_id to {}", db_index),
+                                        format!("Updated connection database_id to {db_index}"),
                                     );
                                 }
                             }
