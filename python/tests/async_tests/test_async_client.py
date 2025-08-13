@@ -33,6 +33,8 @@ from glide_shared.commands.core_options import (
     ConditionalChange,
     ExpireOptions,
     ExpiryGetEx,
+    ExpirySet,
+    ExpiryType,
     ExpiryTypeGetEx,
     FieldConditionalChange,
     FlushMode,
