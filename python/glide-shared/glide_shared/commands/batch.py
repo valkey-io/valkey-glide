@@ -702,7 +702,7 @@ class BaseBatch:
         args.extend(["FIELDS", str(len(field_value_map))])
         args.extend(field_value_list)
 
-        return (self.append_command(RequestType.HSetex, args),)
+        return self.append_command(RequestType.HSetex, args)
 
     def hget(self: TBatch, key: TEncodable, field: TEncodable) -> TBatch:
         """
