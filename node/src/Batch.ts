@@ -1105,8 +1105,11 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * @param fields - The fields to set expiration for.
      * @param options - Optional arguments for the HEXPIRE command. See {@link HExpireOptions}.
      *
-     * Command Response - An array of boolean values indicating whether expiration was set for each field.
-     *     `true` if expiration was set, `false` if the field doesn't exist or the condition wasn't met.
+     * Command Response - An array of numbers indicating the result for each field:
+     *     - `1` if expiration was set successfully
+     *     - `0` if the specified condition (NX, XX, GT, LT) was not met
+     *     - `-2` if the field does not exist or the key does not exist
+     *     - `2` when called with 0 seconds (field deleted)
      */
     public hexpire(
         key: GlideString,
@@ -1124,9 +1127,10 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * @param key - The key of the hash.
      * @param fields - The fields in the hash to remove expiration from.
      *
-     * Command Response - An array of boolean values indicating whether expiration was successfully removed for each field.
-     *     - `true` if the field's expiration was removed.
-     *     - `false` if the field does not exist or does not have an associated expiration.
+     * Command Response - An array of numbers indicating the result for each field:
+     *     - `1` if the field's expiration was removed successfully.
+     *     - `-1` if the field exists but has no associated expiration.
+     *     - `-2` if the field does not exist or the key does not exist.
      */
     public hpersist(
         key: GlideString,
@@ -1165,8 +1169,11 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * @param fields - The fields to set expiration for.
      * @param options - Optional arguments for the HEXPIREAT command. See {@link HExpireAtOptions}.
      *
-     * Command Response - An array of boolean values indicating whether expiration was set for each field.
-     *     `true` if expiration was set, `false` if the field doesn't exist or the condition wasn't met.
+     * Command Response - An array of numbers indicating the result for each field:
+     *     - `1` if expiration was set successfully
+     *     - `0` if the specified condition (NX, XX, GT, LT) was not met
+     *     - `-2` if the field does not exist or the key does not exist
+     *     - `2` when called with 0 seconds (field deleted)
      */
     public hexpireat(
         key: GlideString,
