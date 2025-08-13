@@ -2163,7 +2163,10 @@ public class JedisTest {
 
         // Test HRANDFIELD with values
         List<Map.Entry<String, String>> randomFieldsWithValues = jedis.hrandfieldWithValues(key, 2);
-        assertEquals(2, randomFieldsWithValues.size(), "HRANDFIELD with values should return requested number of pairs");
+        assertEquals(
+                2,
+                randomFieldsWithValues.size(),
+                "HRANDFIELD with values should return requested number of pairs");
         for (Map.Entry<String, String> entry : randomFieldsWithValues) {
             assertTrue(testData.containsKey(entry.getKey()), "Field should exist in hash");
             assertEquals(testData.get(entry.getKey()), entry.getValue(), "Value should match");
@@ -2180,7 +2183,7 @@ public class JedisTest {
     void testHSCAN() {
         String key = TEST_KEY_PREFIX + "hash_scan";
         Map<String, String> testData = new HashMap<>();
-        
+
         // Create test data with predictable pattern
         for (int i = 0; i < 20; i++) {
             testData.put("field_" + i, "value_" + i);
@@ -2197,21 +2200,23 @@ public class JedisTest {
         ScanParams params = new ScanParams();
         params.match("field_1*");
         params.count(5);
-        
+
         scanResult = jedis.hscan(key, "0", params);
         assertNotNull(scanResult, "HSCAN with params should return scan result");
-        
+
         // Verify all returned fields match the pattern
         for (Map.Entry<String, String> entry : scanResult.getResult()) {
-            assertTrue(entry.getKey().startsWith("field_1"), 
-                "All returned fields should match pattern field_1*");
+            assertTrue(
+                    entry.getKey().startsWith("field_1"),
+                    "All returned fields should match pattern field_1*");
         }
 
         // Test HSCANNOVALS - scan without values
         ScanResult<String> scanNoValsResult = jedis.hscanNoValues(key, "0");
         assertNotNull(scanNoValsResult, "HSCANNOVALS should return scan result");
         assertNotNull(scanNoValsResult.getResult(), "HSCANNOVALS should return field names");
-        assertTrue(scanNoValsResult.getResult().size() > 0, "HSCANNOVALS should return some field names");
+        assertTrue(
+                scanNoValsResult.getResult().size() > 0, "HSCANNOVALS should return some field names");
 
         // Verify all returned items are field names
         for (String field : scanNoValsResult.getResult()) {
@@ -2254,7 +2259,7 @@ public class JedisTest {
         Map<String, String> hash = new HashMap<>();
         hash.put(field2, value2);
         hash.put("field3", "value3");
-        
+
         params = HSetExParams.hSetExParams().ex(120);
         result = jedis.hsetex(key, params, hash);
         assertTrue(result >= 1, "HSETEX with map should return number of new fields");
@@ -2360,8 +2365,10 @@ public class JedisTest {
         // Test HEXPIRE - set expiration in seconds
         List<Long> result = jedis.hexpire(key, 60, field1, field2);
         assertEquals(2, result.size(), "HEXPIRE should return results for all fields");
-        assertEquals(Long.valueOf(1), result.get(0), "HEXPIRE should return 1 for successful expiration");
-        assertEquals(Long.valueOf(1), result.get(1), "HEXPIRE should return 1 for successful expiration");
+        assertEquals(
+                Long.valueOf(1), result.get(0), "HEXPIRE should return 1 for successful expiration");
+        assertEquals(
+                Long.valueOf(1), result.get(1), "HEXPIRE should return 1 for successful expiration");
 
         // Test HTTL - get TTL in seconds
         List<Long> ttlResult = jedis.httl(key, field1, field2);
@@ -2378,7 +2385,8 @@ public class JedisTest {
         // Test HTTL on non-existing field
         ttlResult = jedis.httl(key, "nonexistent");
         assertEquals(1, ttlResult.size(), "HTTL should return one result");
-        assertEquals(Long.valueOf(-2), ttlResult.get(0), "HTTL should return -2 for non-existing field");
+        assertEquals(
+                Long.valueOf(-2), ttlResult.get(0), "HTTL should return -2 for non-existing field");
     }
 
     @Test
@@ -2402,14 +2410,20 @@ public class JedisTest {
         // Test HPEXPIRE - set expiration in milliseconds
         List<Long> result = jedis.hpexpire(key, 60000, field1, field2); // 60 seconds in milliseconds
         assertEquals(2, result.size(), "HPEXPIRE should return results for all fields");
-        assertEquals(Long.valueOf(1), result.get(0), "HPEXPIRE should return 1 for successful expiration");
-        assertEquals(Long.valueOf(1), result.get(1), "HPEXPIRE should return 1 for successful expiration");
+        assertEquals(
+                Long.valueOf(1), result.get(0), "HPEXPIRE should return 1 for successful expiration");
+        assertEquals(
+                Long.valueOf(1), result.get(1), "HPEXPIRE should return 1 for successful expiration");
 
         // Test HPTTL - get TTL in milliseconds
         List<Long> pttlResult = jedis.hpttl(key, field1, field2);
         assertEquals(2, pttlResult.size(), "HPTTL should return TTL for all fields");
-        assertTrue(pttlResult.get(0) > 0 && pttlResult.get(0) <= 60000, "PTTL should be positive and <= 60000");
-        assertTrue(pttlResult.get(1) > 0 && pttlResult.get(1) <= 60000, "PTTL should be positive and <= 60000");
+        assertTrue(
+                pttlResult.get(0) > 0 && pttlResult.get(0) <= 60000,
+                "PTTL should be positive and <= 60000");
+        assertTrue(
+                pttlResult.get(1) > 0 && pttlResult.get(1) <= 60000,
+                "PTTL should be positive and <= 60000");
 
         // Test HPEXPIRE with condition
         ExpiryOption condition = ExpiryOption.LT; // Less than current expiration
@@ -2420,7 +2434,8 @@ public class JedisTest {
         // Test HPTTL on non-existing field
         pttlResult = jedis.hpttl(key, "nonexistent");
         assertEquals(1, pttlResult.size(), "HPTTL should return one result");
-        assertEquals(Long.valueOf(-2), pttlResult.get(0), "HPTTL should return -2 for non-existing field");
+        assertEquals(
+                Long.valueOf(-2), pttlResult.get(0), "HPTTL should return -2 for non-existing field");
     }
 
     @Test
@@ -2442,12 +2457,16 @@ public class JedisTest {
         long futureTimestamp = System.currentTimeMillis() / 1000 + 120; // 2 minutes from now
         List<Long> result = jedis.hexpireAt(key, futureTimestamp, field1);
         assertEquals(1, result.size(), "HEXPIREAT should return one result");
-        assertEquals(Long.valueOf(1), result.get(0), "HEXPIREAT should return 1 for successful expiration");
+        assertEquals(
+                Long.valueOf(1), result.get(0), "HEXPIREAT should return 1 for successful expiration");
 
         // Test HEXPIRETIME - get expiration time
         List<Long> expireTimeResult = jedis.hexpireTime(key, field1);
         assertEquals(1, expireTimeResult.size(), "HEXPIRETIME should return one result");
-        assertEquals(futureTimestamp, expireTimeResult.get(0).longValue(), "HEXPIRETIME should return correct timestamp");
+        assertEquals(
+                futureTimestamp,
+                expireTimeResult.get(0).longValue(),
+                "HEXPIRETIME should return correct timestamp");
 
         // Test HEXPIREAT with condition
         ExpiryOption condition = ExpiryOption.XX; // Only if field has expiration
@@ -2476,18 +2495,22 @@ public class JedisTest {
         long futureTimestamp = System.currentTimeMillis() + 120000; // 2 minutes from now
         List<Long> result = jedis.hpexpireAt(key, futureTimestamp, field1);
         assertEquals(1, result.size(), "HPEXPIREAT should return one result");
-        assertEquals(Long.valueOf(1), result.get(0), "HPEXPIREAT should return 1 for successful expiration");
+        assertEquals(
+                Long.valueOf(1), result.get(0), "HPEXPIREAT should return 1 for successful expiration");
 
         // Test HPEXPIRETIME - get expiration time in milliseconds
         List<Long> pexpireTimeResult = jedis.hpexpireTime(key, field1);
         assertEquals(1, pexpireTimeResult.size(), "HPEXPIRETIME should return one result");
-        assertEquals(futureTimestamp, pexpireTimeResult.get(0).longValue(), "HPEXPIRETIME should return correct timestamp");
+        assertEquals(
+                futureTimestamp,
+                pexpireTimeResult.get(0).longValue(),
+                "HPEXPIRETIME should return correct timestamp");
 
         // Test HPEXPIREAT with condition
         ExpiryOption condition = ExpiryOption.NX; // Only if field has no expiration
         String field2 = "field2";
         jedis.hset(key, field2, "value2");
-        
+
         result = jedis.hpexpireAt(key, futureTimestamp, condition, field2);
         assertEquals(1, result.size(), "HPEXPIREAT with condition should return one result");
         assertEquals(Long.valueOf(1), result.get(0), "HPEXPIREAT with NX condition should succeed");
@@ -2531,12 +2554,14 @@ public class JedisTest {
         // Test HPERSIST on field without expiration
         result = jedis.hpersist(key, field1);
         assertEquals(1, result.size(), "HPERSIST should return one result");
-        assertEquals(Long.valueOf(0), result.get(0), "HPERSIST should return 0 for field without expiration");
+        assertEquals(
+                Long.valueOf(0), result.get(0), "HPERSIST should return 0 for field without expiration");
 
         // Test HPERSIST on non-existing field
         result = jedis.hpersist(key, "nonexistent");
         assertEquals(1, result.size(), "HPERSIST should return one result");
-        assertEquals(Long.valueOf(-2), result.get(0), "HPERSIST should return -2 for non-existing field");
+        assertEquals(
+                Long.valueOf(-2), result.get(0), "HPERSIST should return -2 for non-existing field");
     }
 
     @Test
@@ -2616,7 +2641,8 @@ public class JedisTest {
         // Test HEXPIRE - binary
         List<Long> result = jedis.hexpire(key, 60, field1, field2);
         assertEquals(2, result.size(), "Binary HEXPIRE should return results for all fields");
-        assertEquals(Long.valueOf(1), result.get(0), "Binary HEXPIRE should return 1 for successful expiration");
+        assertEquals(
+                Long.valueOf(1), result.get(0), "Binary HEXPIRE should return 1 for successful expiration");
 
         // Test HTTL - binary
         List<Long> ttlResult = jedis.httl(key, field1, field2);
@@ -2626,7 +2652,10 @@ public class JedisTest {
         // Test HPEXPIRE - binary
         result = jedis.hpexpire(key, 120000, field1); // 2 minutes in milliseconds
         assertEquals(1, result.size(), "Binary HPEXPIRE should return one result");
-        assertEquals(Long.valueOf(1), result.get(0), "Binary HPEXPIRE should return 1 for successful expiration");
+        assertEquals(
+                Long.valueOf(1),
+                result.get(0),
+                "Binary HPEXPIRE should return 1 for successful expiration");
 
         // Test HPTTL - binary
         List<Long> pttlResult = jedis.hpttl(key, field1);
@@ -2636,7 +2665,8 @@ public class JedisTest {
         // Test HPERSIST - binary
         result = jedis.hpersist(key, field1, field2);
         assertEquals(2, result.size(), "Binary HPERSIST should return results for all fields");
-        assertEquals(Long.valueOf(1), result.get(0), "Binary HPERSIST should return 1 for successful persist");
+        assertEquals(
+                Long.valueOf(1), result.get(0), "Binary HPERSIST should return 1 for successful persist");
     }
 
     @Test
@@ -2668,18 +2698,21 @@ public class JedisTest {
         HGetExParams getParams = HGetExParams.hGetExParams().persist();
         List<byte[]> getResult = jedis.hgetex(key, getParams, field1, field2);
         assertEquals(2, getResult.size(), "Binary HGETEX should return values for all fields");
-        assertArrayEquals(value1, getResult.get(0), "Binary HGETEX should return correct value for field1");
-        assertArrayEquals(value2, getResult.get(1), "Binary HGETEX should return correct value for field2");
+        assertArrayEquals(
+                value1, getResult.get(0), "Binary HGETEX should return correct value for field1");
+        assertArrayEquals(
+                value2, getResult.get(1), "Binary HGETEX should return correct value for field2");
 
         // Test HGETDEL - binary
         List<byte[]> delResult = jedis.hgetdel(key, field1, field2);
         assertEquals(2, delResult.size(), "Binary HGETDEL should return values for all fields");
-        assertArrayEquals(value1, delResult.get(0), "Binary HGETDEL should return correct value for field1");
-        assertArrayEquals(value2, delResult.get(1), "Binary HGETDEL should return correct value for field2");
+        assertArrayEquals(
+                value1, delResult.get(0), "Binary HGETDEL should return correct value for field1");
+        assertArrayEquals(
+                value2, delResult.get(1), "Binary HGETDEL should return correct value for field2");
 
         // Verify fields are deleted
         assertNull(jedis.hget(key, field1), "Field1 should be deleted after binary HGETDEL");
         assertNull(jedis.hget(key, field2), "Field2 should be deleted after binary HGETDEL");
     }
-}
 }

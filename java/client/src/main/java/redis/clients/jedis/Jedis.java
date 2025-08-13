@@ -4171,7 +4171,7 @@ public final class Jedis implements Closeable {
                 args.add(entry.getKey());
                 args.add(entry.getValue());
             }
-            
+
             Object result = glideClient.customCommand(args.toArray(new String[0])).get();
             return result != null ? result.toString() : null;
         } catch (InterruptedException | ExecutionException e) {
@@ -4199,7 +4199,7 @@ public final class Jedis implements Closeable {
                 args.add(new String(entry.getKey()));
                 args.add(new String(entry.getValue()));
             }
-            
+
             Object result = glideClient.customCommand(args.toArray(new String[0])).get();
             return result != null ? result.toString() : null;
         } catch (InterruptedException | ExecutionException e) {
@@ -4755,15 +4755,16 @@ public final class Jedis implements Closeable {
     }
 
     /**
-     * Sets the specified field in the hash stored at key to value with expiration and existence conditions.
-     * Note: This command requires Redis 7.9+ and may not be available in all Redis/Valkey versions.
+     * Sets the specified field in the hash stored at key to value with expiration and existence
+     * conditions. Note: This command requires Redis 7.9+ and may not be available in all Redis/Valkey
+     * versions.
      *
      * @param key the key of the hash
      * @param params the expiration and existence parameters
      * @param field the field in the hash
      * @param value the value to set
-     * @return 1 if field is a new field in the hash and value was set, 0 if field already exists
-     *     in the hash and the value was updated
+     * @return 1 if field is a new field in the hash and value was set, 0 if field already exists in
+     *     the hash and the value was updated
      */
     public long hsetex(String key, HSetExParams params, String field, String value) {
         checkNotClosed();
@@ -4772,12 +4773,12 @@ public final class Jedis implements Closeable {
             List<String> args = new ArrayList<>();
             args.add("HSETEX");
             args.add(key);
-            
+
             // Add existence condition
             if (params.getExistenceCondition() != null) {
                 args.add(params.getExistenceCondition().name());
             }
-            
+
             // Add expiration parameters
             if (params.getExpirationType() != null) {
                 args.add(params.getExpirationType().name());
@@ -4785,10 +4786,10 @@ public final class Jedis implements Closeable {
                     args.add(params.getExpirationValue().toString());
                 }
             }
-            
+
             args.add(field);
             args.add(value);
-            
+
             Object result = glideClient.customCommand(args.toArray(new String[0])).get();
             return result instanceof Long ? (Long) result : Long.parseLong(result.toString());
         } catch (InterruptedException | ExecutionException e) {
@@ -4797,8 +4798,9 @@ public final class Jedis implements Closeable {
     }
 
     /**
-     * Sets the specified fields to their respective values in the hash stored at key with expiration and existence conditions.
-     * Note: This command requires Redis 7.9+ and may not be available in all Redis/Valkey versions.
+     * Sets the specified fields to their respective values in the hash stored at key with expiration
+     * and existence conditions. Note: This command requires Redis 7.9+ and may not be available in
+     * all Redis/Valkey versions.
      *
      * @param key the key of the hash
      * @param params the expiration and existence parameters
@@ -4812,12 +4814,12 @@ public final class Jedis implements Closeable {
             List<String> args = new ArrayList<>();
             args.add("HSETEX");
             args.add(key);
-            
+
             // Add existence condition
             if (params.getExistenceCondition() != null) {
                 args.add(params.getExistenceCondition().name());
             }
-            
+
             // Add expiration parameters
             if (params.getExpirationType() != null) {
                 args.add(params.getExpirationType().name());
@@ -4825,13 +4827,13 @@ public final class Jedis implements Closeable {
                     args.add(params.getExpirationValue().toString());
                 }
             }
-            
+
             // Add field-value pairs
             for (Map.Entry<String, String> entry : hash.entrySet()) {
                 args.add(entry.getKey());
                 args.add(entry.getValue());
             }
-            
+
             Object result = glideClient.customCommand(args.toArray(new String[0])).get();
             return result instanceof Long ? (Long) result : Long.parseLong(result.toString());
         } catch (InterruptedException | ExecutionException e) {
@@ -4840,9 +4842,9 @@ public final class Jedis implements Closeable {
     }
 
     /**
-     * Retrieves the values associated with the specified fields in a hash stored at the given key
-     * and optionally sets their expiration.
-     * Note: This command requires Redis 7.9+ and may not be available in all Redis/Valkey versions.
+     * Retrieves the values associated with the specified fields in a hash stored at the given key and
+     * optionally sets their expiration. Note: This command requires Redis 7.9+ and may not be
+     * available in all Redis/Valkey versions.
      *
      * @param key the key of the hash
      * @param params additional parameters for the HGETEX command
@@ -4856,7 +4858,7 @@ public final class Jedis implements Closeable {
             List<String> args = new ArrayList<>();
             args.add("HGETEX");
             args.add(key);
-            
+
             // Add expiration parameters
             if (params.getExpirationType() != null) {
                 args.add(params.getExpirationType().name());
@@ -4864,10 +4866,10 @@ public final class Jedis implements Closeable {
                     args.add(params.getExpirationValue().toString());
                 }
             }
-            
+
             // Add fields
             args.addAll(Arrays.asList(fields));
-            
+
             Object result = glideClient.customCommand(args.toArray(new String[0])).get();
             if (result instanceof Object[]) {
                 Object[] resultArray = (Object[]) result;
@@ -4885,8 +4887,8 @@ public final class Jedis implements Closeable {
 
     /**
      * Retrieves the values associated with the specified fields in the hash stored at the given key
-     * and then deletes those fields from the hash.
-     * Note: This command requires Redis 7.9+ and may not be available in all Redis/Valkey versions.
+     * and then deletes those fields from the hash. Note: This command requires Redis 7.9+ and may not
+     * be available in all Redis/Valkey versions.
      *
      * @param key the key of the hash
      * @param fields the fields whose values are to be retrieved and then deleted
@@ -4900,7 +4902,7 @@ public final class Jedis implements Closeable {
             args.add("HGETDEL");
             args.add(key);
             args.addAll(Arrays.asList(fields));
-            
+
             Object result = glideClient.customCommand(args.toArray(new String[0])).get();
             if (result instanceof Object[]) {
                 Object[] resultArray = (Object[]) result;
@@ -4917,15 +4919,16 @@ public final class Jedis implements Closeable {
     }
 
     /**
-     * Sets the specified field in the hash stored at key to value with expiration and existence conditions (binary version).
-     * Note: This command requires Redis 7.9+ and may not be available in all Redis/Valkey versions.
+     * Sets the specified field in the hash stored at key to value with expiration and existence
+     * conditions (binary version). Note: This command requires Redis 7.9+ and may not be available in
+     * all Redis/Valkey versions.
      *
      * @param key the key of the hash
      * @param params the expiration and existence parameters
      * @param field the field in the hash
      * @param value the value to set
-     * @return 1 if field is a new field in the hash and value was set, 0 if field already exists
-     *     in the hash and the value was updated
+     * @return 1 if field is a new field in the hash and value was set, 0 if field already exists in
+     *     the hash and the value was updated
      */
     public long hsetex(byte[] key, HSetExParams params, byte[] field, byte[] value) {
         checkNotClosed();
@@ -4934,12 +4937,12 @@ public final class Jedis implements Closeable {
             List<String> args = new ArrayList<>();
             args.add("HSETEX");
             args.add(new String(key));
-            
+
             // Add existence condition
             if (params.getExistenceCondition() != null) {
                 args.add(params.getExistenceCondition().name());
             }
-            
+
             // Add expiration parameters
             if (params.getExpirationType() != null) {
                 args.add(params.getExpirationType().name());
@@ -4947,10 +4950,10 @@ public final class Jedis implements Closeable {
                     args.add(params.getExpirationValue().toString());
                 }
             }
-            
+
             args.add(new String(field));
             args.add(new String(value));
-            
+
             Object result = glideClient.customCommand(args.toArray(new String[0])).get();
             return result instanceof Long ? (Long) result : Long.parseLong(result.toString());
         } catch (InterruptedException | ExecutionException e) {
@@ -4959,8 +4962,9 @@ public final class Jedis implements Closeable {
     }
 
     /**
-     * Sets the specified fields to their respective values in the hash stored at key with expiration and existence conditions (binary version).
-     * Note: This command requires Redis 7.9+ and may not be available in all Redis/Valkey versions.
+     * Sets the specified fields to their respective values in the hash stored at key with expiration
+     * and existence conditions (binary version). Note: This command requires Redis 7.9+ and may not
+     * be available in all Redis/Valkey versions.
      *
      * @param key the key of the hash
      * @param params the expiration and existence parameters
@@ -4974,12 +4978,12 @@ public final class Jedis implements Closeable {
             List<String> args = new ArrayList<>();
             args.add("HSETEX");
             args.add(new String(key));
-            
+
             // Add existence condition
             if (params.getExistenceCondition() != null) {
                 args.add(params.getExistenceCondition().name());
             }
-            
+
             // Add expiration parameters
             if (params.getExpirationType() != null) {
                 args.add(params.getExpirationType().name());
@@ -4987,13 +4991,13 @@ public final class Jedis implements Closeable {
                     args.add(params.getExpirationValue().toString());
                 }
             }
-            
+
             // Add field-value pairs
             for (Map.Entry<byte[], byte[]> entry : hash.entrySet()) {
                 args.add(new String(entry.getKey()));
                 args.add(new String(entry.getValue()));
             }
-            
+
             Object result = glideClient.customCommand(args.toArray(new String[0])).get();
             return result instanceof Long ? (Long) result : Long.parseLong(result.toString());
         } catch (InterruptedException | ExecutionException e) {
@@ -5002,9 +5006,9 @@ public final class Jedis implements Closeable {
     }
 
     /**
-     * Retrieves the values associated with the specified fields in a hash stored at the given key
-     * and optionally sets their expiration (binary version).
-     * Note: This command requires Redis 7.9+ and may not be available in all Redis/Valkey versions.
+     * Retrieves the values associated with the specified fields in a hash stored at the given key and
+     * optionally sets their expiration (binary version). Note: This command requires Redis 7.9+ and
+     * may not be available in all Redis/Valkey versions.
      *
      * @param key the key of the hash
      * @param params additional parameters for the HGETEX command
@@ -5018,7 +5022,7 @@ public final class Jedis implements Closeable {
             List<String> args = new ArrayList<>();
             args.add("HGETEX");
             args.add(new String(key));
-            
+
             // Add expiration parameters
             if (params.getExpirationType() != null) {
                 args.add(params.getExpirationType().name());
@@ -5026,12 +5030,12 @@ public final class Jedis implements Closeable {
                     args.add(params.getExpirationValue().toString());
                 }
             }
-            
+
             // Add fields
             for (byte[] field : fields) {
                 args.add(new String(field));
             }
-            
+
             Object result = glideClient.customCommand(args.toArray(new String[0])).get();
             if (result instanceof Object[]) {
                 Object[] resultArray = (Object[]) result;
@@ -5049,8 +5053,8 @@ public final class Jedis implements Closeable {
 
     /**
      * Retrieves the values associated with the specified fields in the hash stored at the given key
-     * and then deletes those fields from the hash (binary version).
-     * Note: This command requires Redis 7.9+ and may not be available in all Redis/Valkey versions.
+     * and then deletes those fields from the hash (binary version). Note: This command requires Redis
+     * 7.9+ and may not be available in all Redis/Valkey versions.
      *
      * @param key the key of the hash
      * @param fields the fields whose values are to be retrieved and then deleted
@@ -5066,7 +5070,7 @@ public final class Jedis implements Closeable {
             for (byte[] field : fields) {
                 args.add(new String(field));
             }
-            
+
             Object result = glideClient.customCommand(args.toArray(new String[0])).get();
             if (result instanceof Object[]) {
                 Object[] resultArray = (Object[]) result;
@@ -5272,7 +5276,7 @@ public final class Jedis implements Closeable {
             args.add(key);
             args.add(String.valueOf(seconds));
             args.addAll(Arrays.asList(fields));
-            
+
             Object result = glideClient.customCommand(args.toArray(new String[0])).get();
             return convertToLongList(result);
         } catch (InterruptedException | ExecutionException e) {
@@ -5300,7 +5304,7 @@ public final class Jedis implements Closeable {
             args.add(String.valueOf(seconds));
             args.add(condition.name());
             args.addAll(Arrays.asList(fields));
-            
+
             Object result = glideClient.customCommand(args.toArray(new String[0])).get();
             return convertToLongList(result);
         } catch (InterruptedException | ExecutionException e) {
@@ -5326,7 +5330,7 @@ public final class Jedis implements Closeable {
             args.add(key);
             args.add(String.valueOf(milliseconds));
             args.addAll(Arrays.asList(fields));
-            
+
             Object result = glideClient.customCommand(args.toArray(new String[0])).get();
             return convertToLongList(result);
         } catch (InterruptedException | ExecutionException e) {
@@ -5355,7 +5359,7 @@ public final class Jedis implements Closeable {
             args.add(String.valueOf(milliseconds));
             args.add(condition.name());
             args.addAll(Arrays.asList(fields));
-            
+
             Object result = glideClient.customCommand(args.toArray(new String[0])).get();
             return convertToLongList(result);
         } catch (InterruptedException | ExecutionException e) {
@@ -5381,7 +5385,7 @@ public final class Jedis implements Closeable {
             args.add(key);
             args.add(String.valueOf(unixTimeSeconds));
             args.addAll(Arrays.asList(fields));
-            
+
             Object result = glideClient.customCommand(args.toArray(new String[0])).get();
             return convertToLongList(result);
         } catch (InterruptedException | ExecutionException e) {
@@ -5410,7 +5414,7 @@ public final class Jedis implements Closeable {
             args.add(String.valueOf(unixTimeSeconds));
             args.add(condition.name());
             args.addAll(Arrays.asList(fields));
-            
+
             Object result = glideClient.customCommand(args.toArray(new String[0])).get();
             return convertToLongList(result);
         } catch (InterruptedException | ExecutionException e) {
@@ -5436,7 +5440,7 @@ public final class Jedis implements Closeable {
             args.add(key);
             args.add(String.valueOf(unixTimeMillis));
             args.addAll(Arrays.asList(fields));
-            
+
             Object result = glideClient.customCommand(args.toArray(new String[0])).get();
             return convertToLongList(result);
         } catch (InterruptedException | ExecutionException e) {
@@ -5465,7 +5469,7 @@ public final class Jedis implements Closeable {
             args.add(String.valueOf(unixTimeMillis));
             args.add(condition.name());
             args.addAll(Arrays.asList(fields));
-            
+
             Object result = glideClient.customCommand(args.toArray(new String[0])).get();
             return convertToLongList(result);
         } catch (InterruptedException | ExecutionException e) {
@@ -5489,7 +5493,7 @@ public final class Jedis implements Closeable {
             args.add("HEXPIRETIME");
             args.add(key);
             args.addAll(Arrays.asList(fields));
-            
+
             Object result = glideClient.customCommand(args.toArray(new String[0])).get();
             return convertToLongList(result);
         } catch (InterruptedException | ExecutionException e) {
@@ -5513,7 +5517,7 @@ public final class Jedis implements Closeable {
             args.add("HPEXPIRETIME");
             args.add(key);
             args.addAll(Arrays.asList(fields));
-            
+
             Object result = glideClient.customCommand(args.toArray(new String[0])).get();
             return convertToLongList(result);
         } catch (InterruptedException | ExecutionException e) {
@@ -5537,7 +5541,7 @@ public final class Jedis implements Closeable {
             args.add("HTTL");
             args.add(key);
             args.addAll(Arrays.asList(fields));
-            
+
             Object result = glideClient.customCommand(args.toArray(new String[0])).get();
             return convertToLongList(result);
         } catch (InterruptedException | ExecutionException e) {
@@ -5561,7 +5565,7 @@ public final class Jedis implements Closeable {
             args.add("HPTTL");
             args.add(key);
             args.addAll(Arrays.asList(fields));
-            
+
             Object result = glideClient.customCommand(args.toArray(new String[0])).get();
             return convertToLongList(result);
         } catch (InterruptedException | ExecutionException e) {
@@ -5585,7 +5589,7 @@ public final class Jedis implements Closeable {
             args.add("HPERSIST");
             args.add(key);
             args.addAll(Arrays.asList(fields));
-            
+
             Object result = glideClient.customCommand(args.toArray(new String[0])).get();
             return convertToLongList(result);
         } catch (InterruptedException | ExecutionException e) {
@@ -5596,8 +5600,8 @@ public final class Jedis implements Closeable {
     // Binary variants for hash expiration commands
 
     /**
-     * Set expiry for hash field using relative time to expire (seconds) - binary version.
-     * Note: This command requires Redis 7.4+ and may not be available in all Redis/Valkey versions.
+     * Set expiry for hash field using relative time to expire (seconds) - binary version. Note: This
+     * command requires Redis 7.4+ and may not be available in all Redis/Valkey versions.
      *
      * @param key hash
      * @param seconds time to expire
@@ -5615,7 +5619,7 @@ public final class Jedis implements Closeable {
             for (byte[] field : fields) {
                 args.add(new String(field));
             }
-            
+
             Object result = glideClient.customCommand(args.toArray(new String[0])).get();
             return convertToLongList(result);
         } catch (InterruptedException | ExecutionException e) {
@@ -5624,8 +5628,9 @@ public final class Jedis implements Closeable {
     }
 
     /**
-     * Set expiry for hash field using relative time to expire (seconds) with condition - binary version.
-     * Note: This command requires Redis 7.4+ and may not be available in all Redis/Valkey versions.
+     * Set expiry for hash field using relative time to expire (seconds) with condition - binary
+     * version. Note: This command requires Redis 7.4+ and may not be available in all Redis/Valkey
+     * versions.
      *
      * @param key hash
      * @param seconds time to expire
@@ -5645,7 +5650,7 @@ public final class Jedis implements Closeable {
             for (byte[] field : fields) {
                 args.add(new String(field));
             }
-            
+
             Object result = glideClient.customCommand(args.toArray(new String[0])).get();
             return convertToLongList(result);
         } catch (InterruptedException | ExecutionException e) {
@@ -5654,8 +5659,8 @@ public final class Jedis implements Closeable {
     }
 
     /**
-     * Set expiry for hash field using relative time to expire (milliseconds) - binary version.
-     * Note: This command requires Redis 7.4+ and may not be available in all Redis/Valkey versions.
+     * Set expiry for hash field using relative time to expire (milliseconds) - binary version. Note:
+     * This command requires Redis 7.4+ and may not be available in all Redis/Valkey versions.
      *
      * @param key hash
      * @param milliseconds time to expire
@@ -5673,7 +5678,7 @@ public final class Jedis implements Closeable {
             for (byte[] field : fields) {
                 args.add(new String(field));
             }
-            
+
             Object result = glideClient.customCommand(args.toArray(new String[0])).get();
             return convertToLongList(result);
         } catch (InterruptedException | ExecutionException e) {
@@ -5682,8 +5687,9 @@ public final class Jedis implements Closeable {
     }
 
     /**
-     * Set expiry for hash field using relative time to expire (milliseconds) with condition - binary version.
-     * Note: This command requires Redis 7.4+ and may not be available in all Redis/Valkey versions.
+     * Set expiry for hash field using relative time to expire (milliseconds) with condition - binary
+     * version. Note: This command requires Redis 7.4+ and may not be available in all Redis/Valkey
+     * versions.
      *
      * @param key hash
      * @param milliseconds time to expire
@@ -5691,7 +5697,8 @@ public final class Jedis implements Closeable {
      * @param fields the fields to set expiration for
      * @return list of results for each field
      */
-    public List<Long> hpexpire(byte[] key, long milliseconds, ExpiryOption condition, byte[]... fields) {
+    public List<Long> hpexpire(
+            byte[] key, long milliseconds, ExpiryOption condition, byte[]... fields) {
         checkNotClosed();
         ensureInitialized();
         try {
@@ -5703,7 +5710,7 @@ public final class Jedis implements Closeable {
             for (byte[] field : fields) {
                 args.add(new String(field));
             }
-            
+
             Object result = glideClient.customCommand(args.toArray(new String[0])).get();
             return convertToLongList(result);
         } catch (InterruptedException | ExecutionException e) {
@@ -5712,8 +5719,8 @@ public final class Jedis implements Closeable {
     }
 
     /**
-     * Set expiry for hash field using an absolute Unix timestamp (seconds) - binary version.
-     * Note: This command requires Redis 7.4+ and may not be available in all Redis/Valkey versions.
+     * Set expiry for hash field using an absolute Unix timestamp (seconds) - binary version. Note:
+     * This command requires Redis 7.4+ and may not be available in all Redis/Valkey versions.
      *
      * @param key hash
      * @param unixTimeSeconds time to expire
@@ -5731,7 +5738,7 @@ public final class Jedis implements Closeable {
             for (byte[] field : fields) {
                 args.add(new String(field));
             }
-            
+
             Object result = glideClient.customCommand(args.toArray(new String[0])).get();
             return convertToLongList(result);
         } catch (InterruptedException | ExecutionException e) {
@@ -5740,8 +5747,9 @@ public final class Jedis implements Closeable {
     }
 
     /**
-     * Set expiry for hash field using an absolute Unix timestamp (seconds) with condition - binary version.
-     * Note: This command requires Redis 7.4+ and may not be available in all Redis/Valkey versions.
+     * Set expiry for hash field using an absolute Unix timestamp (seconds) with condition - binary
+     * version. Note: This command requires Redis 7.4+ and may not be available in all Redis/Valkey
+     * versions.
      *
      * @param key hash
      * @param unixTimeSeconds time to expire
@@ -5749,7 +5757,8 @@ public final class Jedis implements Closeable {
      * @param fields the fields to set expiration for
      * @return list of results for each field
      */
-    public List<Long> hexpireAt(byte[] key, long unixTimeSeconds, ExpiryOption condition, byte[]... fields) {
+    public List<Long> hexpireAt(
+            byte[] key, long unixTimeSeconds, ExpiryOption condition, byte[]... fields) {
         checkNotClosed();
         ensureInitialized();
         try {
@@ -5761,7 +5770,7 @@ public final class Jedis implements Closeable {
             for (byte[] field : fields) {
                 args.add(new String(field));
             }
-            
+
             Object result = glideClient.customCommand(args.toArray(new String[0])).get();
             return convertToLongList(result);
         } catch (InterruptedException | ExecutionException e) {
@@ -5789,7 +5798,7 @@ public final class Jedis implements Closeable {
             for (byte[] field : fields) {
                 args.add(new String(field));
             }
-            
+
             Object result = glideClient.customCommand(args.toArray(new String[0])).get();
             return convertToLongList(result);
         } catch (InterruptedException | ExecutionException e) {
@@ -5798,8 +5807,9 @@ public final class Jedis implements Closeable {
     }
 
     /**
-     * Set expiry for hash field using an absolute Unix timestamp (milliseconds) with condition - binary version.
-     * Note: This command requires Redis 7.4+ and may not be available in all Redis/Valkey versions.
+     * Set expiry for hash field using an absolute Unix timestamp (milliseconds) with condition -
+     * binary version. Note: This command requires Redis 7.4+ and may not be available in all
+     * Redis/Valkey versions.
      *
      * @param key hash
      * @param unixTimeMillis time to expire
@@ -5807,7 +5817,8 @@ public final class Jedis implements Closeable {
      * @param fields the fields to set expiration for
      * @return list of results for each field
      */
-    public List<Long> hpexpireAt(byte[] key, long unixTimeMillis, ExpiryOption condition, byte[]... fields) {
+    public List<Long> hpexpireAt(
+            byte[] key, long unixTimeMillis, ExpiryOption condition, byte[]... fields) {
         checkNotClosed();
         ensureInitialized();
         try {
@@ -5819,7 +5830,7 @@ public final class Jedis implements Closeable {
             for (byte[] field : fields) {
                 args.add(new String(field));
             }
-            
+
             Object result = glideClient.customCommand(args.toArray(new String[0])).get();
             return convertToLongList(result);
         } catch (InterruptedException | ExecutionException e) {
@@ -5845,7 +5856,7 @@ public final class Jedis implements Closeable {
             for (byte[] field : fields) {
                 args.add(new String(field));
             }
-            
+
             Object result = glideClient.customCommand(args.toArray(new String[0])).get();
             return convertToLongList(result);
         } catch (InterruptedException | ExecutionException e) {
@@ -5854,8 +5865,9 @@ public final class Jedis implements Closeable {
     }
 
     /**
-     * Returns the expiration time of a hash field as a Unix timestamp, in milliseconds - binary version.
-     * Note: This command requires Redis 7.4+ and may not be available in all Redis/Valkey versions.
+     * Returns the expiration time of a hash field as a Unix timestamp, in milliseconds - binary
+     * version. Note: This command requires Redis 7.4+ and may not be available in all Redis/Valkey
+     * versions.
      *
      * @param key hash
      * @param fields the fields to get expiration time for
@@ -5871,7 +5883,7 @@ public final class Jedis implements Closeable {
             for (byte[] field : fields) {
                 args.add(new String(field));
             }
-            
+
             Object result = glideClient.customCommand(args.toArray(new String[0])).get();
             return convertToLongList(result);
         } catch (InterruptedException | ExecutionException e) {
@@ -5880,8 +5892,8 @@ public final class Jedis implements Closeable {
     }
 
     /**
-     * Returns the TTL in seconds of a hash field - binary version.
-     * Note: This command requires Redis 7.4+ and may not be available in all Redis/Valkey versions.
+     * Returns the TTL in seconds of a hash field - binary version. Note: This command requires Redis
+     * 7.4+ and may not be available in all Redis/Valkey versions.
      *
      * @param key hash
      * @param fields the fields to get TTL for
@@ -5897,7 +5909,7 @@ public final class Jedis implements Closeable {
             for (byte[] field : fields) {
                 args.add(new String(field));
             }
-            
+
             Object result = glideClient.customCommand(args.toArray(new String[0])).get();
             return convertToLongList(result);
         } catch (InterruptedException | ExecutionException e) {
@@ -5906,8 +5918,8 @@ public final class Jedis implements Closeable {
     }
 
     /**
-     * Returns the TTL in milliseconds of a hash field - binary version.
-     * Note: This command requires Redis 7.4+ and may not be available in all Redis/Valkey versions.
+     * Returns the TTL in milliseconds of a hash field - binary version. Note: This command requires
+     * Redis 7.4+ and may not be available in all Redis/Valkey versions.
      *
      * @param key hash
      * @param fields the fields to get TTL for
@@ -5923,7 +5935,7 @@ public final class Jedis implements Closeable {
             for (byte[] field : fields) {
                 args.add(new String(field));
             }
-            
+
             Object result = glideClient.customCommand(args.toArray(new String[0])).get();
             return convertToLongList(result);
         } catch (InterruptedException | ExecutionException e) {
@@ -5932,8 +5944,8 @@ public final class Jedis implements Closeable {
     }
 
     /**
-     * Removes the expiration time for each specified field - binary version.
-     * Note: This command requires Redis 7.4+ and may not be available in all Redis/Valkey versions.
+     * Removes the expiration time for each specified field - binary version. Note: This command
+     * requires Redis 7.4+ and may not be available in all Redis/Valkey versions.
      *
      * @param key hash
      * @param fields the fields to remove expiration for
@@ -5949,7 +5961,7 @@ public final class Jedis implements Closeable {
             for (byte[] field : fields) {
                 args.add(new String(field));
             }
-            
+
             Object result = glideClient.customCommand(args.toArray(new String[0])).get();
             return convertToLongList(result);
         } catch (InterruptedException | ExecutionException e) {
@@ -5957,9 +5969,7 @@ public final class Jedis implements Closeable {
         }
     }
 
-    /**
-     * Helper method to convert result to List<Long>.
-     */
+    /** Helper method to convert result to List<Long>. */
     private List<Long> convertToLongList(Object result) {
         if (result instanceof Object[]) {
             Object[] resultArray = (Object[]) result;

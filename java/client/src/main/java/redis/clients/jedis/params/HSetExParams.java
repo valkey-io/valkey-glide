@@ -2,7 +2,8 @@
 package redis.clients.jedis.params;
 
 /**
- * Parameters for HSETEX command. Provides methods to set expiration options and existence conditions for the HSETEX command.
+ * Parameters for HSETEX command. Provides methods to set expiration options and existence
+ * conditions for the HSETEX command.
  */
 public class HSetExParams {
 
@@ -15,8 +16,8 @@ public class HSetExParams {
     }
 
     public enum ExistenceCondition {
-        FNX,  // Field Not eXists - only set if field does not exist
-        FXX   // Field eXists - only set if field already exists
+        FNX, // Field Not eXists - only set if field does not exist
+        FXX // Field eXists - only set if field already exists
     }
 
     private ExpiryType expirationType;
