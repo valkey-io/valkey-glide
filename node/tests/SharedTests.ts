@@ -1436,7 +1436,9 @@ export function runBaseTests(config: {
 
                 // set up hash with two keys/values
                 expect(await client.hset(key, fieldValueMap)).toEqual(2);
-                expect(await client.hkeys(key)).toEqual([field1, field2]);
+                expect((await client.hkeys(key)).sort()).toEqual(
+                    [field1, field2].sort(),
+                );
 
                 // remove one key
                 expect(await client.hdel(key, [field1])).toEqual(1);
@@ -1846,16 +1848,24 @@ export function runBaseTests(config: {
                 };
                 expect(await client.hset(key, fieldValueMap)).toEqual(2);
 
-                expect(await client.hgetall(key)).toEqual(
-                    convertFieldsAndValuesToHashDataType({
-                        [field1]: value,
-                        [field2]: value,
-                    }),
+                const hgetallResult = await client.hgetall(key);
+                const expectedResult = convertFieldsAndValuesToHashDataType({
+                    [field1]: value,
+                    [field2]: value,
+                });
+                // Sort both arrays by field to make order-independent comparison
+                hgetallResult.sort((a, b) =>
+                    String(a.field).localeCompare(String(b.field)),
                 );
+                expectedResult.sort((a, b) =>
+                    String(a.field).localeCompare(String(b.field)),
+                );
+                expect(hgetallResult).toEqual(expectedResult);
 
-                expect(
-                    await client.hgetall(key, { decoder: Decoder.Bytes }),
-                ).toEqual([
+                const hgetallBytesResult = await client.hgetall(key, {
+                    decoder: Decoder.Bytes,
+                });
+                const expectedBytesResult = [
                     {
                         field: Buffer.from(field1),
                         value: Buffer.from(value),
@@ -1864,7 +1874,15 @@ export function runBaseTests(config: {
                         field: Buffer.from(field2),
                         value: Buffer.from(value),
                     },
-                ]);
+                ];
+                // Sort both arrays by field to make order-independent comparison
+                hgetallBytesResult.sort((a, b) =>
+                    Buffer.compare(a.field as Buffer, b.field as Buffer),
+                );
+                expectedBytesResult.sort((a, b) =>
+                    Buffer.compare(a.field as Buffer, b.field as Buffer),
+                );
+                expect(hgetallBytesResult).toEqual(expectedBytesResult);
 
                 expect(
                     await client.hgetall(Buffer.from("nonExistingKey")),
@@ -1998,7 +2016,9 @@ export function runBaseTests(config: {
                 expect(
                     await client.hset(Buffer.from(key1), fieldValueMap),
                 ).toEqual(2);
-                expect(await client.hvals(key1)).toEqual(["value1", "value2"]);
+                expect((await client.hvals(key1)).sort()).toEqual(
+                    ["value1", "value2"].sort(),
+                );
                 expect(await client.hdel(key1, [field1])).toEqual(1);
                 expect(await client.hvals(Buffer.from(key1))).toEqual([
                     "value2",
@@ -2007,9 +2027,13 @@ export function runBaseTests(config: {
 
                 //hvals with binary buffers
                 expect(await client.hset(key2, fieldValueMap)).toEqual(2);
+                const hvalsResult = await client.hvals(key2, {
+                    decoder: Decoder.Bytes,
+                });
+                const expectedValues = [value1Encoded, value2Encoded];
                 expect(
-                    await client.hvals(key2, { decoder: Decoder.Bytes }),
-                ).toEqual([value1Encoded, value2Encoded]);
+                    hvalsResult.sort((a, b) => Buffer.compare(a, b)),
+                ).toEqual(expectedValues.sort((a, b) => Buffer.compare(a, b)));
                 expect(await client.hdel(key2, [field1])).toEqual(1);
                 expect(
                     await client.hvals(key2, { decoder: Decoder.Bytes }),
