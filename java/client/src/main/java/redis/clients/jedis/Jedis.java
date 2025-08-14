@@ -7,6 +7,7 @@ import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.GetExOptions;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
 import glide.api.models.commands.LPosOptions;
+import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SortBaseOptions;
 import glide.api.models.commands.SortOptions;
@@ -7063,14 +7064,14 @@ public final class Jedis implements Closeable {
         checkNotClosed();
         ensureInitialized();
         try {
-            glide.api.models.commands.ListDirection glideFrom =
+            ListDirection glideFrom =
                     from == redis.clients.jedis.args.ListDirection.LEFT
-                            ? glide.api.models.commands.ListDirection.LEFT
-                            : glide.api.models.commands.ListDirection.RIGHT;
-            glide.api.models.commands.ListDirection glideTo =
+                            ? ListDirection.LEFT
+                            : ListDirection.RIGHT;
+            ListDirection glideTo =
                     to == redis.clients.jedis.args.ListDirection.LEFT
-                            ? glide.api.models.commands.ListDirection.LEFT
-                            : glide.api.models.commands.ListDirection.RIGHT;
+                            ? ListDirection.LEFT
+                            : ListDirection.RIGHT;
             return glideClient.lmove(srcKey, dstKey, glideFrom, glideTo).get();
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("LMOVE operation failed", e);
@@ -7094,14 +7095,14 @@ public final class Jedis implements Closeable {
         checkNotClosed();
         ensureInitialized();
         try {
-            glide.api.models.commands.ListDirection glideFrom =
+            ListDirection glideFrom =
                     from == redis.clients.jedis.args.ListDirection.LEFT
-                            ? glide.api.models.commands.ListDirection.LEFT
-                            : glide.api.models.commands.ListDirection.RIGHT;
-            glide.api.models.commands.ListDirection glideTo =
+                            ? ListDirection.LEFT
+                            : ListDirection.RIGHT;
+            ListDirection glideTo =
                     to == redis.clients.jedis.args.ListDirection.LEFT
-                            ? glide.api.models.commands.ListDirection.LEFT
-                            : glide.api.models.commands.ListDirection.RIGHT;
+                            ? ListDirection.LEFT
+                            : ListDirection.RIGHT;
             GlideString result =
                     glideClient
                             .lmove(GlideString.of(srcKey), GlideString.of(dstKey), glideFrom, glideTo)
@@ -7131,14 +7132,14 @@ public final class Jedis implements Closeable {
         checkNotClosed();
         ensureInitialized();
         try {
-            glide.api.models.commands.ListDirection glideFrom =
+            ListDirection glideFrom =
                     from == redis.clients.jedis.args.ListDirection.LEFT
-                            ? glide.api.models.commands.ListDirection.LEFT
-                            : glide.api.models.commands.ListDirection.RIGHT;
-            glide.api.models.commands.ListDirection glideTo =
+                            ? ListDirection.LEFT
+                            : ListDirection.RIGHT;
+            ListDirection glideTo =
                     to == redis.clients.jedis.args.ListDirection.LEFT
-                            ? glide.api.models.commands.ListDirection.LEFT
-                            : glide.api.models.commands.ListDirection.RIGHT;
+                            ? ListDirection.LEFT
+                            : ListDirection.RIGHT;
             return glideClient.blmove(srcKey, dstKey, glideFrom, glideTo, timeout).get();
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("BLMOVE operation failed", e);
@@ -7165,14 +7166,14 @@ public final class Jedis implements Closeable {
         checkNotClosed();
         ensureInitialized();
         try {
-            glide.api.models.commands.ListDirection glideFrom =
+            ListDirection glideFrom =
                     from == redis.clients.jedis.args.ListDirection.LEFT
-                            ? glide.api.models.commands.ListDirection.LEFT
-                            : glide.api.models.commands.ListDirection.RIGHT;
-            glide.api.models.commands.ListDirection glideTo =
+                            ? ListDirection.LEFT
+                            : ListDirection.RIGHT;
+            ListDirection glideTo =
                     to == redis.clients.jedis.args.ListDirection.LEFT
-                            ? glide.api.models.commands.ListDirection.LEFT
-                            : glide.api.models.commands.ListDirection.RIGHT;
+                            ? ListDirection.LEFT
+                            : ListDirection.RIGHT;
             GlideString result =
                     glideClient
                             .blmove(GlideString.of(srcKey), GlideString.of(dstKey), glideFrom, glideTo, timeout)
@@ -7197,10 +7198,10 @@ public final class Jedis implements Closeable {
         checkNotClosed();
         ensureInitialized();
         try {
-            glide.api.models.commands.ListDirection glideDirection =
+            ListDirection glideDirection =
                     direction == redis.clients.jedis.args.ListDirection.LEFT
-                            ? glide.api.models.commands.ListDirection.LEFT
-                            : glide.api.models.commands.ListDirection.RIGHT;
+                            ? ListDirection.LEFT
+                            : ListDirection.RIGHT;
             Map<String, String[]> result = glideClient.lmpop(keys, glideDirection).get();
             if (result != null && !result.isEmpty()) {
                 Map.Entry<String, String[]> entry = result.entrySet().iterator().next();
@@ -7227,10 +7228,10 @@ public final class Jedis implements Closeable {
         checkNotClosed();
         ensureInitialized();
         try {
-            glide.api.models.commands.ListDirection glideDirection =
+            ListDirection glideDirection =
                     direction == redis.clients.jedis.args.ListDirection.LEFT
-                            ? glide.api.models.commands.ListDirection.LEFT
-                            : glide.api.models.commands.ListDirection.RIGHT;
+                            ? ListDirection.LEFT
+                            : ListDirection.RIGHT;
             Map<String, String[]> result = glideClient.lmpop(keys, glideDirection, count).get();
             if (result != null && !result.isEmpty()) {
                 Map.Entry<String, String[]> entry = result.entrySet().iterator().next();
@@ -7256,10 +7257,10 @@ public final class Jedis implements Closeable {
         checkNotClosed();
         ensureInitialized();
         try {
-            glide.api.models.commands.ListDirection glideDirection =
+            ListDirection glideDirection =
                     direction == redis.clients.jedis.args.ListDirection.LEFT
-                            ? glide.api.models.commands.ListDirection.LEFT
-                            : glide.api.models.commands.ListDirection.RIGHT;
+                            ? ListDirection.LEFT
+                            : ListDirection.RIGHT;
             GlideString[] glideKeys = new GlideString[keys.length];
             for (int i = 0; i < keys.length; i++) {
                 glideKeys[i] = GlideString.of(keys[i]);
@@ -7294,10 +7295,10 @@ public final class Jedis implements Closeable {
         checkNotClosed();
         ensureInitialized();
         try {
-            glide.api.models.commands.ListDirection glideDirection =
+            ListDirection glideDirection =
                     direction == redis.clients.jedis.args.ListDirection.LEFT
-                            ? glide.api.models.commands.ListDirection.LEFT
-                            : glide.api.models.commands.ListDirection.RIGHT;
+                            ? ListDirection.LEFT
+                            : ListDirection.RIGHT;
             GlideString[] glideKeys = new GlideString[keys.length];
             for (int i = 0; i < keys.length; i++) {
                 glideKeys[i] = GlideString.of(keys[i]);
@@ -7332,10 +7333,10 @@ public final class Jedis implements Closeable {
         checkNotClosed();
         ensureInitialized();
         try {
-            glide.api.models.commands.ListDirection glideDirection =
+            ListDirection glideDirection =
                     direction == redis.clients.jedis.args.ListDirection.LEFT
-                            ? glide.api.models.commands.ListDirection.LEFT
-                            : glide.api.models.commands.ListDirection.RIGHT;
+                            ? ListDirection.LEFT
+                            : ListDirection.RIGHT;
             Map<String, String[]> result = glideClient.blmpop(keys, glideDirection, timeout).get();
             if (result != null && !result.isEmpty()) {
                 Map.Entry<String, String[]> entry = result.entrySet().iterator().next();
@@ -7362,10 +7363,10 @@ public final class Jedis implements Closeable {
         checkNotClosed();
         ensureInitialized();
         try {
-            glide.api.models.commands.ListDirection glideDirection =
+            ListDirection glideDirection =
                     direction == redis.clients.jedis.args.ListDirection.LEFT
-                            ? glide.api.models.commands.ListDirection.LEFT
-                            : glide.api.models.commands.ListDirection.RIGHT;
+                            ? ListDirection.LEFT
+                            : ListDirection.RIGHT;
             Map<String, String[]> result = glideClient.blmpop(keys, glideDirection, count, timeout).get();
             if (result != null && !result.isEmpty()) {
                 Map.Entry<String, String[]> entry = result.entrySet().iterator().next();
@@ -7392,10 +7393,10 @@ public final class Jedis implements Closeable {
         checkNotClosed();
         ensureInitialized();
         try {
-            glide.api.models.commands.ListDirection glideDirection =
+            ListDirection glideDirection =
                     direction == redis.clients.jedis.args.ListDirection.LEFT
-                            ? glide.api.models.commands.ListDirection.LEFT
-                            : glide.api.models.commands.ListDirection.RIGHT;
+                            ? ListDirection.LEFT
+                            : ListDirection.RIGHT;
             GlideString[] glideKeys = new GlideString[keys.length];
             for (int i = 0; i < keys.length; i++) {
                 glideKeys[i] = GlideString.of(keys[i]);
@@ -7432,10 +7433,10 @@ public final class Jedis implements Closeable {
         checkNotClosed();
         ensureInitialized();
         try {
-            glide.api.models.commands.ListDirection glideDirection =
+            ListDirection glideDirection =
                     direction == redis.clients.jedis.args.ListDirection.LEFT
-                            ? glide.api.models.commands.ListDirection.LEFT
-                            : glide.api.models.commands.ListDirection.RIGHT;
+                            ? ListDirection.LEFT
+                            : ListDirection.RIGHT;
             GlideString[] glideKeys = new GlideString[keys.length];
             for (int i = 0; i < keys.length; i++) {
                 glideKeys[i] = GlideString.of(keys[i]);
