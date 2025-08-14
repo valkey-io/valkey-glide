@@ -5,6 +5,7 @@ import static glide.TestConfiguration.SERVER_VERSION;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.*;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -2597,8 +2598,22 @@ public class JedisTest {
         // Test HGETALL - binary
         Map<byte[], byte[]> allFields = jedis.hgetAll(key);
         assertEquals(2, allFields.size(), "Binary HGETALL should return all field-value pairs");
-        assertTrue(allFields.containsKey(field1), "Binary HGETALL should contain field1");
-        assertTrue(allFields.containsKey(field2), "Binary HGETALL should contain field2");
+
+        // Check if field1 and field2 exist by comparing byte arrays content
+        boolean foundField1 = false, foundField2 = false;
+        for (Map.Entry<byte[], byte[]> entry : allFields.entrySet()) {
+            if (Arrays.equals(entry.getKey(), field1)) {
+                foundField1 = true;
+                assertArrayEquals(
+                        value1, entry.getValue(), "Binary HGETALL should have correct value for field1");
+            } else if (Arrays.equals(entry.getKey(), field2)) {
+                foundField2 = true;
+                assertArrayEquals(
+                        value2, entry.getValue(), "Binary HGETALL should have correct value for field2");
+            }
+        }
+        assertTrue(foundField1, "Binary HGETALL should contain field1");
+        assertTrue(foundField2, "Binary HGETALL should contain field2");
 
         // Test HKEYS and HVALS - binary
         Set<byte[]> keys = jedis.hkeys(key);
