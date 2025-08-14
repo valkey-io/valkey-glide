@@ -224,15 +224,11 @@ class BaseClient(CoreCommands):
 
         for arg in args:
             if isinstance(arg, str):
-                # Convert string to bytes
                 arg_bytes = arg.encode(ENCODING)
-            elif isinstance(arg, (int, float)):
-                # Convert numeric values to strings and then to bytes
-                arg_bytes = str(arg).encode(ENCODING)
             elif isinstance(arg, bytes):
                 arg_bytes = arg
             else:
-                raise ValueError(f"Unsupported argument type: {type(arg)}")
+                raise TypeError(f"Unsupported argument type: {type(arg)}")
 
             # Use ffi.from_buffer for zero-copy conversion
             buffers.append(arg_bytes)  # Keep the byte buffer alive
@@ -379,9 +375,6 @@ class BaseClient(CoreCommands):
                 "Unable to execute requests; the client is closed. Please create a new client."
             )
 
-        if not commands:
-            raise ValueError("Batch cannot be empty")
-
         client_adapter_ptr = self._core_client
         if client_adapter_ptr == self._ffi.NULL:
             raise ValueError("Invalid client pointer.")
@@ -395,9 +388,6 @@ class BaseClient(CoreCommands):
         batch_options, option_refs = self._create_c_batch_options_from_params(
             retry_server_error, retry_connection_error, route, timeout
         )
-
-        # Keep references alive during call
-        all_refs = batch_refs + option_refs  # noqa: F841
 
         result = self._lib.batch(
             client_adapter_ptr,
@@ -415,8 +405,6 @@ class BaseClient(CoreCommands):
         is_atomic: bool,
     ) -> Tuple[Any, List[Any]]:
         """Convert commands directly to C BatchInfo (no intermediate _to_c_strings)."""
-        if not commands:
-            raise ValueError("Batch cannot be empty")
 
         all_refs = []
         cmd_infos = []
@@ -428,13 +416,11 @@ class BaseClient(CoreCommands):
 
             for arg in args:
                 if isinstance(arg, str):
-                    arg_bytes = arg.encode("utf-8")
-                elif isinstance(arg, (int, float)):
-                    arg_bytes = str(arg).encode("utf-8")
+                    arg_bytes = arg.encode(ENCODING)
                 elif isinstance(arg, bytes):
                     arg_bytes = arg
                 else:
-                    raise ValueError(f"Unsupported argument type: {type(arg)}")
+                    raise TypeError(f"Unsupported argument type: {type(arg)}")
 
                 buffers.append(arg_bytes)
                 arg_ptrs.append(self._ffi.from_buffer(arg_bytes))
@@ -522,13 +508,15 @@ class BaseClient(CoreCommands):
             slot_type = 0 if route.slot_type == SlotType.PRIMARY else 1
         elif isinstance(route, SlotKeyRoute):
             route_type = 4
-            slot_key_bytes = route.slot_key.encode("utf-8") + b"\0"
+            # Null termination needed for safety instructions of the FFI layer's `ptr_to_str` call.
+            slot_key_bytes = route.slot_key.encode(ENCODING) + b"\0"
             refs.append(slot_key_bytes)
             slot_key_ptr = self._ffi.from_buffer(slot_key_bytes)
             slot_type = 0 if route.slot_type == SlotType.PRIMARY else 1
         elif isinstance(route, ByAddressRoute):
             route_type = 5
-            hostname_bytes = route.host.encode("utf-8") + b"\0"
+            # Null termination needed for safety instructions of the FFI layer's `ptr_to_str` call.
+            hostname_bytes = route.host.encode(ENCODING) + b"\0"
             refs.append(hostname_bytes)
             hostname_ptr = self._ffi.from_buffer(hostname_bytes)
             port = route.port if route.port is not None else 0
