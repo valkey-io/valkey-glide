@@ -7,7 +7,6 @@ import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.GetExOptions;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
 import glide.api.models.commands.LPosOptions;
-import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SortBaseOptions;
 import glide.api.models.commands.SortOptions;
@@ -48,6 +47,7 @@ import javax.net.ssl.SSLSocketFactory;
 import redis.clients.jedis.args.BitCountOption;
 import redis.clients.jedis.args.BitOP;
 import redis.clients.jedis.args.ExpiryOption;
+import redis.clients.jedis.args.ListDirection;
 import redis.clients.jedis.args.ListPosition;
 import redis.clients.jedis.commands.ProtocolCommand;
 import redis.clients.jedis.exceptions.JedisConnectionException;
@@ -7056,22 +7056,18 @@ public final class Jedis implements Closeable {
      * @param to the direction to push to the destination list
      * @return the element being moved, or null when the source list is empty
      */
-    public String lmove(
-            String srcKey,
-            String dstKey,
-            redis.clients.jedis.args.ListDirection from,
-            redis.clients.jedis.args.ListDirection to) {
+    public String lmove(String srcKey, String dstKey, ListDirection from, ListDirection to) {
         checkNotClosed();
         ensureInitialized();
         try {
-            ListDirection glideFrom =
-                    from == redis.clients.jedis.args.ListDirection.LEFT
-                            ? ListDirection.LEFT
-                            : ListDirection.RIGHT;
-            ListDirection glideTo =
-                    to == redis.clients.jedis.args.ListDirection.LEFT
-                            ? ListDirection.LEFT
-                            : ListDirection.RIGHT;
+            glide.api.models.commands.ListDirection glideFrom =
+                    from == ListDirection.LEFT
+                            ? glide.api.models.commands.ListDirection.LEFT
+                            : glide.api.models.commands.ListDirection.RIGHT;
+            glide.api.models.commands.ListDirection glideTo =
+                    to == ListDirection.LEFT
+                            ? glide.api.models.commands.ListDirection.LEFT
+                            : glide.api.models.commands.ListDirection.RIGHT;
             return glideClient.lmove(srcKey, dstKey, glideFrom, glideTo).get();
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("LMOVE operation failed", e);
@@ -7087,22 +7083,18 @@ public final class Jedis implements Closeable {
      * @param to the direction to push to the destination list
      * @return the element being moved, or null when the source list is empty
      */
-    public byte[] lmove(
-            byte[] srcKey,
-            byte[] dstKey,
-            redis.clients.jedis.args.ListDirection from,
-            redis.clients.jedis.args.ListDirection to) {
+    public byte[] lmove(byte[] srcKey, byte[] dstKey, ListDirection from, ListDirection to) {
         checkNotClosed();
         ensureInitialized();
         try {
-            ListDirection glideFrom =
-                    from == redis.clients.jedis.args.ListDirection.LEFT
-                            ? ListDirection.LEFT
-                            : ListDirection.RIGHT;
-            ListDirection glideTo =
-                    to == redis.clients.jedis.args.ListDirection.LEFT
-                            ? ListDirection.LEFT
-                            : ListDirection.RIGHT;
+            glide.api.models.commands.ListDirection glideFrom =
+                    from == ListDirection.LEFT
+                            ? glide.api.models.commands.ListDirection.LEFT
+                            : glide.api.models.commands.ListDirection.RIGHT;
+            glide.api.models.commands.ListDirection glideTo =
+                    to == ListDirection.LEFT
+                            ? glide.api.models.commands.ListDirection.LEFT
+                            : glide.api.models.commands.ListDirection.RIGHT;
             GlideString result =
                     glideClient
                             .lmove(GlideString.of(srcKey), GlideString.of(dstKey), glideFrom, glideTo)
@@ -7124,22 +7116,18 @@ public final class Jedis implements Closeable {
      * @return the element being moved, or null when timeout is reached
      */
     public String blmove(
-            String srcKey,
-            String dstKey,
-            redis.clients.jedis.args.ListDirection from,
-            redis.clients.jedis.args.ListDirection to,
-            double timeout) {
+            String srcKey, String dstKey, ListDirection from, ListDirection to, double timeout) {
         checkNotClosed();
         ensureInitialized();
         try {
-            ListDirection glideFrom =
-                    from == redis.clients.jedis.args.ListDirection.LEFT
-                            ? ListDirection.LEFT
-                            : ListDirection.RIGHT;
-            ListDirection glideTo =
-                    to == redis.clients.jedis.args.ListDirection.LEFT
-                            ? ListDirection.LEFT
-                            : ListDirection.RIGHT;
+            glide.api.models.commands.ListDirection glideFrom =
+                    from == ListDirection.LEFT
+                            ? glide.api.models.commands.ListDirection.LEFT
+                            : glide.api.models.commands.ListDirection.RIGHT;
+            glide.api.models.commands.ListDirection glideTo =
+                    to == ListDirection.LEFT
+                            ? glide.api.models.commands.ListDirection.LEFT
+                            : glide.api.models.commands.ListDirection.RIGHT;
             return glideClient.blmove(srcKey, dstKey, glideFrom, glideTo, timeout).get();
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("BLMOVE operation failed", e);
@@ -7158,22 +7146,18 @@ public final class Jedis implements Closeable {
      * @return the element being moved, or null when timeout is reached
      */
     public byte[] blmove(
-            byte[] srcKey,
-            byte[] dstKey,
-            redis.clients.jedis.args.ListDirection from,
-            redis.clients.jedis.args.ListDirection to,
-            double timeout) {
+            byte[] srcKey, byte[] dstKey, ListDirection from, ListDirection to, double timeout) {
         checkNotClosed();
         ensureInitialized();
         try {
-            ListDirection glideFrom =
-                    from == redis.clients.jedis.args.ListDirection.LEFT
-                            ? ListDirection.LEFT
-                            : ListDirection.RIGHT;
-            ListDirection glideTo =
-                    to == redis.clients.jedis.args.ListDirection.LEFT
-                            ? ListDirection.LEFT
-                            : ListDirection.RIGHT;
+            glide.api.models.commands.ListDirection glideFrom =
+                    from == ListDirection.LEFT
+                            ? glide.api.models.commands.ListDirection.LEFT
+                            : glide.api.models.commands.ListDirection.RIGHT;
+            glide.api.models.commands.ListDirection glideTo =
+                    to == ListDirection.LEFT
+                            ? glide.api.models.commands.ListDirection.LEFT
+                            : glide.api.models.commands.ListDirection.RIGHT;
             GlideString result =
                     glideClient
                             .blmove(GlideString.of(srcKey), GlideString.of(dstKey), glideFrom, glideTo, timeout)
@@ -7193,15 +7177,14 @@ public final class Jedis implements Closeable {
      * @return KeyValue containing the key and list of popped elements, or null when no element could
      *     be popped
      */
-    public KeyValue<String, List<String>> lmpop(
-            redis.clients.jedis.args.ListDirection direction, String... keys) {
+    public KeyValue<String, List<String>> lmpop(ListDirection direction, String... keys) {
         checkNotClosed();
         ensureInitialized();
         try {
-            ListDirection glideDirection =
-                    direction == redis.clients.jedis.args.ListDirection.LEFT
-                            ? ListDirection.LEFT
-                            : ListDirection.RIGHT;
+            glide.api.models.commands.ListDirection glideDirection =
+                    direction == ListDirection.LEFT
+                            ? glide.api.models.commands.ListDirection.LEFT
+                            : glide.api.models.commands.ListDirection.RIGHT;
             Map<String, String[]> result = glideClient.lmpop(keys, glideDirection).get();
             if (result != null && !result.isEmpty()) {
                 Map.Entry<String, String[]> entry = result.entrySet().iterator().next();
@@ -7223,15 +7206,14 @@ public final class Jedis implements Closeable {
      * @return KeyValue containing the key and list of popped elements, or null when no element could
      *     be popped
      */
-    public KeyValue<String, List<String>> lmpop(
-            redis.clients.jedis.args.ListDirection direction, int count, String... keys) {
+    public KeyValue<String, List<String>> lmpop(ListDirection direction, int count, String... keys) {
         checkNotClosed();
         ensureInitialized();
         try {
-            ListDirection glideDirection =
-                    direction == redis.clients.jedis.args.ListDirection.LEFT
-                            ? ListDirection.LEFT
-                            : ListDirection.RIGHT;
+            glide.api.models.commands.ListDirection glideDirection =
+                    direction == ListDirection.LEFT
+                            ? glide.api.models.commands.ListDirection.LEFT
+                            : glide.api.models.commands.ListDirection.RIGHT;
             Map<String, String[]> result = glideClient.lmpop(keys, glideDirection, count).get();
             if (result != null && !result.isEmpty()) {
                 Map.Entry<String, String[]> entry = result.entrySet().iterator().next();
@@ -7252,15 +7234,14 @@ public final class Jedis implements Closeable {
      * @return KeyValue containing the key and list of popped elements, or null when no element could
      *     be popped
      */
-    public KeyValue<byte[], List<byte[]>> lmpop(
-            redis.clients.jedis.args.ListDirection direction, byte[]... keys) {
+    public KeyValue<byte[], List<byte[]>> lmpop(ListDirection direction, byte[]... keys) {
         checkNotClosed();
         ensureInitialized();
         try {
-            ListDirection glideDirection =
-                    direction == redis.clients.jedis.args.ListDirection.LEFT
-                            ? ListDirection.LEFT
-                            : ListDirection.RIGHT;
+            glide.api.models.commands.ListDirection glideDirection =
+                    direction == ListDirection.LEFT
+                            ? glide.api.models.commands.ListDirection.LEFT
+                            : glide.api.models.commands.ListDirection.RIGHT;
             GlideString[] glideKeys = new GlideString[keys.length];
             for (int i = 0; i < keys.length; i++) {
                 glideKeys[i] = GlideString.of(keys[i]);
@@ -7290,15 +7271,14 @@ public final class Jedis implements Closeable {
      * @return KeyValue containing the key and list of popped elements, or null when no element could
      *     be popped
      */
-    public KeyValue<byte[], List<byte[]>> lmpop(
-            redis.clients.jedis.args.ListDirection direction, int count, byte[]... keys) {
+    public KeyValue<byte[], List<byte[]>> lmpop(ListDirection direction, int count, byte[]... keys) {
         checkNotClosed();
         ensureInitialized();
         try {
-            ListDirection glideDirection =
-                    direction == redis.clients.jedis.args.ListDirection.LEFT
-                            ? ListDirection.LEFT
-                            : ListDirection.RIGHT;
+            glide.api.models.commands.ListDirection glideDirection =
+                    direction == ListDirection.LEFT
+                            ? glide.api.models.commands.ListDirection.LEFT
+                            : glide.api.models.commands.ListDirection.RIGHT;
             GlideString[] glideKeys = new GlideString[keys.length];
             for (int i = 0; i < keys.length; i++) {
                 glideKeys[i] = GlideString.of(keys[i]);
@@ -7329,14 +7309,14 @@ public final class Jedis implements Closeable {
      *     reached
      */
     public KeyValue<String, List<String>> blmpop(
-            double timeout, redis.clients.jedis.args.ListDirection direction, String... keys) {
+            double timeout, ListDirection direction, String... keys) {
         checkNotClosed();
         ensureInitialized();
         try {
-            ListDirection glideDirection =
-                    direction == redis.clients.jedis.args.ListDirection.LEFT
-                            ? ListDirection.LEFT
-                            : ListDirection.RIGHT;
+            glide.api.models.commands.ListDirection glideDirection =
+                    direction == ListDirection.LEFT
+                            ? glide.api.models.commands.ListDirection.LEFT
+                            : glide.api.models.commands.ListDirection.RIGHT;
             Map<String, String[]> result = glideClient.blmpop(keys, glideDirection, timeout).get();
             if (result != null && !result.isEmpty()) {
                 Map.Entry<String, String[]> entry = result.entrySet().iterator().next();
@@ -7359,14 +7339,14 @@ public final class Jedis implements Closeable {
      *     reached
      */
     public KeyValue<String, List<String>> blmpop(
-            double timeout, redis.clients.jedis.args.ListDirection direction, int count, String... keys) {
+            double timeout, ListDirection direction, int count, String... keys) {
         checkNotClosed();
         ensureInitialized();
         try {
-            ListDirection glideDirection =
-                    direction == redis.clients.jedis.args.ListDirection.LEFT
-                            ? ListDirection.LEFT
-                            : ListDirection.RIGHT;
+            glide.api.models.commands.ListDirection glideDirection =
+                    direction == ListDirection.LEFT
+                            ? glide.api.models.commands.ListDirection.LEFT
+                            : glide.api.models.commands.ListDirection.RIGHT;
             Map<String, String[]> result = glideClient.blmpop(keys, glideDirection, count, timeout).get();
             if (result != null && !result.isEmpty()) {
                 Map.Entry<String, String[]> entry = result.entrySet().iterator().next();
@@ -7389,14 +7369,14 @@ public final class Jedis implements Closeable {
      *     reached
      */
     public KeyValue<byte[], List<byte[]>> blmpop(
-            double timeout, redis.clients.jedis.args.ListDirection direction, byte[]... keys) {
+            double timeout, ListDirection direction, byte[]... keys) {
         checkNotClosed();
         ensureInitialized();
         try {
-            ListDirection glideDirection =
-                    direction == redis.clients.jedis.args.ListDirection.LEFT
-                            ? ListDirection.LEFT
-                            : ListDirection.RIGHT;
+            glide.api.models.commands.ListDirection glideDirection =
+                    direction == ListDirection.LEFT
+                            ? glide.api.models.commands.ListDirection.LEFT
+                            : glide.api.models.commands.ListDirection.RIGHT;
             GlideString[] glideKeys = new GlideString[keys.length];
             for (int i = 0; i < keys.length; i++) {
                 glideKeys[i] = GlideString.of(keys[i]);
@@ -7429,14 +7409,14 @@ public final class Jedis implements Closeable {
      *     reached
      */
     public KeyValue<byte[], List<byte[]>> blmpop(
-            double timeout, redis.clients.jedis.args.ListDirection direction, int count, byte[]... keys) {
+            double timeout, ListDirection direction, int count, byte[]... keys) {
         checkNotClosed();
         ensureInitialized();
         try {
-            ListDirection glideDirection =
-                    direction == redis.clients.jedis.args.ListDirection.LEFT
-                            ? ListDirection.LEFT
-                            : ListDirection.RIGHT;
+            glide.api.models.commands.ListDirection glideDirection =
+                    direction == ListDirection.LEFT
+                            ? glide.api.models.commands.ListDirection.LEFT
+                            : glide.api.models.commands.ListDirection.RIGHT;
             GlideString[] glideKeys = new GlideString[keys.length];
             for (int i = 0; i < keys.length; i++) {
                 glideKeys[i] = GlideString.of(keys[i]);
@@ -7468,11 +7448,7 @@ public final class Jedis implements Closeable {
      */
     @Deprecated
     public String rpoplpush(String srckey, String dstkey) {
-        return lmove(
-                srckey,
-                dstkey,
-                redis.clients.jedis.args.ListDirection.RIGHT,
-                redis.clients.jedis.args.ListDirection.LEFT);
+        return lmove(srckey, dstkey, ListDirection.RIGHT, ListDirection.LEFT);
     }
 
     /**
@@ -7486,11 +7462,7 @@ public final class Jedis implements Closeable {
      */
     @Deprecated
     public byte[] rpoplpush(final byte[] srckey, final byte[] dstkey) {
-        return lmove(
-                srckey,
-                dstkey,
-                redis.clients.jedis.args.ListDirection.RIGHT,
-                redis.clients.jedis.args.ListDirection.LEFT);
+        return lmove(srckey, dstkey, ListDirection.RIGHT, ListDirection.LEFT);
     }
 
     /**
@@ -7504,12 +7476,7 @@ public final class Jedis implements Closeable {
      */
     @Deprecated
     public String brpoplpush(String source, String destination, int timeout) {
-        return blmove(
-                source,
-                destination,
-                redis.clients.jedis.args.ListDirection.RIGHT,
-                redis.clients.jedis.args.ListDirection.LEFT,
-                timeout);
+        return blmove(source, destination, ListDirection.RIGHT, ListDirection.LEFT, timeout);
     }
 
     /**
@@ -7523,11 +7490,6 @@ public final class Jedis implements Closeable {
      */
     @Deprecated
     public byte[] brpoplpush(final byte[] source, final byte[] destination, int timeout) {
-        return blmove(
-                source,
-                destination,
-                redis.clients.jedis.args.ListDirection.RIGHT,
-                redis.clients.jedis.args.ListDirection.LEFT,
-                timeout);
+        return blmove(source, destination, ListDirection.RIGHT, ListDirection.LEFT, timeout);
     }
 }
