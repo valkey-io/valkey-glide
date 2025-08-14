@@ -15,13 +15,17 @@ import redis.clients.jedis.Jedis;
 import redis.clients.jedis.Protocol;
 import redis.clients.jedis.args.BitOP;
 import redis.clients.jedis.args.ExpiryOption;
+import redis.clients.jedis.args.ListDirection;
+import redis.clients.jedis.args.ListPosition;
 import redis.clients.jedis.params.BitPosParams;
 import redis.clients.jedis.params.GetExParams;
 import redis.clients.jedis.params.HGetExParams;
 import redis.clients.jedis.params.HSetExParams;
+import redis.clients.jedis.params.LPosParams;
 import redis.clients.jedis.params.ScanParams;
 import redis.clients.jedis.params.SetParams;
 import redis.clients.jedis.resps.ScanResult;
+import redis.clients.jedis.util.KeyValue;
 
 /**
  * Jedis compatibility test that validates GLIDE's Jedis compatibility layer functionality.
@@ -271,7 +275,38 @@ public class JedisTest {
             TEST_KEY_PREFIX + "sendcmd_set",
             TEST_KEY_PREFIX + "sendcmd_binary",
             TEST_KEY_PREFIX + "sendcmd_optional",
-            TEST_KEY_PREFIX + "sendcmd_nx"
+            TEST_KEY_PREFIX + "sendcmd_nx",
+
+            // List command test keys
+            TEST_KEY_PREFIX + "list_basic",
+            TEST_KEY_PREFIX + "list_basic_binary",
+            TEST_KEY_PREFIX + "list_range",
+            TEST_KEY_PREFIX + "list_range_binary",
+            TEST_KEY_PREFIX + "list_modify",
+            TEST_KEY_PREFIX + "list_nonexistent",
+            TEST_KEY_PREFIX + "list_modify_binary",
+            TEST_KEY_PREFIX + "list_block1",
+            TEST_KEY_PREFIX + "list_block2",
+            TEST_KEY_PREFIX + "list_block3",
+            TEST_KEY_PREFIX + "list_block_bin1",
+            TEST_KEY_PREFIX + "list_block_bin2",
+            TEST_KEY_PREFIX + "list_pos",
+            TEST_KEY_PREFIX + "list_pos_binary",
+            TEST_KEY_PREFIX + "list_src",
+            TEST_KEY_PREFIX + "list_dst",
+            TEST_KEY_PREFIX + "list_src_bin",
+            TEST_KEY_PREFIX + "list_dst_bin",
+            TEST_KEY_PREFIX + "list_mpop1",
+            TEST_KEY_PREFIX + "list_mpop2",
+            TEST_KEY_PREFIX + "list_mpop3",
+            TEST_KEY_PREFIX + "list_mpop_bin1",
+            TEST_KEY_PREFIX + "list_mpop_bin2",
+            TEST_KEY_PREFIX + "list_deprecated_src",
+            TEST_KEY_PREFIX + "list_deprecated_dst",
+            TEST_KEY_PREFIX + "list_deprecated_src_bin",
+            TEST_KEY_PREFIX + "list_deprecated_dst_bin",
+            TEST_KEY_PREFIX + "list_edge",
+            TEST_KEY_PREFIX + "not_a_list"
         };
 
         jedis.del(keysToDelete);
@@ -2739,5 +2774,730 @@ public class JedisTest {
         // Verify fields are deleted
         assertNull(jedis.hget(key, field1), "Field1 should be deleted after binary HGETDEL");
         assertNull(jedis.hget(key, field2), "Field2 should be deleted after binary HGETDEL");
+    }
+
+    // ========== LIST COMMANDS TESTS ==========
+
+    @Test
+    @Order(135)
+    @DisplayName("List Commands - Basic Operations (LPUSH, RPUSH, LPOP, RPOP, LLEN)")
+    void testListBasicOperations() {
+        String key = TEST_KEY_PREFIX + "list_basic";
+
+        // Test LPUSH - String version
+        long result = jedis.lpush(key, "value1", "value2", "value3");
+        assertEquals(3, result, "LPUSH should return list length");
+
+        // Test RPUSH - String version
+        result = jedis.rpush(key, "value4", "value5");
+        assertEquals(5, result, "RPUSH should return list length");
+
+        // Test LLEN
+        long length = jedis.llen(key);
+        assertEquals(5, length, "LLEN should return correct list length");
+
+        // Test LPOP - single element
+        String popped = jedis.lpop(key);
+        assertEquals("value3", popped, "LPOP should return last pushed element");
+
+        // Test RPOP - single element
+        popped = jedis.rpop(key);
+        assertEquals("value5", popped, "RPOP should return last pushed element");
+
+        // Test LPOP - multiple elements
+        List<String> poppedList = jedis.lpop(key, 2);
+        assertEquals(2, poppedList.size(), "LPOP with count should return correct number of elements");
+        assertEquals("value2", poppedList.get(0), "LPOP should return elements in correct order");
+        assertEquals("value1", poppedList.get(1), "LPOP should return elements in correct order");
+
+        // Test RPOP - multiple elements
+        jedis.rpush(key, "a", "b", "c");
+        poppedList = jedis.rpop(key, 2);
+        assertEquals(2, poppedList.size(), "RPOP with count should return correct number of elements");
+        assertEquals("c", poppedList.get(0), "RPOP should return elements in correct order");
+        assertEquals("b", poppedList.get(1), "RPOP should return elements in correct order");
+    }
+
+    @Test
+    @Order(136)
+    @DisplayName("List Commands - Basic Operations Binary")
+    void testListBasicOperationsBinary() {
+        byte[] key = (TEST_KEY_PREFIX + "list_basic_binary").getBytes();
+        byte[] value1 = "value1".getBytes();
+        byte[] value2 = "value2".getBytes();
+        byte[] value3 = "value3".getBytes();
+
+        // Test LPUSH - binary version
+        long result = jedis.lpush(key, value1, value2, value3);
+        assertEquals(3, result, "Binary LPUSH should return list length");
+
+        // Test RPUSH - binary version
+        byte[] value4 = "value4".getBytes();
+        result = jedis.rpush(key, value4);
+        assertEquals(4, result, "Binary RPUSH should return list length");
+
+        // Test LLEN - binary
+        long length = jedis.llen(key);
+        assertEquals(4, length, "Binary LLEN should return correct list length");
+
+        // Test LPOP - binary single element
+        byte[] popped = jedis.lpop(key);
+        assertArrayEquals(value3, popped, "Binary LPOP should return last pushed element");
+
+        // Test RPOP - binary single element
+        popped = jedis.rpop(key);
+        assertArrayEquals(value4, popped, "Binary RPOP should return last pushed element");
+
+        // Test LPOP - binary multiple elements
+        List<byte[]> poppedList = jedis.lpop(key, 2);
+        assertEquals(
+                2, poppedList.size(), "Binary LPOP with count should return correct number of elements");
+        assertArrayEquals(
+                value2, poppedList.get(0), "Binary LPOP should return elements in correct order");
+        assertArrayEquals(
+                value1, poppedList.get(1), "Binary LPOP should return elements in correct order");
+    }
+
+    @Test
+    @Order(137)
+    @DisplayName("List Commands - Range and Index Operations (LRANGE, LTRIM, LINDEX, LSET)")
+    void testListRangeAndIndexOperations() {
+        String key = TEST_KEY_PREFIX + "list_range";
+
+        // Setup test data
+        jedis.lpush(key, "item1", "item2", "item3", "item4", "item5");
+
+        // Test LRANGE
+        List<String> range = jedis.lrange(key, 0, 2);
+        assertEquals(3, range.size(), "LRANGE should return correct number of elements");
+        assertEquals("item5", range.get(0), "LRANGE should return elements in correct order");
+        assertEquals("item4", range.get(1), "LRANGE should return elements in correct order");
+        assertEquals("item3", range.get(2), "LRANGE should return elements in correct order");
+
+        // Test LRANGE with negative indices
+        range = jedis.lrange(key, -2, -1);
+        assertEquals(2, range.size(), "LRANGE with negative indices should work");
+        assertEquals("item2", range.get(0), "LRANGE should handle negative indices correctly");
+        assertEquals("item1", range.get(1), "LRANGE should handle negative indices correctly");
+
+        // Test LINDEX
+        String element = jedis.lindex(key, 0);
+        assertEquals("item5", element, "LINDEX should return correct element");
+
+        element = jedis.lindex(key, -1);
+        assertEquals("item1", element, "LINDEX should handle negative index");
+
+        // Test LSET
+        String result = jedis.lset(key, 2, "modified_item3");
+        assertEquals("OK", result, "LSET should return OK");
+
+        element = jedis.lindex(key, 2);
+        assertEquals("modified_item3", element, "LSET should modify element correctly");
+
+        // Test LTRIM
+        result = jedis.ltrim(key, 1, 3);
+        assertEquals("OK", result, "LTRIM should return OK");
+
+        long length = jedis.llen(key);
+        assertEquals(3, length, "LTRIM should reduce list length");
+
+        range = jedis.lrange(key, 0, -1);
+        assertEquals("item4", range.get(0), "LTRIM should preserve correct elements");
+        assertEquals("modified_item3", range.get(1), "LTRIM should preserve correct elements");
+        assertEquals("item2", range.get(2), "LTRIM should preserve correct elements");
+    }
+
+    @Test
+    @Order(138)
+    @DisplayName("List Commands - Range and Index Operations Binary")
+    void testListRangeAndIndexOperationsBinary() {
+        byte[] key = (TEST_KEY_PREFIX + "list_range_binary").getBytes();
+        byte[] item1 = "item1".getBytes();
+        byte[] item2 = "item2".getBytes();
+        byte[] item3 = "item3".getBytes();
+
+        // Setup test data
+        jedis.lpush(key, item1, item2, item3);
+
+        // Test LRANGE - binary
+        List<byte[]> range = jedis.lrange(key, 0, -1);
+        assertEquals(3, range.size(), "Binary LRANGE should return correct number of elements");
+        assertArrayEquals(item3, range.get(0), "Binary LRANGE should return elements in correct order");
+        assertArrayEquals(item2, range.get(1), "Binary LRANGE should return elements in correct order");
+        assertArrayEquals(item1, range.get(2), "Binary LRANGE should return elements in correct order");
+
+        // Test LINDEX - binary
+        byte[] element = jedis.lindex(key, 1);
+        assertArrayEquals(item2, element, "Binary LINDEX should return correct element");
+
+        // Test LSET - binary
+        byte[] newValue = "modified_item2".getBytes();
+        String result = jedis.lset(key, 1, newValue);
+        assertEquals("OK", result, "Binary LSET should return OK");
+
+        element = jedis.lindex(key, 1);
+        assertArrayEquals(newValue, element, "Binary LSET should modify element correctly");
+
+        // Test LTRIM - binary
+        result = jedis.ltrim(key, 0, 1);
+        assertEquals("OK", result, "Binary LTRIM should return OK");
+
+        long length = jedis.llen(key);
+        assertEquals(2, length, "Binary LTRIM should reduce list length");
+    }
+
+    @Test
+    @Order(139)
+    @DisplayName("List Commands - Modification Operations (LREM, LINSERT, LPUSHX, RPUSHX)")
+    void testListModificationOperations() {
+        String key = TEST_KEY_PREFIX + "list_modify";
+        String nonExistentKey = TEST_KEY_PREFIX + "list_nonexistent";
+
+        // Setup test data with duplicates for LREM testing
+        jedis.lpush(key, "a", "b", "a", "c", "a", "d");
+
+        // Test LREM - remove all occurrences
+        long removed = jedis.lrem(key, 0, "a");
+        assertEquals(3, removed, "LREM should remove all occurrences when count is 0");
+
+        List<String> remaining = jedis.lrange(key, 0, -1);
+        assertEquals(3, remaining.size(), "List should have correct size after LREM");
+        assertFalse(remaining.contains("a"), "List should not contain removed elements");
+
+        // Test LREM - remove from head
+        jedis.lpush(key, "x", "x", "y");
+        removed = jedis.lrem(key, 2, "x");
+        assertEquals(2, removed, "LREM should remove specified count from head");
+
+        // Test LINSERT - before
+        long insertResult = jedis.linsert(key, ListPosition.BEFORE, "y", "before_y");
+        assertTrue(insertResult > 0, "LINSERT BEFORE should return positive length");
+
+        String element = jedis.lindex(key, 0);
+        assertEquals("before_y", element, "LINSERT BEFORE should insert in correct position");
+
+        // Test LINSERT - after
+        insertResult = jedis.linsert(key, ListPosition.AFTER, "y", "after_y");
+        assertTrue(insertResult > 0, "LINSERT AFTER should return positive length");
+
+        // Test LPUSHX - existing key
+        long pushResult = jedis.lpushx(key, "lpushx_value");
+        assertTrue(pushResult > 0, "LPUSHX on existing key should return positive length");
+
+        element = jedis.lindex(key, 0);
+        assertEquals("lpushx_value", element, "LPUSHX should add element to head");
+
+        // Test LPUSHX - non-existent key
+        pushResult = jedis.lpushx(nonExistentKey, "should_not_exist");
+        assertEquals(0, pushResult, "LPUSHX on non-existent key should return 0");
+
+        assertFalse(jedis.exists(nonExistentKey), "LPUSHX should not create non-existent key");
+
+        // Test RPUSHX - existing key
+        pushResult = jedis.rpushx(key, "rpushx_value");
+        assertTrue(pushResult > 0, "RPUSHX on existing key should return positive length");
+
+        element = jedis.lindex(key, -1);
+        assertEquals("rpushx_value", element, "RPUSHX should add element to tail");
+
+        // Test RPUSHX - non-existent key
+        pushResult = jedis.rpushx(nonExistentKey, "should_not_exist");
+        assertEquals(0, pushResult, "RPUSHX on non-existent key should return 0");
+    }
+
+    @Test
+    @Order(140)
+    @DisplayName("List Commands - Modification Operations Binary")
+    void testListModificationOperationsBinary() {
+        byte[] key = (TEST_KEY_PREFIX + "list_modify_binary").getBytes();
+        byte[] valueA = "a".getBytes();
+        byte[] valueB = "b".getBytes();
+        byte[] valueC = "c".getBytes();
+
+        // Setup test data
+        jedis.lpush(key, valueA, valueB, valueA, valueC);
+
+        // Test LREM - binary
+        long removed = jedis.lrem(key, 1, valueA);
+        assertEquals(1, removed, "Binary LREM should remove one occurrence");
+
+        // Test LINSERT - binary
+        byte[] insertValue = "inserted".getBytes();
+        long insertResult = jedis.linsert(key, ListPosition.BEFORE, valueB, insertValue);
+        assertTrue(insertResult > 0, "Binary LINSERT should return positive length");
+
+        // Test LPUSHX - binary
+        byte[] lpushxValue = "lpushx".getBytes();
+        long pushResult = jedis.lpushx(key, lpushxValue);
+        assertTrue(pushResult > 0, "Binary LPUSHX should return positive length");
+
+        byte[] element = jedis.lindex(key, 0);
+        assertArrayEquals(lpushxValue, element, "Binary LPUSHX should add element correctly");
+
+        // Test RPUSHX - binary
+        byte[] rpushxValue = "rpushx".getBytes();
+        pushResult = jedis.rpushx(key, rpushxValue);
+        assertTrue(pushResult > 0, "Binary RPUSHX should return positive length");
+
+        element = jedis.lindex(key, -1);
+        assertArrayEquals(rpushxValue, element, "Binary RPUSHX should add element correctly");
+    }
+
+    @Test
+    @Order(141)
+    @DisplayName("List Commands - Blocking Operations (BLPOP, BRPOP)")
+    void testListBlockingOperations() {
+        String key1 = TEST_KEY_PREFIX + "list_block1";
+        String key2 = TEST_KEY_PREFIX + "list_block2";
+        String key3 = TEST_KEY_PREFIX + "list_block3";
+
+        // Setup test data
+        jedis.lpush(key1, "value1", "value2");
+        jedis.lpush(key2, "value3", "value4");
+
+        // Test BLPOP - int timeout, multiple keys
+        List<String> result = jedis.blpop(1, key1, key2, key3);
+        assertEquals(2, result.size(), "BLPOP should return key and value");
+        assertEquals(key1, result.get(0), "BLPOP should return correct key");
+        assertEquals("value2", result.get(1), "BLPOP should return correct value");
+
+        // Test BLPOP - double timeout, multiple keys (KeyValue return)
+        KeyValue<String, String> kvResult = jedis.blpop(1.0, key1, key2, key3);
+        assertNotNull(kvResult, "BLPOP with double timeout should return KeyValue");
+        assertEquals(key1, kvResult.getKey(), "BLPOP KeyValue should have correct key");
+        assertEquals("value1", kvResult.getValue(), "BLPOP KeyValue should have correct value");
+
+        // Test BLPOP - single key variants
+        jedis.lpush(key1, "single_value");
+        result = jedis.blpop(1, key1);
+        assertEquals(2, result.size(), "BLPOP single key should return key and value");
+        assertEquals("single_value", result.get(1), "BLPOP single key should return correct value");
+
+        kvResult = jedis.blpop(1.0, key1);
+        assertNull(kvResult, "BLPOP on empty key should return null");
+
+        // Test BRPOP - int timeout, multiple keys
+        result = jedis.brpop(1, key2, key3);
+        assertEquals(2, result.size(), "BRPOP should return key and value");
+        assertEquals(key2, result.get(0), "BRPOP should return correct key");
+        assertEquals("value3", result.get(1), "BRPOP should return correct value");
+
+        // Test BRPOP - double timeout, multiple keys (KeyValue return)
+        kvResult = jedis.brpop(1.0, key2, key3);
+        assertNotNull(kvResult, "BRPOP with double timeout should return KeyValue");
+        assertEquals(key2, kvResult.getKey(), "BRPOP KeyValue should have correct key");
+        assertEquals("value4", kvResult.getValue(), "BRPOP KeyValue should have correct value");
+
+        // Test BRPOP - single key variants
+        jedis.rpush(key2, "single_value_r");
+        result = jedis.brpop(1, key2);
+        assertEquals(2, result.size(), "BRPOP single key should return key and value");
+        assertEquals("single_value_r", result.get(1), "BRPOP single key should return correct value");
+
+        kvResult = jedis.brpop(1.0, key2);
+        assertNull(kvResult, "BRPOP on empty key should return null");
+    }
+
+    @Test
+    @Order(142)
+    @DisplayName("List Commands - Blocking Operations Binary")
+    void testListBlockingOperationsBinary() {
+        byte[] key1 = (TEST_KEY_PREFIX + "list_block_bin1").getBytes();
+        byte[] key2 = (TEST_KEY_PREFIX + "list_block_bin2").getBytes();
+        byte[] value1 = "value1".getBytes();
+        byte[] value2 = "value2".getBytes();
+
+        // Setup test data
+        jedis.lpush(key1, value1, value2);
+
+        // Test BLPOP - binary int timeout
+        List<byte[]> result = jedis.blpop(1, key1, key2);
+        assertEquals(2, result.size(), "Binary BLPOP should return key and value");
+        assertArrayEquals(key1, result.get(0), "Binary BLPOP should return correct key");
+        assertArrayEquals(value2, result.get(1), "Binary BLPOP should return correct value");
+
+        // Test BLPOP - binary double timeout (KeyValue return)
+        KeyValue<byte[], byte[]> kvResult = jedis.blpop(1.0, key1, key2);
+        assertNotNull(kvResult, "Binary BLPOP with double timeout should return KeyValue");
+        assertArrayEquals(key1, kvResult.getKey(), "Binary BLPOP KeyValue should have correct key");
+        assertArrayEquals(
+                value1, kvResult.getValue(), "Binary BLPOP KeyValue should have correct value");
+
+        // Test BRPOP - binary
+        jedis.rpush(key2, value1, value2);
+        result = jedis.brpop(1, key2);
+        assertEquals(2, result.size(), "Binary BRPOP should return key and value");
+        assertArrayEquals(key2, result.get(0), "Binary BRPOP should return correct key");
+        assertArrayEquals(value2, result.get(1), "Binary BRPOP should return correct value");
+
+        kvResult = jedis.brpop(1.0, key2);
+        assertNotNull(kvResult, "Binary BRPOP with double timeout should return KeyValue");
+        assertArrayEquals(
+                value1, kvResult.getValue(), "Binary BRPOP KeyValue should have correct value");
+    }
+
+    @Test
+    @Order(143)
+    @DisplayName("List Commands - Position Operations (LPOS)")
+    void testListPositionOperations() {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("6.0.6"), "LPOS requires Redis 6.0.6+");
+
+        String key = TEST_KEY_PREFIX + "list_pos";
+
+        // Setup test data with duplicates
+        jedis.lpush(key, "a", "b", "c", "b", "d", "b", "e");
+
+        // Test LPOS - basic usage
+        Long position = jedis.lpos(key, "b");
+        assertNotNull(position, "LPOS should find element");
+        assertEquals(1L, position, "LPOS should return correct position");
+
+        // Test LPOS - element not found
+        position = jedis.lpos(key, "not_found");
+        assertNull(position, "LPOS should return null for non-existent element");
+
+        // Test LPOS with parameters - rank
+        LPosParams params = LPosParams.lPosParams().rank(2);
+        position = jedis.lpos(key, "b", params);
+        assertNotNull(position, "LPOS with rank should find element");
+        assertEquals(3L, position, "LPOS with rank should return correct position");
+
+        // Test LPOS with parameters - maxlen
+        params = LPosParams.lPosParams().maxlen(3);
+        position = jedis.lpos(key, "d");
+        assertNotNull(position, "LPOS should find element within range");
+
+        // Test LPOS - multiple positions
+        List<Long> positions = jedis.lpos(key, "b", LPosParams.lPosParams(), 3);
+        assertEquals(3, positions.size(), "LPOS should return multiple positions");
+        assertEquals(1L, positions.get(0), "LPOS should return positions in order");
+        assertEquals(3L, positions.get(1), "LPOS should return positions in order");
+        assertEquals(5L, positions.get(2), "LPOS should return positions in order");
+
+        // Test LPOS - limit results
+        positions = jedis.lpos(key, "b", LPosParams.lPosParams(), 2);
+        assertEquals(2, positions.size(), "LPOS should limit results correctly");
+    }
+
+    @Test
+    @Order(144)
+    @DisplayName("List Commands - Position Operations Binary")
+    void testListPositionOperationsBinary() {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("6.0.6"), "LPOS requires Redis 6.0.6+");
+
+        byte[] key = (TEST_KEY_PREFIX + "list_pos_binary").getBytes();
+        byte[] valueA = "a".getBytes();
+        byte[] valueB = "b".getBytes();
+        byte[] valueC = "c".getBytes();
+
+        // Setup test data - lpush adds to the left, so order will be: valueB, valueC, valueB, valueA
+        jedis.lpush(key, valueA, valueB, valueC, valueB);
+
+        // Test LPOS - binary basic usage
+        Long position = jedis.lpos(key, valueB);
+        assertNotNull(position, "Binary LPOS should find element");
+        assertEquals(0L, position, "Binary LPOS should return correct position");
+
+        // Test LPOS - binary with parameters
+        LPosParams params = LPosParams.lPosParams().rank(2);
+        position = jedis.lpos(key, valueB, params);
+        assertNotNull(position, "Binary LPOS with rank should find element");
+        assertEquals(2L, position, "Binary LPOS with rank should return correct position");
+
+        // Test LPOS - binary multiple positions
+        List<Long> positions = jedis.lpos(key, valueB, LPosParams.lPosParams(), 2);
+        assertEquals(2, positions.size(), "Binary LPOS should return multiple positions");
+        assertEquals(0L, positions.get(0), "Binary LPOS should return positions in order");
+        assertEquals(2L, positions.get(1), "Binary LPOS should return positions in order");
+    }
+
+    @Test
+    @Order(145)
+    @DisplayName("List Commands - Move Operations (LMOVE, BLMOVE)")
+    void testListMoveOperations() {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "LMOVE requires Redis 6.2.0+");
+
+        String srcKey = TEST_KEY_PREFIX + "list_src";
+        String dstKey = TEST_KEY_PREFIX + "list_dst";
+
+        // Setup test data
+        jedis.lpush(srcKey, "item1", "item2", "item3");
+        jedis.lpush(dstKey, "existing1", "existing2");
+
+        // Test LMOVE - LEFT to RIGHT
+        String moved = jedis.lmove(srcKey, dstKey, ListDirection.LEFT, ListDirection.RIGHT);
+        assertEquals("item3", moved, "LMOVE should return moved element");
+
+        // Verify source list
+        List<String> srcList = jedis.lrange(srcKey, 0, -1);
+        assertEquals(2, srcList.size(), "Source list should have one less element");
+        assertFalse(srcList.contains("item3"), "Moved element should not be in source");
+
+        // Verify destination list
+        List<String> dstList = jedis.lrange(dstKey, 0, -1);
+        assertEquals(3, dstList.size(), "Destination list should have one more element");
+        assertEquals("item3", dstList.get(2), "Moved element should be at end of destination");
+
+        // Test LMOVE - RIGHT to LEFT
+        moved = jedis.lmove(srcKey, dstKey, ListDirection.RIGHT, ListDirection.LEFT);
+        assertEquals("item1", moved, "LMOVE RIGHT to LEFT should return correct element");
+
+        dstList = jedis.lrange(dstKey, 0, -1);
+        assertEquals("item1", dstList.get(0), "Moved element should be at head of destination");
+
+        // Test BLMOVE - blocking move
+        jedis.lpush(srcKey, "blocking_item");
+        moved = jedis.blmove(srcKey, dstKey, ListDirection.LEFT, ListDirection.RIGHT, 1.0);
+        assertEquals("blocking_item", moved, "BLMOVE should return moved element");
+
+        // Test BLMOVE - timeout on empty list
+        jedis.del(srcKey);
+        moved = jedis.blmove(srcKey, dstKey, ListDirection.LEFT, ListDirection.RIGHT, 0.1);
+        assertNull(moved, "BLMOVE should timeout and return null on empty list");
+    }
+
+    @Test
+    @Order(146)
+    @DisplayName("List Commands - Move Operations Binary")
+    void testListMoveOperationsBinary() {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "LMOVE requires Redis 6.2.0+");
+
+        byte[] srcKey = (TEST_KEY_PREFIX + "list_src_bin").getBytes();
+        byte[] dstKey = (TEST_KEY_PREFIX + "list_dst_bin").getBytes();
+        byte[] item1 = "item1".getBytes();
+        byte[] item2 = "item2".getBytes();
+
+        // Setup test data
+        jedis.lpush(srcKey, item1, item2);
+
+        // Test LMOVE - binary
+        byte[] moved = jedis.lmove(srcKey, dstKey, ListDirection.LEFT, ListDirection.RIGHT);
+        assertArrayEquals(item2, moved, "Binary LMOVE should return moved element");
+
+        // Verify destination list
+        List<byte[]> dstList = jedis.lrange(dstKey, 0, -1);
+        assertEquals(1, dstList.size(), "Binary destination list should have moved element");
+        assertArrayEquals(item2, dstList.get(0), "Binary moved element should be correct");
+
+        // Test BLMOVE - binary
+        moved = jedis.blmove(srcKey, dstKey, ListDirection.LEFT, ListDirection.LEFT, 1.0);
+        assertArrayEquals(item1, moved, "Binary BLMOVE should return moved element");
+
+        dstList = jedis.lrange(dstKey, 0, -1);
+        assertEquals(2, dstList.size(), "Binary destination should have both elements");
+        assertArrayEquals(item1, dstList.get(0), "Binary BLMOVE should place element at head");
+    }
+
+    @Test
+    @Order(147)
+    @DisplayName("List Commands - Multi-Pop Operations (LMPOP, BLMPOP)")
+    void testListMultiPopOperations() {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "LMPOP requires Redis 7.0.0+");
+
+        String key1 = TEST_KEY_PREFIX + "list_mpop1";
+        String key2 = TEST_KEY_PREFIX + "list_mpop2";
+        String key3 = TEST_KEY_PREFIX + "list_mpop3";
+
+        // Setup test data
+        jedis.lpush(key2, "item1", "item2", "item3");
+
+        // Test LMPOP - LEFT direction, first non-empty key
+        KeyValue<String, List<String>> result = jedis.lmpop(ListDirection.LEFT, key1, key2, key3);
+        assertNotNull(result, "LMPOP should return result from first non-empty key");
+        assertEquals(key2, result.getKey(), "LMPOP should return correct key");
+        assertEquals(1, result.getValue().size(), "LMPOP should return one element by default");
+        assertEquals("item3", result.getValue().get(0), "LMPOP should return correct element");
+
+        // Test LMPOP - RIGHT direction with count
+        result = jedis.lmpop(ListDirection.RIGHT, 2, key1, key2, key3);
+        assertNotNull(result, "LMPOP with count should return result");
+        assertEquals(key2, result.getKey(), "LMPOP should return correct key");
+        assertEquals(2, result.getValue().size(), "LMPOP should return specified count");
+        assertEquals("item1", result.getValue().get(0), "LMPOP RIGHT should return from tail");
+        assertEquals("item2", result.getValue().get(1), "LMPOP RIGHT should return in order");
+
+        // Test LMPOP - no elements available
+        result = jedis.lmpop(ListDirection.LEFT, key1, key2, key3);
+        assertNull(result, "LMPOP should return null when no elements available");
+
+        // Test BLMPOP - blocking multi-pop
+        jedis.lpush(key1, "blocking1", "blocking2", "blocking3");
+        result = jedis.blmpop(1.0, ListDirection.LEFT, key1, key2);
+        assertNotNull(result, "BLMPOP should return result");
+        assertEquals(key1, result.getKey(), "BLMPOP should return correct key");
+        assertEquals(1, result.getValue().size(), "BLMPOP should return one element by default");
+        assertEquals("blocking3", result.getValue().get(0), "BLMPOP should return correct element");
+
+        // Test BLMPOP - with count
+        result = jedis.blmpop(1.0, ListDirection.LEFT, 2, key1, key2);
+        assertNotNull(result, "BLMPOP with count should return result");
+        assertEquals(2, result.getValue().size(), "BLMPOP should return specified count");
+        assertEquals("blocking2", result.getValue().get(0), "BLMPOP should return elements in order");
+        assertEquals("blocking1", result.getValue().get(1), "BLMPOP should return elements in order");
+
+        // Test BLMPOP - timeout
+        result = jedis.blmpop(0.1, ListDirection.LEFT, key1, key2, key3);
+        assertNull(result, "BLMPOP should timeout and return null");
+    }
+
+    @Test
+    @Order(148)
+    @DisplayName("List Commands - Multi-Pop Operations Binary")
+    void testListMultiPopOperationsBinary() {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "LMPOP requires Redis 7.0.0+");
+
+        byte[] key1 = (TEST_KEY_PREFIX + "list_mpop_bin1").getBytes();
+        byte[] key2 = (TEST_KEY_PREFIX + "list_mpop_bin2").getBytes();
+        byte[] item1 = "item1".getBytes();
+        byte[] item2 = "item2".getBytes();
+        byte[] item3 = "item3".getBytes();
+
+        // Setup test data
+        jedis.lpush(key1, item1, item2, item3);
+
+        // Test LMPOP - binary
+        KeyValue<byte[], List<byte[]>> result = jedis.lmpop(ListDirection.LEFT, key1, key2);
+        assertNotNull(result, "Binary LMPOP should return result");
+        assertArrayEquals(key1, result.getKey(), "Binary LMPOP should return correct key");
+        assertEquals(1, result.getValue().size(), "Binary LMPOP should return one element");
+        assertArrayEquals(
+                item3, result.getValue().get(0), "Binary LMPOP should return correct element");
+
+        // Test LMPOP - binary with count
+        result = jedis.lmpop(ListDirection.RIGHT, 2, key1, key2);
+        assertNotNull(result, "Binary LMPOP with count should return result");
+        assertEquals(2, result.getValue().size(), "Binary LMPOP should return specified count");
+        assertArrayEquals(item1, result.getValue().get(0), "Binary LMPOP should return from tail");
+        assertArrayEquals(item2, result.getValue().get(1), "Binary LMPOP should return in order");
+
+        // Test BLMPOP - binary
+        jedis.lpush(key2, item1, item2);
+        result = jedis.blmpop(1.0, ListDirection.LEFT, key1, key2);
+        assertNotNull(result, "Binary BLMPOP should return result");
+        assertArrayEquals(key2, result.getKey(), "Binary BLMPOP should return correct key");
+        assertArrayEquals(
+                item2, result.getValue().get(0), "Binary BLMPOP should return correct element");
+
+        // Test BLMPOP - binary with count
+        result = jedis.blmpop(1.0, ListDirection.LEFT, 2, key1, key2);
+        assertNotNull(result, "Binary BLMPOP with count should return result");
+        assertEquals(1, result.getValue().size(), "Binary BLMPOP should return available elements");
+        assertArrayEquals(
+                item1, result.getValue().get(0), "Binary BLMPOP should return remaining element");
+    }
+
+    @Test
+    @Order(149)
+    @DisplayName("List Commands - Deprecated Operations (RPOPLPUSH, BRPOPLPUSH)")
+    void testListDeprecatedOperations() {
+        String srcKey = TEST_KEY_PREFIX + "list_deprecated_src";
+        String dstKey = TEST_KEY_PREFIX + "list_deprecated_dst";
+
+        // Setup test data
+        jedis.lpush(srcKey, "item1", "item2", "item3");
+        jedis.lpush(dstKey, "existing1");
+
+        // Test RPOPLPUSH
+        String moved = jedis.rpoplpush(srcKey, dstKey);
+        assertEquals("item1", moved, "RPOPLPUSH should return moved element");
+
+        // Verify source list
+        List<String> srcList = jedis.lrange(srcKey, 0, -1);
+        assertEquals(2, srcList.size(), "Source list should have one less element after RPOPLPUSH");
+        assertFalse(srcList.contains("item1"), "Moved element should not be in source");
+
+        // Verify destination list
+        List<String> dstList = jedis.lrange(dstKey, 0, -1);
+        assertEquals(2, dstList.size(), "Destination list should have moved element");
+        assertEquals("item1", dstList.get(0), "RPOPLPUSH should add element to head of destination");
+
+        // Test BRPOPLPUSH
+        jedis.lpush(srcKey, "blocking_item");
+        moved = jedis.brpoplpush(srcKey, dstKey, 1);
+        assertEquals("item2", moved, "BRPOPLPUSH should return moved element");
+
+        dstList = jedis.lrange(dstKey, 0, -1);
+        assertEquals("item2", dstList.get(0), "BRPOPLPUSH should add element to head of destination");
+
+        // Test BRPOPLPUSH - timeout
+        jedis.del(srcKey);
+        moved = jedis.brpoplpush(srcKey, dstKey, 1);
+        assertNull(moved, "BRPOPLPUSH should timeout and return null on empty list");
+    }
+
+    @Test
+    @Order(150)
+    @DisplayName("List Commands - Deprecated Operations Binary")
+    void testListDeprecatedOperationsBinary() {
+        byte[] srcKey = (TEST_KEY_PREFIX + "list_deprecated_src_bin").getBytes();
+        byte[] dstKey = (TEST_KEY_PREFIX + "list_deprecated_dst_bin").getBytes();
+        byte[] item1 = "item1".getBytes();
+        byte[] item2 = "item2".getBytes();
+
+        // Setup test data
+        jedis.lpush(srcKey, item1, item2);
+
+        // Test RPOPLPUSH - binary
+        byte[] moved = jedis.rpoplpush(srcKey, dstKey);
+        assertArrayEquals(item1, moved, "Binary RPOPLPUSH should return moved element");
+
+        // Verify destination list
+        List<byte[]> dstList = jedis.lrange(dstKey, 0, -1);
+        assertEquals(1, dstList.size(), "Binary destination list should have moved element");
+        assertArrayEquals(item1, dstList.get(0), "Binary RPOPLPUSH should move element correctly");
+
+        // Test BRPOPLPUSH - binary
+        moved = jedis.brpoplpush(srcKey, dstKey, 1);
+        assertArrayEquals(item2, moved, "Binary BRPOPLPUSH should return moved element");
+
+        dstList = jedis.lrange(dstKey, 0, -1);
+        assertEquals(2, dstList.size(), "Binary destination should have both elements");
+        assertArrayEquals(item2, dstList.get(0), "Binary BRPOPLPUSH should add to head");
+        assertArrayEquals(item1, dstList.get(1), "Binary BRPOPLPUSH should preserve order");
+    }
+
+    @Test
+    @Order(151)
+    @DisplayName("List Commands - Edge Cases and Error Handling")
+    void testListEdgeCases() {
+        String key = TEST_KEY_PREFIX + "list_edge";
+        String nonListKey = TEST_KEY_PREFIX + "not_a_list";
+
+        // Setup non-list key
+        jedis.set(nonListKey, "string_value");
+
+        // Test operations on empty list
+        assertNull(jedis.lpop(key), "LPOP on non-existent key should return null");
+        assertNull(jedis.rpop(key), "RPOP on non-existent key should return null");
+        assertEquals(0, jedis.llen(key), "LLEN on non-existent key should return 0");
+
+        List<String> emptyRange = jedis.lrange(key, 0, -1);
+        assertTrue(emptyRange.isEmpty(), "LRANGE on non-existent key should return empty list");
+
+        // Test LINDEX on non-existent key
+        assertNull(jedis.lindex(key, 0), "LINDEX on non-existent key should return null");
+
+        // Test operations with large indices
+        jedis.lpush(key, "item1", "item2");
+        assertNull(jedis.lindex(key, 100), "LINDEX with large index should return null");
+        assertNull(jedis.lindex(key, -100), "LINDEX with large negative index should return null");
+
+        // Test LRANGE with invalid ranges
+        List<String> invalidRange = jedis.lrange(key, 10, 20);
+        assertTrue(invalidRange.isEmpty(), "LRANGE with invalid range should return empty list");
+
+        // Test LREM on non-existent element
+        long removed = jedis.lrem(key, 1, "non_existent");
+        assertEquals(0, removed, "LREM on non-existent element should return 0");
+
+        // Test LINSERT with non-existent pivot
+        long insertResult = jedis.linsert(key, ListPosition.BEFORE, "non_existent", "new_value");
+        assertEquals(-1, insertResult, "LINSERT with non-existent pivot should return -1");
+
+        // Test LPUSHX and RPUSHX on non-existent key
+        assertEquals(
+                0, jedis.lpushx("non_existent_key", "value"), "LPUSHX on non-existent key should return 0");
+        assertEquals(
+                0, jedis.rpushx("non_existent_key", "value"), "RPUSHX on non-existent key should return 0");
     }
 }
