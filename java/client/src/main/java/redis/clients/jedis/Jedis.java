@@ -2627,6 +2627,18 @@ public final class Jedis implements Closeable {
      * @param result the GLIDE scan result
      * @return ScanResult with cursor and keys
      */
+    /** Helper method to convert Jedis LPosParams to GLIDE LPosOptions. */
+    private static LPosOptions convertLPosParamsToLPosOptions(LPosParams params) {
+        LPosOptions.LPosOptionsBuilder builder = LPosOptions.builder();
+        if (params.getRank() != null) {
+            builder.rank((long) params.getRank());
+        }
+        if (params.getMaxlen() != null) {
+            builder.maxLength((long) params.getMaxlen());
+        }
+        return builder.build();
+    }
+
     private static ScanResult<String> convertToScanResult(Object[] result) {
         if (result != null && result.length >= 2) {
             String newCursor = result[0].toString();
@@ -6925,20 +6937,7 @@ public final class Jedis implements Closeable {
         checkNotClosed();
         ensureInitialized();
         try {
-            LPosOptions options = LPosOptions.builder().build();
-            if (params.getRank() != null) {
-                options = LPosOptions.builder().rank(((long) params.getRank())).build();
-            }
-            if (params.getMaxlen() != null) {
-                options = LPosOptions.builder().maxLength(((long) params.getMaxlen())).build();
-            }
-            if (params.getRank() != null && params.getMaxlen() != null) {
-                options =
-                        LPosOptions.builder()
-                                .rank(((long) params.getRank()))
-                                .maxLength(((long) params.getMaxlen()))
-                                .build();
-            }
+            LPosOptions options = convertLPosParamsToLPosOptions(params);
             return glideClient.lpos(key, element, options).get();
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("LPOS operation failed", e);
@@ -6958,20 +6957,7 @@ public final class Jedis implements Closeable {
         checkNotClosed();
         ensureInitialized();
         try {
-            LPosOptions options = LPosOptions.builder().build();
-            if (params.getRank() != null) {
-                options = LPosOptions.builder().rank(((long) params.getRank())).build();
-            }
-            if (params.getMaxlen() != null) {
-                options = LPosOptions.builder().maxLength(((long) params.getMaxlen())).build();
-            }
-            if (params.getRank() != null && params.getMaxlen() != null) {
-                options =
-                        LPosOptions.builder()
-                                .rank(((long) params.getRank()))
-                                .maxLength(((long) params.getMaxlen()))
-                                .build();
-            }
+            LPosOptions options = convertLPosParamsToLPosOptions(params);
             return glideClient.lpos(GlideString.of(key), GlideString.of(element), options).get();
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("LPOS operation failed", e);
@@ -6991,20 +6977,7 @@ public final class Jedis implements Closeable {
         checkNotClosed();
         ensureInitialized();
         try {
-            LPosOptions options = LPosOptions.builder().build();
-            if (params.getRank() != null) {
-                options = LPosOptions.builder().rank(((long) params.getRank())).build();
-            }
-            if (params.getMaxlen() != null) {
-                options = LPosOptions.builder().maxLength(((long) params.getMaxlen())).build();
-            }
-            if (params.getRank() != null && params.getMaxlen() != null) {
-                options =
-                        LPosOptions.builder()
-                                .rank(((long) params.getRank()))
-                                .maxLength(((long) params.getMaxlen()))
-                                .build();
-            }
+            LPosOptions options = convertLPosParamsToLPosOptions(params);
             Long[] result = glideClient.lposCount(key, element, count, options).get();
             return result != null ? Arrays.asList(result) : Collections.emptyList();
         } catch (InterruptedException | ExecutionException e) {
@@ -7025,20 +6998,7 @@ public final class Jedis implements Closeable {
         checkNotClosed();
         ensureInitialized();
         try {
-            LPosOptions options = LPosOptions.builder().build();
-            if (params.getRank() != null) {
-                options = LPosOptions.builder().rank(((long) params.getRank())).build();
-            }
-            if (params.getMaxlen() != null) {
-                options = LPosOptions.builder().maxLength(((long) params.getMaxlen())).build();
-            }
-            if (params.getRank() != null && params.getMaxlen() != null) {
-                options =
-                        LPosOptions.builder()
-                                .rank(((long) params.getRank()))
-                                .maxLength(((long) params.getMaxlen()))
-                                .build();
-            }
+            LPosOptions options = convertLPosParamsToLPosOptions(params);
             Long[] result =
                     glideClient.lposCount(GlideString.of(key), GlideString.of(element), count, options).get();
             return result != null ? Arrays.asList(result) : Collections.emptyList();
