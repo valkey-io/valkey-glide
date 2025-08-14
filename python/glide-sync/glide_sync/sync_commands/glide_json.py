@@ -6,10 +6,10 @@ Examples:
     >>> from glide import glide_json
     >>> import json
     >>> value = {'a': 1.0, 'b': 2}
-    >>> json_str = json.dumps(value) # Convert Python dictionary to JSON string using json.dumps()
-    >>> await glide_json.set(client, "doc", "$", json_str)
+    >>> json_str = glide_json.dumps(value) # Convert Python dictionary to JSON string using json.dumps()
+    >>> json.set(client, "doc", "$", json_str)
         'OK'  # Indicates successful setting of the value at path '$' in the key stored at `doc`.
-    >>> json_get = await glide_json.get(client, "doc", "$") # Returns the value at path '$' in the JSON document stored at
+    >>> json_get = glide_json.get(client, "doc", "$") # Returns the value at path '$' in the JSON document stored at
                                                             # `doc` as JSON string.
     >>> print(json_get)
         b"[{\"a\":1.0,\"b\":2}]"
@@ -35,7 +35,7 @@ from glide_shared.constants import (
 from ..glide_client import TGlideClient
 
 
-async def set(
+def set(
     client: TGlideClient,
     key: TEncodable,
     path: TEncodable,
@@ -64,17 +64,17 @@ async def set(
         >>> import json
         >>> value = {'a': 1.0, 'b': 2}
         >>> json_str = json.dumps(value)
-        >>> await glide_json.set(client, "doc", "$", json_str)
+        >>> glide_json.set(client, "doc", "$", json_str)
             'OK'  # Indicates successful setting of the value at path '$' in the key stored at `doc`.
     """
     args = ["JSON.SET", key, path, value]
     if set_condition:
         args.append(set_condition.value)
 
-    return cast(Optional[TOK], await client.custom_command(args))
+    return cast(Optional[TOK], client.custom_command(args))
 
 
-async def get(
+def get(
     client: TGlideClient,
     key: TEncodable,
     paths: Optional[Union[TEncodable, List[TEncodable]]] = None,
@@ -112,16 +112,16 @@ async def get(
     Examples:
         >>> from glide import glide_json, JsonGetOptions
         >>> import json
-        >>> json_str = await glide_json.get(client, "doc", "$")
+        >>> json_str = glide_json.get(client, "doc", "$")
         >>> json.loads(str(json_str)) # Parse JSON string to Python data
             [{"a": 1.0, "b" :2}]  # JSON object retrieved from the key `doc` using json.loads()
-        >>> await glide_json.get(client, "doc", "$")
+        >>> glide_json.get(client, "doc", "$")
             b"[{\"a\":1.0,\"b\":2}]"  # Returns the value at path '$' in the JSON document stored at `doc`.
-        >>> await glide_json.get(client, "doc", ["$.a", "$.b"], JsonGetOptions(indent="  ", newline="\n", space=" "))
+        >>> glide_json.get(client, "doc", ["$.a", "$.b"], JsonGetOptions(indent="  ", newline="\n", space=" "))
             b"{\n \"$.a\": [\n  1.0\n ],\n \"$.b\": [\n  2\n ]\n}"  # Returns the values at paths '$.a' and '$.b' in the JSON
                                                                     # document stored at `doc`, with specified
                                                                     # formatting options.
-        >>> await glide_json.get(client, "doc", "$.non_existing_path")
+        >>> glide_json.get(client, "doc", "$.non_existing_path")
             b"[]"  # Returns an empty array since the path '$.non_existing_path' does not exist in the JSON document
                    # stored at `doc`.
     """
@@ -133,10 +133,10 @@ async def get(
             paths = [paths]
         args.extend(paths)
 
-    return cast(TJsonResponse[Optional[bytes]], await client.custom_command(args))
+    return cast(TJsonResponse[Optional[bytes]], client.custom_command(args))
 
 
-async def arrappend(
+def arrappend(
     client: TGlideClient,
     key: TEncodable,
     path: TEncodable,
@@ -169,20 +169,20 @@ async def arrappend(
     Examples:
         >>> from glide import glide_json
         >>> import json
-        >>> await glide_json.set(client, "doc", "$", '{"a": 1, "b": ["one", "two"]}')
+        >>> glide_json.set(client, "doc", "$", '{"a": 1, "b": ["one", "two"]}')
             'OK'  # Indicates successful setting of the value at path '$' in the key stored at `doc`.
-        >>> await glide_json.arrappend(client, "doc", ["three"], "$.b")
+        >>> glide_json.arrappend(client, "doc", ["three"], "$.b")
             [3]  # Returns the new length of the array at path '$.b' after appending the value.
-        >>> await glide_json.arrappend(client, "doc", ["four"], ".b")
+        >>> glide_json.arrappend(client, "doc", ["four"], ".b")
             4 # Returns the new length of the array at path '.b' after appending the value.
-        >>> json.loads(await glide_json.get(client, "doc", "."))
+        >>> json.loads(glide_json.get(client, "doc", "."))
             {"a": 1, "b": ["one", "two", "three", "four"]}  # Returns the updated JSON document
     """
     args = ["JSON.ARRAPPEND", key, path] + values
-    return cast(TJsonResponse[int], await client.custom_command(args))
+    return cast(TJsonResponse[int], client.custom_command(args))
 
 
-async def arrindex(
+def arrindex(
     client: TGlideClient,
     key: TEncodable,
     path: TEncodable,
@@ -231,25 +231,25 @@ async def arrindex(
 
     Examples:
         >>> from glide import glide_json
-        >>> await glide_json.set(client, "doc", "$", '[[], ["a"], ["a", "b"], ["a", "b", "c"]]')
+        >>> glide_json.set(client, "doc", "$", '[[], ["a"], ["a", "b"], ["a", "b", "c"]]')
             'OK'
-        >>> await glide_json.arrindex(client, "doc", "$[*]", '"b"')
+        >>> glide_json.arrindex(client, "doc", "$[*]", '"b"')
             [-1, -1, 1, 1]
-        >>> await glide_json.set(client, "doc", ".", '{"children": ["John", "Jack", "Tom", "Bob", "Mike"]}')
+        >>> glide_json.set(client, "doc", ".", '{"children": ["John", "Jack", "Tom", "Bob", "Mike"]}')
             'OK'
-        >>> await glide_json.arrindex(client, "doc", ".children", '"Tom"')
+        >>> glide_json.arrindex(client, "doc", ".children", '"Tom"')
             2
-        >>> await glide_json.set(client, "doc", "$", '{"fruits": ["apple", "banana", "cherry", "banana", "grape"]}')
+        >>> glide_json.set(client, "doc", "$", '{"fruits": ["apple", "banana", "cherry", "banana", "grape"]}')
             'OK'
-        >>> await glide_json.arrindex(client, "doc", "$.fruits", '"banana"', JsonArrIndexOptions(start=2, end=4))
+        >>> glide_json.arrindex(client, "doc", "$.fruits", '"banana"', JsonArrIndexOptions(start=2, end=4))
             3
-        >>> await glide_json.set(client, "k", ".", '[1, 2, "a", 4, "a", 6, 7, "b"]')
+        >>> glide_json.set(client, "k", ".", '[1, 2, "a", 4, "a", 6, 7, "b"]')
             'OK'
-        >>> await glide_json.arrindex(client, "k", ".", '"b"', JsonArrIndexOptions(start=4, end=0))
+        >>> glide_json.arrindex(client, "k", ".", '"b"', JsonArrIndexOptions(start=4, end=0))
             7  # "b" found at index 7 within the specified range, treating end=0 as the entire array's end.
-        >>> await glide_json.arrindex(client, "k", ".", '"b"', JsonArrIndexOptions(start=4, end=-1))
+        >>> glide_json.arrindex(client, "k", ".", '"b"', JsonArrIndexOptions(start=4, end=-1))
             7  # "b" found at index 7, with end=-1 covering the full array to its last element.
-        >>> await glide_json.arrindex(client, "k", ".", '"b"', JsonArrIndexOptions(start=4, end=7))
+        >>> glide_json.arrindex(client, "k", ".", '"b"', JsonArrIndexOptions(start=4, end=7))
             -1  # "b" not found within the range from index 4 to exclusive end at index 7.
     """
     args = ["JSON.ARRINDEX", key, path, value]
@@ -257,10 +257,10 @@ async def arrindex(
     if options:
         args.extend(options.to_args())
 
-    return cast(TJsonResponse[int], await client.custom_command(args))
+    return cast(TJsonResponse[int], client.custom_command(args))
 
 
-async def arrinsert(
+def arrinsert(
     client: TGlideClient,
     key: TEncodable,
     path: TEncodable,
@@ -295,25 +295,25 @@ async def arrinsert(
 
     Examples:
         >>> from glide import glide_json
-        >>> await glide_json.set(client, "doc", "$", '[[], ["a"], ["a", "b"]]')
+        >>> glide_json.set(client, "doc", "$", '[[], ["a"], ["a", "b"]]')
             'OK'
-        >>> await glide_json.arrinsert(client, "doc", "$[*]", 0, ['"c"', '{"key": "value"}', "true", "null", '["bar"]'])
+        >>> glide_json.arrinsert(client, "doc", "$[*]", 0, ['"c"', '{"key": "value"}', "true", "null", '["bar"]'])
             [5, 6, 7]  # New lengths of arrays after insertion
-        >>> await glide_json.get(client, "doc")
+        >>> glide_json.get(client, "doc")
             b'[["c",{"key":"value"},true,null,["bar"]],["c",{"key":"value"},true,null,["bar"],"a"],["c",{"key":"value"},true,null,["bar"],"a","b"]]'
 
-        >>> await glide_json.set(client, "doc", "$", '[[], ["a"], ["a", "b"]]')
+        >>> glide_json.set(client, "doc", "$", '[[], ["a"], ["a", "b"]]')
             'OK'
-        >>> await glide_json.arrinsert(client, "doc", ".", 0, ['"c"'])
+        >>> glide_json.arrinsert(client, "doc", ".", 0, ['"c"'])
             4  # New length of the root array after insertion
-        >>> await glide_json.get(client, "doc")
+        >>> glide_json.get(client, "doc")
             b'[\"c\",[],[\"a\"],[\"a\",\"b\"]]'
     """
     args = ["JSON.ARRINSERT", key, path, str(index)] + values
-    return cast(TJsonResponse[int], await client.custom_command(args))
+    return cast(TJsonResponse[int], client.custom_command(args))
 
 
-async def arrlen(
+def arrlen(
     client: TGlideClient,
     key: TEncodable,
     path: Optional[TEncodable] = None,
@@ -341,22 +341,22 @@ async def arrlen(
 
     Examples:
         >>> from glide import glide_json
-        >>> await glide_json.set(client, "doc", "$", '{"a": [1, 2, 3], "b": {"a": [1, 2], "c": {"a": 42}}}')
+        >>> glide_json.set(client, "doc", "$", '{"a": [1, 2, 3], "b": {"a": [1, 2], "c": {"a": 42}}}')
             'OK'  # JSON is successfully set for doc
-        >>> await glide_json.arrlen(client, "doc", "$")
+        >>> glide_json.arrlen(client, "doc", "$")
             [None]  # No array at the root path.
-        >>> await glide_json.arrlen(client, "doc", "$.a")
+        >>> glide_json.arrlen(client, "doc", "$.a")
             [3]  # Retrieves the length of the array at path $.a.
-        >>> await glide_json.arrlen(client, "doc", "$..a")
+        >>> glide_json.arrlen(client, "doc", "$..a")
             [3, 2, None]  # Retrieves lengths of arrays found at all levels of the path `$..a`.
-        >>> await glide_json.arrlen(client, "doc", "..a")
+        >>> glide_json.arrlen(client, "doc", "..a")
             3  # Legacy path retrieves the first array match at path `..a`.
-        >>> await glide_json.arrlen(client, "non_existing_key", "$.a")
+        >>> glide_json.arrlen(client, "non_existing_key", "$.a")
             None  # Returns None because the key does not exist.
 
-        >>> await glide_json.set(client, "doc", "$", '[1, 2, 3, 4]')
+        >>> glide_json.set(client, "doc", "$", '[1, 2, 3, 4]')
             'OK'  # JSON is successfully set for doc
-        >>> await glide_json.arrlen(client, "doc")
+        >>> glide_json.arrlen(client, "doc")
             4  # Retrieves lengths of array in root.
     """
     args = ["JSON.ARRLEN", key]
@@ -364,11 +364,11 @@ async def arrlen(
         args.append(path)
     return cast(
         Optional[TJsonResponse[int]],
-        await client.custom_command(args),
+        client.custom_command(args),
     )
 
 
-async def arrpop(
+def arrpop(
     client: TGlideClient,
     key: TEncodable,
     options: Optional[JsonArrPopOptions] = None,
@@ -400,31 +400,31 @@ async def arrpop(
 
     Examples:
         >>> from glide import glide_json
-        >>> await glide_json.set(
+        >>> glide_json.set(
         ...     client,
         ...     "doc",
         ...     "$",
         ...     '{"a": [1, 2, true], "b": {"a": [3, 4, ["value", 3, false], 5], "c": {"a": 42}}}'
         ... )
             b'OK'
-        >>> await glide_json.arrpop(client, "doc", JsonArrPopOptions(path="$.a", index=1))
+        >>> glide_json.arrpop(client, "doc", JsonArrPopOptions(path="$.a", index=1))
             [b'2']  # Pop second element from array at path $.a
-        >>> await glide_json.arrpop(client, "doc", JsonArrPopOptions(path="$..a"))
+        >>> glide_json.arrpop(client, "doc", JsonArrPopOptions(path="$..a"))
             [b'true', b'5', None]  # Pop last elements from all arrays matching path `$..a`
 
         #### Using a legacy path (..) to pop the first matching array
-        >>> await glide_json.arrpop(client, "doc", JsonArrPopOptions(path="..a"))
+        >>> glide_json.arrpop(client, "doc", JsonArrPopOptions(path="..a"))
             b"1"  # First match popped (from array at path ..a)
 
         #### Even though only one value is returned from `..a`, subsequent arrays are also affected
-        >>> await glide_json.get(client, "doc", "$..a")
+        >>> glide_json.get(client, "doc", "$..a")
             b"[[], [3, 4], 42]"  # Remaining elements after pop show the changes
 
-        >>> await glide_json.set(client, "doc", "$", '[[], ["a"], ["a", "b", "c"]]')
+        >>> glide_json.set(client, "doc", "$", '[[], ["a"], ["a", "b", "c"]]')
             b'OK'  # JSON is successfully set
-        >>> await glide_json.arrpop(client, "doc", JsonArrPopOptions(path=".", index=-1))
+        >>> glide_json.arrpop(client, "doc", JsonArrPopOptions(path=".", index=-1))
             b'["a","b","c"]'  # Pop last elements at path `.`
-        >>> await glide_json.arrpop(client, "doc")
+        >>> glide_json.arrpop(client, "doc")
             b'["a"]'  # Pop last elements at path `.`
     """
     args = ["JSON.ARRPOP", key]
@@ -433,11 +433,11 @@ async def arrpop(
 
     return cast(
         Optional[TJsonResponse[bytes]],
-        await client.custom_command(args),
+        client.custom_command(args),
     )
 
 
-async def arrtrim(
+def arrtrim(
     client: TGlideClient,
     key: TEncodable,
     path: TEncodable,
@@ -475,27 +475,27 @@ async def arrtrim(
 
     Examples:
         >>> from glide import glide_json
-        >>> await glide_json.set(client, "doc", "$", '[[], ["a"], ["a", "b"], ["a", "b", "c"]]')
+        >>> glide_json.set(client, "doc", "$", '[[], ["a"], ["a", "b"], ["a", "b", "c"]]')
             'OK'
-        >>> await glide_json.arrtrim(client, "doc", "$[*]", 0, 1)
+        >>> glide_json.arrtrim(client, "doc", "$[*]", 0, 1)
             [0, 1, 2, 2]
-        >>> await glide_json.get(client, "doc")
+        >>> glide_json.get(client, "doc")
             b'[[],[\"a\"],[\"a\",\"b\"],[\"a\",\"b\"]]'
 
-        >>> await glide_json.set(client, "doc", "$", '{"children": ["John", "Jack", "Tom", "Bob", "Mike"]}')
+        >>> glide_json.set(client, "doc", "$", '{"children": ["John", "Jack", "Tom", "Bob", "Mike"]}')
             'OK'
-        >>> await glide_json.arrtrim(client, "doc", ".children", 0, 1)
+        >>> glide_json.arrtrim(client, "doc", ".children", 0, 1)
             2
-        >>> await glide_json.get(client, "doc", ".children")
+        >>> glide_json.get(client, "doc", ".children")
             b'["John","Jack"]'
     """
     return cast(
         TJsonResponse[int],
-        await client.custom_command(["JSON.ARRTRIM", key, path, str(start), str(end)]),
+        client.custom_command(["JSON.ARRTRIM", key, path, str(start), str(end)]),
     )
 
 
-async def clear(
+def clear(
     client: TGlideClient,
     key: TEncodable,
     path: Optional[str] = None,
@@ -518,21 +518,21 @@ async def clear(
 
     Examples:
         >>> from glide import glide_json
-        >>> await glide_json.set(
+        >>> glide_json.set(
         ...     client,
         ...     "doc",
         ...     "$",
         ...     '{"obj":{"a":1, "b":2}, "arr":[1,2,3], "str": "foo", "bool": true, "int": 42, "float": 3.14, "nullVal": null}'
         ... )
             'OK'  # JSON document is successfully set.
-        >>> await glide_json.clear(client, "doc", "$.*")
+        >>> glide_json.clear(client, "doc", "$.*")
             6      # 6 values are cleared (arrays/objects/strings/numbers/booleans), but `null` remains as is.
-        >>> await glide_json.get(client, "doc", "$")
+        >>> glide_json.get(client, "doc", "$")
             b'[{"obj":{},"arr":[],"str":"","bool":false,"int":0,"float":0.0,"nullVal":null}]'
-        >>> await glide_json.clear(client, "doc", "$.*")
+        >>> glide_json.clear(client, "doc", "$.*")
             0  # No further clearing needed since the containers are already empty and the values are defaults.
 
-        >>> await glide_json.set(
+        >>> glide_json.set(
         ...     client,
         ...     "doc",
         ...     "$",
@@ -545,26 +545,26 @@ async def clear(
         ...     )
         ... )
             'OK'
-        >>> await glide_json.clear(client, "doc", "b.a[1:3]")
+        >>> glide_json.clear(client, "doc", "b.a[1:3]")
             2  # 2 elements (`6` and `7`) are cleared.
-        >>> await glide_json.clear(client, "doc", "b.a[1:3]")
+        >>> glide_json.clear(client, "doc", "b.a[1:3]")
             0 # No elements cleared since specified slice has already been cleared.
-        >>> await glide_json.get(client, "doc", "$..a")
+        >>> glide_json.get(client, "doc", "$..a")
             b'[1,[5,0,0],true,"value",3.5,{"foo":"foo"}]'
 
-        >>> await glide_json.clear(client, "doc", "$..a")
+        >>> glide_json.clear(client, "doc", "$..a")
             6  # All numeric, boolean, and string values across paths are cleared.
-        >>> await glide_json.get(client, "doc", "$..a")
+        >>> glide_json.get(client, "doc", "$..a")
             b'[0,[],false,"",0.0,{}]'
     """
     args = ["JSON.CLEAR", key]
     if path:
         args.append(path)
 
-    return cast(int, await client.custom_command(args))
+    return cast(int, client.custom_command(args))
 
 
-async def debug_fields(
+def debug_fields(
     client: TGlideClient,
     key: TEncodable,
     path: Optional[TEncodable] = None,
@@ -600,14 +600,14 @@ async def debug_fields(
 
     Examples:
         >>> from glide import glide_json
-        >>> await glide_json.set(client, "k1", "$", '[1, 2.3, "foo", true, null, {}, [], {"a":1, "b":2}, [1,2,3]]')
+        >>> glide_json.set(client, "k1", "$", '[1, 2.3, "foo", true, null, {}, [], {"a":1, "b":2}, [1,2,3]]')
             'OK'
-        >>> await glide_json.debug_fields(client, "k1", "$[*]")
+        >>> glide_json.debug_fields(client, "k1", "$[*]")
             [1, 1, 1, 1, 1, 0, 0, 2, 3]
-        >>> await glide_json.debug_fields(client, "k1", ".")
+        >>> glide_json.debug_fields(client, "k1", ".")
             14 # 9 top-level fields + 5 nested address fields
 
-        >>> await glide_json.set(
+        >>> glide_json.set(
         ...     client,
         ...     "k1",
         ...     "$",
@@ -624,21 +624,19 @@ async def debug_fields(
         ...     )
         ... )
             'OK'
-        >>> await glide_json.debug_fields(client, "k1")
+        >>> glide_json.debug_fields(client, "k1")
             19
-        >>> await glide_json.debug_fields(client, "k1", ".address")
+        >>> glide_json.debug_fields(client, "k1", ".address")
             4
     """
     args = ["JSON.DEBUG", "FIELDS", key]
     if path:
         args.append(path)
 
-    return cast(
-        Optional[TJsonUniversalResponse[int]], await client.custom_command(args)
-    )
+    return cast(Optional[TJsonUniversalResponse[int]], client.custom_command(args))
 
 
-async def debug_memory(
+def debug_memory(
     client: TGlideClient,
     key: TEncodable,
     path: Optional[TEncodable] = None,
@@ -666,12 +664,12 @@ async def debug_memory(
 
     Examples:
         >>> from glide import glide_json
-        >>> await glide_json.set(client, "k1", "$", '[1, 2.3, "foo", true, null, {}, [], {"a":1, "b":2}, [1,2,3]]')
+        >>> glide_json.set(client, "k1", "$", '[1, 2.3, "foo", true, null, {}, [], {"a":1, "b":2}, [1,2,3]]')
             'OK'
-        >>> await glide_json.debug_memory(client, "k1", "$[*]")
+        >>> glide_json.debug_memory(client, "k1", "$[*]")
             [16, 16, 19, 16, 16, 16, 16, 66, 64]
 
-        >>> await glide_json.set(
+        >>> glide_json.set(
         ...     client,
         ...     "k1",
         ...     "$",
@@ -688,21 +686,19 @@ async def debug_memory(
         ...     )
         ... )
             'OK'
-        >>> await glide_json.debug_memory(client, "k1")
+        >>> glide_json.debug_memory(client, "k1")
             472
-        >>> await glide_json.debug_memory(client, "k1", ".phoneNumbers")
+        >>> glide_json.debug_memory(client, "k1", ".phoneNumbers")
             164
     """
     args = ["JSON.DEBUG", "MEMORY", key]
     if path:
         args.append(path)
 
-    return cast(
-        Optional[TJsonUniversalResponse[int]], await client.custom_command(args)
-    )
+    return cast(Optional[TJsonUniversalResponse[int]], client.custom_command(args))
 
 
-async def delete(
+def delete(
     client: TGlideClient,
     key: TEncodable,
     path: Optional[TEncodable] = None,
@@ -722,22 +718,22 @@ async def delete(
 
     Examples:
         >>> from glide import glide_json
-        >>> await glide_json.set(client, "doc", "$", '{"a": 1, "nested": {"a": 2, "b": 3}}')
+        >>> glide_json.set(client, "doc", "$", '{"a": 1, "nested": {"a": 2, "b": 3}}')
             'OK'  # Indicates successful setting of the value at path '$' in the key stored at `doc`.
-        >>> await glide_json.delete(client, "doc", "$..a")
+        >>> glide_json.delete(client, "doc", "$..a")
             2  # Indicates successful deletion of the specific values in the key stored at `doc`.
-        >>> await glide_json.get(client, "doc", "$")
+        >>> glide_json.get(client, "doc", "$")
             "[{\"nested\":{\"b\":3}}]"  # Returns the value at path '$' in the JSON document stored at `doc`.
-        >>> await glide_json.delete(client, "doc")
+        >>> glide_json.delete(client, "doc")
             1  # Deletes the entire JSON document stored at `doc`.
     """
 
     return cast(
-        int, await client.custom_command(["JSON.DEL", key] + ([path] if path else []))
+        int, client.custom_command(["JSON.DEL", key] + ([path] if path else []))
     )
 
 
-async def forget(
+def forget(
     client: TGlideClient,
     key: TEncodable,
     path: Optional[TEncodable] = None,
@@ -757,23 +753,23 @@ async def forget(
 
     Examples:
         >>> from glide import glide_json
-        >>> await glide_json.set(client, "doc", "$", '{"a": 1, "nested": {"a": 2, "b": 3}}')
+        >>> glide_json.set(client, "doc", "$", '{"a": 1, "nested": {"a": 2, "b": 3}}')
             'OK'  # Indicates successful setting of the value at path '$' in the key stored at `doc`.
-        >>> await glide_json.forget(client, "doc", "$..a")
+        >>> glide_json.forget(client, "doc", "$..a")
             2  # Indicates successful deletion of the specific values in the key stored at `doc`.
-        >>> await glide_json.get(client, "doc", "$")
+        >>> glide_json.get(client, "doc", "$")
             "[{\"nested\":{\"b\":3}}]"  # Returns the value at path '$' in the JSON document stored at `doc`.
-        >>> await glide_json.forget(client, "doc")
+        >>> glide_json.forget(client, "doc")
             1  # Deletes the entire JSON document stored at `doc`.
     """
 
     return cast(
         Optional[int],
-        await client.custom_command(["JSON.FORGET", key] + ([path] if path else [])),
+        client.custom_command(["JSON.FORGET", key] + ([path] if path else [])),
     )
 
 
-async def mget(
+def mget(
     client: TGlideClient,
     keys: List[TEncodable],
     path: TEncodable,
@@ -808,21 +804,21 @@ async def mget(
     Examples:
         >>> from glide import glide_json
         >>> import json
-        >>> json_strs = await glide_json.mget(client, ["doc1", "doc2"], "$")
+        >>> json_strs = glide_json.mget(client, ["doc1", "doc2"], "$")
         >>> [json.loads(js) for js in json_strs]  # Parse JSON strings to Python data
             [[{"a": 1.0, "b": 2}], [{"a": 2.0, "b": {"a": 3.0, "b" : 4.0}}]]  # JSON objects retrieved from keys
                                                                               # `doc1` and `doc2`
-        >>> await glide_json.mget(client, ["doc1", "doc2"], "$.a")
+        >>> glide_json.mget(client, ["doc1", "doc2"], "$.a")
             [b"[1.0]", b"[2.0]"]  # Returns values at path '$.a' for the JSON documents stored at `doc1` and `doc2`.
-        >>> await glide_json.mget(client, ["doc1"], "$.non_existing_path")
+        >>> glide_json.mget(client, ["doc1"], "$.non_existing_path")
             [None]  # Returns an empty array since the path '$.non_existing_path' does not exist in the JSON document
                     # stored at `doc1`.
     """
     args = ["JSON.MGET"] + keys + [path]
-    return cast(List[Optional[bytes]], await client.custom_command(args))
+    return cast(List[Optional[bytes]], client.custom_command(args))
 
 
-async def numincrby(
+def numincrby(
     client: TGlideClient,
     key: TEncodable,
     path: TEncodable,
@@ -853,19 +849,19 @@ async def numincrby(
 
     Examples:
         >>> from glide import glide_json
-        >>> await glide_json.set(client, "doc", "$", '{"a": [], "b": [1], "c": [1, 2], "d": [1, 2, 3]}')
+        >>> glide_json.set(client, "doc", "$", '{"a": [], "b": [1], "c": [1, 2], "d": [1, 2, 3]}')
             'OK'
-        >>> await glide_json.numincrby(client, "doc", "$.d[*]", 10)
+        >>> glide_json.numincrby(client, "doc", "$.d[*]", 10)
             b'[11,12,13]'  # Increment each element in `d` array by 10.
-        >>> await glide_json.numincrby(client, "doc", ".c[1]", 10)
+        >>> glide_json.numincrby(client, "doc", ".c[1]", 10)
             b'12'  # Increment the second element in the `c` array by 10.
     """
     args = ["JSON.NUMINCRBY", key, path, str(number)]
 
-    return cast(bytes, await client.custom_command(args))
+    return cast(bytes, client.custom_command(args))
 
 
-async def nummultby(
+def nummultby(
     client: TGlideClient,
     key: TEncodable,
     path: TEncodable,
@@ -896,19 +892,19 @@ async def nummultby(
 
     Examples:
         >>> from glide import glide_json
-        >>> await glide_json.set(client, "doc", "$", '{"a": [], "b": [1], "c": [1, 2], "d": [1, 2, 3]}')
+        >>> glide_json.set(client, "doc", "$", '{"a": [], "b": [1], "c": [1, 2], "d": [1, 2, 3]}')
             'OK'
-        >>> await glide_json.nummultby(client, "doc", "$.d[*]", 2)
+        >>> glide_json.nummultby(client, "doc", "$.d[*]", 2)
             b'[2,4,6]'  # Multiplies each element in the `d` array by 2.
-        >>> await glide_json.nummultby(client, "doc", ".c[1]", 2)
+        >>> glide_json.nummultby(client, "doc", ".c[1]", 2)
             b'4'  # Multiplies the second element in the `c` array by 2.
     """
     args = ["JSON.NUMMULTBY", key, path, str(number)]
 
-    return cast(bytes, await client.custom_command(args))
+    return cast(bytes, client.custom_command(args))
 
 
-async def objlen(
+def objlen(
     client: TGlideClient,
     key: TEncodable,
     path: Optional[TEncodable] = None,
@@ -938,19 +934,19 @@ async def objlen(
 
     Examples:
         >>> from glide import glide_json
-        >>> await glide_json.set(client, "doc", "$", '{"a": 1.0, "b": {"a": {"x": 1, "y": 2}, "b": 2.5, "c": true}}')
+        >>> glide_json.set(client, "doc", "$", '{"a": 1.0, "b": {"a": {"x": 1, "y": 2}, "b": 2.5, "c": true}}')
             b'OK'  # Indicates successful setting of the value at the root path '$' in the key `doc`.
-        >>> await glide_json.objlen(client, "doc", "$")
+        >>> glide_json.objlen(client, "doc", "$")
             [2]  # Returns the number of key-value pairs at the root object, which has 2 keys: 'a' and 'b'.
-        >>> await glide_json.objlen(client, "doc", ".")
+        >>> glide_json.objlen(client, "doc", ".")
             2  # Returns the number of key-value pairs for the object matching the path '.', which has 2 keys: 'a' and 'b'.
-        >>> await glide_json.objlen(client, "doc", "$.b")
+        >>> glide_json.objlen(client, "doc", "$.b")
             [3]  # Returns the length of the object at path '$.b', which has 3 keys: 'a', 'b', and 'c'.
-        >>> await glide_json.objlen(client, "doc", ".b")
+        >>> glide_json.objlen(client, "doc", ".b")
             3  # Returns the length of the nested object at path '.b', which has 3 keys.
-        >>> await glide_json.objlen(client, "doc", "$..a")
+        >>> glide_json.objlen(client, "doc", "$..a")
             [None, 2]
-        >>> await glide_json.objlen(client, "doc")
+        >>> glide_json.objlen(client, "doc")
             2  # Returns the number of key-value pairs for the object matching the path '.', which has 2 keys: 'a' and 'b'.
     """
     args = ["JSON.OBJLEN", key]
@@ -958,11 +954,11 @@ async def objlen(
         args.append(path)
     return cast(
         Optional[TJsonResponse[int]],
-        await client.custom_command(args),
+        client.custom_command(args),
     )
 
 
-async def objkeys(
+def objkeys(
     client: TGlideClient,
     key: TEncodable,
     path: Optional[TEncodable] = None,
@@ -992,15 +988,15 @@ async def objkeys(
 
     Examples:
         >>> from glide import glide_json
-        >>> await glide_json.set(client, "doc", "$", '{"a": 1.0, "b": {"a": {"x": 1, "y": 2}, "b": 2.5, "c": true}}')
+        >>> glide_json.set(client, "doc", "$", '{"a": 1.0, "b": {"a": {"x": 1, "y": 2}, "b": 2.5, "c": true}}')
             b'OK'  # Indicates successful setting of the value at the root path '$' in the key `doc`.
-        >>> await glide_json.objkeys(client, "doc", "$")
+        >>> glide_json.objkeys(client, "doc", "$")
             [[b"a", b"b"]]  # Returns a list of arrays containing the key names for objects matching the path '$'.
-        >>> await glide_json.objkeys(client, "doc", ".")
+        >>> glide_json.objkeys(client, "doc", ".")
             [b"a", b"b"]  # Returns key names for the object matching the path '.' as it is the only match.
-        >>> await glide_json.objkeys(client, "doc", "$.b")
+        >>> glide_json.objkeys(client, "doc", "$.b")
             [[b"a", b"b", b"c"]]  # Returns key names as a nested list for objects matching the JSONPath '$.b'.
-        >>> await glide_json.objkeys(client, "doc", ".b")
+        >>> glide_json.objkeys(client, "doc", ".b")
             [b"a", b"b", b"c"]  # Returns key names for the nested object at path '.b'.
     """
     args = ["JSON.OBJKEYS", key]
@@ -1008,11 +1004,11 @@ async def objkeys(
         args.append(path)
     return cast(
         Optional[Union[List[bytes], List[List[bytes]]]],
-        await client.custom_command(args),
+        client.custom_command(args),
     )
 
 
-async def resp(
+def resp(
     client: TGlideClient, key: TEncodable, path: Optional[TEncodable] = None
 ) -> TJsonUniversalResponse[
     Optional[Union[bytes, int, List[Optional[Union[bytes, int]]]]]
@@ -1051,11 +1047,11 @@ async def resp(
 
     Examples:
         >>> from glide import glide_json
-        >>> await glide_json.set(client, "doc", "$", '{"a": [1, 2, 3], "b": {"a": [1, 2], "c": {"a": 42}}}')
+        >>> glide_json.set(client, "doc", "$", '{"a": [1, 2, 3], "b": {"a": [1, 2], "c": {"a": 42}}}')
             'OK'
-        >>> await glide_json.resp(client, "doc", "$..a")
+        >>> glide_json.resp(client, "doc", "$..a")
             [[b"[", 1, 2, 3],[b"[", 1, 2],42]
-        >>> await glide_json.resp(client, "doc", "..a")
+        >>> glide_json.resp(client, "doc", "..a")
             [b"[", 1, 2, 3]
     """
     args = ["JSON.RESP", key]
@@ -1066,11 +1062,11 @@ async def resp(
         TJsonUniversalResponse[
             Optional[Union[bytes, int, List[Optional[Union[bytes, int]]]]]
         ],
-        await client.custom_command(args),
+        client.custom_command(args),
     )
 
 
-async def strappend(
+def strappend(
     client: TGlideClient,
     key: TEncodable,
     value: TEncodable,
@@ -1103,28 +1099,28 @@ async def strappend(
     Examples:
         >>> from glide import glide_json
         >>> import json
-        >>> await glide_json.set(client, "doc", "$", json.dumps({"a":"foo", "nested": {"a": "hello"}, "nested2": {"a": 31}}))
+        >>> glide_json.set(client, "doc", "$", json.dumps({"a":"foo", "nested": {"a": "hello"}, "nested2": {"a": 31}}))
             'OK'
-        >>> await glide_json.strappend(client, "doc", json.dumps("baz"), "$..a")
+        >>> glide_json.strappend(client, "doc", json.dumps("baz"), "$..a")
             [6, 8, None]  # The new length of the string values at path '$..a' in the key stored at `doc` after the append
                           # operation.
-        >>> await glide_json.strappend(client, "doc", '"foo"', "nested.a")
+        >>> glide_json.strappend(client, "doc", '"foo"', "nested.a")
             11  # The length of the string value after appending "foo" to the string at path 'nested.array' in the key stored
                 # at `doc`.
-        >>> json.loads(await glide_json.get(client, json.dumps("doc"), "$"))
+        >>> json.loads(glide_json.get(client, json.dumps("doc"), "$"))
             [{"a":"foobaz", "nested": {"a": "hellobazfoo"}, "nested2": {"a": 31}}] # The updated JSON value in the key stored
                                                                                    # at `doc`.
     """
 
     return cast(
         TJsonResponse[int],
-        await client.custom_command(
+        client.custom_command(
             ["JSON.STRAPPEND", key] + ([path, value] if path else [value])
         ),
     )
 
 
-async def strlen(
+def strlen(
     client: TGlideClient,
     key: TEncodable,
     path: Optional[TEncodable] = None,
@@ -1152,28 +1148,28 @@ async def strlen(
     Examples:
         >>> from glide import glide_json
         >>> import json
-        >>> await glide_json.set(client, "doc", "$", json.dumps({"a":"foo", "nested": {"a": "hello"}, "nested2": {"a": 31}}))
+        >>> glide_json.set(client, "doc", "$", json.dumps({"a":"foo", "nested": {"a": "hello"}, "nested2": {"a": 31}}))
             'OK'
-        >>> await glide_json.strlen(client, "doc", "$..a")
+        >>> glide_json.strlen(client, "doc", "$..a")
             [3, 5, None]  # The length of the string values at path '$..a' in the key stored at `doc`.
-        >>> await glide_json.strlen(client, "doc", "nested.a")
+        >>> glide_json.strlen(client, "doc", "nested.a")
             5  # The length of the JSON value at path 'nested.a' in the key stored at `doc`.
-        >>> await glide_json.strlen(client, "doc", "$")
+        >>> glide_json.strlen(client, "doc", "$")
             [None]  # Returns an array with None since the value at root path does in the JSON document stored at `doc` is not
                     # a string.
-        >>> await glide_json.strlen(client, "non_existing_key", ".")
+        >>> glide_json.strlen(client, "non_existing_key", ".")
             None  # `key` doesn't exist.
     """
 
     return cast(
         TJsonResponse[Optional[int]],
-        await client.custom_command(
+        client.custom_command(
             ["JSON.STRLEN", key, path] if path else ["JSON.STRLEN", key]
         ),
     )
 
 
-async def toggle(
+def toggle(
     client: TGlideClient,
     key: TEncodable,
     path: TEncodable,
@@ -1201,30 +1197,30 @@ async def toggle(
     Examples:
         >>> from glide import glide_json
         >>> import json
-        >>> await glide_json.set(
+        >>> glide_json.set(
         ...     client,
         ...     "doc",
         ...     "$",
         ...     json.dumps({"bool": True, "nested": {"bool": False, "nested": {"bool": 10}}})
         ... )
             'OK'
-        >>> await glide_json.toggle(client, "doc", "$.bool")
+        >>> glide_json.toggle(client, "doc", "$.bool")
             [False, True, None]  # Indicates successful toggling of the Boolean values at path '$.bool' in the key stored at
                                  # `doc`.
-        >>> await glide_json.toggle(client, "doc", "bool")
+        >>> glide_json.toggle(client, "doc", "bool")
             True  # Indicates successful toggling of the Boolean value at path 'bool' in the key stored at `doc`.
-        >>> json.loads(await glide_json.get(client, "doc", "$"))
+        >>> json.loads(glide_json.get(client, "doc", "$"))
             [{"bool": True, "nested": {"bool": True, "nested": {"bool": 10}}}] # The updated JSON value in the key stored at
                                                                                # `doc`.
     """
 
     return cast(
         TJsonResponse[bool],
-        await client.custom_command(["JSON.TOGGLE", key, path]),
+        client.custom_command(["JSON.TOGGLE", key, path]),
     )
 
 
-async def type(
+def type(
     client: TGlideClient,
     key: TEncodable,
     path: Optional[TEncodable] = None,
@@ -1251,19 +1247,17 @@ async def type(
 
     Examples:
         >>> from glide import glide_json
-        >>> await glide_json.set(client, "doc", "$", '{"a": 1, "nested": {"a": 2, "b": 3}}')
+        >>> glide_json.set(client, "doc", "$", '{"a": 1, "nested": {"a": 2, "b": 3}}')
             'OK'
-        >>> await glide_json.type(client, "doc", "$.nested")
+        >>> glide_json.type(client, "doc", "$.nested")
             [b'object']  # Indicates the type of the value at path '$.nested' in the key stored at `doc`.
-        >>> await glide_json.type(client, "doc", "$.nested.a")
+        >>> glide_json.type(client, "doc", "$.nested.a")
             [b'integer']  # Indicates the type of the value at path '$.nested.a' in the key stored at `doc`.
-        >>> await glide_json.type(client, "doc", "$[*]")
+        >>> glide_json.type(client, "doc", "$[*]")
             [b'integer',  b'object']  # Array of types in all top level elements.
     """
     args = ["JSON.TYPE", key]
     if path:
         args.append(path)
 
-    return cast(
-        Optional[TJsonUniversalResponse[bytes]], await client.custom_command(args)
-    )
+    return cast(Optional[TJsonUniversalResponse[bytes]], client.custom_command(args))

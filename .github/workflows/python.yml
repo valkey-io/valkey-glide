@@ -410,7 +410,7 @@ jobs:
                   target: aarch64-unknown-linux-gnu
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
-            - name: Test with pytest (asyncio only)
+            - name: Test with pytest
               if: ${{ env.RUN_FULL_MATRIX != 'true' }}
               working-directory: ./python
               run: |
@@ -421,6 +421,18 @@ jobs:
               working-directory: ./python
               run: |
                   python3 dev.py test --args --tls --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} -k server_modules --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
+
+            - name: Test with pytest (async only)
+              if: ${{ env.RUN_ASYNC_ONLY == 'true' && env.RUN_FULL_MATRIX != 'true'}}
+              working-directory: ./python
+              run: |
+                  python3 dev.py test --args --tls --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} -k server_modules tests/async_tests --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
+
+            - name: Test with pytest (sync only)
+              if: ${{ env.RUN_SYNC_ONLY == 'true' && env.RUN_FULL_MATRIX != 'true'}}
+              working-directory: ./python
+              run: |
+                  python3 dev.py test --args --tls --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} -k server_modules tests/sync_tests --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
 
             - name: Upload test reports
               if: always()

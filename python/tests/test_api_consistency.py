@@ -45,8 +45,6 @@ EXCLUDED_API_FUNCTIONS = {
 
 EXCLUDED_API_FILENAMES = {
     "async_only": [
-        "ft.py",
-        "glide_json.py",
         "opentelemetry.py",
     ],
     "sync_only": ["_glide_ffi.py"],
@@ -80,11 +78,9 @@ EXCLUDED_TESTS = {
 
 EXCLUDED_TESTS_FILENAMES = {
     "async_only": [
-        "test_json.py",
         "test_opentelemetry.py",
         "test_pubsub.py",
         "test_scan.py",
-        "test_ft.py",
     ],
     "sync_only": [],
 }
