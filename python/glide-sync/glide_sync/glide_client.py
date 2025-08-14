@@ -379,6 +379,10 @@ class BaseClient(CoreCommands):
         if client_adapter_ptr == self._ffi.NULL:
             raise ValueError("Invalid client pointer.")
 
+        # Note: batch_refs and option_refs must remain in scope
+        # throughout this entire function call to prevent garbage collection of Python objects
+        # that have C pointers pointing to them via ffi.from_buffer().
+
         # Convert commands + atomic flag to C BatchInfo
         batch_info, batch_refs = self._convert_commands_to_c_batch_info(
             commands, is_atomic
@@ -404,13 +408,22 @@ class BaseClient(CoreCommands):
         commands: List[Tuple[RequestType.ValueType, List[TEncodable]]],
         is_atomic: bool,
     ) -> Tuple[Any, List[Any]]:
-        """Convert commands directly to C BatchInfo (no intermediate _to_c_strings)."""
+        """
+        Convert commands directly to C BatchInfo (no intermediate _to_c_strings).
+        Returns a tuple of (batch_info, refs) where refs contains all Python objects
+        that must be kept alive to prevent garbage collection while C code uses pointers to them.
+        """
+        # all_refs keeps Python objects alive while C pointers reference their memory.
+        # ffi.from_buffer() creates C pointers to Python object memory, and ffi.new() creates
+        # FFI-managed memory with a Python reference controlling its lifetime. In both cases,
+        # if Python references are garbage collected, the underlying memory may be freed,
+        # creating dangling C pointers.
 
         all_refs = []
         cmd_infos = []
 
         for request_type, args in commands:
-            buffers = []
+            args_buffers = []
             arg_ptrs = []
             arg_lengths = []
 
@@ -422,11 +435,10 @@ class BaseClient(CoreCommands):
                 else:
                     raise TypeError(f"Unsupported argument type: {type(arg)}")
 
-                buffers.append(arg_bytes)
+                args_buffers.append(arg_bytes)
                 arg_ptrs.append(self._ffi.from_buffer(arg_bytes))
                 arg_lengths.append(len(arg_bytes))
 
-            # Build the two arrays directly
             c_arg_array = self._ffi.new("const uint8_t*[]", arg_ptrs)
             c_lengths = self._ffi.new("size_t[]", arg_lengths)
 
@@ -441,7 +453,7 @@ class BaseClient(CoreCommands):
             )
 
             cmd_infos.append(cmd_info)
-            all_refs.extend(buffers + [c_arg_array, c_lengths])
+            all_refs.extend(args_buffers + [c_arg_array, c_lengths])
 
         cmd_info_array = self._ffi.new("const CmdInfo*[]", cmd_infos)
         all_refs.append(cmd_info_array)
@@ -465,7 +477,12 @@ class BaseClient(CoreCommands):
         route: Optional[Route],
         timeout: Optional[int],
     ) -> Tuple[Any, List[Any]]:
-        """Create BatchOptionsInfo from params, with refs."""
+        """
+        Create BatchOptionsInfo from params, with refs.
+        Returns a tuple of (batch_options, refs) where refs contains all Python objects
+        that must be kept alive while C code accesses pointers to them.
+        """
+
         route_info, route_refs = self._convert_route_to_c_format(route)
 
         batch_options = self._ffi.new(
@@ -484,6 +501,12 @@ class BaseClient(CoreCommands):
     def _convert_route_to_c_format(
         self, route: Optional[Route]
     ) -> Tuple[Any, List[Any]]:
+        """
+        Convert a Route object to C RouteInfo format.
+
+        Returns a tuple of (route_info, refs) where refs contains all Python objects
+        that must be kept alive while C code uses pointers to them.
+        """
         if route is None:
             return self._ffi.NULL, []
 
