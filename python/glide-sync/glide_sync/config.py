@@ -53,6 +53,9 @@ class GlideClientConfiguration(SharedGlideClientConfiguration):
         client_name (Optional[str]): Client name to be used for the client. Will be used with CLIENT SETNAME command during
             connection establishment.
         protocol (ProtocolVersion): The version of the RESP protocol to communicate with the server.
+        pubsub_subscriptions (Optional[GlideClientConfiguration.PubSubSubscriptions]): Pubsub subscriptions to be used for the
+                client.
+                Will be applied via SUBSCRIBE/PSUBSCRIBE commands during connection establishment.
         client_az (Optional[str]): Availability Zone of the client.
             If ReadFrom strategy is AZAffinity, this setting ensures that readonly commands are directed to replicas within
             the specified AZ if exits.
@@ -76,6 +79,9 @@ class GlideClientConfiguration(SharedGlideClientConfiguration):
         database_id: Optional[int] = None,
         client_name: Optional[str] = None,
         protocol: ProtocolVersion = ProtocolVersion.RESP3,
+        pubsub_subscriptions: Optional[
+            SharedGlideClientConfiguration.PubSubSubscriptions
+        ] = None,
         client_az: Optional[str] = None,
         advanced_config: Optional[AdvancedGlideClientConfiguration] = None,
         lazy_connect: Optional[bool] = None,
@@ -90,7 +96,7 @@ class GlideClientConfiguration(SharedGlideClientConfiguration):
             database_id=database_id,
             client_name=client_name,
             protocol=protocol,
-            pubsub_subscriptions=None,
+            pubsub_subscriptions=pubsub_subscriptions,
             inflight_requests_limit=None,
             client_az=client_az,
             advanced_config=advanced_config,
@@ -130,6 +136,9 @@ class GlideClusterClientConfiguration(SharedGlideClusterClientConfiguration):
             These checks evaluate changes in the cluster's topology, triggering a slot refresh when detected.
             Periodic checks ensure a quick and efficient process by querying a limited number of nodes.
             Defaults to PeriodicChecksStatus.ENABLED_DEFAULT_CONFIGS.
+        pubsub_subscriptions (Optional[GlideClusterClientConfiguration.PubSubSubscriptions]): Pubsub subscriptions to be used
+            for the client.
+            Will be applied via SUBSCRIBE/PSUBSCRIBE/SSUBSCRIBE commands during connection establishment.
         client_az (Optional[str]): Availability Zone of the client.
             If ReadFrom strategy is AZAffinity, this setting ensures that readonly commands are directed to replicas within
             the specified AZ if exits.
@@ -158,6 +167,9 @@ class GlideClusterClientConfiguration(SharedGlideClusterClientConfiguration):
         periodic_checks: Union[
             PeriodicChecksStatus, PeriodicChecksManualInterval
         ] = PeriodicChecksStatus.ENABLED_DEFAULT_CONFIGS,
+        pubsub_subscriptions: Optional[
+            SharedGlideClusterClientConfiguration.PubSubSubscriptions
+        ] = None,
         client_az: Optional[str] = None,
         advanced_config: Optional[AdvancedGlideClusterClientConfiguration] = None,
         lazy_connect: Optional[bool] = None,
@@ -169,7 +181,7 @@ class GlideClusterClientConfiguration(SharedGlideClusterClientConfiguration):
             read_from=read_from,
             request_timeout=request_timeout,
             periodic_checks=periodic_checks,
-            pubsub_subscriptions=None,
+            pubsub_subscriptions=pubsub_subscriptions,
             reconnect_strategy=reconnect_strategy,
             client_name=client_name,
             protocol=protocol,
