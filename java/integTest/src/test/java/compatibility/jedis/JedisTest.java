@@ -2230,8 +2230,9 @@ public class JedisTest {
     @DisplayName("HSETEX Command")
     void testHSETEX() {
         assumeTrue(
-                SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0"),
-                "HSETEX command requires Redis 7.9.0 or higher");
+                SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")
+                        && !SERVER_VERSION.toString().startsWith("8."),
+                "HSETEX command requires Redis 7.9.0+ (not available in Valkey 8.x)");
 
         String key = TEST_KEY_PREFIX + "hash_setex";
         String field1 = "field1";
@@ -2272,8 +2273,9 @@ public class JedisTest {
     @DisplayName("HGETEX Command")
     void testHGETEX() {
         assumeTrue(
-                SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0"),
-                "HGETEX command requires Redis 7.9.0 or higher");
+                SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")
+                        && !SERVER_VERSION.toString().startsWith("8."),
+                "HGETEX command requires Redis 7.9.0+ (not available in Valkey 8.x)");
 
         String key = TEST_KEY_PREFIX + "hash_getex";
         String field1 = "field1";
@@ -2309,8 +2311,9 @@ public class JedisTest {
     @DisplayName("HGETDEL Command")
     void testHGETDEL() {
         assumeTrue(
-                SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0"),
-                "HGETDEL command requires Redis 7.9.0 or higher");
+                SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")
+                        && !SERVER_VERSION.toString().startsWith("8."),
+                "HGETDEL command requires Redis 7.9.0+ (not available in Valkey 8.x)");
 
         String key = TEST_KEY_PREFIX + "hash_getdel";
         String field1 = "field1";
@@ -2350,8 +2353,9 @@ public class JedisTest {
     @DisplayName("HEXPIRE and HTTL Commands")
     void testHEXPIREAndHTTL() {
         assumeTrue(
-                SERVER_VERSION.isGreaterThanOrEqualTo("7.4.0"),
-                "Hash field expiration commands require Redis 7.4.0 or higher");
+                SERVER_VERSION.isGreaterThanOrEqualTo("7.4.0")
+                        && !SERVER_VERSION.toString().startsWith("8."),
+                "Hash field expiration commands require Redis 7.4.0+ (not available in Valkey 8.x)");
 
         String key = TEST_KEY_PREFIX + "hash_expire";
         String field1 = "field1";
@@ -2395,8 +2399,9 @@ public class JedisTest {
     @DisplayName("HPEXPIRE and HPTTL Commands")
     void testHPEXPIREAndHPTTL() {
         assumeTrue(
-                SERVER_VERSION.isGreaterThanOrEqualTo("7.4.0"),
-                "Hash field expiration commands require Redis 7.4.0 or higher");
+                SERVER_VERSION.isGreaterThanOrEqualTo("7.4.0")
+                        && !SERVER_VERSION.toString().startsWith("8."),
+                "Hash field expiration commands require Redis 7.4.0+ (not available in Valkey 8.x)");
 
         String key = TEST_KEY_PREFIX + "hash_pexpire";
         String field1 = "field1";
@@ -2444,8 +2449,9 @@ public class JedisTest {
     @DisplayName("HEXPIREAT and HEXPIRETIME Commands")
     void testHEXPIREATAndHEXPIRETIME() {
         assumeTrue(
-                SERVER_VERSION.isGreaterThanOrEqualTo("7.4.0"),
-                "Hash field expiration commands require Redis 7.4.0 or higher");
+                SERVER_VERSION.isGreaterThanOrEqualTo("7.4.0")
+                        && !SERVER_VERSION.toString().startsWith("8."),
+                "Hash field expiration commands require Redis 7.4.0+ (not available in Valkey 8.x)");
 
         String key = TEST_KEY_PREFIX + "hash_expireat";
         String field1 = "field1";
@@ -2482,8 +2488,9 @@ public class JedisTest {
     @DisplayName("HPEXPIREAT and HPEXPIRETIME Commands")
     void testHPEXPIREATAndHPEXPIRETIME() {
         assumeTrue(
-                SERVER_VERSION.isGreaterThanOrEqualTo("7.4.0"),
-                "Hash field expiration commands require Redis 7.4.0 or higher");
+                SERVER_VERSION.isGreaterThanOrEqualTo("7.4.0")
+                        && !SERVER_VERSION.toString().startsWith("8."),
+                "Hash field expiration commands require Redis 7.4.0+ (not available in Valkey 8.x)");
 
         String key = TEST_KEY_PREFIX + "hash_pexpireat";
         String field1 = "field1";
@@ -2522,8 +2529,9 @@ public class JedisTest {
     @DisplayName("HPERSIST Command")
     void testHPERSIST() {
         assumeTrue(
-                SERVER_VERSION.isGreaterThanOrEqualTo("7.4.0"),
-                "Hash field expiration commands require Redis 7.4.0 or higher");
+                SERVER_VERSION.isGreaterThanOrEqualTo("7.4.0")
+                        && !SERVER_VERSION.toString().startsWith("8."),
+                "Hash field expiration commands require Redis 7.4.0+ (not available in Valkey 8.x)");
 
         String key = TEST_KEY_PREFIX + "hash_persist";
         String field1 = "field1";
@@ -2640,8 +2648,9 @@ public class JedisTest {
     @DisplayName("Hash Commands - Binary Variants with Expiration")
     void testHashCommandsBinaryWithExpiration() {
         assumeTrue(
-                SERVER_VERSION.isGreaterThanOrEqualTo("7.4.0"),
-                "Hash field expiration commands require Redis 7.4.0 or higher");
+                SERVER_VERSION.isGreaterThanOrEqualTo("7.4.0")
+                        && !SERVER_VERSION.toString().startsWith("8."),
+                "Hash field expiration commands require Redis 7.4.0+ (not available in Valkey 8.x)");
 
         byte[] key = (TEST_KEY_PREFIX + "hash_binary_exp").getBytes();
         byte[] field1 = "field1".getBytes();
@@ -2689,8 +2698,9 @@ public class JedisTest {
     @DisplayName("Hash Commands - Binary Variants for Newer Commands")
     void testHashCommandsBinaryNewer() {
         assumeTrue(
-                SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0"),
-                "Newer hash commands require Redis 7.9.0 or higher");
+                SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")
+                        && !SERVER_VERSION.toString().startsWith("8."),
+                "Newer hash commands require Redis 7.9.0+ (not available in Valkey 8.x)");
 
         byte[] key = (TEST_KEY_PREFIX + "hash_binary_new").getBytes();
         byte[] field1 = "field1".getBytes();
