@@ -351,7 +351,7 @@ public final class Jedis implements Closeable {
     }
 
     /** Convert Jedis BitCountOption to GLIDE BitmapIndexType. */
-    private BitmapIndexType convertBitCountOptionToBitmapIndexType(BitCountOption option) {
+    private static BitmapIndexType convertBitCountOptionToBitmapIndexType(BitCountOption option) {
         switch (option) {
             case BYTE:
                 return BitmapIndexType.BYTE;
@@ -363,7 +363,7 @@ public final class Jedis implements Closeable {
     }
 
     /** Convert Jedis ExpiryOption to GLIDE ExpireOptions. */
-    private ExpireOptions convertExpiryOptionToExpireOptions(ExpiryOption expiryOption) {
+    private static ExpireOptions convertExpiryOptionToExpireOptions(ExpiryOption expiryOption) {
         switch (expiryOption) {
             case NX:
                 return ExpireOptions.HAS_NO_EXPIRY;
@@ -379,7 +379,7 @@ public final class Jedis implements Closeable {
     }
 
     /** Convert Jedis SetParams to GLIDE SetOptions. */
-    private SetOptions convertSetParamsToSetOptions(SetParams params) {
+    private static SetOptions convertSetParamsToSetOptions(SetParams params) {
         SetOptions.SetOptionsBuilder builder = SetOptions.builder();
 
         // Handle existence conditions
@@ -424,7 +424,7 @@ public final class Jedis implements Closeable {
     }
 
     /** Add SetParams options to String command arguments. */
-    private void addSetParamsToArgs(List<String> args, SetParams params) {
+    private static void addSetParamsToArgs(List<String> args, SetParams params) {
         // Handle existence conditions
         if (params.getExistenceCondition() != null) {
             switch (params.getExistenceCondition()) {
@@ -464,7 +464,7 @@ public final class Jedis implements Closeable {
     }
 
     /** Add SetParams options to GlideString command arguments. */
-    private void addSetParamsToGlideStringArgs(List<GlideString> args, SetParams params) {
+    private static void addSetParamsToGlideStringArgs(List<GlideString> args, SetParams params) {
         // Handle existence conditions
         if (params.getExistenceCondition() != null) {
             switch (params.getExistenceCondition()) {
@@ -522,7 +522,7 @@ public final class Jedis implements Closeable {
      * @return the equivalent GLIDE GetExOptions
      * @throws IllegalArgumentException if params is invalid or no expiration type is specified
      */
-    private GetExOptions convertGetExParamsToGetExOptions(GetExParams params) {
+    private static GetExOptions convertGetExParamsToGetExOptions(GetExParams params) {
         if (params.getExpirationType() != null) {
             switch (params.getExpirationType()) {
                 case EX:
@@ -2451,7 +2451,7 @@ public final class Jedis implements Closeable {
      * @param params the Jedis-style parameters (BY, LIMIT, GET, ASC/DESC, ALPHA)
      * @return SortOptions object
      */
-    private SortOptions parseSortParameters(String[] params) {
+    private static SortOptions parseSortParameters(String[] params) {
         SortOptions.SortOptionsBuilder builder = SortOptions.builder();
 
         for (int i = 0; i < params.length; i++) {
@@ -2621,7 +2621,7 @@ public final class Jedis implements Closeable {
      * @param result the GLIDE scan result
      * @return ScanResult with cursor and keys
      */
-    private ScanResult<String> convertToScanResult(Object[] result) {
+    private static ScanResult<String> convertToScanResult(Object[] result) {
         if (result != null && result.length >= 2) {
             String newCursor = result[0].toString();
             Object keysObj = result[1];
@@ -2639,7 +2639,7 @@ public final class Jedis implements Closeable {
     }
 
     /** Convert ScanParams to GLIDE ScanOptions. */
-    private ScanOptions convertScanParamsToScanOptions(ScanParams params) {
+    private static ScanOptions convertScanParamsToScanOptions(ScanParams params) {
         ScanOptions.ScanOptionsBuilder builder = ScanOptions.builder();
 
         if (params.getMatchPattern() != null) {
@@ -3494,7 +3494,7 @@ public final class Jedis implements Closeable {
      * @param args the Jedis-style arguments (GET/SET/INCRBY/OVERFLOW followed by parameters)
      * @return array of BitFieldSubCommands
      */
-    private BitFieldSubCommands[] parseBitFieldArguments(String[] args) {
+    private static BitFieldSubCommands[] parseBitFieldArguments(String[] args) {
         List<BitFieldSubCommands> commands = new ArrayList<>();
 
         for (int i = 0; i < args.length; ) {
@@ -3558,7 +3558,7 @@ public final class Jedis implements Closeable {
      * @param args the Jedis-style arguments (only GET operations allowed)
      * @return array of BitFieldReadOnlySubCommands
      */
-    private BitFieldReadOnlySubCommands[] parseBitFieldReadOnlyArguments(String[] args) {
+    private static BitFieldReadOnlySubCommands[] parseBitFieldReadOnlyArguments(String[] args) {
         List<BitFieldReadOnlySubCommands> commands = new ArrayList<>();
 
         for (int i = 0; i < args.length; ) {
@@ -3586,7 +3586,7 @@ public final class Jedis implements Closeable {
      * @param encodingStr encoding string (e.g., "u4", "i8")
      * @return BitEncoding object (UnsignedEncoding or SignedEncoding)
      */
-    private Object parseEncoding(String encodingStr) {
+    private static Object parseEncoding(String encodingStr) {
         if (encodingStr.startsWith("u")) {
             long bits = Long.parseLong(encodingStr.substring(1));
             return new UnsignedEncoding(bits);
@@ -3605,7 +3605,7 @@ public final class Jedis implements Closeable {
      * @param offsetStr offset string (e.g., "0", "#1")
      * @return BitOffset object (Offset or OffsetMultiplier)
      */
-    private Object parseOffset(String offsetStr) {
+    private static Object parseOffset(String offsetStr) {
         if (offsetStr.startsWith("#")) {
             long offset = Long.parseLong(offsetStr.substring(1));
             return new OffsetMultiplier(offset);
@@ -3616,7 +3616,7 @@ public final class Jedis implements Closeable {
     }
 
     /** Create BitFieldGet with proper interface types. */
-    private BitFieldGet createBitFieldGet(String encodingStr, String offsetStr) {
+    private static BitFieldGet createBitFieldGet(String encodingStr, String offsetStr) {
         if (encodingStr.startsWith("u")) {
             long bits = Long.parseLong(encodingStr.substring(1));
             UnsignedEncoding encoding = new UnsignedEncoding(bits);
@@ -3646,7 +3646,7 @@ public final class Jedis implements Closeable {
     }
 
     /** Create BitFieldSet with proper interface types. */
-    private BitFieldSet createBitFieldSet(String encodingStr, String offsetStr, long value) {
+    private static BitFieldSet createBitFieldSet(String encodingStr, String offsetStr, long value) {
         if (encodingStr.startsWith("u")) {
             long bits = Long.parseLong(encodingStr.substring(1));
             UnsignedEncoding encoding = new UnsignedEncoding(bits);
@@ -3676,7 +3676,7 @@ public final class Jedis implements Closeable {
     }
 
     /** Create BitFieldIncrby with proper interface types. */
-    private BitFieldIncrby createBitFieldIncrby(
+    private static BitFieldIncrby createBitFieldIncrby(
             String encodingStr, String offsetStr, long increment) {
         if (encodingStr.startsWith("u")) {
             long bits = Long.parseLong(encodingStr.substring(1));
@@ -3712,7 +3712,7 @@ public final class Jedis implements Closeable {
      * @param controlStr control string (e.g., "WRAP", "SAT", "FAIL")
      * @return BitOverflowControl enum
      */
-    private BitOverflowControl parseOverflowControl(String controlStr) {
+    private static BitOverflowControl parseOverflowControl(String controlStr) {
         switch (controlStr.toUpperCase()) {
             case "WRAP":
                 return BitOverflowControl.WRAP;
@@ -3727,7 +3727,7 @@ public final class Jedis implements Closeable {
     }
 
     /** Helper method to concatenate string arrays. */
-    private String[] concatenateArrays(String[] array1, String[] array2) {
+    private static String[] concatenateArrays(String[] array1, String[] array2) {
         String[] result = new String[array1.length + array2.length];
         System.arraycopy(array1, 0, result, 0, array1.length);
         System.arraycopy(array2, 0, result, array1.length, array2.length);
@@ -5970,7 +5970,7 @@ public final class Jedis implements Closeable {
     }
 
     /** Helper method to convert result to List<Long>. */
-    private List<Long> convertToLongList(Object result) {
+    private static List<Long> convertToLongList(Object result) {
         if (result instanceof Object[]) {
             Object[] resultArray = (Object[]) result;
             List<Long> longResult = new ArrayList<>();
@@ -5993,7 +5993,7 @@ public final class Jedis implements Closeable {
     }
 
     /** Helper method to convert Jedis ScanParams to GLIDE HScanOptions. */
-    private HScanOptions convertScanParamsToHScanOptions(ScanParams params) {
+    private static HScanOptions convertScanParamsToHScanOptions(ScanParams params) {
         HScanOptions.HScanOptionsBuilder builder = HScanOptions.builder();
 
         if (params.getMatchPattern() != null) {
@@ -6008,7 +6008,7 @@ public final class Jedis implements Closeable {
     }
 
     /** Helper method to convert Jedis ScanParams to GLIDE HScanOptionsBinary. */
-    private HScanOptionsBinary convertScanParamsToHScanOptionsBinary(ScanParams params) {
+    private static HScanOptionsBinary convertScanParamsToHScanOptionsBinary(ScanParams params) {
         HScanOptionsBinary.HScanOptionsBinaryBuilder builder = HScanOptionsBinary.builder();
 
         if (params.getMatchPattern() != null) {
