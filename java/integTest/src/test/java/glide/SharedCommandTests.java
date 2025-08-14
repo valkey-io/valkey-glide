@@ -109,8 +109,6 @@ import glide.api.models.commands.stream.StreamReadGroupOptions;
 import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions.MaxLen;
 import glide.api.models.commands.stream.StreamTrimOptions.MinId;
-import glide.api.models.configuration.AdvancedGlideClientConfiguration;
-import glide.api.models.configuration.AdvancedGlideClusterClientConfiguration;
 import glide.api.models.configuration.ProtocolVersion;
 import glide.api.models.exceptions.RequestException;
 import java.time.Instant;
@@ -11177,14 +11175,11 @@ public class SharedCommandTests {
                 SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in version 6.2.0");
         String key1 = "{key}-1" + UUID.randomUUID();
         String key2 = "{key}-2" + UUID.randomUUID();
-        // create new client with extended timeout for client creation, but default request timeout (250
-        // millis) for commands
+        // create new client with default request timeout (250 millis)
         try (var testClient =
                 client instanceof GlideClient
-                        ? GlideClient.createClient(commonClientConfig().requestTimeout(5000).build()).get()
-                        : GlideClusterClient.createClient(
-                                        commonClusterClientConfig().requestTimeout(5000).build())
-                                .get()) {
+                        ? GlideClient.createClient(commonClientConfig().build()).get()
+                        : GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
 
             // ensure that commands doesn't time out even if timeout > request timeout
             Logger.log(
@@ -11227,14 +11222,11 @@ public class SharedCommandTests {
                 SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in version 6.2.0");
         GlideString key1 = gs("{key}-1" + UUID.randomUUID());
         GlideString key2 = gs("{key}-2" + UUID.randomUUID());
-        // create new client with extended timeout for client creation, but default request timeout (250
-        // millis) for commands
+        // create new client with default request timeout (250 millis)
         try (var testClient =
                 client instanceof GlideClient
-                        ? GlideClient.createClient(commonClientConfig().requestTimeout(5000).build()).get()
-                        : GlideClusterClient.createClient(
-                                        commonClusterClientConfig().requestTimeout(5000).build())
-                                .get()) {
+                        ? GlideClient.createClient(commonClientConfig().build()).get()
+                        : GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
 
             // ensure that commands doesn't time out even if timeout > request timeout
             Logger.log(
