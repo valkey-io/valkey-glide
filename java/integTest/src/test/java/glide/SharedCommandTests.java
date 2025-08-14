@@ -33,6 +33,7 @@ import static org.junit.jupiter.api.Named.named;
 import glide.api.BaseClient;
 import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
+import glide.api.logging.Logger;
 import glide.api.models.BaseBatch;
 import glide.api.models.Batch;
 import glide.api.models.ClusterBatch;
@@ -11181,24 +11182,24 @@ public class SharedCommandTests {
                         : GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
 
             // ensure that commands doesn't time out even if timeout > request timeout
-            System.out.println("Testing blmove with 1-second timeout on empty lists");
+            Logger.log(Logger.Level.INFO, "blmove_test", "Testing blmove with 1-second timeout on empty lists");
             assertNull(testClient.blmove(key1, key2, ListDirection.LEFT, ListDirection.LEFT, 1).get());
-            System.out.println("First blmove completed successfully (returned null as expected)");
+            Logger.log(Logger.Level.INFO, "blmove_test", "First blmove completed successfully (returned null as expected)");
 
             // Small delay to ensure proper state before next operation
             Thread.sleep(100);
 
             // with 0 timeout (no timeout) should never time out,
             // but we wrap the test with timeout to avoid test failing or stuck forever
-            System.out.println("Testing blmove with infinite timeout - expecting TimeoutException from future");
+            Logger.log(Logger.Level.INFO, "blmove_test", "Testing blmove with infinite timeout - expecting TimeoutException from future");
             assertThrows(
                     TimeoutException.class, // <- future timeout, not command timeout
                     () -> {
                         var future = testClient.blmove(key1, key2, ListDirection.LEFT, ListDirection.LEFT, 0);
-                        System.out.println("blmove with timeout=0 started, waiting for future timeout");
+                        Logger.log(Logger.Level.INFO, "blmove_test", "blmove with timeout=0 started, waiting for future timeout");
                         return future.get(5, TimeUnit.SECONDS); // Increased from 3 to 5 seconds for CI stability
                     });
-            System.out.println("blmove timeout test completed successfully");
+            Logger.log(Logger.Level.INFO, "blmove_test", "blmove timeout test completed successfully");
         }
     }
 
@@ -11217,24 +11218,24 @@ public class SharedCommandTests {
                         : GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
 
             // ensure that commands doesn't time out even if timeout > request timeout
-            System.out.println("Testing blmove with 1-second timeout on empty lists");
+            Logger.log(Logger.Level.INFO, "blmove_binary_test", "Testing blmove with 1-second timeout on empty lists");
             assertNull(testClient.blmove(key1, key2, ListDirection.LEFT, ListDirection.LEFT, 1).get());
-            System.out.println("First blmove completed successfully (returned null as expected)");
+            Logger.log(Logger.Level.INFO, "blmove_binary_test", "First blmove completed successfully (returned null as expected)");
 
             // Small delay to ensure proper state before next operation
             Thread.sleep(100);
 
             // with 0 timeout (no timeout) should never time out,
             // but we wrap the test with timeout to avoid test failing or stuck forever
-            System.out.println("Testing blmove with infinite timeout - expecting TimeoutException from future");
+            Logger.log(Logger.Level.INFO, "blmove_binary_test", "Testing blmove with infinite timeout - expecting TimeoutException from future");
             assertThrows(
                     TimeoutException.class, // <- future timeout, not command timeout
                     () -> {
                         var future = testClient.blmove(key1, key2, ListDirection.LEFT, ListDirection.LEFT, 0);
-                        System.out.println("blmove with timeout=0 started, waiting for future timeout");
+                        Logger.log(Logger.Level.INFO, "blmove_binary_test", "blmove with timeout=0 started, waiting for future timeout");
                         return future.get(5, TimeUnit.SECONDS); // Increased from 3 to 5 seconds for CI stability
                     });
-            System.out.println("blmove timeout test completed successfully");
+            Logger.log(Logger.Level.INFO, "blmove_binary_test", "blmove timeout test completed successfully");
         }
     }
 
