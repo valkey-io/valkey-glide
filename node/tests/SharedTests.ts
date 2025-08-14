@@ -2032,7 +2032,7 @@ export function runBaseTests(config: {
                 });
                 const expectedValues = [value1Encoded, value2Encoded];
                 expect(
-                    hvalsResult.sort((a, b) => Buffer.compare(a, b)),
+                    hvalsResult.sort((a, b) => Buffer.compare(a as Buffer, b as Buffer)),
                 ).toEqual(expectedValues.sort((a, b) => Buffer.compare(a, b)));
                 expect(await client.hdel(key2, [field1])).toEqual(1);
                 expect(
