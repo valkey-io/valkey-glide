@@ -2,7 +2,7 @@
 
 import os
 import sys
-from typing import List, Optional, Union
+from typing import Any, List, Optional, Tuple, Union
 
 from glide_shared.config import BaseClientConfiguration
 from glide_shared.constants import OK, TEncodable, TResult
@@ -13,7 +13,17 @@ from glide_shared.exceptions import (
     get_request_error_class,
 )
 from glide_shared.protobuf.command_request_pb2 import RequestType
-from glide_shared.routes import Route, build_protobuf_route
+from glide_shared.routes import (
+    AllNodes,
+    AllPrimaries,
+    ByAddressRoute,
+    RandomNode,
+    Route,
+    SlotIdRoute,
+    SlotKeyRoute,
+    SlotType,
+    build_protobuf_route,
+)
 
 from ._glide_ffi import _GlideFFI
 from .config import GlideClientConfiguration, GlideClusterClientConfiguration
@@ -137,6 +147,7 @@ class BaseClient(CoreCommands):
             6: self._handle_map_response,
             7: self._handle_set_response,
             8: self._handle_ok_response,
+            9: self._handle_error_response,
         }
 
         handler = handlers.get(msg.response_type)
@@ -192,6 +203,13 @@ class BaseClient(CoreCommands):
     def _handle_ok_response(self, msg):
         return OK
 
+    def _handle_error_response(self, msg):
+        try:
+            error_msg = self._ffi.buffer(msg.string_value, msg.string_value_len)[:]
+            return RequestError(f"{error_msg}")
+        except Exception as e:
+            raise RequestError(f"Error decoding error message: {e}")
+
     def _try_ffi_cast(self, type, source):
         try:
             return self._ffi.cast(type, source)
@@ -206,15 +224,11 @@ class BaseClient(CoreCommands):
 
         for arg in args:
             if isinstance(arg, str):
-                # Convert string to bytes
                 arg_bytes = arg.encode(ENCODING)
-            elif isinstance(arg, (int, float)):
-                # Convert numeric values to strings and then to bytes
-                arg_bytes = str(arg).encode(ENCODING)
             elif isinstance(arg, bytes):
                 arg_bytes = arg
             else:
-                raise ValueError(f"Unsupported argument type: {type(arg)}")
+                raise TypeError(f"Unsupported argument type: {type(arg)}")
 
             # Use ffi.from_buffer for zero-copy conversion
             buffers.append(arg_bytes)  # Keep the byte buffer alive
@@ -341,6 +355,210 @@ class BaseClient(CoreCommands):
             immediate_auth,
         )
         return self._handle_cmd_result(result)
+
+    def _execute_batch(
+        self,
+        commands: List[Tuple[RequestType.ValueType, List[TEncodable]]],
+        is_atomic: bool,
+        raise_on_error: bool,
+        retry_server_error: bool = False,
+        retry_connection_error: bool = False,
+        route: Optional[Route] = None,
+        timeout: Optional[int] = None,
+    ) -> List[TResult]:
+        """
+        Execute a batch of commands synchronously using the FFI batch function.
+        Accepts pre-extracted parameters from exec().
+        """
+        if self._is_closed:
+            raise ClosingError(
+                "Unable to execute requests; the client is closed. Please create a new client."
+            )
+
+        client_adapter_ptr = self._core_client
+        if client_adapter_ptr == self._ffi.NULL:
+            raise ValueError("Invalid client pointer.")
+
+        # Note: batch_refs and option_refs must remain in scope
+        # throughout this entire function call to prevent garbage collection of Python objects
+        # that have C pointers pointing to them via ffi.from_buffer().
+
+        # Convert commands + atomic flag to C BatchInfo
+        batch_info, batch_refs = self._convert_commands_to_c_batch_info(
+            commands, is_atomic
+        )
+
+        # Create batch options from extracted parameters
+        batch_options, option_refs = self._create_c_batch_options_from_params(
+            retry_server_error, retry_connection_error, route, timeout
+        )
+
+        result = self._lib.batch(
+            client_adapter_ptr,
+            0,  # callback_index (0 for sync)
+            batch_info,
+            raise_on_error,
+            batch_options,
+            0,  # span_ptr (not yet implemented in sync)
+        )
+        return self._handle_cmd_result(result)
+
+    def _convert_commands_to_c_batch_info(
+        self,
+        commands: List[Tuple[RequestType.ValueType, List[TEncodable]]],
+        is_atomic: bool,
+    ) -> Tuple[Any, List[Any]]:
+        """
+        Convert commands directly to C BatchInfo (no intermediate _to_c_strings).
+        Returns a tuple of (batch_info, refs) where refs contains all Python objects
+        that must be kept alive to prevent garbage collection while C code uses pointers to them.
+        """
+        # all_refs keeps Python objects alive while C pointers reference their memory.
+        # ffi.from_buffer() creates C pointers to Python object memory, and ffi.new() creates
+        # FFI-managed memory with a Python reference controlling its lifetime. In both cases,
+        # if Python references are garbage collected, the underlying memory may be freed,
+        # creating dangling C pointers.
+
+        all_refs = []
+        cmd_infos = []
+
+        for request_type, args in commands:
+            args_buffers = []
+            arg_ptrs = []
+            arg_lengths = []
+
+            for arg in args:
+                if isinstance(arg, str):
+                    arg_bytes = arg.encode(ENCODING)
+                elif isinstance(arg, bytes):
+                    arg_bytes = arg
+                else:
+                    raise TypeError(f"Unsupported argument type: {type(arg)}")
+
+                args_buffers.append(arg_bytes)
+                arg_ptrs.append(self._ffi.from_buffer(arg_bytes))
+                arg_lengths.append(len(arg_bytes))
+
+            c_arg_array = self._ffi.new("const uint8_t*[]", arg_ptrs)
+            c_lengths = self._ffi.new("size_t[]", arg_lengths)
+
+            cmd_info = self._ffi.new(
+                "CmdInfo*",
+                {
+                    "request_type": request_type,
+                    "args": c_arg_array,
+                    "arg_count": len(args),
+                    "args_len": c_lengths,
+                },
+            )
+
+            cmd_infos.append(cmd_info)
+            all_refs.extend(args_buffers + [c_arg_array, c_lengths])
+
+        cmd_info_array = self._ffi.new("const CmdInfo*[]", cmd_infos)
+        all_refs.append(cmd_info_array)
+        all_refs.extend(cmd_infos)
+
+        batch_info = self._ffi.new(
+            "BatchInfo*",
+            {
+                "cmd_count": len(commands),
+                "cmds": cmd_info_array,
+                "is_atomic": is_atomic,
+            },
+        )
+
+        return batch_info, all_refs + [batch_info]
+
+    def _create_c_batch_options_from_params(
+        self,
+        retry_server_error: bool,
+        retry_connection_error: bool,
+        route: Optional[Route],
+        timeout: Optional[int],
+    ) -> Tuple[Any, List[Any]]:
+        """
+        Create BatchOptionsInfo from params, with refs.
+        Returns a tuple of (batch_options, refs) where refs contains all Python objects
+        that must be kept alive while C code accesses pointers to them.
+        """
+
+        route_info, route_refs = self._convert_route_to_c_format(route)
+
+        batch_options = self._ffi.new(
+            "BatchOptionsInfo*",
+            {
+                "retry_server_error": retry_server_error,
+                "retry_connection_error": retry_connection_error,
+                "has_timeout": timeout is not None,
+                "timeout": timeout or 0,
+                "route_info": route_info,
+            },
+        )
+
+        return batch_options, route_refs + [batch_options]
+
+    def _convert_route_to_c_format(
+        self, route: Optional[Route]
+    ) -> Tuple[Any, List[Any]]:
+        """
+        Convert a Route object to C RouteInfo format.
+
+        Returns a tuple of (route_info, refs) where refs contains all Python objects
+        that must be kept alive while C code uses pointers to them.
+        """
+        if route is None:
+            return self._ffi.NULL, []
+
+        refs = []
+
+        slot_key_ptr = self._ffi.NULL
+        hostname_ptr = self._ffi.NULL
+        route_type = 2  # Default to Random
+        slot_id = 0
+        slot_type = 0  # Primary by default
+        port = 0
+
+        if isinstance(route, AllNodes):
+            route_type = 0
+        elif isinstance(route, AllPrimaries):
+            route_type = 1
+        elif isinstance(route, RandomNode):
+            route_type = 2
+        elif isinstance(route, SlotIdRoute):
+            route_type = 3
+            slot_id = route.slot_id
+            slot_type = 0 if route.slot_type == SlotType.PRIMARY else 1
+        elif isinstance(route, SlotKeyRoute):
+            route_type = 4
+            # Null termination needed for safety instructions of the FFI layer's `ptr_to_str` call.
+            slot_key_bytes = route.slot_key.encode(ENCODING) + b"\0"
+            refs.append(slot_key_bytes)
+            slot_key_ptr = self._ffi.from_buffer(slot_key_bytes)
+            slot_type = 0 if route.slot_type == SlotType.PRIMARY else 1
+        elif isinstance(route, ByAddressRoute):
+            route_type = 5
+            # Null termination needed for safety instructions of the FFI layer's `ptr_to_str` call.
+            hostname_bytes = route.host.encode(ENCODING) + b"\0"
+            refs.append(hostname_bytes)
+            hostname_ptr = self._ffi.from_buffer(hostname_bytes)
+            port = route.port if route.port is not None else 0
+        else:
+            raise RequestError(f"Invalid route type: {type(route)}")
+
+        route_info = self._ffi.new(
+            "RouteInfo*",
+            {
+                "route_type": route_type,
+                "slot_id": slot_id,
+                "slot_key": slot_key_ptr,
+                "slot_type": slot_type,
+                "hostname": hostname_ptr,
+                "port": port,
+            },
+        )
+
+        return route_info, refs + [route_info]
 
     def close(self):
         if not self._is_closed:

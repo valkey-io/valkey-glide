@@ -31,9 +31,6 @@ EXCLUDED_API_FUNCTIONS = {
         "try_get_pubsub_message",
         # scan
         "scan",
-        "unwatch",
-        # batch
-        "exec",
         # _CompatFuture
         "done",
         "result",
@@ -77,10 +74,6 @@ EXCLUDED_TESTS = {
         "test_script_large_keys_and_args",
         "test_script_kill_route",
         "run_writing_script",
-        # Batch
-        "test_watch",
-        "test_unwatch",
-        "test_unwatch_with_route",
     ],
     "sync_only": ["test_sync_fork"],
 }
@@ -89,7 +82,6 @@ EXCLUDED_TESTS_FILENAMES = {
     "async_only": [
         "test_json.py",
         "test_opentelemetry.py",
-        "test_batch.py",
         "test_pubsub.py",
         "test_scan.py",
         "test_ft.py",
