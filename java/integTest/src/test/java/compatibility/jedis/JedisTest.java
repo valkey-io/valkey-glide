@@ -5,6 +5,7 @@ import static glide.TestConfiguration.SERVER_VERSION;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.*;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -13,8 +14,11 @@ import org.junit.jupiter.api.*;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.Protocol;
 import redis.clients.jedis.args.BitOP;
+import redis.clients.jedis.args.ExpiryOption;
 import redis.clients.jedis.params.BitPosParams;
 import redis.clients.jedis.params.GetExParams;
+import redis.clients.jedis.params.HGetExParams;
+import redis.clients.jedis.params.HSetExParams;
 import redis.clients.jedis.params.ScanParams;
 import redis.clients.jedis.params.SetParams;
 import redis.clients.jedis.resps.ScanResult;
@@ -1848,5 +1852,892 @@ public class JedisTest {
         Object getKey2Result = jedis.sendCommand(Protocol.Command.GET, key2);
         assertEquals(
                 value, getKey2Result.toString(), "Original value should be unchanged after failed NX");
+    }
+
+    // Hash Commands Tests
+
+    @Test
+    @Order(111)
+    @DisplayName("HSET and HGET Commands")
+    void testHSETAndHGET() {
+        String key = TEST_KEY_PREFIX + "hash_basic";
+        String field1 = "field1";
+        String field2 = "field2";
+        String value1 = "value1";
+        String value2 = "value2";
+
+        // Test HSET - single field
+        long result = jedis.hset(key, field1, value1);
+        assertEquals(1, result, "HSET should return 1 for new field");
+
+        // Test HGET
+        String getValue = jedis.hget(key, field1);
+        assertEquals(value1, getValue, "HGET should return correct value");
+
+        // Test HSET - existing field
+        result = jedis.hset(key, field1, "new_value");
+        assertEquals(0, result, "HSET should return 0 for existing field");
+
+        // Test HSET - multiple fields
+        Map<String, String> hash = new HashMap<>();
+        hash.put(field1, value1);
+        hash.put(field2, value2);
+        result = jedis.hset(key, hash);
+        assertEquals(1, result, "HSET with map should return number of new fields");
+
+        // Test HGET on non-existing field
+        String nonExistentValue = jedis.hget(key, "nonexistent");
+        assertNull(nonExistentValue, "HGET should return null for non-existing field");
+    }
+
+    @Test
+    @Order(112)
+    @DisplayName("HDEL Command")
+    void testHDEL() {
+        String key = TEST_KEY_PREFIX + "hash_del";
+        String field1 = "field1";
+        String field2 = "field2";
+        String field3 = "field3";
+
+        // Set up test data
+        jedis.hset(key, field1, "value1");
+        jedis.hset(key, field2, "value2");
+        jedis.hset(key, field3, "value3");
+
+        // Test HDEL - single field
+        long result = jedis.hdel(key, field1);
+        assertEquals(1, result, "HDEL should return 1 for existing field");
+
+        // Verify field is deleted
+        assertNull(jedis.hget(key, field1), "Deleted field should not exist");
+
+        // Test HDEL - multiple fields
+        result = jedis.hdel(key, field2, field3);
+        assertEquals(2, result, "HDEL should return 2 for two existing fields");
+
+        // Test HDEL - non-existing field
+        result = jedis.hdel(key, "nonexistent");
+        assertEquals(0, result, "HDEL should return 0 for non-existing field");
+    }
+
+    @Test
+    @Order(113)
+    @DisplayName("HEXISTS Command")
+    void testHEXISTS() {
+        String key = TEST_KEY_PREFIX + "hash_exists";
+        String field = "testfield";
+
+        // Test HEXISTS on non-existing hash
+        boolean exists = jedis.hexists(key, field);
+        assertFalse(exists, "HEXISTS should return false for non-existing hash");
+
+        // Set up test data
+        jedis.hset(key, field, "value");
+
+        // Test HEXISTS on existing field
+        exists = jedis.hexists(key, field);
+        assertTrue(exists, "HEXISTS should return true for existing field");
+
+        // Test HEXISTS on non-existing field
+        exists = jedis.hexists(key, "nonexistent");
+        assertFalse(exists, "HEXISTS should return false for non-existing field");
+    }
+
+    @Test
+    @Order(114)
+    @DisplayName("HLEN Command")
+    void testHLEN() {
+        String key = TEST_KEY_PREFIX + "hash_len";
+
+        // Test HLEN on non-existing hash
+        long length = jedis.hlen(key);
+        assertEquals(0, length, "HLEN should return 0 for non-existing hash");
+
+        // Set up test data
+        jedis.hset(key, "field1", "value1");
+        jedis.hset(key, "field2", "value2");
+        jedis.hset(key, "field3", "value3");
+
+        // Test HLEN
+        length = jedis.hlen(key);
+        assertEquals(3, length, "HLEN should return correct number of fields");
+
+        // Delete a field and test again
+        jedis.hdel(key, "field1");
+        length = jedis.hlen(key);
+        assertEquals(2, length, "HLEN should return updated count after deletion");
+    }
+
+    @Test
+    @Order(115)
+    @DisplayName("HKEYS and HVALS Commands")
+    void testHKEYSAndHVALS() {
+        String key = TEST_KEY_PREFIX + "hash_keys_vals";
+        Map<String, String> testData = new HashMap<>();
+        testData.put("field1", "value1");
+        testData.put("field2", "value2");
+        testData.put("field3", "value3");
+
+        // Set up test data
+        jedis.hset(key, testData);
+
+        // Test HKEYS
+        Set<String> keys = jedis.hkeys(key);
+        assertEquals(3, keys.size(), "HKEYS should return all field names");
+        assertTrue(keys.containsAll(testData.keySet()), "HKEYS should contain all field names");
+
+        // Test HVALS
+        List<String> values = jedis.hvals(key);
+        assertEquals(3, values.size(), "HVALS should return all values");
+        assertTrue(values.containsAll(testData.values()), "HVALS should contain all values");
+    }
+
+    @Test
+    @Order(116)
+    @DisplayName("HGETALL Command")
+    void testHGETALL() {
+        String key = TEST_KEY_PREFIX + "hash_getall";
+        Map<String, String> testData = new HashMap<>();
+        testData.put("field1", "value1");
+        testData.put("field2", "value2");
+        testData.put("field3", "value3");
+
+        // Test HGETALL on non-existing hash
+        Map<String, String> result = jedis.hgetAll(key);
+        assertTrue(result.isEmpty(), "HGETALL should return empty map for non-existing hash");
+
+        // Set up test data
+        jedis.hset(key, testData);
+
+        // Test HGETALL
+        result = jedis.hgetAll(key);
+        assertEquals(testData.size(), result.size(), "HGETALL should return all field-value pairs");
+        assertEquals(testData, result, "HGETALL should return correct field-value pairs");
+    }
+
+    @Test
+    @Order(117)
+    @DisplayName("HMGET and HMSET Commands")
+    void testHMGETAndHMSET() {
+        String key = TEST_KEY_PREFIX + "hash_multi";
+        Map<String, String> testData = new HashMap<>();
+        testData.put("field1", "value1");
+        testData.put("field2", "value2");
+        testData.put("field3", "value3");
+
+        // Test HMSET
+        String result = jedis.hmset(key, testData);
+        assertEquals("OK", result, "HMSET should return OK"); // HMSET typically returns "OK"
+
+        // Test HMGET - existing fields
+        List<String> values = jedis.hmget(key, "field1", "field2", "field3");
+        assertEquals(3, values.size(), "HMGET should return values for all fields");
+        assertEquals("value1", values.get(0), "HMGET should return correct value for field1");
+        assertEquals("value2", values.get(1), "HMGET should return correct value for field2");
+        assertEquals("value3", values.get(2), "HMGET should return correct value for field3");
+
+        // Test HMGET - mix of existing and non-existing fields
+        values = jedis.hmget(key, "field1", "nonexistent", "field2");
+        assertEquals(3, values.size(), "HMGET should return list with same size as requested fields");
+        assertEquals("value1", values.get(0), "HMGET should return correct value for existing field");
+        assertNull(values.get(1), "HMGET should return null for non-existing field");
+        assertEquals("value2", values.get(2), "HMGET should return correct value for existing field");
+    }
+
+    @Test
+    @Order(118)
+    @DisplayName("HSETNX Command")
+    void testHSETNX() {
+        String key = TEST_KEY_PREFIX + "hash_setnx";
+        String field = "testfield";
+        String value1 = "value1";
+        String value2 = "value2";
+
+        // Test HSETNX on new field
+        long result = jedis.hsetnx(key, field, value1);
+        assertEquals(1, result, "HSETNX should return 1 for new field");
+        assertEquals(value1, jedis.hget(key, field), "Field should have correct value");
+
+        // Test HSETNX on existing field
+        result = jedis.hsetnx(key, field, value2);
+        assertEquals(0, result, "HSETNX should return 0 for existing field");
+        assertEquals(value1, jedis.hget(key, field), "Field should retain original value");
+    }
+
+    @Test
+    @Order(119)
+    @DisplayName("HINCRBY Command")
+    void testHINCRBY() {
+        String key = TEST_KEY_PREFIX + "hash_incrby";
+        String field = "counter";
+
+        // Test HINCRBY on non-existing field
+        long result = jedis.hincrBy(key, field, 5);
+        assertEquals(5, result, "HINCRBY should return 5 for new field");
+        assertEquals("5", jedis.hget(key, field), "Field should have value 5");
+
+        // Test HINCRBY on existing field
+        result = jedis.hincrBy(key, field, 3);
+        assertEquals(8, result, "HINCRBY should return 8");
+        assertEquals("8", jedis.hget(key, field), "Field should have value 8");
+
+        // Test HINCRBY with negative value
+        result = jedis.hincrBy(key, field, -2);
+        assertEquals(6, result, "HINCRBY should return 6");
+        assertEquals("6", jedis.hget(key, field), "Field should have value 6");
+    }
+
+    @Test
+    @Order(120)
+    @DisplayName("HINCRBYFLOAT Command")
+    void testHINCRBYFLOAT() {
+        String key = TEST_KEY_PREFIX + "hash_incrbyfloat";
+        String field = "float_counter";
+
+        // Test HINCRBYFLOAT on non-existing field
+        double result = jedis.hincrByFloat(key, field, 2.5);
+        assertEquals(2.5, result, 0.001, "HINCRBYFLOAT should return 2.5 for new field");
+        assertEquals("2.5", jedis.hget(key, field), "Field should have value 2.5");
+
+        // Test HINCRBYFLOAT on existing field
+        result = jedis.hincrByFloat(key, field, 1.5);
+        assertEquals(4.0, result, 0.001, "HINCRBYFLOAT should return 4.0");
+        assertEquals("4", jedis.hget(key, field), "Field should have value 4");
+
+        // Test HINCRBYFLOAT with negative value
+        result = jedis.hincrByFloat(key, field, -0.5);
+        assertEquals(3.5, result, 0.001, "HINCRBYFLOAT should return 3.5");
+        assertEquals("3.5", jedis.hget(key, field), "Field should have value 3.5");
+    }
+
+    @Test
+    @Order(121)
+    @DisplayName("HSTRLEN Command")
+    void testHSTRLEN() {
+        String key = TEST_KEY_PREFIX + "hash_strlen";
+        String field = "testfield";
+        String value = "Hello World";
+
+        // Test HSTRLEN on non-existing field
+        long length = jedis.hstrlen(key, field);
+        assertEquals(0, length, "HSTRLEN should return 0 for non-existing field");
+
+        // Set up test data
+        jedis.hset(key, field, value);
+
+        // Test HSTRLEN on existing field
+        length = jedis.hstrlen(key, field);
+        assertEquals(value.length(), length, "HSTRLEN should return correct string length");
+
+        // Test HSTRLEN on empty field
+        jedis.hset(key, "empty", "");
+        length = jedis.hstrlen(key, "empty");
+        assertEquals(0, length, "HSTRLEN should return 0 for empty field");
+    }
+
+    @Test
+    @Order(122)
+    @DisplayName("HRANDFIELD Command")
+    void testHRANDFIELD() {
+        String key = TEST_KEY_PREFIX + "hash_randfield";
+        Map<String, String> testData = new HashMap<>();
+        testData.put("field1", "value1");
+        testData.put("field2", "value2");
+        testData.put("field3", "value3");
+        testData.put("field4", "value4");
+        testData.put("field5", "value5");
+
+        // Set up test data
+        jedis.hset(key, testData);
+
+        // Test HRANDFIELD - single field
+        String randomField = jedis.hrandfield(key);
+        assertNotNull(randomField, "HRANDFIELD should return a field");
+        assertTrue(testData.containsKey(randomField), "HRANDFIELD should return existing field");
+
+        // Test HRANDFIELD - multiple fields
+        List<String> randomFields = jedis.hrandfield(key, 3);
+        assertEquals(3, randomFields.size(), "HRANDFIELD should return requested number of fields");
+        for (String field : randomFields) {
+            assertTrue(testData.containsKey(field), "All returned fields should exist in hash");
+        }
+
+        // Test HRANDFIELD with values
+        List<Map.Entry<String, String>> randomFieldsWithValues = jedis.hrandfieldWithValues(key, 2);
+        assertEquals(
+                2,
+                randomFieldsWithValues.size(),
+                "HRANDFIELD with values should return requested number of pairs");
+        for (Map.Entry<String, String> entry : randomFieldsWithValues) {
+            assertTrue(testData.containsKey(entry.getKey()), "Field should exist in hash");
+            assertEquals(testData.get(entry.getKey()), entry.getValue(), "Value should match");
+        }
+
+        // Test HRANDFIELD on non-existing hash
+        String nonExistentField = jedis.hrandfield(TEST_KEY_PREFIX + "nonexistent");
+        assertNull(nonExistentField, "HRANDFIELD should return null for non-existing hash");
+    }
+
+    @Test
+    @Order(123)
+    @DisplayName("HSCAN Command")
+    void testHSCAN() {
+        String key = TEST_KEY_PREFIX + "hash_scan";
+        Map<String, String> testData = new HashMap<>();
+
+        // Create test data with predictable pattern
+        for (int i = 0; i < 20; i++) {
+            testData.put("field_" + i, "value_" + i);
+        }
+        jedis.hset(key, testData);
+
+        // Test HSCAN - basic scan
+        ScanResult<Map.Entry<String, String>> scanResult = jedis.hscan(key, "0");
+        assertNotNull(scanResult, "HSCAN should return scan result");
+        assertNotNull(scanResult.getResult(), "HSCAN should return field-value pairs");
+        assertTrue(scanResult.getResult().size() > 0, "HSCAN should return some field-value pairs");
+
+        // Test HSCAN with ScanParams
+        ScanParams params = new ScanParams();
+        params.match("field_1*");
+        params.count(5);
+
+        scanResult = jedis.hscan(key, "0", params);
+        assertNotNull(scanResult, "HSCAN with params should return scan result");
+
+        // Verify all returned fields match the pattern
+        for (Map.Entry<String, String> entry : scanResult.getResult()) {
+            assertTrue(
+                    entry.getKey().startsWith("field_1"),
+                    "All returned fields should match pattern field_1*");
+        }
+
+        // Test HSCANNOVALS - scan without values
+        ScanResult<String> scanNoValsResult = jedis.hscanNoValues(key, "0");
+        assertNotNull(scanNoValsResult, "HSCANNOVALS should return scan result");
+        assertNotNull(scanNoValsResult.getResult(), "HSCANNOVALS should return field names");
+        assertTrue(
+                scanNoValsResult.getResult().size() > 0, "HSCANNOVALS should return some field names");
+
+        // Verify all returned items are field names
+        for (String field : scanNoValsResult.getResult()) {
+            assertTrue(testData.containsKey(field), "All returned fields should exist in hash");
+        }
+    }
+
+    @Test
+    @Order(124)
+    @DisplayName("HSETEX Command")
+    void testHSETEX() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")
+                        && !SERVER_VERSION.toString().startsWith("8."),
+                "HSETEX command requires Redis 7.9.0+ (not available in Valkey 8.x)");
+
+        String key = TEST_KEY_PREFIX + "hash_setex";
+        String field1 = "field1";
+        String field2 = "field2";
+        String value1 = "value1";
+        String value2 = "value2";
+
+        // Test HSETEX with expiration - single field
+        HSetExParams params = HSetExParams.hSetExParams().ex(60); // 60 seconds
+        long result = jedis.hsetex(key, params, field1, value1);
+        assertEquals(1, result, "HSETEX should return 1 for new field");
+        assertEquals(value1, jedis.hget(key, field1), "Field should have correct value");
+
+        // Test HSETEX with FNX condition (field not exists)
+        params = HSetExParams.hSetExParams().fnx().ex(30);
+        result = jedis.hsetex(key, params, field1, "new_value");
+        assertEquals(0, result, "HSETEX with FNX should return 0 for existing field");
+        assertEquals(value1, jedis.hget(key, field1), "Field should retain original value");
+
+        // Test HSETEX with FXX condition (field exists)
+        params = HSetExParams.hSetExParams().fxx().px(30000); // 30 seconds in milliseconds
+        result = jedis.hsetex(key, params, field1, "updated_value");
+        assertEquals(0, result, "HSETEX with FXX should return 0 when updating existing field");
+
+        // Test HSETEX with multiple fields
+        Map<String, String> hash = new HashMap<>();
+        hash.put(field2, value2);
+        hash.put("field3", "value3");
+
+        params = HSetExParams.hSetExParams().ex(120);
+        result = jedis.hsetex(key, params, hash);
+        assertTrue(result >= 1, "HSETEX with map should return number of new fields");
+        assertEquals(value2, jedis.hget(key, field2), "Field2 should have correct value");
+    }
+
+    @Test
+    @Order(125)
+    @DisplayName("HGETEX Command")
+    void testHGETEX() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")
+                        && !SERVER_VERSION.toString().startsWith("8."),
+                "HGETEX command requires Redis 7.9.0+ (not available in Valkey 8.x)");
+
+        String key = TEST_KEY_PREFIX + "hash_getex";
+        String field1 = "field1";
+        String field2 = "field2";
+        String value1 = "value1";
+        String value2 = "value2";
+
+        // Set up test data
+        jedis.hset(key, field1, value1);
+        jedis.hset(key, field2, value2);
+
+        // Test HGETEX with expiration
+        HGetExParams params = HGetExParams.hGetExParams().ex(60); // 60 seconds
+        List<String> result = jedis.hgetex(key, params, field1, field2);
+        assertEquals(2, result.size(), "HGETEX should return values for all fields");
+        assertEquals(value1, result.get(0), "HGETEX should return correct value for field1");
+        assertEquals(value2, result.get(1), "HGETEX should return correct value for field2");
+
+        // Test HGETEX with persist
+        params = HGetExParams.hGetExParams().persist();
+        result = jedis.hgetex(key, params, field1);
+        assertEquals(1, result.size(), "HGETEX should return one value");
+        assertEquals(value1, result.get(0), "HGETEX should return correct value");
+
+        // Test HGETEX on non-existing field
+        result = jedis.hgetex(key, params, "nonexistent");
+        assertEquals(1, result.size(), "HGETEX should return list with one element");
+        assertNull(result.get(0), "HGETEX should return null for non-existing field");
+    }
+
+    @Test
+    @Order(126)
+    @DisplayName("HGETDEL Command")
+    void testHGETDEL() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")
+                        && !SERVER_VERSION.toString().startsWith("8."),
+                "HGETDEL command requires Redis 7.9.0+ (not available in Valkey 8.x)");
+
+        String key = TEST_KEY_PREFIX + "hash_getdel";
+        String field1 = "field1";
+        String field2 = "field2";
+        String field3 = "field3";
+        String value1 = "value1";
+        String value2 = "value2";
+        String value3 = "value3";
+
+        // Set up test data
+        jedis.hset(key, field1, value1);
+        jedis.hset(key, field2, value2);
+        jedis.hset(key, field3, value3);
+
+        // Test HGETDEL - single field
+        List<String> result = jedis.hgetdel(key, field1);
+        assertEquals(1, result.size(), "HGETDEL should return one value");
+        assertEquals(value1, result.get(0), "HGETDEL should return correct value");
+        assertNull(jedis.hget(key, field1), "Field should be deleted after HGETDEL");
+
+        // Test HGETDEL - multiple fields
+        result = jedis.hgetdel(key, field2, field3);
+        assertEquals(2, result.size(), "HGETDEL should return values for all fields");
+        assertEquals(value2, result.get(0), "HGETDEL should return correct value for field2");
+        assertEquals(value3, result.get(1), "HGETDEL should return correct value for field3");
+        assertNull(jedis.hget(key, field2), "Field2 should be deleted after HGETDEL");
+        assertNull(jedis.hget(key, field3), "Field3 should be deleted after HGETDEL");
+
+        // Test HGETDEL on non-existing field
+        result = jedis.hgetdel(key, "nonexistent");
+        assertEquals(1, result.size(), "HGETDEL should return list with one element");
+        assertNull(result.get(0), "HGETDEL should return null for non-existing field");
+    }
+
+    @Test
+    @Order(127)
+    @DisplayName("HEXPIRE and HTTL Commands")
+    void testHEXPIREAndHTTL() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("7.4.0")
+                        && !SERVER_VERSION.toString().startsWith("8."),
+                "Hash field expiration commands require Redis 7.4.0+ (not available in Valkey 8.x)");
+
+        String key = TEST_KEY_PREFIX + "hash_expire";
+        String field1 = "field1";
+        String field2 = "field2";
+        String value1 = "value1";
+        String value2 = "value2";
+
+        // Set up test data
+        jedis.hset(key, field1, value1);
+        jedis.hset(key, field2, value2);
+
+        // Test HEXPIRE - set expiration in seconds
+        List<Long> result = jedis.hexpire(key, 60, field1, field2);
+        assertEquals(2, result.size(), "HEXPIRE should return results for all fields");
+        assertEquals(
+                Long.valueOf(1), result.get(0), "HEXPIRE should return 1 for successful expiration");
+        assertEquals(
+                Long.valueOf(1), result.get(1), "HEXPIRE should return 1 for successful expiration");
+
+        // Test HTTL - get TTL in seconds
+        List<Long> ttlResult = jedis.httl(key, field1, field2);
+        assertEquals(2, ttlResult.size(), "HTTL should return TTL for all fields");
+        assertTrue(ttlResult.get(0) > 0 && ttlResult.get(0) <= 60, "TTL should be positive and <= 60");
+        assertTrue(ttlResult.get(1) > 0 && ttlResult.get(1) <= 60, "TTL should be positive and <= 60");
+
+        // Test HEXPIRE with condition
+        ExpiryOption condition = ExpiryOption.GT; // Greater than current expiration
+        result = jedis.hexpire(key, 120, condition, field1);
+        assertEquals(1, result.size(), "HEXPIRE with condition should return one result");
+        assertEquals(Long.valueOf(1), result.get(0), "HEXPIRE with GT condition should succeed");
+
+        // Test HTTL on non-existing field
+        ttlResult = jedis.httl(key, "nonexistent");
+        assertEquals(1, ttlResult.size(), "HTTL should return one result");
+        assertEquals(
+                Long.valueOf(-2), ttlResult.get(0), "HTTL should return -2 for non-existing field");
+    }
+
+    @Test
+    @Order(128)
+    @DisplayName("HPEXPIRE and HPTTL Commands")
+    void testHPEXPIREAndHPTTL() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("7.4.0")
+                        && !SERVER_VERSION.toString().startsWith("8."),
+                "Hash field expiration commands require Redis 7.4.0+ (not available in Valkey 8.x)");
+
+        String key = TEST_KEY_PREFIX + "hash_pexpire";
+        String field1 = "field1";
+        String field2 = "field2";
+        String value1 = "value1";
+        String value2 = "value2";
+
+        // Set up test data
+        jedis.hset(key, field1, value1);
+        jedis.hset(key, field2, value2);
+
+        // Test HPEXPIRE - set expiration in milliseconds
+        List<Long> result = jedis.hpexpire(key, 60000, field1, field2); // 60 seconds in milliseconds
+        assertEquals(2, result.size(), "HPEXPIRE should return results for all fields");
+        assertEquals(
+                Long.valueOf(1), result.get(0), "HPEXPIRE should return 1 for successful expiration");
+        assertEquals(
+                Long.valueOf(1), result.get(1), "HPEXPIRE should return 1 for successful expiration");
+
+        // Test HPTTL - get TTL in milliseconds
+        List<Long> pttlResult = jedis.hpttl(key, field1, field2);
+        assertEquals(2, pttlResult.size(), "HPTTL should return TTL for all fields");
+        assertTrue(
+                pttlResult.get(0) > 0 && pttlResult.get(0) <= 60000,
+                "PTTL should be positive and <= 60000");
+        assertTrue(
+                pttlResult.get(1) > 0 && pttlResult.get(1) <= 60000,
+                "PTTL should be positive and <= 60000");
+
+        // Test HPEXPIRE with condition
+        ExpiryOption condition = ExpiryOption.LT; // Less than current expiration
+        result = jedis.hpexpire(key, 30000, condition, field1);
+        assertEquals(1, result.size(), "HPEXPIRE with condition should return one result");
+        assertEquals(Long.valueOf(1), result.get(0), "HPEXPIRE with LT condition should succeed");
+
+        // Test HPTTL on non-existing field
+        pttlResult = jedis.hpttl(key, "nonexistent");
+        assertEquals(1, pttlResult.size(), "HPTTL should return one result");
+        assertEquals(
+                Long.valueOf(-2), pttlResult.get(0), "HPTTL should return -2 for non-existing field");
+    }
+
+    @Test
+    @Order(129)
+    @DisplayName("HEXPIREAT and HEXPIRETIME Commands")
+    void testHEXPIREATAndHEXPIRETIME() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("7.4.0")
+                        && !SERVER_VERSION.toString().startsWith("8."),
+                "Hash field expiration commands require Redis 7.4.0+ (not available in Valkey 8.x)");
+
+        String key = TEST_KEY_PREFIX + "hash_expireat";
+        String field1 = "field1";
+        String value1 = "value1";
+
+        // Set up test data
+        jedis.hset(key, field1, value1);
+
+        // Test HEXPIREAT - set expiration at Unix timestamp (seconds)
+        long futureTimestamp = System.currentTimeMillis() / 1000 + 120; // 2 minutes from now
+        List<Long> result = jedis.hexpireAt(key, futureTimestamp, field1);
+        assertEquals(1, result.size(), "HEXPIREAT should return one result");
+        assertEquals(
+                Long.valueOf(1), result.get(0), "HEXPIREAT should return 1 for successful expiration");
+
+        // Test HEXPIRETIME - get expiration time
+        List<Long> expireTimeResult = jedis.hexpireTime(key, field1);
+        assertEquals(1, expireTimeResult.size(), "HEXPIRETIME should return one result");
+        assertEquals(
+                futureTimestamp,
+                expireTimeResult.get(0).longValue(),
+                "HEXPIRETIME should return correct timestamp");
+
+        // Test HEXPIREAT with condition
+        ExpiryOption condition = ExpiryOption.XX; // Only if field has expiration
+        long newTimestamp = futureTimestamp + 60; // 1 minute later
+        result = jedis.hexpireAt(key, newTimestamp, condition, field1);
+        assertEquals(1, result.size(), "HEXPIREAT with condition should return one result");
+        assertEquals(Long.valueOf(1), result.get(0), "HEXPIREAT with XX condition should succeed");
+    }
+
+    @Test
+    @Order(130)
+    @DisplayName("HPEXPIREAT and HPEXPIRETIME Commands")
+    void testHPEXPIREATAndHPEXPIRETIME() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("7.4.0")
+                        && !SERVER_VERSION.toString().startsWith("8."),
+                "Hash field expiration commands require Redis 7.4.0+ (not available in Valkey 8.x)");
+
+        String key = TEST_KEY_PREFIX + "hash_pexpireat";
+        String field1 = "field1";
+        String value1 = "value1";
+
+        // Set up test data
+        jedis.hset(key, field1, value1);
+
+        // Test HPEXPIREAT - set expiration at Unix timestamp (milliseconds)
+        long futureTimestamp = System.currentTimeMillis() + 120000; // 2 minutes from now
+        List<Long> result = jedis.hpexpireAt(key, futureTimestamp, field1);
+        assertEquals(1, result.size(), "HPEXPIREAT should return one result");
+        assertEquals(
+                Long.valueOf(1), result.get(0), "HPEXPIREAT should return 1 for successful expiration");
+
+        // Test HPEXPIRETIME - get expiration time in milliseconds
+        List<Long> pexpireTimeResult = jedis.hpexpireTime(key, field1);
+        assertEquals(1, pexpireTimeResult.size(), "HPEXPIRETIME should return one result");
+        assertEquals(
+                futureTimestamp,
+                pexpireTimeResult.get(0).longValue(),
+                "HPEXPIRETIME should return correct timestamp");
+
+        // Test HPEXPIREAT with condition
+        ExpiryOption condition = ExpiryOption.NX; // Only if field has no expiration
+        String field2 = "field2";
+        jedis.hset(key, field2, "value2");
+
+        result = jedis.hpexpireAt(key, futureTimestamp, condition, field2);
+        assertEquals(1, result.size(), "HPEXPIREAT with condition should return one result");
+        assertEquals(Long.valueOf(1), result.get(0), "HPEXPIREAT with NX condition should succeed");
+    }
+
+    @Test
+    @Order(131)
+    @DisplayName("HPERSIST Command")
+    void testHPERSIST() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("7.4.0")
+                        && !SERVER_VERSION.toString().startsWith("8."),
+                "Hash field expiration commands require Redis 7.4.0+ (not available in Valkey 8.x)");
+
+        String key = TEST_KEY_PREFIX + "hash_persist";
+        String field1 = "field1";
+        String field2 = "field2";
+        String value1 = "value1";
+        String value2 = "value2";
+
+        // Set up test data with expiration
+        jedis.hset(key, field1, value1);
+        jedis.hset(key, field2, value2);
+        jedis.hexpire(key, 60, field1, field2);
+
+        // Verify fields have expiration
+        List<Long> ttlResult = jedis.httl(key, field1, field2);
+        assertTrue(ttlResult.get(0) > 0, "Field1 should have TTL");
+        assertTrue(ttlResult.get(1) > 0, "Field2 should have TTL");
+
+        // Test HPERSIST - remove expiration
+        List<Long> result = jedis.hpersist(key, field1, field2);
+        assertEquals(2, result.size(), "HPERSIST should return results for all fields");
+        assertEquals(Long.valueOf(1), result.get(0), "HPERSIST should return 1 for successful persist");
+        assertEquals(Long.valueOf(1), result.get(1), "HPERSIST should return 1 for successful persist");
+
+        // Verify fields no longer have expiration
+        ttlResult = jedis.httl(key, field1, field2);
+        assertEquals(Long.valueOf(-1), ttlResult.get(0), "Field1 should have no expiration");
+        assertEquals(Long.valueOf(-1), ttlResult.get(1), "Field2 should have no expiration");
+
+        // Test HPERSIST on field without expiration
+        result = jedis.hpersist(key, field1);
+        assertEquals(1, result.size(), "HPERSIST should return one result");
+        assertEquals(
+                Long.valueOf(0), result.get(0), "HPERSIST should return 0 for field without expiration");
+
+        // Test HPERSIST on non-existing field
+        result = jedis.hpersist(key, "nonexistent");
+        assertEquals(1, result.size(), "HPERSIST should return one result");
+        assertEquals(
+                Long.valueOf(-2), result.get(0), "HPERSIST should return -2 for non-existing field");
+    }
+
+    @Test
+    @Order(132)
+    @DisplayName("Hash Commands - Binary Variants")
+    void testHashCommandsBinary() {
+        byte[] key = (TEST_KEY_PREFIX + "hash_binary").getBytes();
+        byte[] field1 = "field1".getBytes();
+        byte[] field2 = "field2".getBytes();
+        byte[] value1 = "value1".getBytes();
+        byte[] value2 = "value2".getBytes();
+
+        // Test HSET and HGET - binary
+        long result = jedis.hset(key, field1, value1);
+        assertEquals(1, result, "Binary HSET should return 1 for new field");
+
+        byte[] getValue = jedis.hget(key, field1);
+        assertArrayEquals(value1, getValue, "Binary HGET should return correct value");
+
+        // Test HSET with map - binary
+        Map<byte[], byte[]> hash = new HashMap<>();
+        hash.put(field1, value1);
+        hash.put(field2, value2);
+        result = jedis.hset(key, hash);
+        assertEquals(1, result, "Binary HSET with map should return number of new fields");
+
+        // Test HMGET - binary
+        List<byte[]> values = jedis.hmget(key, field1, field2);
+        assertEquals(2, values.size(), "Binary HMGET should return values for all fields");
+        assertArrayEquals(value1, values.get(0), "Binary HMGET should return correct value for field1");
+        assertArrayEquals(value2, values.get(1), "Binary HMGET should return correct value for field2");
+
+        // Test HGETALL - binary
+        Map<byte[], byte[]> allFields = jedis.hgetAll(key);
+        assertEquals(2, allFields.size(), "Binary HGETALL should return all field-value pairs");
+
+        // Check if field1 and field2 exist by comparing byte arrays content
+        boolean foundField1 = false, foundField2 = false;
+        for (Map.Entry<byte[], byte[]> entry : allFields.entrySet()) {
+            if (Arrays.equals(entry.getKey(), field1)) {
+                foundField1 = true;
+                assertArrayEquals(
+                        value1, entry.getValue(), "Binary HGETALL should have correct value for field1");
+            } else if (Arrays.equals(entry.getKey(), field2)) {
+                foundField2 = true;
+                assertArrayEquals(
+                        value2, entry.getValue(), "Binary HGETALL should have correct value for field2");
+            }
+        }
+        assertTrue(foundField1, "Binary HGETALL should contain field1");
+        assertTrue(foundField2, "Binary HGETALL should contain field2");
+
+        // Test HKEYS and HVALS - binary
+        Set<byte[]> keys = jedis.hkeys(key);
+        assertEquals(2, keys.size(), "Binary HKEYS should return all field names");
+
+        List<byte[]> vals = jedis.hvals(key);
+        assertEquals(2, vals.size(), "Binary HVALS should return all values");
+
+        // Test HEXISTS - binary
+        boolean exists = jedis.hexists(key, field1);
+        assertTrue(exists, "Binary HEXISTS should return true for existing field");
+
+        // Test HDEL - binary
+        result = jedis.hdel(key, field1);
+        assertEquals(1, result, "Binary HDEL should return 1 for existing field");
+
+        // Test HLEN - binary
+        long length = jedis.hlen(key);
+        assertEquals(1, length, "Binary HLEN should return correct count");
+    }
+
+    @Test
+    @Order(133)
+    @DisplayName("Hash Commands - Binary Variants with Expiration")
+    void testHashCommandsBinaryWithExpiration() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("7.4.0")
+                        && !SERVER_VERSION.toString().startsWith("8."),
+                "Hash field expiration commands require Redis 7.4.0+ (not available in Valkey 8.x)");
+
+        byte[] key = (TEST_KEY_PREFIX + "hash_binary_exp").getBytes();
+        byte[] field1 = "field1".getBytes();
+        byte[] field2 = "field2".getBytes();
+        byte[] value1 = "value1".getBytes();
+        byte[] value2 = "value2".getBytes();
+
+        // Set up test data
+        jedis.hset(key, field1, value1);
+        jedis.hset(key, field2, value2);
+
+        // Test HEXPIRE - binary
+        List<Long> result = jedis.hexpire(key, 60, field1, field2);
+        assertEquals(2, result.size(), "Binary HEXPIRE should return results for all fields");
+        assertEquals(
+                Long.valueOf(1), result.get(0), "Binary HEXPIRE should return 1 for successful expiration");
+
+        // Test HTTL - binary
+        List<Long> ttlResult = jedis.httl(key, field1, field2);
+        assertEquals(2, ttlResult.size(), "Binary HTTL should return TTL for all fields");
+        assertTrue(ttlResult.get(0) > 0, "Binary TTL should be positive");
+
+        // Test HPEXPIRE - binary
+        result = jedis.hpexpire(key, 120000, field1); // 2 minutes in milliseconds
+        assertEquals(1, result.size(), "Binary HPEXPIRE should return one result");
+        assertEquals(
+                Long.valueOf(1),
+                result.get(0),
+                "Binary HPEXPIRE should return 1 for successful expiration");
+
+        // Test HPTTL - binary
+        List<Long> pttlResult = jedis.hpttl(key, field1);
+        assertEquals(1, pttlResult.size(), "Binary HPTTL should return one result");
+        assertTrue(pttlResult.get(0) > 0, "Binary PTTL should be positive");
+
+        // Test HPERSIST - binary
+        result = jedis.hpersist(key, field1, field2);
+        assertEquals(2, result.size(), "Binary HPERSIST should return results for all fields");
+        assertEquals(
+                Long.valueOf(1), result.get(0), "Binary HPERSIST should return 1 for successful persist");
+    }
+
+    @Test
+    @Order(134)
+    @DisplayName("Hash Commands - Binary Variants for Newer Commands")
+    void testHashCommandsBinaryNewer() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")
+                        && !SERVER_VERSION.toString().startsWith("8."),
+                "Newer hash commands require Redis 7.9.0+ (not available in Valkey 8.x)");
+
+        byte[] key = (TEST_KEY_PREFIX + "hash_binary_new").getBytes();
+        byte[] field1 = "field1".getBytes();
+        byte[] field2 = "field2".getBytes();
+        byte[] value1 = "value1".getBytes();
+        byte[] value2 = "value2".getBytes();
+
+        // Test HSETEX - binary
+        HSetExParams params = HSetExParams.hSetExParams().ex(60);
+        long result = jedis.hsetex(key, params, field1, value1);
+        assertEquals(1, result, "Binary HSETEX should return 1 for new field");
+
+        // Test HSETEX with map - binary
+        Map<byte[], byte[]> hash = new HashMap<>();
+        hash.put(field2, value2);
+        result = jedis.hsetex(key, params, hash);
+        assertEquals(1, result, "Binary HSETEX with map should return number of new fields");
+
+        // Test HGETEX - binary
+        HGetExParams getParams = HGetExParams.hGetExParams().persist();
+        List<byte[]> getResult = jedis.hgetex(key, getParams, field1, field2);
+        assertEquals(2, getResult.size(), "Binary HGETEX should return values for all fields");
+        assertArrayEquals(
+                value1, getResult.get(0), "Binary HGETEX should return correct value for field1");
+        assertArrayEquals(
+                value2, getResult.get(1), "Binary HGETEX should return correct value for field2");
+
+        // Test HGETDEL - binary
+        List<byte[]> delResult = jedis.hgetdel(key, field1, field2);
+        assertEquals(2, delResult.size(), "Binary HGETDEL should return values for all fields");
+        assertArrayEquals(
+                value1, delResult.get(0), "Binary HGETDEL should return correct value for field1");
+        assertArrayEquals(
+                value2, delResult.get(1), "Binary HGETDEL should return correct value for field2");
+
+        // Verify fields are deleted
+        assertNull(jedis.hget(key, field1), "Field1 should be deleted after binary HGETDEL");
+        assertNull(jedis.hget(key, field2), "Field2 should be deleted after binary HGETDEL");
     }
 }
