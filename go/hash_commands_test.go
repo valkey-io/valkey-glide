@@ -790,7 +790,7 @@ func ExampleClient_HSetEx() {
 	fmt.Println(result)
 
 	// Output:
-	// 1
+	// true
 }
 
 func ExampleClusterClient_HSetEx() {
@@ -811,7 +811,7 @@ func ExampleClusterClient_HSetEx() {
 	fmt.Println(result)
 
 	// Output:
-	// 1
+	// true
 }
 
 func ExampleClient_HGetEx() {

@@ -1811,7 +1811,7 @@ func (client *baseClient) HRandFieldWithCountWithValues(ctx context.Context, key
 	return handle2DStringArrayResponse(result)
 }
 
-// HSetEx sets the value of one or more fields of a given hash key, and optionally set their expiration time or time-to-live
+// Sets the value of one or more fields of a given hash key, and optionally set their expiration time or time-to-live
 // (TTL).
 // This command overwrites the values and expirations of specified fields that exist in the hash.
 // If `key` doesn't exist, a new key holding a hash is created.
@@ -1831,7 +1831,7 @@ func (client *baseClient) HRandFieldWithCountWithValues(ctx context.Context, key
 //
 // Return value:
 //
-//	The number of fields that were added or updated.
+//	True if the operation was successful, false otherwise.
 //
 // [valkey.io]: https://valkey.io/commands/hsetex/
 func (client *baseClient) HSetEx(
@@ -1839,21 +1839,25 @@ func (client *baseClient) HSetEx(
 	key string,
 	fieldsAndValues map[string]string,
 	opts options.HSetExOptions,
-) (int64, error) {
+) (bool, error) {
 	args, err := options.BuildHSetExArgs(key, fieldsAndValues, opts)
 	if err != nil {
-		return models.DefaultIntResponse, err
+		return false, err
 	}
 
 	result, err := client.executeCommand(ctx, C.HSetEx, args)
 	if err != nil {
-		return models.DefaultIntResponse, err
+		return false, err
 	}
 
-	return handleIntResponse(result)
+	intResult, err := handleIntResponse(result)
+	if err != nil {
+		return false, err
+	}
+	return intResult == 1, nil
 }
 
-// HGetEx gets the values of one or more fields of a given hash key and optionally sets their expiration time or time-to-live
+// Gets the values of one or more fields of a given hash key and optionally sets their expiration time or time-to-live
 // (TTL).
 //
 // Since:
@@ -1895,7 +1899,7 @@ func (client *baseClient) HGetEx(
 	return handleStringOrNilArrayResponse(result)
 }
 
-// HExpire sets an expiration (TTL or time to live) on one or more fields of a given hash key. You must specify at least one
+// Sets an expiration (TTL or time to live) on one or more fields of a given hash key. You must specify at least one
 // field.
 // Field(s) will automatically be deleted from the hash key when their TTLs expire.
 // Field expirations will only be cleared by commands that delete or overwrite the contents of the hash fields, including HDEL
@@ -1947,7 +1951,7 @@ func (client *baseClient) HExpire(
 	return handleIntArrayResponse(result)
 }
 
-// HExpireAt sets an expiration (TTL or time to live) on one or more fields of a given hash key using an absolute Unix
+// Sets an expiration (TTL or time to live) on one or more fields of a given hash key using an absolute Unix
 // timestamp. A timestamp in the past will delete the field immediately.
 // Field(s) will automatically be deleted from the hash key when their TTLs expire.
 //
@@ -1991,7 +1995,7 @@ func (client *baseClient) HExpireAt(
 	return handleIntArrayResponse(result)
 }
 
-// HPExpire sets an expiration (TTL or time to live) on one or more fields of a given hash key.
+// Sets an expiration (TTL or time to live) on one or more fields of a given hash key.
 // Field(s) will automatically be deleted from the hash key when their TTLs expire.
 //
 // Since:
@@ -2034,7 +2038,7 @@ func (client *baseClient) HPExpire(
 	return handleIntArrayResponse(result)
 }
 
-// HPExpireAt sets an expiration (TTL or time to live) on one or more fields of a given hash key using an absolute Unix
+// Sets an expiration (TTL or time to live) on one or more fields of a given hash key using an absolute Unix
 // timestamp. A timestamp in the past will delete the field immediately.
 // Field(s) will automatically be deleted from the hash key when their TTLs expire.
 //
@@ -2078,7 +2082,7 @@ func (client *baseClient) HPExpireAt(
 	return handleIntArrayResponse(result)
 }
 
-// HPersist removes the existing expiration on a hash key's field(s), turning the field(s) from volatile (a field with
+// Removes the existing expiration on a hash key's field(s), turning the field(s) from volatile (a field with
 // expiration set) to persistent (a field that will never expire as no TTL (time to live) is associated).
 //
 // Since:
@@ -2113,7 +2117,7 @@ func (client *baseClient) HPersist(ctx context.Context, key string, fields []str
 	return handleIntArrayResponse(result)
 }
 
-// HTtl returns the remaining TTL (time to live) of a hash key's field(s) that have a set expiration.
+// Returns the remaining TTL (time to live) of a hash key's field(s) that have a set expiration.
 //
 // Since:
 //
@@ -2147,7 +2151,7 @@ func (client *baseClient) HTtl(ctx context.Context, key string, fields []string)
 	return handleIntArrayResponse(result)
 }
 
-// HPTtl returns the remaining TTL (time to live) of a hash key's field(s) that have a set expiration, in milliseconds.
+// Returns the remaining TTL (time to live) of a hash key's field(s) that have a set expiration, in milliseconds.
 //
 // Since:
 //
@@ -2181,7 +2185,7 @@ func (client *baseClient) HPTtl(ctx context.Context, key string, fields []string
 	return handleIntArrayResponse(result)
 }
 
-// HExpireTime returns the absolute Unix timestamp in seconds since Unix epoch at which the given key's field(s) will expire.
+// Returns the absolute Unix timestamp in seconds since Unix epoch at which the given key's field(s) will expire.
 //
 // Since:
 //
@@ -2215,7 +2219,7 @@ func (client *baseClient) HExpireTime(ctx context.Context, key string, fields []
 	return handleIntArrayResponse(result)
 }
 
-// HPExpireTime returns the absolute Unix timestamp in milliseconds since Unix epoch at which the given key's field(s) will
+// Returns the absolute Unix timestamp in milliseconds since Unix epoch at which the given key's field(s) will
 // expire.
 //
 // Since:

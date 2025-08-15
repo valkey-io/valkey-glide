@@ -891,7 +891,7 @@ func (b *BaseBatch[T]) HRandFieldWithCountWithValues(key string, count int64) *T
 //
 // Command Response:
 //
-//	The number of fields that were added or updated.
+//	True if the operation was successful, false otherwise.
 //
 // [valkey.io]: https://valkey.io/commands/hsetex/
 func (b *BaseBatch[T]) HSetEx(key string, fieldsAndValues map[string]string, opts options.HSetExOptions) *T {
@@ -899,7 +899,7 @@ func (b *BaseBatch[T]) HSetEx(key string, fieldsAndValues map[string]string, opt
 	if err != nil {
 		return b.addError("HSetEx", err)
 	}
-	return b.addCmdAndTypeChecker(C.HSetEx, args, reflect.Int64, false)
+	return b.addCmdAndTypeChecker(C.HSetEx, args, reflect.Bool, false)
 }
 
 // HGetEx gets the values of one or more fields of a given hash key and optionally sets their expiration time or time-to-live

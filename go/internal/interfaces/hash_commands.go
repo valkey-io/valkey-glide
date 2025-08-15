@@ -57,7 +57,7 @@ type HashCommands interface {
 
 	HRandFieldWithCountWithValues(ctx context.Context, key string, count int64) ([][]string, error)
 
-	HSetEx(ctx context.Context, key string, fieldsAndValues map[string]string, options options.HSetExOptions) (int64, error)
+	HSetEx(ctx context.Context, key string, fieldsAndValues map[string]string, options options.HSetExOptions) (bool, error)
 
 	HGetEx(ctx context.Context, key string, fields []string, options options.HGetExOptions) ([]models.Result[string], error)
 
