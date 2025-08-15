@@ -8,25 +8,25 @@ import {
     AdvancedBaseClientConfiguration,
     BaseClient,
     BaseClientConfiguration,
-    ClusterBatch,
-    ClusterBatchOptions,
-    ClusterScanCursor,
-    ClusterScanOptions,
+    convertGlideRecordToRecord,
     Decoder,
     DecoderOption,
+    GlideRecord,
+    GlideReturnType,
+    GlideString,
+    PubSubMsg,
+} from "./BaseClient";
+import { ClusterBatch } from "./Batch";
+import {
+    ClusterBatchOptions,
+    ClusterScanOptions,
     FlushMode,
     FunctionListOptions,
     FunctionListResponse,
     FunctionRestorePolicy,
     FunctionStatsSingleResponse,
-    GlideRecord,
-    GlideReturnType,
-    GlideString,
     InfoOptions,
     LolwutOptions,
-    PubSubMsg,
-    Script,
-    convertGlideRecordToRecord,
     createClientGetName,
     createClientId,
     createConfigGet,
@@ -62,7 +62,8 @@ import {
     createScriptKill,
     createTime,
     createUnWatch,
-} from ".";
+} from "./Commands";
+import { ClusterScanCursor, Script } from "../build-ts/native";
 import {
     command_request,
     connection_request,
