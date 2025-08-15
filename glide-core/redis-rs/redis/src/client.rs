@@ -569,6 +569,11 @@ impl Client {
     pub fn update_password(&mut self, password: Option<String>) {
         self.connection_info.redis.password = password;
     }
+
+    /// Updates the database in connection_info.
+    pub fn update_database(&mut self, db: i64) {
+        self.connection_info.redis.db = db;
+    }
 }
 
 #[cfg(feature = "aio")]
