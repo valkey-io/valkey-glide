@@ -1751,7 +1751,7 @@ func (suite *GlideTestSuite) TestHPersist_RemoveExpiration() {
 		hsetOptions := options.NewHSetExOptions().SetExpiry(options.NewExpiryIn(60 * time.Second))
 		result, err := client.HSetEx(context.Background(), key, fields, hsetOptions)
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), int64(1), result)
+		assert.True(suite.T(), result)
 
 		// Verify expiration is set
 		ttls, err := client.HTtl(context.Background(), key, []string{"field1", "field2"})
@@ -1784,7 +1784,7 @@ func (suite *GlideTestSuite) TestHTtl_WithExpiringFields() {
 		hsetOptions := options.NewHSetExOptions().SetExpiry(options.NewExpiryIn(60 * time.Second))
 		result, err := client.HSetEx(context.Background(), key, fields, hsetOptions)
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), int64(1), result)
+		assert.True(suite.T(), result)
 
 		// Get TTL for fields
 		ttls, err := client.HTtl(context.Background(), key, []string{"field1", "field2", "field3"})
