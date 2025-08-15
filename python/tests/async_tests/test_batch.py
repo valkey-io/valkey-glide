@@ -23,8 +23,14 @@ from glide_shared.commands.batch_options import (
 )
 from glide_shared.commands.command_args import OrderBy
 from glide_shared.commands.core_options import (
+    ExpireOptions,
+    ExpiryGetEx,
+    ExpirySet,
+    ExpiryType,
+    ExpiryTypeGetEx,
     FlushMode,
     FunctionRestorePolicy,
+    HashFieldConditionalChange,
     InfoSection,
 )
 from glide_shared.commands.stream import StreamAddOptions
@@ -736,3 +742,847 @@ class TestBatch:
             RequestError, match="Retry strategies are not supported for atomic batches"
         ):
             await glide_client.exec(batch, raise_on_error=True, options=options)
+
+    @pytest.mark.skip_if_version_below("9.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_httl_batch(self, glide_client: TGlideClient):
+        key = get_random_string(10)
+        field1 = get_random_string(5)
+        field2 = get_random_string(5)
+        non_existent_field = get_random_string(5)
+
+        # Set up hash with fields
+        field_value_map = {field1: "value1", field2: "value2"}
+        await glide_client.hset(key, field_value_map)
+
+        # Test HTTL in batch
+        if isinstance(glide_client, GlideClusterClient):
+            cluster_batch = ClusterBatch(is_atomic=False)
+            cluster_batch.httl(key, [field1, field2])
+            cluster_batch.httl(key, [non_existent_field])
+            cluster_batch.httl("non_existent_key", [field1])
+            result = await glide_client.exec(cluster_batch, raise_on_error=False)
+        else:
+            standalone_batch = Batch(is_atomic=False)
+            standalone_batch.httl(key, [field1, field2])
+            standalone_batch.httl(key, [non_existent_field])
+            standalone_batch.httl("non_existent_key", [field1])
+            result = await glide_client.exec(standalone_batch, raise_on_error=False)
+        assert result is not None
+        assert result == [[-1, -1], [-2], [-2]]
+
+    @pytest.mark.skip_if_version_below("9.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_hpttl_batch(self, glide_client: TGlideClient):
+        key = get_random_string(10)
+        field1 = get_random_string(5)
+        field2 = get_random_string(5)
+        non_existent_field = get_random_string(5)
+
+        # Set up hash with fields
+        field_value_map = {field1: "value1", field2: "value2"}
+        await glide_client.hset(key, field_value_map)
+
+        # Test HPTTL in batch
+        if isinstance(glide_client, GlideClusterClient):
+            cluster_batch = ClusterBatch(is_atomic=False)
+            cluster_batch.hpttl(key, [field1, field2])
+            cluster_batch.hpttl(key, [non_existent_field])
+            cluster_batch.hpttl("non_existent_key", [field1])
+            result = await glide_client.exec(cluster_batch, raise_on_error=False)
+        else:
+            standalone_batch = Batch(is_atomic=False)
+            standalone_batch.hpttl(key, [field1, field2])
+            standalone_batch.hpttl(key, [non_existent_field])
+            standalone_batch.hpttl("non_existent_key", [field1])
+            result = await glide_client.exec(standalone_batch, raise_on_error=False)
+        assert result is not None
+        assert result == [[-1, -1], [-2], [-2]]
+
+    @pytest.mark.skip_if_version_below("9.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_hexpiretime_batch(self, glide_client: TGlideClient):
+        key = get_random_string(10)
+        field1 = get_random_string(5)
+        field2 = get_random_string(5)
+        field3 = get_random_string(5)
+        non_existent_field = get_random_string(5)
+
+        # Set up hash with fields - some with expiration, some without
+        field_value_map = {field1: "value1", field2: "value2"}
+        await glide_client.hset(key, field_value_map)
+
+        # Set expiration on field1 using HSETEX
+        import time
+
+        future_timestamp = int(time.time()) + 10
+        await glide_client.hsetex(
+            key,
+            {field3: "value3_with_expiry"},
+            expiry=ExpirySet(ExpiryType.UNIX_SEC, future_timestamp),
+        )
+
+        # Test HEXPIRETIME in batch
+        if isinstance(glide_client, GlideClusterClient):
+            cluster_batch = ClusterBatch(is_atomic=False)
+            cluster_batch.hexpiretime(
+                key, [field1, field2]
+            )  # fields without expiration
+            cluster_batch.hexpiretime(key, [field3])  # field with expiration
+            cluster_batch.hexpiretime(key, [non_existent_field])  # non-existent field
+            cluster_batch.hexpiretime("non_existent_key", [field1])  # non-existent key
+            cluster_batch.hexpiretime(key, [])  # empty fields list
+            result = await glide_client.exec(cluster_batch, raise_on_error=False)
+        else:
+            standalone_batch = Batch(is_atomic=False)
+            standalone_batch.hexpiretime(
+                key, [field1, field2]
+            )  # fields without expiration
+            standalone_batch.hexpiretime(key, [field3])  # field with expiration
+            standalone_batch.hexpiretime(
+                key, [non_existent_field]
+            )  # non-existent field
+            standalone_batch.hexpiretime(
+                "non_existent_key", [field1]
+            )  # non-existent key
+            standalone_batch.hexpiretime(key, [])  # empty fields list
+            result = await glide_client.exec(standalone_batch, raise_on_error=False)
+
+        assert result is not None
+        assert result[0] == [-1, -1]  # fields without expiration
+        assert result[1] == [future_timestamp]  # field with expiration
+        assert result[2] == [-2]  # non-existent field
+        assert result[3] == [-2]  # non-existent key
+        assert result[4] == []  # empty fields list
+
+    @pytest.mark.skip_if_version_below("9.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_hpexpiretime_batch(self, glide_client: TGlideClient):
+        key = get_random_string(10)
+        field1 = get_random_string(5)
+        field2 = get_random_string(5)
+        non_existent_field = get_random_string(5)
+        non_existent_key = get_random_string(10)
+
+        # Set up hash with fields
+        field_value_map = {field1: "value1", field2: "value2"}
+        assert await glide_client.hset(key, field_value_map) == 2
+
+        # Set expiration on field1 using HSETEX
+        import time
+
+        future_timestamp_ms = int(time.time() * 1000) + 10000
+        hsetex_result = await glide_client.hsetex(
+            key,
+            {field1: "value1_with_expiry"},
+            expiry=ExpirySet(ExpiryType.UNIX_MILLSEC, future_timestamp_ms),
+        )
+        assert hsetex_result == 1
+
+        # Test HPEXPIRETIME in batch
+        if isinstance(glide_client, GlideClusterClient):
+            cluster_batch = ClusterBatch(is_atomic=False)
+            cluster_batch.hpexpiretime(key, [field2])  # field without expiration
+            cluster_batch.hpexpiretime(key, [field1])  # field with expiration
+            cluster_batch.hpexpiretime(key, [non_existent_field])  # non-existent field
+            cluster_batch.hpexpiretime(non_existent_key, [field1])  # non-existent key
+            cluster_batch.hpexpiretime(key, [])  # empty fields list
+
+            result = await glide_client.exec(cluster_batch, raise_on_error=True)
+        else:
+            batch = Batch(is_atomic=False)
+            batch.hpexpiretime(key, [field2])  # field without expiration
+            batch.hpexpiretime(key, [field1])  # field with expiration
+            batch.hpexpiretime(key, [non_existent_field])  # non-existent field
+            batch.hpexpiretime(non_existent_key, [field1])  # non-existent key
+            batch.hpexpiretime(key, [])  # empty fields list
+
+            result = await glide_client.exec(batch, raise_on_error=True)
+
+        assert result is not None
+        assert result[0] == [-1]  # field without expiration
+        assert result[1] == [future_timestamp_ms]  # field with expiration
+        assert result[2] == [-2]  # non-existent field
+        assert result[3] == [-2]  # non-existent key
+        assert result[4] == []  # empty fields list
+
+    @pytest.mark.skip_if_version_below("9.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_hsetex_batch(self, glide_client: TGlideClient):
+        key1 = get_random_string(10)
+        key2 = get_random_string(10)
+        field1 = get_random_string(5)
+        field2 = get_random_string(5)
+        field3 = get_random_string(5)
+
+        # Test HSETEX in batch with different options
+        if isinstance(glide_client, GlideClusterClient):
+            cluster_batch = ClusterBatch(is_atomic=False)
+            # Basic HSETEX with expiration
+            cluster_batch.hsetex(
+                key1,
+                {field1: "value1", field2: "value2"},
+                expiry=ExpirySet(ExpiryType.SEC, 10),
+            )
+            # HSETEX with field conditional change
+            cluster_batch.hsetex(
+                key1,
+                {field3: "value3"},
+                field_conditional_change=HashFieldConditionalChange.ONLY_IF_NONE_EXIST,
+                expiry=ExpirySet(ExpiryType.MILLSEC, 5000),
+            )
+            # HSETEX on new key
+            cluster_batch.hsetex(
+                key2, {field1: "new_value"}, expiry=ExpirySet(ExpiryType.SEC, 15)
+            )
+            # Verify with HTTL
+            cluster_batch.httl(key1, [field1, field2, field3])
+            cluster_batch.httl(key2, [field1])
+            result = await glide_client.exec(cluster_batch, raise_on_error=False)
+        else:
+            standalone_batch = Batch(is_atomic=False)
+            # Basic HSETEX with expiration
+            standalone_batch.hsetex(
+                key1,
+                {field1: "value1", field2: "value2"},
+                expiry=ExpirySet(ExpiryType.SEC, 10),
+            )
+            # HSETEX with field conditional change
+            standalone_batch.hsetex(
+                key1,
+                {field3: "value3"},
+                field_conditional_change=HashFieldConditionalChange.ONLY_IF_NONE_EXIST,
+                expiry=ExpirySet(ExpiryType.MILLSEC, 5000),
+            )
+            # HSETEX on new key
+            standalone_batch.hsetex(
+                key2, {field1: "new_value"}, expiry=ExpirySet(ExpiryType.SEC, 15)
+            )
+            # Verify with HTTL
+            standalone_batch.httl(key1, [field1, field2, field3])
+            standalone_batch.httl(key2, [field1])
+            result = await glide_client.exec(standalone_batch, raise_on_error=False)
+        assert result is not None
+
+        # Check results
+        assert result[0] == 1  # First HSETEX should succeed
+        assert result[1] == 1  # Second HSETEX should succeed (field doesn't exist)
+        assert result[2] == 1  # Third HSETEX should succeed
+
+        # Check TTL results - all should have positive TTL values
+        ttl_key1 = result[3]
+        ttl_key2 = result[4]
+        assert isinstance(ttl_key1, list) and isinstance(ttl_key2, list)
+        assert all(
+            isinstance(ttl, int) and 0 < ttl <= 10 for ttl in ttl_key1[:2]
+        )  # field1, field2 have ~10s TTL
+        assert (
+            isinstance(ttl_key1[2], int) and 0 < ttl_key1[2] <= 5
+        )  # field3 has ~5s TTL
+        assert (
+            isinstance(ttl_key2[0], int) and 0 < ttl_key2[0] <= 15
+        )  # key2 field1 has ~15s TTL
+
+    @pytest.mark.skip_if_version_below("9.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_hgetex_batch(self, glide_client: TGlideClient):
+        key1 = get_random_string(10)
+        key2 = get_random_string(10)
+        field1 = get_random_string(5)
+        field2 = get_random_string(5)
+        field3 = get_random_string(5)
+
+        # Set up initial data
+        await glide_client.hset(
+            key1, {field1: "value1", field2: "value2", field3: "value3"}
+        )
+        await glide_client.hset(key2, {field1: "other_value"})
+
+        # Test HGETEX in batch with different options
+        if isinstance(glide_client, GlideClusterClient):
+            cluster_batch = ClusterBatch(is_atomic=False)
+            # Basic HGETEX without expiry
+            cluster_batch.hgetex(key1, [field1, field2])
+            # HGETEX with EX expiry option
+            cluster_batch.hgetex(
+                key1, [field1], expiry=ExpiryGetEx(ExpiryTypeGetEx.SEC, 10)
+            )
+            # HGETEX with PX expiry option
+            cluster_batch.hgetex(
+                key1, [field2], expiry=ExpiryGetEx(ExpiryTypeGetEx.MILLSEC, 8000)
+            )
+            # HGETEX with PERSIST option
+            cluster_batch.hgetex(
+                key1, [field3], expiry=ExpiryGetEx(ExpiryTypeGetEx.PERSIST, None)
+            )
+            # HGETEX on non-existent key
+            cluster_batch.hgetex("non_existent_key", [field1])
+            # HGETEX with mixed existent/non-existent fields
+            cluster_batch.hgetex(key1, [field1, "non_existent_field"])
+            # Verify expiration changes with HTTL
+            cluster_batch.httl(key1, [field1, field2, field3])
+            result = await glide_client.exec(cluster_batch, raise_on_error=False)
+        else:
+            standalone_batch = Batch(is_atomic=False)
+            # Basic HGETEX without expiry
+            standalone_batch.hgetex(key1, [field1, field2])
+            # HGETEX with EX expiry option
+            standalone_batch.hgetex(
+                key1, [field1], expiry=ExpiryGetEx(ExpiryTypeGetEx.SEC, 10)
+            )
+            # HGETEX with PX expiry option
+            standalone_batch.hgetex(
+                key1, [field2], expiry=ExpiryGetEx(ExpiryTypeGetEx.MILLSEC, 8000)
+            )
+            # HGETEX with PERSIST option
+            standalone_batch.hgetex(
+                key1, [field3], expiry=ExpiryGetEx(ExpiryTypeGetEx.PERSIST, None)
+            )
+            # HGETEX on non-existent key
+            standalone_batch.hgetex("non_existent_key", [field1])
+            # HGETEX with mixed existent/non-existent fields
+            standalone_batch.hgetex(key1, [field1, "non_existent_field"])
+            # Verify expiration changes with HTTL
+            standalone_batch.httl(key1, [field1, field2, field3])
+            result = await glide_client.exec(standalone_batch, raise_on_error=False)
+        assert result is not None
+
+        # Check results
+        assert result[0] == [b"value1", b"value2"]  # Basic HGETEX
+        assert result[1] == [b"value1"]  # HGETEX with EX expiry
+        assert result[2] == [b"value2"]  # HGETEX with PX expiry
+        assert result[3] == [b"value3"]  # HGETEX with PERSIST
+        assert result[4] is None  # HGETEX on non-existent key
+        assert result[5] == [b"value1", None]  # Mixed existent/non-existent fields
+
+        # Check TTL results
+        ttl_results = result[6]
+        assert isinstance(ttl_results, list)
+        assert (
+            isinstance(ttl_results[0], int) and 0 < ttl_results[0] <= 10
+        )  # field1 should have ~10s TTL
+        assert (
+            isinstance(ttl_results[1], int) and 0 < ttl_results[1] <= 8
+        )  # field2 should have ~8s TTL
+        assert ttl_results[2] == -1  # field3 should have no expiration (PERSIST)
+
+    @pytest.mark.skip_if_version_below("9.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_hexpire_batch(self, glide_client: TGlideClient):
+        key1 = get_random_string(10)
+        key2 = get_random_string(10)
+        field1 = get_random_string(5)
+        field2 = get_random_string(5)
+        field3 = get_random_string(5)
+        non_existent_field = get_random_string(5)
+        non_existent_key = get_random_string(10)
+
+        # Set up test data
+        await glide_client.hset(
+            key1, {field1: "value1", field2: "value2", field3: "value3"}
+        )
+        await glide_client.hset(key2, {field1: "value1", field2: "value2"})
+
+        # Create batch with various HEXPIRE operations
+        batch = (
+            ClusterBatch(is_atomic=False)
+            if isinstance(glide_client, GlideClusterClient)
+            else Batch(is_atomic=False)
+        )
+        batch.hexpire(key1, 10, [field1, field2])  # Basic HEXPIRE
+        batch.hexpire(
+            key1, 20, [field3], option=ExpireOptions.HasNoExpiry
+        )  # HEXPIRE with NX
+        batch.hexpire(
+            key1, 30, [field1], option=ExpireOptions.HasExistingExpiry
+        )  # HEXPIRE with XX
+        batch.hexpire(
+            key1, 5, [field2], option=ExpireOptions.NewExpiryLessThanCurrent
+        )  # HEXPIRE with LT
+        batch.hexpire(
+            key1, 40, [field1], option=ExpireOptions.NewExpiryGreaterThanCurrent
+        )  # HEXPIRE with GT
+        batch.hexpire(non_existent_key, 15, [field1])  # HEXPIRE on non-existent key
+        batch.hexpire(
+            key1, 25, [field1, non_existent_field]
+        )  # Mixed existent/non-existent fields
+        batch.hexpire(key2, 0, [field1])  # Immediate deletion with 0 seconds
+        batch.httl(key1, [field1, field2, field3])  # Check TTL values
+        batch.hget(key2, field1)  # Check if field1 was deleted
+
+        # Execute batch
+        result = await exec_batch(glide_client, batch, raise_on_error=False)
+        assert result is not None
+
+        # Check results
+        assert result[0] == [1, 1]  # Basic HEXPIRE on field1, field2
+        assert result[1] == [1]  # HEXPIRE with NX on field3 (no prior expiry)
+        assert result[2] == [1]  # HEXPIRE with XX on field1 (has expiry)
+        assert result[3] == [1]  # HEXPIRE with LT on field2 (5 < 10)
+        assert result[4] == [1]  # HEXPIRE with GT on field1 (40 > 30)
+        assert result[5] == [-2]  # HEXPIRE on non-existent key
+        assert result[6] == [
+            1,
+            -2,
+        ]  # Mixed fields: field1 exists, non_existent_field doesn't
+        assert result[7] == [2]  # Immediate deletion (0 seconds)
+
+        # Check TTL results
+        ttl_results = result[8]
+        assert isinstance(ttl_results, list)
+        assert (
+            isinstance(ttl_results[0], int) and 0 < ttl_results[0] <= 40
+        )  # field1 should have ~40s TTL
+        assert (
+            isinstance(ttl_results[1], int) and 0 < ttl_results[1] <= 5
+        )  # field2 should have ~5s TTL
+        assert (
+            isinstance(ttl_results[2], int) and 0 < ttl_results[2] <= 20
+        )  # field3 should have ~20s TTL
+
+        # Check that field1 in key2 was deleted
+        assert result[9] is None  # field1 should be deleted
+
+    @pytest.mark.skip_if_version_below("9.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_hpexpire_batch(self, glide_client: TGlideClient):
+        key1 = get_random_string(10)
+        key2 = get_random_string(10)
+        field1 = get_random_string(5)
+        field2 = get_random_string(5)
+        field3 = get_random_string(5)
+        non_existent_field = get_random_string(5)
+
+        # Set up hash with fields for both keys
+        field_value_map = {field1: "value1", field2: "value2", field3: "value3"}
+        await glide_client.hset(key1, field_value_map)
+        await glide_client.hset(key2, field_value_map)
+
+        # Create batch with HPEXPIRE operations
+        batch = (
+            ClusterBatch(is_atomic=False)
+            if isinstance(glide_client, GlideClusterClient)
+            else Batch(is_atomic=False)
+        )
+        batch.hpexpire(key1, 10000, [field1, field2])  # Set 10000ms expiration
+        batch.hpexpire(key1, 15000, [non_existent_field])  # Non-existent field
+        batch.hpexpire(key2, 5000, [field1])  # Set 5000ms expiration
+        batch.hpexpire(key2, 20000, [field2, field3])  # Set 20000ms expiration
+        batch.hpexpire(key2, 0, [field1])  # Delete field1 immediately
+        batch.httl(key1, [field1, field2])  # Check TTL for key1 fields
+        batch.httl(key2, [field1, field2, field3])  # Check TTL for key2 fields
+        batch.hget(key2, field1)  # Should be None (deleted)
+
+        # Execute batch
+        result = await exec_batch(glide_client, batch, raise_on_error=False)
+        assert result is not None
+
+        # Verify results
+        assert result[0] == [1, 1]  # key1 field1 and field2 expiration set
+        assert result[1] == [-2]  # non_existent_field doesn't exist
+        assert result[2] == [1]  # key2 field1 expiration set
+        assert result[3] == [1, 1]  # key2 field2 and field3 expiration set
+        assert result[4] == [2]  # key2 field1 deleted immediately
+
+        # Check TTL results
+        ttl_key1 = result[5]
+        ttl_key2 = result[6]
+        assert isinstance(ttl_key1, list) and isinstance(ttl_key2, list)
+
+        # key1 fields should have TTL
+        assert (
+            isinstance(ttl_key1[0], int) and 0 < ttl_key1[0] <= 10
+        )  # field1 has ~10s TTL
+        assert (
+            isinstance(ttl_key1[1], int) and 0 < ttl_key1[1] <= 10
+        )  # field2 has ~10s TTL
+
+        # key2 fields: field1 deleted, field2 and field3 have TTL
+        assert ttl_key2[0] == -2  # field1 was deleted
+        assert (
+            isinstance(ttl_key2[1], int) and 0 < ttl_key2[1] <= 20
+        )  # field2 has ~20s TTL
+        assert (
+            isinstance(ttl_key2[2], int) and 0 < ttl_key2[2] <= 20
+        )  # field3 has ~20s TTL
+
+        # Check that field1 in key2 was deleted
+        assert result[7] is None  # field1 should be deleted
+
+        # Test HPEXPIRE with conditional options in batch
+        batch2 = (
+            ClusterBatch(is_atomic=False)
+            if isinstance(glide_client, GlideClusterClient)
+            else Batch(is_atomic=False)
+        )
+        batch2.hpexpire(
+            key1, 25000, [field1], option=ExpireOptions.HasExistingExpiry
+        )  # XX option
+        batch2.hpexpire(
+            key1, 30000, [field3], option=ExpireOptions.HasNoExpiry
+        )  # NX option
+        batch2.httl(key1, [field1, field3])  # Check TTL
+
+        result2 = await exec_batch(glide_client, batch2, raise_on_error=False)
+        assert result2 is not None
+
+        # Verify conditional results
+        assert result2[0] == [1]  # field1 has existing expiry, XX should succeed
+        assert result2[1] == [1]  # field3 has no expiry, NX should succeed
+
+        # Check TTL results
+        ttl_results = result2[2]
+        assert isinstance(ttl_results, list)
+        assert (
+            isinstance(ttl_results[0], int) and 0 < ttl_results[0] <= 25
+        )  # field1 should have ~25s TTL
+        assert (
+            isinstance(ttl_results[1], int) and 0 < ttl_results[1] <= 30
+        )  # field3 should have ~30s TTL
+
+    @pytest.mark.skip_if_version_below("9.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_hexpireat_batch(self, glide_client: TGlideClient):
+        import time
+
+        key1 = get_random_string(10)
+        key2 = get_random_string(10)
+        field1 = get_random_string(5)
+        field2 = get_random_string(5)
+        field3 = get_random_string(5)
+        non_existent_field = get_random_string(5)
+        non_existent_key = get_random_string(10)
+
+        # Set up test data
+        await glide_client.hset(
+            key1, {field1: "value1", field2: "value2", field3: "value3"}
+        )
+        await glide_client.hset(key2, {field1: "value1", field2: "value2"})
+
+        # Create timestamps for testing
+        future_timestamp1 = int(time.time()) + 30
+        future_timestamp2 = int(time.time()) + 45
+        past_timestamp = int(time.time()) - 60
+
+        # Create batch with various HEXPIREAT operations
+        batch = (
+            ClusterBatch(is_atomic=False)
+            if isinstance(glide_client, GlideClusterClient)
+            else Batch(is_atomic=False)
+        )
+        batch.hexpireat(key1, future_timestamp1, [field1, field2])  # Basic HEXPIREAT
+        batch.hexpireat(
+            key1, future_timestamp2, [field3], option=ExpireOptions.HasNoExpiry
+        )  # HEXPIREAT with NX
+        batch.hexpireat(
+            key1, future_timestamp2, [field1], option=ExpireOptions.HasExistingExpiry
+        )  # HEXPIREAT with XX
+        batch.hexpireat(
+            key1,
+            future_timestamp1,
+            [field2],
+            option=ExpireOptions.NewExpiryLessThanCurrent,
+        )  # HEXPIREAT with LT (should fail since future_timestamp1 < future_timestamp2)
+        batch.hexpireat(
+            key1,
+            future_timestamp2 + 20,
+            [field1],
+            option=ExpireOptions.NewExpiryGreaterThanCurrent,
+        )  # HEXPIREAT with GT
+        batch.hexpireat(
+            non_existent_key, future_timestamp1, [field1]
+        )  # HEXPIREAT on non-existent key
+        batch.hexpireat(
+            key1, future_timestamp1, [field1, non_existent_field]
+        )  # Mixed existent/non-existent fields
+        batch.hexpireat(
+            key2, past_timestamp, [field1]
+        )  # Immediate deletion with past timestamp
+        batch.httl(key1, [field1, field2, field3])  # Check TTL values
+        batch.hget(key2, field1)  # Check if field1 was deleted
+
+        # Execute batch
+        result = await exec_batch(glide_client, batch, raise_on_error=False)
+        assert result is not None
+
+        # Check results
+        assert result[0] == [1, 1]  # Basic HEXPIREAT on field1, field2
+        assert result[1] == [1]  # HEXPIREAT with NX on field3 (no prior expiry)
+        assert result[2] == [1]  # HEXPIREAT with XX on field1 (has expiry)
+        assert result[3] == [0]  # HEXPIREAT with LT on field2 (should fail)
+        assert result[4] == [
+            1
+        ]  # HEXPIREAT with GT on field1 (later timestamp > current)
+        assert result[5] == [-2]  # HEXPIREAT on non-existent key
+        assert result[6] == [
+            1,
+            -2,
+        ]  # Mixed fields: field1 exists, non_existent_field doesn't
+        assert result[7] == [2]  # Immediate deletion (past timestamp)
+
+        # Check TTL results
+        ttl_results = result[8]
+        assert isinstance(ttl_results, list)
+        assert isinstance(ttl_results[0], int) and (
+            0 < ttl_results[0] <= 65
+        )  # field1 should have TTL (future_timestamp2 + 20)
+        assert (
+            isinstance(ttl_results[1], int) and 0 < ttl_results[1] <= 30
+        )  # field2 should have TTL (future_timestamp1)
+        assert (
+            isinstance(ttl_results[2], int) and 0 < ttl_results[2] <= 45
+        )  # field3 should have TTL (future_timestamp2)
+
+        # Check that field1 in key2 was deleted
+        assert result[9] is None  # field1 should be deleted
+
+        # Test HEXPIREAT with more conditional options in batch
+        batch2 = (
+            ClusterBatch(is_atomic=False)
+            if isinstance(glide_client, GlideClusterClient)
+            else Batch(is_atomic=False)
+        )
+        base_timestamp = int(time.time()) + 60
+        later_timestamp = base_timestamp + 30
+        earlier_timestamp = base_timestamp - 10
+
+        # Set base expiration first
+        batch2.hexpireat(key1, base_timestamp, [field2])
+        batch2.hexpireat(
+            key1,
+            later_timestamp,
+            [field2],
+            option=ExpireOptions.NewExpiryGreaterThanCurrent,
+        )  # GT option
+        batch2.hexpireat(
+            key1,
+            earlier_timestamp,
+            [field2],
+            option=ExpireOptions.NewExpiryLessThanCurrent,
+        )  # LT option
+        batch2.httl(key1, [field2])  # Check final TTL
+
+        result2 = await exec_batch(glide_client, batch2, raise_on_error=False)
+        assert result2 is not None
+
+        # Verify conditional results
+        assert result2[0] == [1]  # Base expiration set
+        assert result2[1] == [1]  # GT should succeed (later_timestamp > base_timestamp)
+        assert result2[2] == [
+            1
+        ]  # LT should succeed (earlier_timestamp < later_timestamp)
+
+        # Check final TTL result
+        ttl_result = result2[3]
+        assert isinstance(ttl_result, list)
+        assert isinstance(ttl_result[0], int) and (
+            0 < ttl_result[0] <= (earlier_timestamp - int(time.time()))
+        )  # Should have earlier_timestamp TTL
+
+    @pytest.mark.skip_if_version_below("9.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_hpexpireat_batch(self, glide_client: TGlideClient):
+        import time
+
+        key1 = get_random_string(10)
+        key2 = get_random_string(10)
+        field1 = get_random_string(5)
+        field2 = get_random_string(5)
+        field3 = get_random_string(5)
+        non_existent_field = get_random_string(5)
+        non_existent_key = get_random_string(10)
+
+        # Set up test data
+        await glide_client.hset(
+            key1, {field1: "value1", field2: "value2", field3: "value3"}
+        )
+        await glide_client.hset(key2, {field1: "value1", field2: "value2"})
+
+        # Create timestamps for testing (in milliseconds)
+        future_timestamp_ms1 = int(time.time() * 1000) + 30000  # 30 seconds from now
+        future_timestamp_ms2 = int(time.time() * 1000) + 45000  # 45 seconds from now
+        past_timestamp_ms = int(time.time() * 1000) - 60000  # 60 seconds ago
+
+        # Create batch with various HPEXPIREAT operations
+        batch = (
+            ClusterBatch(is_atomic=False)
+            if isinstance(glide_client, GlideClusterClient)
+            else Batch(is_atomic=False)
+        )
+        batch.hpexpireat(
+            key1, future_timestamp_ms1, [field1, field2]
+        )  # Basic HPEXPIREAT
+        batch.hpexpireat(
+            key1, future_timestamp_ms2, [field3], option=ExpireOptions.HasNoExpiry
+        )  # HPEXPIREAT with NX
+        batch.hpexpireat(
+            key1, future_timestamp_ms2, [field1], option=ExpireOptions.HasExistingExpiry
+        )  # HPEXPIREAT with XX
+        batch.hpexpireat(
+            key1,
+            future_timestamp_ms1,
+            [field2],
+            option=ExpireOptions.NewExpiryLessThanCurrent,
+        )  # HPEXPIREAT with LT (should fail since future_timestamp_ms1 < future_timestamp_ms2)
+        batch.hpexpireat(
+            key1,
+            future_timestamp_ms2 + 20000,
+            [field1],
+            option=ExpireOptions.NewExpiryGreaterThanCurrent,
+        )  # HPEXPIREAT with GT
+        batch.hpexpireat(
+            non_existent_key, future_timestamp_ms1, [field1]
+        )  # HPEXPIREAT on non-existent key
+        batch.hpexpireat(
+            key1, future_timestamp_ms1, [field1, non_existent_field]
+        )  # Mixed existent/non-existent fields
+        batch.hpexpireat(
+            key2, past_timestamp_ms, [field1]
+        )  # Immediate deletion with past timestamp
+        batch.httl(key1, [field1, field2, field3])  # Check TTL values
+        batch.hget(key2, field1)  # Check if field1 was deleted
+
+        # Execute batch
+        result = await exec_batch(glide_client, batch, raise_on_error=False)
+        assert result is not None
+
+        # Check results
+        assert result[0] == [1, 1]  # Basic HPEXPIREAT on field1, field2
+        assert result[1] == [1]  # HPEXPIREAT with NX on field3 (no prior expiry)
+        assert result[2] == [1]  # HPEXPIREAT with XX on field1 (has expiry)
+        assert result[3] == [0]  # HPEXPIREAT with LT on field2 (should fail)
+        assert result[4] == [
+            1
+        ]  # HPEXPIREAT with GT on field1 (later timestamp > current)
+        assert result[5] == [-2]  # HPEXPIREAT on non-existent key
+        assert result[6] == [
+            1,
+            -2,
+        ]  # Mixed: field1 updated, non_existent_field doesn't exist
+        assert result[7] == [2]  # field1 in key2 deleted immediately (past timestamp)
+
+        # Check TTL values (should be positive for fields with expiration)
+        ttl_result = result[8]
+        assert isinstance(ttl_result, list)
+        assert isinstance(ttl_result[0], int) and (
+            0 < ttl_result[0] <= 65
+        )  # field1 should have TTL (updated by GT operation)
+        assert (
+            isinstance(ttl_result[1], int) and 0 < ttl_result[1] <= 30
+        )  # field2 should have TTL from initial HPEXPIREAT
+        assert (
+            isinstance(ttl_result[2], int) and 0 < ttl_result[2] <= 45
+        )  # field3 should have TTL from NX operation
+
+        assert result[9] is None  # field1 in key2 should be deleted
+
+        # Test conditional operations with timestamps in milliseconds
+        batch2 = (
+            ClusterBatch(is_atomic=False)
+            if isinstance(glide_client, GlideClusterClient)
+            else Batch(is_atomic=False)
+        )
+        base_timestamp_ms = int(time.time() * 1000) + 60000  # 60 seconds from now
+        later_timestamp_ms = base_timestamp_ms + 20000  # 20 seconds later
+        earlier_timestamp_ms = later_timestamp_ms - 10000  # 10 seconds earlier
+
+        # Set base expiration first
+        batch2.hpexpireat(key1, base_timestamp_ms, [field2])
+        batch2.hpexpireat(
+            key1,
+            later_timestamp_ms,
+            [field2],
+            option=ExpireOptions.NewExpiryGreaterThanCurrent,
+        )  # GT option
+        batch2.hpexpireat(
+            key1,
+            earlier_timestamp_ms,
+            [field2],
+            option=ExpireOptions.NewExpiryLessThanCurrent,
+        )  # LT option
+        batch2.httl(key1, [field2])  # Check final TTL
+
+        result2 = await exec_batch(glide_client, batch2, raise_on_error=False)
+        assert result2 is not None
+
+        # Verify conditional results
+        assert result2[0] == [1]  # Base expiration set
+        assert result2[1] == [
+            1
+        ]  # GT should succeed (later_timestamp_ms > base_timestamp_ms)
+        assert result2[2] == [
+            1
+        ]  # LT should succeed (earlier_timestamp_ms < later_timestamp_ms)
+
+        # Check final TTL result (convert milliseconds to seconds for comparison)
+        ttl_result = result2[3]
+        assert isinstance(ttl_result, list)
+        expected_ttl_seconds = (earlier_timestamp_ms - int(time.time() * 1000)) // 1000
+        assert isinstance(ttl_result[0], int) and (
+            0 < ttl_result[0] <= expected_ttl_seconds
+        )  # Should have earlier_timestamp_ms TTL
+
+    @pytest.mark.skip_if_version_below("9.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_hpersist_batch(self, glide_client: TGlideClient):
+        key1 = get_random_string(10)
+        key2 = get_random_string(10)
+        field1 = get_random_string(5)
+        field2 = get_random_string(5)
+        field3 = get_random_string(5)
+        non_existent_field = get_random_string(5)
+
+        # Set up hash with fields and expiration
+        field_value_map1 = {field1: "value1", field2: "value2", field3: "value3"}
+        field_value_map2 = {field1: "value1", field2: "value2"}
+
+        await glide_client.hset(key1, field_value_map1)
+        await glide_client.hset(key2, field_value_map2)
+
+        # Set expiration on some fields
+        await glide_client.hsetex(
+            key1,
+            {field1: "value1_updated", field2: "value2_updated"},
+            expiry=ExpirySet(ExpiryType.SEC, 10),
+        )
+        await glide_client.hexpire(key2, 15, [field1, field2])
+
+        # Create batch with HPERSIST operations
+        batch = (
+            ClusterBatch(is_atomic=False)
+            if isinstance(glide_client, GlideClusterClient)
+            else Batch(is_atomic=False)
+        )
+        batch.hpersist(
+            key1, [field1, field2, field3]
+        )  # field1,field2 have expiry, field3 doesn't
+        batch.hpersist(key1, [non_existent_field])  # non-existent field
+        batch.hpersist(key2, [field1, field2])  # both have expiry
+        batch.httl(key1, [field1, field2, field3])  # verify persistence
+        batch.httl(key2, [field1, field2])  # verify persistence
+
+        # Execute batch
+        result = await exec_batch(glide_client, batch, raise_on_error=True)
+        assert result is not None
+
+        # Verify results
+        assert result[0] == [
+            1,
+            1,
+            -1,
+        ]  # field1,field2 made persistent, field3 already persistent
+        assert result[1] == [-2]  # non-existent field
+        assert result[2] == [1, 1]  # both fields made persistent
+        assert result[3] == [-1, -1, -1]  # all fields now persistent
+        assert result[4] == [-1, -1]  # both fields now persistent
