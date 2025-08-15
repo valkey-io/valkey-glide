@@ -295,13 +295,7 @@ public final class Jedis implements Closeable {
      * @since Valkey 1.0.0
      */
     public String set(String key, String value) {
-        checkNotClosed();
-        ensureInitialized(); // Lazy initialization
-        try {
-            return glideClient.set(key, value).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("SET operation failed", e);
-        }
+        return executeCommandWithGlide("SET", () -> glideClient.set(key, value).get());
     }
 
     /**
@@ -312,12 +306,8 @@ public final class Jedis implements Closeable {
      * @return "OK" if successful
      */
     public String set(final byte[] key, final byte[] value) {
-        checkNotClosed();
-        try {
-            return glideClient.set(GlideString.of(key), GlideString.of(value)).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("SET operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "SET", () -> glideClient.set(GlideString.of(key), GlideString.of(value)).get());
     }
 
     /**
@@ -329,13 +319,12 @@ public final class Jedis implements Closeable {
      * @return "OK" if successful, null if not set due to conditions
      */
     public String set(final String key, final String value, final SetParams params) {
-        checkNotClosed();
-        try {
-            SetOptions options = convertSetParamsToSetOptions(params);
-            return glideClient.set(key, value, options).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("SET operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "SET",
+                () -> {
+                    SetOptions options = convertSetParamsToSetOptions(params);
+                    return glideClient.set(key, value, options).get();
+                });
     }
 
     /**
@@ -347,13 +336,12 @@ public final class Jedis implements Closeable {
      * @return "OK" if successful, null if not set due to conditions
      */
     public String set(final byte[] key, final byte[] value, final SetParams params) {
-        checkNotClosed();
-        try {
-            SetOptions options = convertSetParamsToSetOptions(params);
-            return glideClient.set(GlideString.of(key), GlideString.of(value), options).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("SET operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "SET",
+                () -> {
+                    SetOptions options = convertSetParamsToSetOptions(params);
+                    return glideClient.set(GlideString.of(key), GlideString.of(value), options).get();
+                });
     }
 
     /** Convert Jedis BitCountOption to GLIDE BitmapIndexType. */
@@ -557,13 +545,7 @@ public final class Jedis implements Closeable {
      * @since Valkey 1.0.0
      */
     public String get(final String key) {
-        checkNotClosed();
-        ensureInitialized(); // Lazy initialization
-        try {
-            return glideClient.get(key).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("GET operation failed", e);
-        }
+        return executeCommandWithGlide("GET", () -> glideClient.get(key).get());
     }
 
     /**
@@ -573,13 +555,12 @@ public final class Jedis implements Closeable {
      * @return the value of the key, or null if the key does not exist
      */
     public byte[] get(final byte[] key) {
-        checkNotClosed();
-        try {
-            GlideString result = glideClient.get(GlideString.of(key)).get();
-            return result != null ? result.getBytes() : null;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("GET operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "GET",
+                () -> {
+                    GlideString result = glideClient.get(GlideString.of(key)).get();
+                    return result != null ? result.getBytes() : null;
+                });
     }
 
     /**
@@ -591,13 +572,7 @@ public final class Jedis implements Closeable {
      * @since Valkey 1.0.0
      */
     public String ping() {
-        checkNotClosed();
-        ensureInitialized(); // Lazy initialization
-        try {
-            return glideClient.ping().get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("PING operation failed", e);
-        }
+        return executeCommandWithGlide("PING", () -> glideClient.ping().get());
     }
 
     /**
@@ -611,12 +586,7 @@ public final class Jedis implements Closeable {
      * @since Valkey 2.8.0
      */
     public String ping(String message) {
-        checkNotClosed();
-        try {
-            return glideClient.ping(message).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("PING operation failed", e);
-        }
+        return executeCommandWithGlide("PING", () -> glideClient.ping(message).get());
     }
 
     /**
@@ -626,13 +596,12 @@ public final class Jedis implements Closeable {
      * @return the echoed message
      */
     public byte[] ping(final byte[] message) {
-        checkNotClosed();
-        try {
-            GlideString result = glideClient.ping(GlideString.of(message)).get();
-            return result.getBytes();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("PING operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "PING",
+                () -> {
+                    GlideString result = glideClient.ping(GlideString.of(message)).get();
+                    return result.getBytes();
+                });
     }
 
     /**
@@ -786,18 +755,42 @@ public final class Jedis implements Closeable {
     }
 
     /**
+     * Functional interface for operations that can throw InterruptedException and ExecutionException.
+     */
+    @FunctionalInterface
+    private interface GlideOperation<T> {
+        T execute() throws InterruptedException, ExecutionException;
+    }
+
+    /**
+     * Helper method that encapsulates the common try/catch pattern with connection checks. This
+     * method handles the standard flow: checkNotClosed() -> ensureInitialized() -> execute operation
+     * -> handle exceptions.
+     *
+     * @param operationName the name of the operation for error messages
+     * @param operation the lambda containing the GLIDE client operation
+     * @param <T> the return type of the operation
+     * @return the result of the operation
+     * @throws JedisException if the operation fails or connection is closed
+     */
+    private <T> T executeCommandWithGlide(String operationName, GlideOperation<T> operation) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            return operation.execute();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException(operationName + " operation failed", e);
+        }
+    }
+
+    /**
      * Delete one or more keys.
      *
      * @param key the key to delete
      * @return the number of keys that were removed
      */
     public long del(String key) {
-        checkNotClosed();
-        try {
-            return glideClient.del(new String[] {key}).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("DEL operation failed", e);
-        }
+        return executeCommandWithGlide("DEL", () -> glideClient.del(new String[] {key}).get());
     }
 
     /**
@@ -807,12 +800,7 @@ public final class Jedis implements Closeable {
      * @return the number of keys that were removed
      */
     public long del(String... keys) {
-        checkNotClosed();
-        try {
-            return glideClient.del(keys).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("DEL operation failed", e);
-        }
+        return executeCommandWithGlide("DEL", () -> glideClient.del(keys).get());
     }
 
     /**
@@ -822,12 +810,8 @@ public final class Jedis implements Closeable {
      * @return the number of keys that were removed
      */
     public long del(final byte[] key) {
-        checkNotClosed();
-        try {
-            return glideClient.del(new GlideString[] {GlideString.of(key)}).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("DEL operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "DEL", () -> glideClient.del(new GlideString[] {GlideString.of(key)}).get());
     }
 
     /**
@@ -837,16 +821,12 @@ public final class Jedis implements Closeable {
      * @return the number of keys that were removed
      */
     public long del(final byte[]... keys) {
-        checkNotClosed();
-        try {
-            GlideString[] glideKeys = new GlideString[keys.length];
-            for (int i = 0; i < keys.length; i++) {
-                glideKeys[i] = GlideString.of(keys[i]);
-            }
-            return glideClient.del(glideKeys).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("DEL operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "DEL",
+                () -> {
+                    GlideString[] glideKeys = convertToGlideStringArray(keys);
+                    return glideClient.del(glideKeys).get();
+                });
     }
 
     /**
@@ -938,21 +918,20 @@ public final class Jedis implements Closeable {
      * @return "OK"
      */
     public String mset(String... keysvalues) {
-        checkNotClosed();
-        try {
-            if (keysvalues.length % 2 == 1) {
-                throw new IllegalArgumentException("keyvalues must be of even length");
-            }
-            Map<String, String> keyValueMap = new HashMap<>();
-            for (int i = 0; i < keysvalues.length; i += 2) {
-                if (i + 1 < keysvalues.length) {
-                    keyValueMap.put(keysvalues[i], keysvalues[i + 1]);
-                }
-            }
-            return glideClient.mset(keyValueMap).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("MSET operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "MSET",
+                () -> {
+                    if (keysvalues.length % 2 == 1) {
+                        throw new IllegalArgumentException("keyvalues must be of even length");
+                    }
+                    Map<String, String> keyValueMap = new HashMap<>();
+                    for (int i = 0; i < keysvalues.length; i += 2) {
+                        if (i + 1 < keysvalues.length) {
+                            keyValueMap.put(keysvalues[i], keysvalues[i + 1]);
+                        }
+                    }
+                    return glideClient.mset(keyValueMap).get();
+                });
     }
 
     /**
@@ -962,12 +941,7 @@ public final class Jedis implements Closeable {
      * @return "OK"
      */
     public String mset(Map<String, String> keyValueMap) {
-        checkNotClosed();
-        try {
-            return glideClient.mset(keyValueMap).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("MSET operation failed", e);
-        }
+        return executeCommandWithGlide("MSET", () -> glideClient.mset(keyValueMap).get());
     }
 
     /**
@@ -977,21 +951,20 @@ public final class Jedis implements Closeable {
      * @return "OK"
      */
     public String mset(final byte[]... keysvalues) {
-        checkNotClosed();
-        try {
-            if (keysvalues.length % 2 == 1) {
-                throw new IllegalArgumentException("keyvalues must be of even length");
-            }
-            Map<GlideString, GlideString> keyValueMap = new HashMap<>();
-            for (int i = 0; i < keysvalues.length; i += 2) {
-                if (i + 1 < keysvalues.length) {
-                    keyValueMap.put(GlideString.of(keysvalues[i]), GlideString.of(keysvalues[i + 1]));
-                }
-            }
-            return glideClient.msetBinary(keyValueMap).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("MSET operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "MSET",
+                () -> {
+                    if (keysvalues.length % 2 == 1) {
+                        throw new IllegalArgumentException("keyvalues must be of even length");
+                    }
+                    Map<GlideString, GlideString> keyValueMap = new HashMap<>();
+                    for (int i = 0; i < keysvalues.length; i += 2) {
+                        if (i + 1 < keysvalues.length) {
+                            keyValueMap.put(GlideString.of(keysvalues[i]), GlideString.of(keysvalues[i + 1]));
+                        }
+                    }
+                    return glideClient.msetBinary(keyValueMap).get();
+                });
     }
 
     /**
@@ -1001,13 +974,12 @@ public final class Jedis implements Closeable {
      * @return list of values corresponding to the keys
      */
     public List<String> mget(String... keys) {
-        checkNotClosed();
-        try {
-            String[] result = glideClient.mget(keys).get();
-            return Arrays.asList(result);
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("MGET operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "MGET",
+                () -> {
+                    String[] result = glideClient.mget(keys).get();
+                    return Arrays.asList(result);
+                });
     }
 
     /**
@@ -1017,21 +989,17 @@ public final class Jedis implements Closeable {
      * @return list of values corresponding to the keys
      */
     public List<byte[]> mget(final byte[]... keys) {
-        checkNotClosed();
-        try {
-            GlideString[] glideKeys = new GlideString[keys.length];
-            for (int i = 0; i < keys.length; i++) {
-                glideKeys[i] = GlideString.of(keys[i]);
-            }
-            GlideString[] result = glideClient.mget(glideKeys).get();
-            List<byte[]> byteList = new ArrayList<>();
-            for (GlideString gs : result) {
-                byteList.add(gs != null ? gs.getBytes() : null);
-            }
-            return byteList;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("MGET operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "MGET",
+                () -> {
+                    GlideString[] glideKeys = convertToGlideStringArray(keys);
+                    GlideString[] result = glideClient.mget(glideKeys).get();
+                    List<byte[]> byteList = new ArrayList<>();
+                    for (GlideString gs : result) {
+                        byteList.add(gs != null ? gs.getBytes() : null);
+                    }
+                    return byteList;
+                });
     }
 
     /**
@@ -1042,19 +1010,18 @@ public final class Jedis implements Closeable {
      * @return 1 if the key was set, 0 if the key already exists
      */
     public long setnx(String key, String value) {
-        checkNotClosed();
-        try {
-            Object result = glideClient.customCommand(new String[] {"SETNX", key, value}).get();
-            if (result instanceof Long) {
-                return (Long) result;
-            } else if (result instanceof Boolean) {
-                return ((Boolean) result) ? 1L : 0L;
-            } else {
-                return Long.parseLong(result.toString());
-            }
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("SETNX operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "SETNX",
+                () -> {
+                    Object result = glideClient.customCommand(new String[] {"SETNX", key, value}).get();
+                    if (result instanceof Long) {
+                        return (Long) result;
+                    } else if (result instanceof Boolean) {
+                        return ((Boolean) result) ? 1L : 0L;
+                    } else {
+                        return Long.parseLong(result.toString());
+                    }
+                });
     }
 
     /**
@@ -1065,25 +1032,24 @@ public final class Jedis implements Closeable {
      * @return 1 if the key was set, 0 if the key already exists
      */
     public long setnx(final byte[] key, final byte[] value) {
-        checkNotClosed();
-        try {
-            Object result =
-                    glideClient
-                            .customCommand(
-                                    new GlideString[] {
-                                        GlideString.of("SETNX"), GlideString.of(key), GlideString.of(value)
-                                    })
-                            .get();
-            if (result instanceof Long) {
-                return (Long) result;
-            } else if (result instanceof Boolean) {
-                return ((Boolean) result) ? 1L : 0L;
-            } else {
-                return Long.parseLong(result.toString());
-            }
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("SETNX operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "SETNX",
+                () -> {
+                    Object result =
+                            glideClient
+                                    .customCommand(
+                                            new GlideString[] {
+                                                GlideString.of("SETNX"), GlideString.of(key), GlideString.of(value)
+                                            })
+                                    .get();
+                    if (result instanceof Long) {
+                        return (Long) result;
+                    } else if (result instanceof Boolean) {
+                        return ((Boolean) result) ? 1L : 0L;
+                    } else {
+                        return Long.parseLong(result.toString());
+                    }
+                });
     }
 
     /**
@@ -1095,16 +1061,15 @@ public final class Jedis implements Closeable {
      * @return "OK"
      */
     public String setex(String key, long seconds, String value) {
-        checkNotClosed();
-        try {
-            Object result =
-                    glideClient
-                            .customCommand(new String[] {"SETEX", key, String.valueOf(seconds), value})
-                            .get();
-            return result != null ? result.toString() : null;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("SETEX operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "SETEX",
+                () -> {
+                    Object result =
+                            glideClient
+                                    .customCommand(new String[] {"SETEX", key, String.valueOf(seconds), value})
+                                    .get();
+                    return result != null ? result.toString() : null;
+                });
     }
 
     /**
@@ -1116,22 +1081,21 @@ public final class Jedis implements Closeable {
      * @return "OK"
      */
     public String setex(final byte[] key, final long seconds, final byte[] value) {
-        checkNotClosed();
-        try {
-            Object result =
-                    glideClient
-                            .customCommand(
-                                    new GlideString[] {
-                                        GlideString.of("SETEX"),
-                                        GlideString.of(key),
-                                        GlideString.of(String.valueOf(seconds)),
-                                        GlideString.of(value)
-                                    })
-                            .get();
-            return result != null ? result.toString() : null;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("SETEX operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "SETEX",
+                () -> {
+                    Object result =
+                            glideClient
+                                    .customCommand(
+                                            new GlideString[] {
+                                                GlideString.of("SETEX"),
+                                                GlideString.of(key),
+                                                GlideString.of(String.valueOf(seconds)),
+                                                GlideString.of(value)
+                                            })
+                                    .get();
+                    return result != null ? result.toString() : null;
+                });
     }
 
     /**
@@ -1143,16 +1107,15 @@ public final class Jedis implements Closeable {
      * @return "OK"
      */
     public String psetex(String key, long milliseconds, String value) {
-        checkNotClosed();
-        try {
-            Object result =
-                    glideClient
-                            .customCommand(new String[] {"PSETEX", key, String.valueOf(milliseconds), value})
-                            .get();
-            return result != null ? result.toString() : null;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("PSETEX operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "PSETEX",
+                () -> {
+                    Object result =
+                            glideClient
+                                    .customCommand(new String[] {"PSETEX", key, String.valueOf(milliseconds), value})
+                                    .get();
+                    return result != null ? result.toString() : null;
+                });
     }
 
     /**
@@ -1164,22 +1127,21 @@ public final class Jedis implements Closeable {
      * @return "OK"
      */
     public String psetex(final byte[] key, final long milliseconds, final byte[] value) {
-        checkNotClosed();
-        try {
-            Object result =
-                    glideClient
-                            .customCommand(
-                                    new GlideString[] {
-                                        GlideString.of("PSETEX"),
-                                        GlideString.of(key),
-                                        GlideString.of(String.valueOf(milliseconds)),
-                                        GlideString.of(value)
-                                    })
-                            .get();
-            return result != null ? result.toString() : null;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("PSETEX operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "PSETEX",
+                () -> {
+                    Object result =
+                            glideClient
+                                    .customCommand(
+                                            new GlideString[] {
+                                                GlideString.of("PSETEX"),
+                                                GlideString.of(key),
+                                                GlideString.of(String.valueOf(milliseconds)),
+                                                GlideString.of(value)
+                                            })
+                                    .get();
+                    return result != null ? result.toString() : null;
+                });
     }
 
     /**
@@ -1192,13 +1154,12 @@ public final class Jedis implements Closeable {
      */
     @Deprecated
     public String getSet(final String key, final String value) {
-        checkNotClosed();
-        try {
-            Object result = glideClient.customCommand(new String[] {"GETSET", key, value}).get();
-            return result != null ? result.toString() : null;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("GETSET operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "GETSET",
+                () -> {
+                    Object result = glideClient.customCommand(new String[] {"GETSET", key, value}).get();
+                    return result != null ? result.toString() : null;
+                });
     }
 
     /**
@@ -1211,19 +1172,18 @@ public final class Jedis implements Closeable {
      */
     @Deprecated
     public byte[] getSet(final byte[] key, final byte[] value) {
-        checkNotClosed();
-        try {
-            Object result =
-                    glideClient
-                            .customCommand(
-                                    new GlideString[] {
-                                        GlideString.of("GETSET"), GlideString.of(key), GlideString.of(value)
-                                    })
-                            .get();
-            return result != null ? result.toString().getBytes(VALKEY_CHARSET) : null;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("GETSET operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "GETSET",
+                () -> {
+                    Object result =
+                            glideClient
+                                    .customCommand(
+                                            new GlideString[] {
+                                                GlideString.of("GETSET"), GlideString.of(key), GlideString.of(value)
+                                            })
+                                    .get();
+                    return result != null ? result.toString().getBytes(VALKEY_CHARSET) : null;
+                });
     }
 
     /**
@@ -1288,22 +1248,20 @@ public final class Jedis implements Closeable {
      * @return the old value, or null if key did not exist
      */
     public String setGet(final String key, final String value, final SetParams params) {
-        checkNotClosed();
-        try {
-            // Build SET command with correct parameter order: SET key value [params] GET
-            List<String> args = new ArrayList<>();
-            args.add("SET");
-            args.add(key);
-            args.add(value);
-            addSetParamsToArgs(args, params);
-            // Add GET option AFTER SetParams
-            args.add("GET");
+        return executeCommandWithGlide(
+                "SETGET",
+                () -> { // Build SET command with correct parameter order: SET key value [params] GET
+                    List<String> args = new ArrayList<>();
+                    args.add("SET");
+                    args.add(key);
+                    args.add(value);
+                    addSetParamsToArgs(args, params);
+                    // Add GET option AFTER SetParams
+                    args.add("GET");
 
-            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
-            return result != null ? result.toString() : null;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("SETGET operation failed", e);
-        }
+                    Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+                    return result != null ? result.toString() : null;
+                });
     }
 
     /**
@@ -1315,22 +1273,20 @@ public final class Jedis implements Closeable {
      * @return the old value, or null if key did not exist
      */
     public byte[] setGet(final byte[] key, final byte[] value, final SetParams params) {
-        checkNotClosed();
-        try {
-            // Build SET command with correct parameter order: SET key value [params] GET
-            List<GlideString> args = new ArrayList<>();
-            args.add(GlideString.of("SET"));
-            args.add(GlideString.of(key));
-            args.add(GlideString.of(value));
-            addSetParamsToGlideStringArgs(args, params);
-            // Add GET option AFTER SetParams
-            args.add(GlideString.of("GET"));
+        return executeCommandWithGlide(
+                "SETGET",
+                () -> { // Build SET command with correct parameter order: SET key value [params] GET
+                    List<GlideString> args = new ArrayList<>();
+                    args.add(GlideString.of("SET"));
+                    args.add(GlideString.of(key));
+                    args.add(GlideString.of(value));
+                    addSetParamsToGlideStringArgs(args, params);
+                    // Add GET option AFTER SetParams
+                    args.add(GlideString.of("GET"));
 
-            Object result = glideClient.customCommand(args.toArray(new GlideString[0])).get();
-            return result != null ? result.toString().getBytes(VALKEY_CHARSET) : null;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("SETGET operation failed", e);
-        }
+                    Object result = glideClient.customCommand(args.toArray(new GlideString[0])).get();
+                    return result != null ? result.toString().getBytes(VALKEY_CHARSET) : null;
+                });
     }
 
     /**
@@ -1340,12 +1296,7 @@ public final class Jedis implements Closeable {
      * @return the value, or null if key did not exist
      */
     public String getDel(final String key) {
-        checkNotClosed();
-        try {
-            return glideClient.getdel(key).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("GETDEL operation failed", e);
-        }
+        return executeCommandWithGlide("GETDEL", () -> glideClient.getdel(key).get());
     }
 
     /**
@@ -1355,13 +1306,12 @@ public final class Jedis implements Closeable {
      * @return the value, or null if key did not exist
      */
     public byte[] getDel(final byte[] key) {
-        checkNotClosed();
-        try {
-            GlideString result = glideClient.getdel(GlideString.of(key)).get();
-            return result != null ? result.getBytes() : null;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("GETDEL operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "GETDEL",
+                () -> {
+                    GlideString result = glideClient.getdel(GlideString.of(key)).get();
+                    return result != null ? result.getBytes() : null;
+                });
     }
 
     /**
@@ -1386,13 +1336,12 @@ public final class Jedis implements Closeable {
      * @see GetExParams
      */
     public String getEx(final String key, final GetExParams params) {
-        checkNotClosed();
-        try {
-            GetExOptions getExOptions = convertGetExParamsToGetExOptions(params);
-            return glideClient.getex(key, getExOptions).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("GETEX operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "GETEX",
+                () -> {
+                    GetExOptions getExOptions = convertGetExParamsToGetExOptions(params);
+                    return glideClient.getex(key, getExOptions).get();
+                });
     }
 
     /**
@@ -1417,14 +1366,13 @@ public final class Jedis implements Closeable {
      * @see GetExParams
      */
     public byte[] getEx(final byte[] key, final GetExParams params) {
-        checkNotClosed();
-        try {
-            GetExOptions getExOptions = convertGetExParamsToGetExOptions(params);
-            GlideString result = glideClient.getex(GlideString.of(key), getExOptions).get();
-            return result != null ? result.getBytes() : null;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("GETEX operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "GETEX",
+                () -> {
+                    GetExOptions getExOptions = convertGetExParamsToGetExOptions(params);
+                    GlideString result = glideClient.getex(GlideString.of(key), getExOptions).get();
+                    return result != null ? result.getBytes() : null;
+                });
     }
 
     /**
@@ -1448,12 +1396,7 @@ public final class Jedis implements Closeable {
      * @since Valkey 2.0.0
      */
     public long append(final String key, final String value) {
-        checkNotClosed();
-        try {
-            return glideClient.append(key, value).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("APPEND operation failed", e);
-        }
+        return executeCommandWithGlide("APPEND", () -> glideClient.append(key, value).get());
     }
 
     /**
@@ -1477,12 +1420,8 @@ public final class Jedis implements Closeable {
      * @since Valkey 2.0.0
      */
     public long append(final byte[] key, final byte[] value) {
-        checkNotClosed();
-        try {
-            return glideClient.append(GlideString.of(key), GlideString.of(value)).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("APPEND operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "APPEND", () -> glideClient.append(GlideString.of(key), GlideString.of(value)).get());
     }
 
     /**
@@ -1492,12 +1431,7 @@ public final class Jedis implements Closeable {
      * @return the length of the string, or 0 if key does not exist
      */
     public long strlen(String key) {
-        checkNotClosed();
-        try {
-            return glideClient.strlen(key).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("STRLEN operation failed", e);
-        }
+        return executeCommandWithGlide("STRLEN", () -> glideClient.strlen(key).get());
     }
 
     /**
@@ -1507,12 +1441,7 @@ public final class Jedis implements Closeable {
      * @return the length of the string, or 0 if key does not exist
      */
     public long strlen(final byte[] key) {
-        checkNotClosed();
-        try {
-            return glideClient.strlen(GlideString.of(key)).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("STRLEN operation failed", e);
-        }
+        return executeCommandWithGlide("STRLEN", () -> glideClient.strlen(GlideString.of(key)).get());
     }
 
     /**
@@ -1522,12 +1451,7 @@ public final class Jedis implements Closeable {
      * @return the value after increment
      */
     public long incr(String key) {
-        checkNotClosed();
-        try {
-            return glideClient.incr(key).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("INCR operation failed", e);
-        }
+        return executeCommandWithGlide("INCR", () -> glideClient.incr(key).get());
     }
 
     /**
@@ -1537,12 +1461,7 @@ public final class Jedis implements Closeable {
      * @return the value after increment
      */
     public long incr(final byte[] key) {
-        checkNotClosed();
-        try {
-            return glideClient.incr(GlideString.of(key)).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("INCR operation failed", e);
-        }
+        return executeCommandWithGlide("INCR", () -> glideClient.incr(GlideString.of(key)).get());
     }
 
     /**
@@ -1553,12 +1472,7 @@ public final class Jedis implements Closeable {
      * @return the value after increment
      */
     public long incrBy(String key, long increment) {
-        checkNotClosed();
-        try {
-            return glideClient.incrBy(key, increment).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("INCRBY operation failed", e);
-        }
+        return executeCommandWithGlide("INCRBY", () -> glideClient.incrBy(key, increment).get());
     }
 
     /**
@@ -1569,12 +1483,8 @@ public final class Jedis implements Closeable {
      * @return the value after increment
      */
     public double incrByFloat(String key, double increment) {
-        checkNotClosed();
-        try {
-            return glideClient.incrByFloat(key, increment).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("INCRBYFLOAT operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "INCRBYFLOAT", () -> glideClient.incrByFloat(key, increment).get());
     }
 
     /**
@@ -1585,12 +1495,8 @@ public final class Jedis implements Closeable {
      * @return the value after increment
      */
     public long incrBy(final byte[] key, final long increment) {
-        checkNotClosed();
-        try {
-            return glideClient.incrBy(GlideString.of(key), increment).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("INCRBY operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "INCRBY", () -> glideClient.incrBy(GlideString.of(key), increment).get());
     }
 
     /**
@@ -1601,12 +1507,8 @@ public final class Jedis implements Closeable {
      * @return the value after increment
      */
     public double incrByFloat(final byte[] key, final double increment) {
-        checkNotClosed();
-        try {
-            return glideClient.incrByFloat(GlideString.of(key), increment).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("INCRBYFLOAT operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "INCRBYFLOAT", () -> glideClient.incrByFloat(GlideString.of(key), increment).get());
     }
 
     /**
@@ -1616,12 +1518,7 @@ public final class Jedis implements Closeable {
      * @return the value after decrement
      */
     public long decr(String key) {
-        checkNotClosed();
-        try {
-            return glideClient.decr(key).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("DECR operation failed", e);
-        }
+        return executeCommandWithGlide("DECR", () -> glideClient.decr(key).get());
     }
 
     /**
@@ -1631,12 +1528,7 @@ public final class Jedis implements Closeable {
      * @return the value after decrement
      */
     public long decr(final byte[] key) {
-        checkNotClosed();
-        try {
-            return glideClient.decr(GlideString.of(key)).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("DECR operation failed", e);
-        }
+        return executeCommandWithGlide("DECR", () -> glideClient.decr(GlideString.of(key)).get());
     }
 
     /**
@@ -1647,12 +1539,7 @@ public final class Jedis implements Closeable {
      * @return the value after decrement
      */
     public long decrBy(String key, long decrement) {
-        checkNotClosed();
-        try {
-            return glideClient.decrBy(key, decrement).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("DECRBY operation failed", e);
-        }
+        return executeCommandWithGlide("DECRBY", () -> glideClient.decrBy(key, decrement).get());
     }
 
     /**
@@ -1663,12 +1550,8 @@ public final class Jedis implements Closeable {
      * @return the value after decrement
      */
     public long decrBy(final byte[] key, final long decrement) {
-        checkNotClosed();
-        try {
-            return glideClient.decrBy(GlideString.of(key), decrement).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("DECRBY operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "DECRBY", () -> glideClient.decrBy(GlideString.of(key), decrement).get());
     }
 
     // ===== KEY MANAGEMENT COMMANDS =====
@@ -1688,12 +1571,7 @@ public final class Jedis implements Closeable {
      * @return the number of keys that were removed
      */
     public long unlink(String... keys) {
-        checkNotClosed();
-        try {
-            return glideClient.unlink(keys).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("UNLINK operation failed", e);
-        }
+        return executeCommandWithGlide("UNLINK", () -> glideClient.unlink(keys).get());
     }
 
     /**
@@ -1703,12 +1581,8 @@ public final class Jedis implements Closeable {
      * @return the number of keys that were removed
      */
     public long unlink(final byte[] key) {
-        checkNotClosed();
-        try {
-            return glideClient.unlink(new GlideString[] {GlideString.of(key)}).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("UNLINK operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "UNLINK", () -> glideClient.unlink(new GlideString[] {GlideString.of(key)}).get());
     }
 
     /**
@@ -1718,16 +1592,12 @@ public final class Jedis implements Closeable {
      * @return the number of keys that were removed
      */
     public long unlink(final byte[]... keys) {
-        checkNotClosed();
-        try {
-            GlideString[] glideKeys = new GlideString[keys.length];
-            for (int i = 0; i < keys.length; i++) {
-                glideKeys[i] = GlideString.of(keys[i]);
-            }
-            return glideClient.unlink(glideKeys).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("UNLINK operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "UNLINK",
+                () -> {
+                    GlideString[] glideKeys = convertToGlideStringArray(keys);
+                    return glideClient.unlink(glideKeys).get();
+                });
     }
 
     /**
@@ -1737,12 +1607,7 @@ public final class Jedis implements Closeable {
      * @return the number of keys that exist
      */
     public long exists(String... keys) {
-        checkNotClosed();
-        try {
-            return glideClient.exists(keys).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("EXISTS operation failed", e);
-        }
+        return executeCommandWithGlide("EXISTS", () -> glideClient.exists(keys).get());
     }
 
     /**
@@ -1752,12 +1617,8 @@ public final class Jedis implements Closeable {
      * @return true if the key exists, false otherwise
      */
     public boolean exists(final byte[] key) {
-        checkNotClosed();
-        try {
-            return glideClient.exists(new GlideString[] {GlideString.of(key)}).get() > 0;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("EXISTS operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "EXISTS", () -> glideClient.exists(new GlideString[] {GlideString.of(key)}).get() > 0);
     }
 
     /**
@@ -1767,12 +1628,8 @@ public final class Jedis implements Closeable {
      * @return true if the key exists, false otherwise
      */
     public boolean exists(final String key) {
-        checkNotClosed();
-        try {
-            return glideClient.exists(new String[] {key}).get() > 0;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("EXISTS operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "EXISTS", () -> glideClient.exists(new String[] {key}).get() > 0);
     }
 
     /**
@@ -1782,12 +1639,8 @@ public final class Jedis implements Closeable {
      * @return true if the key exists, false otherwise
      */
     public boolean keyExists(final String key) {
-        checkNotClosed();
-        try {
-            return glideClient.exists(new String[] {key}).get() > 0;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("EXISTS operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "EXISTS", () -> glideClient.exists(new String[] {key}).get() > 0);
     }
 
     /**
@@ -1797,12 +1650,8 @@ public final class Jedis implements Closeable {
      * @return true if the key exists, false otherwise
      */
     public boolean keyExists(final byte[] key) {
-        checkNotClosed();
-        try {
-            return glideClient.exists(new GlideString[] {GlideString.of(key)}).get() > 0;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("EXISTS operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "EXISTS", () -> glideClient.exists(new GlideString[] {GlideString.of(key)}).get() > 0);
     }
 
     /**
@@ -1812,16 +1661,12 @@ public final class Jedis implements Closeable {
      * @return the number of keys that exist
      */
     public long exists(final byte[]... keys) {
-        checkNotClosed();
-        try {
-            GlideString[] glideKeys = new GlideString[keys.length];
-            for (int i = 0; i < keys.length; i++) {
-                glideKeys[i] = GlideString.of(keys[i]);
-            }
-            return glideClient.exists(glideKeys).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("EXISTS operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "EXISTS",
+                () -> {
+                    GlideString[] glideKeys = convertToGlideStringArray(keys);
+                    return glideClient.exists(glideKeys).get();
+                });
     }
 
     /**
@@ -1831,12 +1676,7 @@ public final class Jedis implements Closeable {
      * @return the type of the key
      */
     public String type(String key) {
-        checkNotClosed();
-        try {
-            return glideClient.type(key).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("TYPE operation failed", e);
-        }
+        return executeCommandWithGlide("TYPE", () -> glideClient.type(key).get());
     }
 
     /**
@@ -1846,12 +1686,7 @@ public final class Jedis implements Closeable {
      * @return the type of the key
      */
     public String type(final byte[] key) {
-        checkNotClosed();
-        try {
-            return glideClient.type(GlideString.of(key)).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("TYPE operation failed", e);
-        }
+        return executeCommandWithGlide("TYPE", () -> glideClient.type(GlideString.of(key)).get());
     }
 
     /**
@@ -1871,12 +1706,7 @@ public final class Jedis implements Closeable {
      * @since Valkey 1.0.0
      */
     public String randomKey() {
-        checkNotClosed();
-        try {
-            return glideClient.randomKey().get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("RANDOMKEY operation failed", e);
-        }
+        return executeCommandWithGlide("RANDOMKEY", () -> glideClient.randomKey().get());
     }
 
     /**
@@ -1887,12 +1717,7 @@ public final class Jedis implements Closeable {
      * @return "OK"
      */
     public String rename(String oldkey, String newkey) {
-        checkNotClosed();
-        try {
-            return glideClient.rename(oldkey, newkey).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("RENAME operation failed", e);
-        }
+        return executeCommandWithGlide("RENAME", () -> glideClient.rename(oldkey, newkey).get());
     }
 
     /**
@@ -1903,12 +1728,8 @@ public final class Jedis implements Closeable {
      * @return "OK"
      */
     public String rename(final byte[] oldkey, final byte[] newkey) {
-        checkNotClosed();
-        try {
-            return glideClient.rename(GlideString.of(oldkey), GlideString.of(newkey)).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("RENAME operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "RENAME", () -> glideClient.rename(GlideString.of(oldkey), GlideString.of(newkey)).get());
     }
 
     /**
@@ -1919,13 +1740,12 @@ public final class Jedis implements Closeable {
      * @return 1 if the key was renamed, 0 if the new key already exists
      */
     public long renamenx(String oldkey, String newkey) {
-        checkNotClosed();
-        try {
-            Boolean result = glideClient.renamenx(oldkey, newkey).get();
-            return result ? 1L : 0L;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("RENAMENX operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "RENAMENX",
+                () -> {
+                    Boolean result = glideClient.renamenx(oldkey, newkey).get();
+                    return result ? 1L : 0L;
+                });
     }
 
     /**
@@ -1936,13 +1756,13 @@ public final class Jedis implements Closeable {
      * @return 1 if the key was renamed, 0 if the new key already exists
      */
     public long renamenx(final byte[] oldkey, final byte[] newkey) {
-        checkNotClosed();
-        try {
-            Boolean result = glideClient.renamenx(GlideString.of(oldkey), GlideString.of(newkey)).get();
-            return result ? 1L : 0L;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("RENAMENX operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "RENAMENX",
+                () -> {
+                    Boolean result =
+                            glideClient.renamenx(GlideString.of(oldkey), GlideString.of(newkey)).get();
+                    return result ? 1L : 0L;
+                });
     }
 
     /**
@@ -1953,13 +1773,12 @@ public final class Jedis implements Closeable {
      * @return 1 if expiration was set, 0 if key does not exist
      */
     public long expire(String key, long seconds) {
-        checkNotClosed();
-        try {
-            Boolean result = glideClient.expire(key, seconds).get();
-            return result ? 1L : 0L;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("EXPIRE operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "EXPIRE",
+                () -> {
+                    Boolean result = glideClient.expire(key, seconds).get();
+                    return result ? 1L : 0L;
+                });
     }
 
     /**
@@ -1970,13 +1789,12 @@ public final class Jedis implements Closeable {
      * @return 1 if expiration was set, 0 if key does not exist
      */
     public long expire(final byte[] key, final long seconds) {
-        checkNotClosed();
-        try {
-            Boolean result = glideClient.expire(GlideString.of(key), seconds).get();
-            return result ? 1L : 0L;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("EXPIRE operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "EXPIRE",
+                () -> {
+                    Boolean result = glideClient.expire(GlideString.of(key), seconds).get();
+                    return result ? 1L : 0L;
+                });
     }
 
     /**
@@ -1988,14 +1806,13 @@ public final class Jedis implements Closeable {
      * @return 1 if expiration was set, 0 if key does not exist or condition not met
      */
     public long expire(final byte[] key, final long seconds, final ExpiryOption expiryOption) {
-        checkNotClosed();
-        try {
-            ExpireOptions glideOption = convertExpiryOptionToExpireOptions(expiryOption);
-            Boolean result = glideClient.expire(GlideString.of(key), seconds, glideOption).get();
-            return result ? 1L : 0L;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("EXPIRE operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "EXPIRE",
+                () -> {
+                    ExpireOptions glideOption = convertExpiryOptionToExpireOptions(expiryOption);
+                    Boolean result = glideClient.expire(GlideString.of(key), seconds, glideOption).get();
+                    return result ? 1L : 0L;
+                });
     }
 
     /**
@@ -2007,14 +1824,13 @@ public final class Jedis implements Closeable {
      * @return 1 if expiration was set, 0 if key does not exist or condition not met
      */
     public long expire(final String key, final long seconds, final ExpiryOption expiryOption) {
-        checkNotClosed();
-        try {
-            ExpireOptions glideOption = convertExpiryOptionToExpireOptions(expiryOption);
-            Boolean result = glideClient.expire(key, seconds, glideOption).get();
-            return result ? 1L : 0L;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("EXPIRE operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "EXPIRE",
+                () -> {
+                    ExpireOptions glideOption = convertExpiryOptionToExpireOptions(expiryOption);
+                    Boolean result = glideClient.expire(key, seconds, glideOption).get();
+                    return result ? 1L : 0L;
+                });
     }
 
     /**
@@ -2028,13 +1844,12 @@ public final class Jedis implements Closeable {
      * @since Valkey 1.2.0
      */
     public long expireAt(String key, long unixTime) {
-        checkNotClosed();
-        try {
-            Boolean result = glideClient.expireAt(key, unixTime).get();
-            return result ? 1L : 0L;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("EXPIREAT operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "EXPIREAT",
+                () -> {
+                    Boolean result = glideClient.expireAt(key, unixTime).get();
+                    return result ? 1L : 0L;
+                });
     }
 
     /**
@@ -2045,13 +1860,12 @@ public final class Jedis implements Closeable {
      * @return 1 if expiration was set, 0 if key does not exist
      */
     public long expireAt(final byte[] key, final long unixTime) {
-        checkNotClosed();
-        try {
-            Boolean result = glideClient.expireAt(GlideString.of(key), unixTime).get();
-            return result ? 1L : 0L;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("EXPIREAT operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "EXPIREAT",
+                () -> {
+                    Boolean result = glideClient.expireAt(GlideString.of(key), unixTime).get();
+                    return result ? 1L : 0L;
+                });
     }
 
     /**
@@ -2063,14 +1877,13 @@ public final class Jedis implements Closeable {
      * @return 1 if expiration was set, 0 if key does not exist or condition not met
      */
     public long expireAt(String key, long unixTime, ExpiryOption expiryOption) {
-        checkNotClosed();
-        try {
-            ExpireOptions glideOption = convertExpiryOptionToExpireOptions(expiryOption);
-            Boolean result = glideClient.expireAt(key, unixTime, glideOption).get();
-            return result ? 1L : 0L;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("EXPIREAT operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "EXPIREAT",
+                () -> {
+                    ExpireOptions glideOption = convertExpiryOptionToExpireOptions(expiryOption);
+                    Boolean result = glideClient.expireAt(key, unixTime, glideOption).get();
+                    return result ? 1L : 0L;
+                });
     }
 
     /**
@@ -2082,14 +1895,13 @@ public final class Jedis implements Closeable {
      * @return 1 if expiration was set, 0 if key does not exist or condition not met
      */
     public long expireAt(byte[] key, long unixTime, ExpiryOption expiryOption) {
-        checkNotClosed();
-        try {
-            ExpireOptions glideOption = convertExpiryOptionToExpireOptions(expiryOption);
-            Boolean result = glideClient.expireAt(GlideString.of(key), unixTime, glideOption).get();
-            return result ? 1L : 0L;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("EXPIREAT operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "EXPIREAT",
+                () -> {
+                    ExpireOptions glideOption = convertExpiryOptionToExpireOptions(expiryOption);
+                    Boolean result = glideClient.expireAt(GlideString.of(key), unixTime, glideOption).get();
+                    return result ? 1L : 0L;
+                });
     }
 
     /**
@@ -2100,13 +1912,12 @@ public final class Jedis implements Closeable {
      * @return 1 if expiration was set, 0 if key does not exist
      */
     public long pexpire(String key, long milliseconds) {
-        checkNotClosed();
-        try {
-            Boolean result = glideClient.pexpire(key, milliseconds).get();
-            return result ? 1L : 0L;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("PEXPIRE operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "PEXPIRE",
+                () -> {
+                    Boolean result = glideClient.pexpire(key, milliseconds).get();
+                    return result ? 1L : 0L;
+                });
     }
 
     /**
@@ -2117,13 +1928,12 @@ public final class Jedis implements Closeable {
      * @return 1 if expiration was set, 0 if key does not exist
      */
     public long pexpire(final byte[] key, final long milliseconds) {
-        checkNotClosed();
-        try {
-            Boolean result = glideClient.pexpire(GlideString.of(key), milliseconds).get();
-            return result ? 1L : 0L;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("PEXPIRE operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "PEXPIRE",
+                () -> {
+                    Boolean result = glideClient.pexpire(GlideString.of(key), milliseconds).get();
+                    return result ? 1L : 0L;
+                });
     }
 
     /**
@@ -2135,14 +1945,14 @@ public final class Jedis implements Closeable {
      * @return 1 if expiration was set, 0 if key does not exist or condition not met
      */
     public long pexpire(final byte[] key, final long milliseconds, final ExpiryOption expiryOption) {
-        checkNotClosed();
-        try {
-            ExpireOptions glideOption = convertExpiryOptionToExpireOptions(expiryOption);
-            Boolean result = glideClient.pexpire(GlideString.of(key), milliseconds, glideOption).get();
-            return result ? 1L : 0L;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("PEXPIRE operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "PEXPIRE",
+                () -> {
+                    ExpireOptions glideOption = convertExpiryOptionToExpireOptions(expiryOption);
+                    Boolean result =
+                            glideClient.pexpire(GlideString.of(key), milliseconds, glideOption).get();
+                    return result ? 1L : 0L;
+                });
     }
 
     /**
@@ -2154,14 +1964,13 @@ public final class Jedis implements Closeable {
      * @return 1 if expiration was set, 0 if key does not exist or condition not met
      */
     public long pexpire(final String key, final long milliseconds, final ExpiryOption expiryOption) {
-        checkNotClosed();
-        try {
-            ExpireOptions glideOption = convertExpiryOptionToExpireOptions(expiryOption);
-            Boolean result = glideClient.pexpire(key, milliseconds, glideOption).get();
-            return result ? 1L : 0L;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("PEXPIRE operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "PEXPIRE",
+                () -> {
+                    ExpireOptions glideOption = convertExpiryOptionToExpireOptions(expiryOption);
+                    Boolean result = glideClient.pexpire(key, milliseconds, glideOption).get();
+                    return result ? 1L : 0L;
+                });
     }
 
     /**
@@ -2172,13 +1981,12 @@ public final class Jedis implements Closeable {
      * @return 1 if expiration was set, 0 if key does not exist
      */
     public long pexpireAt(String key, long millisecondsTimestamp) {
-        checkNotClosed();
-        try {
-            Boolean result = glideClient.pexpireAt(key, millisecondsTimestamp).get();
-            return result ? 1L : 0L;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("PEXPIREAT operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "PEXPIREAT",
+                () -> {
+                    Boolean result = glideClient.pexpireAt(key, millisecondsTimestamp).get();
+                    return result ? 1L : 0L;
+                });
     }
 
     /**
@@ -2189,13 +1997,12 @@ public final class Jedis implements Closeable {
      * @return 1 if expiration was set, 0 if key does not exist
      */
     public long pexpireAt(final byte[] key, final long millisecondsTimestamp) {
-        checkNotClosed();
-        try {
-            Boolean result = glideClient.pexpireAt(GlideString.of(key), millisecondsTimestamp).get();
-            return result ? 1L : 0L;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("PEXPIREAT operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "PEXPIREAT",
+                () -> {
+                    Boolean result = glideClient.pexpireAt(GlideString.of(key), millisecondsTimestamp).get();
+                    return result ? 1L : 0L;
+                });
     }
 
     /**
@@ -2207,14 +2014,13 @@ public final class Jedis implements Closeable {
      * @return 1 if expiration was set, 0 if key does not exist or condition not met
      */
     public long pexpireAt(String key, long millisecondsTimestamp, ExpiryOption expiryOption) {
-        checkNotClosed();
-        try {
-            ExpireOptions glideOption = convertExpiryOptionToExpireOptions(expiryOption);
-            Boolean result = glideClient.pexpireAt(key, millisecondsTimestamp, glideOption).get();
-            return result ? 1L : 0L;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("PEXPIREAT operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "PEXPIREAT",
+                () -> {
+                    ExpireOptions glideOption = convertExpiryOptionToExpireOptions(expiryOption);
+                    Boolean result = glideClient.pexpireAt(key, millisecondsTimestamp, glideOption).get();
+                    return result ? 1L : 0L;
+                });
     }
 
     /**
@@ -2226,15 +2032,14 @@ public final class Jedis implements Closeable {
      * @return 1 if expiration was set, 0 if key does not exist or condition not met
      */
     public long pexpireAt(byte[] key, long millisecondsTimestamp, ExpiryOption expiryOption) {
-        checkNotClosed();
-        try {
-            ExpireOptions glideOption = convertExpiryOptionToExpireOptions(expiryOption);
-            Boolean result =
-                    glideClient.pexpireAt(GlideString.of(key), millisecondsTimestamp, glideOption).get();
-            return result ? 1L : 0L;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("PEXPIREAT operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "PEXPIREAT",
+                () -> {
+                    ExpireOptions glideOption = convertExpiryOptionToExpireOptions(expiryOption);
+                    Boolean result =
+                            glideClient.pexpireAt(GlideString.of(key), millisecondsTimestamp, glideOption).get();
+                    return result ? 1L : 0L;
+                });
     }
 
     /**
@@ -2245,12 +2050,7 @@ public final class Jedis implements Closeable {
      *     exist
      */
     public long expireTime(String key) {
-        checkNotClosed();
-        try {
-            return glideClient.expiretime(key).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("EXPIRETIME operation failed", e);
-        }
+        return executeCommandWithGlide("EXPIRETIME", () -> glideClient.expiretime(key).get());
     }
 
     /**
@@ -2261,12 +2061,7 @@ public final class Jedis implements Closeable {
      *     not exist
      */
     public long pexpireTime(String key) {
-        checkNotClosed();
-        try {
-            return glideClient.pexpiretime(key).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("PEXPIRETIME operation failed", e);
-        }
+        return executeCommandWithGlide("PEXPIRETIME", () -> glideClient.pexpiretime(key).get());
     }
 
     /**
@@ -2277,13 +2072,12 @@ public final class Jedis implements Closeable {
      * @return 1 if expiration was set, 0 if key does not exist
      */
     public long pexpireat(final byte[] key, final long millisecondsTimestamp) {
-        checkNotClosed();
-        try {
-            Boolean result = glideClient.pexpireAt(GlideString.of(key), millisecondsTimestamp).get();
-            return result ? 1L : 0L;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("PEXPIREAT operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "PEXPIREAT",
+                () -> {
+                    Boolean result = glideClient.pexpireAt(GlideString.of(key), millisecondsTimestamp).get();
+                    return result ? 1L : 0L;
+                });
     }
 
     /**
@@ -2294,12 +2088,8 @@ public final class Jedis implements Closeable {
      *     exist
      */
     public long expireTime(final byte[] key) {
-        checkNotClosed();
-        try {
-            return glideClient.expiretime(GlideString.of(key)).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("EXPIRETIME operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "EXPIRETIME", () -> glideClient.expiretime(GlideString.of(key)).get());
     }
 
     /**
@@ -2310,12 +2100,8 @@ public final class Jedis implements Closeable {
      *     not exist
      */
     public long pexpireTime(final byte[] key) {
-        checkNotClosed();
-        try {
-            return glideClient.pexpiretime(GlideString.of(key)).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("PEXPIRETIME operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "PEXPIRETIME", () -> glideClient.pexpiretime(GlideString.of(key)).get());
     }
 
     /**
@@ -2325,12 +2111,7 @@ public final class Jedis implements Closeable {
      * @return time to live in seconds, or -1 if key has no expiration, -2 if key does not exist
      */
     public long ttl(String key) {
-        checkNotClosed();
-        try {
-            return glideClient.ttl(key).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("TTL operation failed", e);
-        }
+        return executeCommandWithGlide("TTL", () -> glideClient.ttl(key).get());
     }
 
     /**
@@ -2340,12 +2121,7 @@ public final class Jedis implements Closeable {
      * @return time to live in seconds, or -1 if key has no expiration, -2 if key does not exist
      */
     public long ttl(final byte[] key) {
-        checkNotClosed();
-        try {
-            return glideClient.ttl(GlideString.of(key)).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("TTL operation failed", e);
-        }
+        return executeCommandWithGlide("TTL", () -> glideClient.ttl(GlideString.of(key)).get());
     }
 
     /**
@@ -2355,12 +2131,7 @@ public final class Jedis implements Closeable {
      * @return time to live in milliseconds, or -1 if key has no expiration, -2 if key does not exist
      */
     public long pttl(String key) {
-        checkNotClosed();
-        try {
-            return glideClient.pttl(key).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("PTTL operation failed", e);
-        }
+        return executeCommandWithGlide("PTTL", () -> glideClient.pttl(key).get());
     }
 
     /**
@@ -2370,12 +2141,7 @@ public final class Jedis implements Closeable {
      * @return time to live in milliseconds, or -1 if key has no expiration, -2 if key does not exist
      */
     public long pttl(final byte[] key) {
-        checkNotClosed();
-        try {
-            return glideClient.pttl(GlideString.of(key)).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("PTTL operation failed", e);
-        }
+        return executeCommandWithGlide("PTTL", () -> glideClient.pttl(GlideString.of(key)).get());
     }
 
     /**
@@ -2385,13 +2151,12 @@ public final class Jedis implements Closeable {
      * @return 1 if expiration was removed, 0 if key does not exist or has no expiration
      */
     public long persist(String key) {
-        checkNotClosed();
-        try {
-            Boolean result = glideClient.persist(key).get();
-            return result ? 1L : 0L;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("PERSIST operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "PERSIST",
+                () -> {
+                    Boolean result = glideClient.persist(key).get();
+                    return result ? 1L : 0L;
+                });
     }
 
     /**
@@ -2401,13 +2166,12 @@ public final class Jedis implements Closeable {
      * @return 1 if expiration was removed, 0 if key does not exist or has no expiration
      */
     public long persist(final byte[] key) {
-        checkNotClosed();
-        try {
-            Boolean result = glideClient.persist(GlideString.of(key)).get();
-            return result ? 1L : 0L;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("PERSIST operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "PERSIST",
+                () -> {
+                    Boolean result = glideClient.persist(GlideString.of(key)).get();
+                    return result ? 1L : 0L;
+                });
     }
 
     /**
@@ -2417,13 +2181,12 @@ public final class Jedis implements Closeable {
      * @return the sorted elements
      */
     public List<String> sort(String key) {
-        checkNotClosed();
-        try {
-            String[] result = glideClient.sort(key).get();
-            return Arrays.asList(result);
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("SORT operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "SORT",
+                () -> {
+                    String[] result = glideClient.sort(key).get();
+                    return Arrays.asList(result);
+                });
     }
 
     /**
@@ -2516,12 +2279,7 @@ public final class Jedis implements Closeable {
      * @return the serialized value, or null if key does not exist
      */
     public byte[] dump(String key) {
-        checkNotClosed();
-        try {
-            return glideClient.dump(GlideString.of(key)).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("DUMP operation failed", e);
-        }
+        return executeCommandWithGlide("DUMP", () -> glideClient.dump(GlideString.of(key)).get());
     }
 
     /**
@@ -2531,12 +2289,7 @@ public final class Jedis implements Closeable {
      * @return the serialized value, or null if key does not exist
      */
     public byte[] dump(final byte[] key) {
-        checkNotClosed();
-        try {
-            return glideClient.dump(GlideString.of(key)).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("DUMP operation failed", e);
-        }
+        return executeCommandWithGlide("DUMP", () -> glideClient.dump(GlideString.of(key)).get());
     }
 
     /**
@@ -2548,12 +2301,8 @@ public final class Jedis implements Closeable {
      * @return "OK"
      */
     public String restore(String key, long ttl, byte[] serializedValue) {
-        checkNotClosed();
-        try {
-            return glideClient.restore(GlideString.of(key), ttl, serializedValue).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("RESTORE operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "RESTORE", () -> glideClient.restore(GlideString.of(key), ttl, serializedValue).get());
     }
 
     /**
@@ -2595,13 +2344,12 @@ public final class Jedis implements Closeable {
      * @return 1 if key was moved, 0 if key does not exist or already exists in target database
      */
     public long move(String key, int dbIndex) {
-        checkNotClosed();
-        try {
-            Boolean result = glideClient.move(key, dbIndex).get();
-            return result ? 1L : 0L;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("MOVE operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "MOVE",
+                () -> {
+                    Boolean result = glideClient.move(key, dbIndex).get();
+                    return result ? 1L : 0L;
+                });
     }
 
     /**
@@ -2612,13 +2360,12 @@ public final class Jedis implements Closeable {
      * @return 1 if key was moved, 0 if key does not exist or already exists in target database
      */
     public long move(final byte[] key, final int dbIndex) {
-        checkNotClosed();
-        try {
-            Boolean result = glideClient.move(GlideString.of(key), dbIndex).get();
-            return result ? 1L : 0L;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("MOVE operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "MOVE",
+                () -> {
+                    Boolean result = glideClient.move(GlideString.of(key), dbIndex).get();
+                    return result ? 1L : 0L;
+                });
     }
 
     /**
@@ -2645,6 +2392,24 @@ public final class Jedis implements Closeable {
         return jedisDirection == ListDirection.LEFT
                 ? glide.api.models.commands.ListDirection.LEFT
                 : glide.api.models.commands.ListDirection.RIGHT;
+    }
+
+    /** Helper method to convert String array to GlideString array. */
+    private static GlideString[] convertToGlideStringArray(String[] strings) {
+        GlideString[] glideStrings = new GlideString[strings.length];
+        for (int i = 0; i < strings.length; i++) {
+            glideStrings[i] = GlideString.of(strings[i]);
+        }
+        return glideStrings;
+    }
+
+    /** Helper method to convert byte array to GlideString array. */
+    private static GlideString[] convertToGlideStringArray(byte[][] bytes) {
+        GlideString[] glideStrings = new GlideString[bytes.length];
+        for (int i = 0; i < bytes.length; i++) {
+            glideStrings[i] = GlideString.of(bytes[i]);
+        }
+        return glideStrings;
     }
 
     private static ScanResult<String> convertToScanResult(Object[] result) {
@@ -2698,14 +2463,13 @@ public final class Jedis implements Closeable {
      * @return scan result with new cursor and keys
      */
     public ScanResult<String> scan(final String cursor, final ScanParams params) {
-        checkNotClosed();
-        try {
-            ScanOptions options = convertScanParamsToScanOptions(params);
-            Object[] result = glideClient.scan(cursor, options).get();
-            return convertToScanResult(result);
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("SCAN operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "SCAN",
+                () -> {
+                    ScanOptions options = convertScanParamsToScanOptions(params);
+                    Object[] result = glideClient.scan(cursor, options).get();
+                    return convertToScanResult(result);
+                });
     }
 
     /**
@@ -2779,13 +2543,12 @@ public final class Jedis implements Closeable {
      * @return scan result with new cursor and keys
      */
     public ScanResult<String> scan(final String cursor) {
-        checkNotClosed();
-        try {
-            Object[] result = glideClient.scan(cursor).get();
-            return convertToScanResult(result);
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("SCAN operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "SCAN",
+                () -> {
+                    Object[] result = glideClient.scan(cursor).get();
+                    return convertToScanResult(result);
+                });
     }
 
     /**
@@ -2877,12 +2640,7 @@ public final class Jedis implements Closeable {
      * @return the number of keys that were touched
      */
     public long touch(String... keys) {
-        checkNotClosed();
-        try {
-            return glideClient.touch(keys).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("TOUCH operation failed", e);
-        }
+        return executeCommandWithGlide("TOUCH", () -> glideClient.touch(keys).get());
     }
 
     /**
@@ -2892,12 +2650,8 @@ public final class Jedis implements Closeable {
      * @return the number of keys that were touched
      */
     public long touch(final byte[] key) {
-        checkNotClosed();
-        try {
-            return glideClient.touch(new GlideString[] {GlideString.of(key)}).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("TOUCH operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "TOUCH", () -> glideClient.touch(new GlideString[] {GlideString.of(key)}).get());
     }
 
     /**
@@ -2907,16 +2661,12 @@ public final class Jedis implements Closeable {
      * @return the number of keys that were touched
      */
     public long touch(final byte[]... keys) {
-        checkNotClosed();
-        try {
-            GlideString[] glideKeys = new GlideString[keys.length];
-            for (int i = 0; i < keys.length; i++) {
-                glideKeys[i] = GlideString.of(keys[i]);
-            }
-            return glideClient.touch(glideKeys).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("TOUCH operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "TOUCH",
+                () -> {
+                    GlideString[] glideKeys = convertToGlideStringArray(keys);
+                    return glideClient.touch(glideKeys).get();
+                });
     }
 
     /**
@@ -2929,12 +2679,7 @@ public final class Jedis implements Closeable {
      *     replace is false
      */
     public boolean copy(String srcKey, String dstKey, boolean replace) {
-        checkNotClosed();
-        try {
-            return glideClient.copy(srcKey, dstKey, replace).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("COPY operation failed", e);
-        }
+        return executeCommandWithGlide("COPY", () -> glideClient.copy(srcKey, dstKey, replace).get());
     }
 
     /**
@@ -2947,12 +2692,9 @@ public final class Jedis implements Closeable {
      *     replace is false
      */
     public boolean copy(final byte[] srcKey, final byte[] dstKey, final boolean replace) {
-        checkNotClosed();
-        try {
-            return glideClient.copy(GlideString.of(srcKey), GlideString.of(dstKey), replace).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("COPY operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "COPY",
+                () -> glideClient.copy(GlideString.of(srcKey), GlideString.of(dstKey), replace).get());
     }
 
     /**
@@ -3045,13 +2787,12 @@ public final class Jedis implements Closeable {
      * @return the original bit value stored at offset
      */
     public boolean setbit(String key, long offset, boolean value) {
-        checkNotClosed();
-        try {
-            Long result = glideClient.setbit(key, offset, value ? 1L : 0L).get();
-            return result.equals(1L);
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("SETBIT operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "SETBIT",
+                () -> {
+                    Long result = glideClient.setbit(key, offset, value ? 1L : 0L).get();
+                    return result.equals(1L);
+                });
     }
 
     /**
@@ -3063,13 +2804,12 @@ public final class Jedis implements Closeable {
      * @return the original bit value stored at offset
      */
     public boolean setbit(final byte[] key, final long offset, final boolean value) {
-        checkNotClosed();
-        try {
-            Long result = glideClient.setbit(GlideString.of(key), offset, value ? 1L : 0L).get();
-            return result.equals(1L);
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("SETBIT operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "SETBIT",
+                () -> {
+                    Long result = glideClient.setbit(GlideString.of(key), offset, value ? 1L : 0L).get();
+                    return result.equals(1L);
+                });
     }
 
     /**
@@ -3080,13 +2820,12 @@ public final class Jedis implements Closeable {
      * @return the bit value stored at offset
      */
     public boolean getbit(final String key, final long offset) {
-        checkNotClosed();
-        try {
-            Long result = glideClient.getbit(key, offset).get();
-            return result.equals(1L);
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("GETBIT operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "GETBIT",
+                () -> {
+                    Long result = glideClient.getbit(key, offset).get();
+                    return result.equals(1L);
+                });
     }
 
     /**
@@ -3097,13 +2836,12 @@ public final class Jedis implements Closeable {
      * @return the bit value stored at offset
      */
     public boolean getbit(final byte[] key, final long offset) {
-        checkNotClosed();
-        try {
-            Long result = glideClient.getbit(GlideString.of(key), offset).get();
-            return result.equals(1L);
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("GETBIT operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "GETBIT",
+                () -> {
+                    Long result = glideClient.getbit(GlideString.of(key), offset).get();
+                    return result.equals(1L);
+                });
     }
 
     /**
@@ -3116,12 +2854,7 @@ public final class Jedis implements Closeable {
      * @since Valkey 2.6.0
      */
     public long bitcount(final String key) {
-        checkNotClosed();
-        try {
-            return glideClient.bitcount(key).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("BITCOUNT operation failed", e);
-        }
+        return executeCommandWithGlide("BITCOUNT", () -> glideClient.bitcount(key).get());
     }
 
     /**
@@ -3136,12 +2869,7 @@ public final class Jedis implements Closeable {
      * @since Valkey 2.6.0
      */
     public long bitcount(final String key, final long start, final long end) {
-        checkNotClosed();
-        try {
-            return glideClient.bitcount(key, start, end).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("BITCOUNT operation failed", e);
-        }
+        return executeCommandWithGlide("BITCOUNT", () -> glideClient.bitcount(key, start, end).get());
     }
 
     /**
@@ -3151,12 +2879,8 @@ public final class Jedis implements Closeable {
      * @return the number of bits set to 1
      */
     public long bitcount(final byte[] key) {
-        checkNotClosed();
-        try {
-            return glideClient.bitcount(GlideString.of(key)).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("BITCOUNT operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "BITCOUNT", () -> glideClient.bitcount(GlideString.of(key)).get());
     }
 
     /**
@@ -3168,12 +2892,8 @@ public final class Jedis implements Closeable {
      * @return the number of bits set to 1
      */
     public long bitcount(final byte[] key, final long start, final long end) {
-        checkNotClosed();
-        try {
-            return glideClient.bitcount(GlideString.of(key), start, end).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("BITCOUNT operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "BITCOUNT", () -> glideClient.bitcount(GlideString.of(key), start, end).get());
     }
 
     /**
@@ -3187,13 +2907,12 @@ public final class Jedis implements Closeable {
      */
     public long bitcount(
             final byte[] key, final long start, final long end, final BitCountOption option) {
-        checkNotClosed();
-        try {
-            BitmapIndexType indexType = convertBitCountOptionToBitmapIndexType(option);
-            return glideClient.bitcount(GlideString.of(key), start, end, indexType).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("BITCOUNT operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "BITCOUNT",
+                () -> {
+                    BitmapIndexType indexType = convertBitCountOptionToBitmapIndexType(option);
+                    return glideClient.bitcount(GlideString.of(key), start, end, indexType).get();
+                });
     }
 
     /**
@@ -3207,13 +2926,12 @@ public final class Jedis implements Closeable {
      */
     public long bitcount(
             final String key, final long start, final long end, final BitCountOption option) {
-        checkNotClosed();
-        try {
-            BitmapIndexType indexType = convertBitCountOptionToBitmapIndexType(option);
-            return glideClient.bitcount(key, start, end, indexType).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("BITCOUNT operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "BITCOUNT",
+                () -> {
+                    BitmapIndexType indexType = convertBitCountOptionToBitmapIndexType(option);
+                    return glideClient.bitcount(key, start, end, indexType).get();
+                });
     }
 
     /**
@@ -3224,12 +2942,7 @@ public final class Jedis implements Closeable {
      * @return the position of the first bit set to the specified value, or -1 if not found
      */
     public long bitpos(final String key, final boolean value) {
-        checkNotClosed();
-        try {
-            return glideClient.bitpos(key, value ? 1L : 0L).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("BITPOS operation failed", e);
-        }
+        return executeCommandWithGlide("BITPOS", () -> glideClient.bitpos(key, value ? 1L : 0L).get());
     }
 
     /**
@@ -3243,12 +2956,8 @@ public final class Jedis implements Closeable {
      * @return the position of the first bit set to the specified value, or -1 if not found
      */
     public long bitpos(final byte[] key, final boolean value) {
-        checkNotClosed();
-        try {
-            return glideClient.bitpos(GlideString.of(key), value ? 1L : 0L).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("BITPOS operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "BITPOS", () -> glideClient.bitpos(GlideString.of(key), value ? 1L : 0L).get());
     }
 
     /**
@@ -3774,13 +3483,12 @@ public final class Jedis implements Closeable {
      * @since Valkey 2.8.9
      */
     public long pfadd(String key, String... elements) {
-        checkNotClosed();
-        try {
-            Boolean result = glideClient.pfadd(key, elements).get();
-            return result ? 1L : 0L;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("PFADD operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "PFADD",
+                () -> {
+                    Boolean result = glideClient.pfadd(key, elements).get();
+                    return result ? 1L : 0L;
+                });
     }
 
     /**
@@ -3795,17 +3503,16 @@ public final class Jedis implements Closeable {
      * @since Valkey 2.8.9
      */
     public long pfadd(final byte[] key, final byte[]... elements) {
-        checkNotClosed();
-        try {
-            String[] stringElements = new String[elements.length];
-            for (int i = 0; i < elements.length; i++) {
-                stringElements[i] = new String(elements[i], VALKEY_CHARSET);
-            }
-            Boolean result = glideClient.pfadd(new String(key, VALKEY_CHARSET), stringElements).get();
-            return result ? 1L : 0L;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("PFADD operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "PFADD",
+                () -> {
+                    String[] stringElements = new String[elements.length];
+                    for (int i = 0; i < elements.length; i++) {
+                        stringElements[i] = new String(elements[i], VALKEY_CHARSET);
+                    }
+                    Boolean result = glideClient.pfadd(new String(key, VALKEY_CHARSET), stringElements).get();
+                    return result ? 1L : 0L;
+                });
     }
 
     /**
@@ -3818,12 +3525,7 @@ public final class Jedis implements Closeable {
      * @since Valkey 2.8.9
      */
     public long pfcount(String key) {
-        checkNotClosed();
-        try {
-            return glideClient.pfcount(new String[] {key}).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("PFCOUNT operation failed", e);
-        }
+        return executeCommandWithGlide("PFCOUNT", () -> glideClient.pfcount(new String[] {key}).get());
     }
 
     /**
@@ -3837,12 +3539,7 @@ public final class Jedis implements Closeable {
      * @since Valkey 2.8.9
      */
     public long pfcount(String... keys) {
-        checkNotClosed();
-        try {
-            return glideClient.pfcount(keys).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("PFCOUNT operation failed", e);
-        }
+        return executeCommandWithGlide("PFCOUNT", () -> glideClient.pfcount(keys).get());
     }
 
     /**
@@ -3856,12 +3553,7 @@ public final class Jedis implements Closeable {
      * @since Valkey 2.8.9
      */
     public String pfmerge(String destKey, String... sourceKeys) {
-        checkNotClosed();
-        try {
-            return glideClient.pfmerge(destKey, sourceKeys).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("PFMERGE operation failed", e);
-        }
+        return executeCommandWithGlide("PFMERGE", () -> glideClient.pfmerge(destKey, sourceKeys).get());
     }
 
     /**
@@ -3871,12 +3563,8 @@ public final class Jedis implements Closeable {
      * @return the approximated cardinality of the HyperLogLog data structure
      */
     public long pfcount(final byte[] key) {
-        checkNotClosed();
-        try {
-            return glideClient.pfcount(new String[] {new String(key, VALKEY_CHARSET)}).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("PFCOUNT operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "PFCOUNT", () -> glideClient.pfcount(new String[] {new String(key, VALKEY_CHARSET)}).get());
     }
 
     /**
@@ -4069,15 +3757,13 @@ public final class Jedis implements Closeable {
      *     the hash and the value was updated
      */
     public long hset(String key, String field, String value) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            Map<String, String> fieldValueMap = new HashMap<>();
-            fieldValueMap.put(field, value);
-            return glideClient.hset(key, fieldValueMap).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("HSET operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "HSET",
+                () -> {
+                    Map<String, String> fieldValueMap = new HashMap<>();
+                    fieldValueMap.put(field, value);
+                    return glideClient.hset(key, fieldValueMap).get();
+                });
     }
 
     /**
@@ -4090,15 +3776,13 @@ public final class Jedis implements Closeable {
      *     the hash and the value was updated
      */
     public long hset(final byte[] key, final byte[] field, final byte[] value) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            Map<GlideString, GlideString> fieldValueMap = new HashMap<>();
-            fieldValueMap.put(GlideString.of(field), GlideString.of(value));
-            return glideClient.hset(GlideString.of(key), fieldValueMap).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("HSET operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "HSET",
+                () -> {
+                    Map<GlideString, GlideString> fieldValueMap = new HashMap<>();
+                    fieldValueMap.put(GlideString.of(field), GlideString.of(value));
+                    return glideClient.hset(GlideString.of(key), fieldValueMap).get();
+                });
     }
 
     /**
@@ -4109,13 +3793,7 @@ public final class Jedis implements Closeable {
      * @return the number of fields that were added
      */
     public long hset(String key, Map<String, String> hash) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            return glideClient.hset(key, hash).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("HSET operation failed", e);
-        }
+        return executeCommandWithGlide("HSET", () -> glideClient.hset(key, hash).get());
     }
 
     /**
@@ -4149,13 +3827,7 @@ public final class Jedis implements Closeable {
      *     does not exist
      */
     public String hget(String key, String field) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            return glideClient.hget(key, field).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("HGET operation failed", e);
-        }
+        return executeCommandWithGlide("HGET", () -> glideClient.hget(key, field).get());
     }
 
     /**
@@ -4167,14 +3839,12 @@ public final class Jedis implements Closeable {
      *     does not exist
      */
     public byte[] hget(final byte[] key, final byte[] field) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            GlideString result = glideClient.hget(GlideString.of(key), GlideString.of(field)).get();
-            return result != null ? result.getBytes() : null;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("HGET operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "HGET",
+                () -> {
+                    GlideString result = glideClient.hget(GlideString.of(key), GlideString.of(field)).get();
+                    return result != null ? result.getBytes() : null;
+                });
     }
 
     /**
@@ -4242,14 +3912,12 @@ public final class Jedis implements Closeable {
      *     requested
      */
     public List<String> hmget(String key, String... fields) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            String[] result = glideClient.hmget(key, fields).get();
-            return Arrays.asList(result);
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("HMGET operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "HMGET",
+                () -> {
+                    String[] result = glideClient.hmget(key, fields).get();
+                    return Arrays.asList(result);
+                });
     }
 
     /**
@@ -4265,10 +3933,7 @@ public final class Jedis implements Closeable {
         checkNotClosed();
         ensureInitialized();
         try {
-            GlideString[] glideFields = new GlideString[fields.length];
-            for (int i = 0; i < fields.length; i++) {
-                glideFields[i] = GlideString.of(fields[i]);
-            }
+            GlideString[] glideFields = convertToGlideStringArray(fields);
             GlideString[] result = glideClient.hmget(GlideString.of(key), glideFields).get();
             List<byte[]> byteResult = new ArrayList<>();
             for (GlideString gs : result) {
@@ -4288,13 +3953,7 @@ public final class Jedis implements Closeable {
      *     exist
      */
     public Map<String, String> hgetAll(String key) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            return glideClient.hgetall(key).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("HGETALL operation failed", e);
-        }
+        return executeCommandWithGlide("HGETALL", () -> glideClient.hgetall(key).get());
     }
 
     /**
@@ -4328,13 +3987,7 @@ public final class Jedis implements Closeable {
      *     existing fields
      */
     public long hdel(String key, String... fields) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            return glideClient.hdel(key, fields).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("HDEL operation failed", e);
-        }
+        return executeCommandWithGlide("HDEL", () -> glideClient.hdel(key, fields).get());
     }
 
     /**
@@ -4346,17 +3999,12 @@ public final class Jedis implements Closeable {
      *     existing fields
      */
     public long hdel(final byte[] key, final byte[]... fields) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            GlideString[] glideFields = new GlideString[fields.length];
-            for (int i = 0; i < fields.length; i++) {
-                glideFields[i] = GlideString.of(fields[i]);
-            }
-            return glideClient.hdel(GlideString.of(key), glideFields).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("HDEL operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "HDEL",
+                () -> {
+                    GlideString[] glideFields = convertToGlideStringArray(fields);
+                    return glideClient.hdel(GlideString.of(key), glideFields).get();
+                });
     }
 
     /**
@@ -4368,13 +4016,7 @@ public final class Jedis implements Closeable {
      *     not exist
      */
     public boolean hexists(String key, String field) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            return glideClient.hexists(key, field).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("HEXISTS operation failed", e);
-        }
+        return executeCommandWithGlide("HEXISTS", () -> glideClient.hexists(key, field).get());
     }
 
     /**
@@ -4386,13 +4028,8 @@ public final class Jedis implements Closeable {
      *     not exist
      */
     public boolean hexists(final byte[] key, final byte[] field) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            return glideClient.hexists(GlideString.of(key), GlideString.of(field)).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("HEXISTS operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "HEXISTS", () -> glideClient.hexists(GlideString.of(key), GlideString.of(field)).get());
     }
 
     /**
@@ -4402,13 +4039,7 @@ public final class Jedis implements Closeable {
      * @return the number of fields in the hash, or 0 when key does not exist
      */
     public long hlen(String key) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            return glideClient.hlen(key).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("HLEN operation failed", e);
-        }
+        return executeCommandWithGlide("HLEN", () -> glideClient.hlen(key).get());
     }
 
     /**
@@ -4418,13 +4049,7 @@ public final class Jedis implements Closeable {
      * @return the number of fields in the hash, or 0 when key does not exist
      */
     public long hlen(final byte[] key) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            return glideClient.hlen(GlideString.of(key)).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("HLEN operation failed", e);
-        }
+        return executeCommandWithGlide("HLEN", () -> glideClient.hlen(GlideString.of(key)).get());
     }
 
     /**
@@ -4434,14 +4059,12 @@ public final class Jedis implements Closeable {
      * @return a set of field names in the hash, or an empty set when key does not exist
      */
     public Set<String> hkeys(String key) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            String[] keys = glideClient.hkeys(key).get();
-            return new HashSet<>(Arrays.asList(keys));
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("HKEYS operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "HKEYS",
+                () -> {
+                    String[] keys = glideClient.hkeys(key).get();
+                    return new HashSet<>(Arrays.asList(keys));
+                });
     }
 
     /**
@@ -4472,14 +4095,12 @@ public final class Jedis implements Closeable {
      * @return a list of values in the hash, or an empty list when key does not exist
      */
     public List<String> hvals(String key) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            String[] values = glideClient.hvals(key).get();
-            return Arrays.asList(values);
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("HVALS operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "HVALS",
+                () -> {
+                    String[] values = glideClient.hvals(key).get();
+                    return Arrays.asList(values);
+                });
     }
 
     /**
@@ -4512,13 +4133,7 @@ public final class Jedis implements Closeable {
      * @return the value at field after the increment operation
      */
     public long hincrBy(String key, String field, long value) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            return glideClient.hincrBy(key, field, value).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("HINCRBY operation failed", e);
-        }
+        return executeCommandWithGlide("HINCRBY", () -> glideClient.hincrBy(key, field, value).get());
     }
 
     /**
@@ -4530,13 +4145,9 @@ public final class Jedis implements Closeable {
      * @return the value at field after the increment operation
      */
     public long hincrBy(final byte[] key, final byte[] field, final long value) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            return glideClient.hincrBy(GlideString.of(key), GlideString.of(field), value).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("HINCRBY operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "HINCRBY",
+                () -> glideClient.hincrBy(GlideString.of(key), GlideString.of(field), value).get());
     }
 
     /**
@@ -4549,13 +4160,8 @@ public final class Jedis implements Closeable {
      * @return the value at field after the increment operation
      */
     public double hincrByFloat(String key, String field, double value) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            return glideClient.hincrByFloat(key, field, value).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("HINCRBYFLOAT operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "HINCRBYFLOAT", () -> glideClient.hincrByFloat(key, field, value).get());
     }
 
     /**
@@ -4568,13 +4174,9 @@ public final class Jedis implements Closeable {
      * @return the value at field after the increment operation
      */
     public double hincrByFloat(final byte[] key, final byte[] field, final double value) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            return glideClient.hincrByFloat(GlideString.of(key), GlideString.of(field), value).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("HINCRBYFLOAT operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "HINCRBYFLOAT",
+                () -> glideClient.hincrByFloat(GlideString.of(key), GlideString.of(field), value).get());
     }
 
     /**
@@ -4587,13 +4189,11 @@ public final class Jedis implements Closeable {
      *     the hash and no operation was performed
      */
     public long hsetnx(String key, String field, String value) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            return glideClient.hsetnx(key, field, value).get() ? 1L : 0L;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("HSETNX operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "HSETNX",
+                () -> {
+                    return glideClient.hsetnx(key, field, value).get() ? 1L : 0L;
+                });
     }
 
     /**
@@ -4607,17 +4207,15 @@ public final class Jedis implements Closeable {
      *     the hash and no operation was performed
      */
     public long hsetnx(final byte[] key, final byte[] field, final byte[] value) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            return glideClient
-                            .hsetnx(GlideString.of(key), GlideString.of(field), GlideString.of(value))
-                            .get()
-                    ? 1L
-                    : 0L;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("HSETNX operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "HSETNX",
+                () -> {
+                    return glideClient
+                                    .hsetnx(GlideString.of(key), GlideString.of(field), GlideString.of(value))
+                                    .get()
+                            ? 1L
+                            : 0L;
+                });
     }
 
     /**
@@ -4629,13 +4227,7 @@ public final class Jedis implements Closeable {
      *     the hash or key does not exist
      */
     public long hstrlen(String key, String field) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            return glideClient.hstrlen(key, field).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("HSTRLEN operation failed", e);
-        }
+        return executeCommandWithGlide("HSTRLEN", () -> glideClient.hstrlen(key, field).get());
     }
 
     /**
@@ -4648,13 +4240,8 @@ public final class Jedis implements Closeable {
      *     the hash or key does not exist
      */
     public long hstrlen(final byte[] key, final byte[] field) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            return glideClient.hstrlen(GlideString.of(key), GlideString.of(field)).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("HSTRLEN operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "HSTRLEN", () -> glideClient.hstrlen(GlideString.of(key), GlideString.of(field)).get());
     }
 
     /**
@@ -4664,13 +4251,7 @@ public final class Jedis implements Closeable {
      * @return a random field from the hash, or null when key does not exist
      */
     public String hrandfield(String key) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            return glideClient.hrandfield(key).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("HRANDFIELD operation failed", e);
-        }
+        return executeCommandWithGlide("HRANDFIELD", () -> glideClient.hrandfield(key).get());
     }
 
     /**
@@ -4680,14 +4261,12 @@ public final class Jedis implements Closeable {
      * @return a random field from the hash, or null when key does not exist
      */
     public byte[] hrandfield(final byte[] key) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            GlideString result = glideClient.hrandfield(GlideString.of(key)).get();
-            return result != null ? result.getBytes() : null;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("HRANDFIELD operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "HRANDFIELD",
+                () -> {
+                    GlideString result = glideClient.hrandfield(GlideString.of(key)).get();
+                    return result != null ? result.getBytes() : null;
+                });
     }
 
     /**
@@ -4698,14 +4277,12 @@ public final class Jedis implements Closeable {
      * @return an array of random fields from the hash
      */
     public List<String> hrandfield(String key, long count) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            String[] fields = glideClient.hrandfieldWithCount(key, count).get();
-            return Arrays.asList(fields);
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("HRANDFIELD operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "HRANDFIELD",
+                () -> {
+                    String[] fields = glideClient.hrandfieldWithCount(key, count).get();
+                    return Arrays.asList(fields);
+                });
     }
 
     /**
@@ -5294,20 +4871,18 @@ public final class Jedis implements Closeable {
      * @return list of results for each field
      */
     public List<Long> hexpire(String key, long seconds, String... fields) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            List<String> args = new ArrayList<>();
-            args.add("HEXPIRE");
-            args.add(key);
-            args.add(String.valueOf(seconds));
-            args.addAll(Arrays.asList(fields));
+        return executeCommandWithGlide(
+                "HEXPIRE",
+                () -> {
+                    List<String> args = new ArrayList<>();
+                    args.add("HEXPIRE");
+                    args.add(key);
+                    args.add(String.valueOf(seconds));
+                    args.addAll(Arrays.asList(fields));
 
-            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
-            return convertToLongList(result);
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("HEXPIRE operation failed", e);
-        }
+                    Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+                    return convertToLongList(result);
+                });
     }
 
     /**
@@ -5321,21 +4896,19 @@ public final class Jedis implements Closeable {
      * @return list of results for each field
      */
     public List<Long> hexpire(String key, long seconds, ExpiryOption condition, String... fields) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            List<String> args = new ArrayList<>();
-            args.add("HEXPIRE");
-            args.add(key);
-            args.add(String.valueOf(seconds));
-            args.add(condition.name());
-            args.addAll(Arrays.asList(fields));
+        return executeCommandWithGlide(
+                "HEXPIRE",
+                () -> {
+                    List<String> args = new ArrayList<>();
+                    args.add("HEXPIRE");
+                    args.add(key);
+                    args.add(String.valueOf(seconds));
+                    args.add(condition.name());
+                    args.addAll(Arrays.asList(fields));
 
-            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
-            return convertToLongList(result);
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("HEXPIRE operation failed", e);
-        }
+                    Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+                    return convertToLongList(result);
+                });
     }
 
     /**
@@ -5348,20 +4921,18 @@ public final class Jedis implements Closeable {
      * @return list of results for each field
      */
     public List<Long> hpexpire(String key, long milliseconds, String... fields) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            List<String> args = new ArrayList<>();
-            args.add("HPEXPIRE");
-            args.add(key);
-            args.add(String.valueOf(milliseconds));
-            args.addAll(Arrays.asList(fields));
+        return executeCommandWithGlide(
+                "HPEXPIRE",
+                () -> {
+                    List<String> args = new ArrayList<>();
+                    args.add("HPEXPIRE");
+                    args.add(key);
+                    args.add(String.valueOf(milliseconds));
+                    args.addAll(Arrays.asList(fields));
 
-            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
-            return convertToLongList(result);
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("HPEXPIRE operation failed", e);
-        }
+                    Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+                    return convertToLongList(result);
+                });
     }
 
     /**
@@ -5376,21 +4947,19 @@ public final class Jedis implements Closeable {
      */
     public List<Long> hpexpire(
             String key, long milliseconds, ExpiryOption condition, String... fields) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            List<String> args = new ArrayList<>();
-            args.add("HPEXPIRE");
-            args.add(key);
-            args.add(String.valueOf(milliseconds));
-            args.add(condition.name());
-            args.addAll(Arrays.asList(fields));
+        return executeCommandWithGlide(
+                "HPEXPIRE",
+                () -> {
+                    List<String> args = new ArrayList<>();
+                    args.add("HPEXPIRE");
+                    args.add(key);
+                    args.add(String.valueOf(milliseconds));
+                    args.add(condition.name());
+                    args.addAll(Arrays.asList(fields));
 
-            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
-            return convertToLongList(result);
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("HPEXPIRE operation failed", e);
-        }
+                    Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+                    return convertToLongList(result);
+                });
     }
 
     /**
@@ -5403,20 +4972,18 @@ public final class Jedis implements Closeable {
      * @return list of results for each field
      */
     public List<Long> hexpireAt(String key, long unixTimeSeconds, String... fields) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            List<String> args = new ArrayList<>();
-            args.add("HEXPIREAT");
-            args.add(key);
-            args.add(String.valueOf(unixTimeSeconds));
-            args.addAll(Arrays.asList(fields));
+        return executeCommandWithGlide(
+                "HEXPIREAT",
+                () -> {
+                    List<String> args = new ArrayList<>();
+                    args.add("HEXPIREAT");
+                    args.add(key);
+                    args.add(String.valueOf(unixTimeSeconds));
+                    args.addAll(Arrays.asList(fields));
 
-            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
-            return convertToLongList(result);
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("HEXPIREAT operation failed", e);
-        }
+                    Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+                    return convertToLongList(result);
+                });
     }
 
     /**
@@ -5431,21 +4998,19 @@ public final class Jedis implements Closeable {
      */
     public List<Long> hexpireAt(
             String key, long unixTimeSeconds, ExpiryOption condition, String... fields) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            List<String> args = new ArrayList<>();
-            args.add("HEXPIREAT");
-            args.add(key);
-            args.add(String.valueOf(unixTimeSeconds));
-            args.add(condition.name());
-            args.addAll(Arrays.asList(fields));
+        return executeCommandWithGlide(
+                "HEXPIREAT",
+                () -> {
+                    List<String> args = new ArrayList<>();
+                    args.add("HEXPIREAT");
+                    args.add(key);
+                    args.add(String.valueOf(unixTimeSeconds));
+                    args.add(condition.name());
+                    args.addAll(Arrays.asList(fields));
 
-            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
-            return convertToLongList(result);
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("HEXPIREAT operation failed", e);
-        }
+                    Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+                    return convertToLongList(result);
+                });
     }
 
     /**
@@ -5458,20 +5023,18 @@ public final class Jedis implements Closeable {
      * @return list of results for each field
      */
     public List<Long> hpexpireAt(String key, long unixTimeMillis, String... fields) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            List<String> args = new ArrayList<>();
-            args.add("HPEXPIREAT");
-            args.add(key);
-            args.add(String.valueOf(unixTimeMillis));
-            args.addAll(Arrays.asList(fields));
+        return executeCommandWithGlide(
+                "HPEXPIREAT",
+                () -> {
+                    List<String> args = new ArrayList<>();
+                    args.add("HPEXPIREAT");
+                    args.add(key);
+                    args.add(String.valueOf(unixTimeMillis));
+                    args.addAll(Arrays.asList(fields));
 
-            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
-            return convertToLongList(result);
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("HPEXPIREAT operation failed", e);
-        }
+                    Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+                    return convertToLongList(result);
+                });
     }
 
     /**
@@ -5486,21 +5049,19 @@ public final class Jedis implements Closeable {
      */
     public List<Long> hpexpireAt(
             String key, long unixTimeMillis, ExpiryOption condition, String... fields) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            List<String> args = new ArrayList<>();
-            args.add("HPEXPIREAT");
-            args.add(key);
-            args.add(String.valueOf(unixTimeMillis));
-            args.add(condition.name());
-            args.addAll(Arrays.asList(fields));
+        return executeCommandWithGlide(
+                "HPEXPIREAT",
+                () -> {
+                    List<String> args = new ArrayList<>();
+                    args.add("HPEXPIREAT");
+                    args.add(key);
+                    args.add(String.valueOf(unixTimeMillis));
+                    args.add(condition.name());
+                    args.addAll(Arrays.asList(fields));
 
-            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
-            return convertToLongList(result);
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("HPEXPIREAT operation failed", e);
-        }
+                    Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+                    return convertToLongList(result);
+                });
     }
 
     /**
@@ -5512,19 +5073,17 @@ public final class Jedis implements Closeable {
      * @return list of expiration times for each field
      */
     public List<Long> hexpireTime(String key, String... fields) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            List<String> args = new ArrayList<>();
-            args.add("HEXPIRETIME");
-            args.add(key);
-            args.addAll(Arrays.asList(fields));
+        return executeCommandWithGlide(
+                "HEXPIRETIME",
+                () -> {
+                    List<String> args = new ArrayList<>();
+                    args.add("HEXPIRETIME");
+                    args.add(key);
+                    args.addAll(Arrays.asList(fields));
 
-            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
-            return convertToLongList(result);
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("HEXPIRETIME operation failed", e);
-        }
+                    Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+                    return convertToLongList(result);
+                });
     }
 
     /**
@@ -5536,19 +5095,17 @@ public final class Jedis implements Closeable {
      * @return list of expiration times for each field
      */
     public List<Long> hpexpireTime(String key, String... fields) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            List<String> args = new ArrayList<>();
-            args.add("HPEXPIRETIME");
-            args.add(key);
-            args.addAll(Arrays.asList(fields));
+        return executeCommandWithGlide(
+                "HPEXPIRETIME",
+                () -> {
+                    List<String> args = new ArrayList<>();
+                    args.add("HPEXPIRETIME");
+                    args.add(key);
+                    args.addAll(Arrays.asList(fields));
 
-            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
-            return convertToLongList(result);
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("HPEXPIRETIME operation failed", e);
-        }
+                    Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+                    return convertToLongList(result);
+                });
     }
 
     /**
@@ -5560,19 +5117,17 @@ public final class Jedis implements Closeable {
      * @return list of TTL values for each field
      */
     public List<Long> httl(String key, String... fields) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            List<String> args = new ArrayList<>();
-            args.add("HTTL");
-            args.add(key);
-            args.addAll(Arrays.asList(fields));
+        return executeCommandWithGlide(
+                "HTTL",
+                () -> {
+                    List<String> args = new ArrayList<>();
+                    args.add("HTTL");
+                    args.add(key);
+                    args.addAll(Arrays.asList(fields));
 
-            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
-            return convertToLongList(result);
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("HTTL operation failed", e);
-        }
+                    Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+                    return convertToLongList(result);
+                });
     }
 
     /**
@@ -5584,19 +5139,17 @@ public final class Jedis implements Closeable {
      * @return list of TTL values for each field
      */
     public List<Long> hpttl(String key, String... fields) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            List<String> args = new ArrayList<>();
-            args.add("HPTTL");
-            args.add(key);
-            args.addAll(Arrays.asList(fields));
+        return executeCommandWithGlide(
+                "HPTTL",
+                () -> {
+                    List<String> args = new ArrayList<>();
+                    args.add("HPTTL");
+                    args.add(key);
+                    args.addAll(Arrays.asList(fields));
 
-            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
-            return convertToLongList(result);
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("HPTTL operation failed", e);
-        }
+                    Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+                    return convertToLongList(result);
+                });
     }
 
     /**
@@ -5608,19 +5161,17 @@ public final class Jedis implements Closeable {
      * @return list of results for each field
      */
     public List<Long> hpersist(String key, String... fields) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            List<String> args = new ArrayList<>();
-            args.add("HPERSIST");
-            args.add(key);
-            args.addAll(Arrays.asList(fields));
+        return executeCommandWithGlide(
+                "HPERSIST",
+                () -> {
+                    List<String> args = new ArrayList<>();
+                    args.add("HPERSIST");
+                    args.add(key);
+                    args.addAll(Arrays.asList(fields));
 
-            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
-            return convertToLongList(result);
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("HPERSIST operation failed", e);
-        }
+                    Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+                    return convertToLongList(result);
+                });
     }
 
     // Binary variants for hash expiration commands
@@ -6091,13 +5642,7 @@ public final class Jedis implements Closeable {
      * @return the length of the list after the push operation
      */
     public long lpush(String key, String... strings) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            return glideClient.lpush(key, strings).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("LPUSH operation failed", e);
-        }
+        return executeCommandWithGlide("LPUSH", () -> glideClient.lpush(key, strings).get());
     }
 
     /**
@@ -6108,17 +5653,12 @@ public final class Jedis implements Closeable {
      * @return the length of the list after the push operation
      */
     public long lpush(final byte[] key, final byte[]... strings) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            GlideString[] glideStrings = new GlideString[strings.length];
-            for (int i = 0; i < strings.length; i++) {
-                glideStrings[i] = GlideString.of(strings[i]);
-            }
-            return glideClient.lpush(GlideString.of(key), glideStrings).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("LPUSH operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "LPUSH",
+                () -> {
+                    GlideString[] glideStrings = convertToGlideStringArray(strings);
+                    return glideClient.lpush(GlideString.of(key), glideStrings).get();
+                });
     }
 
     /**
@@ -6129,13 +5669,7 @@ public final class Jedis implements Closeable {
      * @return the length of the list after the push operation
      */
     public long rpush(String key, String... strings) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            return glideClient.rpush(key, strings).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("RPUSH operation failed", e);
-        }
+        return executeCommandWithGlide("RPUSH", () -> glideClient.rpush(key, strings).get());
     }
 
     /**
@@ -6146,17 +5680,12 @@ public final class Jedis implements Closeable {
      * @return the length of the list after the push operation
      */
     public long rpush(final byte[] key, final byte[]... strings) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            GlideString[] glideStrings = new GlideString[strings.length];
-            for (int i = 0; i < strings.length; i++) {
-                glideStrings[i] = GlideString.of(strings[i]);
-            }
-            return glideClient.rpush(GlideString.of(key), glideStrings).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("RPUSH operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "RPUSH",
+                () -> {
+                    GlideString[] glideStrings = convertToGlideStringArray(strings);
+                    return glideClient.rpush(GlideString.of(key), glideStrings).get();
+                });
     }
 
     /**
@@ -6166,13 +5695,7 @@ public final class Jedis implements Closeable {
      * @return the value of the first element, or null when key does not exist
      */
     public String lpop(String key) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            return glideClient.lpop(key).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("LPOP operation failed", e);
-        }
+        return executeCommandWithGlide("LPOP", () -> glideClient.lpop(key).get());
     }
 
     /**
@@ -6182,14 +5705,12 @@ public final class Jedis implements Closeable {
      * @return the value of the first element, or null when key does not exist
      */
     public byte[] lpop(final byte[] key) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            GlideString result = glideClient.lpop(GlideString.of(key)).get();
-            return result != null ? result.getBytes() : null;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("LPOP operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "LPOP",
+                () -> {
+                    GlideString result = glideClient.lpop(GlideString.of(key)).get();
+                    return result != null ? result.getBytes() : null;
+                });
     }
 
     /**
@@ -6200,14 +5721,12 @@ public final class Jedis implements Closeable {
      * @return list of popped elements, or empty list when key does not exist
      */
     public List<String> lpop(String key, int count) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            String[] result = glideClient.lpopCount(key, count).get();
-            return result != null ? Arrays.asList(result) : Collections.emptyList();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("LPOP operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "LPOP",
+                () -> {
+                    String[] result = glideClient.lpopCount(key, count).get();
+                    return result != null ? Arrays.asList(result) : Collections.emptyList();
+                });
     }
 
     /**
@@ -6243,13 +5762,7 @@ public final class Jedis implements Closeable {
      * @return the value of the last element, or null when key does not exist
      */
     public String rpop(String key) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            return glideClient.rpop(key).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("RPOP operation failed", e);
-        }
+        return executeCommandWithGlide("RPOP", () -> glideClient.rpop(key).get());
     }
 
     /**
@@ -6259,14 +5772,12 @@ public final class Jedis implements Closeable {
      * @return the value of the last element, or null when key does not exist
      */
     public byte[] rpop(final byte[] key) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            GlideString result = glideClient.rpop(GlideString.of(key)).get();
-            return result != null ? result.getBytes() : null;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("RPOP operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "RPOP",
+                () -> {
+                    GlideString result = glideClient.rpop(GlideString.of(key)).get();
+                    return result != null ? result.getBytes() : null;
+                });
     }
 
     /**
@@ -6277,14 +5788,12 @@ public final class Jedis implements Closeable {
      * @return list of popped elements, or empty list when key does not exist
      */
     public List<String> rpop(String key, int count) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            String[] result = glideClient.rpopCount(key, count).get();
-            return result != null ? Arrays.asList(result) : Collections.emptyList();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("RPOP operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "RPOP",
+                () -> {
+                    String[] result = glideClient.rpopCount(key, count).get();
+                    return result != null ? Arrays.asList(result) : Collections.emptyList();
+                });
     }
 
     /**
@@ -6320,13 +5829,7 @@ public final class Jedis implements Closeable {
      * @return the length of the list at key
      */
     public long llen(String key) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            return glideClient.llen(key).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("LLEN operation failed", e);
-        }
+        return executeCommandWithGlide("LLEN", () -> glideClient.llen(key).get());
     }
 
     /**
@@ -6336,13 +5839,7 @@ public final class Jedis implements Closeable {
      * @return the length of the list at key
      */
     public long llen(final byte[] key) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            return glideClient.llen(GlideString.of(key)).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("LLEN operation failed", e);
-        }
+        return executeCommandWithGlide("LLEN", () -> glideClient.llen(GlideString.of(key)).get());
     }
 
     /**
@@ -6354,14 +5851,12 @@ public final class Jedis implements Closeable {
      * @return list of elements in the specified range
      */
     public List<String> lrange(String key, long start, long stop) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            String[] result = glideClient.lrange(key, start, stop).get();
-            return result != null ? Arrays.asList(result) : Collections.emptyList();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("LRANGE operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "LRANGE",
+                () -> {
+                    String[] result = glideClient.lrange(key, start, stop).get();
+                    return result != null ? Arrays.asList(result) : Collections.emptyList();
+                });
     }
 
     /**
@@ -6399,13 +5894,7 @@ public final class Jedis implements Closeable {
      * @return always "OK"
      */
     public String ltrim(String key, long start, long stop) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            return glideClient.ltrim(key, start, stop).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("LTRIM operation failed", e);
-        }
+        return executeCommandWithGlide("LTRIM", () -> glideClient.ltrim(key, start, stop).get());
     }
 
     /**
@@ -6418,13 +5907,8 @@ public final class Jedis implements Closeable {
      * @return always "OK"
      */
     public String ltrim(final byte[] key, long start, long stop) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            return glideClient.ltrim(GlideString.of(key), start, stop).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("LTRIM operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "LTRIM", () -> glideClient.ltrim(GlideString.of(key), start, stop).get());
     }
 
     /**
@@ -6435,13 +5919,7 @@ public final class Jedis implements Closeable {
      * @return the requested element, or null when index is out of range
      */
     public String lindex(String key, long index) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            return glideClient.lindex(key, index).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("LINDEX operation failed", e);
-        }
+        return executeCommandWithGlide("LINDEX", () -> glideClient.lindex(key, index).get());
     }
 
     /**
@@ -6452,14 +5930,12 @@ public final class Jedis implements Closeable {
      * @return the requested element, or null when index is out of range
      */
     public byte[] lindex(final byte[] key, long index) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            GlideString result = glideClient.lindex(GlideString.of(key), index).get();
-            return result != null ? result.getBytes() : null;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("LINDEX operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "LINDEX",
+                () -> {
+                    GlideString result = glideClient.lindex(GlideString.of(key), index).get();
+                    return result != null ? result.getBytes() : null;
+                });
     }
 
     /**
@@ -6471,13 +5947,7 @@ public final class Jedis implements Closeable {
      * @return "OK" on success
      */
     public String lset(String key, long index, String element) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            return glideClient.lset(key, index, element).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("LSET operation failed", e);
-        }
+        return executeCommandWithGlide("LSET", () -> glideClient.lset(key, index, element).get());
     }
 
     /**
@@ -6489,13 +5959,8 @@ public final class Jedis implements Closeable {
      * @return "OK" on success
      */
     public String lset(final byte[] key, long index, final byte[] element) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            return glideClient.lset(GlideString.of(key), index, GlideString.of(element)).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("LSET operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "LSET", () -> glideClient.lset(GlideString.of(key), index, GlideString.of(element)).get());
     }
 
     /**
@@ -6507,13 +5972,7 @@ public final class Jedis implements Closeable {
      * @return the number of removed elements
      */
     public long lrem(String key, long count, String element) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            return glideClient.lrem(key, count, element).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("LREM operation failed", e);
-        }
+        return executeCommandWithGlide("LREM", () -> glideClient.lrem(key, count, element).get());
     }
 
     /**
@@ -6526,13 +5985,8 @@ public final class Jedis implements Closeable {
      * @return the number of removed elements
      */
     public long lrem(final byte[] key, long count, final byte[] element) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            return glideClient.lrem(GlideString.of(key), count, GlideString.of(element)).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("LREM operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "LREM", () -> glideClient.lrem(GlideString.of(key), count, GlideString.of(element)).get());
     }
 
     /**
@@ -6546,15 +6000,13 @@ public final class Jedis implements Closeable {
      *     found
      */
     public long linsert(String key, ListPosition where, String pivot, String element) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            InsertPosition position =
-                    where == ListPosition.BEFORE ? InsertPosition.BEFORE : InsertPosition.AFTER;
-            return glideClient.linsert(key, position, pivot, element).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("LINSERT operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "LINSERT",
+                () -> {
+                    InsertPosition position =
+                            where == ListPosition.BEFORE ? InsertPosition.BEFORE : InsertPosition.AFTER;
+                    return glideClient.linsert(key, position, pivot, element).get();
+                });
     }
 
     /**
@@ -6570,17 +6022,16 @@ public final class Jedis implements Closeable {
      */
     public long linsert(
             final byte[] key, ListPosition where, final byte[] pivot, final byte[] element) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            InsertPosition position =
-                    where == ListPosition.BEFORE ? InsertPosition.BEFORE : InsertPosition.AFTER;
-            return glideClient
-                    .linsert(GlideString.of(key), position, GlideString.of(pivot), GlideString.of(element))
-                    .get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("LINSERT operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "LINSERT",
+                () -> {
+                    InsertPosition position =
+                            where == ListPosition.BEFORE ? InsertPosition.BEFORE : InsertPosition.AFTER;
+                    return glideClient
+                            .linsert(
+                                    GlideString.of(key), position, GlideString.of(pivot), GlideString.of(element))
+                            .get();
+                });
     }
 
     /**
@@ -6592,13 +6043,7 @@ public final class Jedis implements Closeable {
      * @return the length of the list after the push operation
      */
     public long lpushx(String key, String... strings) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            return glideClient.lpushx(key, strings).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("LPUSHX operation failed", e);
-        }
+        return executeCommandWithGlide("LPUSHX", () -> glideClient.lpushx(key, strings).get());
     }
 
     /**
@@ -6610,17 +6055,12 @@ public final class Jedis implements Closeable {
      * @return the length of the list after the push operation
      */
     public long lpushx(final byte[] key, final byte[]... strings) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            GlideString[] glideStrings = new GlideString[strings.length];
-            for (int i = 0; i < strings.length; i++) {
-                glideStrings[i] = GlideString.of(strings[i]);
-            }
-            return glideClient.lpushx(GlideString.of(key), glideStrings).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("LPUSHX operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "LPUSHX",
+                () -> {
+                    GlideString[] glideStrings = convertToGlideStringArray(strings);
+                    return glideClient.lpushx(GlideString.of(key), glideStrings).get();
+                });
     }
 
     /**
@@ -6632,13 +6072,7 @@ public final class Jedis implements Closeable {
      * @return the length of the list after the push operation
      */
     public long rpushx(String key, String... strings) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            return glideClient.rpushx(key, strings).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("RPUSHX operation failed", e);
-        }
+        return executeCommandWithGlide("RPUSHX", () -> glideClient.rpushx(key, strings).get());
     }
 
     /**
@@ -6650,17 +6084,12 @@ public final class Jedis implements Closeable {
      * @return the length of the list after the push operation
      */
     public long rpushx(final byte[] key, final byte[]... strings) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            GlideString[] glideStrings = new GlideString[strings.length];
-            for (int i = 0; i < strings.length; i++) {
-                glideStrings[i] = GlideString.of(strings[i]);
-            }
-            return glideClient.rpushx(GlideString.of(key), glideStrings).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("RPUSHX operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "RPUSHX",
+                () -> {
+                    GlideString[] glideStrings = convertToGlideStringArray(strings);
+                    return glideClient.rpushx(GlideString.of(key), glideStrings).get();
+                });
     }
 
     /**
@@ -6671,14 +6100,12 @@ public final class Jedis implements Closeable {
      * @return list containing the key and the popped element, or null when no element could be popped
      */
     public List<String> blpop(int timeout, String... keys) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            String[] result = glideClient.blpop(keys, timeout).get();
-            return result != null ? Arrays.asList(result) : null;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("BLPOP operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "BLPOP",
+                () -> {
+                    String[] result = glideClient.blpop(keys, timeout).get();
+                    return result != null ? Arrays.asList(result) : null;
+                });
     }
 
     /**
@@ -6714,10 +6141,7 @@ public final class Jedis implements Closeable {
         checkNotClosed();
         ensureInitialized();
         try {
-            GlideString[] glideKeys = new GlideString[keys.length];
-            for (int i = 0; i < keys.length; i++) {
-                glideKeys[i] = GlideString.of(keys[i]);
-            }
+            GlideString[] glideKeys = convertToGlideStringArray(keys);
             GlideString[] result = glideClient.blpop(glideKeys, timeout).get();
             if (result != null) {
                 List<byte[]> byteResult = new ArrayList<>();
@@ -6744,10 +6168,7 @@ public final class Jedis implements Closeable {
         checkNotClosed();
         ensureInitialized();
         try {
-            GlideString[] glideKeys = new GlideString[keys.length];
-            for (int i = 0; i < keys.length; i++) {
-                glideKeys[i] = GlideString.of(keys[i]);
-            }
+            GlideString[] glideKeys = convertToGlideStringArray(keys);
             GlideString[] result = glideClient.blpop(glideKeys, timeout).get();
             if (result != null && result.length >= 2) {
                 return new KeyValue<>(result[0].getBytes(), result[1].getBytes());
@@ -6766,14 +6187,12 @@ public final class Jedis implements Closeable {
      * @return list containing the key and the popped element, or null when no element could be popped
      */
     public List<String> brpop(int timeout, String... keys) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            String[] result = glideClient.brpop(keys, timeout).get();
-            return result != null ? Arrays.asList(result) : null;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("BRPOP operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "BRPOP",
+                () -> {
+                    String[] result = glideClient.brpop(keys, timeout).get();
+                    return result != null ? Arrays.asList(result) : null;
+                });
     }
 
     /**
@@ -6809,10 +6228,7 @@ public final class Jedis implements Closeable {
         checkNotClosed();
         ensureInitialized();
         try {
-            GlideString[] glideKeys = new GlideString[keys.length];
-            for (int i = 0; i < keys.length; i++) {
-                glideKeys[i] = GlideString.of(keys[i]);
-            }
+            GlideString[] glideKeys = convertToGlideStringArray(keys);
             GlideString[] result = glideClient.brpop(glideKeys, timeout).get();
             if (result != null) {
                 List<byte[]> byteResult = new ArrayList<>();
@@ -6839,10 +6255,7 @@ public final class Jedis implements Closeable {
         checkNotClosed();
         ensureInitialized();
         try {
-            GlideString[] glideKeys = new GlideString[keys.length];
-            for (int i = 0; i < keys.length; i++) {
-                glideKeys[i] = GlideString.of(keys[i]);
-            }
+            GlideString[] glideKeys = convertToGlideStringArray(keys);
             GlideString[] result = glideClient.brpop(glideKeys, timeout).get();
             if (result != null && result.length >= 2) {
                 return new KeyValue<>(result[0].getBytes(), result[1].getBytes());
@@ -6907,13 +6320,7 @@ public final class Jedis implements Closeable {
      * @return the index of the first matching element, or null if not found
      */
     public Long lpos(String key, String element) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            return glideClient.lpos(key, element).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("LPOS operation failed", e);
-        }
+        return executeCommandWithGlide("LPOS", () -> glideClient.lpos(key, element).get());
     }
 
     /**
@@ -6924,13 +6331,8 @@ public final class Jedis implements Closeable {
      * @return the index of the first matching element, or null if not found
      */
     public Long lpos(final byte[] key, final byte[] element) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            return glideClient.lpos(GlideString.of(key), GlideString.of(element)).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("LPOS operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "LPOS", () -> glideClient.lpos(GlideString.of(key), GlideString.of(element)).get());
     }
 
     /**
@@ -6942,14 +6344,12 @@ public final class Jedis implements Closeable {
      * @return the index of the matching element, or null if not found
      */
     public Long lpos(String key, String element, LPosParams params) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            LPosOptions options = convertLPosParamsToLPosOptions(params);
-            return glideClient.lpos(key, element, options).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("LPOS operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "LPOS",
+                () -> {
+                    LPosOptions options = convertLPosParamsToLPosOptions(params);
+                    return glideClient.lpos(key, element, options).get();
+                });
     }
 
     /**
@@ -6962,14 +6362,12 @@ public final class Jedis implements Closeable {
      * @return the index of the matching element, or null if not found
      */
     public Long lpos(final byte[] key, final byte[] element, LPosParams params) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            LPosOptions options = convertLPosParamsToLPosOptions(params);
-            return glideClient.lpos(GlideString.of(key), GlideString.of(element), options).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("LPOS operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "LPOS",
+                () -> {
+                    LPosOptions options = convertLPosParamsToLPosOptions(params);
+                    return glideClient.lpos(GlideString.of(key), GlideString.of(element), options).get();
+                });
     }
 
     /**
@@ -6982,15 +6380,13 @@ public final class Jedis implements Closeable {
      * @return list of indices of matching elements
      */
     public List<Long> lpos(String key, String element, LPosParams params, long count) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            LPosOptions options = convertLPosParamsToLPosOptions(params);
-            Long[] result = glideClient.lposCount(key, element, count, options).get();
-            return result != null ? Arrays.asList(result) : Collections.emptyList();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("LPOS operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "LPOS",
+                () -> {
+                    LPosOptions options = convertLPosParamsToLPosOptions(params);
+                    Long[] result = glideClient.lposCount(key, element, count, options).get();
+                    return result != null ? Arrays.asList(result) : Collections.emptyList();
+                });
     }
 
     /**
@@ -7003,16 +6399,16 @@ public final class Jedis implements Closeable {
      * @return list of indices of matching elements
      */
     public List<Long> lpos(final byte[] key, final byte[] element, LPosParams params, long count) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            LPosOptions options = convertLPosParamsToLPosOptions(params);
-            Long[] result =
-                    glideClient.lposCount(GlideString.of(key), GlideString.of(element), count, options).get();
-            return result != null ? Arrays.asList(result) : Collections.emptyList();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("LPOS operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "LPOS",
+                () -> {
+                    LPosOptions options = convertLPosParamsToLPosOptions(params);
+                    Long[] result =
+                            glideClient
+                                    .lposCount(GlideString.of(key), GlideString.of(element), count, options)
+                                    .get();
+                    return result != null ? Arrays.asList(result) : Collections.emptyList();
+                });
     }
 
     /**
@@ -7025,15 +6421,13 @@ public final class Jedis implements Closeable {
      * @return the element being moved, or null when the source list is empty
      */
     public String lmove(String srcKey, String dstKey, ListDirection from, ListDirection to) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            glide.api.models.commands.ListDirection glideFrom = convertToGlideListDirection(from);
-            glide.api.models.commands.ListDirection glideTo = convertToGlideListDirection(to);
-            return glideClient.lmove(srcKey, dstKey, glideFrom, glideTo).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("LMOVE operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "LMOVE",
+                () -> {
+                    glide.api.models.commands.ListDirection glideFrom = convertToGlideListDirection(from);
+                    glide.api.models.commands.ListDirection glideTo = convertToGlideListDirection(to);
+                    return glideClient.lmove(srcKey, dstKey, glideFrom, glideTo).get();
+                });
     }
 
     /**
@@ -7046,19 +6440,17 @@ public final class Jedis implements Closeable {
      * @return the element being moved, or null when the source list is empty
      */
     public byte[] lmove(byte[] srcKey, byte[] dstKey, ListDirection from, ListDirection to) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            glide.api.models.commands.ListDirection glideFrom = convertToGlideListDirection(from);
-            glide.api.models.commands.ListDirection glideTo = convertToGlideListDirection(to);
-            GlideString result =
-                    glideClient
-                            .lmove(GlideString.of(srcKey), GlideString.of(dstKey), glideFrom, glideTo)
-                            .get();
-            return result != null ? result.getBytes() : null;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("LMOVE operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "LMOVE",
+                () -> {
+                    glide.api.models.commands.ListDirection glideFrom = convertToGlideListDirection(from);
+                    glide.api.models.commands.ListDirection glideTo = convertToGlideListDirection(to);
+                    GlideString result =
+                            glideClient
+                                    .lmove(GlideString.of(srcKey), GlideString.of(dstKey), glideFrom, glideTo)
+                                    .get();
+                    return result != null ? result.getBytes() : null;
+                });
     }
 
     /**
@@ -7073,15 +6465,13 @@ public final class Jedis implements Closeable {
      */
     public String blmove(
             String srcKey, String dstKey, ListDirection from, ListDirection to, double timeout) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            glide.api.models.commands.ListDirection glideFrom = convertToGlideListDirection(from);
-            glide.api.models.commands.ListDirection glideTo = convertToGlideListDirection(to);
-            return glideClient.blmove(srcKey, dstKey, glideFrom, glideTo, timeout).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("BLMOVE operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "BLMOVE",
+                () -> {
+                    glide.api.models.commands.ListDirection glideFrom = convertToGlideListDirection(from);
+                    glide.api.models.commands.ListDirection glideTo = convertToGlideListDirection(to);
+                    return glideClient.blmove(srcKey, dstKey, glideFrom, glideTo, timeout).get();
+                });
     }
 
     /**
@@ -7097,19 +6487,18 @@ public final class Jedis implements Closeable {
      */
     public byte[] blmove(
             byte[] srcKey, byte[] dstKey, ListDirection from, ListDirection to, double timeout) {
-        checkNotClosed();
-        ensureInitialized();
-        try {
-            glide.api.models.commands.ListDirection glideFrom = convertToGlideListDirection(from);
-            glide.api.models.commands.ListDirection glideTo = convertToGlideListDirection(to);
-            GlideString result =
-                    glideClient
-                            .blmove(GlideString.of(srcKey), GlideString.of(dstKey), glideFrom, glideTo, timeout)
-                            .get();
-            return result != null ? result.getBytes() : null;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("BLMOVE operation failed", e);
-        }
+        return executeCommandWithGlide(
+                "BLMOVE",
+                () -> {
+                    glide.api.models.commands.ListDirection glideFrom = convertToGlideListDirection(from);
+                    glide.api.models.commands.ListDirection glideTo = convertToGlideListDirection(to);
+                    GlideString result =
+                            glideClient
+                                    .blmove(
+                                            GlideString.of(srcKey), GlideString.of(dstKey), glideFrom, glideTo, timeout)
+                                    .get();
+                    return result != null ? result.getBytes() : null;
+                });
     }
 
     /**
@@ -7180,10 +6569,7 @@ public final class Jedis implements Closeable {
         try {
             glide.api.models.commands.ListDirection glideDirection =
                     convertToGlideListDirection(direction);
-            GlideString[] glideKeys = new GlideString[keys.length];
-            for (int i = 0; i < keys.length; i++) {
-                glideKeys[i] = GlideString.of(keys[i]);
-            }
+            GlideString[] glideKeys = convertToGlideStringArray(keys);
             Map<GlideString, GlideString[]> result = glideClient.lmpop(glideKeys, glideDirection).get();
             if (result != null && !result.isEmpty()) {
                 Map.Entry<GlideString, GlideString[]> entry = result.entrySet().iterator().next();
@@ -7215,10 +6601,7 @@ public final class Jedis implements Closeable {
         try {
             glide.api.models.commands.ListDirection glideDirection =
                     convertToGlideListDirection(direction);
-            GlideString[] glideKeys = new GlideString[keys.length];
-            for (int i = 0; i < keys.length; i++) {
-                glideKeys[i] = GlideString.of(keys[i]);
-            }
+            GlideString[] glideKeys = convertToGlideStringArray(keys);
             Map<GlideString, GlideString[]> result =
                     glideClient.lmpop(glideKeys, glideDirection, count).get();
             if (result != null && !result.isEmpty()) {
@@ -7307,10 +6690,7 @@ public final class Jedis implements Closeable {
         try {
             glide.api.models.commands.ListDirection glideDirection =
                     convertToGlideListDirection(direction);
-            GlideString[] glideKeys = new GlideString[keys.length];
-            for (int i = 0; i < keys.length; i++) {
-                glideKeys[i] = GlideString.of(keys[i]);
-            }
+            GlideString[] glideKeys = convertToGlideStringArray(keys);
             Map<GlideString, GlideString[]> result =
                     glideClient.blmpop(glideKeys, glideDirection, timeout).get();
             if (result != null && !result.isEmpty()) {
@@ -7345,10 +6725,7 @@ public final class Jedis implements Closeable {
         try {
             glide.api.models.commands.ListDirection glideDirection =
                     convertToGlideListDirection(direction);
-            GlideString[] glideKeys = new GlideString[keys.length];
-            for (int i = 0; i < keys.length; i++) {
-                glideKeys[i] = GlideString.of(keys[i]);
-            }
+            GlideString[] glideKeys = convertToGlideStringArray(keys);
             Map<GlideString, GlideString[]> result =
                     glideClient.blmpop(glideKeys, glideDirection, count, timeout).get();
             if (result != null && !result.isEmpty()) {
