@@ -5,6 +5,8 @@ import glide.api.GlideClient;
 import glide.api.models.GlideString;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.GetExOptions;
+import glide.api.models.commands.LInsertOptions.InsertPosition;
+import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SortBaseOptions;
 import glide.api.models.commands.SortOptions;
@@ -45,6 +47,8 @@ import javax.net.ssl.SSLSocketFactory;
 import redis.clients.jedis.args.BitCountOption;
 import redis.clients.jedis.args.BitOP;
 import redis.clients.jedis.args.ExpiryOption;
+import redis.clients.jedis.args.ListDirection;
+import redis.clients.jedis.args.ListPosition;
 import redis.clients.jedis.commands.ProtocolCommand;
 import redis.clients.jedis.exceptions.JedisConnectionException;
 import redis.clients.jedis.exceptions.JedisException;
@@ -52,9 +56,11 @@ import redis.clients.jedis.params.BitPosParams;
 import redis.clients.jedis.params.GetExParams;
 import redis.clients.jedis.params.HGetExParams;
 import redis.clients.jedis.params.HSetExParams;
+import redis.clients.jedis.params.LPosParams;
 import redis.clients.jedis.params.ScanParams;
 import redis.clients.jedis.params.SetParams;
 import redis.clients.jedis.resps.ScanResult;
+import redis.clients.jedis.util.KeyValue;
 
 /**
  * Jedis compatibility wrapper for Valkey GLIDE client. This class provides a Jedis-like API while
@@ -2621,6 +2627,26 @@ public final class Jedis implements Closeable {
      * @param result the GLIDE scan result
      * @return ScanResult with cursor and keys
      */
+    /** Helper method to convert Jedis LPosParams to GLIDE LPosOptions. */
+    private static LPosOptions convertLPosParamsToLPosOptions(LPosParams params) {
+        LPosOptions.LPosOptionsBuilder builder = LPosOptions.builder();
+        if (params.getRank() != null) {
+            builder.rank((long) params.getRank());
+        }
+        if (params.getMaxlen() != null) {
+            builder.maxLength((long) params.getMaxlen());
+        }
+        return builder.build();
+    }
+
+    /** Helper method to convert Jedis ListDirection to GLIDE ListDirection. */
+    private static glide.api.models.commands.ListDirection convertToGlideListDirection(
+            ListDirection jedisDirection) {
+        return jedisDirection == ListDirection.LEFT
+                ? glide.api.models.commands.ListDirection.LEFT
+                : glide.api.models.commands.ListDirection.RIGHT;
+    }
+
     private static ScanResult<String> convertToScanResult(Object[] result) {
         if (result != null && result.length >= 2) {
             String newCursor = result[0].toString();
@@ -6053,5 +6079,1345 @@ public final class Jedis implements Closeable {
     public int getDB() {
         // TODO: Track database selection in compatibility layer
         return 0; // Default database for now
+    }
+
+    // ========== LIST COMMANDS ==========
+
+    /**
+     * Inserts all the specified values at the head of the list stored at key.
+     *
+     * @param key the key of the list
+     * @param strings the values to insert
+     * @return the length of the list after the push operation
+     */
+    public long lpush(String key, String... strings) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            return glideClient.lpush(key, strings).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("LPUSH operation failed", e);
+        }
+    }
+
+    /**
+     * Inserts all the specified values at the head of the list stored at key (binary version).
+     *
+     * @param key the key of the list
+     * @param strings the values to insert
+     * @return the length of the list after the push operation
+     */
+    public long lpush(final byte[] key, final byte[]... strings) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            GlideString[] glideStrings = new GlideString[strings.length];
+            for (int i = 0; i < strings.length; i++) {
+                glideStrings[i] = GlideString.of(strings[i]);
+            }
+            return glideClient.lpush(GlideString.of(key), glideStrings).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("LPUSH operation failed", e);
+        }
+    }
+
+    /**
+     * Inserts all the specified values at the tail of the list stored at key.
+     *
+     * @param key the key of the list
+     * @param strings the values to insert
+     * @return the length of the list after the push operation
+     */
+    public long rpush(String key, String... strings) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            return glideClient.rpush(key, strings).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("RPUSH operation failed", e);
+        }
+    }
+
+    /**
+     * Inserts all the specified values at the tail of the list stored at key (binary version).
+     *
+     * @param key the key of the list
+     * @param strings the values to insert
+     * @return the length of the list after the push operation
+     */
+    public long rpush(final byte[] key, final byte[]... strings) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            GlideString[] glideStrings = new GlideString[strings.length];
+            for (int i = 0; i < strings.length; i++) {
+                glideStrings[i] = GlideString.of(strings[i]);
+            }
+            return glideClient.rpush(GlideString.of(key), glideStrings).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("RPUSH operation failed", e);
+        }
+    }
+
+    /**
+     * Removes and returns the first element of the list stored at key.
+     *
+     * @param key the key of the list
+     * @return the value of the first element, or null when key does not exist
+     */
+    public String lpop(String key) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            return glideClient.lpop(key).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("LPOP operation failed", e);
+        }
+    }
+
+    /**
+     * Removes and returns the first element of the list stored at key (binary version).
+     *
+     * @param key the key of the list
+     * @return the value of the first element, or null when key does not exist
+     */
+    public byte[] lpop(final byte[] key) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            GlideString result = glideClient.lpop(GlideString.of(key)).get();
+            return result != null ? result.getBytes() : null;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("LPOP operation failed", e);
+        }
+    }
+
+    /**
+     * Removes and returns up to count elements from the head of the list stored at key.
+     *
+     * @param key the key of the list
+     * @param count the number of elements to pop
+     * @return list of popped elements, or empty list when key does not exist
+     */
+    public List<String> lpop(String key, int count) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            String[] result = glideClient.lpopCount(key, count).get();
+            return result != null ? Arrays.asList(result) : Collections.emptyList();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("LPOP operation failed", e);
+        }
+    }
+
+    /**
+     * Removes and returns up to count elements from the head of the list stored at key (binary
+     * version).
+     *
+     * @param key the key of the list
+     * @param count the number of elements to pop
+     * @return list of popped elements, or empty list when key does not exist
+     */
+    public List<byte[]> lpop(final byte[] key, int count) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            GlideString[] result = glideClient.lpopCount(GlideString.of(key), count).get();
+            if (result == null) {
+                return Collections.emptyList();
+            }
+            List<byte[]> byteResult = new ArrayList<>();
+            for (GlideString gs : result) {
+                byteResult.add(gs.getBytes());
+            }
+            return byteResult;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("LPOP operation failed", e);
+        }
+    }
+
+    /**
+     * Removes and returns the last element of the list stored at key.
+     *
+     * @param key the key of the list
+     * @return the value of the last element, or null when key does not exist
+     */
+    public String rpop(String key) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            return glideClient.rpop(key).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("RPOP operation failed", e);
+        }
+    }
+
+    /**
+     * Removes and returns the last element of the list stored at key (binary version).
+     *
+     * @param key the key of the list
+     * @return the value of the last element, or null when key does not exist
+     */
+    public byte[] rpop(final byte[] key) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            GlideString result = glideClient.rpop(GlideString.of(key)).get();
+            return result != null ? result.getBytes() : null;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("RPOP operation failed", e);
+        }
+    }
+
+    /**
+     * Removes and returns up to count elements from the tail of the list stored at key.
+     *
+     * @param key the key of the list
+     * @param count the number of elements to pop
+     * @return list of popped elements, or empty list when key does not exist
+     */
+    public List<String> rpop(String key, int count) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            String[] result = glideClient.rpopCount(key, count).get();
+            return result != null ? Arrays.asList(result) : Collections.emptyList();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("RPOP operation failed", e);
+        }
+    }
+
+    /**
+     * Removes and returns up to count elements from the tail of the list stored at key (binary
+     * version).
+     *
+     * @param key the key of the list
+     * @param count the number of elements to pop
+     * @return list of popped elements, or empty list when key does not exist
+     */
+    public List<byte[]> rpop(final byte[] key, int count) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            GlideString[] result = glideClient.rpopCount(GlideString.of(key), count).get();
+            if (result == null) {
+                return Collections.emptyList();
+            }
+            List<byte[]> byteResult = new ArrayList<>();
+            for (GlideString gs : result) {
+                byteResult.add(gs.getBytes());
+            }
+            return byteResult;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("RPOP operation failed", e);
+        }
+    }
+
+    /**
+     * Returns the length of the list stored at key.
+     *
+     * @param key the key of the list
+     * @return the length of the list at key
+     */
+    public long llen(String key) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            return glideClient.llen(key).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("LLEN operation failed", e);
+        }
+    }
+
+    /**
+     * Returns the length of the list stored at key (binary version).
+     *
+     * @param key the key of the list
+     * @return the length of the list at key
+     */
+    public long llen(final byte[] key) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            return glideClient.llen(GlideString.of(key)).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("LLEN operation failed", e);
+        }
+    }
+
+    /**
+     * Returns the specified elements of the list stored at key.
+     *
+     * @param key the key of the list
+     * @param start the start index
+     * @param stop the stop index
+     * @return list of elements in the specified range
+     */
+    public List<String> lrange(String key, long start, long stop) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            String[] result = glideClient.lrange(key, start, stop).get();
+            return result != null ? Arrays.asList(result) : Collections.emptyList();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("LRANGE operation failed", e);
+        }
+    }
+
+    /**
+     * Returns the specified elements of the list stored at key (binary version).
+     *
+     * @param key the key of the list
+     * @param start the start index
+     * @param stop the stop index
+     * @return list of elements in the specified range
+     */
+    public List<byte[]> lrange(final byte[] key, long start, long stop) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            GlideString[] result = glideClient.lrange(GlideString.of(key), start, stop).get();
+            if (result == null) {
+                return Collections.emptyList();
+            }
+            List<byte[]> byteResult = new ArrayList<>();
+            for (GlideString gs : result) {
+                byteResult.add(gs.getBytes());
+            }
+            return byteResult;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("LRANGE operation failed", e);
+        }
+    }
+
+    /**
+     * Trim an existing list so that it will contain only the specified range of elements specified.
+     *
+     * @param key the key of the list
+     * @param start the start index
+     * @param stop the stop index
+     * @return always "OK"
+     */
+    public String ltrim(String key, long start, long stop) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            return glideClient.ltrim(key, start, stop).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("LTRIM operation failed", e);
+        }
+    }
+
+    /**
+     * Trim an existing list so that it will contain only the specified range of elements specified
+     * (binary version).
+     *
+     * @param key the key of the list
+     * @param start the start index
+     * @param stop the stop index
+     * @return always "OK"
+     */
+    public String ltrim(final byte[] key, long start, long stop) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            return glideClient.ltrim(GlideString.of(key), start, stop).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("LTRIM operation failed", e);
+        }
+    }
+
+    /**
+     * Returns the element at index in the list stored at key.
+     *
+     * @param key the key of the list
+     * @param index the index of the element
+     * @return the requested element, or null when index is out of range
+     */
+    public String lindex(String key, long index) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            return glideClient.lindex(key, index).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("LINDEX operation failed", e);
+        }
+    }
+
+    /**
+     * Returns the element at index in the list stored at key (binary version).
+     *
+     * @param key the key of the list
+     * @param index the index of the element
+     * @return the requested element, or null when index is out of range
+     */
+    public byte[] lindex(final byte[] key, long index) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            GlideString result = glideClient.lindex(GlideString.of(key), index).get();
+            return result != null ? result.getBytes() : null;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("LINDEX operation failed", e);
+        }
+    }
+
+    /**
+     * Sets the list element at index to element.
+     *
+     * @param key the key of the list
+     * @param index the index of the element to set
+     * @param element the new element value
+     * @return "OK" on success
+     */
+    public String lset(String key, long index, String element) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            return glideClient.lset(key, index, element).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("LSET operation failed", e);
+        }
+    }
+
+    /**
+     * Sets the list element at index to element (binary version).
+     *
+     * @param key the key of the list
+     * @param index the index of the element to set
+     * @param element the new element value
+     * @return "OK" on success
+     */
+    public String lset(final byte[] key, long index, final byte[] element) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            return glideClient.lset(GlideString.of(key), index, GlideString.of(element)).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("LSET operation failed", e);
+        }
+    }
+
+    /**
+     * Removes the first count occurrences of elements equal to element from the list stored at key.
+     *
+     * @param key the key of the list
+     * @param count the number of elements to remove
+     * @param element the element to remove
+     * @return the number of removed elements
+     */
+    public long lrem(String key, long count, String element) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            return glideClient.lrem(key, count, element).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("LREM operation failed", e);
+        }
+    }
+
+    /**
+     * Removes the first count occurrences of elements equal to element from the list stored at key
+     * (binary version).
+     *
+     * @param key the key of the list
+     * @param count the number of elements to remove
+     * @param element the element to remove
+     * @return the number of removed elements
+     */
+    public long lrem(final byte[] key, long count, final byte[] element) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            return glideClient.lrem(GlideString.of(key), count, GlideString.of(element)).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("LREM operation failed", e);
+        }
+    }
+
+    /**
+     * Inserts element in the list stored at key either before or after the reference value pivot.
+     *
+     * @param key the key of the list
+     * @param where BEFORE or AFTER
+     * @param pivot the reference value
+     * @param element the element to insert
+     * @return the length of the list after the insert operation, or -1 when the value pivot was not
+     *     found
+     */
+    public long linsert(String key, ListPosition where, String pivot, String element) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            InsertPosition position =
+                    where == ListPosition.BEFORE ? InsertPosition.BEFORE : InsertPosition.AFTER;
+            return glideClient.linsert(key, position, pivot, element).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("LINSERT operation failed", e);
+        }
+    }
+
+    /**
+     * Inserts element in the list stored at key either before or after the reference value pivot
+     * (binary version).
+     *
+     * @param key the key of the list
+     * @param where BEFORE or AFTER
+     * @param pivot the reference value
+     * @param element the element to insert
+     * @return the length of the list after the insert operation, or -1 when the value pivot was not
+     *     found
+     */
+    public long linsert(
+            final byte[] key, ListPosition where, final byte[] pivot, final byte[] element) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            InsertPosition position =
+                    where == ListPosition.BEFORE ? InsertPosition.BEFORE : InsertPosition.AFTER;
+            return glideClient
+                    .linsert(GlideString.of(key), position, GlideString.of(pivot), GlideString.of(element))
+                    .get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("LINSERT operation failed", e);
+        }
+    }
+
+    /**
+     * Inserts specified values at the head of the list stored at key, only if key already exists and
+     * holds a list.
+     *
+     * @param key the key of the list
+     * @param strings the values to insert
+     * @return the length of the list after the push operation
+     */
+    public long lpushx(String key, String... strings) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            return glideClient.lpushx(key, strings).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("LPUSHX operation failed", e);
+        }
+    }
+
+    /**
+     * Inserts specified values at the head of the list stored at key, only if key already exists and
+     * holds a list (binary version).
+     *
+     * @param key the key of the list
+     * @param strings the values to insert
+     * @return the length of the list after the push operation
+     */
+    public long lpushx(final byte[] key, final byte[]... strings) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            GlideString[] glideStrings = new GlideString[strings.length];
+            for (int i = 0; i < strings.length; i++) {
+                glideStrings[i] = GlideString.of(strings[i]);
+            }
+            return glideClient.lpushx(GlideString.of(key), glideStrings).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("LPUSHX operation failed", e);
+        }
+    }
+
+    /**
+     * Inserts specified values at the tail of the list stored at key, only if key already exists and
+     * holds a list.
+     *
+     * @param key the key of the list
+     * @param strings the values to insert
+     * @return the length of the list after the push operation
+     */
+    public long rpushx(String key, String... strings) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            return glideClient.rpushx(key, strings).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("RPUSHX operation failed", e);
+        }
+    }
+
+    /**
+     * Inserts specified values at the tail of the list stored at key, only if key already exists and
+     * holds a list (binary version).
+     *
+     * @param key the key of the list
+     * @param strings the values to insert
+     * @return the length of the list after the push operation
+     */
+    public long rpushx(final byte[] key, final byte[]... strings) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            GlideString[] glideStrings = new GlideString[strings.length];
+            for (int i = 0; i < strings.length; i++) {
+                glideStrings[i] = GlideString.of(strings[i]);
+            }
+            return glideClient.rpushx(GlideString.of(key), glideStrings).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("RPUSHX operation failed", e);
+        }
+    }
+
+    /**
+     * BLPOP is a blocking list pop primitive. It is the blocking version of LPOP.
+     *
+     * @param timeout the timeout in seconds
+     * @param keys the keys to check
+     * @return list containing the key and the popped element, or null when no element could be popped
+     */
+    public List<String> blpop(int timeout, String... keys) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            String[] result = glideClient.blpop(keys, timeout).get();
+            return result != null ? Arrays.asList(result) : null;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("BLPOP operation failed", e);
+        }
+    }
+
+    /**
+     * BLPOP is a blocking list pop primitive. It is the blocking version of LPOP.
+     *
+     * @param timeout the timeout in seconds (double precision)
+     * @param keys the keys to check
+     * @return KeyValue containing the key and the popped element, or null when no element could be
+     *     popped
+     */
+    public KeyValue<String, String> blpop(double timeout, String... keys) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            String[] result = glideClient.blpop(keys, timeout).get();
+            if (result != null && result.length >= 2) {
+                return new KeyValue<>(result[0], result[1]);
+            }
+            return null;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("BLPOP operation failed", e);
+        }
+    }
+
+    /**
+     * BLPOP is a blocking list pop primitive. It is the blocking version of LPOP (binary version).
+     *
+     * @param timeout the timeout in seconds
+     * @param keys the keys to check
+     * @return list containing the key and the popped element, or null when no element could be popped
+     */
+    public List<byte[]> blpop(int timeout, byte[]... keys) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            GlideString[] glideKeys = new GlideString[keys.length];
+            for (int i = 0; i < keys.length; i++) {
+                glideKeys[i] = GlideString.of(keys[i]);
+            }
+            GlideString[] result = glideClient.blpop(glideKeys, timeout).get();
+            if (result != null) {
+                List<byte[]> byteResult = new ArrayList<>();
+                for (GlideString gs : result) {
+                    byteResult.add(gs.getBytes());
+                }
+                return byteResult;
+            }
+            return null;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("BLPOP operation failed", e);
+        }
+    }
+
+    /**
+     * BLPOP is a blocking list pop primitive. It is the blocking version of LPOP (binary version).
+     *
+     * @param timeout the timeout in seconds (double precision)
+     * @param keys the keys to check
+     * @return KeyValue containing the key and the popped element, or null when no element could be
+     *     popped
+     */
+    public KeyValue<byte[], byte[]> blpop(double timeout, byte[]... keys) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            GlideString[] glideKeys = new GlideString[keys.length];
+            for (int i = 0; i < keys.length; i++) {
+                glideKeys[i] = GlideString.of(keys[i]);
+            }
+            GlideString[] result = glideClient.blpop(glideKeys, timeout).get();
+            if (result != null && result.length >= 2) {
+                return new KeyValue<>(result[0].getBytes(), result[1].getBytes());
+            }
+            return null;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("BLPOP operation failed", e);
+        }
+    }
+
+    /**
+     * BRPOP is a blocking list pop primitive. It is the blocking version of RPOP.
+     *
+     * @param timeout the timeout in seconds
+     * @param keys the keys to check
+     * @return list containing the key and the popped element, or null when no element could be popped
+     */
+    public List<String> brpop(int timeout, String... keys) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            String[] result = glideClient.brpop(keys, timeout).get();
+            return result != null ? Arrays.asList(result) : null;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("BRPOP operation failed", e);
+        }
+    }
+
+    /**
+     * BRPOP is a blocking list pop primitive. It is the blocking version of RPOP.
+     *
+     * @param timeout the timeout in seconds (double precision)
+     * @param keys the keys to check
+     * @return KeyValue containing the key and the popped element, or null when no element could be
+     *     popped
+     */
+    public KeyValue<String, String> brpop(double timeout, String... keys) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            String[] result = glideClient.brpop(keys, timeout).get();
+            if (result != null && result.length >= 2) {
+                return new KeyValue<>(result[0], result[1]);
+            }
+            return null;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("BRPOP operation failed", e);
+        }
+    }
+
+    /**
+     * BRPOP is a blocking list pop primitive. It is the blocking version of RPOP (binary version).
+     *
+     * @param timeout the timeout in seconds
+     * @param keys the keys to check
+     * @return list containing the key and the popped element, or null when no element could be popped
+     */
+    public List<byte[]> brpop(int timeout, byte[]... keys) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            GlideString[] glideKeys = new GlideString[keys.length];
+            for (int i = 0; i < keys.length; i++) {
+                glideKeys[i] = GlideString.of(keys[i]);
+            }
+            GlideString[] result = glideClient.brpop(glideKeys, timeout).get();
+            if (result != null) {
+                List<byte[]> byteResult = new ArrayList<>();
+                for (GlideString gs : result) {
+                    byteResult.add(gs.getBytes());
+                }
+                return byteResult;
+            }
+            return null;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("BRPOP operation failed", e);
+        }
+    }
+
+    /**
+     * BRPOP is a blocking list pop primitive. It is the blocking version of RPOP (binary version).
+     *
+     * @param timeout the timeout in seconds (double precision)
+     * @param keys the keys to check
+     * @return KeyValue containing the key and the popped element, or null when no element could be
+     *     popped
+     */
+    public KeyValue<byte[], byte[]> brpop(double timeout, byte[]... keys) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            GlideString[] glideKeys = new GlideString[keys.length];
+            for (int i = 0; i < keys.length; i++) {
+                glideKeys[i] = GlideString.of(keys[i]);
+            }
+            GlideString[] result = glideClient.brpop(glideKeys, timeout).get();
+            if (result != null && result.length >= 2) {
+                return new KeyValue<>(result[0].getBytes(), result[1].getBytes());
+            }
+            return null;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("BRPOP operation failed", e);
+        }
+    }
+
+    /**
+     * BLPOP is a blocking list pop primitive for a single key.
+     *
+     * @param timeout the timeout in seconds
+     * @param key the key to check
+     * @return list containing the key and the popped element, or null when no element could be popped
+     */
+    public List<String> blpop(int timeout, String key) {
+        return blpop(timeout, new String[] {key});
+    }
+
+    /**
+     * BLPOP is a blocking list pop primitive for a single key.
+     *
+     * @param timeout the timeout in seconds (double precision)
+     * @param key the key to check
+     * @return KeyValue containing the key and the popped element, or null when no element could be
+     *     popped
+     */
+    public KeyValue<String, String> blpop(double timeout, String key) {
+        return blpop(timeout, new String[] {key});
+    }
+
+    /**
+     * BRPOP is a blocking list pop primitive for a single key.
+     *
+     * @param timeout the timeout in seconds
+     * @param key the key to check
+     * @return list containing the key and the popped element, or null when no element could be popped
+     */
+    public List<String> brpop(int timeout, String key) {
+        return brpop(timeout, new String[] {key});
+    }
+
+    /**
+     * BRPOP is a blocking list pop primitive for a single key.
+     *
+     * @param timeout the timeout in seconds (double precision)
+     * @param key the key to check
+     * @return KeyValue containing the key and the popped element, or null when no element could be
+     *     popped
+     */
+    public KeyValue<String, String> brpop(double timeout, String key) {
+        return brpop(timeout, new String[] {key});
+    }
+
+    /**
+     * Returns the index of the first matching element in the list stored at key.
+     *
+     * @param key the key of the list
+     * @param element the element to search for
+     * @return the index of the first matching element, or null if not found
+     */
+    public Long lpos(String key, String element) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            return glideClient.lpos(key, element).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("LPOS operation failed", e);
+        }
+    }
+
+    /**
+     * Returns the index of the first matching element in the list stored at key (binary version).
+     *
+     * @param key the key of the list
+     * @param element the element to search for
+     * @return the index of the first matching element, or null if not found
+     */
+    public Long lpos(final byte[] key, final byte[] element) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            return glideClient.lpos(GlideString.of(key), GlideString.of(element)).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("LPOS operation failed", e);
+        }
+    }
+
+    /**
+     * Returns the index of matching elements in the list stored at key with additional options.
+     *
+     * @param key the key of the list
+     * @param element the element to search for
+     * @param params additional parameters for the search
+     * @return the index of the matching element, or null if not found
+     */
+    public Long lpos(String key, String element, LPosParams params) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            LPosOptions options = convertLPosParamsToLPosOptions(params);
+            return glideClient.lpos(key, element, options).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("LPOS operation failed", e);
+        }
+    }
+
+    /**
+     * Returns the index of matching elements in the list stored at key with additional options
+     * (binary version).
+     *
+     * @param key the key of the list
+     * @param element the element to search for
+     * @param params additional parameters for the search
+     * @return the index of the matching element, or null if not found
+     */
+    public Long lpos(final byte[] key, final byte[] element, LPosParams params) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            LPosOptions options = convertLPosParamsToLPosOptions(params);
+            return glideClient.lpos(GlideString.of(key), GlideString.of(element), options).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("LPOS operation failed", e);
+        }
+    }
+
+    /**
+     * Returns the indices of matching elements in the list stored at key.
+     *
+     * @param key the key of the list
+     * @param element the element to search for
+     * @param params additional parameters for the search
+     * @param count the maximum number of matches to return
+     * @return list of indices of matching elements
+     */
+    public List<Long> lpos(String key, String element, LPosParams params, long count) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            LPosOptions options = convertLPosParamsToLPosOptions(params);
+            Long[] result = glideClient.lposCount(key, element, count, options).get();
+            return result != null ? Arrays.asList(result) : Collections.emptyList();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("LPOS operation failed", e);
+        }
+    }
+
+    /**
+     * Returns the indices of matching elements in the list stored at key (binary version).
+     *
+     * @param key the key of the list
+     * @param element the element to search for
+     * @param params additional parameters for the search
+     * @param count the maximum number of matches to return
+     * @return list of indices of matching elements
+     */
+    public List<Long> lpos(final byte[] key, final byte[] element, LPosParams params, long count) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            LPosOptions options = convertLPosParamsToLPosOptions(params);
+            Long[] result =
+                    glideClient.lposCount(GlideString.of(key), GlideString.of(element), count, options).get();
+            return result != null ? Arrays.asList(result) : Collections.emptyList();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("LPOS operation failed", e);
+        }
+    }
+
+    /**
+     * Atomically moves an element from one list to another.
+     *
+     * @param srcKey the source list key
+     * @param dstKey the destination list key
+     * @param from the direction to pop from the source list
+     * @param to the direction to push to the destination list
+     * @return the element being moved, or null when the source list is empty
+     */
+    public String lmove(String srcKey, String dstKey, ListDirection from, ListDirection to) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            glide.api.models.commands.ListDirection glideFrom = convertToGlideListDirection(from);
+            glide.api.models.commands.ListDirection glideTo = convertToGlideListDirection(to);
+            return glideClient.lmove(srcKey, dstKey, glideFrom, glideTo).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("LMOVE operation failed", e);
+        }
+    }
+
+    /**
+     * Atomically moves an element from one list to another (binary version).
+     *
+     * @param srcKey the source list key
+     * @param dstKey the destination list key
+     * @param from the direction to pop from the source list
+     * @param to the direction to push to the destination list
+     * @return the element being moved, or null when the source list is empty
+     */
+    public byte[] lmove(byte[] srcKey, byte[] dstKey, ListDirection from, ListDirection to) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            glide.api.models.commands.ListDirection glideFrom = convertToGlideListDirection(from);
+            glide.api.models.commands.ListDirection glideTo = convertToGlideListDirection(to);
+            GlideString result =
+                    glideClient
+                            .lmove(GlideString.of(srcKey), GlideString.of(dstKey), glideFrom, glideTo)
+                            .get();
+            return result != null ? result.getBytes() : null;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("LMOVE operation failed", e);
+        }
+    }
+
+    /**
+     * Atomically moves an element from one list to another (binary version).
+     *
+     * @param srcKey the source list key
+     * @param dstKey the destination list key
+     * @param from the direction to pop from the source list
+     * @param to the direction to push to the destination list
+     * @param timeout the timeout in seconds
+     * @return the element being moved, or null when timeout is reached
+     */
+    public String blmove(
+            String srcKey, String dstKey, ListDirection from, ListDirection to, double timeout) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            glide.api.models.commands.ListDirection glideFrom = convertToGlideListDirection(from);
+            glide.api.models.commands.ListDirection glideTo = convertToGlideListDirection(to);
+            return glideClient.blmove(srcKey, dstKey, glideFrom, glideTo, timeout).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("BLMOVE operation failed", e);
+        }
+    }
+
+    /**
+     * Blocking version of LMOVE. Atomically moves an element from one list to another (binary
+     * version).
+     *
+     * @param srcKey the source list key
+     * @param dstKey the destination list key
+     * @param from the direction to pop from the source list
+     * @param to the direction to push to the destination list
+     * @param timeout the timeout in seconds
+     * @return the element being moved, or null when timeout is reached
+     */
+    public byte[] blmove(
+            byte[] srcKey, byte[] dstKey, ListDirection from, ListDirection to, double timeout) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            glide.api.models.commands.ListDirection glideFrom = convertToGlideListDirection(from);
+            glide.api.models.commands.ListDirection glideTo = convertToGlideListDirection(to);
+            GlideString result =
+                    glideClient
+                            .blmove(GlideString.of(srcKey), GlideString.of(dstKey), glideFrom, glideTo, timeout)
+                            .get();
+            return result != null ? result.getBytes() : null;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("BLMOVE operation failed", e);
+        }
+    }
+
+    /**
+     * Pops one or more elements from the first non-empty list key from the list of provided key
+     * names.
+     *
+     * @param direction the direction to pop from (LEFT or RIGHT)
+     * @param keys the keys to check
+     * @return KeyValue containing the key and list of popped elements, or null when no element could
+     *     be popped
+     */
+    public KeyValue<String, List<String>> lmpop(ListDirection direction, String... keys) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            glide.api.models.commands.ListDirection glideDirection =
+                    convertToGlideListDirection(direction);
+            Map<String, String[]> result = glideClient.lmpop(keys, glideDirection).get();
+            if (result != null && !result.isEmpty()) {
+                Map.Entry<String, String[]> entry = result.entrySet().iterator().next();
+                return new KeyValue<>(entry.getKey(), Arrays.asList(entry.getValue()));
+            }
+            return null;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("LMPOP operation failed", e);
+        }
+    }
+
+    /**
+     * Pops one or more elements from the first non-empty list key from the list of provided key
+     * names.
+     *
+     * @param direction the direction to pop from (LEFT or RIGHT)
+     * @param count the maximum number of elements to pop
+     * @param keys the keys to check
+     * @return KeyValue containing the key and list of popped elements, or null when no element could
+     *     be popped
+     */
+    public KeyValue<String, List<String>> lmpop(ListDirection direction, int count, String... keys) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            glide.api.models.commands.ListDirection glideDirection =
+                    convertToGlideListDirection(direction);
+            Map<String, String[]> result = glideClient.lmpop(keys, glideDirection, count).get();
+            if (result != null && !result.isEmpty()) {
+                Map.Entry<String, String[]> entry = result.entrySet().iterator().next();
+                return new KeyValue<>(entry.getKey(), Arrays.asList(entry.getValue()));
+            }
+            return null;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("LMPOP operation failed", e);
+        }
+    }
+
+    /**
+     * Pops one or more elements from the first non-empty list key from the list of provided key names
+     * (binary version).
+     *
+     * @param direction the direction to pop from (LEFT or RIGHT)
+     * @param keys the keys to check
+     * @return KeyValue containing the key and list of popped elements, or null when no element could
+     *     be popped
+     */
+    public KeyValue<byte[], List<byte[]>> lmpop(ListDirection direction, byte[]... keys) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            glide.api.models.commands.ListDirection glideDirection =
+                    convertToGlideListDirection(direction);
+            GlideString[] glideKeys = new GlideString[keys.length];
+            for (int i = 0; i < keys.length; i++) {
+                glideKeys[i] = GlideString.of(keys[i]);
+            }
+            Map<GlideString, GlideString[]> result = glideClient.lmpop(glideKeys, glideDirection).get();
+            if (result != null && !result.isEmpty()) {
+                Map.Entry<GlideString, GlideString[]> entry = result.entrySet().iterator().next();
+                List<byte[]> values = new ArrayList<>();
+                for (GlideString gs : entry.getValue()) {
+                    values.add(gs.getBytes());
+                }
+                return new KeyValue<>(entry.getKey().getBytes(), values);
+            }
+            return null;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("LMPOP operation failed", e);
+        }
+    }
+
+    /**
+     * Pops one or more elements from the first non-empty list key from the list of provided key names
+     * (binary version).
+     *
+     * @param direction the direction to pop from (LEFT or RIGHT)
+     * @param count the maximum number of elements to pop
+     * @param keys the keys to check
+     * @return KeyValue containing the key and list of popped elements, or null when no element could
+     *     be popped
+     */
+    public KeyValue<byte[], List<byte[]>> lmpop(ListDirection direction, int count, byte[]... keys) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            glide.api.models.commands.ListDirection glideDirection =
+                    convertToGlideListDirection(direction);
+            GlideString[] glideKeys = new GlideString[keys.length];
+            for (int i = 0; i < keys.length; i++) {
+                glideKeys[i] = GlideString.of(keys[i]);
+            }
+            Map<GlideString, GlideString[]> result =
+                    glideClient.lmpop(glideKeys, glideDirection, count).get();
+            if (result != null && !result.isEmpty()) {
+                Map.Entry<GlideString, GlideString[]> entry = result.entrySet().iterator().next();
+                List<byte[]> values = new ArrayList<>();
+                for (GlideString gs : entry.getValue()) {
+                    values.add(gs.getBytes());
+                }
+                return new KeyValue<>(entry.getKey().getBytes(), values);
+            }
+            return null;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("LMPOP operation failed", e);
+        }
+    }
+
+    /**
+     * Blocking version of LMPOP. Pops one or more elements from the first non-empty list key.
+     *
+     * @param timeout the timeout in seconds
+     * @param direction the direction to pop from (LEFT or RIGHT)
+     * @param keys the keys to check
+     * @return KeyValue containing the key and list of popped elements, or null when timeout is
+     *     reached
+     */
+    public KeyValue<String, List<String>> blmpop(
+            double timeout, ListDirection direction, String... keys) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            glide.api.models.commands.ListDirection glideDirection =
+                    convertToGlideListDirection(direction);
+            Map<String, String[]> result = glideClient.blmpop(keys, glideDirection, timeout).get();
+            if (result != null && !result.isEmpty()) {
+                Map.Entry<String, String[]> entry = result.entrySet().iterator().next();
+                return new KeyValue<>(entry.getKey(), Arrays.asList(entry.getValue()));
+            }
+            return null;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("BLMPOP operation failed", e);
+        }
+    }
+
+    /**
+     * Blocking version of LMPOP. Pops one or more elements from the first non-empty list key.
+     *
+     * @param timeout the timeout in seconds
+     * @param direction the direction to pop from (LEFT or RIGHT)
+     * @param count the maximum number of elements to pop
+     * @param keys the keys to check
+     * @return KeyValue containing the key and list of popped elements, or null when timeout is
+     *     reached
+     */
+    public KeyValue<String, List<String>> blmpop(
+            double timeout, ListDirection direction, int count, String... keys) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            glide.api.models.commands.ListDirection glideDirection =
+                    convertToGlideListDirection(direction);
+            Map<String, String[]> result = glideClient.blmpop(keys, glideDirection, count, timeout).get();
+            if (result != null && !result.isEmpty()) {
+                Map.Entry<String, String[]> entry = result.entrySet().iterator().next();
+                return new KeyValue<>(entry.getKey(), Arrays.asList(entry.getValue()));
+            }
+            return null;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("BLMPOP operation failed", e);
+        }
+    }
+
+    /**
+     * Blocking version of LMPOP. Pops one or more elements from the first non-empty list key (binary
+     * version).
+     *
+     * @param timeout the timeout in seconds
+     * @param direction the direction to pop from (LEFT or RIGHT)
+     * @param keys the keys to check
+     * @return KeyValue containing the key and list of popped elements, or null when timeout is
+     *     reached
+     */
+    public KeyValue<byte[], List<byte[]>> blmpop(
+            double timeout, ListDirection direction, byte[]... keys) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            glide.api.models.commands.ListDirection glideDirection =
+                    convertToGlideListDirection(direction);
+            GlideString[] glideKeys = new GlideString[keys.length];
+            for (int i = 0; i < keys.length; i++) {
+                glideKeys[i] = GlideString.of(keys[i]);
+            }
+            Map<GlideString, GlideString[]> result =
+                    glideClient.blmpop(glideKeys, glideDirection, timeout).get();
+            if (result != null && !result.isEmpty()) {
+                Map.Entry<GlideString, GlideString[]> entry = result.entrySet().iterator().next();
+                List<byte[]> values = new ArrayList<>();
+                for (GlideString gs : entry.getValue()) {
+                    values.add(gs.getBytes());
+                }
+                return new KeyValue<>(entry.getKey().getBytes(), values);
+            }
+            return null;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("BLMPOP operation failed", e);
+        }
+    }
+
+    /**
+     * Blocking version of LMPOP. Pops one or more elements from the first non-empty list key (binary
+     * version).
+     *
+     * @param timeout the timeout in seconds
+     * @param direction the direction to pop from (LEFT or RIGHT)
+     * @param count the maximum number of elements to pop
+     * @param keys the keys to check
+     * @return KeyValue containing the key and list of popped elements, or null when timeout is
+     *     reached
+     */
+    public KeyValue<byte[], List<byte[]>> blmpop(
+            double timeout, ListDirection direction, int count, byte[]... keys) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            glide.api.models.commands.ListDirection glideDirection =
+                    convertToGlideListDirection(direction);
+            GlideString[] glideKeys = new GlideString[keys.length];
+            for (int i = 0; i < keys.length; i++) {
+                glideKeys[i] = GlideString.of(keys[i]);
+            }
+            Map<GlideString, GlideString[]> result =
+                    glideClient.blmpop(glideKeys, glideDirection, count, timeout).get();
+            if (result != null && !result.isEmpty()) {
+                Map.Entry<GlideString, GlideString[]> entry = result.entrySet().iterator().next();
+                List<byte[]> values = new ArrayList<>();
+                for (GlideString gs : entry.getValue()) {
+                    values.add(gs.getBytes());
+                }
+                return new KeyValue<>(entry.getKey().getBytes(), values);
+            }
+            return null;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("BLMPOP operation failed", e);
+        }
+    }
+
+    /**
+     * Atomically returns and removes the last element of the list stored at source, and pushes the
+     * element at the first element of the list stored at destination.
+     *
+     * @deprecated Use LMOVE instead
+     * @param srckey the source key
+     * @param dstkey the destination key
+     * @return the element being popped and pushed
+     */
+    @Deprecated
+    public String rpoplpush(String srckey, String dstkey) {
+        return lmove(srckey, dstkey, ListDirection.RIGHT, ListDirection.LEFT);
+    }
+
+    /**
+     * Atomically returns and removes the last element of the list stored at source, and pushes the
+     * element at the first element of the list stored at destination (binary version).
+     *
+     * @deprecated Use LMOVE instead
+     * @param srckey the source key
+     * @param dstkey the destination key
+     * @return the element being popped and pushed
+     */
+    @Deprecated
+    public byte[] rpoplpush(final byte[] srckey, final byte[] dstkey) {
+        return lmove(srckey, dstkey, ListDirection.RIGHT, ListDirection.LEFT);
+    }
+
+    /**
+     * Blocking version of RPOPLPUSH.
+     *
+     * @deprecated Use BLMOVE instead
+     * @param source the source key
+     * @param destination the destination key
+     * @param timeout the timeout in seconds
+     * @return the element being popped and pushed, or null when timeout is reached
+     */
+    @Deprecated
+    public String brpoplpush(String source, String destination, int timeout) {
+        return blmove(source, destination, ListDirection.RIGHT, ListDirection.LEFT, timeout);
+    }
+
+    /**
+     * Blocking version of RPOPLPUSH (binary version).
+     *
+     * @deprecated Use BLMOVE instead
+     * @param source the source key
+     * @param destination the destination key
+     * @param timeout the timeout in seconds
+     * @return the element being popped and pushed, or null when timeout is reached
+     */
+    @Deprecated
+    public byte[] brpoplpush(final byte[] source, final byte[] destination, int timeout) {
+        return blmove(source, destination, ListDirection.RIGHT, ListDirection.LEFT, timeout);
     }
 }
