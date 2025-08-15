@@ -104,7 +104,6 @@ jobs:
                         'cargo': 'rust',
                         'gomod': 'go',
                         'pip': 'python',
-                        'nuget': 'csharp',
                         'github_actions': 'github-actions'
                       };
                       
