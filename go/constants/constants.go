@@ -70,6 +70,12 @@ const (
 	//
 	// since Valkey 8.1 and above.
 	OnlyIfEquals ConditionalSet = "IFEQ"
+	// OnlyIfFieldsDoNotExist only sets the hash fields if none of them already exist. Equivalent to "FNX" in the valkey API.
+	// Used with hash field expiration commands.
+	OnlyIfFieldsDoNotExist ConditionalSet = "FNX"
+	// OnlyIfAllFieldsExist only sets the hash fields if all of them already exist. Equivalent to "FXX" in the valkey API.
+	// Used with hash field expiration commands.
+	OnlyIfAllFieldsExist ConditionalSet = "FXX"
 )
 
 type ExpireCondition string
