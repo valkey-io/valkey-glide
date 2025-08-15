@@ -2,6 +2,7 @@
 package glide.api.commands;
 
 import glide.api.models.GlideString;
+import glide.api.models.commands.HashFieldExpirationOptions;
 import glide.api.models.commands.scan.HScanOptions;
 import glide.api.models.commands.scan.HScanOptions.HScanOptionsBuilder;
 import glide.api.models.commands.scan.HScanOptionsBinary;
@@ -17,6 +18,9 @@ import java.util.concurrent.CompletableFuture;
 public interface HashBaseCommands {
     /** Valkey API keyword used to query hash members with their values. */
     String WITH_VALUES_VALKEY_API = "WITHVALUES";
+
+    /** Valkey API keyword used to specify fields in hash commands. */
+    String FIELDS_VALKEY_API = "FIELDS";
 
     /**
      * Retrieves the value associated with <code>field</code> in the hash stored at <code>key</code>.
@@ -760,4 +764,689 @@ public interface HashBaseCommands {
      */
     CompletableFuture<Object[]> hscan(
             GlideString key, GlideString cursor, HScanOptionsBinary hScanOptions);
+
+    /**
+     * Sets the specified fields to their respective values in the hash stored at <code>key</code>
+     * with optional expiration and conditional options.
+     *
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/hsetex/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param fieldValueMap A field-value map consisting of fields and their corresponding values to
+     *     be set in the hash stored at the specified key.
+     * @param options Optional parameters for the command including conditional changes and expiry
+     *     settings.
+     * @return The number of fields that were added to the hash.
+     * @example
+     *     <pre>{@code
+     * // Set fields with 60 second expiration
+     * HashFieldExpirationOptions options = HashFieldExpirationOptions.builder()
+     *     .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
+     *     .build();
+     * Long num = client.hsetex("my_hash", Map.of("field1", "value1", "field2", "value2"), options).get();
+     * assert num == 2L;
+     *
+     * // Set fields only if hash doesn't exist with field conditional
+     * HashFieldExpirationOptions conditionalOptions = HashFieldExpirationOptions.builder()
+     *     .conditionalSetOnlyIfNotExist()
+     *     .fieldConditionalSetOnlyIfNoneExist()
+     *     .expiry(HashFieldExpirationOptions.ExpirySet.Milliseconds(30000L))
+     *     .build();
+     * Long result = client.hsetex("new_hash", Map.of("field", "value"), conditionalOptions).get();
+     * assert result == 1L;
+     * }</pre>
+     */
+    CompletableFuture<Long> hsetex(
+            String key, Map<String, String> fieldValueMap, HashFieldExpirationOptions options);
+
+    /**
+     * Sets the specified fields to their respective values in the hash stored at <code>key</code>
+     * with optional expiration and conditional options.
+     *
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/hsetex/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param fieldValueMap A field-value map consisting of fields and their corresponding values to
+     *     be set in the hash stored at the specified key.
+     * @param options Optional parameters for the command including conditional changes and expiry
+     *     settings.
+     * @return The number of fields that were added to the hash.
+     * @example
+     *     <pre>{@code
+     * // Set fields with 60 second expiration
+     * HashFieldExpirationOptions options = HashFieldExpirationOptions.builder()
+     *     .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
+     *     .build();
+     * Long num = client.hsetex(gs("my_hash"), Map.of(gs("field1"), gs("value1"), gs("field2"), gs("value2")), options).get();
+     * assert num == 2L;
+     *
+     * // Set fields only if hash doesn't exist with field conditional
+     * HashFieldExpirationOptions conditionalOptions = HashFieldExpirationOptions.builder()
+     *     .conditionalSetOnlyIfNotExist()
+     *     .fieldConditionalSetOnlyIfNoneExist()
+     *     .expiry(HashFieldExpirationOptions.ExpirySet.Milliseconds(30000L))
+     *     .build();
+     * Long result = client.hsetex(gs("new_hash"), Map.of(gs("field"), gs("value")), conditionalOptions).get();
+     * assert result == 1L;
+     * }</pre>
+     */
+    CompletableFuture<Long> hsetex(
+            GlideString key,
+            Map<GlideString, GlideString> fieldValueMap,
+            HashFieldExpirationOptions options);
+
+    /**
+     * Retrieves the values of specified fields from the hash stored at <code>key</code> and
+     * optionally sets their expiration or removes it.
+     *
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/hgetex/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param fields The fields in the hash stored at <code>key</code> to retrieve from the database.
+     * @param options Optional parameters for the command including expiry settings or persist option.
+     * @return An array of values associated with the given fields, in the same order as they are
+     *     requested.<br>
+     *     For every field that does not exist in the hash, a null value is returned.<br>
+     *     If <code>key</code> does not exist, it is treated as an empty hash, and it returns an empty
+     *     array.<br>
+     * @example
+     *     <pre>{@code
+     * // Get fields and set 60 second expiration
+     * HashFieldExpirationOptions options = HashFieldExpirationOptions.builder()
+     *     .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
+     *     .build();
+     * String[] values = client.hgetex("my_hash", new String[] {"field1", "field2"}, options).get();
+     * assert Arrays.equals(values, new String[] {"value1", "value2"});
+     *
+     * // Get fields and remove their expiration
+     * HashFieldExpirationOptions persistOptions = HashFieldExpirationOptions.builder()
+     *     .expiry(HashFieldExpirationOptions.ExpirySet.Persist())
+     *     .build();
+     * String[] persistedValues = client.hgetex("my_hash", new String[] {"field1"}, persistOptions).get();
+     * assert Arrays.equals(persistedValues, new String[] {"value1"});
+     * }</pre>
+     */
+    CompletableFuture<String[]> hgetex(
+            String key, String[] fields, HashFieldExpirationOptions options);
+
+    /**
+     * Retrieves the values of specified fields from the hash stored at <code>key</code> and
+     * optionally sets their expiration or removes it.
+     *
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/hgetex/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param fields The fields in the hash stored at <code>key</code> to retrieve from the database.
+     * @param options Optional parameters for the command including expiry settings or persist option.
+     * @return An array of values associated with the given fields, in the same order as they are
+     *     requested.<br>
+     *     For every field that does not exist in the hash, a null value is returned.<br>
+     *     If <code>key</code> does not exist, it is treated as an empty hash, and it returns an empty
+     *     array.<br>
+     * @example
+     *     <pre>{@code
+     * // Get fields and set 60 second expiration
+     * HashFieldExpirationOptions options = HashFieldExpirationOptions.builder()
+     *     .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
+     *     .build();
+     * GlideString[] values = client.hgetex(gs("my_hash"), new GlideString[] {gs("field1"), gs("field2")}, options).get();
+     * assert Arrays.equals(values, new GlideString[] {gs("value1"), gs("value2")});
+     *
+     * // Get fields and remove their expiration
+     * HashFieldExpirationOptions persistOptions = HashFieldExpirationOptions.builder()
+     *     .expiry(HashFieldExpirationOptions.ExpirySet.Persist())
+     *     .build();
+     * GlideString[] persistedValues = client.hgetex(gs("my_hash"), new GlideString[] {gs("field1")}, persistOptions).get();
+     * assert Arrays.equals(persistedValues, new GlideString[] {gs("value1")});
+     * }</pre>
+     */
+    CompletableFuture<GlideString[]> hgetex(
+            GlideString key, GlideString[] fields, HashFieldExpirationOptions options);
+
+    /**
+     * Sets expiration time for hash fields. HEXPIRE sets the expiration time in seconds for the
+     * specified fields of the hash stored at <code>key</code>. You can specify whether to set the
+     * expiration only if the field has no expiration, only if the field has an existing expiration,
+     * only if the new expiration is greater than the current one, or only if the new expiration is
+     * less than the current one.
+     *
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/hexpire/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param seconds The expiration time in seconds.
+     * @param fields The fields in the hash stored at <code>key</code> to set expiration for.
+     * @param options The expiration condition options.
+     * @return An array of <code>Long</code> values indicating the result of setting expiration for
+     *     each field:
+     *     <ul>
+     *       <li><code>1</code> if the expiration time was successfully set for the field.
+     *       <li><code>0</code> if the specified condition was not met.
+     *       <li><code>-2</code> if the field does not exist or the key does not exist.
+     *       <li><code>2</code> when called with 0 seconds.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * // Set expiration for fields only if they have no existing expiration
+     * HashFieldExpirationOptions options = HashFieldExpirationOptions.builder()
+     *     .expirationConditionOnlyIfNoExpiry()
+     *     .build();
+     * Long[] results = client.hexpire("my_hash", 60L, new String[] {"field1", "field2"}, options).get();
+     * assert Arrays.equals(results, new Long[] {1L, 0L}); // field1 had no expiry, field2 already had expiry
+     *
+     * // Set expiration for fields only if new expiration is greater than current
+     * HashFieldExpirationOptions gtOptions = HashFieldExpirationOptions.builder()
+     *     .expirationConditionOnlyIfGreaterThanCurrent()
+     *     .build();
+     * Long[] gtResults = client.hexpire("my_hash", 120L, new String[] {"field1"}, gtOptions).get();
+     * assert Arrays.equals(gtResults, new Long[] {1L}); // 120 > 60, so expiration was updated
+     * }</pre>
+     */
+    CompletableFuture<Long[]> hexpire(
+            String key, long seconds, String[] fields, HashFieldExpirationOptions options);
+
+    /**
+     * Sets expiration time for hash fields. HEXPIRE sets the expiration time in seconds for the
+     * specified fields of the hash stored at <code>key</code>. You can specify whether to set the
+     * expiration only if the field has no expiration, only if the field has an existing expiration,
+     * only if the new expiration is greater than the current one, or only if the new expiration is
+     * less than the current one.
+     *
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/hexpire/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param seconds The expiration time in seconds.
+     * @param fields The fields in the hash stored at <code>key</code> to set expiration for.
+     * @param options The expiration condition options.
+     * @return An array of <code>Long</code> values indicating the result of setting expiration for
+     *     each field:
+     *     <ul>
+     *       <li><code>1</code> if the expiration time was successfully set for the field.
+     *       <li><code>0</code> if the specified condition was not met.
+     *       <li><code>-2</code> if the field does not exist or the key does not exist.
+     *       <li><code>2</code> when called with 0 seconds.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * // Set expiration for fields only if they have no existing expiration
+     * HashFieldExpirationOptions options = HashFieldExpirationOptions.builder()
+     *     .expirationConditionOnlyIfNoExpiry()
+     *     .build();
+     * Long[] results = client.hexpire(gs("my_hash"), 60L, new GlideString[] {gs("field1"), gs("field2")}, options).get();
+     * assert Arrays.equals(results, new Long[] {1L, 0L}); // field1 had no expiry, field2 already had expiry
+     *
+     * // Set expiration for fields only if new expiration is greater than current
+     * HashFieldExpirationOptions gtOptions = HashFieldExpirationOptions.builder()
+     *     .expirationConditionOnlyIfGreaterThanCurrent()
+     *     .build();
+     * Long[] gtResults = client.hexpire(gs("my_hash"), 120L, new GlideString[] {gs("field1")}, gtOptions).get();
+     * assert Arrays.equals(gtResults, new Long[] {1L}); // 120 > 60, so expiration was updated
+     * }</pre>
+     */
+    CompletableFuture<Long[]> hexpire(
+            GlideString key, long seconds, GlideString[] fields, HashFieldExpirationOptions options);
+
+    /**
+     * Removes the expiration time for each specified field, turning the field from volatile (a field
+     * with expiration time) to persistent (a field that will never expire as no expiration time is
+     * associated).
+     *
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/hpersist/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param fields The fields to remove expiration from.
+     * @return An array of <code>Long</code> values, each corresponding to a field:
+     *     <ul>
+     *       <li><code>1</code> if the expiration time was successfully removed from the field.
+     *       <li><code>-1</code> if the field exists but has no expiration time.
+     *       <li><code>-2</code> if the field does not exist or the key does not exist.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * // Set fields with expiration
+     * HashFieldExpirationOptions options = HashFieldExpirationOptions.builder()
+     *     .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
+     *     .build();
+     * client.hsetex("my_hash", Map.of("field1", "value1", "field2", "value2"), options).get();
+     *
+     * // Remove expiration from fields
+     * Long[] results = client.hpersist("my_hash", new String[] {"field1", "field2", "field3"}).get();
+     * assert Arrays.equals(results, new Long[] {1L, 1L, -2L}); // field1 and field2 had expiry removed, field3 doesn't exist
+     * }</pre>
+     */
+    CompletableFuture<Long[]> hpersist(String key, String[] fields);
+
+    /**
+     * Removes the expiration time for each specified field, turning the field from volatile (a field
+     * with expiration time) to persistent (a field that will never expire as no expiration time is
+     * associated).
+     *
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/hpersist/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param fields The fields to remove expiration from.
+     * @return An array of <code>Long</code> values, each corresponding to a field:
+     *     <ul>
+     *       <li><code>1</code> if the expiration time was successfully removed from the field.
+     *       <li><code>-1</code> if the field exists but has no expiration time.
+     *       <li><code>-2</code> if the field does not exist or the key does not exist.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * // Set fields with expiration
+     * HashFieldExpirationOptions options = HashFieldExpirationOptions.builder()
+     *     .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
+     *     .build();
+     * client.hsetex(gs("my_hash"), Map.of(gs("field1"), gs("value1"), gs("field2"), gs("value2")), options).get();
+     *
+     * // Remove expiration from fields
+     * Long[] results = client.hpersist(gs("my_hash"), new GlideString[] {gs("field1"), gs("field2"), gs("field3")}).get();
+     * assert Arrays.equals(results, new Long[] {1L, 1L, -2L}); // field1 and field2 had expiry removed, field3 doesn't exist
+     * }</pre>
+     */
+    CompletableFuture<Long[]> hpersist(GlideString key, GlideString[] fields);
+
+    /**
+     * Sets expiration time for hash fields, in milliseconds. Creates the hash if it doesn't exist. If
+     * a field is already expired, it will be deleted rather than expired.
+     *
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/hpexpire/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param milliseconds The expiration time to set for the fields, in milliseconds.
+     * @param fields The fields to set expiration for.
+     * @param options The expiration options.
+     * @return An array of <code>Long</code> values, each corresponding to a field:
+     *     <ul>
+     *       <li><code>1</code> if the expiration time was successfully set for the field.
+     *       <li><code>0</code> if the specified condition was not met.
+     *       <li><code>-2</code> if the field does not exist or the hash is empty.
+     *       <li><code>2</code> when called with 0 milliseconds.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * // Set expiration for fields in 5000 milliseconds (5 seconds)
+     * HashFieldExpirationOptions options = HashFieldExpirationOptions.builder()
+     *     .expirationConditionOnlyIfNoExpiry()
+     *     .build();
+     * Long[] results = client.hpexpire("my_hash", 5000L, new String[] {"field1", "field2"}, options).get();
+     * assert Arrays.equals(results, new Long[] {1L, 1L}); // Both fields had expiration set
+     * }</pre>
+     */
+    CompletableFuture<Long[]> hpexpire(
+            String key, long milliseconds, String[] fields, HashFieldExpirationOptions options);
+
+    /**
+     * Sets expiration time for hash fields, in milliseconds. Creates the hash if it doesn't exist. If
+     * a field is already expired, it will be deleted rather than expired.
+     *
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/hpexpire/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param milliseconds The expiration time to set for the fields, in milliseconds.
+     * @param fields The fields to set expiration for.
+     * @param options The expiration options.
+     * @return An array of <code>Long</code> values, each corresponding to a field:
+     *     <ul>
+     *       <li><code>1</code> if the expiration time was successfully set for the field.
+     *       <li><code>0</code> if the specified condition was not met.
+     *       <li><code>-2</code> if the field does not exist or the hash is empty.
+     *       <li><code>2</code> when called with 0 milliseconds.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * // Set expiration for fields in 5000 milliseconds (5 seconds)
+     * HashFieldExpirationOptions options = HashFieldExpirationOptions.builder()
+     *     .expirationConditionOnlyIfNoExpiry()
+     *     .build();
+     * Long[] results = client.hpexpire(gs("my_hash"), 5000L, new GlideString[] {gs("field1"), gs("field2")}, options).get();
+     * assert Arrays.equals(results, new Long[] {1L, 1L}); // Both fields had expiration set
+     * }</pre>
+     */
+    CompletableFuture<Long[]> hpexpire(
+            GlideString key, long milliseconds, GlideString[] fields, HashFieldExpirationOptions options);
+
+    /**
+     * Sets expiration time for hash fields, in seconds, using an absolute Unix timestamp. Creates the
+     * hash if it doesn't exist. If a field is already expired, it will be deleted rather than
+     * expired.
+     *
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/hexpireat/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param unixSeconds The expiration time to set for the fields, as a Unix timestamp in seconds.
+     * @param fields The fields to set expiration for.
+     * @param options The expiration options.
+     * @return An array of <code>Long</code> values, each corresponding to a field:
+     *     <ul>
+     *       <li><code>1</code> if the expiration time was successfully set for the field.
+     *       <li><code>0</code> if the specified condition was not met.
+     *       <li><code>-2</code> if the field does not exist or the hash is empty.
+     *       <li><code>2</code> when called with 0 seconds or past Unix time.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * // Set expiration for fields at Unix timestamp 1672531200 (January 1, 2023)
+     * HashFieldExpirationOptions options = HashFieldExpirationOptions.builder()
+     *     .expirationConditionOnlyIfNoExpiry()
+     *     .build();
+     * Long[] results = client.hexpireat("my_hash", 1672531200L, new String[] {"field1", "field2"}, options).get();
+     * assert Arrays.equals(results, new Long[] {1L, 1L}); // Both fields had expiration set
+     * }</pre>
+     */
+    CompletableFuture<Long[]> hexpireat(
+            String key, long unixSeconds, String[] fields, HashFieldExpirationOptions options);
+
+    /**
+     * Sets expiration time for hash fields, in seconds, using an absolute Unix timestamp. Creates the
+     * hash if it doesn't exist. If a field is already expired, it will be deleted rather than
+     * expired.
+     *
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/hexpireat/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param unixSeconds The expiration time to set for the fields, as a Unix timestamp in seconds.
+     * @param fields The fields to set expiration for.
+     * @param options The expiration options.
+     * @return An array of <code>Long</code> values, each corresponding to a field:
+     *     <ul>
+     *       <li><code>1</code> if the expiration time was successfully set for the field.
+     *       <li><code>0</code> if the specified condition was not met.
+     *       <li><code>-2</code> if the field does not exist or the hash is empty.
+     *       <li><code>2</code> when called with 0 seconds or past Unix time.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * // Set expiration for fields at Unix timestamp 1672531200 (January 1, 2023)
+     * HashFieldExpirationOptions options = HashFieldExpirationOptions.builder()
+     *     .expirationConditionOnlyIfNoExpiry()
+     *     .build();
+     * Long[] results = client.hexpireat(gs("my_hash"), 1672531200L, new GlideString[] {gs("field1"), gs("field2")}, options).get();
+     * assert Arrays.equals(results, new Long[] {1L, 1L}); // Both fields had expiration set
+     * }</pre>
+     */
+    CompletableFuture<Long[]> hexpireat(
+            GlideString key, long unixSeconds, GlideString[] fields, HashFieldExpirationOptions options);
+
+    /**
+     * Sets expiration time for hash fields, using an absolute Unix timestamp in milliseconds. <code>
+     * HPEXPIREAT</code> has the same effect and semantic as <code>HEXPIREAT</code>, but the Unix time
+     * at which the field will expire is specified in milliseconds instead of seconds.
+     *
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/hpexpireat/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param unixMilliseconds The expiration time to set for the fields, as a Unix timestamp in
+     *     milliseconds.
+     * @param fields An array of hash field names for which to set the expiration.
+     * @param options Optional conditions and configurations for the expiration. See {@link
+     *     HashFieldExpirationOptions}.
+     * @return An array of <code>Long</code> values indicating the result for each field:
+     *     <ul>
+     *       <li><code>1</code> if the expiration time was successfully set for the field.
+     *       <li><code>0</code> if the specified condition was not met.
+     *       <li><code>-2</code> if the field does not exist or the hash is empty.
+     *       <li><code>2</code> when called with 0 seconds or past Unix time in milliseconds.
+     *     </ul>
+     *     If <code>unixMilliseconds</code> is in the past, the field will be deleted rather than
+     *     expired.
+     * @example
+     *     <pre>{@code
+     * // Set expiration for hash fields to January 1, 2024 00:00:00 UTC (in milliseconds)
+     * HashFieldExpirationOptions options = HashFieldExpirationOptions.builder()
+     *     .expirationConditionOnlyIfNoExpiry()
+     *     .build();
+     * Long[] results = client.hpexpireat("my_hash", 1672531200000L, new String[] {"field1", "field2"}, options).get();
+     * assert Arrays.equals(results, new Long[] {1L, 1L}); // Both fields had expiration set
+     * }</pre>
+     */
+    CompletableFuture<Long[]> hpexpireat(
+            String key, long unixMilliseconds, String[] fields, HashFieldExpirationOptions options);
+
+    /**
+     * Sets expiration time for hash fields, using an absolute Unix timestamp in milliseconds. <code>
+     * HPEXPIREAT</code> has the same effect and semantic as <code>HEXPIREAT</code>, but the Unix time
+     * at which the field will expire is specified in milliseconds instead of seconds.
+     *
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/hpexpireat/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param unixMilliseconds The expiration time to set for the fields, as a Unix timestamp in
+     *     milliseconds.
+     * @param fields An array of hash field names for which to set the expiration.
+     * @param options Optional conditions and configurations for the expiration. See {@link
+     *     HashFieldExpirationOptions}.
+     * @return An array of <code>Long</code> values indicating the result for each field:
+     *     <ul>
+     *       <li><code>1</code> if the expiration time was successfully set for the field.
+     *       <li><code>0</code> if the specified condition was not met.
+     *       <li><code>-2</code> if the field does not exist or the hash is empty.
+     *       <li><code>2</code> when called with 0 seconds or past Unix time in milliseconds.
+     *     </ul>
+     *     If <code>unixMilliseconds</code> is in the past, the field will be deleted rather than
+     *     expired.
+     * @example
+     *     <pre>{@code
+     * // Set expiration for hash fields to January 1, 2024 00:00:00 UTC (in milliseconds)
+     * HashFieldExpirationOptions options = HashFieldExpirationOptions.builder()
+     *     .expirationConditionOnlyIfNoExpiry()
+     *     .build();
+     * Long[] results = client.hpexpireat(gs("my_hash"), 1672531200000L, new GlideString[] {gs("field1"), gs("field2")}, options).get();
+     * assert Arrays.equals(results, new Long[] {1L, 1L}); // Both fields had expiration set
+     * }</pre>
+     */
+    CompletableFuture<Long[]> hpexpireat(
+            GlideString key,
+            long unixMilliseconds,
+            GlideString[] fields,
+            HashFieldExpirationOptions options);
+
+    /**
+     * Returns the remaining time to live of hash fields that have a timeout, in seconds.
+     *
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/httl/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param fields The fields to get the TTL for.
+     * @return An array of <code>Long</code> values, each corresponding to a field:
+     *     <ul>
+     *       <li>TTL in seconds if the field exists and has a timeout.
+     *       <li><code>-1</code> if the field exists but has no associated expire.
+     *       <li><code>-2</code> if the field does not exist.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * // Get TTL for hash fields
+     * Long[] ttls = client.httl("my_hash", new String[] {"field1", "field2", "field3"}).get();
+     * assert ttls[0] > 0; // field1 has TTL
+     * assert ttls[1] == -1; // field2 exists but has no expiration
+     * assert ttls[2] == -2; // field3 does not exist
+     * }</pre>
+     */
+    CompletableFuture<Long[]> httl(String key, String[] fields);
+
+    /**
+     * Returns the remaining time to live of hash fields that have a timeout, in seconds.
+     *
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/httl/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param fields The fields to get the TTL for.
+     * @return An array of <code>Long</code> values, each corresponding to a field:
+     *     <ul>
+     *       <li>TTL in seconds if the field exists and has a timeout.
+     *       <li><code>-1</code> if the field exists but has no associated expire.
+     *       <li><code>-2</code> if the field does not exist.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * // Get TTL for hash fields
+     * Long[] ttls = client.httl(gs("my_hash"), new GlideString[] {gs("field1"), gs("field2"), gs("field3")}).get();
+     * assert ttls[0] > 0; // field1 has TTL
+     * assert ttls[1] == -1; // field2 exists but has no expiration
+     * assert ttls[2] == -2; // field3 does not exist
+     * }</pre>
+     */
+    CompletableFuture<Long[]> httl(GlideString key, GlideString[] fields);
+
+    /**
+     * Returns the remaining time to live of hash fields that have a timeout, in milliseconds.
+     *
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/hpttl/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param fields The fields to get the TTL for.
+     * @return An array of TTL values in milliseconds for the specified fields:
+     *     <ul>
+     *       <li>For fields with a timeout, returns the remaining TTL in milliseconds.
+     *       <li>For fields that exist but have no associated expire, returns <code>-1</code>.
+     *       <li>For fields that do not exist, returns <code>-2</code>.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * // Get TTL for hash fields in milliseconds
+     * Long[] ttls = client.hpttl("my_hash", new String[] {"field1", "field2", "field3"}).get();
+     * assert ttls[0] > 0; // field1 has TTL in milliseconds
+     * assert ttls[1] == -1; // field2 exists but has no expiration
+     * assert ttls[2] == -2; // field3 does not exist
+     * }</pre>
+     */
+    CompletableFuture<Long[]> hpttl(String key, String[] fields);
+
+    /**
+     * Returns the remaining time to live of hash fields that have a timeout, in milliseconds.
+     *
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/hpttl/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param fields The fields to get the TTL for.
+     * @return An array of TTL values in milliseconds for the specified fields:
+     *     <ul>
+     *       <li>For fields with a timeout, returns the remaining TTL in milliseconds.
+     *       <li>For fields that exist but have no associated expire, returns <code>-1</code>.
+     *       <li>For fields that do not exist, returns <code>-2</code>.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * // Get TTL for hash fields in milliseconds
+     * Long[] ttls = client.hpttl(gs("my_hash"), new GlideString[] {gs("field1"), gs("field2"), gs("field3")}).get();
+     * assert ttls[0] > 0; // field1 has TTL in milliseconds
+     * assert ttls[1] == -1; // field2 exists but has no expiration
+     * assert ttls[2] == -2; // field3 does not exist
+     * }</pre>
+     */
+    CompletableFuture<Long[]> hpttl(GlideString key, GlideString[] fields);
+
+    /**
+     * Returns the absolute Unix timestamp (in seconds) at which the given hash fields will expire.
+     *
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/hexpiretime/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param fields The fields to get the expiration timestamp for.
+     * @return An array of expiration timestamps in seconds for the specified fields:
+     *     <ul>
+     *       <li>For fields with a timeout, returns the absolute Unix timestamp in seconds.
+     *       <li>For fields that exist but have no associated expire, returns <code>-1</code>.
+     *       <li>For fields that do not exist, returns <code>-2</code>.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * // Get expiration timestamps for hash fields
+     * Long[] timestamps = client.hexpiretime("my_hash", new String[] {"field1", "field2", "field3"}).get();
+     * assert timestamps[0] > System.currentTimeMillis() / 1000; // field1 has future expiration
+     * assert timestamps[1] == -1; // field2 exists but has no expiration
+     * assert timestamps[2] == -2; // field3 does not exist
+     * }</pre>
+     */
+    CompletableFuture<Long[]> hexpiretime(String key, String[] fields);
+
+    /**
+     * Returns the absolute Unix timestamp (in seconds) at which the given hash fields will expire.
+     *
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/hexpiretime/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param fields The fields to get the expiration timestamp for.
+     * @return An array of expiration timestamps in seconds for the specified fields:
+     *     <ul>
+     *       <li>For fields with a timeout, returns the absolute Unix timestamp in seconds.
+     *       <li>For fields that exist but have no associated expire, returns <code>-1</code>.
+     *       <li>For fields that do not exist, returns <code>-2</code>.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * // Get expiration timestamps for hash fields
+     * Long[] timestamps = client.hexpiretime(gs("my_hash"), new GlideString[] {gs("field1"), gs("field2"), gs("field3")}).get();
+     * assert timestamps[0] > System.currentTimeMillis() / 1000; // field1 has future expiration
+     * assert timestamps[1] == -1; // field2 exists but has no expiration
+     * assert timestamps[2] == -2; // field3 does not exist
+     * }</pre>
+     */
+    CompletableFuture<Long[]> hexpiretime(GlideString key, GlideString[] fields);
+
+    /**
+     * Returns the absolute Unix timestamp (in milliseconds) at which the given hash fields will
+     * expire.
+     *
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/hpexpiretime/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param fields The fields to get the expiration timestamp for.
+     * @return An array of expiration timestamps in milliseconds for the specified fields:
+     *     <ul>
+     *       <li>For fields with a timeout, returns the absolute Unix timestamp in milliseconds.
+     *       <li>For fields that exist but have no associated expire, returns <code>-1</code>.
+     *       <li>For fields that do not exist, returns <code>-2</code>.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * // Get expiration timestamps for hash fields in milliseconds
+     * Long[] timestamps = client.hpexpiretime("my_hash", new String[] {"field1", "field2", "field3"}).get();
+     * assert timestamps[0] > System.currentTimeMillis(); // field1 has future expiration
+     * assert timestamps[1] == -1; // field2 exists but has no expiration
+     * assert timestamps[2] == -2; // field3 does not exist
+     * }</pre>
+     */
+    CompletableFuture<Long[]> hpexpiretime(String key, String[] fields);
+
+    /**
+     * Returns the absolute Unix timestamp (in milliseconds) at which the given hash fields will
+     * expire.
+     *
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/hpexpiretime/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param fields The fields to get the expiration timestamp for.
+     * @return An array of expiration timestamps in milliseconds for the specified fields:
+     *     <ul>
+     *       <li>For fields with a timeout, returns the absolute Unix timestamp in milliseconds.
+     *       <li>For fields that exist but have no associated expire, returns <code>-1</code>.
+     *       <li>For fields that do not exist, returns <code>-2</code>.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * // Get expiration timestamps for hash fields in milliseconds
+     * Long[] timestamps = client.hpexpiretime(gs("my_hash"), new GlideString[] {gs("field1"), gs("field2"), gs("field3")}).get();
+     * assert timestamps[0] > System.currentTimeMillis(); // field1 has future expiration
+     * assert timestamps[1] == -1; // field2 exists but has no expiration
+     * assert timestamps[2] == -2; // field3 does not exist
+     * }</pre>
+     */
+    CompletableFuture<Long[]> hpexpiretime(GlideString key, GlideString[] fields);
 }
