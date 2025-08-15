@@ -15,6 +15,7 @@ import static command_request.CommandRequestOuterClass.RequestType.BitFieldReadO
 import static command_request.CommandRequestOuterClass.RequestType.BitOp;
 import static command_request.CommandRequestOuterClass.RequestType.BitPos;
 import static command_request.CommandRequestOuterClass.RequestType.ClientGetName;
+import static command_request.CommandRequestOuterClass.RequestType.ClientSetName;
 import static command_request.CommandRequestOuterClass.RequestType.ClientId;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigGet;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigResetStat;
@@ -2013,6 +2014,12 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     public T clientGetName() {
         protobufBatch.addCommands(buildCommand(ClientGetName));
+        return getThis();
+    }
+
+    public <ArgType> T clientSetName(@NonNull ArgType name) {
+        checkTypeOrThrow(name);
+        protobufBatch.addCommands(buildCommand(ClientSetName));
         return getThis();
     }
 

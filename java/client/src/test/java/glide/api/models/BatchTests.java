@@ -15,6 +15,7 @@ import static command_request.CommandRequestOuterClass.RequestType.BitFieldReadO
 import static command_request.CommandRequestOuterClass.RequestType.BitOp;
 import static command_request.CommandRequestOuterClass.RequestType.BitPos;
 import static command_request.CommandRequestOuterClass.RequestType.ClientGetName;
+import static command_request.CommandRequestOuterClass.RequestType.ClientSetName;
 import static command_request.CommandRequestOuterClass.RequestType.ClientId;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigGet;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigResetStat;
@@ -555,6 +556,9 @@ public class BatchTests {
 
         batch.clientGetName();
         results.add(Pair.of(ClientGetName, buildArgs()));
+
+        batch.clientSetName("glide");
+        results.add(Pair.of(ClientSetName, buildArgs("glide")));
 
         batch.configRewrite();
         results.add(Pair.of(ConfigRewrite, buildArgs()));
