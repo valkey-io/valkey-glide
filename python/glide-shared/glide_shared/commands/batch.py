@@ -20,6 +20,7 @@ from glide_shared.commands.core_options import (
     ExpirySet,
     FlushMode,
     FunctionRestorePolicy,
+    HashFieldConditionalChange,
     InfoSection,
     InsertPosition,
     UpdateOptions,
@@ -955,6 +956,391 @@ class BaseBatch:
             Returns `0` if `field` or `key` does not exist.
         """
         return self.append_command(RequestType.HStrlen, [key, field])
+
+    def httl(self: TBatch, key: TEncodable, fields: List[TEncodable]) -> TBatch:
+        """
+        Returns the remaining time to live (in seconds) of hash key's field(s) that have an associated expiration.
+
+        See [valkey.io](https://valkey.io/commands/httl/) for more details.
+
+        Args:
+            key (TEncodable): The key of the hash.
+            fields (List[TEncodable]): The list of fields to get TTL for.
+
+        Commands response:
+            List[int]: A list of TTL values for each field:
+            - Positive integer: remaining TTL in seconds
+            - -1: field exists but has no expiration
+            - -2: field does not exist or key does not exist
+
+        Since: Valkey 9.0.0
+        """
+        return self.append_command(
+            RequestType.HTtl, [key, "FIELDS", str(len(fields))] + fields
+        )
+
+    def hpttl(self: TBatch, key: TEncodable, fields: List[TEncodable]) -> TBatch:
+        """
+        Returns the remaining time to live (in milliseconds) of hash key's field(s) that have an associated expiration.
+
+        See [valkey.io](https://valkey.io/commands/hpttl/) for more details.
+
+        Args:
+            key (TEncodable): The key of the hash.
+            fields (List[TEncodable]): The list of fields to get TTL for.
+
+        Commands response:
+            List[int]: A list of TTL values for each field:
+            - Positive integer: remaining TTL in milliseconds
+            - -1: field exists but has no expiration
+            - -2: field does not exist or key does not exist
+
+        Since: Valkey 9.0.0
+        """
+        return self.append_command(
+            RequestType.HPTtl, [key, "FIELDS", str(len(fields))] + fields
+        )
+
+    def hexpiretime(self: TBatch, key: TEncodable, fields: List[TEncodable]) -> TBatch:
+        """
+        Returns the absolute expiration timestamp (in seconds) of hash key's field(s) that have an associated expiration.
+
+        See [valkey.io](https://valkey.io/commands/hexpiretime/) for more details.
+
+        Args:
+            key (TEncodable): The key of the hash.
+            fields (List[TEncodable]): The list of fields to get expiration timestamps for.
+
+        Commands response:
+            List[int]: A list of expiration timestamps for each field:
+            - Positive integer: absolute expiration timestamp in seconds (Unix timestamp)
+            - -1: field exists but has no expiration
+            - -2: field does not exist or key does not exist
+
+        Since: Valkey 9.0.0
+        """
+        return self.append_command(
+            RequestType.HExpireTime, [key, "FIELDS", str(len(fields))] + fields
+        )
+
+    def hpexpiretime(self: TBatch, key: TEncodable, fields: List[TEncodable]) -> TBatch:
+        """
+        Returns the absolute expiration timestamp (in milliseconds) of hash key's field(s) that have an associated expiration.
+
+        See [valkey.io](https://valkey.io/commands/hpexpiretime/) for more details.
+
+        Args:
+            key (TEncodable): The key of the hash.
+            fields (List[TEncodable]): The list of fields to get expiration timestamps for.
+
+        Returns:
+            TBatch: The batch object for method chaining.
+
+        Command Response:
+            List[int]: A list of expiration timestamps for each field:
+            - Positive integer: absolute expiration timestamp in milliseconds (Unix timestamp in ms)
+            - -1: field exists but has no expiration
+            - -2: field does not exist or key does not exist
+
+        Since: Valkey 9.0.0
+        """
+        return self.append_command(
+            RequestType.HPExpireTime, [key, "FIELDS", str(len(fields))] + fields
+        )
+
+    def hsetex(
+        self: TBatch,
+        key: TEncodable,
+        field_value_map: Mapping[TEncodable, TEncodable],
+        field_conditional_change: Optional[HashFieldConditionalChange] = None,
+        expiry: Optional[ExpirySet] = None,
+    ) -> TBatch:
+        """
+        Sets the specified fields to their respective values in the hash stored at `key` with optional expiration.
+
+        See [valkey.io](https://valkey.io/commands/hsetex/) for more details.
+
+        Args:
+            key (TEncodable): The key of the hash.
+            field_value_map (Mapping[TEncodable, TEncodable]): A field-value map consisting of fields and their corresponding
+                values to be set in the hash stored at the specified key.
+            field_conditional_change (Optional[HashFieldConditionalChange]): Field conditional change option:
+                - ONLY_IF_ALL_EXIST (FXX): Only set fields if all of them already exist.
+                - ONLY_IF_NONE_EXIST (FNX): Only set fields if none of them already exist.
+            expiry (Optional[ExpirySet]): Expiration options for the fields:
+                - EX: Expiration time in seconds.
+                - PX: Expiration time in milliseconds.
+                - EXAT: Absolute expiration time in seconds (Unix timestamp).
+                - PXAT: Absolute expiration time in milliseconds (Unix timestamp).
+                - KEEPTTL: Retain existing TTL.
+
+        Commands response:
+            int: 1 if all fields were set successfully, 0 if none were set due to conditional constraints.
+
+        Since: Valkey 9.0.0
+        """
+        args: List[TEncodable] = [key]
+
+        # Add field conditional change option if specified
+        if field_conditional_change is not None:
+            args.append(field_conditional_change.value)
+
+        # Add expiry options if specified
+        if expiry is not None:
+            args.extend(expiry.get_cmd_args())
+
+        # Add FIELDS keyword and field count
+        args.extend(["FIELDS", str(len(field_value_map))])
+
+        # Add field-value pairs
+        for field, value in field_value_map.items():
+            args.extend([field, value])
+
+        return self.append_command(RequestType.HSetEx, args)
+
+    def hgetex(
+        self: TBatch,
+        key: TEncodable,
+        fields: List[TEncodable],
+        expiry: Optional[ExpiryGetEx] = None,
+    ) -> TBatch:
+        """
+        Retrieves the values of specified fields in the hash stored at `key` and optionally sets their expiration.
+
+        See [valkey.io](https://valkey.io/commands/hgetex/) for more details.
+
+        Args:
+            key (TEncodable): The key of the hash.
+            fields (List[TEncodable]): The list of fields to retrieve from the hash.
+            expiry (Optional[ExpiryGetEx]): Expiration options for the retrieved fields:
+                - EX: Expiration time in seconds.
+                - PX: Expiration time in milliseconds.
+                - EXAT: Absolute expiration time in seconds (Unix timestamp).
+                - PXAT: Absolute expiration time in milliseconds (Unix timestamp).
+                - PERSIST: Remove expiration from the fields.
+
+        Commands response:
+            Optional[List[Optional[bytes]]]: A list of values associated with the given fields, in the same order as requested.
+            For every field that does not exist in the hash, a null value is returned.
+            If `key` does not exist, returns None.
+
+        Since: Valkey 9.0.0
+        """
+        args: List[TEncodable] = [key]
+
+        # Add expiry options if specified
+        if expiry is not None:
+            args.extend(expiry.get_cmd_args())
+
+        # Add FIELDS keyword and field count
+        args.extend(["FIELDS", str(len(fields))])
+
+        # Add fields
+        args.extend(fields)
+
+        return self.append_command(RequestType.HGetEx, args)
+
+    def hexpire(
+        self: TBatch,
+        key: TEncodable,
+        seconds: int,
+        fields: List[TEncodable],
+        option: Optional[ExpireOptions] = None,
+    ) -> TBatch:
+        """
+        Sets expiration time in seconds for one or more hash fields.
+
+        See [valkey.io](https://valkey.io/commands/hexpire/) for more details.
+
+        Args:
+            key (TEncodable): The key of the hash.
+            seconds (int): The expiration time in seconds.
+            fields (List[TEncodable]): The list of fields to set expiration for.
+            option (Optional[ExpireOptions]): Conditional expiration option:
+                - HasNoExpiry (NX): Set expiration only when the field has no expiry.
+                - HasExistingExpiry (XX): Set expiration only when the field has an existing expiry.
+                - NewExpiryGreaterThanCurrent (GT): Set expiration only when the new expiry is greater than the current one.
+                - NewExpiryLessThanCurrent (LT): Set expiration only when the new expiry is less than the current one.
+
+        Commands response:
+            List[int]: A list of status codes for each field:
+            - 1: Expiration time was applied successfully.
+            - 0: Specified condition was not met.
+            - -2: Field does not exist or key does not exist.
+            - 2: Field was deleted immediately (when seconds is 0 or timestamp is in the past).
+
+        Since: Valkey 9.0.0
+        """
+        args: List[TEncodable] = [key, str(seconds)]
+
+        # Add conditional option if specified
+        if option is not None:
+            args.append(option.value)
+
+        # Add FIELDS keyword and field count
+        args.extend(["FIELDS", str(len(fields))])
+
+        # Add fields
+        args.extend(fields)
+
+        return self.append_command(RequestType.HExpire, args)
+
+    def hpersist(self: TBatch, key: TEncodable, fields: List[TEncodable]) -> TBatch:
+        """
+        Removes the expiration from one or more hash fields, making them persistent.
+
+        See [valkey.io](https://valkey.io/commands/hpersist/) for more details.
+
+        Args:
+            key (TEncodable): The key of the hash.
+            fields (List[TEncodable]): The list of fields to remove expiration from.
+
+        Commands response:
+            List[int]: A list of status codes for each field:
+            - 1: Expiration was removed successfully (field became persistent).
+            - -1: Field exists but has no expiration.
+            - -2: Field does not exist or key does not exist.
+
+        Since: Valkey 9.0.0
+        """
+        args: List[TEncodable] = [key, "FIELDS", str(len(fields))] + fields
+
+        return self.append_command(RequestType.HPersist, args)
+
+    def hpexpire(
+        self: TBatch,
+        key: TEncodable,
+        milliseconds: int,
+        fields: List[TEncodable],
+        option: Optional[ExpireOptions] = None,
+    ) -> TBatch:
+        """
+        Sets expiration time in milliseconds for one or more hash fields.
+
+        See [valkey.io](https://valkey.io/commands/hpexpire/) for more details.
+
+        Args:
+            key (TEncodable): The key of the hash.
+            milliseconds (int): The expiration time in milliseconds.
+            fields (List[TEncodable]): The list of fields to set expiration for.
+            option (Optional[ExpireOptions]): Conditional expiration option:
+                - HasNoExpiry (NX): Set expiration only when the field has no expiry.
+                - HasExistingExpiry (XX): Set expiration only when the field has an existing expiry.
+                - NewExpiryGreaterThanCurrent (GT): Set expiration only when the new expiry is greater than the current one.
+                - NewExpiryLessThanCurrent (LT): Set expiration only when the new expiry is less than the current one.
+
+        Commands response:
+            List[int]: A list of status codes for each field:
+            - 1: Expiration time was applied successfully.
+            - 0: Specified condition was not met.
+            - -2: Field does not exist or key does not exist.
+            - 2: Field was deleted immediately (when milliseconds is 0 or timestamp is in the past).
+
+        Since: Valkey 9.0.0
+        """
+        args: List[TEncodable] = [key, str(milliseconds)]
+
+        # Add conditional option if specified
+        if option is not None:
+            args.append(option.value)
+
+        # Add FIELDS keyword and field count
+        args.extend(["FIELDS", str(len(fields))])
+
+        # Add fields
+        args.extend(fields)
+
+        return self.append_command(RequestType.HPExpire, args)
+
+    def hexpireat(
+        self: TBatch,
+        key: TEncodable,
+        unix_timestamp: int,
+        fields: List[TEncodable],
+        option: Optional[ExpireOptions] = None,
+    ) -> TBatch:
+        """
+        Sets expiration time at absolute Unix timestamp in seconds for one or more hash fields.
+
+        See [valkey.io](https://valkey.io/commands/hexpireat/) for more details.
+
+        Args:
+            key (TEncodable): The key of the hash.
+            unix_timestamp (int): The absolute expiration time as Unix timestamp in seconds.
+            fields (List[TEncodable]): The list of fields to set expiration for.
+            option (Optional[ExpireOptions]): Conditional expiration option:
+                - HasNoExpiry (NX): Set expiration only when the field has no expiry.
+                - HasExistingExpiry (XX): Set expiration only when the field has an existing expiry.
+                - NewExpiryGreaterThanCurrent (GT): Set expiration only when the new expiry is greater than the current one.
+                - NewExpiryLessThanCurrent (LT): Set expiration only when the new expiry is less than the current one.
+
+        Commands response:
+            List[int]: A list of status codes for each field:
+            - 1: Expiration time was applied successfully.
+            - 0: Specified condition was not met.
+            - -2: Field does not exist or key does not exist.
+            - 2: Field was deleted immediately (when timestamp is in the past).
+
+        Since: Valkey 9.0.0
+        """
+        args: List[TEncodable] = [key, str(unix_timestamp)]
+
+        # Add conditional option if specified
+        if option is not None:
+            args.append(option.value)
+
+        # Add FIELDS keyword and field count
+        args.extend(["FIELDS", str(len(fields))])
+
+        # Add fields
+        args.extend(fields)
+
+        return self.append_command(RequestType.HExpireAt, args)
+
+    def hpexpireat(
+        self: TBatch,
+        key: TEncodable,
+        unix_timestamp_ms: int,
+        fields: List[TEncodable],
+        option: Optional[ExpireOptions] = None,
+    ) -> TBatch:
+        """
+        Sets expiration time at absolute Unix timestamp in milliseconds for one or more hash fields.
+
+        See [valkey.io](https://valkey.io/commands/hpexpireat/) for more details.
+
+        Args:
+            key (TEncodable): The key of the hash.
+            unix_timestamp_ms (int): The absolute expiration time as Unix timestamp in milliseconds.
+            fields (List[TEncodable]): The list of fields to set expiration for.
+            option (Optional[ExpireOptions]): Conditional expiration option:
+                - HasNoExpiry (NX): Set expiration only when the field has no expiry.
+                - HasExistingExpiry (XX): Set expiration only when the field has an existing expiry.
+                - NewExpiryGreaterThanCurrent (GT): Set expiration only when the new expiry is greater than the current one.
+                - NewExpiryLessThanCurrent (LT): Set expiration only when the new expiry is less than the current one.
+
+        Commands response:
+            List[int]: A list of status codes for each field:
+            - 1: Expiration time was applied successfully.
+            - 0: Specified condition was not met.
+            - -2: Field does not exist or key does not exist.
+            - 2: Field was deleted immediately (when timestamp is in the past).
+
+        Since: Valkey 9.0.0
+        """
+        args: List[TEncodable] = [key, str(unix_timestamp_ms)]
+
+        # Add conditional option if specified
+        if option is not None:
+            args.append(option.value)
+
+        # Add FIELDS keyword and field count
+        args.extend(["FIELDS", str(len(fields))])
+
+        # Add fields
+        args.extend(fields)
+
+        return self.append_command(RequestType.HPExpireAt, args)
 
     def lpush(self: TBatch, key: TEncodable, elements: List[TEncodable]) -> TBatch:
         """
