@@ -662,12 +662,12 @@ class BaseBatch:
         return self.append_command(RequestType.HSet, field_value_list)
 
     def hsetex(
-        self,
+        self: TBatch,
         key: TEncodable,
         field_value_map: Mapping[TEncodable, TEncodable],
         conditional_options: Optional[FieldConditionalChange] = None,
         expiry: Optional[ExpirySet] = None,
-    ) -> int:
+    ) -> TBatch:
         """
         Sets the specified fields to their respective values in the hash stored at <code>key</code>
         with optional expiration and conditional options.
