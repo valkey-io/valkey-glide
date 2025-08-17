@@ -20,8 +20,8 @@ from glide_shared.constants import (
 )
 from glide_shared.protobuf.command_request_pb2 import RequestType
 
-from ..script import Script
 from .core import CoreCommands
+from .script import Script
 
 
 class StandaloneCommands(CoreCommands):
@@ -939,7 +939,7 @@ class StandaloneCommands(CoreCommands):
 
         Examples:
             >>> lua_script = Script("return { KEYS[1], ARGV[1] }")
-            >>> client.invoke_script(lua_script, keys=["foo"], args=["bar"] );
+            >>> client.invoke_script(lua_script, keys=["foo"], args=["bar"])
                 [b"foo", b"bar"]
         """
         return self._execute_script(script.get_hash(), keys, args)

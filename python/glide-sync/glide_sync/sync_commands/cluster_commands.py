@@ -23,8 +23,8 @@ from glide_shared.exceptions import RequestError
 from glide_shared.protobuf.command_request_pb2 import RequestType
 from glide_shared.routes import Route
 
-from ..script import Script
 from .core import CoreCommands
+from .script import Script
 
 
 class ClusterCommands(CoreCommands):
@@ -1222,7 +1222,7 @@ class ClusterCommands(CoreCommands):
 
         Examples:
             >>> lua_script = Script("return { KEYS[1], ARGV[1] }")
-            >>> client.invoke_script(lua_script, keys=["foo"], args=["bar"] );
+            >>> client.invoke_script(lua_script, keys=["foo"], args=["bar"])
                 [b"foo", b"bar"]
         """
         return self._execute_script(script.get_hash(), keys, args)
@@ -1254,7 +1254,7 @@ class ClusterCommands(CoreCommands):
 
         Examples:
             >>> lua_script = Script("return { ARGV[1] }")
-            >>> client.invoke_script(lua_script, args=["bar"], route=AllPrimaries());
+            >>> client.invoke_script(lua_script, args=["bar"], route=AllPrimaries())
                 [b"bar"]
         """
         return self._execute_script(

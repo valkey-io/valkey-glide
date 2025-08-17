@@ -149,8 +149,8 @@ from .config import GlideClientConfiguration, GlideClusterClientConfiguration
 from .glide_client import GlideClient, GlideClusterClient, TGlideClient
 from .logger import Level as LogLevel
 from .logger import Logger
-from .script import Script
 from .sync_commands import ft, glide_json
+from .sync_commands.script import Script
 
 __all__ = [
     # Client

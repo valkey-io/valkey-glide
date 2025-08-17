@@ -88,7 +88,7 @@ from glide_shared.routes import (
     SlotType,
 )
 from glide_sync.glide_client import GlideClient, GlideClusterClient, TGlideClient
-from glide_sync.script import Script
+from glide_sync.sync_commands.script import Script
 
 from tests.sync_tests.conftest import create_sync_client
 from tests.utils.utils import (

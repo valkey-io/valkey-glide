@@ -52,9 +52,9 @@ class BaseClient(CoreCommands):
         """
         To create a new client, use the `create` classmethod
         """
-        self._glide_ffi = _GlideFFI()
-        self._ffi = self._glide_ffi.ffi
-        self._lib = self._glide_ffi.lib
+        _glide_ffi = _GlideFFI()
+        self._ffi = _glide_ffi.ffi
+        self._lib = _glide_ffi.lib
         self._config: BaseClientConfiguration = config
         self._is_closed: bool = False
 
@@ -243,6 +243,7 @@ class BaseClient(CoreCommands):
             buffers,  # Ensure buffers stay alive
         )
 
+    # `route_bytes` must remain alive for the duration of the FFI call that consumes `route_ptr`
     def _to_c_route_ptr_and_len(self, route: Optional[Route]):
         proto_route = build_protobuf_route(route)
         if proto_route:
@@ -250,10 +251,11 @@ class BaseClient(CoreCommands):
             route_ptr = self._ffi.from_buffer(route_bytes)
             route_len = len(route_bytes)
         else:
+            route_bytes = None
             route_ptr = self._ffi.NULL
             route_len = 0
 
-        return route_ptr, route_len
+        return route_ptr, route_len, route_bytes
 
     def _handle_cmd_result(self, command_result):
         try:
@@ -293,11 +295,12 @@ class BaseClient(CoreCommands):
         # Convert the arguments to C-compatible pointers
         c_args, c_lengths, buffers = self._to_c_strings(args)
 
-        route_ptr, route_len = self._to_c_route_ptr_and_len(route)
+        # Route bytes should be kept alive in the scope of the FFI call
+        route_ptr, route_len, route_bytes = self._to_c_route_ptr_and_len(route)
 
         result = self._lib.command(
             client_adapter_ptr,  # Pointer to the ClientAdapter from create_client()
-            1,  # Request ID - placeholder for sync clients (used for async callbacks)
+            0,  # Request ID - placeholder for sync clients (used for async callbacks)
             request_type,  # Request type (e.g., GET or SET)
             len(args),  # Number of arguments
             c_args,  # Array of argument pointers
@@ -600,11 +603,12 @@ class BaseClient(CoreCommands):
         hash_bytes = script_hash.encode(ENCODING)
         hash_buffer = self._ffi.from_buffer(hash_bytes)
 
-        route_ptr, route_len = self._to_c_route_ptr_and_len(route)
+        # Route bytes should be kept alive in the scope of the FFI call
+        route_ptr, route_len, route_bytes = self._to_c_route_ptr_and_len(route)
 
         result = self._lib.invoke_script(
             client_adapter_ptr,  # Pointer to the ClientAdapter from create_client()
-            1,  # Request ID - placeholder for sync clients (used for async callbacks)
+            0,  # Request ID - placeholder for sync clients (used for async callbacks)
             hash_buffer,  # Pointer to the script's SHA1 hash string
             len(keys),  # num of keys
             keys_c_args,  # keys (array of pointers)
