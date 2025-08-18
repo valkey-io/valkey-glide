@@ -140,114 +140,147 @@ public class ConfigurationMapper {
         }
     }
 
-    /** NEW: Comprehensive SSL/TLS configuration mapping with fallback to insecure mode. */
+    /**
+     * Comprehensive SSL/TLS configuration mapping with structured validation and clear logging. Maps
+     * Jedis SSL configuration to GLIDE TLS configuration with appropriate fallbacks.
+     */
     private static void mapSslConfiguration(
             JedisClientConfig jedisConfig,
             ServerCredentials.ServerCredentialsBuilder credentialsBuilder,
             GlideClientConfiguration.GlideClientConfigurationBuilder glideBuilder) {
 
-        SslOptions sslOptions = jedisConfig.getSslOptions();
-        boolean needsAdvancedConfig = false;
+        logger.info("Mapping SSL/TLS configuration from Jedis to GLIDE");
+
         AdvancedGlideClientConfiguration.AdvancedGlideClientConfigurationBuilder advancedBuilder =
                 AdvancedGlideClientConfiguration.builder();
+        boolean needsAdvancedConfig = false;
 
-        if (sslOptions != null) {
-            // Handle SslOptions - for now, log warning about certificate conversion
-            logger.warning(
-                    "SslOptions detected with keystore/truststore configuration. GLIDE currently uses system"
-                            + " certificate stores. Consider converting certificates to system trust store or"
-                            + " using insecure TLS for development.");
+        // Process SSL configuration in priority order: SslOptions > SSLSocketFactory > HostnameVerifier
+        // > SSLParameters
 
-            // Check SSL verify mode - only use insecure TLS for explicit INSECURE mode
-            if (sslOptions.getSslVerifyMode() == SslVerifyMode.INSECURE) {
-                advancedBuilder.tlsAdvancedConfiguration(
-                        TlsAdvancedConfiguration.builder().useInsecureTLS(true).build());
-                needsAdvancedConfig = true;
-            }
+        // Priority 1: SslOptions (highest priority)
+        if (jedisConfig.getSslOptions() != null) {
+            needsAdvancedConfig = processSslOptions(jedisConfig.getSslOptions(), advancedBuilder);
 
         } else if (jedisConfig.getSslSocketFactory() != null) {
-            // Handle custom SSL socket factory - not supported, should fail
+            // Priority 2: Custom SSLSocketFactory - not supported, should fail
+            logger.severe("Custom SSLSocketFactory detected - not supported in GLIDE");
             throw new JedisConfigurationException(
-                    "Custom SSLSocketFactory is not supported in GLIDE. "
-                            + "Please use system certificate store or remove custom SSL factory.");
+                    "Custom SSLSocketFactory is not supported in GLIDE. Please use system certificate store"
+                            + " or SslOptions with SslVerifyMode.INSECURE for testing.");
 
         } else if (jedisConfig.getHostnameVerifier() != null) {
-            // Handle custom hostname verifier - not supported, should fail
+            // Priority 3: Custom HostnameVerifier - not supported, should fail
+            logger.severe("Custom HostnameVerifier detected - not supported in GLIDE");
             throw new JedisConfigurationException(
-                    "Custom HostnameVerifier is not supported in GLIDE. "
-                            + "Please use system hostname verification or remove custom verifier.");
+                    "Custom HostnameVerifier is not supported in GLIDE. Please use system hostname"
+                            + " verification or SslOptions with SslVerifyMode.INSECURE for testing.");
         }
 
-        // Handle SSL parameters
+        // Priority 4: SSLParameters (lowest priority)
         if (jedisConfig.getSslParameters() != null) {
             boolean sslParamsNeedAdvanced =
-                    handleSslParameters(jedisConfig.getSslParameters(), advancedBuilder);
+                    processSslParameters(jedisConfig.getSslParameters(), advancedBuilder);
             needsAdvancedConfig = needsAdvancedConfig || sslParamsNeedAdvanced;
         }
 
-        // Set advanced configuration if needed
+        // Apply advanced configuration if needed
         if (needsAdvancedConfig) {
             glideBuilder.advancedConfiguration(advancedBuilder.build());
+            logger.info("Applied advanced TLS configuration to GLIDE client");
+        } else {
+            logger.info("Using default secure TLS configuration");
         }
     }
 
-    /** SIMPLIFIED: Converts SslOptions to GLIDE configuration with warnings. */
-    private static void mapSslOptions(
-            SslOptions sslOptions, ServerCredentials.ServerCredentialsBuilder credentialsBuilder) {
+    /** Processes SslOptions configuration and returns true if advanced configuration is needed. */
+    private static boolean processSslOptions(
+            SslOptions sslOptions,
+            AdvancedGlideClientConfiguration.AdvancedGlideClientConfigurationBuilder advancedBuilder) {
 
-        // For now, we'll log warnings about unsupported certificate conversion
-        if (sslOptions.getTruststoreResource() != null) {
-            logger.warning(
-                    "Truststore configuration detected but not supported in current GLIDE version. "
-                            + "Consider using system certificate store or insecure TLS for development.");
-        }
+        logger.info("Processing SslOptions configuration");
 
+        // Check for certificate resources and log warnings
         if (sslOptions.getKeystoreResource() != null) {
             logger.warning(
-                    "Keystore configuration detected but not supported in current GLIDE version. "
-                            + "Consider using system certificate store or insecure TLS for development.");
+                    "SSL Configuration: Keystore configuration detected - GLIDE uses system certificate"
+                            + " store");
+        }
+
+        if (sslOptions.getTruststoreResource() != null) {
+            logger.warning(
+                    "SSL Configuration: Truststore configuration detected - GLIDE uses system certificate"
+                            + " store");
+        }
+
+        // Handle SSL verify mode
+        SslVerifyMode verifyMode = sslOptions.getSslVerifyMode();
+        if (verifyMode == SslVerifyMode.INSECURE) {
+            logger.warning(
+                    "SSL Configuration: SSL verification disabled via SslVerifyMode.INSECURE - using insecure"
+                            + " TLS");
+            advancedBuilder.tlsAdvancedConfiguration(
+                    TlsAdvancedConfiguration.builder().useInsecureTLS(true).build());
+            return true;
+        } else {
+            logger.info(
+                    "SSL Configuration: SSL verification enabled via SslVerifyMode."
+                            + verifyMode
+                            + " - using secure TLS");
+            return false;
         }
     }
 
-    /**
-     * NEW: Handles SSL parameters that can be partially mapped to GLIDE. Returns true if advanced
-     * configuration is needed.
-     */
-    private static boolean handleSslParameters(
+    /** Processes SSLParameters configuration and returns true if advanced configuration is needed. */
+    private static boolean processSslParameters(
             SSLParameters sslParameters,
             AdvancedGlideClientConfiguration.AdvancedGlideClientConfigurationBuilder advancedBuilder) {
 
-        boolean needsAdvancedConfig = false;
+        logger.info("Processing SSLParameters configuration");
 
-        if (sslParameters.getCipherSuites() != null) {
+        // Check cipher suites
+        if (sslParameters.getCipherSuites() != null && sslParameters.getCipherSuites().length > 0) {
             logger.warning(
-                    "Custom cipher suites specified in SSLParameters. "
-                            + "GLIDE will use its own secure cipher suite selection.");
+                    "SSL Configuration: Custom cipher suites specified - GLIDE will use secure cipher suite"
+                            + " selection");
         }
 
-        if (sslParameters.getProtocols() != null) {
+        // Check protocols
+        if (sslParameters.getProtocols() != null && sslParameters.getProtocols().length > 0) {
             logger.warning(
-                    "Custom SSL protocols specified in SSLParameters. "
-                            + "GLIDE will auto-select the best available TLS protocol.");
+                    "SSL Configuration: Custom SSL protocols specified - GLIDE will auto-select best"
+                            + " available TLS protocol");
         }
 
-        if (!sslParameters.getWantClientAuth() && !sslParameters.getNeedClientAuth()) {
-            logger.info(
-                    "Client authentication disabled in SSLParameters. "
-                            + "Ensure server is configured accordingly.");
+        // Check client authentication
+        if (sslParameters.getNeedClientAuth()) {
+            logger.warning(
+                    "SSL Configuration: Client authentication required - not supported in current GLIDE"
+                            + " version");
+        } else if (sslParameters.getWantClientAuth()) {
+            logger.warning(
+                    "SSL Configuration: Client authentication requested - not supported in current GLIDE"
+                            + " version");
+        } else {
+            logger.info("SSL Configuration: Client authentication disabled - compatible with GLIDE");
         }
 
-        // If endpoint identification is disabled, this is not supported
-        if (sslParameters.getEndpointIdentificationAlgorithm() != null
-                && sslParameters.getEndpointIdentificationAlgorithm().isEmpty()) {
-
+        // Check endpoint identification
+        String endpointAlgorithm = sslParameters.getEndpointIdentificationAlgorithm();
+        if (endpointAlgorithm != null && endpointAlgorithm.isEmpty()) {
+            logger.severe("Endpoint identification disabled in SSLParameters - not supported");
             throw new JedisConfigurationException(
                     "Disabled endpoint identification is not supported in GLIDE. "
                             + "GLIDE enforces hostname verification for security. "
-                            + "Use SslVerifyMode.INSECURE if you need to bypass verification.");
+                            + "Use SslOptions with SslVerifyMode.INSECURE if you need to bypass verification.");
+        } else if (endpointAlgorithm != null) {
+            logger.info(
+                    "SSL Configuration: Endpoint identification algorithm: "
+                            + endpointAlgorithm
+                            + " - compatible with GLIDE");
         }
 
-        return needsAdvancedConfig;
+        return false; // SSLParameters don't require advanced config by themselves
     }
 
     /** Maps advanced settings from Jedis to GLIDE configuration. */
