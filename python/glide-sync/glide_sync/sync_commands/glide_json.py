@@ -7,7 +7,7 @@ Examples:
     >>> import json
     >>> value = {'a': 1.0, 'b': 2}
     >>> json_str = glide_json.dumps(value) # Convert Python dictionary to JSON string using json.dumps()
-    >>> json.set(client, "doc", "$", json_str)
+    >>> glide_json.set(client, "doc", "$", json_str)
         'OK'  # Indicates successful setting of the value at path '$' in the key stored at `doc`.
     >>> json_get = glide_json.get(client, "doc", "$") # Returns the value at path '$' in the JSON document stored at
                                                             # `doc` as JSON string.
