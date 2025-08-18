@@ -123,7 +123,7 @@ public class ConfigurationMapper {
             }
         }
 
-        // Handle SSL/TLS (ENHANCED IMPLEMENTATION)
+        // Handle SSL/TLS
         if (jedisConfig.isSsl()) {
             builder.useTLS(true);
 
@@ -155,29 +155,20 @@ public class ConfigurationMapper {
                 AdvancedGlideClientConfiguration.builder();
         boolean needsAdvancedConfig = false;
 
-        // Process SSL configuration in priority order: SslOptions > SSLSocketFactory > HostnameVerifier
-        // > SSLParameters
-
-        // Priority 1: SslOptions (highest priority)
         if (jedisConfig.getSslOptions() != null) {
             needsAdvancedConfig = processSslOptions(jedisConfig.getSslOptions(), advancedBuilder);
-
         } else if (jedisConfig.getSslSocketFactory() != null) {
-            // Priority 2: Custom SSLSocketFactory - not supported, should fail
             logger.severe("Custom SSLSocketFactory detected - not supported in GLIDE");
             throw new JedisConfigurationException(
                     "Custom SSLSocketFactory is not supported in GLIDE. Please use system certificate store"
                             + " or SslOptions with SslVerifyMode.INSECURE for testing.");
-
         } else if (jedisConfig.getHostnameVerifier() != null) {
-            // Priority 3: Custom HostnameVerifier - not supported, should fail
             logger.severe("Custom HostnameVerifier detected - not supported in GLIDE");
             throw new JedisConfigurationException(
                     "Custom HostnameVerifier is not supported in GLIDE. Please use system hostname"
                             + " verification or SslOptions with SslVerifyMode.INSECURE for testing.");
         }
 
-        // Priority 4: SSLParameters (lowest priority)
         if (jedisConfig.getSslParameters() != null) {
             boolean sslParamsNeedAdvanced =
                     processSslParameters(jedisConfig.getSslParameters(), advancedBuilder);
@@ -280,7 +271,7 @@ public class ConfigurationMapper {
                             + " - compatible with GLIDE");
         }
 
-        return false; // SSLParameters don't require advanced config by themselves
+        return false;
     }
 
     /** Maps advanced settings from Jedis to GLIDE configuration. */
