@@ -190,6 +190,14 @@ public final class Jedis implements Closeable {
             this.resourceId = ResourceLifecycleManager.getInstance().registerResource(this);
             i++;
             this.lazyInitialized = true;
+        } catch (ConfigurationMapper.JedisConfigurationException e) {
+            // Enhanced error handling for configuration conversion issues
+            throw new JedisConnectionException(
+                    "Failed to convert Jedis configuration to GLIDE: "
+                            + e.getMessage()
+                            + ". Please check your SSL/TLS certificate configuration or consider using PEM format"
+                            + " certificates.",
+                    e);
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisConnectionException("Failed to create GLIDE client", e);
         } catch (RuntimeException e) {
@@ -718,6 +726,15 @@ public final class Jedis implements Closeable {
             } catch (Exception e) {
                 throw new JedisException("Failed to close GLIDE client", e);
             }
+        }
+
+        // Cleanup temporary certificate files created during configuration conversion
+        try {
+            ConfigurationMapper.cleanupTempFiles();
+        } catch (Exception e) {
+            // Log warning but don't fail the close operation
+            System.err.println(
+                    "Warning: Failed to cleanup temporary certificate files: " + e.getMessage());
         }
     }
 
@@ -6796,5 +6813,24 @@ public final class Jedis implements Closeable {
     @Deprecated
     public byte[] brpoplpush(final byte[] source, final byte[] destination, int timeout) {
         return blmove(source, destination, ListDirection.RIGHT, ListDirection.LEFT, timeout);
+    }
+
+    // Static initialization block for cleanup hooks
+    static {
+        // Add shutdown hook to cleanup temporary certificate files
+        Runtime.getRuntime()
+                .addShutdownHook(
+                        new Thread(
+                                () -> {
+                                    try {
+                                        ConfigurationMapper.cleanupTempFiles();
+                                    } catch (Exception e) {
+                                        // Ignore exceptions during shutdown
+                                        System.err.println(
+                                                "Warning: Failed to cleanup temporary certificate files during shutdown: "
+                                                        + e.getMessage());
+                                    }
+                                },
+                                "Jedis-Certificate-Cleanup"));
     }
 }
