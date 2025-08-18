@@ -192,8 +192,8 @@ public class JedisPool implements Closeable {
                     jedis.getGlideClient().close();
                 } catch (Exception e) {
                     // Log error but don't throw - we're in cleanup mode
-                    System.err.println(
-                            "Warning: Failed to close Jedis connection when pool queue full: " + e.getMessage());
+                    System.err.println("Warning: Failed to close Jedis connection when pool queue full:");
+                    e.printStackTrace();
                 }
             }
         } else if (jedis != null) {
@@ -204,7 +204,8 @@ public class JedisPool implements Closeable {
                     jedis.getGlideClient().close();
                 } catch (Exception e) {
                     // Log error but continue
-                    System.err.println("Error closing returned connection: " + e.getMessage());
+                    System.err.println("Error closing returned connection:");
+                    e.printStackTrace();
                 }
             }
         }
@@ -240,7 +241,8 @@ public class JedisPool implements Closeable {
                     jedis.getGlideClient().close();
                 } catch (Exception e) {
                     // Log error but continue closing other connections
-                    System.err.println("Error closing connection: " + e.getMessage());
+                    System.err.println("Error closing connection:");
+                    e.printStackTrace();
                 }
             }
 

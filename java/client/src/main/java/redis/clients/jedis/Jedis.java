@@ -733,8 +733,8 @@ public final class Jedis implements Closeable {
             ConfigurationMapper.cleanupTempFiles();
         } catch (Exception e) {
             // Log warning but don't fail the close operation
-            System.err.println(
-                    "Warning: Failed to cleanup temporary certificate files: " + e.getMessage());
+            System.err.println("Warning: Failed to cleanup temporary certificate files:");
+            e.printStackTrace();
         }
     }
 
@@ -6827,8 +6827,8 @@ public final class Jedis implements Closeable {
                                     } catch (Exception e) {
                                         // Ignore exceptions during shutdown
                                         System.err.println(
-                                                "Warning: Failed to cleanup temporary certificate files during shutdown: "
-                                                        + e.getMessage());
+                                                "Warning: Failed to cleanup temporary certificate files during shutdown:");
+                                        e.printStackTrace();
                                     }
                                 },
                                 "Jedis-Certificate-Cleanup"));
