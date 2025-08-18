@@ -158,34 +158,24 @@ public class ConfigurationMapper {
                             + " certificate stores. Consider converting certificates to system trust store or"
                             + " using insecure TLS for development.");
 
-            // Check SSL verify mode
-            if (sslOptions.getSslVerifyMode() == SslVerifyMode.NONE
-                    || sslOptions.getSslVerifyMode() == SslVerifyMode.INSECURE) {
-
+            // Check SSL verify mode - only use insecure TLS for explicit INSECURE mode
+            if (sslOptions.getSslVerifyMode() == SslVerifyMode.INSECURE) {
                 advancedBuilder.tlsAdvancedConfiguration(
                         TlsAdvancedConfiguration.builder().useInsecureTLS(true).build());
                 needsAdvancedConfig = true;
             }
 
         } else if (jedisConfig.getSslSocketFactory() != null) {
-            // Handle custom SSL socket factory
-            logger.warning(
-                    "Custom SSLSocketFactory detected. Using insecure TLS mode as fallback. "
-                            + "Consider using GLIDE's built-in TLS configuration.");
-
-            advancedBuilder.tlsAdvancedConfiguration(
-                    TlsAdvancedConfiguration.builder()
-                            .useInsecureTLS(true) // Fallback for custom SSL factories
-                            .build());
-            needsAdvancedConfig = true;
+            // Handle custom SSL socket factory - not supported, should fail
+            throw new JedisConfigurationException(
+                    "Custom SSLSocketFactory is not supported in GLIDE. "
+                            + "Please use system certificate store or remove custom SSL factory.");
 
         } else if (jedisConfig.getHostnameVerifier() != null) {
-            // Handle custom hostname verifier
-            logger.warning("Custom HostnameVerifier detected. Using insecure TLS mode.");
-
-            advancedBuilder.tlsAdvancedConfiguration(
-                    TlsAdvancedConfiguration.builder().useInsecureTLS(true).build());
-            needsAdvancedConfig = true;
+            // Handle custom hostname verifier - not supported, should fail
+            throw new JedisConfigurationException(
+                    "Custom HostnameVerifier is not supported in GLIDE. "
+                            + "Please use system hostname verification or remove custom verifier.");
         }
 
         // Handle SSL parameters
@@ -247,14 +237,14 @@ public class ConfigurationMapper {
                             + "Ensure server is configured accordingly.");
         }
 
-        // If endpoint identification is disabled, use insecure TLS
+        // If endpoint identification is disabled, this is not supported
         if (sslParameters.getEndpointIdentificationAlgorithm() != null
                 && sslParameters.getEndpointIdentificationAlgorithm().isEmpty()) {
 
-            logger.warning("Endpoint identification disabled in SSLParameters. Using insecure TLS mode.");
-            advancedBuilder.tlsAdvancedConfiguration(
-                    TlsAdvancedConfiguration.builder().useInsecureTLS(true).build());
-            needsAdvancedConfig = true;
+            throw new JedisConfigurationException(
+                    "Disabled endpoint identification is not supported in GLIDE. "
+                            + "GLIDE enforces hostname verification for security. "
+                            + "Use SslVerifyMode.INSECURE if you need to bypass verification.");
         }
 
         return needsAdvancedConfig;
@@ -345,17 +335,28 @@ public class ConfigurationMapper {
             JedisClientConfig jedisConfig, List<String> warnings, List<String> errors) {
 
         if (jedisConfig.getSslSocketFactory() != null) {
-            warnings.add("Custom SSLSocketFactory detected. Will use insecure TLS mode as fallback.");
+            errors.add("Custom SSLSocketFactory is not supported in GLIDE");
         }
 
         if (jedisConfig.getHostnameVerifier() != null) {
-            warnings.add("Custom HostnameVerifier detected. Will use insecure TLS mode as fallback.");
+            errors.add("Custom HostnameVerifier is not supported in GLIDE");
+        }
+
+        // Check SSL parameters for unsupported configurations
+        if (jedisConfig.getSslParameters() != null) {
+            SSLParameters sslParams = jedisConfig.getSslParameters();
+            if (sslParams.getEndpointIdentificationAlgorithm() != null
+                    && sslParams.getEndpointIdentificationAlgorithm().isEmpty()) {
+                errors.add("Disabled endpoint identification is not supported in GLIDE");
+            }
         }
 
         SslOptions sslOptions = jedisConfig.getSslOptions();
         if (sslOptions != null) {
-            if (sslOptions.getSslVerifyMode() == SslVerifyMode.NONE) {
-                warnings.add("SSL verification disabled. Will map to GLIDE's useInsecureTLS option.");
+            if (sslOptions.getSslVerifyMode() == SslVerifyMode.INSECURE) {
+                warnings.add(
+                        "SSL verification disabled via SslVerifyMode.INSECURE. Will map to GLIDE's"
+                                + " useInsecureTLS option.");
             }
 
             // Check if certificate resources are accessible
