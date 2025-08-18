@@ -6,8 +6,7 @@
     },
     {
         "type": "valkey",
-        "version": "8.1",
-        "run": "always"
+        "version": "8.1"
     },
     {
         "type": "valkey",
