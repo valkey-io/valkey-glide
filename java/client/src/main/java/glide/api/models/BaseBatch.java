@@ -1103,7 +1103,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
         checkTypeOrThrow(key);
         protobufBatch.addCommands(
                 buildCommand(
-                        HPTtl, newArgsBuilder().add(key).add("FIELDS").add(fields.length).add(fields)));
+                        HPTtl, newArgsBuilder().add(key).add(FIELDS_VALKEY_API).add(fields.length).add(fields)));
         return getThis();
     }
 
@@ -1128,7 +1128,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
         checkTypeOrThrow(key);
         protobufBatch.addCommands(
                 buildCommand(
-                        HExpireTime, newArgsBuilder().add(key).add("FIELDS").add(fields.length).add(fields)));
+                        HExpireTime, newArgsBuilder().add(key).add(FIELDS_VALKEY_API).add(fields.length).add(fields)));
         return getThis();
     }
 
@@ -1154,7 +1154,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
         checkTypeOrThrow(key);
         protobufBatch.addCommands(
                 buildCommand(
-                        HPExpireTime, newArgsBuilder().add(key).add("FIELDS").add(fields.length).add(fields)));
+                        HPExpireTime, newArgsBuilder().add(key).add(FIELDS_VALKEY_API).add(fields.length).add(fields)));
         return getThis();
     }
 

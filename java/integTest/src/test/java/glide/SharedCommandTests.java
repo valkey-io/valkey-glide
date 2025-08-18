@@ -1419,7 +1419,7 @@ public class SharedCommandTests {
 
         // Test HSETEX
         Long result = client.hsetex(key, fieldValueMap, options).get();
-        assertEquals(2L, result);
+        assertEquals(1L, result); // HSETEX returns 1 when all fields are set successfully
 
         // Verify fields were set
         assertEquals("value1", client.hget(key, "field1").get());
@@ -1445,35 +1445,35 @@ public class SharedCommandTests {
         fieldValueMap.put("field1", "value1");
         fieldValueMap.put("field2", "value2");
 
-        // Test NX option - should succeed on non-existent hash
-        HashFieldExpirationOptions nxOptions =
+        // Test FNX option - should succeed when none of the fields exist
+        HashFieldExpirationOptions fnxOptions =
                 HashFieldExpirationOptions.builder()
-                        .conditionalSetOnlyIfNotExist()
+                        .fieldConditionalSetOnlyIfNoneExist()
                         .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
                         .build();
 
-        Long result = client.hsetex(key, fieldValueMap, nxOptions).get();
-        assertEquals(2L, result);
+        Long result = client.hsetex(key, fieldValueMap, fnxOptions).get();
+        assertEquals(1L, result); // HSETEX returns 1 when all fields are set successfully
 
-        // Test XX option - should succeed on existing hash
-        Map<String, String> newFieldValueMap = new LinkedHashMap<>();
-        newFieldValueMap.put("field3", "value3");
+        // Test FXX option - should succeed when all fields exist (update existing fields)
+        Map<String, String> existingFieldValueMap = new LinkedHashMap<>();
+        existingFieldValueMap.put("field1", "updated_value1");
+        existingFieldValueMap.put("field2", "updated_value2");
 
-        HashFieldExpirationOptions xxOptions =
+        HashFieldExpirationOptions fxxOptions =
                 HashFieldExpirationOptions.builder()
-                        .conditionalSetOnlyIfExists()
+                        .fieldConditionalSetOnlyIfAllExist()
                         .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
                         .build();
 
-        result = client.hsetex(key, newFieldValueMap, xxOptions).get();
-        assertEquals(1L, result);
+        result = client.hsetex(key, existingFieldValueMap, fxxOptions).get();
+        assertEquals(1L, result); // HSETEX returns 1 when all fields are set successfully
 
         // Verify TTL was set correctly for all fields
-        Long[] ttlResult = client.httl(key, new String[] {"field1", "field2", "field3"}).get();
-        assertEquals(3, ttlResult.length);
+        Long[] ttlResult = client.httl(key, new String[] {"field1", "field2"}).get();
+        assertEquals(2, ttlResult.length);
         assertTrue(ttlResult[0] > 0 && ttlResult[0] <= 60); // field1 should have TTL
         assertTrue(ttlResult[1] > 0 && ttlResult[1] <= 60); // field2 should have TTL
-        assertTrue(ttlResult[2] > 0 && ttlResult[2] <= 60); // field3 should have TTL
     }
 
     @SneakyThrows
@@ -1504,7 +1504,7 @@ public class SharedCommandTests {
                         .build();
 
         Long result = client.hsetex(key, existingFieldsMap, fxxOptions).get();
-        assertEquals(0L, result); // Fields updated, not added
+        assertEquals(1L, result); // HSETEX returns 1 when all fields are set successfully
 
         // Test FNX option - should succeed when none of the fields exist
         Map<String, String> newFieldsMap = new LinkedHashMap<>();
@@ -1518,7 +1518,7 @@ public class SharedCommandTests {
                         .build();
 
         result = client.hsetex(key, newFieldsMap, fnxOptions).get();
-        assertEquals(2L, result); // New fields added
+        assertEquals(1L, result); // HSETEX returns 1 when all fields are set successfully
 
         // Verify TTL was set correctly for the updated and new fields
         Long[] ttlResult =
@@ -1604,23 +1604,22 @@ public class SharedCommandTests {
 
         HashFieldExpirationOptions options =
                 HashFieldExpirationOptions.builder()
-                        .conditionalSetOnlyIfNotExist()
                         .fieldConditionalSetOnlyIfNoneExist()
                         .expiry(HashFieldExpirationOptions.ExpirySet.Milliseconds(30000L))
                         .build();
 
         Long result = client.hsetex(key, fieldValueMap, options).get();
-        assertEquals(2L, result);
+        assertEquals(1L, result); // HSETEX returns 1 when all fields are set successfully
 
         // Verify fields were set
         assertEquals(gs("value1"), client.hget(key, gs("field1")).get());
         assertEquals(gs("value2"), client.hget(key, gs("field2")).get());
 
-        // Verify TTL was set correctly
+        // Verify TTL was set correctly (30000ms = 30 seconds)
         Long[] ttlResult = client.httl(key, new GlideString[] {gs("field1"), gs("field2")}).get();
         assertEquals(2, ttlResult.length);
-        assertTrue(ttlResult[0] > 0 && ttlResult[0] <= 60); // field1 should have TTL
-        assertTrue(ttlResult[1] > 0 && ttlResult[1] <= 60); // field2 should have TTL
+        assertTrue(ttlResult[0] > 0 && ttlResult[0] <= 30); // field1 should have TTL
+        assertTrue(ttlResult[1] > 0 && ttlResult[1] <= 30); // field2 should have TTL
 
         // Clean up
         client.del(new GlideString[] {key}).get();
@@ -2972,8 +2971,15 @@ public class SharedCommandTests {
                         : ((GlideClient) client).exec((Batch) batch, false).get();
 
         assertEquals(1, result.length);
-        Long[] hpttlResult = (Long[]) result[0];
-        assertEquals(3, hpttlResult.length);
+        Object[] hpttlResultRaw = (Object[]) result[0];
+        assertEquals(3, hpttlResultRaw.length);
+        
+        // Convert Object[] to Long[] manually
+        Long[] hpttlResult = new Long[hpttlResultRaw.length];
+        for (int i = 0; i < hpttlResultRaw.length; i++) {
+            hpttlResult[i] = ((Number) hpttlResultRaw[i]).longValue();
+        }
+        
         assertTrue(
                 hpttlResult[0] > 0 && hpttlResult[0] <= 60000); // field1 should have TTL in milliseconds
         assertTrue(
@@ -3203,8 +3209,15 @@ public class SharedCommandTests {
                         : ((GlideClient) client).exec((Batch) batch, false).get();
 
         assertEquals(1, result.length);
-        Long[] hexpiretime_result = (Long[]) result[0];
-        assertEquals(3, hexpiretime_result.length);
+        Object[] hexpiretime_resultRaw = (Object[]) result[0];
+        assertEquals(3, hexpiretime_resultRaw.length);
+        
+        // Convert Object[] to Long[] manually
+        Long[] hexpiretime_result = new Long[hexpiretime_resultRaw.length];
+        for (int i = 0; i < hexpiretime_resultRaw.length; i++) {
+            hexpiretime_result[i] = ((Number) hexpiretime_resultRaw[i]).longValue();
+        }
+        
         assertTrue(
                 hexpiretime_result[0] >= expireAtSeconds
                         && hexpiretime_result[0]
@@ -3416,8 +3429,14 @@ public class SharedCommandTests {
                         : ((GlideClient) client).exec((Batch) batch, false).get();
 
         assertEquals(1, result.length);
-        Long[] hpexpiretime_result = (Long[]) result[0];
-        assertEquals(3, hpexpiretime_result.length);
+        Object[] hpexpiretime_resultRaw = (Object[]) result[0];
+        assertEquals(3, hpexpiretime_resultRaw.length);
+        
+        // Convert Object[] to Long[] manually
+        Long[] hpexpiretime_result = new Long[hpexpiretime_resultRaw.length];
+        for (int i = 0; i < hpexpiretime_resultRaw.length; i++) {
+            hpexpiretime_result[i] = ((Number) hpexpiretime_resultRaw[i]).longValue();
+        }
 
         assertTrue(
                 hpexpiretime_result[0] >= expireAtMs - 1000
