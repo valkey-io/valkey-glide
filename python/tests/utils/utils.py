@@ -1045,7 +1045,7 @@ def helper6(
     args.append({})
 
 
-async def helper5(transaction, version, key11, key12, key17, key18, key20, args):
+def helper5(transaction, version, key11, key12, key17, key18, key20, args):
     if not check_version_lt(version, "7.0.0"):
         transaction.set(key20, "foobar")
         args.append(OK)
@@ -1214,9 +1214,7 @@ async def helper5(transaction, version, key11, key12, key17, key18, key20, args)
     args.append(4)
 
 
-async def helper4(
-    transaction, version, key8, key10, key13, key14, key15, key19, key20, args
-):
+def helper4(transaction, version, key8, key10, key13, key14, key15, key19, key20, args):
     transaction.zadd(key8, {"one": 1, "two": 2, "three": 3, "four": 4})
     args.append(4.0)
     transaction.zrank(key8, "one")
@@ -1356,7 +1354,7 @@ async def helper4(
     args.append([609])
 
 
-async def helper3(
+def helper3(
     transaction,
     version,
     key5,
@@ -1451,7 +1449,7 @@ async def helper3(
     args.append({b"foo", b"bar"})
     transaction.sinterstore(key7, [key7, key7])
     args.append(2)
-    if not await check_version_lt(version, "7.0.0"):
+    if not check_version_lt(version, "7.0.0"):
         transaction.sintercard([key7, key7])
         args.append(2)
         transaction.sintercard([key7, key7], 1)
@@ -1464,7 +1462,7 @@ async def helper3(
     args.append(False)
 
 
-async def helper2(
+def helper2(
     transaction,
     version,
     key,
@@ -1542,7 +1540,7 @@ async def helper2(
     args.append([b"0", [key3.encode(), b"10.5"]])
     transaction.hscan(key4, "0", match="*", count=10)
     args.append([b"0", [key3.encode(), b"10.5"]])
-    if not await check_version_lt(version, "8.0.0"):
+    if not check_version_lt(version, "8.0.0"):
         transaction.hscan(key4, "0", match="*", count=10, no_values=True)
         args.append([b"0", [key3.encode()]])
     transaction.hrandfield(key4)
@@ -1558,7 +1556,7 @@ async def helper2(
     args.append(None)
 
 
-async def helper1(
+def helper1(
     transaction, version, key, key2, value, value_bytes, value2, value2_bytes, args
 ):
     transaction.dbsize()
