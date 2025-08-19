@@ -60,6 +60,7 @@ import {
 } from "./TestUtilities";
 
 const TIMEOUT = 50000;
+const CLEANUP_TIMEOUT = 10000; // 10 seconds for cleanup operations
 
 describe("GlideClusterClient", () => {
     let testsFailed = 0;
@@ -78,6 +79,9 @@ describe("GlideClusterClient", () => {
                 getServerVersion,
             );
 
+            // Add small delay between cluster initializations to prevent socket contention
+            await new Promise((resolve) => setTimeout(resolve, 100));
+
             // Initialize cluster from existing addresses for AzAffinity test
             azCluster = await ValkeyCluster.initFromExistingCluster(
                 true,
@@ -92,6 +96,9 @@ describe("GlideClusterClient", () => {
                 getServerVersion,
             );
 
+            // Add small delay between cluster creations to prevent socket contention
+            await new Promise((resolve) => setTimeout(resolve, 100));
+
             azCluster = await ValkeyCluster.createCluster(
                 true,
                 3,
@@ -103,18 +110,24 @@ describe("GlideClusterClient", () => {
 
     afterEach(async () => {
         await flushAndCloseClient(true, cluster?.getAddresses(), client);
+        // Add small delay between cluster cleanups to prevent socket exhaustion
+        await new Promise((resolve) => setTimeout(resolve, 5));
         await flushAndCloseClient(true, azCluster?.getAddresses(), azClient);
     });
 
     afterAll(async () => {
         if (testsFailed === 0) {
             if (cluster) await cluster.close();
+            // Add small delay between cluster closures to prevent socket contention
+            await new Promise((resolve) => setTimeout(resolve, 50));
             if (azCluster) await azCluster.close();
         } else {
             if (cluster) await cluster.close(true);
+            // Add small delay between cluster closures to prevent socket contention
+            await new Promise((resolve) => setTimeout(resolve, 50));
             if (azCluster) await azCluster.close(true);
         }
-    });
+    }, CLEANUP_TIMEOUT);
 
     runBaseTests({
         init: async (protocol, configOverrides) => {
@@ -1686,11 +1699,12 @@ describe("GlideClusterClient", () => {
                                 ? { type: "primarySlotKey", key: "1" }
                                 : "allPrimaries";
 
+                            const script = new Script(
+                                Buffer.from("return {ARGV[1]}"),
+                            );
+
                             try {
                                 const arg = getRandomKey();
-                                const script = new Script(
-                                    Buffer.from("return {ARGV[1]}"),
-                                );
                                 let res = await client.invokeScriptWithRoute(
                                     script,
                                     { args: [Buffer.from(arg)], route },
@@ -1727,6 +1741,7 @@ describe("GlideClusterClient", () => {
                                     );
                                 }
                             } finally {
+                                script.release();
                                 client.close();
                             }
                         },
@@ -2137,6 +2152,7 @@ describe("GlideClusterClient", () => {
             } finally {
                 // If script wasn't killed, and it didn't time out - it blocks the server and cause the
                 // test to fail. Wait for the script to complete (we cannot kill it)
+                longScript.release();
                 expect(await promise).toContain("Timed out");
                 client1.close();
                 client2.close();

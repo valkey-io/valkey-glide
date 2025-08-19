@@ -4,7 +4,63 @@ This document describes how to set up your development environment to build and 
 
 The Valkey GLIDE Python wrapper consists of both Python and Rust code. Rust bindings for Python are implemented using [PyO3](https://github.com/PyO3/pyo3), and the Python package is built using [maturin](https://github.com/PyO3/maturin). The Python and Rust components communicate using the [protobuf](https://github.com/protocolbuffers/protobuf) protocol.
 
-# Prerequisites
+
+## 📁 Python Project Structure
+---
+
+The `python/` directory contains three separate components:
+
+
+#### 🔹 glide-async/
+-	Purpose: Async client for Valkey, implemented as a hybrid Python/Rust project.
+-	Rust bindings: via PyO3, defined in `valkey-glide/python/glide-async/src/lib.rs`.
+-	Communication Layer: Communicates with Glide's Rust core using a Unix Domain Socket (UDS).
+-	Import path: `import glide`
+-	PyPI package name: `valkey-glide`
+-	Build backend: Maturin (Rust-based)
+
+
+#### 🔹 glide-sync/
+-	Purpose: Sync client for Valkey, implemented via CFFI, built with setuptools.
+-	Rust bindings: via CFFI, defined in `valkey-glide/ffi/src/lib.rs`.
+-	Communication Layer: Communicates with Glide's Rust core via direct FFI.
+-	Import path: `import glide_sync`
+-	PyPI package name: `valkey-glide-sync`
+-	Build backend: setuptools (C-based)
+
+
+#### 🔹 glide-shared/
+-	Purpose: Shared Python logic used by both clients — includes command builders, exceptions, constants, protobuf message handling, and more.
+-	Import path: `import glide_shared`
+-	Installation: Installed locally via `pip install valkey-glide/python/glide-shared` during each client’s build process. Not published separately to PyPI.
+
+
+### 🧱 High-Level Folder Structure
+```
+python/
+├── glide-async/            # Async client (PyO3 + Maturin)
+│   ├── Cargo.toml
+│   ├── pyproject.toml
+│   ├── python/glide/       # Python code for async client
+│   └── src/                # Rust code with PyO3 bindings
+├── glide-sync/             # Sync client (CFFI + setuptools)
+│   ├── pyproject.toml
+│   └── glide_sync/         # Python code for sync client
+├── glide-shared/           # Shared logic used by both clients
+│   ├── pyproject.toml
+│   └── glide_shared/       # Shared source code
+└── tests/                  # Shared test suite
+ffi/
+├── src/                    # Rust code provides a C-compatible FFI (used in glide-sync)
+```
+
+### 📦 Packaging and Installation Notes
+-	During development, `glide_shared` must be installed locally (editable or standard install).
+-	Each client is built and released independently, with its own isolated package name and pyproject.toml.
+-	Shared logic remains fully decoupled from both clients and reusable between them.
+
+
+## Prerequisites
 ---
 
 Before building the package from source, make sure that you have installed the listed dependencies below:
@@ -66,33 +122,23 @@ Continue with **Install protobuf compiler** and **Install `ziglang` and `zigbuil
 
 ```bash
 brew update
-brew install python3 git gcc pkgconfig protobuf@3 openssl virtualenv cmake
+brew install python3 git gcc pkgconfig openssl virtualenv cmake
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 # Check that the Rust compiler is installed
 rustc --version
 ```
+
 Continue with **Install protobuf compiler** below.
+It is not necessary to **Install `ziglang` and `zigbuild`** for MacOS.
 
 </details>
 
 <details>
 <summary>Install protobuf compiler</summary>
 
-To install protobuf for MacOS, run:
-
-```bash
-brew install protobuf@3
-# Verify the Protobuf compiler installation
-protoc --version
-
-# If protoc is not found or does not work correctly, update the PATH
-echo 'export PATH="/opt/homebrew/opt/protobuf@3/bin:$PATH"' >> /Users/$USER/.bash_profile
-source /Users/$USER/.bash_profile
-protoc --version
-```
-
-For the remaining systems, do the following:
+Various platform-specific zips can be found [here](https://github.com/protocolbuffers/protobuf/releases/v3.20.3).
+Choose the appropriate zip for your system and run the commands below, adjusting for the zip you chose:
 
 ```bash
 PB_REL="https://github.com/protocolbuffers/protobuf/releases"
@@ -102,6 +148,9 @@ export PATH="$PATH:$HOME/.local/bin"
 # Check that the protobuf compiler is installed. A minimum version of 3.20.0 is required.
 protoc --version
 ```
+
+> [!NOTE]
+> You may wish to add the entire `export PATH` line to your shell configuration file to persist this path addition, either `.bashrc` or `.zshrc` depending on which shell you are using.
 
 </details>
 
@@ -115,7 +164,7 @@ cargo install --locked cargo-zigbuild
 
 </details>
 
-# Cloning the Repository
+## Cloning the Repository
 ---
 
 To begin development, clone the repository:
@@ -127,7 +176,7 @@ git clone https://github.com/valkey-io/valkey-glide.git
 cd valkey-glide
 ```
 
-# Build
+## Build
 ---
 
 After installing prerequisites and cloning the repository, you can build the async Python client using the `dev.py` CLI utility that can be found in the root `python/` directory.
@@ -150,7 +199,7 @@ Run the following to see all available commands:
 python3 dev.py --help
 ```
 
-# Tests
+## Tests
 ---
 
 Ensure you have installed `valkey-server` and `valkey-cli` on your host (or `redis-server` and `redis-cli`).
@@ -173,7 +222,7 @@ python3 dev.py test --args \
   --standalone-endpoints=localhost:6379
 ```
 
-# Manually Running Tests
+## Manually Running Tests
 ---
 
 If needed, you can invoke `pytest` directly from the root `python/` directory for custom workflows:
@@ -194,9 +243,9 @@ source .env/bin/activate
 pytest -v --async-backend=trio --async-backend=asyncio
 ```
 
-# Protobuf
+## Protobuf
 ---
-During the initial build, Python protobuf files were created in `python/python/glide/protobuf`. If modifications are made to the protobuf definition files (`.proto` files located in `glide-core/src/protofuf`), it becomes necessary to regenerate the Python protobuf files.
+During the initial build, Python protobuf files were created in `python/glide-shared/glide_shared/protobuf`. If modifications are made to the protobuf definition files (`.proto` files located in `glide-core/src/protofuf`), it becomes necessary to regenerate the Python protobuf files.
 
 Protobuf files are automatically regenerated as part of the `build` process. If you only need to regenerate the protobuf files (e.g., after editing `.proto` files), you can use the standalone command the root `python/` directory:
 
@@ -204,9 +253,9 @@ Protobuf files are automatically regenerated as part of the `build` process. If 
 python3 dev.py protobuf
 ```
 
-This generates `.py` and `.pyi` interface files for type checking and places them in the `python/python/glide/protobuf` folder.
+This generates `.py` and `.pyi` interface files for type checking and places them in the `python/glide-shared/glide_shared/protobuf` folder.
 
-# Linters
+## Linters
 ---
 
 Development on the Python wrapper may involve changes in either the Python or Rust code. Each language has distinct linter tests that must be passed before committing changes.
@@ -239,14 +288,70 @@ cargo fmt --manifest-path ./Cargo.toml --all
 
 > These are not included in the `dev.py` utility and should be run separately from the `python` root folder.
 
-# Documentation
+## Packaging
+---
+
+This section explains how the `valkey-glide` (async client) and `valkey-glide-sync` (sync client) packages are built into Python wheels for local use and PyPI publishing.
+
+### Async Client (`valkey-glide`)
+
+1. **Stage shared code**  
+   Before packaging, we copy the `glide-shared/glide_shared` package directory into the `glide-async/python/` folder. This ensures the shared code is included in the final wheel.
+
+2. **Make it discoverable**  
+   In `glide-async/pyproject.toml`, we add the appropriate `include` rule under `[tool.maturin]` to make sure the copied files are bundled with the wheel. For example:
+   ```toml
+   include = ["python/glide_shared/**/*.py"]
+   ```
+3. **Build the wheel**
+    We use `maturin build` from the `glide-async` directory to create a Python wheel that includes the compiled Rust extension and all Python code.
+
+4. **Multiplatform packaging for PyPI**
+    To publish wheels to PyPI, we use the `PyO3/maturin-action` GitHub Action, which builds manylinux and macOS wheels for different Python versions (both CPython and PyPy). This action runs in CI and uses prebuilt Docker containers for compatibility.
+
+5. **Local testing**
+    You can test building a wheel and installing it locally using:
+    ```bash
+    python dev.py build --client async --wheel
+    ```
+### Sync Client (`valkey-glide-sync`)
+
+1. **Vendoring dependencies (for both sdist and wheel)**  
+   During the build process (for both source distributions and wheels), we vendor (copy) all required Rust crates and Python modules into the `glide-sync` directory.
+   This includes:
+   - ffi
+   - glide-core
+   - logger_core
+   - glide_shared (Python module)
+
+   Vendoring ensures that all dependencies are self-contained within the package at build time, which is required for reproducible builds and compatibility with tools like cibuildwheel.
+
+2. **Build steps**
+   - The necessary dependencies are vendored into the `glide-sync` directory before the build starts.
+   - We run `cargo build` in the `glide-sync/ffi/` folder to compile the Rust FFI library.
+   - The resulting shared object file (e.g. `libglide_ffi.so`) is copied into the `glide-sync/glide_sync/` directory.
+   - We then build the Python package, either as a wheel or as an sdist.
+
+3. **Multiplatform packaging for PyPI**  
+   To support building wheels for multiple platforms (Linux, macOS, and different Python versions), we use the [`cibuildwheel`](https://github.com/pypa/cibuildwheel) tool.  
+   This tool installs all required Python versions and runs the build inside isolated Docker containers (e.g., manylinux2014).  
+   Because the sync client depends on external Rust code (`glide-core`, `ffi`, `logger_core`), we run `cibuildwheel` from the **project root** and specify `python/glide-sync` as the build target.  
+   This allows the tool to copy the full project context into the container.
+
+5. **Local testing**  
+   You can building a wheel and install it locally using:
+   ```bash
+   python dev.py build --client sync --wheel
+   ```
+
+## Documentation
 ---
 
 > **NOTE:**  We are currently in process of switching our documentation tool from `sphinx` to `mkdocs`. Currently the files located in `python/docs` are required for `sphinx`'s CI validation step (`docs-test`) as they are the configuration files for how `sphinx` works in documenting Valkey GLIDE. Once we switch to `mkdocs`, `sphinx` related files and validation should be removed, and `mkdocs`'s files and validation should be used instead.
 
 > By default, `mkdocs` should still be using Google's Python Docstring Style so the "Documentation Style" section below will still be valid.
 
-We follow the [Google Style Python Docstrings format](https://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_google.html) in our documentation. For our documentation tool, we use `sphinx`. 
+We follow the [Google Style Python Docstrings format](https://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_google.html) in our documentation. For our documentation tool, we use `sphinx`.
 
 **Note:** `docs/index.rst` has manual modifications to it and should NOT be deleted. Modify this file with caution.
 
@@ -312,7 +417,7 @@ Examples:
 """
 ```
 
-### Example of Properly Formatted Documentation for a Class 
+### Example of Properly Formatted Documentation for a Class
 
 ```python
 class BitOffsetMultiplier(BitFieldOffset):
@@ -383,7 +488,7 @@ Attributes:
 
 #### Return value(s)
 
-Return values are a little special for sphinx. If we wanted to provide more context or multiple possible return values, the convention we will go for is that we should add a space between every different return value. 
+Return values are a little special for sphinx. If we wanted to provide more context or multiple possible return values, the convention we will go for is that we should add a space between every different return value.
 
 We start by adding the return type on the first line, followed by a description of the return value.
 
@@ -392,10 +497,10 @@ We start by adding the return type on the first line, followed by a description 
 ```python
 Returns:
     List[int]: Some description here regarding the purpose of the list of ints being
-    returned. Notice how this new line is not indented but it is still apart of the same 
+    returned. Notice how this new line is not indented but it is still apart of the same
     description.
 
-    If we ever want to provide more context or another description of another return value 
+    If we ever want to provide more context or another description of another return value
     (ex. None, -1, True/False, etc.) we add a space between this description and the
     previous description.
 ```
@@ -439,7 +544,7 @@ Examples:
         }
         # Indicates the stream entries for "my_stream" with IDs greater than "0-0". The operation blocks up to
         # 1000ms if there is no stream data.
-    
+
     ... # More examples here
 ```
 
@@ -485,7 +590,7 @@ Format: `` `text <link>`_ ``
 Example: `` `SORT <https://valkey.io/commands/sort/>`_ ``
 
 
-# Recommended extensions for VS Code
+## Recommended extensions for VS Code
 ---
 
 -   [Python](https://marketplace.visualstudio.com/items?itemName=ms-python.python)
@@ -494,6 +599,6 @@ Example: `` `SORT <https://valkey.io/commands/sort/>`_ ``
 -   [Flake8](https://marketplace.visualstudio.com/items?itemName=ms-python.flake8)
 -   [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
 
-# Community Support and Feedback
+## Community Support and Feedback
 
 We encourage you to join our community to support, share feedback, and ask questions. You can approach us for anything on our Valkey Slack: [Join Valkey Slack](https://join.slack.com/t/valkey-oss-developer/shared_invite/zt-2nxs51chx-EB9hu9Qdch3GMfRcztTSkQ).
