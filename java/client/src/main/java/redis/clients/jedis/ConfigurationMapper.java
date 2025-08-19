@@ -94,9 +94,7 @@ public class ConfigurationMapper {
         }
     }
 
-    /**
-     * Maps authentication and SSL/TLS settings with comprehensive certificate conversion.
-     */
+    /** Maps authentication and SSL/TLS settings with comprehensive certificate conversion. */
     private static void mapCredentialsAndSsl(
             JedisClientConfig jedisConfig,
             GlideClientConfiguration.GlideClientConfigurationBuilder builder) {
