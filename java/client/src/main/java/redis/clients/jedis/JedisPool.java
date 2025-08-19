@@ -126,8 +126,7 @@ public class JedisPool implements Closeable {
         this.availableConnections = new LinkedBlockingQueue<>();
         this.poolId = ResourceLifecycleManager.getInstance().registerResource(this);
 
-        // Validate configuration
-        ConfigurationMapper.validateConfiguration(config);
+        // Configuration validation happens during mapping when connections are created
     }
 
     /**

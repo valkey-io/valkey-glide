@@ -153,11 +153,9 @@ public final class Jedis implements Closeable {
         this.parentPool = null;
         this.config = config;
 
-        // Validate configuration
-        ConfigurationMapper.validateConfiguration(config);
-
         // Defer GlideClient creation until first Redis operation (lazy initialization)
         // This solves DataGrip compatibility issues with native library loading
+        // Configuration validation happens during mapping when GlideClient is created
         this.glideClient = null;
         this.resourceId = null;
         this.lazyInitialized = false;

@@ -7,7 +7,6 @@ import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.ProtocolVersion;
 import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.configuration.TlsAdvancedConfiguration;
-import java.io.InputStream;
 import java.util.*;
 import java.util.logging.Logger;
 import javax.net.ssl.SSLParameters;
@@ -35,18 +34,11 @@ public class ConfigurationMapper {
     public static GlideClientConfiguration mapToGlideConfig(
             String host, int port, JedisClientConfig jedisConfig) {
 
-        // Validate configuration can be converted
-        ValidationResult validation = validateConfiguration(jedisConfig);
-        if (!validation.getErrors().isEmpty()) {
+        // Check for unsupported features early
+        if (jedisConfig.getAuthXManager() != null) {
             throw new JedisConfigurationException(
-                    "Cannot convert Jedis configuration to GLIDE: "
-                            + String.join(", ", validation.getErrors()));
+                    "AuthXManager is not supported in GLIDE. Please use username/password authentication.");
         }
-
-        // Log warnings for partial mappings
-        validation
-                .getWarnings()
-                .forEach(warning -> logger.warning("Configuration conversion warning: " + warning));
 
         GlideClientConfiguration.GlideClientConfigurationBuilder builder =
                 GlideClientConfiguration.builder();
@@ -54,7 +46,7 @@ public class ConfigurationMapper {
         // Map basic connection settings
         mapConnectionSettings(jedisConfig, host, port, builder);
 
-        // Map authentication and SSL/TLS settings (ENHANCED)
+        // Map authentication and SSL/TLS settings
         mapCredentialsAndSsl(jedisConfig, builder);
 
         // Map advanced settings
@@ -88,7 +80,7 @@ public class ConfigurationMapper {
         }
 
         // Timeout mapping - GLIDE uses single timeout concept
-        int timeout = calculateGlideTimeout(jedisConfig);
+        int timeout = calculateGlideRequestTimeout(jedisConfig);
         if (timeout > 0) {
             builder.requestTimeout(timeout);
         }
@@ -158,12 +150,10 @@ public class ConfigurationMapper {
         if (jedisConfig.getSslOptions() != null) {
             needsAdvancedConfig = processSslOptions(jedisConfig.getSslOptions(), advancedBuilder);
         } else if (jedisConfig.getSslSocketFactory() != null) {
-            logger.severe("Custom SSLSocketFactory detected - not supported in GLIDE");
             throw new JedisConfigurationException(
                     "Custom SSLSocketFactory is not supported in GLIDE. Please use system certificate store"
                             + " or SslOptions with SslVerifyMode.INSECURE for testing.");
         } else if (jedisConfig.getHostnameVerifier() != null) {
-            logger.severe("Custom HostnameVerifier detected - not supported in GLIDE");
             throw new JedisConfigurationException(
                     "Custom HostnameVerifier is not supported in GLIDE. Please use system hostname"
                             + " verification or SslOptions with SslVerifyMode.INSECURE for testing.");
@@ -189,22 +179,26 @@ public class ConfigurationMapper {
             SslOptions sslOptions,
             AdvancedGlideClientConfiguration.AdvancedGlideClientConfigurationBuilder advancedBuilder) {
 
-        logger.info("Processing SslOptions configuration");
-
         // Check for certificate resources - not supported, should fail
         if (sslOptions.getKeystoreResource() != null) {
-            logger.severe("SSL Configuration: Keystore configuration detected - not supported in GLIDE");
             throw new JedisConfigurationException(
                     "Keystore configuration is not supported in GLIDE. Please use system certificate store or"
                             + " SslOptions with SslVerifyMode.INSECURE for testing.");
         }
 
         if (sslOptions.getTruststoreResource() != null) {
-            logger.severe(
-                    "SSL Configuration: Truststore configuration detected - not supported in GLIDE");
             throw new JedisConfigurationException(
                     "Truststore configuration is not supported in GLIDE. Please use system certificate store"
                             + " or SslOptions with SslVerifyMode.INSECURE for testing.");
+        }
+
+        boolean needsAdvancedConfig = false;
+
+        // Process SSL parameters if present
+        if (sslOptions.getSslParameters() != null) {
+            boolean sslParamsNeedAdvanced =
+                    processSslParameters(sslOptions.getSslParameters(), advancedBuilder);
+            needsAdvancedConfig = needsAdvancedConfig || sslParamsNeedAdvanced;
         }
 
         // Handle SSL verify mode
@@ -221,7 +215,7 @@ public class ConfigurationMapper {
                     "SSL Configuration: SSL verification enabled via SslVerifyMode."
                             + verifyMode
                             + " - using secure TLS");
-            return false;
+            return needsAdvancedConfig;
         }
     }
 
@@ -230,11 +224,8 @@ public class ConfigurationMapper {
             SSLParameters sslParameters,
             AdvancedGlideClientConfiguration.AdvancedGlideClientConfigurationBuilder advancedBuilder) {
 
-        logger.info("Processing SSLParameters configuration");
-
         // Check cipher suites - not supported, should fail
         if (sslParameters.getCipherSuites() != null && sslParameters.getCipherSuites().length > 0) {
-            logger.severe("SSL Configuration: Custom cipher suites specified - not supported in GLIDE");
             throw new JedisConfigurationException(
                     "Custom cipher suites are not supported in GLIDE. GLIDE automatically selects secure"
                             + " cipher suites. Please remove custom cipher suite configuration.");
@@ -242,7 +233,6 @@ public class ConfigurationMapper {
 
         // Check protocols - not supported, should fail
         if (sslParameters.getProtocols() != null && sslParameters.getProtocols().length > 0) {
-            logger.severe("SSL Configuration: Custom SSL protocols specified - not supported in GLIDE");
             throw new JedisConfigurationException(
                     "Custom SSL protocols are not supported in GLIDE. GLIDE automatically selects the best"
                             + " available TLS protocol. Please remove custom protocol configuration.");
@@ -250,12 +240,10 @@ public class ConfigurationMapper {
 
         // Check client authentication - not supported, should fail
         if (sslParameters.getNeedClientAuth()) {
-            logger.severe("SSL Configuration: Client authentication required - not supported in GLIDE");
             throw new JedisConfigurationException(
                     "Client authentication (needClientAuth) is not supported in GLIDE. Please remove client"
                             + " authentication configuration or use server-side authentication.");
         } else if (sslParameters.getWantClientAuth()) {
-            logger.severe("SSL Configuration: Client authentication requested - not supported in GLIDE");
             throw new JedisConfigurationException(
                     "Client authentication (wantClientAuth) is not supported in GLIDE. Please remove client"
                             + " authentication configuration or use server-side authentication.");
@@ -266,7 +254,6 @@ public class ConfigurationMapper {
         // Check endpoint identification
         String endpointAlgorithm = sslParameters.getEndpointIdentificationAlgorithm();
         if (endpointAlgorithm != null && endpointAlgorithm.isEmpty()) {
-            logger.severe("Endpoint identification disabled in SSLParameters - not supported");
             throw new JedisConfigurationException(
                     "Disabled endpoint identification is not supported in GLIDE. "
                             + "GLIDE enforces hostname verification for security. "
@@ -295,20 +282,33 @@ public class ConfigurationMapper {
         if (jedisConfig.getConnectionTimeoutMillis() != jedisConfig.getSocketTimeoutMillis()) {
             advancedBuilder.connectionTimeout(jedisConfig.getConnectionTimeoutMillis());
             hasAdvancedConfig = true;
+
+            // Log warning about different timeouts
+            if (jedisConfig.getConnectionTimeoutMillis() > 0
+                    && jedisConfig.getSocketTimeoutMillis() > 0) {
+                logger.warning(
+                        String.format(
+                                "Different connection (%dms) and socket (%dms) timeouts specified. GLIDE will use"
+                                        + " connection timeout for connection establishment and socket timeout for"
+                                        + " request timeout.",
+                                jedisConfig.getConnectionTimeoutMillis(), jedisConfig.getSocketTimeoutMillis()));
+            }
         }
 
-        // Handle blocking socket timeout - map to request timeout calculation
+        // Handle blocking socket timeout - warn about architectural difference
         if (jedisConfig.getBlockingSocketTimeoutMillis() > 0) {
-            logger.info(
+            logger.warning(
                     "Blocking socket timeout specified ("
                             + jedisConfig.getBlockingSocketTimeoutMillis()
                             + "ms). "
-                            + "GLIDE will use this in the unified request timeout calculation.");
+                            + "GLIDE uses a unified request timeout for all operations. "
+                            + "Blocking commands will use the same timeout as non-blocking commands.");
         }
 
-        // Handle credentials provider - not supported, should fail
-        if (jedisConfig.getCredentialsProvider() != null) {
-            logger.severe("Custom credentials provider detected - not supported in GLIDE");
+        // Handle credentials provider - only reject custom providers
+        // The default implementation always provides a DefaultRedisCredentialsProvider, which is fine
+        if (jedisConfig.getCredentialsProvider() != null
+                && !(jedisConfig.getCredentialsProvider() instanceof DefaultRedisCredentialsProvider)) {
             throw new JedisConfigurationException(
                     "Custom credentials provider is not supported in GLIDE. GLIDE uses static credentials."
                             + " Please extract credentials manually and use username/password configuration.");
@@ -321,122 +321,13 @@ public class ConfigurationMapper {
     }
 
     /** Calculates appropriate GLIDE request timeout from Jedis socket timeout settings. */
-    private static int calculateGlideTimeout(JedisClientConfig jedisConfig) {
+    private static int calculateGlideRequestTimeout(JedisClientConfig jedisConfig) {
         // Note: connectionTimeout is handled separately in mapAdvancedSettings()
         // This method only handles the requestTimeout mapping
-        int socketTimeout = jedisConfig.getSocketTimeoutMillis();
-        int blockingTimeout = jedisConfig.getBlockingSocketTimeoutMillis();
 
-        // Start with socket timeout as base (this is for command response time)
-        int requestTimeout = socketTimeout;
-
-        // If blocking timeout is specified and reasonable, use it instead
-        // since GLIDE's requestTimeout will apply to all operations including blocking ones
-        if (blockingTimeout > 0 && blockingTimeout < 300000) { // Less than 5 minutes
-            requestTimeout = Math.max(requestTimeout, blockingTimeout);
-        }
-
-        // Ensure minimum timeout
-        return Math.max(requestTimeout, 1000); // At least 1 second
-    }
-
-    /** NEW: Validates that Jedis configuration can be converted to GLIDE. */
-    public static ValidationResult validateConfiguration(JedisClientConfig jedisConfig) {
-        List<String> warnings = new ArrayList<>();
-        List<String> errors = new ArrayList<>();
-
-        // Check for unsupported features
-        if (jedisConfig.getAuthXManager() != null) {
-            errors.add("AuthXManager is not supported in GLIDE");
-        }
-
-        // Check SSL configuration
-        if (jedisConfig.isSsl()) {
-            validateSslConfiguration(jedisConfig, warnings, errors);
-        }
-
-        // Check timeout configurations
-        validateTimeoutConfiguration(jedisConfig, warnings);
-
-        // Check database selection
-        if (jedisConfig.getDatabase() != Protocol.DEFAULT_DATABASE) {
-            warnings.add("Database selection: GLIDE supports database selection for standalone mode");
-        }
-
-        return new ValidationResult(warnings, errors);
-    }
-
-    /** Validates SSL configuration for conversion compatibility. */
-    private static void validateSslConfiguration(
-            JedisClientConfig jedisConfig, List<String> warnings, List<String> errors) {
-
-        if (jedisConfig.getSslSocketFactory() != null) {
-            errors.add("Custom SSLSocketFactory is not supported in GLIDE");
-        }
-
-        if (jedisConfig.getHostnameVerifier() != null) {
-            errors.add("Custom HostnameVerifier is not supported in GLIDE");
-        }
-
-        // Check SSL parameters for unsupported configurations
-        if (jedisConfig.getSslParameters() != null) {
-            SSLParameters sslParams = jedisConfig.getSslParameters();
-            if (sslParams.getEndpointIdentificationAlgorithm() != null
-                    && sslParams.getEndpointIdentificationAlgorithm().isEmpty()) {
-                errors.add("Disabled endpoint identification is not supported in GLIDE");
-            }
-        }
-
-        SslOptions sslOptions = jedisConfig.getSslOptions();
-        if (sslOptions != null) {
-            if (sslOptions.getSslVerifyMode() == SslVerifyMode.INSECURE) {
-                warnings.add(
-                        "SSL verification disabled via SslVerifyMode.INSECURE. Will map to GLIDE's"
-                                + " useInsecureTLS option.");
-            }
-
-            // Check if certificate resources are accessible
-            if (sslOptions.getKeystoreResource() != null) {
-                try (InputStream is = sslOptions.getKeystoreResource().get()) {
-                    // Just test accessibility
-                } catch (Exception e) {
-                    errors.add("Cannot access keystore resource: " + e.getMessage());
-                }
-            }
-
-            if (sslOptions.getTruststoreResource() != null) {
-                try (InputStream is = sslOptions.getTruststoreResource().get()) {
-                    // Just test accessibility
-                } catch (Exception e) {
-                    errors.add("Cannot access truststore resource: " + e.getMessage());
-                }
-            }
-        }
-    }
-
-    /** Validates timeout configuration for conversion. */
-    private static void validateTimeoutConfiguration(
-            JedisClientConfig jedisConfig, List<String> warnings) {
-
-        int connectionTimeout = jedisConfig.getConnectionTimeoutMillis();
-        int socketTimeout = jedisConfig.getSocketTimeoutMillis();
-
-        if (connectionTimeout != socketTimeout && connectionTimeout > 0 && socketTimeout > 0) {
-            warnings.add(
-                    String.format(
-                            "Different connection (%dms) and socket (%dms) timeouts specified. GLIDE will use"
-                                    + " connection timeout for connection establishment and socket timeout for"
-                                    + " request timeout.",
-                            connectionTimeout, socketTimeout));
-        }
-
-        if (jedisConfig.getBlockingSocketTimeoutMillis() > 0) {
-            warnings.add(
-                    "Blocking socket timeout specified ("
-                            + jedisConfig.getBlockingSocketTimeoutMillis()
-                            + "ms). "
-                            + "GLIDE will incorporate this into the unified request timeout calculation.");
-        }
+        // Use socket timeout as the base for request timeout
+        // Socket timeout in Jedis represents the time to wait for command responses
+        return jedisConfig.getSocketTimeoutMillis();
     }
 
     /**
@@ -463,33 +354,6 @@ public class ConfigurationMapper {
     }
 
     // ===== SUPPORTING CLASSES =====
-
-    /** Result of configuration validation. */
-    public static class ValidationResult {
-        private final List<String> warnings;
-        private final List<String> errors;
-
-        public ValidationResult(List<String> warnings, List<String> errors) {
-            this.warnings = new ArrayList<>(warnings);
-            this.errors = new ArrayList<>(errors);
-        }
-
-        public List<String> getWarnings() {
-            return warnings;
-        }
-
-        public List<String> getErrors() {
-            return errors;
-        }
-
-        public boolean hasErrors() {
-            return !errors.isEmpty();
-        }
-
-        public boolean hasWarnings() {
-            return !warnings.isEmpty();
-        }
-    }
 
     /** Custom exception for configuration conversion issues. */
     public static class JedisConfigurationException extends JedisException {
