@@ -151,6 +151,7 @@ from .exceptions import (
     ConnectionError,
     ExecAbortError,
     GlideError,
+    LoggerError,
     RequestError,
     TimeoutError,
 )
@@ -290,6 +291,7 @@ __all__ = [
     "GlideError",
     "RequestError",
     "TimeoutError",
+    "LoggerError",
     # Ft
     "DataType",
     "DistanceMetricType",

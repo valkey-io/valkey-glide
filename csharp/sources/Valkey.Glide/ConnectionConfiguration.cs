@@ -52,6 +52,7 @@ public abstract class ConnectionConfiguration
         public uint NumberOfRetries = numberOfRetries;
         /// <summary>
         /// The multiplier that will be applied to the waiting time between each retry.
+        /// This value is specified in milliseconds.
         /// </summary>
         public uint Factor = factor;
         /// <summary>
