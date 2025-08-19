@@ -566,7 +566,12 @@ public class CommandTests {
         firstNodeInfo = getFirstEntryFromMultiValue(data);
         long valueAfter = getValueFromInfo(firstNodeInfo, "total_net_input_bytes");
 
-        assertTrue(valueAfter < valueBefore);
+        assertTrue(
+                valueAfter < valueBefore,
+                () ->
+                        String.format(
+                                "Expected valueAfter (%d) to be less than valueBefore (%d)",
+                                valueAfter, valueBefore));
     }
 
     @ParameterizedTest
