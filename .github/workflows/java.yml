@@ -296,8 +296,11 @@ jobs:
                     echo "org.gradle.java.installations.auto-download=false" >> ~/.gradle/gradle.properties
                     echo IMAGE=amazonlinux:latest | sed -r 's/:/-/g' >> $GITHUB_ENV
                   elif [[ "${{ matrix.host.TARGET }}" == "x86_64-unknown-linux-musl" ]]; then
-                    apk add openjdk${{matrix.java}} git 
+                    apk add openjdk${{matrix.java}} git bash
                     export JAVA_HOME=/usr/lib/jvm/java-${{matrix.java}}-openjdk
+                    # Create gradle user home and disable auto-download
+                    mkdir -p ~/.gradle
+                    echo "org.gradle.java.installations.auto-download=false" >> ~/.gradle/gradle.properties
                   fi
             # Replace `:` in the variable otherwise it can't be used in `upload-artifact`
             - uses: actions/checkout@v4
@@ -341,8 +344,13 @@ jobs:
               working-directory: java
               env:
                   GLIDE_CONTAINER_BUILD: true
-                  JAVA_HOME: /usr/lib/jvm/java-${{ matrix.java }}-amazon-corretto.x86_64
-              run: ./gradlew --build-cache --continue build -x javadoc
+              run: |
+                  if [[ "${{ matrix.host.OS }}" == "amazon-linux" ]]; then
+                      export JAVA_HOME=/usr/lib/jvm/java-${{matrix.java}}-amazon-corretto.x86_64
+                  else
+                      export JAVA_HOME=/usr/lib/jvm/java-${{matrix.java}}-openjdk
+                  fi
+                  ./gradlew --build-cache --continue build -x javadoc
 
             - name: Upload test & spotbugs reports
               if: always()
