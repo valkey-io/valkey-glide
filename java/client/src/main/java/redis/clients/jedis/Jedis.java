@@ -100,7 +100,7 @@ public final class Jedis implements Closeable {
 
     /** Character encoding used for string-to-byte conversions in Valkey operations. */
     private static final Charset VALKEY_CHARSET = StandardCharsets.UTF_8;
-    
+
     /** Keyword used in hash field expiration commands to specify the number of fields. */
     private static final String FIELDS_KEYWORD = "FIELDS";
 

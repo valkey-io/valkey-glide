@@ -9147,15 +9147,15 @@ class TestCommands:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_lolwut(self, glide_sync_client: TGlideClient):
         result = glide_sync_client.lolwut()
-        assert re.search(rb"(Redis|Valkey) ver\. ", result)
+        assert re.search(rb"(Redis|Valkey) ver\. ?", result)
         result = glide_sync_client.lolwut(parameters=[])
-        assert re.search(rb"(Redis|Valkey) ver\. ", result)
+        assert re.search(rb"(Redis|Valkey) ver\. ?", result)
         result = glide_sync_client.lolwut(parameters=[50, 20])
-        assert re.search(rb"(Redis|Valkey) ver\. ", result)
+        assert re.search(rb"(Redis|Valkey) ver\. ?", result)
         result = glide_sync_client.lolwut(6)
-        assert re.search(rb"(Redis|Valkey) ver\. ", result)
+        assert re.search(rb"(Redis|Valkey) ver\. ?", result)
         result = glide_sync_client.lolwut(5, [30, 4, 4])
-        assert re.search(rb"(Redis|Valkey) ver\. ", result)
+        assert re.search(rb"(Redis|Valkey) ver\. ?", result)
 
         if isinstance(glide_sync_client, GlideClusterClient):
             # test with multi-node route
@@ -9164,23 +9164,23 @@ class TestCommands:
             result_decoded = cast(dict, convert_bytes_to_string_object(result))
             assert result_decoded is not None
             for node_result in result_decoded.values():
-                assert re.search(r"(Redis|Valkey) ver\. ", node_result)
+                assert re.search(r"(Redis|Valkey) ver\. ?", node_result)
 
             result = glide_sync_client.lolwut(parameters=[10, 20], route=AllNodes())
             assert isinstance(result, dict)
             result_decoded = cast(dict, convert_bytes_to_string_object(result))
             assert result_decoded is not None
             for node_result in result_decoded.values():
-                assert re.search(r"(Redis|Valkey) ver\. ", node_result)
+                assert re.search(r"(Redis|Valkey) ver\. ?", node_result)
 
             # test with single-node route
             result = glide_sync_client.lolwut(2, route=RandomNode())
             assert isinstance(result, bytes)
-            assert re.search(rb"(Redis|Valkey) ver\. ", result)
+            assert re.search(rb"(Redis|Valkey) ver\. ?", result)
 
             result = glide_sync_client.lolwut(2, [10, 20], RandomNode())
             assert isinstance(result, bytes)
-            assert re.search(rb"(Redis|Valkey) ver\. ", result)
+            assert re.search(rb"(Redis|Valkey) ver\. ?", result)
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
