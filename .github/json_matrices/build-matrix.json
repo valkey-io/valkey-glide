@@ -60,7 +60,7 @@
         "IMAGE": "node:lts-alpine",
         "CONTAINER_OPTIONS": "--user root --privileged",
         "PACKAGE_MANAGERS": ["npm"],
-        "languages": ["node"]
+        "languages": ["node","java"]
     },
     {
         "OS": "amazon-linux",
