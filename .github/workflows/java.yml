@@ -361,7 +361,7 @@ jobs:
                   else
                       export JAVA_HOME=/usr/lib/jvm/java-${{matrix.java}}-openjdk
                   fi
-                  ./gradlew --build-cache --continue build -x javadoc
+                  ./gradlew --stacktrace --build-cache --continue build -x javadoc
 
             - name: Upload test & spotbugs reports
               if: always()
