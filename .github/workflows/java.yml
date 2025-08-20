@@ -301,6 +301,8 @@ jobs:
                     # Create gradle user home and disable auto-download
                     mkdir -p ~/.gradle
                     echo "org.gradle.java.installations.auto-download=false" >> ~/.gradle/gradle.properties
+
+                    
                   fi
             # Replace `:` in the variable otherwise it can't be used in `upload-artifact`
             - uses: actions/checkout@v4
@@ -322,7 +324,7 @@ jobs:
                   repo-token: ${{ secrets.GITHUB_TOKEN }}
 
             # Ensure Rust is in PATH for container environments
-            - name: Setup Rust PATH
+            - name: Setup Rust Build
               if: ${{ contains(matrix.host.TARGET, 'musl') }}
               run: |
                   echo 'source "$HOME/.cargo/env"' >> ~/.bashrc
@@ -331,6 +333,10 @@ jobs:
                   # Verify Rust is available
                   which cargo || echo "Cargo still not found in PATH"
                   echo "Current PATH: $PATH"
+
+                  # Install ziglang and zigbuild
+                  pip3 install ziglang --break-system-packages
+                  cargo install --locked cargo-zigbuild
 
             - uses: actions/cache@v4
               with:
