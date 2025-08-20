@@ -8,6 +8,7 @@ use logger_core::{log_error, log_info, log_warn};
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
+use strum_macros::IntoStaticStr;
 use thiserror::Error;
 use tokio::sync::{Notify, RwLock};
 use tokio::task::JoinHandle;
@@ -42,19 +43,13 @@ pub enum GlideIAMError {
 }
 
 /// Service type configuration for IAM authentication
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum ServiceType {
-    ElastiCache,
-    MemoryDB,
-}
 
-impl ServiceType {
-    fn service_name(&self) -> &'static str {
-        match self {
-            ServiceType::ElastiCache => "elasticache",
-            ServiceType::MemoryDB => "memorydb",
-        }
-    }
+#[derive(Clone, Copy, Debug, PartialEq, Eq, IntoStaticStr)]
+pub enum ServiceType {
+    #[strum(serialize = "elasticache")]
+    ElastiCache,
+    #[strum(serialize = "memorydb")]
+    MemoryDB,
 }
 
 /// Validate and normalize the refresh interval.
@@ -112,7 +107,6 @@ struct IamTokenState {
     cluster_name: String,
     /// Username for the connection
     username: String,
-    // todo: Add serverless endpoint to state. should be a bool? https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/auth-iam.html
     /// Service type (ElastiCache or MemoryDB)
     service_type: ServiceType,
     /// Token refresh interval in seconds
@@ -141,7 +135,7 @@ impl IAMTokenManager {
     /// # Arguments
     /// * `cluster_name` - The ElastiCache/MemoryDB cluster name
     /// * `username` - Username for authentication
-    /// * `region` - AWS region
+    /// * `region` - AWS region of the cluster
     /// * `service_type` - Service type (ElastiCache or MemoryDB)
     /// * `refresh_interval_seconds` - Optional refresh interval in seconds. Defaults to 14 minutes (840 seconds).
     ///   Maximum allowed is 12 hours (43200 seconds). Values above 15 minutes (900 seconds) will log a warning
@@ -287,13 +281,15 @@ impl IAMTokenManager {
             .await
             .map_err(|e| GlideIAMError::CredentialsError(e.to_string()))?;
 
+        let service_name: &'static str = state.service_type.into();
+
         // Create AWS identity from credentials
         let identity = Credentials::new(
             creds.access_key_id(),
             creds.secret_access_key(),
             creds.session_token().map(|s| s.to_string()),
             None,
-            state.service_type.service_name(), // "elasticache" | "memorydb"
+            service_name, // "elasticache" | "memorydb"
         );
 
         let signing_time = SystemTime::now();
@@ -309,7 +305,7 @@ impl IAMTokenManager {
         let signing_params = v4::SigningParams::builder()
             .identity(&identity_value)
             .region(&state.region)
-            .name(state.service_type.service_name())
+            .name(service_name)
             .time(signing_time)
             .settings(signing_settings)
             .build()
@@ -418,6 +414,18 @@ mod tests {
         }
     }
 
+    fn remove_test_credentials() {
+        // Clear any existing AWS credentials
+        unsafe {
+            env::remove_var("AWS_ACCESS_KEY_ID");
+            env::remove_var("AWS_SECRET_ACCESS_KEY");
+            env::remove_var("AWS_SESSION_TOKEN");
+            env::remove_var("AWS_PROFILE");
+            env::remove_var("AWS_SHARED_CREDENTIALS_FILE");
+            env::remove_var("AWS_CONFIG_FILE");
+        }
+    }
+
     /// Helper function to save token to JSON file for inspection
     fn save_token_to_file(test_name: &str, token: &str, state: &IamTokenState) {
         let token_data = serde_json::json!({
@@ -476,7 +484,7 @@ mod tests {
         let username = "test-user";
         let service_type = ServiceType::ElastiCache;
 
-        let state = create_test_state(region, cluster_name, username, service_type.clone());
+        let state = create_test_state(region, cluster_name, username, service_type);
         let result = IAMTokenManager::generate_token_static(&state).await;
 
         assert!(
@@ -547,7 +555,7 @@ mod tests {
         let username = "memorydb-user";
         let service_type = ServiceType::MemoryDB;
 
-        let state = create_test_state(region, cluster_name, username, service_type.clone());
+        let state = create_test_state(region, cluster_name, username, service_type);
         let result = IAMTokenManager::generate_token_static(&state).await;
 
         assert!(
@@ -586,7 +594,7 @@ mod tests {
         let username = "test@user.com";
         let service_type = ServiceType::ElastiCache;
 
-        let state = create_test_state(region, cluster_name, username, service_type.clone());
+        let state = create_test_state(region, cluster_name, username, service_type);
         let result = IAMTokenManager::generate_token_static(&state).await;
 
         assert!(
@@ -820,28 +828,20 @@ mod tests {
         );
     }
 
-    // todo: check about this test if it should fail or pass
     #[tokio::test]
     #[serial]
     async fn test_iam_generate_token_static_fails_without_credentials() {
         initialize_test_environment(); // Ensure test environment is clean
 
         // Clear any existing AWS credentials
-        unsafe {
-            env::remove_var("AWS_ACCESS_KEY_ID");
-            env::remove_var("AWS_SECRET_ACCESS_KEY");
-            env::remove_var("AWS_SESSION_TOKEN");
-            env::remove_var("AWS_PROFILE");
-            env::remove_var("AWS_SHARED_CREDENTIALS_FILE");
-            env::remove_var("AWS_CONFIG_FILE");
-        }
+        remove_test_credentials();
 
         let region = "us-east-1";
         let cluster_name = "test-cluster";
         let username = "test-user";
         let service_type = ServiceType::ElastiCache;
 
-        let state = create_test_state(region, cluster_name, username, service_type.clone());
+        let state = create_test_state(region, cluster_name, username, service_type);
         let result = IAMTokenManager::generate_token_static(&state).await;
 
         // Note: This test might pass on EC2 instances with IAM roles or other credential sources
