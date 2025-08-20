@@ -71,8 +71,6 @@ subprojects {
         }
     }
 
-    gradle.startParameter.showStacktrace = ShowStacktrace.ALWAYS
-
     ext {
         defaultReleaseVersion = "255.255.255"
         failedTests = []
