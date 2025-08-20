@@ -55,10 +55,7 @@ public class UnifiedJedis implements Closeable {
     public UnifiedJedis(HostAndPort hostAndPort, JedisClientConfig clientConfig) {
         this.config = clientConfig;
 
-        // Validate configuration
-        ConfigurationMapper.validateConfiguration(clientConfig);
-
-        // Map Jedis config to GLIDE config
+        // Map Jedis config to GLIDE config (validation happens during mapping)
         GlideClientConfiguration glideConfig =
                 ConfigurationMapper.mapToGlideConfig(
                         hostAndPort.getHost(), hostAndPort.getPort(), clientConfig);

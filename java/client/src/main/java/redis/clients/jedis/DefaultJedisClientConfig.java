@@ -26,6 +26,7 @@ public class DefaultJedisClientConfig implements JedisClientConfig {
     private final SSLSocketFactory sslSocketFactory;
     private final SSLParameters sslParameters;
     private final HostnameVerifier hostnameVerifier;
+    private final SslOptions sslOptions;
     private final RedisProtocol redisProtocol;
 
     private DefaultJedisClientConfig(Builder builder) {
@@ -40,6 +41,7 @@ public class DefaultJedisClientConfig implements JedisClientConfig {
         this.sslSocketFactory = builder.sslSocketFactory;
         this.sslParameters = builder.sslParameters;
         this.hostnameVerifier = builder.hostnameVerifier;
+        this.sslOptions = builder.sslOptions;
         this.redisProtocol = builder.redisProtocol;
     }
 
@@ -103,6 +105,11 @@ public class DefaultJedisClientConfig implements JedisClientConfig {
     }
 
     @Override
+    public SslOptions getSslOptions() {
+        return sslOptions;
+    }
+
+    @Override
     public RedisProtocol getRedisProtocol() {
         return redisProtocol;
     }
@@ -119,6 +126,7 @@ public class DefaultJedisClientConfig implements JedisClientConfig {
         private SSLSocketFactory sslSocketFactory;
         private SSLParameters sslParameters;
         private HostnameVerifier hostnameVerifier;
+        private SslOptions sslOptions;
         private RedisProtocol redisProtocol = DEFAULT_PROTOCOL;
 
         public Builder connectionTimeoutMillis(int connectionTimeoutMillis) {
@@ -173,6 +181,11 @@ public class DefaultJedisClientConfig implements JedisClientConfig {
 
         public Builder hostnameVerifier(HostnameVerifier hostnameVerifier) {
             this.hostnameVerifier = hostnameVerifier;
+            return this;
+        }
+
+        public Builder sslOptions(SslOptions sslOptions) {
+            this.sslOptions = sslOptions;
             return this;
         }
 
