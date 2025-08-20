@@ -1923,12 +1923,19 @@ func (client *baseClient) HGetEx(
 //	key        - The key of the hash.
 //	expireTime - The expiration time as a duration.
 //	fields     - The fields to set expiration for.
-//	options    - Optional arguments for the command.
+//	options    - Optional arguments for the command. Optional condition for setting expiration:
+//		NX - Only set expiry if field has no expiry.
+//		XX - Only set expiry if field already has expiry.
+//		GT - Only set expiry if new expiry is greater than current.
+//		LT - Only set expiry if new expiry is less than current.
 //
 // Return value:
 //
 //	An array of integers indicating the result for each field:
-//	1 if expiration was set, 0 if expiration was not set (field doesn't exist or condition not met), -2 if field doesn't exist.
+//		-2: Field does not exist in the hash, or key does not exist.
+//		0: The specified condition (NX|XX|GT|LT) was not met.
+//		1: The expiration time was applied.
+//		2: When called with 0 seconds.
 //
 // [valkey.io]: https://valkey.io/commands/hexpire/
 func (client *baseClient) HExpire(
@@ -1967,12 +1974,19 @@ func (client *baseClient) HExpire(
 //	key        - The key of the hash.
 //	expireTime - The expiration time as a time.Time.
 //	fields     - The fields to set expiration for.
-//	options    - Optional arguments for the command.
+//	options    - Optional arguments for the command. Optional condition for setting expiration:
+//		NX - Only set expiry if field has no expiry.
+//		XX - Only set expiry if field already has expiry.
+//		GT - Only set expiry if new expiry is greater than current.
+//		LT - Only set expiry if new expiry is less than current.
 //
 // Return value:
 //
 //	An array of integers indicating the result for each field:
-//	1 if expiration was set, 0 if expiration was not set (field doesn't exist or condition not met), -2 if field doesn't exist.
+//		-2: Field does not exist in the hash, or hash is empty.
+//		0: The specified condition (NX|XX|GT|LT) was not met.
+//		1: The expiration time was applied.
+//		2: When called with 0 seconds or past Unix time.
 //
 // [valkey.io]: https://valkey.io/commands/hexpireat/
 func (client *baseClient) HExpireAt(
@@ -2010,12 +2024,19 @@ func (client *baseClient) HExpireAt(
 //	key        - The key of the hash.
 //	expireTime - The expiration time as a duration.
 //	fields     - The fields to set expiration for.
-//	options    - Optional arguments for the command.
+//	options    - Optional arguments for the command. Optional condition for setting expiration:
+//		NX - Only set expiry if field has no expiry.
+//		XX - Only set expiry if field already has expiry.
+//		GT - Only set expiry if new expiry is greater than current.
+//		LT - Only set expiry if new expiry is less than current.
 //
 // Return value:
 //
 //	An array of integers indicating the result for each field:
-//	1 if expiration was set, 0 if expiration was not set (field doesn't exist or condition not met), -2 if field doesn't exist.
+//		-2: Field does not exist in the hash, or hash is empty.
+//		0: The specified condition (NX|XX|GT|LT) was not met.
+//		1: The expiration time was applied.
+//		2: When called with 0 milliseconds.
 //
 // [valkey.io]: https://valkey.io/commands/hpexpire/
 func (client *baseClient) HPExpire(
@@ -2054,12 +2075,19 @@ func (client *baseClient) HPExpire(
 //	key        - The key of the hash.
 //	expireTime - The expiration time as a time.Time.
 //	fields     - The fields to set expiration for.
-//	options    - Optional arguments for the command.
+//	options    - Optional arguments for the command. Optional condition for setting expiration:
+//		NX - Only set expiry if field has no expiry.
+//		XX - Only set expiry if field already has expiry.
+//		GT - Only set expiry if new expiry is greater than current.
+//		LT - Only set expiry if new expiry is less than current.
 //
 // Return value:
 //
 //	An array of integers indicating the result for each field:
-//	1 if expiration was set, 0 if expiration was not set (field doesn't exist or condition not met), -2 if field doesn't exist.
+//		-2: Field does not exist in the hash, or hash is empty.
+//		0: The specified condition (NX|XX|GT|LT) was not met.
+//		1: The expiration time was applied.
+//		2: When called with 0 milliseconds or past Unix time.
 //
 // [valkey.io]: https://valkey.io/commands/hpexpireat/
 func (client *baseClient) HPExpireAt(
@@ -2100,7 +2128,9 @@ func (client *baseClient) HPExpireAt(
 // Return value:
 //
 //	An array of integers indicating the result for each field:
-//	1 if expiration was removed, 0 if field had no expiration, -2 if field doesn't exist.
+//		-2: Field does not exist in the hash, or hash does not exist.
+//		-1: Field exists but has no expiration.
+//		1: The expiration was successfully removed from the field.
 //
 // [valkey.io]: https://valkey.io/commands/hpersist/
 func (client *baseClient) HPersist(ctx context.Context, key string, fields []string) ([]int64, error) {
