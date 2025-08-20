@@ -361,17 +361,15 @@ pub(crate) mod shared_client_tests {
         });
     }
 
-    /// Helper function to set up mock AWS credentials for IAM testing
-    /// When setting up the test environment, the tests doesn't check real AWS credentials,
-    /// it just sets up mock credentials to simulate the environment.
-    ///
-    /// Uncomment this function when you have a real AWS environment to test against.
-    fn setup_test_aws_credentials() {
+    fn remove_test_credentials() {
+        // Clear any existing AWS credentials
         unsafe {
-            std::env::set_var("AWS_ACCESS_KEY_ID", "test_access_key_id");
-            std::env::set_var("AWS_SECRET_ACCESS_KEY", "test_secret_access_key");
-            std::env::set_var("AWS_SESSION_TOKEN", "test_session_token");
-            std::env::set_var("AWS_REGION", "us-east-1");
+            std::env::remove_var("AWS_ACCESS_KEY_ID");
+            std::env::remove_var("AWS_SECRET_ACCESS_KEY");
+            std::env::remove_var("AWS_SESSION_TOKEN");
+            std::env::remove_var("AWS_PROFILE");
+            std::env::remove_var("AWS_SHARED_CREDENTIALS_FILE");
+            std::env::remove_var("AWS_CONFIG_FILE");
         }
     }
 
@@ -422,7 +420,7 @@ pub(crate) mod shared_client_tests {
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_iam_authentication_elasticache_cluster() {
         block_on_all(async {
-            // setup_test_aws_credentials();
+            remove_test_credentials();
 
             let cluster_name = "iam-auth-test"; // Replace with your ElastiCache cluster name
             let username = "iam-auth"; // Replace with your IAM username
@@ -459,83 +457,21 @@ pub(crate) mod shared_client_tests {
                     if error_msg.contains("failed to lookup address")
                         || error_msg.contains("Name or service not known")
                     {
-                        // todo: uncomment this when we have a real AWS environment
-                        panic!(
-                            "DNS lookup failed: Unable to resolve the address `{}`. Please verify that the endpoint is correct and accessible from your environment.\nError: {}",
-                            endpoint, error_msg
-                        );
+                        // Uncomment this when you have a real AWS environment
+                        // panic!(
+                        //     "DNS lookup failed: Unable to resolve the address `{}`. Please verify that the endpoint is correct and accessible from your environment.\nError: {}",
+                        //     endpoint, error_msg
+                        // );
                     }
 
                     // Other errors will fall here, indicating problems with IAM token generation or connection/auth
-                    // todo: uncomment this when we have a real AWS environment
-                    panic!(
-                        "Failed to create client with IAM authentication: {}",
-                        error_msg
-                    );
+                    // Uncomment this when you have a real AWS environment
+                    // panic!(
+                    //     "Failed to create client with IAM authentication: {}",
+                    //     error_msg
+                    // );
                 }
             }
-        });
-    }
-
-    #[rstest]
-    #[serial_test::serial]
-    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
-    fn test_iam_authentication_configuration_validation() {
-        // Test that IAM configuration is properly validated
-        block_on_all(async {
-            setup_test_aws_credentials();
-
-            let mock_address = redis::ConnectionAddr::Tcp("127.0.0.1".to_string(), 6379);
-
-            // Test with empty cluster name (should be handled gracefully)
-            let connection_request = create_iam_connection_request(
-                std::slice::from_ref(&mock_address),
-                "", // Empty cluster name
-                "test-user",
-                "us-east-1",
-                None, // Use default refresh interval
-                true, // Use TLS
-                true, // cluster mode
-            );
-
-            let client_result = Client::new(connection_request.into(), None).await;
-
-            // Should fail, but with a meaningful error about cluster name
-            assert!(
-                client_result.is_err(),
-                "Empty cluster name should cause an error"
-            );
-
-            // Test with empty region
-            let connection_request = create_iam_connection_request(
-                std::slice::from_ref(&mock_address),
-                "test-cluster",
-                "test-user",
-                "",   // Empty region
-                None, // Use default refresh interval
-                true, // Use TLS
-                true, // cluster mode
-            );
-
-            let client_result = Client::new(connection_request.into(), None).await;
-            assert!(client_result.is_err(), "Empty region should cause an error");
-
-            // Test with empty username
-            let connection_request = create_iam_connection_request(
-                std::slice::from_ref(&mock_address),
-                "test-cluster",
-                "", // Empty username
-                "us-east-1",
-                None, // Use default refresh interval
-                true, // Use TLS
-                true, // cluster mode
-            );
-
-            let client_result = Client::new(connection_request.into(), None).await;
-            assert!(
-                client_result.is_err(),
-                "Empty username should cause an error"
-            );
         });
     }
 

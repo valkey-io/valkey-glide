@@ -397,7 +397,9 @@ impl Client {
             // Create the appropriate client based on configuration
             let real_client = if config.cluster_mode_enabled {
                 // Create cluster client
-                let client = create_cluster_client(config, push_sender).await?;
+                let iam_manager_guard = self.iam_token_manager.read().await;
+                let iam_manager_ref = iam_manager_guard.as_ref();
+                let client = create_cluster_client(config, push_sender, iam_manager_ref).await?;
                 ClientWrapper::Cluster { client }
             } else {
                 // Create standalone client
@@ -991,23 +993,13 @@ fn to_duration(time_in_millis: Option<u32>, default: Duration) -> Duration {
 async fn create_cluster_client(
     request: ConnectionRequest,
     push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
+    iam_token_manager: Option<&Arc<tokio::sync::RwLock<crate::iam::IAMTokenManager>>>,
 ) -> RedisResult<redis::cluster_async::ClusterConnection> {
     // TODO - implement timeout for each connection attempt
     let tls_mode = request.tls_mode.unwrap_or_default();
 
-    // Check if we need to create an IAM token manager for connection establishment
-    let iam_token_manager = if let Some(auth_info) = &request.authentication_info {
-        if auth_info.iam_config.is_some() {
-            Client::create_iam_token_manager(auth_info).await
-        } else {
-            None
-        }
-    } else {
-        None
-    };
-
     let redis_connection_info =
-        get_redis_connection_info_with_iam(&request, iam_token_manager.as_ref()).await;
+        get_redis_connection_info_with_iam(&request, iam_token_manager).await;
     let initial_nodes: Vec<_> = request
         .addresses
         .into_iter()
@@ -1281,9 +1273,10 @@ impl Client {
                     iam_token_manager: iam_token_manager.clone(),
                 }))
             } else if request.cluster_mode_enabled {
-                let client = create_cluster_client(request, push_sender)
-                    .await
-                    .map_err(ConnectionError::Cluster)?;
+                let client =
+                    create_cluster_client(request, push_sender, iam_token_manager.as_ref())
+                        .await
+                        .map_err(ConnectionError::Cluster)?;
                 ClientWrapper::Cluster { client }
             } else {
                 ClientWrapper::Standalone(
