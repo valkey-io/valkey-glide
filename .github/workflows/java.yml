@@ -296,17 +296,8 @@ jobs:
                     echo "org.gradle.java.installations.auto-download=false" >> ~/.gradle/gradle.properties
                     echo IMAGE=amazonlinux:latest | sed -r 's/:/-/g' >> $GITHUB_ENV
                   elif [[ "${{ matrix.host.TARGET }}" == "x86_64-unknown-linux-musl" ]]; then
-                    apk add openjdk11 git gcc pkgconfig openssl unzip cmake curl python3 py3-pip
-                    apk add build-base musl-dev valkey valkey-cli gcompat busybox-extras envsubst protobuf-dev
-                    apk add make libressl-dev mc wget nano mandoc python3 bash less
-                    # Install rust
-                    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-                    . "$HOME/.cargo/env"
-                    # Install ziglang and zigbuild
-                    pip3 install ziglang --break-system-packages && \
-                        cargo install --locked cargo-zigbuild
-                    # Install Rust linter components
-                    rustup component add clippy rustfmt
+                    apk add openjdk${{matrix.java}} git 
+                    export JAVA_HOME=/usr/lib/jvm/java-${{matrix.java}}-openjdk
                   fi
             # Replace `:` in the variable otherwise it can't be used in `upload-artifact`
             - uses: actions/checkout@v4
