@@ -266,7 +266,7 @@ jobs:
                   run-full-matrix: true
                   containers: true
 
-    test-java-container:
+    test-java-container:    
         runs-on: ${{ matrix.host.RUNNER }}
         needs: [get-containers]
         timeout-minutes: 25
@@ -282,18 +282,32 @@ jobs:
         steps:
             - name: Install git and Java
               run: |
-                  yum update -y
-                  yum install -y git tar java-${{ matrix.java }}-amazon-corretto-devel.x86_64
-                  # Set JAVA_HOME to use the installed JDK
-                  export JAVA_HOME=/usr/lib/jvm/java-${{ matrix.java }}-amazon-corretto.x86_64
-                  echo "JAVA_HOME=/usr/lib/jvm/java-${{ matrix.java }}-amazon-corretto.x86_64" >> $GITHUB_ENV
-                  echo "/usr/lib/jvm/java-${{ matrix.java }}-amazon-corretto.x86_64/bin" >> $GITHUB_PATH
-                  # Set environment variable to indicate container environment for Gradle
-                  echo "GLIDE_CONTAINER_BUILD=true" >> $GITHUB_ENV
-                  # Create gradle user home and disable auto-download
-                  mkdir -p ~/.gradle
-                  echo "org.gradle.java.installations.auto-download=false" >> ~/.gradle/gradle.properties
-                  echo IMAGE=amazonlinux:latest | sed -r 's/:/-/g' >> $GITHUB_ENV
+                  if [[ "${{ matrix.host.OS }}" == "amazon-linux" ]]; then
+                    yum update -y
+                    yum install -y git tar java-${{ matrix.java }}-amazon-corretto-devel.x86_64
+                    # Set JAVA_HOME to use the installed JDK
+                    export JAVA_HOME=/usr/lib/jvm/java-${{ matrix.java }}-amazon-corretto.x86_64
+                    echo "JAVA_HOME=/usr/lib/jvm/java-${{ matrix.java }}-amazon-corretto.x86_64" >> $GITHUB_ENV
+                    echo "/usr/lib/jvm/java-${{ matrix.java }}-amazon-corretto.x86_64/bin" >> $GITHUB_PATH
+                    # Set environment variable to indicate container environment for Gradle
+                    echo "GLIDE_CONTAINER_BUILD=true" >> $GITHUB_ENV
+                    # Create gradle user home and disable auto-download
+                    mkdir -p ~/.gradle
+                    echo "org.gradle.java.installations.auto-download=false" >> ~/.gradle/gradle.properties
+                    echo IMAGE=amazonlinux:latest | sed -r 's/:/-/g' >> $GITHUB_ENV
+                  elif [[ "${{ matrix.host.TARGET }}" == "x86_64-unknown-linux-musl" ]]; then
+                    apk add openjdk11 git gcc pkgconfig openssl unzip cmake curl python3 py3-pip
+                    apk add build-base musl-dev valkey valkey-cli gcompat busybox-extras envsubst protobuf-dev
+                    apk add make libressl-dev mc wget nano mandoc python3 bash less
+                    # Install rust
+                    RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+                    export PATH="/root/.cargo/bin:${PATH}"
+                    # Install ziglang and zigbuild
+                    RUN pip3 install ziglang --break-system-packages && \
+                        cargo install --locked cargo-zigbuild
+                    # Install Rust linter components
+                    rustup component add clippy rustfmt
+                  fi
             # Replace `:` in the variable otherwise it can't be used in `upload-artifact`
             - uses: actions/checkout@v4
               with:
