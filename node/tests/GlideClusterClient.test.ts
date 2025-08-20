@@ -751,33 +751,25 @@ describe("GlideClusterClient", () => {
 
             // test with multi-node route
             const result1 = await client.lolwut({ route: "allNodes" });
-            expect(intoString(result1)).toEqual(
-                expect.stringContaining("Redis ver. "),
-            );
+            expect(intoString(result1)).toMatch(/(Redis|Valkey) ver\./);
 
             const result2 = await client.lolwut({
                 version: 2,
                 parameters: [10, 20],
                 route: "allNodes",
             });
-            expect(intoString(result2)).toEqual(
-                expect.stringContaining("Redis ver. "),
-            );
+            expect(intoString(result2)).toMatch(/(Redis|Valkey) ver\./);
 
             // test with single-node route
             const result3 = await client.lolwut({ route: "randomNode" });
-            expect(intoString(result3)).toEqual(
-                expect.stringContaining("Redis ver. "),
-            );
+            expect(intoString(result3)).toMatch(/(Redis|Valkey) ver\./);
 
             const result4 = await client.lolwut({
                 version: 2,
                 parameters: [10, 20],
                 route: "randomNode",
             });
-            expect(intoString(result4)).toEqual(
-                expect.stringContaining("Redis ver. "),
-            );
+            expect(intoString(result4)).toMatch(/(Redis|Valkey) ver\./);
 
             // batch tests
             for (const isAtomic of [true, false]) {
@@ -790,8 +782,8 @@ describe("GlideClusterClient", () => {
 
                 if (results) {
                     for (const element of results) {
-                        expect(intoString(element)).toEqual(
-                            expect.stringContaining("Redis ver. "),
+                        expect(intoString(element)).toMatch(
+                            /(Redis|Valkey) ver\./,
                         );
                     }
                 } else {

@@ -100,6 +100,9 @@ public final class Jedis implements Closeable {
 
     /** Character encoding used for string-to-byte conversions in Valkey operations. */
     private static final Charset VALKEY_CHARSET = StandardCharsets.UTF_8;
+    
+    /** Keyword used in hash field expiration commands to specify the number of fields. */
+    private static final String FIELDS_KEYWORD = "FIELDS";
 
     private volatile GlideClient glideClient; // Changed from final to volatile for lazy init
     private final boolean isPooled;
@@ -4405,6 +4408,10 @@ public final class Jedis implements Closeable {
                 }
             }
 
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add("1"); // Single field
+
             args.add(field);
             args.add(value);
 
@@ -4446,6 +4453,10 @@ public final class Jedis implements Closeable {
                 }
             }
 
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(hash.size()));
+
             // Add field-value pairs
             for (Map.Entry<String, String> entry : hash.entrySet()) {
                 args.add(entry.getKey());
@@ -4484,6 +4495,10 @@ public final class Jedis implements Closeable {
                     args.add(params.getExpirationValue().toString());
                 }
             }
+
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(fields.length));
 
             // Add fields
             args.addAll(Arrays.asList(fields));
@@ -4569,6 +4584,10 @@ public final class Jedis implements Closeable {
                 }
             }
 
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add("1"); // Single field
+
             args.add(new String(field));
             args.add(new String(value));
 
@@ -4610,6 +4629,10 @@ public final class Jedis implements Closeable {
                 }
             }
 
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(hash.size()));
+
             // Add field-value pairs
             for (Map.Entry<byte[], byte[]> entry : hash.entrySet()) {
                 args.add(new String(entry.getKey()));
@@ -4648,6 +4671,10 @@ public final class Jedis implements Closeable {
                     args.add(params.getExpirationValue().toString());
                 }
             }
+
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(fields.length));
 
             // Add fields
             for (byte[] field : fields) {

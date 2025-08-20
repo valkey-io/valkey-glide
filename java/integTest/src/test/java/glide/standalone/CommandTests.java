@@ -67,6 +67,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import lombok.SneakyThrows;
 import org.apache.commons.lang3.ArrayUtils;
@@ -440,23 +441,34 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void lolwut_lolwut(GlideClient regularClient) {
+        // Pattern to match both "Redis ver." and "Valkey ver." formats
+        Pattern versionPattern = Pattern.compile("(Redis|Valkey) ver\\.");
+
         var response = regularClient.lolwut().get();
         System.out.printf("%nLOLWUT standalone client standard response%n%s%n", response);
-        assertTrue(response.contains("Redis ver. " + SERVER_VERSION));
+        assertTrue(
+                versionPattern.matcher(response).find(),
+                "Expected LOLWUT output to contain server version information");
 
         response = regularClient.lolwut(new int[] {30, 4, 4}).get();
         System.out.printf(
                 "%nLOLWUT standalone client standard response with params 30 4 4%n%s%n", response);
-        assertTrue(response.contains("Redis ver. " + SERVER_VERSION));
+        assertTrue(
+                versionPattern.matcher(response).find(),
+                "Expected LOLWUT output to contain server version information");
 
         response = regularClient.lolwut(5).get();
         System.out.printf("%nLOLWUT standalone client ver 5 response%n%s%n", response);
-        assertTrue(response.contains("Redis ver. " + SERVER_VERSION));
+        assertTrue(
+                versionPattern.matcher(response).find(),
+                "Expected LOLWUT output to contain server version information");
 
         response = regularClient.lolwut(6, new int[] {50, 20}).get();
         System.out.printf(
                 "%nLOLWUT standalone client ver 6 response with params 50 20%n%s%n", response);
-        assertTrue(response.contains("Redis ver. " + SERVER_VERSION));
+        assertTrue(
+                versionPattern.matcher(response).find(),
+                "Expected LOLWUT output to contain server version information");
     }
 
     @ParameterizedTest

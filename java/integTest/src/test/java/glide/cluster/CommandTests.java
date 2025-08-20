@@ -98,6 +98,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.SneakyThrows;
@@ -828,38 +829,57 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void lolwut_lolwut(GlideClusterClient clusterClient) {
+        // Pattern to match both "Redis ver." and "Valkey ver." formats
+        Pattern versionPattern = Pattern.compile("(Redis|Valkey) ver\\.");
+
         var response = clusterClient.lolwut().get();
         System.out.printf("%nLOLWUT cluster client standard response%n%s%n", response);
-        assertTrue(response.contains("Redis ver. " + SERVER_VERSION));
+        assertTrue(
+                versionPattern.matcher(response).find(),
+                "Expected LOLWUT output to contain server version information");
 
         response = clusterClient.lolwut(new int[] {50, 20}).get();
         System.out.printf(
                 "%nLOLWUT cluster client standard response with params 50 20%n%s%n", response);
-        assertTrue(response.contains("Redis ver. " + SERVER_VERSION));
+        assertTrue(
+                versionPattern.matcher(response).find(),
+                "Expected LOLWUT output to contain server version information");
 
         response = clusterClient.lolwut(6).get();
         System.out.printf("%nLOLWUT cluster client ver 6 response%n%s%n", response);
-        assertTrue(response.contains("Redis ver. " + SERVER_VERSION));
+        assertTrue(
+                versionPattern.matcher(response).find(),
+                "Expected LOLWUT output to contain server version information");
 
         response = clusterClient.lolwut(5, new int[] {30, 4, 4}).get();
         System.out.printf("%nLOLWUT cluster client ver 5 response with params 30 4 4%n%s%n", response);
-        assertTrue(response.contains("Redis ver. " + SERVER_VERSION));
+        assertTrue(
+                versionPattern.matcher(response).find(),
+                "Expected LOLWUT output to contain server version information");
 
         var clusterResponse = clusterClient.lolwut(ALL_NODES).get();
         for (var nodeResponse : clusterResponse.getMultiValue().values()) {
-            assertTrue(nodeResponse.contains("Redis ver. " + SERVER_VERSION));
+            assertTrue(
+                    versionPattern.matcher(nodeResponse).find(),
+                    "Expected LOLWUT output to contain server version information");
         }
 
         clusterResponse = clusterClient.lolwut(new int[] {10, 20}, ALL_NODES).get();
         for (var nodeResponse : clusterResponse.getMultiValue().values()) {
-            assertTrue(nodeResponse.contains("Redis ver. " + SERVER_VERSION));
+            assertTrue(
+                    versionPattern.matcher(nodeResponse).find(),
+                    "Expected LOLWUT output to contain server version information");
         }
 
         clusterResponse = clusterClient.lolwut(2, RANDOM).get();
-        assertTrue(clusterResponse.getSingleValue().contains("Redis ver. " + SERVER_VERSION));
+        assertTrue(
+                versionPattern.matcher(clusterResponse.getSingleValue()).find(),
+                "Expected LOLWUT output to contain server version information");
 
         clusterResponse = clusterClient.lolwut(2, new int[] {10, 20}, RANDOM).get();
-        assertTrue(clusterResponse.getSingleValue().contains("Redis ver. " + SERVER_VERSION));
+        assertTrue(
+                versionPattern.matcher(clusterResponse.getSingleValue()).find(),
+                "Expected LOLWUT output to contain server version information");
     }
 
     @ParameterizedTest

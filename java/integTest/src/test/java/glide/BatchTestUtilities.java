@@ -58,6 +58,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.BiFunction;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.junit.jupiter.params.provider.Arguments;
 
@@ -856,7 +857,7 @@ public class BatchTestUtilities {
                     OK, // configSet(Map.of("timeout", "1000"))
                     Map.of("timeout", "1000"), // configGet(new String[] {"timeout"})
                     OK, // configResetStat()
-                    "Redis ver. " + SERVER_VERSION + '\n', // lolwut(1)
+                    new VersionPatternMatcher(), // lolwut(1) - accepts both Redis and Valkey formats
                     OK, // flushall()
                     OK, // flushall(ASYNC)
                     OK, // flushdb()
@@ -1394,5 +1395,33 @@ public class BatchTestUtilities {
         return new Object[] {
             0L, // publish("message", "Tchannel")
         };
+    }
+}
+
+/** Custom matcher for LOLWUT version output that accepts both Redis and Valkey formats */
+class VersionPatternMatcher {
+    private final Pattern versionPattern;
+
+    public VersionPatternMatcher() {
+        // Pattern to match both "Redis ver." and "Valkey ver." formats
+        this.versionPattern = Pattern.compile("(Redis|Valkey) ver\\.");
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj instanceof String) {
+            return versionPattern.matcher((String) obj).find();
+        }
+        return false;
+    }
+
+    @Override
+    public int hashCode() {
+        return versionPattern.pattern().hashCode();
+    }
+
+    @Override
+    public String toString() {
+        return "VersionPatternMatcher{pattern=" + versionPattern.pattern() + "}";
     }
 }

@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"regexp"
 	"strings"
 	"time"
 
@@ -1148,7 +1149,10 @@ func (suite *GlideTestSuite) TestClusterLolwut() {
 	result, err := client.Lolwut(context.Background())
 	suite.NoError(err)
 	suite.NotEmpty(result)
-	suite.Contains(result, "Redis ver.")
+	// Support both Redis and Valkey version formats
+	versionPattern := regexp.MustCompile(`(Redis|Valkey) ver\.`)
+	suite.True(versionPattern.MatchString(result),
+		"Expected output to contain server version information, got: %s", result)
 }
 
 func (suite *GlideTestSuite) TestLolwutWithOptions_WithAllNodes() {
@@ -1167,7 +1171,10 @@ func (suite *GlideTestSuite) TestLolwutWithOptions_WithAllNodes() {
 	multiValue := result.MultiValue()
 
 	for _, value := range multiValue {
-		suite.Contains(value, "Redis ver.")
+		// Support both Redis and Valkey version formats
+		versionPattern := regexp.MustCompile(`(Redis|Valkey) ver\.`)
+		suite.True(versionPattern.MatchString(value),
+			"Expected output to contain server version information, got: %s", value)
 	}
 }
 
@@ -1186,7 +1193,10 @@ func (suite *GlideTestSuite) TestLolwutWithOptions_WithAllPrimaries() {
 	multiValue := result.MultiValue()
 
 	for _, value := range multiValue {
-		assert.Contains(suite.T(), value, "Redis ver.")
+		// Support both Redis and Valkey version formats
+		versionPattern := regexp.MustCompile(`(Redis|Valkey) ver\.`)
+		assert.True(suite.T(), versionPattern.MatchString(value),
+			"Expected output to contain server version information, got: %s", value)
 	}
 }
 
@@ -1203,7 +1213,10 @@ func (suite *GlideTestSuite) TestLolwutWithOptions_WithRandomRoute() {
 
 	assert.True(suite.T(), result.IsSingleValue())
 	singleValue := result.SingleValue()
-	assert.Contains(suite.T(), singleValue, "Redis ver.")
+	// Support both Redis and Valkey version formats
+	versionPattern := regexp.MustCompile(`(Redis|Valkey) ver\.`)
+	assert.True(suite.T(), versionPattern.MatchString(singleValue),
+		"Expected output to contain server version information, got: %s", singleValue)
 }
 
 func (suite *GlideTestSuite) TestClientIdCluster() {

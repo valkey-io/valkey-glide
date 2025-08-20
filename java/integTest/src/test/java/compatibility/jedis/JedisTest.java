@@ -2290,7 +2290,8 @@ public class JedisTest {
         // Test HSETEX with FXX condition (field exists)
         params = HSetExParams.hSetExParams().fxx().px(30000); // 30 seconds in milliseconds
         result = jedis.hsetex(key, params, field1, "updated_value");
-        assertEquals(0, result, "HSETEX with FXX should return 0 when updating existing field");
+        assertEquals(1, result, "HSETEX with FXX should return 1 when successfully updating existing field");
+        assertEquals("updated_value", jedis.hget(key, field1), "Field should have updated value");
 
         // Test HSETEX with multiple fields
         Map<String, String> hash = new HashMap<>();
