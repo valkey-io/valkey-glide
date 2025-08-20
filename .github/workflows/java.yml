@@ -301,7 +301,7 @@ jobs:
                     apk add make libressl-dev mc wget nano mandoc python3 bash less
                     # Install rust
                     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-                    export PATH="/root/.cargo/bin:${PATH}"
+                    . "$HOME/.cargo/env"
                     # Install ziglang and zigbuild
                     pip3 install ziglang --break-system-packages && \
                         cargo install --locked cargo-zigbuild
