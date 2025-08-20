@@ -104,7 +104,7 @@ tasks.register('cleanRust') {
 tasks.register('buildRust', Exec) {
     if (osdetector.os == 'linux' && osdetector.release.id != 'alpine') {
         commandLine 'cargo', 'zigbuild', '--target', "${arch}-unknown-linux-gnu.2.17", '--release'
-    } else if (osdetector.release.id == 'alpine') {
+    } else if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
         commandLine 'cargo', 'zigbuild', '--target', "${arch}-unknown-linux-musl", '--release'
         environment RUSTFLAGS: '-C target-feature=-crt-static'
     } else {
@@ -115,7 +115,7 @@ tasks.register('buildRust', Exec) {
 }
 
 tasks.register('buildRustFfi', Exec) {
-    if (osdetector.release.id == 'alpine') {
+    if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
         commandLine 'cargo', 'zigbuild', '--target', "${arch}-unknown-linux-musl", '--release'
         environment RUSTFLAGS: '--cfg ffi_test -C target-feature=-crt-static'
     } else {
@@ -151,7 +151,7 @@ clean.dependsOn('cleanProtobuf', 'cleanRust')
 tasks.register('copyNativeLib', Copy) {
     if (osdetector.os == 'linux' && osdetector.release.id != 'alpine') {
         from "${projectDir}/../target/${arch}-unknown-linux-gnu/release/"
-    } else if (osdetector.release.id == 'alpine') {
+    } else if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
         from "${projectDir}/../target/${arch}-unknown-linux-musl/release/"
     }
     include "*.dylib", "*.so"
@@ -259,7 +259,7 @@ tasks.withType(Test) {
         showStandardStreams true
     }
     // This is needed for the FFI tests
-    if (osdetector.release.id == 'alpine') {
+    if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
         jvmArgs "-Djava.library.path=${projectDir}/../target/${arch}-unknown-linux-musl/release"
     } else {
         jvmArgs "-Djava.library.path=${projectDir}/../target/release"
