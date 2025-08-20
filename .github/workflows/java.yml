@@ -360,6 +360,7 @@ jobs:
                       export JAVA_HOME=/usr/lib/jvm/java-${{matrix.java}}-amazon-corretto.x86_64
                   else
                       export JAVA_HOME=/usr/lib/jvm/java-${{matrix.java}}-openjdk
+                      export PATH=$HOME/.cargo/bin:$PATH
                   fi
                   ./gradlew --stacktrace --build-cache --continue build -x javadoc
 
