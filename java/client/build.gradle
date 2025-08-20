@@ -264,8 +264,6 @@ tasks.withType(Test) {
     } else {
         jvmArgs "-Djava.library.path=${projectDir}/../target/release"
     }
-    // For macOS, we assume the native library is in the same directory as the JAR
-    //jvmArgs "-Djava.library.path=-Djava.library.path=${projectDir}/../target/release:${projectDir}/../target/${arch}-unknown-linux-musl/release"
 
     finalizedBy jacocoTestReport, jacocoTestCoverageVerification
 }
