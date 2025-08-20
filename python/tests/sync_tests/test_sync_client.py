@@ -4910,9 +4910,7 @@ class TestCommands:
         if isinstance(
             glide_sync_client, GlideClusterClient
         ) and sync_check_if_server_version_lt(glide_sync_client, "8.0.0"):
-            return pytest.mark.skip(
-                reason="Valkey version required in cluster mode>= 8.0.0"
-            )
+            pytest.skip(reason="Valkey version required in cluster mode>= 8.0.0")
         key = "{user}" + get_random_string(10)
         store = "{user}" + get_random_string(10)
         user_key1, user_key2, user_key3, user_key4, user_key5 = (
