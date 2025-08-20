@@ -104,18 +104,25 @@ tasks.register('cleanRust') {
 tasks.register('buildRust', Exec) {
     if (osdetector.os == 'linux' && osdetector.release.id != 'alpine') {
         commandLine 'cargo', 'zigbuild', '--target', "${arch}-unknown-linux-gnu.2.17", '--release'
+    } else if (osdetector.release.id == 'alpine') {
+        commandLine 'cargo', 'zigbuild', '--target', "${arch}-unknown-linux-musl", '--release'
+        environment RUSTFLAGS: '-C target-feature=-crt-static'
     } else {
         commandLine 'cargo', 'build', '--release'
     }
-
     workingDir project.rootDir
     environment CARGO_TERM_COLOR: 'always'
 }
 
 tasks.register('buildRustFfi', Exec) {
-    commandLine 'cargo', 'build', '--release'
+    if (osdetector.release.id == 'alpine') {
+        commandLine 'cargo', 'zigbuild', '--target', "${arch}-unknown-linux-musl", '--release'
+        environment RUSTFLAGS: '--cfg ffi_test -C target-feature=-crt-static'
+    } else {
+        commandLine 'cargo', 'build', '--release'
+        environment RUSTFLAGS: '--cfg ffi_test'
+    }
     workingDir project.rootDir
-    environment CARGO_TERM_COLOR: 'always', CARGO_BUILD_RUSTFLAGS: '--cfg ffi_test'
 }
 
 tasks.register('buildWithRust') {
@@ -144,8 +151,8 @@ clean.dependsOn('cleanProtobuf', 'cleanRust')
 tasks.register('copyNativeLib', Copy) {
     if (osdetector.os == 'linux' && osdetector.release.id != 'alpine') {
         from "${projectDir}/../target/${arch}-unknown-linux-gnu/release/"
-    } else {
-        from "${projectDir}/../target/release"
+    } else if (osdetector.release.id == 'alpine') {
+        from "${projectDir}/../target/${arch}-unknown-linux-musl/release/"
     }
     include "*.dylib", "*.so"
     into sourceSets.main.output.resourcesDir
@@ -157,7 +164,7 @@ javadoc.dependsOn('copyNativeLib')
 copyNativeLib.dependsOn('buildRust')
 compileTestJava.dependsOn('copyNativeLib')
 test.dependsOn('buildRust')
-testFfi.dependsOn('buildRust')
+testFfi.dependsOn('buildRustFfi')
 
 test {
     exclude "glide/ffi/FfiTest.class"
@@ -252,7 +259,13 @@ tasks.withType(Test) {
         showStandardStreams true
     }
     // This is needed for the FFI tests
-    jvmArgs "-Djava.library.path=${projectDir}/../target/release"
+    if (osdetector.release.id == 'alpine') {
+        jvmArgs "-Djava.library.path=${projectDir}/../target/${arch}-unknown-linux-musl/release"
+    } else {
+        jvmArgs "-Djava.library.path=${projectDir}/../target/release"
+    }
+    // For macOS, we assume the native library is in the same directory as the JAR
+    //jvmArgs "-Djava.library.path=-Djava.library.path=${projectDir}/../target/release:${projectDir}/../target/${arch}-unknown-linux-musl/release"
 
     finalizedBy jacocoTestReport, jacocoTestCoverageVerification
 }
