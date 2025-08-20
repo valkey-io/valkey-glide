@@ -64,6 +64,8 @@ runs:
         - name: Load host matrix
           id: load-host-matrix
           shell: bash
+          env:
+              GITHUB_ACTOR: ${{ github.actor }}
           run: |
               set -o pipefail
               [[ "$CONTAINERS" == "true" ]] && CONDITION=".IMAGE?" || CONDITION=".IMAGE == null"
@@ -71,7 +73,7 @@ runs:
               if [[ "$EVENT_NAME" == "pull_request" || "$EVENT_NAME" == "push" || "$RUN_FULL_MATRIX" == "false" ]]; then
                   echo 'Pick runners marked as '"run": "always"' only - on PR, push or manually triggered job which does not require full matrix'
                   jq -c '[.[] | select(.run == "always")]' < .github/json_matrices/build-matrix.json | awk '{ printf "host-matrix=%s\n", $0 }' | tee -a $GITHUB_OUTPUT
-              elif [[ "$EVENT_NAME" == "schedule" && "$RUN_FULL_MATRIX" == "true" ]]; then
+              elif [[ "$EVENT_NAME" == "workflow_dispatch" && "$GITHUB_ACTOR" == "github-actions" && "$RUN_FULL_MATRIX" == "true" ]]; then
                   echo 'Pick all runners assigned for the chosen client (language), excluding aarch64-apple-darwin - on scheduled full matrix'
                   jq -c "[.[] | select(.languages? and any(.languages[] == \"$LANGUAGE_NAME\"; .) and $CONDITION and .TARGET != \"aarch64-apple-darwin\")]" < .github/json_matrices/build-matrix.json | awk '{ printf "host-matrix=%s\n", $0 }' | tee -a $GITHUB_OUTPUT
               else
