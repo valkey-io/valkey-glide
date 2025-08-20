@@ -300,10 +300,10 @@ jobs:
                     apk add build-base musl-dev valkey valkey-cli gcompat busybox-extras envsubst protobuf-dev
                     apk add make libressl-dev mc wget nano mandoc python3 bash less
                     # Install rust
-                    RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+                    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
                     export PATH="/root/.cargo/bin:${PATH}"
                     # Install ziglang and zigbuild
-                    RUN pip3 install ziglang --break-system-packages && \
+                    pip3 install ziglang --break-system-packages && \
                         cargo install --locked cargo-zigbuild
                     # Install Rust linter components
                     rustup component add clippy rustfmt
