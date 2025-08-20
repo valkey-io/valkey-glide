@@ -6,7 +6,7 @@
 
 * Java: Add lazy connection support to Java module ([#4350](https://github.com/valkey-io/valkey-glide/pull/4370))
 * Go: Add lazy connection support ([#4374](https://github.com/valkey-io/valkey-glide/pull/4374))
-$ Java/Go/Node/Python: Valkey 9 lolwut tests and jedi compatibility layer tests fix ([#4632](https://github.com/valkey-io/valkey-glide/pull/4632))
+* Java/Go/Node/Python: Fixed LOLWUT tests and Jedis compatibility layer tests for Valkey 9 ([#4632](https://github.com/valkey-io/valkey-glide/pull/4632))
 * Core/Python: fix 100% CPU when blocking command returning data after client closure ([#4612](https://github.com/valkey-io/valkey-glide/pull/4612))
 
 #### Operational Enhancements
