@@ -321,6 +321,17 @@ jobs:
                   version: "29.1"
                   repo-token: ${{ secrets.GITHUB_TOKEN }}
 
+            # Ensure Rust is in PATH for container environments
+            - name: Setup Rust PATH
+              if: ${{ contains(matrix.host.TARGET, 'musl') }}
+              run: |
+                  echo 'source "$HOME/.cargo/env"' >> ~/.bashrc
+                  source "$HOME/.cargo/env"
+                  echo "PATH=$HOME/.cargo/bin:$PATH" >> $GITHUB_ENV
+                  # Verify Rust is available
+                  which cargo || echo "Cargo still not found in PATH"
+                  echo "Current PATH: $PATH"
+
             - uses: actions/cache@v4
               with:
                   path: |
