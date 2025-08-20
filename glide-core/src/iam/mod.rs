@@ -112,7 +112,6 @@ struct IamTokenState {
     cluster_name: String,
     /// Username for the connection
     username: String,
-    // todo: Add serverless endpoint to state. should be a bool? https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/auth-iam.html
     /// Service type (ElastiCache or MemoryDB)
     service_type: ServiceType,
     /// Token refresh interval in seconds
@@ -141,7 +140,7 @@ impl IAMTokenManager {
     /// # Arguments
     /// * `cluster_name` - The ElastiCache/MemoryDB cluster name
     /// * `username` - Username for authentication
-    /// * `region` - AWS region
+    /// * `region` - AWS region of the cluster
     /// * `service_type` - Service type (ElastiCache or MemoryDB)
     /// * `refresh_interval_seconds` - Optional refresh interval in seconds. Defaults to 14 minutes (840 seconds).
     ///   Maximum allowed is 12 hours (43200 seconds). Values above 15 minutes (900 seconds) will log a warning
@@ -415,6 +414,18 @@ mod tests {
             env::set_var("AWS_ACCESS_KEY_ID", "test_access_key");
             env::set_var("AWS_SECRET_ACCESS_KEY", "test_secret_key");
             env::set_var("AWS_SESSION_TOKEN", "test_session_token");
+        }
+    }
+
+    fn remove_test_credentials() {
+        // Clear any existing AWS credentials
+        unsafe {
+            env::remove_var("AWS_ACCESS_KEY_ID");
+            env::remove_var("AWS_SECRET_ACCESS_KEY");
+            env::remove_var("AWS_SESSION_TOKEN");
+            env::remove_var("AWS_PROFILE");
+            env::remove_var("AWS_SHARED_CREDENTIALS_FILE");
+            env::remove_var("AWS_CONFIG_FILE");
         }
     }
 
@@ -827,14 +838,7 @@ mod tests {
         initialize_test_environment(); // Ensure test environment is clean
 
         // Clear any existing AWS credentials
-        unsafe {
-            env::remove_var("AWS_ACCESS_KEY_ID");
-            env::remove_var("AWS_SECRET_ACCESS_KEY");
-            env::remove_var("AWS_SESSION_TOKEN");
-            env::remove_var("AWS_PROFILE");
-            env::remove_var("AWS_SHARED_CREDENTIALS_FILE");
-            env::remove_var("AWS_CONFIG_FILE");
-        }
+        remove_test_credentials();
 
         let region = "us-east-1";
         let cluster_name = "test-cluster";
