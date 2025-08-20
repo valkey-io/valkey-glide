@@ -48,6 +48,8 @@ async-trait = { version = "0.1" }
 serde_json = "1"
 serde = { version = "1", features = ["derive"] }
 versions = "7"
+strum = "0.26"       
+strum_macros = "0.26"
 
 [features]
 proto = ["protobuf"]
@@ -59,6 +61,7 @@ socket-layer = [
     "tokio-util",
 ]
 standalone_heartbeat = []
+iam_tests = []
 
 [dev-dependencies]
 rsevents = "0.3.1"
@@ -78,7 +81,7 @@ glide-core = { path = ".", features = [
 ] } # always enable this feature in tests.
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(standalone_heartbeat)'] }
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(standalone_heartbeat)', 'cfg(feature, values("iam_tests"))'] }
 
 [build-dependencies]
 protobuf-codegen = "3"
