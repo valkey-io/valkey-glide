@@ -40,6 +40,10 @@ on:
                 description: "Run the full engine, host, and language version matrix"
                 type: boolean
                 default: false
+            run-with-macos:
+                description: "Run with macos included (only when necessary)"
+                type: boolean
+                default: false
             name:
                 required: false
                 type: string
@@ -50,6 +54,11 @@ on:
                 default: false
 
     workflow_call:
+        inputs:
+            run-with-macos:
+                description: "Run with macos included (only when necessary)"
+                type: boolean
+                default: false
 
 concurrency:
     group: node-${{ github.head_ref || github.ref }}-${{ toJson(inputs) }}
@@ -77,6 +86,7 @@ jobs:
               with:
                   language-name: node
                   run-full-matrix: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
+                  run-with-macos: ${{ github.event.run-with-macos == 'true' }}
 
     test-node:
         name: Node Tests - ${{ matrix.node }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
