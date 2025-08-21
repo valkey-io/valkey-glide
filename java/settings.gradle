@@ -1,11 +1,13 @@
 // If no matching toolchain is found, this plugin lets Gradle automatically download a matching one.
 plugins {
-    id 'com.google.osdetector' version '1.7.3'
     id 'org.gradle.toolchains.foojay-resolver-convention' version '0.10.0' apply false
 }
 
-if (osdetector.os != 'linux' || osdetector.release.id == 'alpine') {
-    // Disable on Alpine as it fails to detects the JDK and tries to download a new one, which fails due to missing glibc.
+// Check if running on Alpine Linux by examining /etc/os-release
+def isAlpine = new File('/etc/os-release').exists() && new File('/etc/os-release').text.contains('Alpine')
+
+if (!isAlpine) {
+    // Only apply foojay resolver on non-Alpine systems
     apply plugin: 'org.gradle.toolchains.foojay-resolver-convention'
 }
 
