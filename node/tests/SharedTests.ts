@@ -1436,7 +1436,11 @@ export function runBaseTests(config: {
 
                 // set up hash with two keys/values
                 expect(await client.hset(key, fieldValueMap)).toEqual(2);
-                expect(await client.hkeys(key)).toEqual([field1, field2]);
+                const hkeysResult1 = await client.hkeys(key);
+                expect(hkeysResult1.length).toEqual(2);
+                // order is not guaranteed here
+                expect(hkeysResult1).toContainEqual(field1);
+                expect(hkeysResult1).toContainEqual(field2);
 
                 // remove one key
                 expect(await client.hdel(key, [field1])).toEqual(1);

@@ -9,6 +9,8 @@ import java.net.URI;
 import java.time.Duration;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import redis.clients.jedis.exceptions.JedisConnectionException;
+import redis.clients.jedis.exceptions.JedisException;
 
 // import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
 
@@ -53,10 +55,7 @@ public class UnifiedJedis implements Closeable {
     public UnifiedJedis(HostAndPort hostAndPort, JedisClientConfig clientConfig) {
         this.config = clientConfig;
 
-        // Validate configuration
-        ConfigurationMapper.validateConfiguration(clientConfig);
-
-        // Map Jedis config to GLIDE config
+        // Map Jedis config to GLIDE config (validation happens during mapping)
         GlideClientConfiguration glideConfig =
                 ConfigurationMapper.mapToGlideConfig(
                         hostAndPort.getHost(), hostAndPort.getPort(), clientConfig);
