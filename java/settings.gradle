@@ -1,5 +1,6 @@
 // If no matching toolchain is found, this plugin lets Gradle automatically download a matching one.
 plugins {
+    id 'com.google.osdetector' version '1.7.3'
     id 'org.gradle.toolchains.foojay-resolver-convention' version '0.10.0' apply false
 }
 
