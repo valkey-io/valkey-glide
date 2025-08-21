@@ -2114,7 +2114,9 @@ export function runBaseTests(config: {
 
                 // With Count - positive count
                 let result = await client.hrandfieldCount(key1, 5);
-                expect(result).toEqual(fields);
+                expect(result.length).toEqual(fields.length);
+                // order is not guaranteed with random fields
+                result.map((r) => expect(fields).toContainEqual(r));
 
                 // With Count - negative count
                 result = await client.hrandfieldCount(Buffer.from(key1), -5, {
@@ -2129,7 +2131,9 @@ export function runBaseTests(config: {
                     5,
                     { decoder: Decoder.Bytes },
                 );
-                expect(result2).toEqual(encodedEntries);
+                expect(result2.length).toEqual(encodedEntries.length);
+                // order is not guaranteed with random fields
+                result2.map((r) => expect(encodedEntries).toContainEqual(r));
 
                 // With values - negative count
                 result2 = await client.hrandfieldWithValues(key1, -5);
