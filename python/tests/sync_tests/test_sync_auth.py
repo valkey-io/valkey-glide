@@ -65,15 +65,15 @@ class TestSyncAuthCommands:
         assert value == b"test_value"
         config_set_new_password(glide_sync_client, NEW_PASSWORD)
         kill_connections(management_sync_client)
-        # Add a short delay to allow the server to apply the new password
+        # Add a delay to allow the server to apply the new password
         # without this delay, command may or may not time out while the client reconnect
         # ending up with a flaky test
-        time.sleep(2)
+        time.sleep(3)
         # Verify that the client is able to reconnect with the new password,
         value = glide_sync_client.get("test_key")
         assert value == b"test_value"
         kill_connections(management_sync_client)
-        time.sleep(2)
+        time.sleep(3)
         # Verify that the client is able to immediateAuth with the new password after client is killed
         result = glide_sync_client.update_connection_password(
             NEW_PASSWORD, immediate_auth=True
@@ -218,7 +218,7 @@ class TestSyncAuthCommands:
         )
 
         # Sleep to allow enough time for reconnecting
-        time.sleep(2)
+        time.sleep(3)
 
         # The client should now reconnect with the new password automatically
         # Verify that the client is still able to perform operations
@@ -253,7 +253,7 @@ class TestSyncAuthCommands:
         )
 
         # Sleep to allow enough time for reconnecting
-        time.sleep(2)
+        time.sleep(3)
 
         # This command right after disconnection requires the acl_glide_sync_client to have a request timeout of 2000 ms
         # for full matrix tests to pass (otherwise failing on linux-aarch64 architecture).
