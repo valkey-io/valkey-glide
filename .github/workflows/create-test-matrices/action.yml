@@ -13,6 +13,10 @@ inputs:
         description: "Run the full matrix"
         required: true
         type: boolean
+    run-with-macos:
+        description: "Run with macos included"
+        type: boolean
+        default: false
     containers:
         description: "Run in containers"
         required: true
@@ -38,11 +42,13 @@ runs:
           env:
               EVENT_NAME: ${{ github.event_name }}
               RUN_FULL_MATRIX: ${{ inputs.run-full-matrix }}
+              RUN_WITH_MACOS: ${{ inputs.run-with-macos }}
               CONTAINERS: ${{ inputs.containers }}
               LANGUAGE_NAME: ${{ inputs.language-name }}
           run: |
               echo "EVENT_NAME=$EVENT_NAME" >> $GITHUB_ENV
               echo "RUN_FULL_MATRIX=$RUN_FULL_MATRIX" >> $GITHUB_ENV
+              echo "RUN_WITH_MACOS=$RUN_WITH_MACOS" >> $GITHUB_ENV
               echo "CONTAINERS=$CONTAINERS" >> $GITHUB_ENV
               echo "LANGUAGE_NAME=$LANGUAGE_NAME" >> $GITHUB_ENV
 
@@ -67,13 +73,26 @@ runs:
               set -o pipefail
               [[ "$CONTAINERS" == "true" ]] && CONDITION=".IMAGE?" || CONDITION=".IMAGE == null"
               echo 'Select runners (VMs) to run tests on'
+
               if [[ "$EVENT_NAME" == "pull_request" || "$EVENT_NAME" == "push" || "$RUN_FULL_MATRIX" == "false" ]]; then
-                  echo 'Pick runners marked as '"run": "always"' only - on PR, push or manually triggered job which does not require full matrix'
-                  jq -c '[.[] | select(.run == "always")]' < .github/json_matrices/build-matrix.json | awk '{ printf "host-matrix=%s\n", $0 }' | tee -a $GITHUB_OUTPUT
+                echo 'Getting "always run" runners'
+                BASE_MATRIX=$(jq -c '[.[] | select(.run == "always")]' < .github/json_matrices/build-matrix.json)
               else
-                  echo 'Pick all runners assigned for the chosen client (language) - on cron (schedule) or if manually triggered job requires a full matrix'
-                  jq -c "[.[] | select(.languages? and any(.languages[] == \"$LANGUAGE_NAME\"; .) and $CONDITION)]" < .github/json_matrices/build-matrix.json | awk '{ printf "host-matrix=%s\n", $0 }' | tee -a $GITHUB_OUTPUT
+                echo 'Getting full matrix for language excluding macOS'
+                BASE_MATRIX=$(jq --arg lang "$LANGUAGE_NAME" -c '[.[] | select(.languages? and any(.languages[] == $lang; .) and '"$CONDITION"' and .TARGET != "aarch64-apple-darwin")]' < .github/json_matrices/build-matrix.json)
               fi
+                        
+              # Add macOS runners if specified
+              if [[ "$RUN_WITH_MACOS" == "true" ]]; then
+                echo "Including macOS runners separately"
+                MAC_RUNNERS=$(jq --arg lang "$LANGUAGE_NAME" -c '[.[] | select(.languages? and any(.languages[] == $lang; .) and '"$CONDITION"' and .TARGET == "aarch64-apple-darwin")]' < .github/json_matrices/build-matrix.json)
+                            
+                FINAL_MATRIX=$(echo "$BASE_MATRIX" "$MAC_RUNNERS" | jq -sc 'add')
+              else
+                FINAL_MATRIX="$BASE_MATRIX"
+              fi
+                        
+              echo "host-matrix=$(echo $FINAL_MATRIX | tr -d '\n')" >> $GITHUB_OUTPUT
 
         - name: Create language version matrix
           id: create-lang-version-matrix
