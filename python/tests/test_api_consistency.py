@@ -14,12 +14,6 @@ TESTS_SYNC_DIR = PYTHON_DIR / "tests" / "sync_tests"
 
 EXCLUDED_API_FUNCTIONS = {
     "async_only": [
-        # Script
-        "script_flush",
-        "script_exists",
-        "invoke_script",
-        "invoke_script_route",
-        "script_kill",
         # PubSub
         "pubsub_shardchannels",
         "pubsub_shardnumsub",
@@ -40,13 +34,13 @@ EXCLUDED_API_FUNCTIONS = {
         "init_callback",
         "get_statistics",
     ],
-    "sync_only": [],
+    "sync_only": [
+        "get_hash"  # TODO: change test to consider the async client's rust types as well
+    ],
 }
 
 EXCLUDED_API_FILENAMES = {
     "async_only": [
-        "ft.py",
-        "glide_json.py",
         "opentelemetry.py",
     ],
     "sync_only": ["_glide_ffi.py"],
@@ -54,37 +48,17 @@ EXCLUDED_API_FILENAMES = {
 
 EXCLUDED_TESTS = {
     "async_only": [
-        # Script
-        "test_script",
-        "test_script_kill_no_route",
-        "test_script_flush",
-        "test_script_large_keys_no_args",
         "test_inflight_request_limit",
-        "test_script_isnt_removed_while_another_instance_exists",
         "test_statistics",
-        "test_script_kill_unkillable",
-        "test_script_large_args_no_keys",
-        "test_script_show",
-        "run_long_script",
-        "test_script_exists",
-        "attempt_kill_writing_script",
-        "test_script_binary",
-        "script_kill_tests",
-        "wait_and_kill_script",
-        "test_script_large_keys_and_args",
-        "test_script_kill_route",
-        "run_writing_script",
     ],
     "sync_only": ["test_sync_fork"],
 }
 
 EXCLUDED_TESTS_FILENAMES = {
     "async_only": [
-        "test_json.py",
         "test_opentelemetry.py",
         "test_pubsub.py",
         "test_scan.py",
-        "test_ft.py",
     ],
     "sync_only": [],
 }
