@@ -365,7 +365,8 @@ jobs:
                   if [[ "${{ matrix.host.OS }}" == "amazon-linux" ]]; then
                       export JAVA_HOME=/usr/lib/jvm/java-${{matrix.java}}-amazon-corretto.x86_64
                   else
-                      export JAVA_HOME=/usr/lib/jvm/java-${{matrix.java}}-openjdk
+                      #export JAVA_HOME=/usr/lib/jvm/java-${{matrix.java}}-openjdk
+                      export JAVA_HOME=/usr/lib/jvm/java-11-openjdk
                       export PATH=$HOME/.cargo/bin:$PATH
                   fi
                   ./gradlew --stacktrace --build-cache --continue build -x javadoc
