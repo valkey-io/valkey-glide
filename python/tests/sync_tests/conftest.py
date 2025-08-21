@@ -46,7 +46,10 @@ def glide_sync_client(
 ) -> Generator[TSyncGlideClient, None, None]:
     "Get sync socket client for tests"
     client = create_sync_client(
-        request, cluster_mode, protocol=protocol, connection_timeout=5000
+        request,
+        cluster_mode,
+        protocol=protocol,
+        request_timeout=5000,
     )
     yield client
     sync_test_teardown(request, cluster_mode, protocol)
