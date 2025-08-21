@@ -128,26 +128,26 @@ export function createGetRange(
 
 export type SetOptions = (
     | {
-          /**
-           * `onlyIfDoesNotExist` - Only set the key if it does not already exist.
-           * `NX` in the Valkey API.
-           *
-           * `onlyIfExists` - Only set the key if it already exists.
-           * `EX` in the Valkey API.
-           */
-          conditionalSet?: "onlyIfExists" | "onlyIfDoesNotExist";
-      }
+        /**
+         * `onlyIfDoesNotExist` - Only set the key if it does not already exist.
+         * `NX` in the Valkey API.
+         *
+         * `onlyIfExists` - Only set the key if it already exists.
+         * `EX` in the Valkey API.
+         */
+        conditionalSet?: "onlyIfExists" | "onlyIfDoesNotExist";
+    }
     | {
-          /**
-           * `onlyIfEqual` - Only set the key if the comparison value equals the current value of key.
-           * `IFEQ` in the Valkey API.
-           */
-          conditionalSet: "onlyIfEqual";
-          /**
-           * The value to compare the existing value with.
-           */
-          comparisonValue: GlideString;
-      }
+        /**
+         * `onlyIfEqual` - Only set the key if the comparison value equals the current value of key.
+         * `IFEQ` in the Valkey API.
+         */
+        conditionalSet: "onlyIfEqual";
+        /**
+         * The value to compare the existing value with.
+         */
+        comparisonValue: GlideString;
+    }
 ) & {
     /**
      * Return the old string stored at key, or nil if key did not exist. An error
@@ -175,11 +175,11 @@ export type SetOptions = (
      * Equivalent to `KEEPTTL` in the Valkey API.
      */
     expiry?:
-        | "keepExisting"
-        | {
-              type: TimeUnit;
-              count: number;
-          };
+    | "keepExisting"
+    | {
+        type: TimeUnit;
+        count: number;
+    };
 };
 
 /**
@@ -514,9 +514,12 @@ export function createHSetEx(
 ): command_request.Command {
     const args: GlideString[] = [key];
 
-    // Add conditional change options (NX | XX)
+    // HSETEX does not support hash-level conditional changes (NX | XX)
+    // Only field-level conditional changes (FNX | FXX) are supported
     if (options?.conditionalChange) {
-        args.push(options.conditionalChange);
+        throw new Error(
+            `HSETEX does not support hash-level conditional changes (${options.conditionalChange}). Use fieldConditionalChange instead.`,
+        );
     }
 
     // Add field conditional change options (FNX | FXX)
@@ -544,15 +547,17 @@ export function createHSetEx(
         }
     }
 
-    // Add FIELDS keyword and field count
-    args.push("FIELDS", fieldValueMap.length.toString());
+    // Only add FIELDS keyword and field count if fieldValueMap is not empty
+    if (fieldValueMap.length > 0) {
+        args.push("FIELDS", fieldValueMap.length.toString());
 
-    // Add field-value pairs
-    fieldValueMap.forEach((fieldValueObject) => {
-        args.push(fieldValueObject.field, fieldValueObject.value);
-    });
+        // Add field-value pairs
+        fieldValueMap.forEach((fieldValueObject) => {
+            args.push(fieldValueObject.field, fieldValueObject.value);
+        });
+    }
 
-    return createCommand(RequestType.HSetex, args);
+    return createCommand(RequestType.HSetEx, args);
 }
 
 /**
@@ -565,12 +570,15 @@ export function createHGetEx(
 ): command_request.Command {
     const args: GlideString[] = [key];
 
-    // Add expiry options (EX | PX | EXAT | PXAT | KEEPTTL | PERSIST)
+    // Add expiry options (EX | PX | EXAT | PXAT | PERSIST)
+    // Note: HGETEX does not support KEEPTTL
     if (options?.expiry) {
         if (options.expiry === "PERSIST") {
             args.push("PERSIST");
         } else if (options.expiry === "KEEPTTL") {
-            args.push("KEEPTTL");
+            throw new Error(
+                "HGETEX does not support KEEPTTL option. Use PERSIST to remove expiration or specify a new expiry time.",
+            );
         } else {
             if (!Number.isInteger(options.expiry.count)) {
                 throw new Error(
@@ -584,13 +592,12 @@ export function createHGetEx(
         }
     }
 
-    // Add FIELDS keyword and field count
+    // Add FIELDS keyword and field count - always required when fields parameter exists
     args.push("FIELDS", fields.length.toString());
-
     // Add field names
     args.push(...fields);
 
-    return createCommand(RequestType.HGetex, args);
+    return createCommand(RequestType.HGetEx, args);
 }
 
 /**
@@ -609,9 +616,8 @@ export function createHExpire(
         args.push(options.condition);
     }
 
-    // Add FIELDS keyword and field count
+    // Add FIELDS keyword and field count - always required when fields parameter exists
     args.push("FIELDS", fields.length.toString());
-
     // Add field names
     args.push(...fields);
 
@@ -627,9 +633,8 @@ export function createHPersist(
 ): command_request.Command {
     const args: GlideString[] = [key];
 
-    // Add FIELDS keyword and field count
+    // Add FIELDS keyword and field count - always required when fields parameter exists
     args.push("FIELDS", fields.length.toString());
-
     // Add field names
     args.push(...fields);
 
@@ -652,9 +657,8 @@ export function createHPExpire(
         args.push(options.condition);
     }
 
-    // Add FIELDS keyword and field count
+    // Add FIELDS keyword and field count - always required when fields parameter exists
     args.push("FIELDS", fields.length.toString());
-
     // Add field names
     args.push(...fields);
 
@@ -677,9 +681,8 @@ export function createHExpireAt(
         args.push(options.condition);
     }
 
-    // Add FIELDS keyword and field count
+    // Add FIELDS keyword and field count - always required when fields parameter exists
     args.push("FIELDS", fields.length.toString());
-
     // Add field names
     args.push(...fields);
 
@@ -702,9 +705,8 @@ export function createHPExpireAt(
         args.push(options.condition);
     }
 
-    // Add FIELDS keyword and field count
+    // Add FIELDS keyword and field count - always required when fields parameter exists
     args.push("FIELDS", fields.length.toString());
-
     // Add field names
     args.push(...fields);
 
@@ -720,9 +722,8 @@ export function createHTtl(
 ): command_request.Command {
     const args: GlideString[] = [key];
 
-    // Add FIELDS keyword and field count
+    // Add FIELDS keyword and field count - always required when fields parameter exists
     args.push("FIELDS", fields.length.toString());
-
     // Add field names
     args.push(...fields);
 
@@ -738,9 +739,8 @@ export function createHPTtl(
 ): command_request.Command {
     const args: GlideString[] = [key];
 
-    // Add FIELDS keyword and field count
+    // Add FIELDS keyword and field count - always required when fields parameter exists
     args.push("FIELDS", fields.length.toString());
-
     // Add field names
     args.push(...fields);
 
@@ -756,9 +756,8 @@ export function createHExpireTime(
 ): command_request.Command {
     const args: GlideString[] = [key];
 
-    // Add FIELDS keyword and field count
+    // Add FIELDS keyword and field count - always required when fields parameter exists
     args.push("FIELDS", fields.length.toString());
-
     // Add field names
     args.push(...fields);
 
@@ -774,9 +773,8 @@ export function createHPExpireTime(
 ): command_request.Command {
     const args: GlideString[] = [key];
 
-    // Add FIELDS keyword and field count
+    // Add FIELDS keyword and field count - always required when fields parameter exists
     args.push("FIELDS", fields.length.toString());
-
     // Add field names
     args.push(...fields);
 
@@ -1746,7 +1744,7 @@ export function createZAdd(
         if (options.conditionalChange) {
             if (
                 options.conditionalChange ===
-                    ConditionalChange.ONLY_IF_DOES_NOT_EXIST &&
+                ConditionalChange.ONLY_IF_DOES_NOT_EXIST &&
                 options.updateOptions
             ) {
                 throw new Error(
@@ -2022,15 +2020,15 @@ export type Boundary<T> =
      *  Represents a specific boundary.
      */
     | {
-          /**
-           * The comparison value.
-           */
-          value: T;
-          /**
-           * Whether the value is inclusive. Defaults to `true`.
-           */
-          isInclusive?: boolean;
-      };
+        /**
+         * The comparison value.
+         */
+        value: T;
+        /**
+         * Whether the value is inclusive. Defaults to `true`.
+         */
+        isInclusive?: boolean;
+    };
 
 /**
  * Represents a range by index (rank) in a sorted set.
@@ -2397,21 +2395,21 @@ export function createZRank(
 
 export type StreamTrimOptions = (
     | {
-          /**
-           * Trim the stream according to entry ID.
-           * Equivalent to `MINID` in the Valkey API.
-           */
-          method: "minid";
-          threshold: GlideString;
-      }
+        /**
+         * Trim the stream according to entry ID.
+         * Equivalent to `MINID` in the Valkey API.
+         */
+        method: "minid";
+        threshold: GlideString;
+    }
     | {
-          /**
-           * Trim the stream according to length.
-           * Equivalent to `MAXLEN` in the Valkey API.
-           */
-          method: "maxlen";
-          threshold: number;
-      }
+        /**
+         * Trim the stream according to length.
+         * Equivalent to `MAXLEN` in the Valkey API.
+         */
+        method: "maxlen";
+        threshold: number;
+    }
 ) & {
     /**
      * If `true`, the stream will be trimmed exactly. Equivalent to `=` in the
@@ -3553,9 +3551,9 @@ export enum HashFieldConditionalChange {
  */
 export type ExpirySet =
     | {
-          type: TimeUnit;
-          count: number;
-      }
+        type: TimeUnit;
+        count: number;
+    }
     | "KEEPTTL";
 
 /**
@@ -3564,7 +3562,11 @@ export type ExpirySet =
  * See https://valkey.io/commands/hsetex/ for more details.
  */
 export interface HSetExOptions {
-    /** Options for handling existing hash objects. See {@link ConditionalChange}. */
+    /** 
+     * Options for handling existing hash objects. See {@link ConditionalChange}.
+     * Note: HSETEX does not support hash-level conditional changes (NX/XX).
+     * Use fieldConditionalChange for field-level conditions instead.
+     */
     conditionalChange?: ConditionalChange;
     /** Options for handling existing fields. See {@link HashFieldConditionalChange}. */
     fieldConditionalChange?: HashFieldConditionalChange;

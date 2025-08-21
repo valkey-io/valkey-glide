@@ -1061,7 +1061,7 @@ export class BaseClient {
                 if (split.length !== 2) {
                     throw new RequestError(
                         "No port provided, expected host to be formatted as `{hostname}:{port}`. Received " +
-                            host,
+                        host,
                     );
                 }
 
@@ -1127,8 +1127,8 @@ export class BaseClient {
                     err instanceof ValkeyError
                         ? err
                         : new Error(
-                              `Decoding error: '${err}'. \n NOTE: If this was thrown during a command with write operations, the data could be UNRECOVERABLY LOST.`,
-                          ),
+                            `Decoding error: '${err}'. \n NOTE: If this was thrown during a command with write operations, the data could be UNRECOVERABLY LOST.`,
+                        ),
                 );
             }
         } else if (message.constantResponse === response.ConstantResponse.OK) {
@@ -2924,8 +2924,8 @@ export class BaseClient {
      *     }
      * );
      * console.log(result);
-     * // Output: 2
-     * // Indicates that 2 fields were added to the hash with 60 seconds expiration.
+     * // Output: 1
+     * // Indicates that all fields were successfully set with expiration.
      * ```
      *
      * @example
@@ -2941,7 +2941,7 @@ export class BaseClient {
      * );
      * console.log(result);
      * // Output: 1
-     * // Indicates that 1 field was added only because it didn't exist.
+     * // Indicates that the field was successfully set because it didn't exist.
      * ```
      */
     public async hsetex(
@@ -3016,7 +3016,7 @@ export class BaseClient {
      * ```typescript
      * // Set expiration for hash fields
      * const result = await client.hexpire("my_hash", 60, ["field1", "field2"]);
-     * console.log(result); // [true, true] - expiration set for both fields
+     * console.log(result); // [1, 1] - expiration set for both fields
      * ```
      *
      * @example
@@ -3025,7 +3025,7 @@ export class BaseClient {
      * const result = await client.hexpire("my_hash", 120, ["field1", "field2"], {
      *     condition: HashExpirationCondition.ONLY_IF_NO_EXPIRY
      * });
-     * console.log(result); // [true, false] - expiration set only for field1
+     * console.log(result); // [1, 0] - expiration set for field1, condition not met for field2
      * ```
      *
      * @example
@@ -3034,7 +3034,7 @@ export class BaseClient {
      * const result = await client.hexpire("my_hash", 300, ["field1"], {
      *     condition: HashExpirationCondition.ONLY_IF_GREATER_THAN_CURRENT
      * });
-     * console.log(result); // [true] - expiration set because 300 > current TTL
+     * console.log(result); // [1] - expiration set because 300 > current TTL
      * ```
      */
     public async hexpire(
@@ -3064,14 +3064,14 @@ export class BaseClient {
      * ```typescript
      * // Remove expiration from hash fields
      * const result = await client.hpersist("my_hash", ["field1", "field2"]);
-     * console.log(result); // [true, false] - expiration removed from field1, field2 had no expiration
+     * console.log(result); // [1, -1] - expiration removed from field1, field2 had no expiration
      * ```
      *
      * @example
      * ```typescript
      * // Remove expiration from a single field
      * const result = await client.hpersist("my_hash", ["field1"]);
-     * console.log(result); // [true] - expiration removed from field1
+     * console.log(result); // [1] - expiration removed from field1
      * ```
      */
     public async hpersist(
@@ -3100,7 +3100,7 @@ export class BaseClient {
      * ```typescript
      * // Set expiration for hash fields in milliseconds
      * const result = await client.hpexpire("my_hash", 60000, ["field1", "field2"]);
-     * console.log(result); // [true, true] - expiration set for both fields
+     * console.log(result); // [1, 1] - expiration set for both fields
      * ```
      *
      * @example
@@ -3109,6 +3109,7 @@ export class BaseClient {
      * const result = await client.hpexpire("my_hash", 120000, ["field1", "field2"], {
      *     condition: HashExpirationCondition.ONLY_IF_NO_EXPIRY
      * });
+     * console.log(result); // [1, 0] - expiration set for field1, condition not met for field2
      * ```
      *
      * @example
@@ -3117,6 +3118,7 @@ export class BaseClient {
      * const result = await client.hpexpire("my_hash", 300000, ["field1"], {
      *     condition: HashExpirationCondition.ONLY_IF_GREATER_THAN_CURRENT
      * });
+     * console.log(result); // [1] - expiration set because 300000 ms > current TTL
      * ```
      */
     public async hpexpire(
@@ -3150,7 +3152,7 @@ export class BaseClient {
      * // Set expiration for hash fields using Unix timestamp
      * const futureTimestamp = Math.floor(Date.now() / 1000) + 3600; // 1 hour from now
      * const result = await client.hexpireat("my_hash", futureTimestamp, ["field1", "field2"]);
-     * console.log(result); // [true, true] - expiration set for both fields
+     * console.log(result); // [1, 1] - expiration set for both fields
      * ```
      *
      * @example
@@ -3160,6 +3162,7 @@ export class BaseClient {
      * const result = await client.hexpireat("my_hash", futureTimestamp, ["field1", "field2"], {
      *     condition: HashExpirationCondition.ONLY_IF_NO_EXPIRY
      * });
+     * console.log(result); // [1, 0] - expiration set for field1, condition not met for field2
      * ```
      *
      * @example
@@ -3169,6 +3172,7 @@ export class BaseClient {
      * const result = await client.hexpireat("my_hash", futureTimestamp, ["field1"], {
      *     condition: HashExpirationCondition.ONLY_IF_GREATER_THAN_CURRENT
      * });
+     * console.log(result); // [1] - expiration set because timestamp > current expiration
      * ```
      */
     public async hexpireat(
@@ -3202,7 +3206,7 @@ export class BaseClient {
      * // Set expiration for hash fields using Unix timestamp in milliseconds
      * const futureTimestamp = Date.now() + 3600000; // 1 hour from now
      * const result = await client.hpexpireat("my_hash", futureTimestamp, ["field1", "field2"]);
-     * console.log(result); // [true, true] - expiration set for both fields
+     * console.log(result); // [1, 1] - expiration set for both fields
      * ```
      *
      * @example
@@ -3212,6 +3216,7 @@ export class BaseClient {
      * const result = await client.hpexpireat("my_hash", futureTimestamp, ["field1", "field2"], {
      *     condition: HashExpirationCondition.ONLY_IF_NO_EXPIRY
      * });
+     * console.log(result); // [1, 0] - expiration set for field1, condition not met for field2
      * ```
      *
      * @example
@@ -3221,6 +3226,7 @@ export class BaseClient {
      * const result = await client.hpexpireat("my_hash", futureTimestamp, ["field1"], {
      *     condition: HashExpirationCondition.ONLY_IF_GREATER_THAN_CURRENT
      * });
+     * console.log(result); // [1] - expiration set because timestamp > current expiration
      * ```
      */
     public async hpexpireat(
@@ -7196,12 +7202,12 @@ export class BaseClient {
         ReadFrom,
         connection_request.ReadFrom
     > = {
-        primary: connection_request.ReadFrom.Primary,
-        preferReplica: connection_request.ReadFrom.PreferReplica,
-        AZAffinity: connection_request.ReadFrom.AZAffinity,
-        AZAffinityReplicasAndPrimary:
-            connection_request.ReadFrom.AZAffinityReplicasAndPrimary,
-    };
+            primary: connection_request.ReadFrom.Primary,
+            preferReplica: connection_request.ReadFrom.PreferReplica,
+            AZAffinity: connection_request.ReadFrom.AZAffinity,
+            AZAffinityReplicasAndPrimary:
+                connection_request.ReadFrom.AZAffinityReplicasAndPrimary,
+        };
 
     /**
      * Returns the number of messages that were successfully acknowledged by the consumer group member of a stream.
@@ -8612,8 +8618,8 @@ export class BaseClient {
             res === null
                 ? null
                 : res!.map((r) => {
-                      return { key: r.key, elements: r.value };
-                  })[0],
+                    return { key: r.key, elements: r.value };
+                })[0],
         );
     }
 
@@ -8656,8 +8662,8 @@ export class BaseClient {
             res === null
                 ? null
                 : res!.map((r) => {
-                      return { key: r.key, elements: r.value };
-                  })[0],
+                    return { key: r.key, elements: r.value };
+                })[0],
         );
     }
 
@@ -8877,11 +8883,11 @@ export class BaseClient {
             : connection_request.ReadFrom.Primary;
         const authenticationInfo =
             options.credentials !== undefined &&
-            "password" in options.credentials
+                "password" in options.credentials
                 ? {
-                      password: options.credentials.password,
-                      username: options.credentials.username,
-                  }
+                    password: options.credentials.password,
+                    username: options.credentials.username,
+                }
                 : undefined;
         const protocol = options.protocol as
             | connection_request.ProtocolVersion

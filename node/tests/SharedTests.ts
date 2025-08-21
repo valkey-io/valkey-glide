@@ -327,10 +327,10 @@ export function runBaseTests(config: {
                     client instanceof GlideClient
                         ? await client.info([InfoOptions.Commandstats])
                         : Object.values(
-                              await client.info({
-                                  sections: [InfoOptions.Commandstats],
-                              }),
-                          ).join();
+                            await client.info({
+                                sections: [InfoOptions.Commandstats],
+                            }),
+                        ).join();
                 expect(oldResult).toContain("cmdstat_set");
                 expect(await client.configResetStat()).toEqual("OK");
 
@@ -338,10 +338,10 @@ export function runBaseTests(config: {
                     client instanceof GlideClient
                         ? await client.info([InfoOptions.Commandstats])
                         : Object.values(
-                              await client.info({
-                                  sections: [InfoOptions.Commandstats],
-                              }),
-                          ).join();
+                            await client.info({
+                                sections: [InfoOptions.Commandstats],
+                            }),
+                        ).join();
                 expect(result).not.toContain("cmdstat_set");
             }, protocol);
         },
@@ -368,13 +368,13 @@ export function runBaseTests(config: {
                     const response =
                         client instanceof GlideClient
                             ? await client.exec(
-                                  new Batch(isAtomic).lastsave(),
-                                  isAtomic,
-                              )
+                                new Batch(isAtomic).lastsave(),
+                                isAtomic,
+                            )
                             : await client.exec(
-                                  new ClusterBatch(isAtomic).lastsave(),
-                                  isAtomic,
-                              );
+                                new ClusterBatch(isAtomic).lastsave(),
+                                isAtomic,
+                            );
 
                     expect(response?.[0]).toBeGreaterThan(yesterday);
                 }
@@ -2174,7 +2174,7 @@ export function runBaseTests(config: {
                         await client.hsetex(key, fieldValueMap, {
                             expiry: { type: TimeUnit.Seconds, count: 60 },
                         }),
-                    ).toEqual(2);
+                    ).toEqual(1);
 
                     // Verify fields were set
                     expect(await client.hget(key, field1)).toEqual(value1);
@@ -2215,54 +2215,38 @@ export function runBaseTests(config: {
                     const value1 = getRandomKey();
                     const value2 = getRandomKey();
 
-                    // Test with NX (only if hash doesn't exist)
-                    expect(
-                        await client.hsetex(
+                    // Test that hash-level conditional changes are not supported
+                    await expect(
+                        client.hsetex(
                             key,
                             { [field1]: value1 },
                             {
                                 conditionalChange:
                                     ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
+                                expiry: { type: TimeUnit.Seconds, count: 60 },
+                            },
+                        ),
+                    ).rejects.toThrow(
+                        "HSETEX does not support hash-level conditional changes",
+                    );
+
+                    // Test basic functionality without conditional changes
+                    expect(
+                        await client.hsetex(
+                            key,
+                            { [field1]: value1 },
+                            {
                                 expiry: { type: TimeUnit.Seconds, count: 60 },
                             },
                         ),
                     ).toEqual(1);
 
-                    // Should not set because hash already exists
+                    // Test setting another field
                     expect(
                         await client.hsetex(
                             key,
                             { [field2]: value2 },
                             {
-                                conditionalChange:
-                                    ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
-                                expiry: { type: TimeUnit.Seconds, count: 60 },
-                            },
-                        ),
-                    ).toEqual(0);
-
-                    // Test with XX (only if hash exists)
-                    const key2 = getRandomKey();
-                    expect(
-                        await client.hsetex(
-                            key2,
-                            { [field1]: value1 },
-                            {
-                                conditionalChange:
-                                    ConditionalChange.ONLY_IF_EXISTS,
-                                expiry: { type: TimeUnit.Seconds, count: 60 },
-                            },
-                        ),
-                    ).toEqual(0);
-
-                    // Should work because hash exists
-                    expect(
-                        await client.hsetex(
-                            key,
-                            { [field2]: value2 },
-                            {
-                                conditionalChange:
-                                    ConditionalChange.ONLY_IF_EXISTS,
                                 expiry: { type: TimeUnit.Seconds, count: 60 },
                             },
                         ),
@@ -2320,7 +2304,7 @@ export function runBaseTests(config: {
                                 expiry: { type: TimeUnit.Seconds, count: 60 },
                             },
                         ),
-                    ).toEqual(2); // both fields don't exist
+                    ).toEqual(1); // both fields don't exist
 
                     // Should fail because field2 now exists
                     expect(
@@ -2448,7 +2432,7 @@ export function runBaseTests(config: {
                         await client.hsetex(key, recordMap, {
                             expiry: { type: TimeUnit.Seconds, count: 60 },
                         }),
-                    ).toEqual(2);
+                    ).toEqual(1);
 
                     // Test with HashDataType
                     const hashDataType: HashDataType = [
@@ -2463,7 +2447,7 @@ export function runBaseTests(config: {
                         await client.hsetex(key2, hashDataType, {
                             expiry: { type: TimeUnit.Seconds, count: 60 },
                         }),
-                    ).toEqual(2);
+                    ).toEqual(1);
 
                     // Verify values
                     expect(await client.hget(key, field1)).toEqual(value1);
@@ -2566,9 +2550,9 @@ export function runBaseTests(config: {
                         client instanceof GlideClient
                             ? await client.exec(batch as Batch, false)
                             : await (client as GlideClusterClient).exec(
-                                  batch as ClusterBatch,
-                                  false,
-                              );
+                                batch as ClusterBatch,
+                                false,
+                            );
 
                     expect(results).toHaveLength(4);
                     expect(results![0]).toBe(1); // hsetex result for key1
@@ -2610,7 +2594,7 @@ export function runBaseTests(config: {
                             expiry: { type: TimeUnit.Seconds, count: 60 },
                         },
                     );
-                    expect(result1).toBe(2);
+                    expect(result1).toBe(1);
 
                     // Verify values with different decoders
                     expect(await client.hget(keyBuffer, field1)).toBe(
@@ -2625,15 +2609,16 @@ export function runBaseTests(config: {
                         value1,
                     );
 
-                    // Test with empty field-value map
-                    const result2 = await client.hsetex(
-                        getRandomKey(),
-                        {},
-                        {
-                            expiry: { type: TimeUnit.Seconds, count: 60 },
-                        },
-                    );
-                    expect(result2).toBe(0);
+                    // Test with empty field-value map - server should return error
+                    await expect(
+                        client.hsetex(
+                            getRandomKey(),
+                            {},
+                            {
+                                expiry: { type: TimeUnit.Seconds, count: 60 },
+                            },
+                        ),
+                    ).rejects.toThrow(RequestError);
 
                     // Test with very long field and value names
                     const longKey = getRandomKey();
@@ -2747,11 +2732,11 @@ export function runBaseTests(config: {
 
                     expect(errorCaught).toBe(true);
 
-                    // Test batch operation error handling
+                    // Test batch operation error handling with raiseOnError: true
                     const batch =
                         client instanceof GlideClient
-                            ? new Batch(false)
-                            : new ClusterBatch(false);
+                            ? new Batch(true)
+                            : new ClusterBatch(true);
                     batch.hsetex(
                         key,
                         { [field]: value },
@@ -2762,11 +2747,11 @@ export function runBaseTests(config: {
 
                     const execPromise =
                         client instanceof GlideClient
-                            ? client.exec(batch as Batch, false)
+                            ? client.exec(batch as Batch, true)
                             : (client as GlideClusterClient).exec(
-                                  batch as ClusterBatch,
-                                  false,
-                              );
+                                batch as ClusterBatch,
+                                true,
+                            );
 
                     await expect(execPromise).rejects.toThrow(RequestError);
                 },
@@ -2818,11 +2803,14 @@ export function runBaseTests(config: {
                     });
                     expect(result3).toEqual([value1]);
 
-                    // Test HGETEX with KEEPTTL option
-                    const result4 = await client.hgetex(key, [field1], {
-                        expiry: "KEEPTTL",
-                    });
-                    expect(result4).toEqual([value1]);
+                    // Test that HGETEX does not support KEEPTTL
+                    await expect(
+                        client.hgetex(key, [field1], {
+                            expiry: "KEEPTTL",
+                        }),
+                    ).rejects.toThrow(
+                        "HGETEX does not support KEEPTTL option",
+                    );
 
                     // Test HGETEX on non-existent key
                     const nonExistentKey = getRandomKey();
@@ -2936,9 +2924,9 @@ export function runBaseTests(config: {
                     const results = await (client instanceof GlideClient
                         ? client.exec(batch as Batch, false)
                         : (client as GlideClusterClient).exec(
-                              batch as ClusterBatch,
-                              false,
-                          ));
+                            batch as ClusterBatch,
+                            false,
+                        ));
 
                     expect(results).toHaveLength(2);
                     expect(results![0]).toEqual([value1]);
@@ -3011,12 +2999,13 @@ export function runBaseTests(config: {
                         fieldBuffer,
                     ]);
                     expect(result1).toHaveLength(2);
-                    expect(result1[0]).toEqual(valueBuffer);
+                    expect(result1[0]).toEqual(valueBuffer.toString());
                     expect(result1[1]).toEqual(value1);
 
-                    // Test with empty field array
-                    const result2 = await client.hgetex(key, []);
-                    expect(result2).toEqual([]);
+                    // Test with empty field array - server should return error
+                    await expect(
+                        client.hgetex(key, []),
+                    ).rejects.toThrow(RequestError);
 
                     // Test with large field names and values
                     const longKey = getRandomKey();
@@ -3251,9 +3240,9 @@ export function runBaseTests(config: {
                     const results = await (client instanceof GlideClient
                         ? client.exec(batch as Batch, false)
                         : (client as GlideClusterClient).exec(
-                              batch as ClusterBatch,
-                              false,
-                          ));
+                            batch as ClusterBatch,
+                            false,
+                        ));
                     expect(results).toEqual([[1], [1]]);
 
                     // Verify expiration was set using HTTL
@@ -3289,11 +3278,12 @@ export function runBaseTests(config: {
                         client.hexpire(key, 60, [field]),
                     ).rejects.toThrow(RequestError);
 
-                    // Test with empty field array
+                    // Test with empty field array - server should return error
                     const hashKey = getRandomKey();
                     await client.hset(hashKey, { [field]: "value" });
-                    const result = await client.hexpire(hashKey, 60, []);
-                    expect(result).toEqual([]);
+                    await expect(
+                        client.hexpire(hashKey, 60, []),
+                    ).rejects.toThrow(RequestError);
                 },
                 protocol,
             );
@@ -3428,13 +3418,13 @@ export function runBaseTests(config: {
                     const result2 = await client.hpersist(nonExistentKey, [
                         field1,
                     ]);
-                    expect(result2).toEqual([false]);
+                    expect(result2).toEqual([-2]);
 
                     // Test on fields without expiration
                     const key2 = getRandomKey();
                     await client.hset(key2, { [field1]: value1 });
                     const result3 = await client.hpersist(key2, [field1]);
-                    expect(result3).toEqual([false]); // field has no expiration to remove
+                    expect(result3).toEqual([-1]); // field has no expiration to remove
                 },
                 protocol,
             );
@@ -3475,10 +3465,10 @@ export function runBaseTests(config: {
                     const results = await (client instanceof GlideClient
                         ? client.exec(batch as Batch, false)
                         : (client as GlideClusterClient).exec(
-                              batch as ClusterBatch,
-                              false,
-                          ));
-                    expect(results).toEqual([[true], [true]]);
+                            batch as ClusterBatch,
+                            false,
+                        ));
+                    expect(results).toEqual([[1], [1]]);
                 },
                 protocol,
             );
@@ -3504,11 +3494,12 @@ export function runBaseTests(config: {
                         RequestError,
                     );
 
-                    // Test with empty field array
+                    // Test with empty field array - server should return error
                     const hashKey = getRandomKey();
                     await client.hset(hashKey, { [field]: "value" });
-                    const result = await client.hpersist(hashKey, []);
-                    expect(result).toEqual([]);
+                    await expect(
+                        client.hpersist(hashKey, []),
+                    ).rejects.toThrow(RequestError);
                 },
                 protocol,
             );
@@ -3787,11 +3778,11 @@ export function runBaseTests(config: {
                     const results = await (client instanceof GlideClient
                         ? client.exec(batch as Batch, false)
                         : (client as GlideClusterClient).exec(
-                              batch as ClusterBatch,
-                              false,
-                          ));
+                            batch as ClusterBatch,
+                            false,
+                        ));
 
-                    expect(results).toEqual([[true], [true]]);
+                    expect(results).toEqual([[1], [1]]);
                 },
                 protocol,
             );
@@ -3817,11 +3808,12 @@ export function runBaseTests(config: {
                         client.hpexpire(key, 60000, [field]),
                     ).rejects.toThrow(RequestError);
 
-                    // Test with empty field array
+                    // Test with empty field array - server should return error
                     const hashKey = getRandomKey();
                     await client.hset(hashKey, { [field]: "value" });
-                    const result = await client.hpexpire(hashKey, 60000, []);
-                    expect(result).toEqual([]);
+                    await expect(
+                        client.hpexpire(hashKey, 60000, []),
+                    ).rejects.toThrow(RequestError);
                 },
                 protocol,
             );
@@ -3970,7 +3962,7 @@ export function runBaseTests(config: {
                     const result2 = await client.hexpireat(key, pastTimestamp, [
                         field1,
                     ]);
-                    expect(result2).toEqual([1]);
+                    expect(result2).toEqual([2]);
                     expect(await client.hget(key, field1)).toEqual(null);
 
                     // Test on non-existent key
@@ -4013,6 +4005,8 @@ export function runBaseTests(config: {
                         Math.floor(Date.now() / 1000) + 3600; // 1 hour from now
                     const futureTimestamp2 =
                         Math.floor(Date.now() / 1000) + 7200; // 2 hours from now
+                    const futureTimestamp3 =
+                        Math.floor(Date.now() / 1000) + 10800; // 3 hours from now
 
                     // Test NX condition (only if no expiry)
                     const result1 = await client.hexpireat(
@@ -4060,14 +4054,14 @@ export function runBaseTests(config: {
                     // Test GT condition (only if greater than current)
                     const result4 = await client.hexpireat(
                         key,
-                        futureTimestamp2,
+                        futureTimestamp3,
                         [field1],
                         {
                             condition:
                                 HashExpirationCondition.ONLY_IF_GREATER_THAN_CURRENT,
                         },
                     );
-                    expect(result4).toEqual([1]);
+                    expect(result4).toEqual([1]); // futureTimestamp3 is greater than current expiry
 
                     // Test LT condition (only if less than current)
                     const result5 = await client.hexpireat(
@@ -4125,11 +4119,11 @@ export function runBaseTests(config: {
                     const results = await (client instanceof GlideClient
                         ? client.exec(batch as Batch, false)
                         : (client as GlideClusterClient).exec(
-                              batch as ClusterBatch,
-                              false,
-                          ));
+                            batch as ClusterBatch,
+                            false,
+                        ));
 
-                    expect(results).toEqual([[true], [true]]);
+                    expect(results).toEqual([[1], [1]]);
                 },
                 protocol,
             );
@@ -4157,15 +4151,12 @@ export function runBaseTests(config: {
                         client.hexpireat(key, futureTimestamp, [field]),
                     ).rejects.toThrow(RequestError);
 
-                    // Test with empty field array
+                    // Test with empty field array - server should return error
                     const hashKey = getRandomKey();
                     await client.hset(hashKey, { [field]: "value" });
-                    const result = await client.hexpireat(
-                        hashKey,
-                        futureTimestamp,
-                        [],
-                    );
-                    expect(result).toEqual([]);
+                    await expect(
+                        client.hexpireat(hashKey, futureTimestamp, []),
+                    ).rejects.toThrow(RequestError);
                 },
                 protocol,
             );
@@ -4320,7 +4311,7 @@ export function runBaseTests(config: {
                         pastTimestamp,
                         [field1],
                     );
-                    expect(result2).toEqual([1]);
+                    expect(result2).toEqual([2]);
                     expect(await client.hget(key, field1)).toEqual(null);
 
                     // Test on non-existent key
@@ -4479,10 +4470,10 @@ export function runBaseTests(config: {
                     const results = await (client instanceof GlideClient
                         ? client.exec(batch as Batch, false)
                         : (client as GlideClusterClient).exec(
-                              batch as ClusterBatch,
-                              false,
-                          ));
-                    expect(results).toEqual([[true], [true]]);
+                            batch as ClusterBatch,
+                            false,
+                        ));
+                    expect(results).toEqual([[1], [1]]);
 
                     // Verify fields still exist
                     expect(await client.hget(key1, field1)).toEqual(value1);
@@ -4513,15 +4504,12 @@ export function runBaseTests(config: {
                         client.hpexpireat(key, futureTimestamp, [field]),
                     ).rejects.toThrow(RequestError);
 
-                    // Test with empty fields array
+                    // Test with empty fields array - server should return error
                     const hashKey = getRandomKey();
                     await client.hset(hashKey, { [field]: "value" });
-                    const result = await client.hpexpireat(
-                        hashKey,
-                        futureTimestamp,
-                        [],
-                    );
-                    expect(result).toEqual([]);
+                    await expect(
+                        client.hpexpireat(hashKey, futureTimestamp, []),
+                    ).rejects.toThrow(RequestError);
                 },
                 protocol,
             );
@@ -4697,8 +4685,8 @@ export function runBaseTests(config: {
                         batch.httl(key2, [field2]);
                         const results = await client.exec(batch, false);
                         expect(results).not.toBeNull();
-                        expect(results![0]).toBeGreaterThan(0); // key1 field1 has TTL
-                        expect(results![1]).toBeGreaterThan(0); // key2 field2 has TTL
+                        expect((results![0] as number[])[0]).toBeGreaterThan(0); // key1 field1 has TTL
+                        expect((results![1] as number[])[0]).toBeGreaterThan(0); // key2 field2 has TTL
                     } else {
                         const batch = new ClusterBatch(false);
                         batch.httl(key1, [field1]);
@@ -4707,8 +4695,8 @@ export function runBaseTests(config: {
                             client as GlideClusterClient
                         ).exec(batch, false);
                         expect(results).not.toBeNull();
-                        expect(results![0]).toBeGreaterThan(0); // key1 field1 has TTL
-                        expect(results![1]).toBeGreaterThan(0); // key2 field2 has TTL
+                        expect((results![0] as number[])[0]).toBeGreaterThan(0); // key1 field1 has TTL
+                        expect((results![1] as number[])[0]).toBeGreaterThan(0); // key2 field2 has TTL
                     }
                 },
                 protocol,
@@ -4735,11 +4723,12 @@ export function runBaseTests(config: {
                         RequestError,
                     );
 
-                    // Test HTTL with empty fields array
+                    // Test HTTL with empty fields array - server should return error
                     const hashKey = getRandomKey();
                     await client.hset(hashKey, { [field]: "value" });
-                    const result = await client.httl(hashKey, []);
-                    expect(result).toEqual([]);
+                    await expect(
+                        client.httl(hashKey, []),
+                    ).rejects.toThrow(RequestError);
                 },
                 protocol,
             );
@@ -4944,11 +4933,12 @@ export function runBaseTests(config: {
                         client.hexpiretime(key, [field]),
                     ).rejects.toThrow(RequestError);
 
-                    // Test HEXPIRETIME with empty fields array
+                    // Test HEXPIRETIME with empty fields array - server should return error
                     const hashKey = getRandomKey();
                     await client.hset(hashKey, { [field]: "value" });
-                    const result = await client.hexpiretime(hashKey, []);
-                    expect(result).toEqual([]);
+                    await expect(
+                        client.hexpiretime(hashKey, []),
+                    ).rejects.toThrow(RequestError);
                 },
                 protocol,
             );
@@ -5079,11 +5069,12 @@ export function runBaseTests(config: {
                         client.hpexpiretime(key, [field]),
                     ).rejects.toThrow(RequestError);
 
-                    // Test HPEXPIRETIME with empty fields array
+                    // Test HPEXPIRETIME with empty fields array - server should return error
                     const hashKey = getRandomKey();
                     await client.hset(hashKey, { [field]: "value" });
-                    const result = await client.hpexpiretime(hashKey, []);
-                    expect(result).toEqual([]);
+                    await expect(
+                        client.hpexpiretime(hashKey, []),
+                    ).rejects.toThrow(RequestError);
                 },
                 protocol,
             );
@@ -5187,8 +5178,8 @@ export function runBaseTests(config: {
                         batch.hpttl(key2, [field2]);
                         const results = await client.exec(batch, false);
                         expect(results).not.toBeNull();
-                        expect(results![0]).toBeGreaterThan(0); // key1 field1 has TTL
-                        expect(results![1]).toBeGreaterThan(0); // key2 field2 has TTL
+                        expect((results![0] as number[])[0]).toBeGreaterThan(0); // key1 field1 has TTL
+                        expect((results![1] as number[])[0]).toBeGreaterThan(0); // key2 field2 has TTL
                     } else {
                         const batch = new ClusterBatch(false);
                         batch.hpttl(key1, [field1]);
@@ -5197,8 +5188,8 @@ export function runBaseTests(config: {
                             client as GlideClusterClient
                         ).exec(batch, false);
                         expect(results).not.toBeNull();
-                        expect(results![0]).toBeGreaterThan(0); // key1 field1 has TTL
-                        expect(results![1]).toBeGreaterThan(0); // key2 field2 has TTL
+                        expect((results![0] as number[])[0]).toBeGreaterThan(0); // key1 field1 has TTL
+                        expect((results![1] as number[])[0]).toBeGreaterThan(0); // key2 field2 has TTL
                     }
                 },
                 protocol,
@@ -5225,11 +5216,12 @@ export function runBaseTests(config: {
                         RequestError,
                     );
 
-                    // Test HPTTL with empty fields array
+                    // Test HPTTL with empty fields array - server should return error
                     const hashKey = getRandomKey();
                     await client.hset(hashKey, { [field]: "value" });
-                    const result = await client.hpttl(hashKey, []);
-                    expect(result).toEqual([]);
+                    await expect(
+                        client.hpttl(hashKey, []),
+                    ).rejects.toThrow(RequestError);
                 },
                 protocol,
             );
@@ -9372,27 +9364,27 @@ export function runBaseTests(config: {
                 expect(
                     client instanceof GlideClient
                         ? await client.echo(message, {
-                              decoder: Decoder.String,
-                          })
+                            decoder: Decoder.String,
+                        })
                         : await client.echo(message, {
-                              decoder: Decoder.String,
-                          }),
+                            decoder: Decoder.String,
+                        }),
                 ).toEqual(message);
                 expect(
                     client instanceof GlideClient
                         ? await client.echo(message, { decoder: Decoder.Bytes })
                         : await client.echo(message, {
-                              decoder: Decoder.Bytes,
-                          }),
+                            decoder: Decoder.Bytes,
+                        }),
                 ).toEqual(Buffer.from(message));
                 expect(
                     client instanceof GlideClient
                         ? await client.echo(Buffer.from(message), {
-                              decoder: Decoder.String,
-                          })
+                            decoder: Decoder.String,
+                        })
                         : await client.echo(Buffer.from(message), {
-                              decoder: Decoder.String,
-                          }),
+                            decoder: Decoder.String,
+                        }),
                 ).toEqual(message);
                 expect(await client.echo(Buffer.from(message))).toEqual(
                     message,
@@ -11104,17 +11096,17 @@ export function runBaseTests(config: {
                     let response =
                         client instanceof GlideClient
                             ? await client.exec(
-                                  new Batch(isAtomic).dump(key1),
-                                  true,
-                                  {
-                                      decoder: Decoder.Bytes,
-                                  },
-                              )
+                                new Batch(isAtomic).dump(key1),
+                                true,
+                                {
+                                    decoder: Decoder.Bytes,
+                                },
+                            )
                             : await client.exec(
-                                  new ClusterBatch(isAtomic).dump(key1),
-                                  true,
-                                  { decoder: Decoder.Bytes },
-                              );
+                                new ClusterBatch(isAtomic).dump(key1),
+                                true,
+                                { decoder: Decoder.Bytes },
+                            );
                     expect(response?.[0]).not.toBeNull();
                     data = response?.[0] as Buffer;
 
@@ -11122,19 +11114,19 @@ export function runBaseTests(config: {
                     response =
                         client instanceof GlideClient
                             ? await client.exec(
-                                  new Batch(isAtomic)
-                                      .restore(key4, 0, data)
-                                      .get(key4),
-                                  true,
-                                  { decoder: Decoder.String },
-                              )
+                                new Batch(isAtomic)
+                                    .restore(key4, 0, data)
+                                    .get(key4),
+                                true,
+                                { decoder: Decoder.String },
+                            )
                             : await client.exec(
-                                  new ClusterBatch(isAtomic)
-                                      .restore(key4, 0, data)
-                                      .get(key4),
-                                  true,
-                                  { decoder: Decoder.String },
-                              );
+                                new ClusterBatch(isAtomic)
+                                    .restore(key4, 0, data)
+                                    .get(key4),
+                                true,
+                                { decoder: Decoder.String },
+                            );
                     expect(response?.[0]).toEqual("OK");
                     expect(response?.[1]).toEqual(value);
 
@@ -11142,19 +11134,19 @@ export function runBaseTests(config: {
                     response =
                         client instanceof GlideClient
                             ? await client.exec(
-                                  new Batch(isAtomic)
-                                      .restore(key5, 0, data)
-                                      .get(key5),
-                                  true,
-                                  { decoder: Decoder.Bytes },
-                              )
+                                new Batch(isAtomic)
+                                    .restore(key5, 0, data)
+                                    .get(key5),
+                                true,
+                                { decoder: Decoder.Bytes },
+                            )
                             : await client.exec(
-                                  new ClusterBatch(isAtomic)
-                                      .restore(key5, 0, data)
-                                      .get(key5),
-                                  true,
-                                  { decoder: Decoder.Bytes },
-                              );
+                                new ClusterBatch(isAtomic)
+                                    .restore(key5, 0, data)
+                                    .get(key5),
+                                true,
+                                { decoder: Decoder.Bytes },
+                            );
                     expect(response?.[0]).toEqual("OK");
                     expect(response?.[1]).toEqual(valueEncode);
                 }
@@ -11626,13 +11618,13 @@ export function runBaseTests(config: {
                 expiry: expiryVal as
                     | "keepExisting"
                     | {
-                          type:
-                              | TimeUnit.Seconds
-                              | TimeUnit.Milliseconds
-                              | TimeUnit.UnixSeconds
-                              | TimeUnit.UnixMilliseconds;
-                          count: number;
-                      },
+                        type:
+                        | TimeUnit.Seconds
+                        | TimeUnit.Milliseconds
+                        | TimeUnit.UnixSeconds
+                        | TimeUnit.UnixMilliseconds;
+                        count: number;
+                    },
                 conditionalSet: "onlyIfDoesNotExist",
             });
 
@@ -11653,13 +11645,13 @@ export function runBaseTests(config: {
                 expiry: expiryVal as
                     | "keepExisting"
                     | {
-                          type:
-                              | TimeUnit.Seconds
-                              | TimeUnit.Milliseconds
-                              | TimeUnit.UnixSeconds
-                              | TimeUnit.UnixMilliseconds;
-                          count: number;
-                      },
+                        type:
+                        | TimeUnit.Seconds
+                        | TimeUnit.Milliseconds
+                        | TimeUnit.UnixSeconds
+                        | TimeUnit.UnixMilliseconds;
+                        count: number;
+                    },
 
                 conditionalSet: "onlyIfExists",
                 returnOldValue: true,
@@ -11678,13 +11670,13 @@ export function runBaseTests(config: {
                     expiry: expiryVal as
                         | "keepExisting"
                         | {
-                              type:
-                                  | TimeUnit.Seconds
-                                  | TimeUnit.Milliseconds
-                                  | TimeUnit.UnixSeconds
-                                  | TimeUnit.UnixMilliseconds;
-                              count: number;
-                          },
+                            type:
+                            | TimeUnit.Seconds
+                            | TimeUnit.Milliseconds
+                            | TimeUnit.UnixSeconds
+                            | TimeUnit.UnixMilliseconds;
+                            count: number;
+                        },
                     conditionalSet: "onlyIfEqual",
                     comparisonValue: value, // Ensure it matches the current key's value
                 });
@@ -13164,7 +13156,7 @@ export function runBaseTests(config: {
                     for (let i = 0; i < fullResultMapArray.length; i += 2) {
                         expect(
                             (fullResultMapArray[i] as string) in
-                                expectedFullMap,
+                            expectedFullMap,
                         ).toEqual(true);
                     }
 
@@ -14089,23 +14081,23 @@ export function runBaseTests(config: {
                 expect(await client.xinfoGroups(Buffer.from(key))).toEqual(
                     cluster.checkIfServerVersionLessThan("7.0.0")
                         ? [
-                              {
-                                  name: groupName1,
-                                  consumers: 0,
-                                  pending: 0,
-                                  "last-delivered-id": "0-0",
-                              },
-                          ]
+                            {
+                                name: groupName1,
+                                consumers: 0,
+                                pending: 0,
+                                "last-delivered-id": "0-0",
+                            },
+                        ]
                         : [
-                              {
-                                  name: groupName1,
-                                  consumers: 0,
-                                  pending: 0,
-                                  "last-delivered-id": "0-0",
-                                  "entries-read": null,
-                                  lag: 0,
-                              },
-                          ],
+                            {
+                                name: groupName1,
+                                consumers: 0,
+                                pending: 0,
+                                "last-delivered-id": "0-0",
+                                "entries-read": null,
+                                lag: 0,
+                            },
+                        ],
                 );
 
                 expect(
@@ -14142,23 +14134,23 @@ export function runBaseTests(config: {
                 expect(await client.xinfoGroups(key)).toEqual(
                     cluster.checkIfServerVersionLessThan("7.0.0")
                         ? [
-                              {
-                                  name: groupName1,
-                                  consumers: 0,
-                                  pending: 0,
-                                  "last-delivered-id": "0-0",
-                              },
-                          ]
+                            {
+                                name: groupName1,
+                                consumers: 0,
+                                pending: 0,
+                                "last-delivered-id": "0-0",
+                            },
+                        ]
                         : [
-                              {
-                                  name: groupName1,
-                                  consumers: 0,
-                                  pending: 0,
-                                  "last-delivered-id": "0-0",
-                                  "entries-read": null,
-                                  lag: 3,
-                              },
-                          ],
+                            {
+                                name: groupName1,
+                                consumers: 0,
+                                pending: 0,
+                                "last-delivered-id": "0-0",
+                                "entries-read": null,
+                                lag: 3,
+                            },
+                        ],
                 );
 
                 const xreadgroup = await client.xreadgroup(
@@ -14183,23 +14175,23 @@ export function runBaseTests(config: {
                 expect(await client.xinfoGroups(key)).toEqual(
                     cluster.checkIfServerVersionLessThan("7.0.0")
                         ? [
-                              {
-                                  name: groupName1,
-                                  consumers: 1,
-                                  pending: 3,
-                                  "last-delivered-id": streamId3,
-                              },
-                          ]
+                            {
+                                name: groupName1,
+                                consumers: 1,
+                                pending: 3,
+                                "last-delivered-id": streamId3,
+                            },
+                        ]
                         : [
-                              {
-                                  name: groupName1,
-                                  consumers: 1,
-                                  pending: 3,
-                                  "last-delivered-id": streamId3,
-                                  "entries-read": 3,
-                                  lag: 0,
-                              },
-                          ],
+                            {
+                                name: groupName1,
+                                consumers: 1,
+                                pending: 3,
+                                "last-delivered-id": streamId3,
+                                "entries-read": 3,
+                                lag: 0,
+                            },
+                        ],
                 );
 
                 expect(await client.xack(key, groupName1, [streamId1])).toEqual(
@@ -14209,23 +14201,23 @@ export function runBaseTests(config: {
                 expect(await client.xinfoGroups(key)).toEqual(
                     cluster.checkIfServerVersionLessThan("7.0.0")
                         ? [
-                              {
-                                  name: groupName1,
-                                  consumers: 1,
-                                  pending: 2,
-                                  "last-delivered-id": streamId3,
-                              },
-                          ]
+                            {
+                                name: groupName1,
+                                consumers: 1,
+                                pending: 2,
+                                "last-delivered-id": streamId3,
+                            },
+                        ]
                         : [
-                              {
-                                  name: groupName1,
-                                  consumers: 1,
-                                  pending: 2,
-                                  "last-delivered-id": streamId3,
-                                  "entries-read": 3,
-                                  lag: 0,
-                              },
-                          ],
+                            {
+                                name: groupName1,
+                                consumers: 1,
+                                pending: 2,
+                                "last-delivered-id": streamId3,
+                                "entries-read": 3,
+                                lag: 0,
+                            },
+                        ],
                 );
 
                 // key exists, but it is not a stream
@@ -14449,16 +14441,16 @@ export function runBaseTests(config: {
                     Buffer.from(group),
                     cluster.checkIfServerVersionLessThan("6.2.0")
                         ? {
-                              start: InfBoundary.NegativeInfinity,
-                              end: InfBoundary.PositiveInfinity,
-                              count: 1,
-                          }
+                            start: InfBoundary.NegativeInfinity,
+                            end: InfBoundary.PositiveInfinity,
+                            count: 1,
+                        }
                         : {
-                              start: InfBoundary.NegativeInfinity,
-                              end: InfBoundary.PositiveInfinity,
-                              count: 1,
-                              minIdleTime: 42,
-                          },
+                            start: InfBoundary.NegativeInfinity,
+                            end: InfBoundary.PositiveInfinity,
+                            count: 1,
+                            minIdleTime: 42,
+                        },
                 );
                 result[0][2] = 0; // overwrite msec counter to avoid test flakyness
                 expect(result).toEqual([["0-1", "consumer", 0, 1]]);
@@ -15676,9 +15668,9 @@ export function runBaseTests(config: {
                             client instanceof GlideClient
                                 ? await client.exec(batch as Batch, true)
                                 : await client.exec(
-                                      batch as ClusterBatch,
-                                      true,
-                                  );
+                                    batch as ClusterBatch,
+                                    true,
+                                );
                         expect(result).toEqual(expectedResult);
                     }
 
@@ -15728,13 +15720,13 @@ export function runBaseTests(config: {
                 // Retry with a longer timeout
                 const result = isCluster
                     ? await (client as GlideClusterClient).exec(
-                          batch as ClusterBatch,
-                          true,
-                          { timeout: 1000 },
-                      )
+                        batch as ClusterBatch,
+                        true,
+                        { timeout: 1000 },
+                    )
                     : await (client as GlideClient).exec(batch as Batch, true, {
-                          timeout: 1000,
-                      });
+                        timeout: 1000,
+                    });
 
                 expect(result?.length).toBe(1);
             }, protocol);
@@ -15763,9 +15755,9 @@ export function runBaseTests(config: {
 
                 const result = isCluster
                     ? await (client as GlideClusterClient).exec(
-                          batch as ClusterBatch,
-                          false,
-                      )
+                        batch as ClusterBatch,
+                        false,
+                    )
                     : await (client as GlideClient).exec(batch as Batch, false);
 
                 expect(result?.length).toBe(4);
@@ -15938,9 +15930,9 @@ export function runCommonTests(config: {
                 const result = clusterMode
                     ? await client.exec(batch as ClusterTransaction, true)
                     : await (client as GlideClient).exec(
-                          batch as Transaction,
-                          true,
-                      );
+                        batch as Transaction,
+                        true,
+                    );
                 expect(result?.length).toBe(2);
                 expect(result?.[0]).toBe("OK");
                 expect(result?.[1]).toBe("hello");
