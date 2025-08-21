@@ -1850,25 +1850,23 @@ export function runBaseTests(config: {
                 };
                 expect(await client.hset(key, fieldValueMap)).toEqual(2);
 
-                expect(await client.hgetall(key)).toEqual(
-                    convertFieldsAndValuesToHashDataType({
-                        [field1]: value,
-                        [field2]: value,
-                    }),
-                );
+                const hgetallResult1 = await client.hgetall(key);
+                expect(hgetallResult1.length).toEqual(2);
+                // order is not guaranteed here
+                expect(hgetallResult1).toContainEqual({ field: field1, value: value });
+                expect(hgetallResult1).toContainEqual({ field: field2, value: value });
 
-                expect(
-                    await client.hgetall(key, { decoder: Decoder.Bytes }),
-                ).toEqual([
-                    {
-                        field: Buffer.from(field1),
-                        value: Buffer.from(value),
-                    },
-                    {
-                        field: Buffer.from(field2),
-                        value: Buffer.from(value),
-                    },
-                ]);
+                const hgetallResult2 = await client.hgetall(key, { decoder: Decoder.Bytes });
+                expect(hgetallResult2.length).toEqual(2);
+                // order is not guaranteed here
+                expect(hgetallResult2).toContainEqual({
+                    field: Buffer.from(field1),
+                    value: Buffer.from(value),
+                });
+                expect(hgetallResult2).toContainEqual({
+                    field: Buffer.from(field2),
+                    value: Buffer.from(value),
+                });
 
                 expect(
                     await client.hgetall(Buffer.from("nonExistingKey")),
@@ -2002,7 +2000,11 @@ export function runBaseTests(config: {
                 expect(
                     await client.hset(Buffer.from(key1), fieldValueMap),
                 ).toEqual(2);
-                expect(await client.hvals(key1)).toEqual(["value1", "value2"]);
+                const hvalsResult1 = await client.hvals(key1);
+                expect(hvalsResult1.length).toEqual(2);
+                // order is not guaranteed here
+                expect(hvalsResult1).toContainEqual("value1");
+                expect(hvalsResult1).toContainEqual("value2");
                 expect(await client.hdel(key1, [field1])).toEqual(1);
                 expect(await client.hvals(Buffer.from(key1))).toEqual([
                     "value2",
@@ -2011,9 +2013,11 @@ export function runBaseTests(config: {
 
                 //hvals with binary buffers
                 expect(await client.hset(key2, fieldValueMap)).toEqual(2);
-                expect(
-                    await client.hvals(key2, { decoder: Decoder.Bytes }),
-                ).toEqual([value1Encoded, value2Encoded]);
+                const hvalsResult2 = await client.hvals(key2, { decoder: Decoder.Bytes });
+                expect(hvalsResult2.length).toEqual(2);
+                // order is not guaranteed here
+                expect(hvalsResult2).toContainEqual(value1Encoded);
+                expect(hvalsResult2).toContainEqual(value2Encoded);
                 expect(await client.hdel(key2, [field1])).toEqual(1);
                 expect(
                     await client.hvals(key2, { decoder: Decoder.Bytes }),
