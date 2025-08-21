@@ -8,7 +8,7 @@ import os
 import threading
 import time
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict, List, Mapping, Union, cast
+from typing import Any, Dict, List, Mapping, Optional, Union, cast
 
 import pytest
 from glide_shared.commands.batch import Batch, ClusterBatch
@@ -88,6 +88,7 @@ from glide_shared.routes import (
     SlotType,
 )
 from glide_sync.glide_client import GlideClient, GlideClusterClient, TGlideClient
+from glide_sync.sync_commands.script import Script
 
 from tests.sync_tests.conftest import create_sync_client
 from tests.utils.utils import (
@@ -96,6 +97,7 @@ from tests.utils.utils import (
     compare_maps,
     convert_bytes_to_string_object,
     convert_string_to_bytes_object,
+    create_long_running_lua_script,
     create_lua_lib_with_long_running_function,
     generate_lua_lib_code,
     get_first_result,
@@ -4910,9 +4912,7 @@ class TestCommands:
         if isinstance(
             glide_sync_client, GlideClusterClient
         ) and sync_check_if_server_version_lt(glide_sync_client, "8.0.0"):
-            return pytest.mark.skip(
-                reason="Valkey version required in cluster mode>= 8.0.0"
-            )
+            pytest.skip(reason="Valkey version required in cluster mode>= 8.0.0")
         key = "{user}" + get_random_string(10)
         store = "{user}" + get_random_string(10)
         user_key1, user_key2, user_key3, user_key4, user_key5 = (
@@ -10211,3 +10211,375 @@ class TestClusterRoutes:
         # Negative count
         with pytest.raises(RequestError):
             glide_sync_client.hscan(key2, initial_cursor, count=-1)
+
+
+def script_kill_tests(
+    glide_sync_client: TGlideClient,
+    test_client: TGlideClient,
+    route: Optional[Route] = None,
+):
+    """
+    shared tests for SCRIPT KILL used in routed and non-routed variants, clients are created in
+    respective tests with different test matrices.
+    """
+    # Verify that script_kill raises an error when no script is running
+    with pytest.raises(RequestError) as e:
+        glide_sync_client.script_kill()
+    assert "No scripts in execution right now" in str(e)
+
+    # Create a long-running script
+    long_script = Script(create_long_running_lua_script(10))
+
+    def run_long_script():
+        with pytest.raises(RequestError) as e:
+            if route is not None:
+                test_client.invoke_script_route(long_script, route=route)
+            else:
+                test_client.invoke_script(long_script)
+        assert "Script killed by user" in str(e)
+
+    def wait_and_kill_script():
+        time.sleep(3)  # Give some time for the script to start
+        timeout = 0
+        while timeout <= 5:
+            # keep trying to kill until we get an "OK"
+            try:
+                if route is not None:
+                    result = cast(GlideClusterClient, glide_sync_client).script_kill(
+                        route=route
+                    )
+                else:
+                    result = glide_sync_client.script_kill()
+                #  we expect to get success
+                assert result == "OK"
+                break
+            except RequestError:
+                # a RequestError may occur if the script is not yet running
+                # sleep and try again
+                timeout += 0.5
+                time.sleep(0.5)
+
+    # Run the long script and kill it
+    script_thread = threading.Thread(target=run_long_script)
+    kill_thread = threading.Thread(target=wait_and_kill_script)
+
+    script_thread.start()
+    kill_thread.start()
+
+    script_thread.join()
+    kill_thread.join()
+
+    # Verify that script_kill raises an error when no script is running
+    with pytest.raises(RequestError) as e:
+        if route is not None:
+            cast(GlideClusterClient, glide_sync_client).script_kill(route=route)
+        else:
+            glide_sync_client.script_kill()
+    assert "No scripts in execution right now" in str(e)
+
+    test_client.close()
+
+
+class TestSyncScripts:
+    @pytest.mark.smoke_test
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_script(self, glide_sync_client: TGlideClient):
+        key1 = get_random_string(10)
+        key2 = get_random_string(10)
+        script = Script("return 'Hello'")
+        assert glide_sync_client.invoke_script(script) == "Hello".encode()
+
+        script = Script("return redis.call('SET', KEYS[1], ARGV[1])")
+        assert (
+            glide_sync_client.invoke_script(script, keys=[key1], args=["value1"])
+            == "OK"
+        )
+        # Reuse the same script with different parameters.
+        assert (
+            glide_sync_client.invoke_script(script, keys=[key2], args=["value2"])
+            == "OK"
+        )
+        script = Script("return redis.call('GET', KEYS[1])")
+        assert glide_sync_client.invoke_script(script, keys=[key1]) == "value1".encode()
+        assert glide_sync_client.invoke_script(script, keys=[key2]) == "value2".encode()
+
+    @pytest.mark.smoke_test
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_script_binary(self, glide_sync_client: TGlideClient):
+        key1 = bytes(get_random_string(10), "utf-8")
+        key2 = bytes(get_random_string(10), "utf-8")
+        script = Script(bytes("return 'Hello'", "utf-8"))
+        assert glide_sync_client.invoke_script(script) == "Hello".encode()
+
+        script = Script(bytes("return redis.call('SET', KEYS[1], ARGV[1])", "utf-8"))
+        assert (
+            glide_sync_client.invoke_script(
+                script, keys=[key1], args=[bytes("value1", "utf-8")]
+            )
+            == "OK"
+        )
+        # Reuse the same script with different parameters.
+        assert (
+            glide_sync_client.invoke_script(
+                script, keys=[key2], args=[bytes("value2", "utf-8")]
+            )
+            == "OK"
+        )
+        script = Script(bytes("return redis.call('GET', KEYS[1])", "utf-8"))
+        assert glide_sync_client.invoke_script(script, keys=[key1]) == "value1".encode()
+        assert glide_sync_client.invoke_script(script, keys=[key2]) == "value2".encode()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_script_large_keys_no_args(self, request, cluster_mode, protocol):
+        glide_sync_client = create_sync_client(
+            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=5000
+        )
+        length = 2**13  # 8kb
+        key = "0" * length
+        script = Script("return KEYS[1]")
+        assert glide_sync_client.invoke_script(script, keys=[key]) == key.encode()
+        glide_sync_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_script_large_args_no_keys(self, request, cluster_mode, protocol):
+        glide_sync_client = create_sync_client(
+            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=5000
+        )
+        length = 2**12  # 4kb
+        arg1 = "0" * length
+        arg2 = "1" * length
+
+        script = Script("return ARGV[2]")
+        assert (
+            glide_sync_client.invoke_script(script, args=[arg1, arg2]) == arg2.encode()
+        )
+        glide_sync_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_script_large_keys_and_args(self, request, cluster_mode, protocol):
+        glide_sync_client = create_sync_client(
+            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=5000
+        )
+        length = 2**12  # 4kb
+        key = "0" * length
+        arg = "1" * length
+
+        script = Script("return KEYS[1]")
+        assert (
+            glide_sync_client.invoke_script(script, keys=[key], args=[arg])
+            == key.encode()
+        )
+        glide_sync_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_script_exists(
+        self, glide_sync_client: TGlideClient, cluster_mode: bool
+    ):
+        cluster_mode = isinstance(glide_sync_client, GlideClusterClient)
+        script1 = Script("return 'Hello'")
+        script2 = Script("return 'World'")
+        script3 = Script("return 'Hello World'")
+
+        # Load script1 to all nodes, do not load script2 and load script3 with a SlotKeyRoute
+        glide_sync_client.invoke_script(script1)
+
+        if cluster_mode:
+            cast(GlideClusterClient, glide_sync_client).invoke_script_route(
+                script3, route=SlotKeyRoute(SlotType.PRIMARY, "1")
+            )
+        else:
+            glide_sync_client.invoke_script(script3)
+
+        # Get the SHA1 digests of the scripts
+        sha1_1 = script1.get_hash()
+        sha1_2 = script2.get_hash()
+        sha1_3 = script3.get_hash()
+        non_existent_sha1 = "0" * 40  # A SHA1 that doesn't exist
+        # Check existence of scripts
+        result = glide_sync_client.script_exists(
+            [sha1_1, sha1_2, sha1_3, non_existent_sha1]
+        )
+
+        # script1 is loaded and returns true.
+        # script2 is only cached and not loaded, returns false.
+        # script3 is invoked with a SlotKeyRoute. Despite SCRIPT EXIST uses LogicalAggregate AND on the results,
+        #   SCRIPT LOAD during internal execution so the script still gets loaded on all nodes, returns true.
+        # non-existing sha1 returns false.
+        assert result == [True, False, True, False]
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_script_flush(self, glide_sync_client: TGlideClient):
+        # Load a script
+        script = Script("return 'Hello'")
+        glide_sync_client.invoke_script(script)
+
+        # Check that the script exists
+        assert glide_sync_client.script_exists([script.get_hash()]) == [True]
+
+        # Flush the script cache
+        assert glide_sync_client.script_flush() == OK
+
+        # Check that the script no longer exists
+        assert glide_sync_client.script_exists([script.get_hash()]) == [False]
+
+        # Test with ASYNC mode
+        glide_sync_client.invoke_script(script)
+        assert glide_sync_client.script_flush(FlushMode.ASYNC) == OK
+        assert glide_sync_client.script_exists([script.get_hash()]) == [False]
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("single_route", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_script_kill_route(
+        self,
+        request,
+        cluster_mode,
+        protocol,
+        glide_sync_client: TGlideClient,
+        single_route: bool,
+    ):
+        route = SlotKeyRoute(SlotType.PRIMARY, "1") if single_route else AllPrimaries()
+
+        # Create a second client to run the script
+        test_client = create_sync_client(
+            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=30000
+        )
+
+        script_kill_tests(glide_sync_client, test_client, route)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_script_kill_no_route(
+        self,
+        request,
+        cluster_mode,
+        protocol,
+        glide_sync_client: TGlideClient,
+    ):
+        # Create a second client to run the script
+        test_client = create_sync_client(
+            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=30000
+        )
+
+        script_kill_tests(glide_sync_client, test_client)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_script_kill_unkillable(
+        self, request, cluster_mode, protocol, glide_sync_client: TGlideClient
+    ):
+        # Create a second client to run the script
+        test_client = create_sync_client(
+            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=30000
+        )
+
+        # Create a second client to kill the script
+        test_client2 = create_sync_client(
+            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=15000
+        )
+
+        # Add test for script_kill with writing script
+        writing_script = Script(
+            """
+            redis.call('SET', KEYS[1], 'value')
+            local start = redis.call('TIME')[1]
+            while redis.call('TIME')[1] - start < 15 do
+                redis.call('SET', KEYS[1], 'value')
+            end
+        """
+        )
+
+        def run_writing_script():
+            test_client.invoke_script(writing_script, keys=[get_random_string(5)])
+
+        def attempt_kill_writing_script():
+            time.sleep(3)  # Give some time for the script to start
+            foundUnkillable = False
+            while True:
+                try:
+                    test_client2.script_kill()
+                except RequestError as e:
+                    if "UNKILLABLE" in str(e):
+                        foundUnkillable = True
+                        break
+                    time.sleep(0.5)
+
+            assert foundUnkillable
+
+        # Run the writing script and attempt to kill it
+        script_thread = threading.Thread(target=run_writing_script)
+        kill_thread = threading.Thread(target=attempt_kill_writing_script)
+
+        script_thread.start()
+        kill_thread.start()
+
+        script_thread.join()
+        kill_thread.join()
+
+        test_client.close()
+        test_client2.close()
+
+        test_client.close()
+        test_client2.close()
+
+    @pytest.mark.skip_if_version_below("8.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_script_show(self, glide_sync_client: TGlideClient):
+        code = f"return '{get_random_string(5)}'"
+        script = Script(code)
+
+        # Load the scripts
+        glide_sync_client.invoke_script(script)
+
+        # Get the SHA1 digests of the script
+        sha1 = script.get_hash()
+
+        assert glide_sync_client.script_show(sha1) == code.encode()
+
+        with pytest.raises(RequestError):
+            glide_sync_client.script_show("non existing sha1")
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_script_isnt_removed_while_another_instance_exists(
+        self, glide_sync_client: TGlideClient
+    ):
+        """
+        Verifies that a script is retained in the local scripts container and not removed while another
+        instance with the same hash still exists, even after the original reference is released
+        and the server-side script cache is flushed.
+        """
+        script_1 = Script("return 'Script Exists'")
+        script_2 = Script("return 'Script Exists'")
+        assert script_1.get_hash() == script_2.get_hash()
+
+        # Run first script and drop reference
+        assert glide_sync_client.invoke_script(script_1) == b"Script Exists"
+        script_1.__del__()
+
+        # Flush the script from the server
+        assert glide_sync_client.script_flush() == OK
+
+        # Script should not exist on the server anymore
+        assert glide_sync_client.script_exists([script_1.get_hash()]) == [False]
+
+        # Run second script; it should not exist on the server but must be found in the local script cache
+        assert glide_sync_client.invoke_script(script_2) == b"Script Exists"
+
+        # Release script_2 and flush again
+        script_2.__del__()
+        assert glide_sync_client.script_flush() == OK
+
+        # Should now raise NOSCRIPT
+        with pytest.raises(RequestError) as exc_info:
+            glide_sync_client.invoke_script(script_2)
+
+        assert "NOSCRIPT" in str(exc_info.value).upper()
