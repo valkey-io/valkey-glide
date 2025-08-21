@@ -11229,6 +11229,11 @@ func (suite *GlideTestSuite) TestScriptShow() {
 		// Get the SHA1 digest of the script
 		sha1 := script.GetHash()
 
+		// Verify script exists before calling ScriptShow to avoid race conditions
+		exists, err := client.ScriptExists(context.Background(), []string{sha1})
+		suite.NoError(err)
+		assert.Equal(suite.T(), []bool{true}, exists)
+
 		// Test with String
 		scriptSource, err := client.ScriptShow(context.Background(), sha1)
 		suite.NoError(err)
