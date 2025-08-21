@@ -52,9 +52,25 @@ def get_command(commands: List[str]) -> str:
     raise Exception(f"Neither {' nor '.join(commands)} found in the system.")
 
 
-# Determine which server to use by checking `valkey-server` and `redis-server`
-SERVER_COMMAND = get_command(["valkey-server", "redis-server"])
-CLI_COMMAND = get_command(["valkey-cli", "redis-cli"])
+# Global variables for caching server commands (set lazily)
+_SERVER_COMMAND = None
+_CLI_COMMAND = None
+
+
+def get_server_command() -> str:
+    """Get server command, checking valkey-server first, then redis-server"""
+    global _SERVER_COMMAND
+    if _SERVER_COMMAND is None:
+        _SERVER_COMMAND = get_command(["valkey-server", "redis-server"])
+    return _SERVER_COMMAND
+
+
+def get_cli_command() -> str:
+    """Get CLI command, checking valkey-cli first, then redis-cli"""
+    global _CLI_COMMAND
+    if _CLI_COMMAND is None:
+        _CLI_COMMAND = get_command(["valkey-cli", "redis-cli"])
+    return _CLI_COMMAND
 
 
 def init_logger(logfile: str):
@@ -342,22 +358,6 @@ def start_server(
     node_folder = f"{cluster_folder}/{port}"
     Path(node_folder).mkdir(exist_ok=True)
 
-    # Determine which server to use by checking `valkey-server` and `redis-server`
-    def get_server_command() -> str:
-        for server in ["valkey-server", "redis-server"]:
-            try:
-                result = subprocess.run(
-                    ["which", server],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                )
-                if result.returncode == 0:
-                    return server
-            except Exception as e:
-                logging.error(f"Error checking {server}: {e}")
-        raise Exception("Neither valkey-server nor redis-server found in the system.")
-
     def get_server_version(server_name):
         result = subprocess.run(
             [server_name, "--version"], capture_output=True, text=True
@@ -377,7 +377,7 @@ def start_server(
     # Define command arguments
     logfile = f"{node_folder}/server.log"
     cmd_args = [
-        SERVER_COMMAND,
+        get_server_command(),
         f"{'--tls-port' if tls else '--port'}",
         str(port),
         "--cluster-enabled",
@@ -525,7 +525,7 @@ def create_cluster(
     logging.debug("## Starting cluster creation...")
     p = subprocess.Popen(
         [
-            CLI_COMMAND,
+            get_cli_command(),
             *get_cli_option_args(cluster_folder, use_tls),
             "--cluster",
             "create",
@@ -566,7 +566,7 @@ def create_standalone_replication(
         if i == 0:
             continue  # Skip the primary server
         replica_of_command = [
-            CLI_COMMAND,
+            get_cli_command(),
             *get_cli_option_args(cluster_folder, use_tls),
             "-h",
             str(server.host),
@@ -681,7 +681,7 @@ def wait_for_all_topology_views(
     """
     for server in servers:
         cmd_args = [
-            CLI_COMMAND,
+            get_cli_command(),
             "-h",
             server.host,
             "-p",
@@ -697,7 +697,7 @@ def wait_for_all_topology_views(
             if output is not None and output.count(f"{server.host}") == len(servers):
                 # Server is ready, get the node's role
                 cmd_args = [
-                    CLI_COMMAND,
+                    get_cli_command(),
                     "-h",
                     server.host,
                     "-p",
@@ -735,7 +735,7 @@ def wait_for_server(
     while time.time() < timeout_start + timeout:
         p = subprocess.Popen(
             [
-                CLI_COMMAND,
+                get_cli_command(),
                 "-h",
                 server.host,
                 "-p",
@@ -855,7 +855,7 @@ def dir_path(path: str):
 def stop_server(server: Server, cluster_folder: str, use_tls: bool, auth: str):
     logging.debug(f"Stopping server {server}")
     cmd_args = [
-        CLI_COMMAND,
+        get_cli_command(),
         "-h",
         server.host,
         "-p",
@@ -910,7 +910,7 @@ def wait_for_server_shutdown(
     while time.time() < timeout_start + timeout:
         p = subprocess.Popen(
             [
-                CLI_COMMAND,
+                get_cli_command(),
                 "-h",
                 server.host,
                 "-p",

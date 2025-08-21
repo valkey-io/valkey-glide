@@ -13,6 +13,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SSLSocketFactory;
+import redis.clients.jedis.exceptions.JedisException;
 
 /**
  * JedisPool compatibility wrapper for Valkey GLIDE client. This class provides a Jedis-like
@@ -125,8 +126,7 @@ public class JedisPool implements Closeable {
         this.availableConnections = new LinkedBlockingQueue<>();
         this.poolId = ResourceLifecycleManager.getInstance().registerResource(this);
 
-        // Validate configuration
-        ConfigurationMapper.validateConfiguration(config);
+        // Configuration validation happens during mapping when connections are created
     }
 
     /**
@@ -191,8 +191,8 @@ public class JedisPool implements Closeable {
                     jedis.getGlideClient().close();
                 } catch (Exception e) {
                     // Log error but don't throw - we're in cleanup mode
-                    System.err.println(
-                            "Warning: Failed to close Jedis connection when pool queue full: " + e.getMessage());
+                    System.err.println("Warning: Failed to close Jedis connection when pool queue full:");
+                    e.printStackTrace();
                 }
             }
         } else if (jedis != null) {
@@ -203,7 +203,8 @@ public class JedisPool implements Closeable {
                     jedis.getGlideClient().close();
                 } catch (Exception e) {
                     // Log error but continue
-                    System.err.println("Error closing returned connection: " + e.getMessage());
+                    System.err.println("Error closing returned connection:");
+                    e.printStackTrace();
                 }
             }
         }
@@ -239,7 +240,8 @@ public class JedisPool implements Closeable {
                     jedis.getGlideClient().close();
                 } catch (Exception e) {
                     // Log error but continue closing other connections
-                    System.err.println("Error closing connection: " + e.getMessage());
+                    System.err.println("Error closing connection:");
+                    e.printStackTrace();
                 }
             }
 

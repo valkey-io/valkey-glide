@@ -106,6 +106,13 @@ excluded_shared_symbols = [
     "FtProfileKeywords",  # ClassDef
 ]
 
+allowed_missing_re_exports_in_async = [
+    # python/glide-shared/glide_shared/exceptions.py
+    "LoggerError"
+]
+
+allowed_missing_re_exports_in_sync: list[str] = []
+
 
 class AnomalousSymbolVisitor(ast.NodeVisitor):
     def __init__(self, exported_symbols, rename_map, excluded_symbols):
@@ -156,6 +163,7 @@ class AnomalousSymbolVisitor(ast.NodeVisitor):
 
 
 class TestAPIExport:
+    # Return a list with all non-excluded symbols found that are not exported by the package
     def _check_package(
         self,
         package_name: str,
@@ -192,6 +200,7 @@ class TestAPIExport:
         return aggregated_anomalous_symbols
 
     def test_api_export(self):
+        """Test that all non-excluded symbols are exported by the package"""
         all_anomalies = {}
 
         # async
@@ -237,3 +246,34 @@ class TestAPIExport:
                 ]
             )
         )
+
+    def test_shared_symbols_re_exported(self):
+        """Test that all shared package symbols are re-exported by both async and sync packages"""
+
+        missing_from_async = []
+        missing_from_sync = []
+
+        for shared_symbol in shared_exported_symbol_list:
+            # Check if symbol is exported by async package
+            if (
+                shared_symbol not in async_exported_symbol_list
+                and shared_symbol not in allowed_missing_re_exports_in_async
+            ):
+                missing_from_async.append(shared_symbol)
+
+            # Check if symbol is exported by sync package
+            if (
+                shared_symbol not in sync_exported_symbol_list
+                and shared_symbol not in allowed_missing_re_exports_in_sync
+            ):
+                missing_from_sync.append(shared_symbol)
+
+            assert not missing_from_async, (
+                "Shared symbols missing from async package exports. "
+                + f"Missing symbols: {missing_from_async}"
+            )
+
+            assert not missing_from_sync, (
+                "Shared symbols missing from sync package exports. "
+                + f"Missing symbols: {missing_from_sync}"
+            )
