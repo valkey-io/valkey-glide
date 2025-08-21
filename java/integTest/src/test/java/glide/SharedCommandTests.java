@@ -11174,11 +11174,11 @@ public class SharedCommandTests {
                 SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in version 6.2.0");
         String key1 = "{key}-1" + UUID.randomUUID();
         String key2 = "{key}-2" + UUID.randomUUID();
-        // create new client with default request timeout (250 millis)
+        // create new client with extended request timeout (2000 millis) to allow for blocking commands
         try (var testClient =
                 client instanceof GlideClient
-                        ? GlideClient.createClient(commonClientConfig().build()).get()
-                        : GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
+                        ? GlideClient.createClient(commonClientConfig().requestTimeout(2000).build()).get()
+                        : GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(2000).build()).get()) {
 
             // ensure that commands doesn't time out even if timeout > request timeout
             assertNull(testClient.blmove(key1, key2, ListDirection.LEFT, ListDirection.LEFT, 1).get());
@@ -11202,11 +11202,11 @@ public class SharedCommandTests {
                 SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in version 6.2.0");
         GlideString key1 = gs("{key}-1" + UUID.randomUUID());
         GlideString key2 = gs("{key}-2" + UUID.randomUUID());
-        // create new client with default request timeout (250 millis)
+        // create new client with extended request timeout (2000 millis) to allow for blocking commands
         try (var testClient =
                 client instanceof GlideClient
-                        ? GlideClient.createClient(commonClientConfig().build()).get()
-                        : GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
+                        ? GlideClient.createClient(commonClientConfig().requestTimeout(2000).build()).get()
+                        : GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(2000).build()).get()) {
 
             // ensure that commands doesn't time out even if timeout > request timeout
             assertNull(testClient.blmove(key1, key2, ListDirection.LEFT, ListDirection.LEFT, 1).get());
