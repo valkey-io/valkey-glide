@@ -22,7 +22,12 @@ module glide.api {
     exports redis.clients.jedis.resps;
     exports redis.clients.jedis.util;
 
+    // Open Jedis compatibility layer for reflection access in tests
+    opens redis.clients.jedis to
+            glide.integTest;
+
     requires java.logging; // required by shadowed protobuf
+    requires java.management; // required by Apache Commons Pool for JMX
     requires static lombok;
     requires org.apache.commons.lang3;
     requires org.apache.commons.pool2; // Required for Jedis compatibility layer

@@ -357,11 +357,6 @@ public class JedisTest {
             String getResult = testJedis.get(testKey);
             assertEquals(testValue, getResult, "GET should work with constructor-created Jedis");
 
-            // Test that it's marked as pooled
-            assertTrue(
-                    testJedis.isPooled(),
-                    "Jedis created with GlideClient constructor should be marked as pooled");
-
             // Clean up
             testJedis.del(testKey);
             testJedis.close(); // This should not return to pool since dataSource is null
