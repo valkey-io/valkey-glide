@@ -3,6 +3,7 @@ package glide.api;
 
 import static command_request.CommandRequestOuterClass.RequestType.ClientGetName;
 import static command_request.CommandRequestOuterClass.RequestType.ClientId;
+import static command_request.CommandRequestOuterClass.RequestType.ClientSetName;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigGet;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigResetStat;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigRewrite;
@@ -232,6 +233,12 @@ public class GlideClient extends BaseClient
     public CompletableFuture<String> clientGetName() {
         return commandManager.submitNewCommand(
                 ClientGetName, new String[0], this::handleStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> clientSetName(@NonNull String name) {
+        return commandManager.submitNewCommand(
+                ClientSetName, new String[] {name}, this::handleStringResponse);
     }
 
     @Override
