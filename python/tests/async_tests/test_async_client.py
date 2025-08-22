@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import math
-import re
 import time
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Mapping, Optional, Union, cast
@@ -102,6 +101,7 @@ from tests.utils.utils import (
     generate_lua_lib_code,
     get_first_result,
     get_random_string,
+    get_version,
     parse_info_response,
     round_values,
 )
@@ -9172,16 +9172,19 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_lolwut(self, glide_client: TGlideClient):
+        server_version = await get_version(glide_client)
+        server_version_bytes = server_version.encode()
+
         result = await glide_client.lolwut()
-        assert re.search(rb"(Redis|Valkey) ver\. ?", result)
+        assert b"ver" in result and server_version_bytes in result
         result = await glide_client.lolwut(parameters=[])
-        assert re.search(rb"(Redis|Valkey) ver\. ?", result)
+        assert b"ver" in result and server_version_bytes in result
         result = await glide_client.lolwut(parameters=[50, 20])
-        assert re.search(rb"(Redis|Valkey) ver\. ?", result)
+        assert b"ver" in result and server_version_bytes in result
         result = await glide_client.lolwut(6)
-        assert re.search(rb"(Redis|Valkey) ver\. ?", result)
+        assert b"ver" in result and server_version_bytes in result
         result = await glide_client.lolwut(5, [30, 4, 4])
-        assert re.search(rb"(Redis|Valkey) ver\. ?", result)
+        assert b"ver" in result and server_version_bytes in result
 
         if isinstance(glide_client, GlideClusterClient):
             # test with multi-node route
@@ -9190,23 +9193,23 @@ class TestCommands:
             result_decoded = cast(dict, convert_bytes_to_string_object(result))
             assert result_decoded is not None
             for node_result in result_decoded.values():
-                assert re.search(r"(Redis|Valkey) ver\. ?", node_result)
+                assert "ver" in node_result and server_version in node_result
 
             result = await glide_client.lolwut(parameters=[10, 20], route=AllNodes())
             assert isinstance(result, dict)
             result_decoded = cast(dict, convert_bytes_to_string_object(result))
             assert result_decoded is not None
             for node_result in result_decoded.values():
-                assert re.search(r"(Redis|Valkey) ver\. ?", node_result)
+                assert "ver" in node_result and server_version in node_result
 
             # test with single-node route
             result = await glide_client.lolwut(2, route=RandomNode())
             assert isinstance(result, bytes)
-            assert re.search(rb"(Redis|Valkey) ver\. ?", result)
+            assert b"ver" in result and server_version_bytes in result
 
             result = await glide_client.lolwut(2, [10, 20], RandomNode())
             assert isinstance(result, bytes)
-            assert re.search(rb"(Redis|Valkey) ver\. ?", result)
+            assert b"ver" in result and server_version_bytes in result
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

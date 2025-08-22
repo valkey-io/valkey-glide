@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
-	"regexp"
 	"strings"
 	"time"
 
@@ -1149,10 +1148,11 @@ func (suite *GlideTestSuite) TestClusterLolwut() {
 	result, err := client.Lolwut(context.Background())
 	suite.NoError(err)
 	suite.NotEmpty(result)
-	// Support both Redis and Valkey version formats
-	versionPattern := regexp.MustCompile(`(Redis|Valkey) ver\.`)
-	suite.True(versionPattern.MatchString(result),
-		"Expected output to contain server version information, got: %s", result)
+	// Check for version string in LOLWUT output (dual contains approach)
+	hasVer := strings.Contains(result, "ver")
+	hasVersion := strings.Contains(result, suite.serverVersion)
+	suite.True(hasVer && hasVersion,
+		"Expected output to contain 'ver' and version '%s', got: %s", suite.serverVersion, result)
 }
 
 func (suite *GlideTestSuite) TestLolwutWithOptions_WithAllNodes() {
@@ -1171,10 +1171,11 @@ func (suite *GlideTestSuite) TestLolwutWithOptions_WithAllNodes() {
 	multiValue := result.MultiValue()
 
 	for _, value := range multiValue {
-		// Support both Redis and Valkey version formats
-		versionPattern := regexp.MustCompile(`(Redis|Valkey) ver\.`)
-		suite.True(versionPattern.MatchString(value),
-			"Expected output to contain server version information, got: %s", value)
+		// Check for version string in LOLWUT output (dual contains approach)
+		hasVer := strings.Contains(value, "ver")
+		hasVersion := strings.Contains(value, suite.serverVersion)
+		assert.True(suite.T(), hasVer && hasVersion,
+			"Expected output to contain 'ver' and version '%s', got: %s", suite.serverVersion, value)
 	}
 }
 
@@ -1193,10 +1194,11 @@ func (suite *GlideTestSuite) TestLolwutWithOptions_WithAllPrimaries() {
 	multiValue := result.MultiValue()
 
 	for _, value := range multiValue {
-		// Support both Redis and Valkey version formats
-		versionPattern := regexp.MustCompile(`(Redis|Valkey) ver\.`)
-		assert.True(suite.T(), versionPattern.MatchString(value),
-			"Expected output to contain server version information, got: %s", value)
+		// Check for version string in LOLWUT output (dual contains approach)
+		hasVer := strings.Contains(value, "ver")
+		hasVersion := strings.Contains(value, suite.serverVersion)
+		assert.True(suite.T(), hasVer && hasVersion,
+			"Expected output to contain 'ver' and version '%s', got: %s", suite.serverVersion, value)
 	}
 }
 
@@ -1213,10 +1215,11 @@ func (suite *GlideTestSuite) TestLolwutWithOptions_WithRandomRoute() {
 
 	assert.True(suite.T(), result.IsSingleValue())
 	singleValue := result.SingleValue()
-	// Support both Redis and Valkey version formats
-	versionPattern := regexp.MustCompile(`(Redis|Valkey) ver\.`)
-	assert.True(suite.T(), versionPattern.MatchString(singleValue),
-		"Expected output to contain server version information, got: %s", singleValue)
+	// Check for version string in LOLWUT output (dual contains approach)
+	hasVer := strings.Contains(singleValue, "ver")
+	hasVersion := strings.Contains(singleValue, suite.serverVersion)
+	assert.True(suite.T(), hasVer && hasVersion,
+		"Expected output to contain 'ver' and version '%s', got: %s", suite.serverVersion, singleValue)
 }
 
 func (suite *GlideTestSuite) TestClientIdCluster() {
