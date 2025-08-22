@@ -3,47 +3,69 @@ package redis.clients.jedis;
 
 import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
-import glide.api.models.configuration.ProtocolVersion;
 import glide.api.models.configuration.ServerCredentials;
 import java.util.Set;
 import java.util.logging.Logger;
-import java.util.stream.Collectors;
+import redis.clients.jedis.exceptions.JedisException;
 
-/**
- * Utility class to map Jedis cluster configurations to Valkey GLIDE cluster configurations. This
- * handles the translation between the two configuration systems for cluster operations.
- */
+/** Utility class to map Jedis cluster configurations to Valkey GLIDE cluster configurations. */
 public class ClusterConfigurationMapper {
 
     private static final Logger logger = Logger.getLogger(ClusterConfigurationMapper.class.getName());
+
+    /**
+     * Validate cluster configuration for compatibility.
+     *
+     * @param jedisConfig the Jedis configuration to validate
+     * @throws JedisException if configuration is invalid for cluster mode
+     */
+    public static void validateClusterConfiguration(JedisClientConfig jedisConfig) {
+        // Validate database selection - clusters only support database 0
+        if (jedisConfig.getDatabase() != 0) {
+            throw new JedisException(
+                    "Cluster mode only supports database 0, but database "
+                            + jedisConfig.getDatabase()
+                            + " was specified");
+        }
+
+        // Log warnings for configurations that might not work as expected in cluster mode
+        if (jedisConfig.getSocketTimeoutMillis() <= 0) {
+            logger.warning("Socket timeout not set - this may cause issues in cluster mode");
+        }
+
+        if (jedisConfig.getConnectionTimeoutMillis() <= 0) {
+            logger.warning("Connection timeout not set - this may cause issues in cluster mode");
+        }
+    }
 
     /**
      * Convert Jedis cluster configuration to GLIDE cluster configuration.
      *
      * @param nodes the cluster nodes
      * @param jedisConfig the Jedis configuration
-     * @return corresponding GLIDE cluster configuration
+     * @return the GLIDE cluster configuration
      */
     public static GlideClusterClientConfiguration mapToGlideClusterConfig(
             Set<HostAndPort> nodes, JedisClientConfig jedisConfig) {
 
         GlideClusterClientConfiguration.GlideClusterClientConfigurationBuilder builder =
-                GlideClusterClientConfiguration.builder()
-                        .addresses(
-                                nodes.stream()
-                                        .map(
-                                                node ->
-                                                        NodeAddress.builder().host(node.getHost()).port(node.getPort()).build())
-                                        .collect(Collectors.toList()))
-                        .requestTimeout(jedisConfig.getSocketTimeoutMillis());
+                GlideClusterClientConfiguration.builder();
 
-        // TO DO: Add all SSL/TLS Configuration related field mapping. This is not complete.
-        // SSL/TLS configuration.
-        if (jedisConfig.isSsl()) {
-            builder.useTLS(true);
+        // Add all cluster nodes
+        for (HostAndPort node : nodes) {
+            builder.address(NodeAddress.builder().host(node.getHost()).port(node.getPort()).build());
         }
 
-        // Authentication
+        // Map timeout configuration
+        if (jedisConfig.getSocketTimeoutMillis() > 0) {
+            builder.requestTimeout(jedisConfig.getSocketTimeoutMillis());
+        }
+
+        if (jedisConfig.getConnectionTimeoutMillis() > 0) {
+            builder.requestTimeout(jedisConfig.getConnectionTimeoutMillis());
+        }
+
+        // Map authentication configuration
         if (jedisConfig.getUser() != null && jedisConfig.getPassword() != null) {
             builder.credentials(
                     ServerCredentials.builder()
@@ -54,63 +76,26 @@ public class ClusterConfigurationMapper {
             builder.credentials(ServerCredentials.builder().password(jedisConfig.getPassword()).build());
         }
 
-        // Client name
+        // Map SSL configuration
+        if (jedisConfig.isSsl()) {
+            builder.useTLS(true);
+        }
+
+        // Map client name
         if (jedisConfig.getClientName() != null) {
             builder.clientName(jedisConfig.getClientName());
         }
-
-        // Protocol version
-        if (jedisConfig.getRedisProtocol() != null) {
-            builder.protocol(jedisConfig.getRedisProtocol().toGlideProtocol());
-        } else {
-            // Ensure Jedis default behavior (RESP2) is maintained
-            builder.protocol(ProtocolVersion.RESP2);
-        }
-
-        // Cluster-specific configurations
-        // Note: GLIDE may have different cluster configuration options
-        // This is a simplified mapping
 
         return builder.build();
     }
 
     /**
-     * Create a default GLIDE cluster configuration for simple cluster connections.
+     * Convert Jedis cluster configuration to GLIDE cluster configuration with default settings.
      *
      * @param nodes the cluster nodes
-     * @param useSsl whether to use SSL
-     * @return GLIDE cluster configuration
+     * @return the GLIDE cluster configuration with default Jedis client config
      */
-    public static GlideClusterClientConfiguration createDefaultClusterConfig(
-            Set<HostAndPort> nodes, boolean useSsl) {
-        return GlideClusterClientConfiguration.builder()
-                .addresses(
-                        nodes.stream()
-                                .map(
-                                        node -> NodeAddress.builder().host(node.getHost()).port(node.getPort()).build())
-                                .collect(Collectors.toList()))
-                .useTLS(useSsl)
-                .requestTimeout(DefaultJedisClientConfig.DEFAULT_TIMEOUT_MILLIS)
-                .build();
-    }
-
-    /**
-     * Validate that the Jedis cluster configuration is compatible with GLIDE.
-     *
-     * @param jedisConfig the configuration to validate
-     * @throws JedisException if configuration is not supported
-     */
-    public static void validateClusterConfiguration(JedisClientConfig jedisConfig) {
-        // Check for unsupported cluster features
-        if (jedisConfig.getDatabase() != 0) {
-            logger.warning("Database selection is not supported in cluster mode");
-        }
-
-        if (jedisConfig.getBlockingSocketTimeoutMillis() > 0) {
-            logger.warning(
-                    "Blocking socket timeout configuration may not be fully supported in cluster mode");
-        }
-
-        // Add more cluster-specific validations as needed
+    public static GlideClusterClientConfiguration mapToGlideClusterConfig(Set<HostAndPort> nodes) {
+        return mapToGlideClusterConfig(nodes, DefaultJedisClientConfig.builder().build());
     }
 }

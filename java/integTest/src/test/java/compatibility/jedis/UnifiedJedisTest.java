@@ -9,10 +9,10 @@ import org.junit.jupiter.api.*;
 import redis.clients.jedis.UnifiedJedis;
 
 /**
- * UnifiedJedis compatibility test that validates GLIDE UnifiedJedis functionality.
+ * UnifiedJedis standalone compatibility test that validates GLIDE UnifiedJedis functionality.
  *
  * <p>This test ensures that the GLIDE compatibility layer provides the expected UnifiedJedis API
- * and behavior for core Redis operations.
+ * and behavior for core Redis operations in standalone mode.
  */
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class UnifiedJedisTest {
