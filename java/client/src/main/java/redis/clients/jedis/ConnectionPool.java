@@ -3,42 +3,26 @@ package redis.clients.jedis;
 
 import redis.clients.jedis.util.Pool;
 
-/** ConnectionPool compatibility stub for Valkey GLIDE wrapper. */
+/**
+ * ConnectionPool compatibility stub for Valkey GLIDE wrapper.
+ *
+ * @deprecated ConnectionPool is not supported in the GLIDE compatibility layer. Use JedisPool for
+ *     connection pooling instead.
+ */
+@Deprecated
 public class ConnectionPool extends Pool<Connection> {
 
     public ConnectionPool() {
-        // Initialize with a dummy factory since this is just a stub
-        initPool(new DummyConnectionFactory());
+        throw new UnsupportedOperationException(
+                "ConnectionPool is not supported in GLIDE compatibility layer. GLIDE uses a different"
+                        + " connection management architecture. Please use JedisPool for connection pooling"
+                        + " instead. See migration guide:"
+                        + " https://github.com/valkey-io/valkey-glide/blob/main/java/MIGRATION.md");
     }
 
-    private static class DummyConnectionFactory
-            implements org.apache.commons.pool2.PooledObjectFactory<Connection> {
-        @Override
-        public org.apache.commons.pool2.PooledObject<Connection> makeObject() throws Exception {
-            return new org.apache.commons.pool2.impl.DefaultPooledObject<>(new Connection());
-        }
-
-        @Override
-        public void destroyObject(org.apache.commons.pool2.PooledObject<Connection> p)
-                throws Exception {
-            // No-op for stub
-        }
-
-        @Override
-        public boolean validateObject(org.apache.commons.pool2.PooledObject<Connection> p) {
-            return true;
-        }
-
-        @Override
-        public void activateObject(org.apache.commons.pool2.PooledObject<Connection> p)
-                throws Exception {
-            // No-op for stub
-        }
-
-        @Override
-        public void passivateObject(org.apache.commons.pool2.PooledObject<Connection> p)
-                throws Exception {
-            // No-op for stub
-        }
+    @Override
+    public Connection getResource() {
+        throw new UnsupportedOperationException(
+                "ConnectionPool is not supported in GLIDE compatibility layer. Use JedisPool instead.");
     }
 }
