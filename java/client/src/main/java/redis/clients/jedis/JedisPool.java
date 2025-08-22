@@ -84,6 +84,37 @@ public class JedisPool extends Pool<Jedis> {
         this(new GenericObjectPoolConfig<Jedis>(), host, port, user, password);
     }
 
+    public JedisPool(final String host, final int port, final int timeout) {
+        this(
+                new GenericObjectPoolConfig<Jedis>(),
+                host,
+                port,
+                DefaultJedisClientConfig.builder()
+                        .socketTimeoutMillis(timeout)
+                        .connectionTimeoutMillis(timeout)
+                        .build());
+    }
+
+    public JedisPool(final String host, final int port, final String password) {
+        this(
+                new GenericObjectPoolConfig<Jedis>(),
+                host,
+                port,
+                DefaultJedisClientConfig.builder().password(password).build());
+    }
+
+    public JedisPool(final String host, final int port, final int timeout, final String password) {
+        this(
+                new GenericObjectPoolConfig<Jedis>(),
+                host,
+                port,
+                DefaultJedisClientConfig.builder()
+                        .socketTimeoutMillis(timeout)
+                        .connectionTimeoutMillis(timeout)
+                        .password(password)
+                        .build());
+    }
+
     public JedisPool(final HostAndPort hostAndPort, final JedisClientConfig clientConfig) {
         this(
                 new GenericObjectPoolConfig<Jedis>(),
