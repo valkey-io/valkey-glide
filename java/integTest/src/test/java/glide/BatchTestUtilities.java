@@ -856,7 +856,21 @@ public class BatchTestUtilities {
                     OK, // configSet(Map.of("timeout", "1000"))
                     Map.of("timeout", "1000"), // configGet(new String[] {"timeout"})
                     OK, // configResetStat()
-                    "ver. " + SERVER_VERSION + '\n', // lolwut(1)
+                    new Object() {
+                        @Override
+                        public boolean equals(Object obj) {
+                            if (obj instanceof String) {
+                                String response = (String) obj;
+                                return response.contains("ver") && response.contains(SERVER_VERSION.toString());
+                            }
+                            return false;
+                        }
+
+                        @Override
+                        public String toString() {
+                            return "LOLWUT version matcher for " + SERVER_VERSION;
+                        }
+                    }, // lolwut(1) - accepts both Redis and Valkey formats
                     OK, // flushall()
                     OK, // flushall(ASYNC)
                     OK, // flushdb()
