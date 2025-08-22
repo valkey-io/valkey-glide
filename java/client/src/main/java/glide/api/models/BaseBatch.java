@@ -16,6 +16,7 @@ import static command_request.CommandRequestOuterClass.RequestType.BitOp;
 import static command_request.CommandRequestOuterClass.RequestType.BitPos;
 import static command_request.CommandRequestOuterClass.RequestType.ClientGetName;
 import static command_request.CommandRequestOuterClass.RequestType.ClientId;
+import static command_request.CommandRequestOuterClass.RequestType.ClientSetName;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigGet;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigResetStat;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigRewrite;
@@ -2013,6 +2014,18 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     public T clientGetName() {
         protobufBatch.addCommands(buildCommand(ClientGetName));
+        return getThis();
+    }
+
+    /**
+     * Set the name of the current connection.
+     *
+     * @see <a href="https://valkey.io/commands/client-setname/">valkey.io</a> for details.
+     * @return Command response - A simple <code>OK</code> response.
+     */
+    public <ArgType> T clientSetName(@NonNull ArgType name) {
+        checkTypeOrThrow(name);
+        protobufBatch.addCommands(buildCommand(ClientSetName, newArgsBuilder().add(name)));
         return getThis();
     }
 
