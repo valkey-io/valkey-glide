@@ -1,5 +1,6 @@
 ::: glide.async_commands.CoreCommands
 ::: glide.async_commands.core.ConditionalChange
+::: glide.async_commands.core.FieldConditionalChange
 ::: glide.async_commands.core.ExpiryType
 ::: glide.async_commands.core.ExpiryTypeGetEx
 ::: glide.async_commands.core.InfoSection
