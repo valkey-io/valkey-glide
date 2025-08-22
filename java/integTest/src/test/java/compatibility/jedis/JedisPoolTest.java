@@ -20,18 +20,24 @@ public class JedisPoolTest {
     private static final int redisPort;
 
     static {
-        // Resolve Redis host and port from environment or use defaults
-        String host = System.getProperty("redis.host");
-        if (host == null || host.isEmpty()) {
-            host = System.getenv("REDIS_HOST");
-        }
-        redisHost = (host != null && !host.isEmpty()) ? host : "localhost";
+        // Use the same configuration approach as JedisTest
+        String standaloneHosts = System.getProperty("test.server.standalone");
 
-        String portStr = System.getProperty("redis.port");
-        if (portStr == null || portStr.isEmpty()) {
-            portStr = System.getenv("REDIS_PORT");
+        if (standaloneHosts != null && !standaloneHosts.trim().isEmpty()) {
+            String firstHost = standaloneHosts.split(",")[0].trim();
+            String[] hostPort = firstHost.split(":");
+
+            if (hostPort.length == 2) {
+                redisHost = hostPort[0];
+                redisPort = Integer.parseInt(hostPort[1]);
+            } else {
+                redisHost = "localhost";
+                redisPort = 6379;
+            }
+        } else {
+            redisHost = "localhost";
+            redisPort = 6379;
         }
-        redisPort = (portStr != null && !portStr.isEmpty()) ? Integer.parseInt(portStr) : 6379;
     }
 
     @Test
