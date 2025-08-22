@@ -1935,17 +1935,13 @@ func (client *baseClient) HGetEx(
 //	key        - The key of the hash.
 //	expireTime - The expiration time as a duration.
 //	fields     - The fields to set expiration for.
-//	options    - Optional arguments for the command. Optional condition for setting expiration:
-//		NX - Only set expiry if field has no expiry.
-//		XX - Only set expiry if field already has expiry.
-//		GT - Only set expiry if new expiry is greater than current.
-//		LT - Only set expiry if new expiry is less than current.
+//	options    - Optional arguments for the command, see [options.HExpireOptions].
 //
 // Return value:
 //
 //	An array of integers indicating the result for each field:
 //		-2: Field does not exist in the hash, or key does not exist.
-//		0: The specified condition (NX|XX|GT|LT) was not met.
+//		0: The specified condition was not met.
 //		1: The expiration time was applied.
 //		2: When called with 0 seconds.
 //
@@ -1986,17 +1982,13 @@ func (client *baseClient) HExpire(
 //	key        - The key of the hash.
 //	expireTime - The expiration time as a time.Time.
 //	fields     - The fields to set expiration for.
-//	options    - Optional arguments for the command. Optional condition for setting expiration:
-//		NX - Only set expiry if field has no expiry.
-//		XX - Only set expiry if field already has expiry.
-//		GT - Only set expiry if new expiry is greater than current.
-//		LT - Only set expiry if new expiry is less than current.
+//	options    - Optional arguments for the command, see [options.HExpireOptions].
 //
 // Return value:
 //
 //	An array of integers indicating the result for each field:
 //		-2: Field does not exist in the hash, or hash is empty.
-//		0: The specified condition (NX|XX|GT|LT) was not met.
+//		0: The specified condition was not met.
 //		1: The expiration time was applied.
 //		2: When called with 0 seconds or past Unix time.
 //
@@ -2036,17 +2028,13 @@ func (client *baseClient) HExpireAt(
 //	key        - The key of the hash.
 //	expireTime - The expiration time as a duration.
 //	fields     - The fields to set expiration for.
-//	options    - Optional arguments for the command. Optional condition for setting expiration:
-//		NX - Only set expiry if field has no expiry.
-//		XX - Only set expiry if field already has expiry.
-//		GT - Only set expiry if new expiry is greater than current.
-//		LT - Only set expiry if new expiry is less than current.
+//	options    - Optional arguments for the command, see [options.HExpireOptions].
 //
 // Return value:
 //
 //	An array of integers indicating the result for each field:
 //		-2: Field does not exist in the hash, or hash is empty.
-//		0: The specified condition (NX|XX|GT|LT) was not met.
+//		0: The specified condition was not met.
 //		1: The expiration time was applied.
 //		2: When called with 0 milliseconds.
 //
@@ -2087,17 +2075,13 @@ func (client *baseClient) HPExpire(
 //	key        - The key of the hash.
 //	expireTime - The expiration time as a time.Time.
 //	fields     - The fields to set expiration for.
-//	options    - Optional arguments for the command. Optional condition for setting expiration:
-//		NX - Only set expiry if field has no expiry.
-//		XX - Only set expiry if field already has expiry.
-//		GT - Only set expiry if new expiry is greater than current.
-//		LT - Only set expiry if new expiry is less than current.
+//	options    - Optional arguments for the command, see [options.HExpireOptions].
 //
 // Return value:
 //
 //	An array of integers indicating the result for each field:
 //		-2: Field does not exist in the hash, or hash is empty.
-//		0: The specified condition (NX|XX|GT|LT) was not met.
+//		0: The specified condition was not met.
 //		1: The expiration time was applied.
 //		2: When called with 0 milliseconds or past Unix time.
 //

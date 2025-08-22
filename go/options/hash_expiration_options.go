@@ -44,16 +44,11 @@ func (opts *HSetExOptions) ToArgs() ([]string, error) {
 	args := []string{}
 
 	// Add conditional set options
-	switch opts.ConditionalSet {
-	case constants.OnlyIfDoesNotExist:
-		args = append(args, "NX")
-	case constants.OnlyIfExists:
-		args = append(args, "XX")
-	case constants.OnlyIfFieldsDoNotExist:
-		args = append(args, "FNX")
-	case constants.OnlyIfAllFieldsExist:
-		args = append(args, "FXX")
+	conditionStr, err := opts.ConditionalSet.ToString()
+	if err != nil {
+		return nil, err
 	}
+	args = append(args, conditionStr)
 
 	// Add expiry options
 	if opts.Expiry != nil {
@@ -142,16 +137,11 @@ func (opts *HExpireOptions) ToArgs() ([]string, error) {
 	args := []string{}
 
 	// Add expire condition options
-	switch opts.ExpireCondition {
-	case constants.HasNoExpiry:
-		args = append(args, "NX")
-	case constants.HasExistingExpiry:
-		args = append(args, "XX")
-	case constants.NewExpiryGreaterThanCurrent:
-		args = append(args, "GT")
-	case constants.NewExpiryLessThanCurrent:
-		args = append(args, "LT")
+	conditionStr, err := opts.ExpireCondition.ToString()
+	if err != nil {
+		return nil, err
 	}
+	args = append(args, conditionStr)
 
 	return args, nil
 }

@@ -78,6 +78,23 @@ const (
 	OnlyIfAllFieldsExist ConditionalSet = "FXX"
 )
 
+func (conditionalSet ConditionalSet) ToString() (string, error) {
+	switch conditionalSet {
+	case OnlyIfExists:
+		return string(OnlyIfExists), nil
+	case OnlyIfDoesNotExist:
+		return string(OnlyIfDoesNotExist), nil
+	case OnlyIfEquals:
+		return string(OnlyIfEquals), nil
+	case OnlyIfFieldsDoNotExist:
+		return string(OnlyIfFieldsDoNotExist), nil
+	case OnlyIfAllFieldsExist:
+		return string(OnlyIfAllFieldsExist), nil
+	default:
+		return "", errors.New("invalid conditional set")
+	}
+}
+
 type ExpireCondition string
 
 const (

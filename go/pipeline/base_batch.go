@@ -872,7 +872,7 @@ func (b *BaseBatch[T]) HRandFieldWithCountWithValues(key string, count int64) *T
 
 // Hash field expiration commands (Valkey 9.0+)
 
-// HSetEx sets the value of one or more fields of a given hash key, and optionally set their expiration time or time-to-live
+// Sets the value of one or more fields of a given hash key, and optionally set their expiration time or time-to-live
 // (TTL).
 // This command overwrites the values and expirations of specified fields that exist in the hash.
 // If `key` doesn't exist, a new key holding a hash is created.
@@ -902,7 +902,7 @@ func (b *BaseBatch[T]) HSetEx(key string, fieldsAndValues map[string]string, opt
 	return b.addCmdAndTypeChecker(C.HSetEx, args, reflect.Bool, false)
 }
 
-// HGetEx gets the values of one or more fields of a given hash key and optionally sets their expiration time or time-to-live
+// Gets the values of one or more fields of a given hash key and optionally sets their expiration time or time-to-live
 // (TTL).
 //
 // Since:
@@ -919,8 +919,8 @@ func (b *BaseBatch[T]) HSetEx(key string, fieldsAndValues map[string]string, opt
 //
 // Command Response:
 //
-//	An array of values associated with the given fields, in the same order as they are requested.
-//	For every field that does not exist in the hash, a nil value is returned.
+//	An array of [models.Result[string]] values associated with the given fields, in the same order as they are requested.
+//	For every field that does not exist in the hash, a [models.CreateNilStringResult()] is returned.
 //	If key does not exist, returns an empty string array.
 //
 // [valkey.io]: https://valkey.io/commands/hgetex/
@@ -932,13 +932,13 @@ func (b *BaseBatch[T]) HGetEx(key string, fields []string, opts options.HGetExOp
 	return b.addCmdAndConverter(C.HGetEx, args, reflect.Slice, false, internal.ConvertArrayOfNilOr[string])
 }
 
-// HExpire sets an expiration (TTL or time to live) on one or more fields of a given hash key. You must specify at least one
+// Sets an expiration (TTL or time to live) on one or more fields of a given hash key. You must specify at least one
 // field.
 // Field(s) will automatically be deleted from the hash key when their TTLs expire.
 // Field expirations will only be cleared by commands that delete or overwrite the contents of the hash fields, including HDEL
 // and HSET commands. This means that all the operations that conceptually alter the value stored at a hash key's field without
 // replacing it with a new one will leave the TTL untouched.
-// You can clear the TTL of a specific field by specifying 0 for the `seconds“ argument.
+// You can clear the TTL of a specific field by specifying 0 for the `seconds` argument.
 //
 // Note:
 //
@@ -955,12 +955,15 @@ func (b *BaseBatch[T]) HGetEx(key string, fields []string, opts options.HGetExOp
 //	key        - The key of the hash.
 //	expireTime - The expiration time as a duration.
 //	fields     - The fields to set expiration for.
-//	options    - Optional arguments for the command.
+//	options    - Optional arguments for the command, see [options.HExpireOptions].
 //
 // Command Response:
 //
 //	An array of integers indicating the result for each field:
-//	1 if expiration was set, 0 if expiration was not set (field doesn't exist or condition not met), -2 if field doesn't exist.
+//		-2: Field does not exist in the hash, or key does not exist.
+//		0: The specified condition was not met.
+//		1: The expiration time was applied.
+//		2: When called with 0 seconds.
 //
 // [valkey.io]: https://valkey.io/commands/hexpire/
 func (b *BaseBatch[T]) HExpire(key string, expireTime time.Duration, fields []string, opts options.HExpireOptions) *T {
@@ -971,7 +974,7 @@ func (b *BaseBatch[T]) HExpire(key string, expireTime time.Duration, fields []st
 	return b.addCmdAndConverter(C.HExpire, args, reflect.Slice, false, internal.ConvertArrayOf[int64])
 }
 
-// HExpireAt sets an expiration (TTL or time to live) on one or more fields of a given hash key using an absolute Unix
+// Sets an expiration (TTL or time to live) on one or more fields of a given hash key using an absolute Unix
 // timestamp. A timestamp in the past will delete the field immediately.
 // Field(s) will automatically be deleted from the hash key when their TTLs expire.
 //
@@ -986,12 +989,15 @@ func (b *BaseBatch[T]) HExpire(key string, expireTime time.Duration, fields []st
 //	key        - The key of the hash.
 //	expireTime - The expiration time as a time.Time.
 //	fields     - The fields to set expiration for.
-//	options    - Optional arguments for the command.
+//	options    - Optional arguments for the command, see [options.HExpireOptions].
 //
 // Command Response:
 //
 //	An array of integers indicating the result for each field:
-//	1 if expiration was set, 0 if expiration was not set (field doesn't exist or condition not met), -2 if field doesn't exist.
+//		-2: Field does not exist in the hash, or hash is empty.
+//		0: The specified condition was not met.
+//		1: The expiration time was applied.
+//		2: When called with 0 seconds or past Unix time.
 //
 // [valkey.io]: https://valkey.io/commands/hexpireat/
 func (b *BaseBatch[T]) HExpireAt(key string, expireTime time.Time, fields []string, opts options.HExpireOptions) *T {
@@ -1002,7 +1008,7 @@ func (b *BaseBatch[T]) HExpireAt(key string, expireTime time.Time, fields []stri
 	return b.addCmdAndConverter(C.HExpireAt, args, reflect.Slice, false, internal.ConvertArrayOf[int64])
 }
 
-// HPExpire sets an expiration (TTL or time to live) on one or more fields of a given hash key.
+// Sets an expiration (TTL or time to live) on one or more fields of a given hash key.
 // Field(s) will automatically be deleted from the hash key when their TTLs expire.
 //
 // Since:
@@ -1016,12 +1022,15 @@ func (b *BaseBatch[T]) HExpireAt(key string, expireTime time.Time, fields []stri
 //	key        - The key of the hash.
 //	expireTime - The expiration time as a duration.
 //	fields     - The fields to set expiration for.
-//	options    - Optional arguments for the command.
+//	options    - Optional arguments for the command, see [options.HExpireOptions].
 //
 // Command Response:
 //
 //	An array of integers indicating the result for each field:
-//	1 if expiration was set, 0 if expiration was not set (field doesn't exist or condition not met), -2 if field doesn't exist.
+//		-2: Field does not exist in the hash, or hash is empty.
+//		0: The specified condition was not met.
+//		1: The expiration time was applied.
+//		2: When called with 0 milliseconds.
 //
 // [valkey.io]: https://valkey.io/commands/hpexpire/
 func (b *BaseBatch[T]) HPExpire(key string, expireTime time.Duration, fields []string, opts options.HExpireOptions) *T {
@@ -1032,7 +1041,7 @@ func (b *BaseBatch[T]) HPExpire(key string, expireTime time.Duration, fields []s
 	return b.addCmdAndConverter(C.HPExpire, args, reflect.Slice, false, internal.ConvertArrayOf[int64])
 }
 
-// HPExpireAt sets an expiration (TTL or time to live) on one or more fields of a given hash key using an absolute Unix
+// Sets an expiration (TTL or time to live) on one or more fields of a given hash key using an absolute Unix
 // timestamp. A timestamp in the past will delete the field immediately.
 // Field(s) will automatically be deleted from the hash key when their TTLs expire.
 //
@@ -1047,12 +1056,15 @@ func (b *BaseBatch[T]) HPExpire(key string, expireTime time.Duration, fields []s
 //	key        - The key of the hash.
 //	expireTime - The expiration time as a time.Time.
 //	fields     - The fields to set expiration for.
-//	options    - Optional arguments for the command.
+//	options    - Optional arguments for the command, see [options.HExpireOptions].
 //
 // Command Response:
 //
 //	An array of integers indicating the result for each field:
-//	1 if expiration was set, 0 if expiration was not set (field doesn't exist or condition not met), -2 if field doesn't exist.
+//		-2: Field does not exist in the hash, or hash is empty.
+//		0: The specified condition was not met.
+//		1: The expiration time was applied.
+//		2: When called with 0 milliseconds or past Unix time.
 //
 // [valkey.io]: https://valkey.io/commands/hpexpireat/
 func (b *BaseBatch[T]) HPExpireAt(key string, expireTime time.Time, fields []string, opts options.HExpireOptions) *T {
@@ -1063,7 +1075,7 @@ func (b *BaseBatch[T]) HPExpireAt(key string, expireTime time.Time, fields []str
 	return b.addCmdAndConverter(C.HPExpireAt, args, reflect.Slice, false, internal.ConvertArrayOf[int64])
 }
 
-// HPersist removes the existing expiration on a hash key's field(s), turning the field(s) from volatile (a field with
+// Removes the existing expiration on a hash key's field(s), turning the field(s) from volatile (a field with
 // expiration set) to persistent (a field that will never expire as no TTL (time to live) is associated).
 //
 // Since:
@@ -1080,7 +1092,9 @@ func (b *BaseBatch[T]) HPExpireAt(key string, expireTime time.Time, fields []str
 // Command Response:
 //
 //	An array of integers indicating the result for each field:
-//	1 if expiration was removed, 0 if field had no expiration, -2 if field doesn't exist.
+//		-2: Field does not exist in the hash, or hash does not exist.
+//		-1: Field exists but has no expiration.
+//		1: The expiration was successfully removed from the field.
 //
 // [valkey.io]: https://valkey.io/commands/hpersist/
 func (b *BaseBatch[T]) HPersist(key string, fields []string) *T {
@@ -1091,7 +1105,7 @@ func (b *BaseBatch[T]) HPersist(key string, fields []string) *T {
 	return b.addCmdAndConverter(C.HPersist, args, reflect.Slice, false, internal.ConvertArrayOf[int64])
 }
 
-// HTtl returns the remaining TTL (time to live) of a hash key's field(s) that have a set expiration.
+// Returns the remaining TTL (time to live) of a hash key's field(s) that have a set expiration.
 //
 // Since:
 //
@@ -1118,7 +1132,7 @@ func (b *BaseBatch[T]) HTtl(key string, fields []string) *T {
 	return b.addCmdAndConverter(C.HTtl, args, reflect.Slice, false, internal.ConvertArrayOf[int64])
 }
 
-// HPTtl returns the remaining TTL (time to live) of a hash key's field(s) that have a set expiration, in milliseconds.
+// Returns the remaining TTL (time to live) of a hash key's field(s) that have a set expiration, in milliseconds.
 //
 // Since:
 //
@@ -1145,7 +1159,7 @@ func (b *BaseBatch[T]) HPTtl(key string, fields []string) *T {
 	return b.addCmdAndConverter(C.HPTtl, args, reflect.Slice, false, internal.ConvertArrayOf[int64])
 }
 
-// HExpireTime returns the absolute Unix timestamp in seconds since Unix epoch at which the given key's field(s) will expire.
+// Returns the absolute Unix timestamp in seconds since Unix epoch at which the given key's field(s) will expire.
 //
 // Since:
 //
@@ -1172,7 +1186,7 @@ func (b *BaseBatch[T]) HExpireTime(key string, fields []string) *T {
 	return b.addCmdAndConverter(C.HExpireTime, args, reflect.Slice, false, internal.ConvertArrayOf[int64])
 }
 
-// HPExpireTime returns the absolute Unix timestamp in milliseconds since Unix epoch at which the given key's field(s) will
+// Returns the absolute Unix timestamp in milliseconds since Unix epoch at which the given key's field(s) will
 // expire.
 //
 // Since:
