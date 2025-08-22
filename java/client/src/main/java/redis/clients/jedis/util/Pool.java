@@ -75,6 +75,15 @@ public abstract class Pool<T> implements Closeable {
     }
 
     /**
+     * Return a resource to the pool (public method following original Jedis pattern).
+     *
+     * @param resource the resource to return
+     */
+    public void returnResource(T resource) {
+        returnResourceObject(resource);
+    }
+
+    /**
      * Invalidate a resource in the pool.
      *
      * @param resource the resource to invalidate

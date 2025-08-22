@@ -61,6 +61,7 @@ import redis.clients.jedis.params.ScanParams;
 import redis.clients.jedis.params.SetParams;
 import redis.clients.jedis.resps.ScanResult;
 import redis.clients.jedis.util.KeyValue;
+import redis.clients.jedis.util.Pool;
 
 /**
  * Jedis compatibility wrapper for Valkey GLIDE client. This class provides a Jedis-like API while
@@ -105,7 +106,7 @@ public final class Jedis implements Closeable {
     private final boolean isPooled;
     private volatile String resourceId; // Changed from final to volatile for lazy init
     private final JedisClientConfig config;
-    private JedisPool parentPool;
+    private Pool<Jedis> dataSource; // Following original Jedis pattern
     private volatile boolean closed = false;
     private volatile boolean lazyInitialized = false; // New field to track initialization
 
@@ -150,11 +151,10 @@ public final class Jedis implements Closeable {
         this.host = host;
         this.port = port;
         this.isPooled = false;
-        this.parentPool = null;
+        this.dataSource = null;
         this.config = config;
 
         // Defer GlideClient creation until first Redis operation (lazy initialization)
-        // This solves DataGrip compatibility issues with native library loading
         // Configuration validation happens during mapping when GlideClient is created
         this.glideClient = null;
         this.resourceId = null;
@@ -273,18 +273,18 @@ public final class Jedis implements Closeable {
     }
 
     /**
-     * Internal constructor for pooled connections.
+     * Internal constructor for pooled connections. This follows the original Jedis pattern where the
+     * pool reference is set separately.
      *
      * @param glideClient the underlying GLIDE client
-     * @param pool the parent pool
      * @param config the client configuration
      */
-    protected Jedis(GlideClient glideClient, JedisPool pool, JedisClientConfig config) {
+    protected Jedis(GlideClient glideClient, JedisClientConfig config) {
         this.host = null; // Not needed for pooled connections
         this.port = 0; // Not needed for pooled connections
         this.glideClient = glideClient;
         this.isPooled = true;
-        this.parentPool = pool;
+        this.dataSource = null; // Will be set by setDataSource()
         this.config = config;
         this.resourceId = ResourceLifecycleManager.getInstance().registerResource(this);
         this.lazyInitialized = true; // Already initialized for pooled connections
@@ -700,6 +700,16 @@ public final class Jedis implements Closeable {
     }
 
     /**
+     * Set the data source (pool) for this Jedis instance. This follows the original Jedis pattern for
+     * pool management.
+     *
+     * @param jedisPool the pool that manages this instance
+     */
+    protected void setDataSource(Pool<Jedis> jedisPool) {
+        this.dataSource = jedisPool;
+    }
+
+    /**
      * Close the connection. If this is a pooled connection, return it to the pool. Otherwise, close
      * the underlying GLIDE client.
      */
@@ -716,8 +726,13 @@ public final class Jedis implements Closeable {
             ResourceLifecycleManager.getInstance().unregisterResource(resourceId);
         }
 
-        if (isPooled && parentPool != null) {
-            parentPool.returnResourceObject(this);
+        // Follow original Jedis pattern for pool management
+        if (dataSource != null) {
+            Pool<Jedis> pool = this.dataSource;
+            this.dataSource = null;
+            // Note: Original Jedis checks isBroken() here, but we don't have that concept
+            // so we always return to pool as a good resource
+            pool.returnResource(this);
         } else if (glideClient != null) { // Only close if initialized
             try {
                 glideClient.close();

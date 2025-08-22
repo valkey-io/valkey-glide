@@ -313,6 +313,65 @@ public class JedisTest {
     }
 
     @Test
+    @Order(0)
+    @DisplayName("Jedis Constructor with GlideClient")
+    void testJedisConstructorWithGlideClient() {
+        // Test the protected constructor that takes GlideClient directly
+        // This constructor is used internally by the pool factory
+        try {
+            // Create a GLIDE client configuration
+            glide.api.models.configuration.GlideClientConfiguration glideConfig =
+                    glide.api.models.configuration.GlideClientConfiguration.builder()
+                            .address(
+                                    glide.api.models.configuration.NodeAddress.builder()
+                                            .host(redisHost)
+                                            .port(redisPort)
+                                            .build())
+                            .requestTimeout(2000)
+                            .build();
+
+            // Create GLIDE client
+            glide.api.GlideClient glideClient = glide.api.GlideClient.createClient(glideConfig).get();
+
+            // Create Jedis instance using the protected constructor
+            redis.clients.jedis.DefaultJedisClientConfig config =
+                    redis.clients.jedis.DefaultJedisClientConfig.builder().build();
+
+            // Use reflection to access the protected constructor
+            java.lang.reflect.Constructor<Jedis> constructor =
+                    Jedis.class.getDeclaredConstructor(
+                            glide.api.GlideClient.class, redis.clients.jedis.JedisClientConfig.class);
+            constructor.setAccessible(true);
+            Jedis testJedis = constructor.newInstance(glideClient, config);
+
+            assertNotNull(testJedis, "Jedis instance should be created successfully");
+            assertFalse(testJedis.isClosed(), "Jedis instance should not be closed initially");
+
+            // Test basic operations
+            String testKey = TEST_KEY_PREFIX + "constructor_test";
+            String testValue = "constructor_test_value";
+
+            String setResult = testJedis.set(testKey, testValue);
+            assertEquals("OK", setResult, "SET should work with constructor-created Jedis");
+
+            String getResult = testJedis.get(testKey);
+            assertEquals(testValue, getResult, "GET should work with constructor-created Jedis");
+
+            // Test that it's marked as pooled
+            assertTrue(
+                    testJedis.isPooled(),
+                    "Jedis created with GlideClient constructor should be marked as pooled");
+
+            // Clean up
+            testJedis.del(testKey);
+            testJedis.close(); // This should not return to pool since dataSource is null
+
+        } catch (Exception e) {
+            fail("Constructor test failed: " + e.getMessage(), e);
+        }
+    }
+
+    @Test
     @Order(1)
     @DisplayName("Basic GET/SET Operations")
     void testBasicSetAndGet() {

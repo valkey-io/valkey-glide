@@ -276,14 +276,15 @@ public class JedisPoolTest {
         try (Jedis jedis = jedisPool.getResource()) {
             // Pool statistics should reflect active connection
             assertTrue(jedisPool.getNumActive() >= 0, "Should have active connections");
-            
+
             // Test connection works
             assertEquals("PONG", jedis.ping(), "Connection should work");
         }
 
         // After returning connection, active count should decrease
         // Note: This might be 0 if connection is returned to idle pool
-        assertTrue(jedisPool.getNumActive() >= 0, "Active connections should be non-negative after return");
+        assertTrue(
+                jedisPool.getNumActive() >= 0, "Active connections should be non-negative after return");
     }
 
     @Test
@@ -292,9 +293,10 @@ public class JedisPoolTest {
         // Test pool creation with authentication (if password is available)
         String password = System.getProperty("test.server.password");
         if (password != null && !password.trim().isEmpty()) {
-            try (JedisPool authPool = new JedisPool(new GenericObjectPoolConfig<>(), redisHost, redisPort, 2000, password)) {
+            try (JedisPool authPool =
+                    new JedisPool(new GenericObjectPoolConfig<>(), redisHost, redisPort, 2000, password)) {
                 assertNotNull(authPool, "Authenticated pool should be created");
-                
+
                 try (Jedis jedis = authPool.getResource()) {
                     String testKey = TEST_KEY_PREFIX + "auth_test";
                     String testValue = "auth_value";
@@ -313,9 +315,10 @@ public class JedisPoolTest {
     @Order(10)
     void testPoolWithTimeout() {
         // Test pool with custom timeout
-        try (JedisPool timeoutPool = new JedisPool(new GenericObjectPoolConfig<>(), redisHost, redisPort, 5000)) {
+        try (JedisPool timeoutPool =
+                new JedisPool(new GenericObjectPoolConfig<>(), redisHost, redisPort, 5000)) {
             assertNotNull(timeoutPool, "Timeout pool should be created");
-            
+
             try (Jedis jedis = timeoutPool.getResource()) {
                 String testKey = TEST_KEY_PREFIX + "timeout_test";
                 String testValue = "timeout_value";
@@ -333,15 +336,15 @@ public class JedisPoolTest {
     @Order(11)
     void testPoolFactoryPattern() {
         // Test pool creation with factory
-        GlideJedisFactory factory = new GlideJedisFactory(redisHost, redisPort, 
-            DefaultJedisClientConfig.builder().build());
-        
+        GlideJedisFactory factory =
+                new GlideJedisFactory(redisHost, redisPort, DefaultJedisClientConfig.builder().build());
+
         GenericObjectPoolConfig<Jedis> poolConfig = new GenericObjectPoolConfig<>();
         poolConfig.setMaxTotal(5);
-        
+
         try (JedisPool factoryPool = new JedisPool(poolConfig, factory)) {
             assertNotNull(factoryPool, "Factory-based pool should be created");
-            
+
             try (Jedis jedis = factoryPool.getResource()) {
                 String testKey = TEST_KEY_PREFIX + "factory_test";
                 String testValue = "factory_value";

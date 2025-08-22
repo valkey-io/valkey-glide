@@ -19,6 +19,7 @@ public class GlideJedisFactory implements PooledObjectFactory<Jedis> {
     private final String host;
     private final int port;
     private final JedisClientConfig clientConfig;
+    private JedisPool pool; // Pool reference set after factory creation
 
     /**
      * Create a new factory for Jedis connections.
@@ -31,6 +32,17 @@ public class GlideJedisFactory implements PooledObjectFactory<Jedis> {
         this.host = host;
         this.port = port;
         this.clientConfig = clientConfig;
+        this.pool = null; // Will be set later by JedisPool
+    }
+
+    /**
+     * Set the pool reference after factory creation. This is called by JedisPool after the factory is
+     * created but before it's used.
+     *
+     * @param pool the JedisPool that owns this factory
+     */
+    public void setPool(JedisPool pool) {
+        this.pool = pool;
     }
 
     @Override
@@ -43,8 +55,18 @@ public class GlideJedisFactory implements PooledObjectFactory<Jedis> {
             // Create GLIDE client
             GlideClient glideClient = GlideClient.createClient(glideConfig).get();
 
-            // Create Jedis wrapper (no pool reference for factory-created instances)
-            Jedis jedis = new Jedis(glideClient, null, clientConfig);
+            // Use the direct constructor following original Jedis pattern
+            // This constructor:
+            // - Takes GlideClient directly (no lazy initialization needed)
+            // - Sets isPooled = true
+            // - Sets lazyInitialized = true
+            // - Registers the resource immediately
+            Jedis jedis = new Jedis(glideClient, clientConfig);
+
+            // Set the pool reference following original Jedis pattern
+            if (pool != null) {
+                jedis.setDataSource(pool);
+            }
 
             return new DefaultPooledObject<>(jedis);
         } catch (InterruptedException | ExecutionException e) {
@@ -127,5 +149,14 @@ public class GlideJedisFactory implements PooledObjectFactory<Jedis> {
      */
     public JedisClientConfig getClientConfig() {
         return clientConfig;
+    }
+
+    /**
+     * Get the pool reference.
+     *
+     * @return the pool reference, or null if not set
+     */
+    public JedisPool getPool() {
+        return pool;
     }
 }

@@ -518,7 +518,10 @@ public class JedisPool extends Pool<Jedis> {
             final String host,
             int port,
             final JedisClientConfig clientConfig) {
-        this(poolConfig, new GlideJedisFactory(host, port, clientConfig));
+        // Create factory and set pool reference
+        GlideJedisFactory factory = new GlideJedisFactory(host, port, clientConfig);
+        initPool(poolConfig, factory);
+        factory.setPool(this); // Set pool reference after initialization
     }
 
     public JedisPool(final GenericObjectPoolConfig<Jedis> poolConfig, final URI uri) {
@@ -577,14 +580,21 @@ public class JedisPool extends Pool<Jedis> {
             final GenericObjectPoolConfig<Jedis> poolConfig,
             final URI uri,
             final JedisClientConfig clientConfig) {
-        this(
-                poolConfig,
-                new GlideJedisFactory(uri.getHost(), uri.getPort(), mergeUriConfig(uri, clientConfig)));
+        // Create factory and set pool reference
+        GlideJedisFactory factory =
+                new GlideJedisFactory(uri.getHost(), uri.getPort(), mergeUriConfig(uri, clientConfig));
+        initPool(poolConfig, factory);
+        factory.setPool(this); // Set pool reference after initialization
     }
 
     public JedisPool(
             final GenericObjectPoolConfig<Jedis> poolConfig, PooledObjectFactory<Jedis> factory) {
         initPool(poolConfig, factory);
+
+        // If it's a GlideJedisFactory, set the pool reference
+        if (factory instanceof GlideJedisFactory) {
+            ((GlideJedisFactory) factory).setPool(this);
+        }
     }
 
     /** Merge URI configuration with client configuration. */
