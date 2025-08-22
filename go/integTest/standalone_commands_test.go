@@ -783,7 +783,11 @@ func (suite *GlideTestSuite) TestLolwutWithOptions_WithVersion() {
 	options := options.NewLolwutOptions(8)
 	res, err := client.LolwutWithOptions(context.Background(), *options)
 	assert.NoError(suite.T(), err)
-	assert.Contains(suite.T(), res, "Redis ver.")
+	// Check for version string in LOLWUT output (dual contains approach)
+	hasVer := strings.Contains(res, "ver")
+	hasVersion := strings.Contains(res, suite.serverVersion)
+	assert.True(suite.T(), hasVer && hasVersion,
+		"Expected output to contain 'ver' and version '%s', got: %s", suite.serverVersion, res)
 }
 
 func (suite *GlideTestSuite) TestLolwutWithOptions_WithVersionAndArgs() {
@@ -791,7 +795,11 @@ func (suite *GlideTestSuite) TestLolwutWithOptions_WithVersionAndArgs() {
 	opts := options.NewLolwutOptions(8).SetArgs([]int{10, 20})
 	res, err := client.LolwutWithOptions(context.Background(), *opts)
 	assert.NoError(suite.T(), err)
-	assert.Contains(suite.T(), res, "Redis ver.")
+	// Check for version string in LOLWUT output (dual contains approach)
+	hasVer := strings.Contains(res, "ver")
+	hasVersion := strings.Contains(res, suite.serverVersion)
+	assert.True(suite.T(), hasVer && hasVersion,
+		"Expected output to contain 'ver' and version '%s', got: %s", suite.serverVersion, res)
 }
 
 func (suite *GlideTestSuite) TestLolwutWithOptions_EmptyArgs() {
@@ -799,7 +807,11 @@ func (suite *GlideTestSuite) TestLolwutWithOptions_EmptyArgs() {
 	opts := options.NewLolwutOptions(6).SetArgs([]int{})
 	res, err := client.LolwutWithOptions(context.Background(), *opts)
 	assert.NoError(suite.T(), err)
-	assert.Contains(suite.T(), res, "Redis ver.")
+	// Check for version string in LOLWUT output (dual contains approach)
+	hasVer := strings.Contains(res, "ver")
+	hasVersion := strings.Contains(res, suite.serverVersion)
+	assert.True(suite.T(), hasVer && hasVersion,
+		"Expected output to contain 'ver' and version '%s', got: %s", suite.serverVersion, res)
 }
 
 func (suite *GlideTestSuite) TestClientId() {

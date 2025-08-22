@@ -9756,7 +9756,11 @@ public class SharedCommandTests {
     public void objectEncoding_returns_string_embstr(BaseClient client) {
         String stringEmbstrKey = UUID.randomUUID().toString();
         assertEquals(OK, client.set(stringEmbstrKey, "value").get());
-        assertEquals("embstr", client.objectEncoding(stringEmbstrKey).get());
+        String encoding = client.objectEncoding(stringEmbstrKey).get();
+        // Valkey 9.0.0+ may return "raw" instead of "embstr" for short strings with long key names
+        assertTrue(
+                encoding.equals("embstr") || encoding.equals("raw"),
+                "Expected 'embstr' or 'raw' but got: " + encoding);
     }
 
     @SneakyThrows
@@ -9765,7 +9769,11 @@ public class SharedCommandTests {
     public void objectEncoding_binary_returns_string_embstr(BaseClient client) {
         GlideString stringEmbstrKey = gs(UUID.randomUUID().toString());
         assertEquals(OK, client.set(stringEmbstrKey, gs("value")).get());
-        assertEquals("embstr", client.objectEncoding(stringEmbstrKey).get());
+        String encoding = client.objectEncoding(stringEmbstrKey).get();
+        // Valkey 9.0.0+ may return "raw" instead of "embstr" for short strings with long key names
+        assertTrue(
+                encoding.equals("embstr") || encoding.equals("raw"),
+                "Expected 'embstr' or 'raw' but got: " + encoding);
     }
 
     @SneakyThrows
