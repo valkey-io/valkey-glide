@@ -2290,7 +2290,9 @@ public class JedisTest {
         // Test HSETEX with FXX condition (field exists)
         params = HSetExParams.hSetExParams().fxx().px(30000); // 30 seconds in milliseconds
         result = jedis.hsetex(key, params, field1, "updated_value");
-        assertEquals(0, result, "HSETEX with FXX should return 0 when updating existing field");
+        assertEquals(
+                1, result, "HSETEX with FXX should return 1 when successfully updating existing field");
+        assertEquals("updated_value", jedis.hget(key, field1), "Field should have updated value");
 
         // Test HSETEX with multiple fields
         Map<String, String> hash = new HashMap<>();
@@ -2345,10 +2347,7 @@ public class JedisTest {
     @Order(126)
     @DisplayName("HGETDEL Command")
     void testHGETDEL() {
-        assumeTrue(
-                SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")
-                        && !SERVER_VERSION.toString().startsWith("8."),
-                "HGETDEL command requires Redis 7.9.0+ (not available in Valkey 8.x)");
+        assumeTrue(SERVER_VERSION.isGreaterThan("9.0.0"), "HGETDEL command requires Valkey 9.0.0+");
 
         String key = TEST_KEY_PREFIX + "hash_getdel";
         String field1 = "field1";
@@ -2599,7 +2598,7 @@ public class JedisTest {
         result = jedis.hpersist(key, field1);
         assertEquals(1, result.size(), "HPERSIST should return one result");
         assertEquals(
-                Long.valueOf(0), result.get(0), "HPERSIST should return 0 for field without expiration");
+                Long.valueOf(-1), result.get(0), "HPERSIST should return -1 for field without expiration");
 
         // Test HPERSIST on non-existing field
         result = jedis.hpersist(key, "nonexistent");
@@ -2732,10 +2731,11 @@ public class JedisTest {
     @Order(134)
     @DisplayName("Hash Commands - Binary Variants for Newer Commands")
     void testHashCommandsBinaryNewer() {
+        // Hash field expiration commands (HSETEX, HGETEX) are available in:
+        // - Valkey 9.0.0+ (HSETEX, HGETEX only - HGETDEL not available)
         assumeTrue(
-                SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")
-                        && !SERVER_VERSION.toString().startsWith("8."),
-                "Newer hash commands require Redis 7.9.0+ (not available in Valkey 8.x)");
+                SERVER_VERSION.isGreaterThan("9.0.0"),
+                "Newer hash commands require Valkey 9.0.0 and HGETDEL requires Valkey greater than 9");
 
         byte[] key = (TEST_KEY_PREFIX + "hash_binary_new").getBytes();
         byte[] field1 = "field1".getBytes();

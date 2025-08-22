@@ -1,6 +1,7 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 
+import re
 import time
 from datetime import date, timedelta
 from typing import List, Optional, Union, cast
@@ -433,7 +434,7 @@ class TestSyncBatch:
 
         for element in results:
             assert isinstance(element, bytes)
-            assert b"Redis ver. " in element
+            assert re.search(rb"(Redis|Valkey) ver\. ?", element)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
