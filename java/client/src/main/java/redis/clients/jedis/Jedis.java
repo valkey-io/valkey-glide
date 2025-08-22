@@ -717,7 +717,7 @@ public final class Jedis implements Closeable {
         }
 
         if (isPooled && parentPool != null) {
-            parentPool.returnResource(this);
+            parentPool.returnResourceObject(this);
         } else if (glideClient != null) { // Only close if initialized
             try {
                 glideClient.close();

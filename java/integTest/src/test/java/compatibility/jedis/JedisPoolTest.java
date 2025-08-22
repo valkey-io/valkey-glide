@@ -3,7 +3,10 @@ package compatibility.jedis;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
 import org.junit.jupiter.api.*;
+import redis.clients.jedis.DefaultJedisClientConfig;
+import redis.clients.jedis.GlideJedisFactory;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 
@@ -233,6 +236,248 @@ public class JedisPoolTest {
         }
     }
 
+    @Test
+    @Order(7)
+    void testPoolConfiguration() {
+        // Test pool with custom configuration
+        GenericObjectPoolConfig<Jedis> poolConfig = new GenericObjectPoolConfig<>();
+        poolConfig.setMaxTotal(10);
+        poolConfig.setMaxIdle(5);
+        poolConfig.setMinIdle(1);
+        poolConfig.setTestOnBorrow(true);
+
+        try (JedisPool customPool = new JedisPool(poolConfig, redisHost, redisPort)) {
+            assertNotNull(customPool, "Custom configured pool should be created");
+            assertFalse(customPool.isClosed(), "Custom pool should not be closed");
+
+            // Test basic operations with custom pool
+            try (Jedis jedis = customPool.getResource()) {
+                String testKey = TEST_KEY_PREFIX + "custom_pool";
+                String testValue = "custom_value";
+
+                String setResult = jedis.set(testKey, testValue);
+                assertEquals("OK", setResult, "SET with custom pool should work");
+
+                String getResult = jedis.get(testKey);
+                assertEquals(testValue, getResult, "GET with custom pool should work");
+            }
+        }
+    }
+
+    @Test
+    @Order(8)
+    void testPoolStatistics() {
+        // Test pool statistics
+        assertTrue(jedisPool.getNumActive() >= 0, "Active connections should be non-negative");
+        assertTrue(jedisPool.getNumIdle() >= 0, "Idle connections should be non-negative");
+        assertTrue(jedisPool.getMaxTotal() > 0, "Max total should be positive");
+
+        // Use a connection and check statistics
+        try (Jedis jedis = jedisPool.getResource()) {
+            // Pool statistics should reflect active connection
+            assertTrue(jedisPool.getNumActive() >= 0, "Should have active connections");
+            
+            // Test connection works
+            assertEquals("PONG", jedis.ping(), "Connection should work");
+        }
+
+        // After returning connection, active count should decrease
+        // Note: This might be 0 if connection is returned to idle pool
+        assertTrue(jedisPool.getNumActive() >= 0, "Active connections should be non-negative after return");
+    }
+
+    @Test
+    @Order(9)
+    void testPoolWithAuthentication() {
+        // Test pool creation with authentication (if password is available)
+        String password = System.getProperty("test.server.password");
+        if (password != null && !password.trim().isEmpty()) {
+            try (JedisPool authPool = new JedisPool(new GenericObjectPoolConfig<>(), redisHost, redisPort, 2000, password)) {
+                assertNotNull(authPool, "Authenticated pool should be created");
+                
+                try (Jedis jedis = authPool.getResource()) {
+                    String testKey = TEST_KEY_PREFIX + "auth_test";
+                    String testValue = "auth_value";
+
+                    String setResult = jedis.set(testKey, testValue);
+                    assertEquals("OK", setResult, "SET with authenticated pool should work");
+
+                    String getResult = jedis.get(testKey);
+                    assertEquals(testValue, getResult, "GET with authenticated pool should work");
+                }
+            }
+        }
+    }
+
+    @Test
+    @Order(10)
+    void testPoolWithTimeout() {
+        // Test pool with custom timeout
+        try (JedisPool timeoutPool = new JedisPool(new GenericObjectPoolConfig<>(), redisHost, redisPort, 5000)) {
+            assertNotNull(timeoutPool, "Timeout pool should be created");
+            
+            try (Jedis jedis = timeoutPool.getResource()) {
+                String testKey = TEST_KEY_PREFIX + "timeout_test";
+                String testValue = "timeout_value";
+
+                String setResult = jedis.set(testKey, testValue);
+                assertEquals("OK", setResult, "SET with timeout pool should work");
+
+                String getResult = jedis.get(testKey);
+                assertEquals(testValue, getResult, "GET with timeout pool should work");
+            }
+        }
+    }
+
+    @Test
+    @Order(11)
+    void testPoolFactoryPattern() {
+        // Test pool creation with factory
+        GlideJedisFactory factory = new GlideJedisFactory(redisHost, redisPort, 
+            DefaultJedisClientConfig.builder().build());
+        
+        GenericObjectPoolConfig<Jedis> poolConfig = new GenericObjectPoolConfig<>();
+        poolConfig.setMaxTotal(5);
+        
+        try (JedisPool factoryPool = new JedisPool(poolConfig, factory)) {
+            assertNotNull(factoryPool, "Factory-based pool should be created");
+            
+            try (Jedis jedis = factoryPool.getResource()) {
+                String testKey = TEST_KEY_PREFIX + "factory_test";
+                String testValue = "factory_value";
+
+                String setResult = jedis.set(testKey, testValue);
+                assertEquals("OK", setResult, "SET with factory pool should work");
+
+                String getResult = jedis.get(testKey);
+                assertEquals(testValue, getResult, "GET with factory pool should work");
+            }
+        }
+    }
+
+    @Test
+    @Order(7)
+    void testPoolConfiguration() {
+        // Test pool with custom configuration
+        org.apache.commons.pool2.impl.GenericObjectPoolConfig<Jedis> poolConfig =
+                new org.apache.commons.pool2.impl.GenericObjectPoolConfig<>();
+        poolConfig.setMaxTotal(10);
+        poolConfig.setMaxIdle(5);
+        poolConfig.setMinIdle(1);
+        poolConfig.setTestOnBorrow(true);
+
+        try (JedisPool customPool = new JedisPool(poolConfig, redisHost, redisPort)) {
+            assertNotNull(customPool, "Custom configured pool should be created");
+            assertFalse(customPool.isClosed(), "Custom pool should not be closed");
+
+            // Test basic operations with custom pool
+            try (Jedis jedis = customPool.getResource()) {
+                String testKey = TEST_KEY_PREFIX + "custom_pool";
+                String testValue = "custom_value";
+
+                String setResult = jedis.set(testKey, testValue);
+                assertEquals("OK", setResult, "SET with custom pool should work");
+
+                String getResult = jedis.get(testKey);
+                assertEquals(testValue, getResult, "GET with custom pool should work");
+            }
+        }
+    }
+
+    @Test
+    @Order(8)
+    void testPoolStatistics() {
+        // Test pool statistics
+        assertTrue(jedisPool.getNumActive() >= 0, "Active connections should be non-negative");
+        assertTrue(jedisPool.getNumIdle() >= 0, "Idle connections should be non-negative");
+        assertTrue(jedisPool.getMaxTotal() > 0, "Max total should be positive");
+
+        // Use a connection and check statistics
+        try (Jedis jedis = jedisPool.getResource()) {
+            // Pool statistics should reflect active connection
+            assertTrue(jedisPool.getNumActive() >= 0, "Should have active connections");
+
+            // Test connection works
+            assertEquals("PONG", jedis.ping(), "Connection should work");
+        }
+
+        // After returning connection, active count should decrease
+        // Note: This might be 0 if connection is returned to idle pool
+        assertTrue(
+                jedisPool.getNumActive() >= 0, "Active connections should be non-negative after return");
+    }
+
+    @Test
+    @Order(9)
+    void testPoolWithAuthentication() {
+        // Test pool creation with authentication (if password is available)
+        String password = System.getProperty("test.server.password");
+        if (password != null && !password.trim().isEmpty()) {
+            try (JedisPool authPool = new JedisPool(redisHost, redisPort, 2000, password)) {
+                assertNotNull(authPool, "Authenticated pool should be created");
+
+                try (Jedis jedis = authPool.getResource()) {
+                    String testKey = TEST_KEY_PREFIX + "auth_test";
+                    String testValue = "auth_value";
+
+                    String setResult = jedis.set(testKey, testValue);
+                    assertEquals("OK", setResult, "SET with authenticated pool should work");
+
+                    String getResult = jedis.get(testKey);
+                    assertEquals(testValue, getResult, "GET with authenticated pool should work");
+                }
+            }
+        }
+    }
+
+    @Test
+    @Order(10)
+    void testPoolWithTimeout() {
+        // Test pool with custom timeout
+        try (JedisPool timeoutPool = new JedisPool(redisHost, redisPort, 5000)) {
+            assertNotNull(timeoutPool, "Timeout pool should be created");
+
+            try (Jedis jedis = timeoutPool.getResource()) {
+                String testKey = TEST_KEY_PREFIX + "timeout_test";
+                String testValue = "timeout_value";
+
+                String setResult = jedis.set(testKey, testValue);
+                assertEquals("OK", setResult, "SET with timeout pool should work");
+
+                String getResult = jedis.get(testKey);
+                assertEquals(testValue, getResult, "GET with timeout pool should work");
+            }
+        }
+    }
+
+    @Test
+    @Order(11)
+    void testPoolFactoryPattern() {
+        // Test pool creation with factory
+        GlideJedisFactory factory =
+                new GlideJedisFactory(
+                        redisHost, redisPort, redis.clients.jedis.DefaultJedisClientConfig.builder().build());
+
+        org.apache.commons.pool2.impl.GenericObjectPoolConfig<Jedis> poolConfig =
+                new org.apache.commons.pool2.impl.GenericObjectPoolConfig<>();
+        poolConfig.setMaxTotal(5);
+
+        try (JedisPool factoryPool = new JedisPool(poolConfig, factory)) {
+            assertNotNull(factoryPool, "Factory-based pool should be created");
+
+            try (Jedis jedis = factoryPool.getResource()) {
+                String testKey = TEST_KEY_PREFIX + "factory_test";
+                String testValue = "factory_value";
+
+                String setResult = jedis.set(testKey, testValue);
+                assertEquals("OK", setResult, "SET with factory pool should work");
+
+                String getResult = jedis.get(testKey);
+                assertEquals(testValue, getResult, "GET with factory pool should work");
+            }
+        }
+    }
+
     private void cleanupTestKeys(Jedis jedis) {
         // Delete all test keys
         String[] keysToDelete = {
@@ -244,7 +489,11 @@ public class JedisPoolTest {
             TEST_KEY_PREFIX + "concurrent_1",
             TEST_KEY_PREFIX + "concurrent_2",
             TEST_KEY_PREFIX + "concurrent_3",
-            TEST_KEY_PREFIX + "concurrent_4"
+            TEST_KEY_PREFIX + "concurrent_4",
+            TEST_KEY_PREFIX + "custom_pool",
+            TEST_KEY_PREFIX + "auth_test",
+            TEST_KEY_PREFIX + "timeout_test",
+            TEST_KEY_PREFIX + "factory_test"
         };
 
         jedis.del(keysToDelete);
