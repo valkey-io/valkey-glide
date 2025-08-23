@@ -22,9 +22,6 @@ import lombok.RequiredArgsConstructor;
 @Builder
 public final class HashFieldExpirationOptions {
 
-    /** Conditional change option for hash operations (NX/XX). */
-    private final ConditionalChange conditionalChange;
-
     /** Field-specific conditional change option for HSETEX (FNX/FXX). */
     private final FieldConditionalChange fieldConditionalChange;
 
@@ -170,30 +167,11 @@ public final class HashFieldExpirationOptions {
      * @throws IllegalArgumentException if mutually exclusive options are set
      */
     private void validateOptions() {
-        // Validate that conditionalChange and fieldConditionalChange are not both set to conflicting
-        // values
-        if (conditionalChange != null && fieldConditionalChange != null) {
-            // Both NX-type options or both XX-type options would be redundant but not conflicting
-            // The validation here is more about logical consistency
-            if ((conditionalChange == ConditionalChange.ONLY_IF_DOES_NOT_EXIST
-                            && fieldConditionalChange == FieldConditionalChange.ONLY_IF_ALL_EXIST)
-                    || (conditionalChange == ConditionalChange.ONLY_IF_EXISTS
-                            && fieldConditionalChange == FieldConditionalChange.ONLY_IF_NONE_EXIST)) {
-                throw new IllegalArgumentException(
-                        "Conflicting conditional options: "
-                                + conditionalChange
-                                + " and "
-                                + fieldConditionalChange);
-            }
-        }
-
         // Validate expiry options - PERSIST is mutually exclusive with all other expiry types
         if (expiry != null && expiry.type == PERSIST) {
             // PERSIST should not be combined with any conditional or field conditional changes
             // for HGETEX as it's a simple operation to remove expiration
-            if (conditionalChange != null
-                    || fieldConditionalChange != null
-                    || expirationCondition != null) {
+            if (fieldConditionalChange != null || expirationCondition != null) {
                 throw new IllegalArgumentException(
                         "PERSIST option cannot be combined with conditional options");
             }
@@ -211,10 +189,6 @@ public final class HashFieldExpirationOptions {
         validateOptions();
 
         List<String> optionArgs = new ArrayList<>();
-
-        if (conditionalChange != null) {
-            optionArgs.add(conditionalChange.getValkeyApi());
-        }
 
         if (fieldConditionalChange != null) {
             optionArgs.add(fieldConditionalChange.getValkeyApi());
@@ -236,26 +210,6 @@ public final class HashFieldExpirationOptions {
 
     /** Builder class for {@link HashFieldExpirationOptions}. */
     public static class HashFieldExpirationOptionsBuilder {
-        /**
-         * Sets the condition to {@link ConditionalChange#ONLY_IF_EXISTS} for the operation.
-         *
-         * @return This builder instance
-         */
-        public HashFieldExpirationOptionsBuilder conditionalSetOnlyIfExists() {
-            this.conditionalChange = ConditionalChange.ONLY_IF_EXISTS;
-            return this;
-        }
-
-        /**
-         * Sets the condition to {@link ConditionalChange#ONLY_IF_DOES_NOT_EXIST} for the operation.
-         *
-         * @return This builder instance
-         */
-        public HashFieldExpirationOptionsBuilder conditionalSetOnlyIfNotExist() {
-            this.conditionalChange = ConditionalChange.ONLY_IF_DOES_NOT_EXIST;
-            return this;
-        }
-
         /**
          * Sets the field condition to {@link FieldConditionalChange#ONLY_IF_ALL_EXIST}.
          *

@@ -2973,13 +2973,13 @@ public class SharedCommandTests {
         assertEquals(1, result.length);
         Object[] hpttlResultRaw = (Object[]) result[0];
         assertEquals(3, hpttlResultRaw.length);
-        
+
         // Convert Object[] to Long[] manually
         Long[] hpttlResult = new Long[hpttlResultRaw.length];
         for (int i = 0; i < hpttlResultRaw.length; i++) {
             hpttlResult[i] = ((Number) hpttlResultRaw[i]).longValue();
         }
-        
+
         assertTrue(
                 hpttlResult[0] > 0 && hpttlResult[0] <= 60000); // field1 should have TTL in milliseconds
         assertTrue(
@@ -3211,13 +3211,13 @@ public class SharedCommandTests {
         assertEquals(1, result.length);
         Object[] hexpiretime_resultRaw = (Object[]) result[0];
         assertEquals(3, hexpiretime_resultRaw.length);
-        
+
         // Convert Object[] to Long[] manually
         Long[] hexpiretime_result = new Long[hexpiretime_resultRaw.length];
         for (int i = 0; i < hexpiretime_resultRaw.length; i++) {
             hexpiretime_result[i] = ((Number) hexpiretime_resultRaw[i]).longValue();
         }
-        
+
         assertTrue(
                 hexpiretime_result[0] >= expireAtSeconds
                         && hexpiretime_result[0]
@@ -3431,7 +3431,7 @@ public class SharedCommandTests {
         assertEquals(1, result.length);
         Object[] hpexpiretime_resultRaw = (Object[]) result[0];
         assertEquals(3, hpexpiretime_resultRaw.length);
-        
+
         // Convert Object[] to Long[] manually
         Long[] hpexpiretime_result = new Long[hpexpiretime_resultRaw.length];
         for (int i = 0; i < hpexpiretime_resultRaw.length; i++) {
