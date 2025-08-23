@@ -49,7 +49,7 @@
         "IMAGE": "node:lts-alpine",
         "CONTAINER_OPTIONS": "--user root --privileged --rm",
         "PACKAGE_MANAGERS": ["npm"],
-        "languages": []
+        "languages": ["java"]
     },
     {
         "OS": "ubuntu",
