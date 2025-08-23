@@ -2588,7 +2588,6 @@ public class GlideClientTest {
         fieldValueMap.put(gs("field2"), gs("value2"));
         HashFieldExpirationOptions options =
                 HashFieldExpirationOptions.builder()
-                        .conditionalSetOnlyIfNotExist()
                         .fieldConditionalSetOnlyIfNoneExist()
                         .expiry(HashFieldExpirationOptions.ExpirySet.Milliseconds(30000L))
                         .build();

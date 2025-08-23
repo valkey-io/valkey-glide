@@ -3,7 +3,6 @@ package glide.api.commands;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import glide.api.models.commands.HashFieldExpirationOptions;
 import org.junit.jupiter.api.Test;
@@ -26,7 +25,6 @@ public class HashFieldExpirationOptionsCommandsTest {
 
         HashFieldExpirationOptions options2 =
                 HashFieldExpirationOptions.builder()
-                        .conditionalSetOnlyIfExists()
                         .fieldConditionalSetOnlyIfAllExist()
                         .expiry(HashFieldExpirationOptions.ExpirySet.Milliseconds(30000L))
                         .build();
@@ -34,7 +32,6 @@ public class HashFieldExpirationOptionsCommandsTest {
 
         HashFieldExpirationOptions options3 =
                 HashFieldExpirationOptions.builder()
-                        .conditionalSetOnlyIfNotExist()
                         .fieldConditionalSetOnlyIfNoneExist()
                         .expiry(
                                 HashFieldExpirationOptions.ExpirySet.UnixSeconds(
@@ -59,26 +56,19 @@ public class HashFieldExpirationOptionsCommandsTest {
 
     @Test
     public void hashFieldExpirationOptions_validation_conflicting_options() {
-        // Test conflicting conditional options
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> {
-                    HashFieldExpirationOptions.builder()
-                            .conditionalSetOnlyIfNotExist() // NX
-                            .fieldConditionalSetOnlyIfAllExist() // FXX
-                            .build()
-                            .toArgs();
-                });
+        // Test that no conflicting options exist anymore since ConditionalChange was removed
+        // This test is now mainly for demonstration that field conditional changes work independently
+        HashFieldExpirationOptions options1 =
+                HashFieldExpirationOptions.builder()
+                        .fieldConditionalSetOnlyIfAllExist() // FXX
+                        .build();
+        assertNotNull(options1.toArgs());
 
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> {
-                    HashFieldExpirationOptions.builder()
-                            .conditionalSetOnlyIfExists() // XX
-                            .fieldConditionalSetOnlyIfNoneExist() // FNX
-                            .build()
-                            .toArgs();
-                });
+        HashFieldExpirationOptions options2 =
+                HashFieldExpirationOptions.builder()
+                        .fieldConditionalSetOnlyIfNoneExist() // FNX
+                        .build();
+        assertNotNull(options2.toArgs());
     }
 
     @Test
@@ -86,16 +76,14 @@ public class HashFieldExpirationOptionsCommandsTest {
         // Test that options are converted to correct argument format
         HashFieldExpirationOptions options =
                 HashFieldExpirationOptions.builder()
-                        .conditionalSetOnlyIfExists()
                         .fieldConditionalSetOnlyIfAllExist()
                         .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
                         .build();
 
         String[] args = options.toArgs();
-        assertEquals("XX", args[0]);
-        assertEquals("FXX", args[1]);
-        assertEquals("EX", args[2]);
-        assertEquals("60", args[3]);
+        assertEquals("FXX", args[0]);
+        assertEquals("EX", args[1]);
+        assertEquals("60", args[2]);
     }
 
     @Test
@@ -103,19 +91,17 @@ public class HashFieldExpirationOptionsCommandsTest {
         // Test all builder methods work correctly
         HashFieldExpirationOptions options =
                 HashFieldExpirationOptions.builder()
-                        .conditionalSetOnlyIfExists()
                         .fieldConditionalSetOnlyIfAllExist()
                         .expirationConditionOnlyIfGreaterThanCurrent()
                         .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
                         .build();
 
         String[] args = options.toArgs();
-        assertEquals(5, args.length);
-        assertEquals("XX", args[0]);
-        assertEquals("FXX", args[1]);
-        assertEquals("GT", args[2]);
-        assertEquals("EX", args[3]);
-        assertEquals("60", args[4]);
+        assertEquals(4, args.length);
+        assertEquals("FXX", args[0]);
+        assertEquals("GT", args[1]);
+        assertEquals("EX", args[2]);
+        assertEquals("60", args[3]);
     }
 
     @Test
@@ -151,18 +137,16 @@ public class HashFieldExpirationOptionsCommandsTest {
         // Test complex combination of options
         HashFieldExpirationOptions options =
                 HashFieldExpirationOptions.builder()
-                        .conditionalSetOnlyIfNotExist()
                         .fieldConditionalSetOnlyIfNoneExist()
                         .expirationConditionOnlyIfLessThanCurrent()
                         .expiry(HashFieldExpirationOptions.ExpirySet.UnixMilliseconds(1640995200000L))
                         .build();
 
         String[] args = options.toArgs();
-        assertEquals(5, args.length);
-        assertEquals("NX", args[0]);
-        assertEquals("FNX", args[1]);
-        assertEquals("LT", args[2]);
-        assertEquals("PXAT", args[3]);
-        assertEquals("1640995200000", args[4]);
+        assertEquals(4, args.length);
+        assertEquals("FNX", args[0]);
+        assertEquals("LT", args[1]);
+        assertEquals("PXAT", args[2]);
+        assertEquals("1640995200000", args[3]);
     }
 }

@@ -786,9 +786,8 @@ public interface HashBaseCommands {
      * Long num = client.hsetex("my_hash", Map.of("field1", "value1", "field2", "value2"), options).get();
      * assert num == 2L;
      *
-     * // Set fields only if hash doesn't exist with field conditional
+     * // Set fields with field conditional
      * HashFieldExpirationOptions conditionalOptions = HashFieldExpirationOptions.builder()
-     *     .conditionalSetOnlyIfNotExist()
      *     .fieldConditionalSetOnlyIfNoneExist()
      *     .expiry(HashFieldExpirationOptions.ExpirySet.Milliseconds(30000L))
      *     .build();
@@ -820,9 +819,8 @@ public interface HashBaseCommands {
      * Long num = client.hsetex(gs("my_hash"), Map.of(gs("field1"), gs("value1"), gs("field2"), gs("value2")), options).get();
      * assert num == 2L;
      *
-     * // Set fields only if hash doesn't exist with field conditional
+     * // Set fields with field conditional
      * HashFieldExpirationOptions conditionalOptions = HashFieldExpirationOptions.builder()
-     *     .conditionalSetOnlyIfNotExist()
      *     .fieldConditionalSetOnlyIfNoneExist()
      *     .expiry(HashFieldExpirationOptions.ExpirySet.Milliseconds(30000L))
      *     .build();

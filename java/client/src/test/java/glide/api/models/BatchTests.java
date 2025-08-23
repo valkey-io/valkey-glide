@@ -423,7 +423,6 @@ public class BatchTests {
                 "key",
                 fieldValueMap,
                 HashFieldExpirationOptions.builder()
-                        .conditionalChange(ConditionalChange.ONLY_IF_EXISTS)
                         .fieldConditionalChange(
                                 HashFieldExpirationOptions.FieldConditionalChange.ONLY_IF_ALL_EXIST)
                         .expiry(HashFieldExpirationOptions.ExpirySet.Milliseconds(5000L))

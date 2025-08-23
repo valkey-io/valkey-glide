@@ -8,12 +8,6 @@ import org.junit.jupiter.api.Test;
 public class HashFieldExpirationOptionsTest {
 
     @Test
-    public void testConditionalChangeEnums() {
-        assertEquals("XX", ConditionalChange.ONLY_IF_EXISTS.getValkeyApi());
-        assertEquals("NX", ConditionalChange.ONLY_IF_DOES_NOT_EXIST.getValkeyApi());
-    }
-
-    @Test
     public void testFieldConditionalChangeEnums() {
         assertEquals(
                 "FXX", HashFieldExpirationOptions.FieldConditionalChange.ONLY_IF_ALL_EXIST.getValkeyApi());
@@ -89,18 +83,16 @@ public class HashFieldExpirationOptionsTest {
     public void testBasicOptionsToArgs() {
         HashFieldExpirationOptions options =
                 HashFieldExpirationOptions.builder()
-                        .conditionalChange(ConditionalChange.ONLY_IF_EXISTS)
                         .fieldConditionalChange(
                                 HashFieldExpirationOptions.FieldConditionalChange.ONLY_IF_ALL_EXIST)
                         .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
                         .build();
 
         String[] args = options.toArgs();
-        assertEquals(4, args.length);
-        assertEquals("XX", args[0]);
-        assertEquals("FXX", args[1]);
-        assertEquals("EX", args[2]);
-        assertEquals("60", args[3]);
+        assertEquals(3, args.length);
+        assertEquals("FXX", args[0]);
+        assertEquals("EX", args[1]);
+        assertEquals("60", args[2]);
     }
 
     @Test
@@ -123,82 +115,31 @@ public class HashFieldExpirationOptionsTest {
     }
 
     @Test
-    public void testValidationConflictingConditionalOptions() {
-        // Test conflicting conditional options: hash doesn't exist (NX) but all fields must exist (FXX)
-        HashFieldExpirationOptions options =
-                HashFieldExpirationOptions.builder()
-                        .conditionalChange(ConditionalChange.ONLY_IF_DOES_NOT_EXIST)
-                        .fieldConditionalChange(
-                                HashFieldExpirationOptions.FieldConditionalChange.ONLY_IF_ALL_EXIST)
-                        .build();
-
-        IllegalArgumentException exception =
-                assertThrows(IllegalArgumentException.class, options::toArgs);
-        assertTrue(exception.getMessage().contains("Conflicting conditional options"));
-    }
-
-    @Test
-    public void testValidationConflictingConditionalOptions2() {
-        // Test conflicting conditional options: hash must exist (XX) but no fields should exist (FNX)
-        HashFieldExpirationOptions options =
-                HashFieldExpirationOptions.builder()
-                        .conditionalChange(ConditionalChange.ONLY_IF_EXISTS)
-                        .fieldConditionalChange(
-                                HashFieldExpirationOptions.FieldConditionalChange.ONLY_IF_NONE_EXIST)
-                        .build();
-
-        IllegalArgumentException exception =
-                assertThrows(IllegalArgumentException.class, options::toArgs);
-        assertTrue(exception.getMessage().contains("Conflicting conditional options"));
-    }
-
-    @Test
     public void testBuilderMethods() {
         HashFieldExpirationOptions options =
                 HashFieldExpirationOptions.builder()
-                        .conditionalSetOnlyIfExists()
                         .fieldConditionalSetOnlyIfAllExist()
                         .expirationConditionOnlyIfGreaterThanCurrent()
                         .build();
 
         String[] args = options.toArgs();
-        assertEquals(3, args.length);
-        assertEquals("XX", args[0]);
-        assertEquals("FXX", args[1]);
-        assertEquals("GT", args[2]);
+        assertEquals(2, args.length);
+        assertEquals("FXX", args[0]);
+        assertEquals("GT", args[1]);
     }
 
     @Test
     public void testBuilderMethodsAlternative() {
         HashFieldExpirationOptions options =
                 HashFieldExpirationOptions.builder()
-                        .conditionalSetOnlyIfNotExist()
                         .fieldConditionalSetOnlyIfNoneExist()
                         .expirationConditionOnlyIfNoExpiry()
                         .build();
 
         String[] args = options.toArgs();
-        assertEquals(3, args.length);
-        assertEquals("NX", args[0]);
-        assertEquals("FNX", args[1]);
-        assertEquals("NX", args[2]); // expiration condition NX
-    }
-
-    @Test
-    public void testPersistWithConditionalChangeValidation() {
-        // Test that PERSIST cannot be combined with conditional change options
-        HashFieldExpirationOptions options =
-                HashFieldExpirationOptions.builder()
-                        .conditionalChange(ConditionalChange.ONLY_IF_EXISTS)
-                        .expiry(HashFieldExpirationOptions.ExpirySet.Persist())
-                        .build();
-
-        IllegalArgumentException exception =
-                assertThrows(IllegalArgumentException.class, options::toArgs);
-        assertTrue(
-                exception
-                        .getMessage()
-                        .contains("PERSIST option cannot be combined with conditional options"));
+        assertEquals(2, args.length);
+        assertEquals("FNX", args[0]);
+        assertEquals("NX", args[1]); // expiration condition NX
     }
 
     @Test
