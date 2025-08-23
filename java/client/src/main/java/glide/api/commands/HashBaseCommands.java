@@ -776,7 +776,7 @@ public interface HashBaseCommands {
      *     be set in the hash stored at the specified key.
      * @param options Optional parameters for the command including conditional changes and expiry
      *     settings.
-     * @return The number of fields that were added to the hash.
+     * @return <code>1</code> if all the fields' values and expiration times were set successfully, <code>0</code> otherwise.
      * @example
      *     <pre>{@code
      * // Set fields with 60 second expiration
@@ -784,7 +784,7 @@ public interface HashBaseCommands {
      *     .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
      *     .build();
      * Long num = client.hsetex("my_hash", Map.of("field1", "value1", "field2", "value2"), options).get();
-     * assert num == 2L;
+     * assert num == 1L;
      *
      * // Set fields with field conditional
      * HashFieldExpirationOptions conditionalOptions = HashFieldExpirationOptions.builder()
@@ -809,7 +809,7 @@ public interface HashBaseCommands {
      *     be set in the hash stored at the specified key.
      * @param options Optional parameters for the command including conditional changes and expiry
      *     settings.
-     * @return The number of fields that were added to the hash.
+     * @return <code>1</code> if all the fields' values and expiration times were set successfully, <code>0</code> otherwise.
      * @example
      *     <pre>{@code
      * // Set fields with 60 second expiration
@@ -817,7 +817,7 @@ public interface HashBaseCommands {
      *     .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
      *     .build();
      * Long num = client.hsetex(gs("my_hash"), Map.of(gs("field1"), gs("value1"), gs("field2"), gs("value2")), options).get();
-     * assert num == 2L;
+     * assert num == 1L;
      *
      * // Set fields with field conditional
      * HashFieldExpirationOptions conditionalOptions = HashFieldExpirationOptions.builder()
@@ -845,8 +845,7 @@ public interface HashBaseCommands {
      * @return An array of values associated with the given fields, in the same order as they are
      *     requested.<br>
      *     For every field that does not exist in the hash, a null value is returned.<br>
-     *     If <code>key</code> does not exist, it is treated as an empty hash, and it returns an empty
-     *     array.<br>
+     *     If <code>key</code> does not exist, it returns <code>null</code>.<br>
      * @example
      *     <pre>{@code
      * // Get fields and set 60 second expiration
@@ -879,8 +878,7 @@ public interface HashBaseCommands {
      * @return An array of values associated with the given fields, in the same order as they are
      *     requested.<br>
      *     For every field that does not exist in the hash, a null value is returned.<br>
-     *     If <code>key</code> does not exist, it is treated as an empty hash, and it returns an empty
-     *     array.<br>
+     *     If <code>key</code> does not exist, it returns <code>null</code>.<br>
      * @example
      *     <pre>{@code
      * // Get fields and set 60 second expiration
@@ -919,7 +917,7 @@ public interface HashBaseCommands {
      *     <ul>
      *       <li><code>1</code> if the expiration time was successfully set for the field.
      *       <li><code>0</code> if the specified condition was not met.
-     *       <li><code>-2</code> if the field does not exist or the key does not exist.
+     *       <li><code>-2</code> if the field does not exist in the HASH, or key does not exist.
      *       <li><code>2</code> when called with 0 seconds.
      *     </ul>
      *
@@ -961,7 +959,7 @@ public interface HashBaseCommands {
      *     <ul>
      *       <li><code>1</code> if the expiration time was successfully set for the field.
      *       <li><code>0</code> if the specified condition was not met.
-     *       <li><code>-2</code> if the field does not exist or the key does not exist.
+     *       <li><code>-2</code> if the field does not exist in the HASH, or key does not exist.
      *       <li><code>2</code> when called with 0 seconds.
      *     </ul>
      *
@@ -998,7 +996,7 @@ public interface HashBaseCommands {
      *     <ul>
      *       <li><code>1</code> if the expiration time was successfully removed from the field.
      *       <li><code>-1</code> if the field exists but has no expiration time.
-     *       <li><code>-2</code> if the field does not exist or the key does not exist.
+     *       <li><code>-2</code> if the field does not exist in the provided hash key, or the hash key does not exist.
      *     </ul>
      *
      * @example
@@ -1029,7 +1027,7 @@ public interface HashBaseCommands {
      *     <ul>
      *       <li><code>1</code> if the expiration time was successfully removed from the field.
      *       <li><code>-1</code> if the field exists but has no expiration time.
-     *       <li><code>-2</code> if the field does not exist or the key does not exist.
+     *       <li><code>-2</code> if the field does not exist in the provided hash key, or the hash key does not exist.
      *     </ul>
      *
      * @example
@@ -1061,7 +1059,7 @@ public interface HashBaseCommands {
      *     <ul>
      *       <li><code>1</code> if the expiration time was successfully set for the field.
      *       <li><code>0</code> if the specified condition was not met.
-     *       <li><code>-2</code> if the field does not exist or the hash is empty.
+     *       <li><code>-2</code> if the field does not exist in the HASH, or HASH is empty.
      *       <li><code>2</code> when called with 0 milliseconds.
      *     </ul>
      *
@@ -1092,7 +1090,7 @@ public interface HashBaseCommands {
      *     <ul>
      *       <li><code>1</code> if the expiration time was successfully set for the field.
      *       <li><code>0</code> if the specified condition was not met.
-     *       <li><code>-2</code> if the field does not exist or the hash is empty.
+     *       <li><code>-2</code> if the field does not exist in the HASH, or HASH is empty.
      *       <li><code>2</code> when called with 0 milliseconds.
      *     </ul>
      *
@@ -1124,7 +1122,7 @@ public interface HashBaseCommands {
      *     <ul>
      *       <li><code>1</code> if the expiration time was successfully set for the field.
      *       <li><code>0</code> if the specified condition was not met.
-     *       <li><code>-2</code> if the field does not exist or the hash is empty.
+     *       <li><code>-2</code> if the field does not exist in the HASH, or HASH is empty.
      *       <li><code>2</code> when called with 0 seconds or past Unix time.
      *     </ul>
      *
@@ -1156,7 +1154,7 @@ public interface HashBaseCommands {
      *     <ul>
      *       <li><code>1</code> if the expiration time was successfully set for the field.
      *       <li><code>0</code> if the specified condition was not met.
-     *       <li><code>-2</code> if the field does not exist or the hash is empty.
+     *       <li><code>-2</code> if the field does not exist in the HASH, or HASH is empty.
      *       <li><code>2</code> when called with 0 seconds or past Unix time.
      *     </ul>
      *
@@ -1190,7 +1188,7 @@ public interface HashBaseCommands {
      *     <ul>
      *       <li><code>1</code> if the expiration time was successfully set for the field.
      *       <li><code>0</code> if the specified condition was not met.
-     *       <li><code>-2</code> if the field does not exist or the hash is empty.
+     *       <li><code>-2</code> if the field does not exist in the HASH, or HASH is empty.
      *       <li><code>2</code> when called with 0 seconds or past Unix time in milliseconds.
      *     </ul>
      *     If <code>unixMilliseconds</code> is in the past, the field will be deleted rather than
@@ -1225,7 +1223,7 @@ public interface HashBaseCommands {
      *     <ul>
      *       <li><code>1</code> if the expiration time was successfully set for the field.
      *       <li><code>0</code> if the specified condition was not met.
-     *       <li><code>-2</code> if the field does not exist or the hash is empty.
+     *       <li><code>-2</code> if the field does not exist in the HASH, or HASH is empty.
      *       <li><code>2</code> when called with 0 seconds or past Unix time in milliseconds.
      *     </ul>
      *     If <code>unixMilliseconds</code> is in the past, the field will be deleted rather than
@@ -1257,7 +1255,7 @@ public interface HashBaseCommands {
      *     <ul>
      *       <li>TTL in seconds if the field exists and has a timeout.
      *       <li><code>-1</code> if the field exists but has no associated expire.
-     *       <li><code>-2</code> if the field does not exist.
+     *       <li><code>-2</code> if the field does not exist in the provided hash key, or the hash key is empty.
      *     </ul>
      *
      * @example
@@ -1282,7 +1280,7 @@ public interface HashBaseCommands {
      *     <ul>
      *       <li>TTL in seconds if the field exists and has a timeout.
      *       <li><code>-1</code> if the field exists but has no associated expire.
-     *       <li><code>-2</code> if the field does not exist.
+     *       <li><code>-2</code> if the field does not exist in the provided hash key, or the hash key is empty.
      *     </ul>
      *
      * @example
@@ -1307,7 +1305,7 @@ public interface HashBaseCommands {
      *     <ul>
      *       <li>For fields with a timeout, returns the remaining TTL in milliseconds.
      *       <li>For fields that exist but have no associated expire, returns <code>-1</code>.
-     *       <li>For fields that do not exist, returns <code>-2</code>.
+     *       <li>For fields that do not exist in the provided hash key, or the hash key is empty, returns <code>-2</code>.
      *     </ul>
      *
      * @example
@@ -1332,7 +1330,7 @@ public interface HashBaseCommands {
      *     <ul>
      *       <li>For fields with a timeout, returns the remaining TTL in milliseconds.
      *       <li>For fields that exist but have no associated expire, returns <code>-1</code>.
-     *       <li>For fields that do not exist, returns <code>-2</code>.
+     *       <li>For fields that do not exist in the provided hash key, or the hash key is empty, returns <code>-2</code>.
      *     </ul>
      *
      * @example
@@ -1357,7 +1355,7 @@ public interface HashBaseCommands {
      *     <ul>
      *       <li>For fields with a timeout, returns the absolute Unix timestamp in seconds.
      *       <li>For fields that exist but have no associated expire, returns <code>-1</code>.
-     *       <li>For fields that do not exist, returns <code>-2</code>.
+     *       <li>For fields that do not exist in the provided hash key, or the hash key is empty, returns <code>-2</code>.
      *     </ul>
      *
      * @example
@@ -1382,7 +1380,7 @@ public interface HashBaseCommands {
      *     <ul>
      *       <li>For fields with a timeout, returns the absolute Unix timestamp in seconds.
      *       <li>For fields that exist but have no associated expire, returns <code>-1</code>.
-     *       <li>For fields that do not exist, returns <code>-2</code>.
+     *       <li>For fields that do not exist in the provided hash key, or the hash key is empty, returns <code>-2</code>.
      *     </ul>
      *
      * @example
@@ -1408,7 +1406,7 @@ public interface HashBaseCommands {
      *     <ul>
      *       <li>For fields with a timeout, returns the absolute Unix timestamp in milliseconds.
      *       <li>For fields that exist but have no associated expire, returns <code>-1</code>.
-     *       <li>For fields that do not exist, returns <code>-2</code>.
+     *       <li>For fields that do not exist in the provided hash key, or the hash key is empty, returns <code>-2</code>.
      *     </ul>
      *
      * @example
@@ -1434,7 +1432,7 @@ public interface HashBaseCommands {
      *     <ul>
      *       <li>For fields with a timeout, returns the absolute Unix timestamp in milliseconds.
      *       <li>For fields that exist but have no associated expire, returns <code>-1</code>.
-     *       <li>For fields that do not exist, returns <code>-2</code>.
+     *       <li>For fields that do not exist in the provided hash key, or the hash key is empty, returns <code>-2</code>.
      *     </ul>
      *
      * @example

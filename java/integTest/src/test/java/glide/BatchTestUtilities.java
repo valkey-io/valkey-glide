@@ -496,7 +496,8 @@ public class BatchTestUtilities {
                     concatenateArrays(
                             result,
                             new Object[] {
-                                1L, // hsetex(hashKey3, Map.of(field1, value1, field2, value2), expiryOptions) - returns 1 for success
+                                1L, // hsetex(hashKey3, Map.of(field1, value1, field2, value2), expiryOptions) -
+                                // returns 1 for success
                                 new Object[] {
                                     value1, value2
                                 }, // hgetex(hashKey3, new String[] {field1, field2}, expiryOptions)
@@ -512,7 +513,8 @@ public class BatchTestUtilities {
                                 }, // hexpireat(hashKey3, timestamp, new String[] {field1, field2}, options)
                                 new Object[] {
                                     -2L, -2L
-                                }, // hpexpireat(hashKey3, timestamp, new String[] {field1, field2}, options) - fields already expired
+                                }, // hpexpireat(hashKey3, timestamp, new String[] {field1, field2}, options) -
+                                // fields already expired
                                 new Object[] {
                                     -2L, -2L
                                 }, // httl(hashKey3, new String[] {field1, field2}) - fields expired (don't exist)
@@ -521,10 +523,12 @@ public class BatchTestUtilities {
                                 }, // hpttl(hashKey3, new String[] {field1, field2}) - fields expired (don't exist)
                                 new Object[] {
                                     -2L, -2L
-                                }, // hexpiretime(hashKey3, new String[] {field1, field2}) - fields expired (don't exist)
+                                }, // hexpiretime(hashKey3, new String[] {field1, field2}) - fields expired (don't
+                                // exist)
                                 new Object[] {
                                     -2L, -2L
-                                }, // hpexpiretime(hashKey3, new String[] {field1, field2}) - fields expired (don't exist)
+                                }, // hpexpiretime(hashKey3, new String[] {field1, field2}) - fields expired (don't
+                                // exist)
                             });
         }
 

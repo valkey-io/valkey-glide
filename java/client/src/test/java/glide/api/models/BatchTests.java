@@ -431,7 +431,7 @@ public class BatchTests {
                 Pair.of(
                         HSetEx,
                         buildArgs(
-                                "key", "XX", "FXX", "PX", "5000", "FIELDS", "2", "field1", "value1", "field2",
+                                "key", "FXX", "PX", "5000", "FIELDS", "2", "field1", "value1", "field2",
                                 "value2")));
 
         batch.hsetnx("key", "field", "value");
