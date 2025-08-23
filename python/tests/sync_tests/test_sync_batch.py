@@ -22,8 +22,13 @@ from glide_shared.commands.batch_options import (
 )
 from glide_shared.commands.command_args import OrderBy
 from glide_shared.commands.core_options import (
+    ExpiryGetEx,
+    ExpirySet,
+    ExpiryType,
+    ExpiryTypeGetEx,
     FlushMode,
     FunctionRestorePolicy,
+    HashFieldConditionalChange,
     InfoSection,
 )
 from glide_shared.commands.stream import StreamAddOptions
@@ -736,6 +741,7 @@ class TestSyncBatch:
             RequestError, match="Retry strategies are not supported for atomic batches"
         ):
             glide_sync_client.exec(batch, raise_on_error=True, options=options)
+
     @pytest.mark.skip_if_version_below("9.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -761,8 +767,9 @@ class TestSyncBatch:
         batch.httl(key, [non_existent_field])
         batch.httl(key, [field1, non_existent_field, field2])
 
-        result = exec_sync_batch(glide_sync_client, batch)
+        result = exec_batch(glide_sync_client, batch)
         assert result == [[-2], [-1, -1, -1], [-2], [-1, -2, -1]]
+
     @pytest.mark.skip_if_version_below("9.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -788,8 +795,9 @@ class TestSyncBatch:
         batch.hpttl(key, [non_existent_field])
         batch.hpttl(key, [field1, non_existent_field, field2])
 
-        result = exec_sync_batch(glide_sync_client, batch)
+        result = exec_batch(glide_sync_client, batch)
         assert result == [[-2], [-1, -1, -1], [-2], [-1, -2, -1]]
+
     @pytest.mark.skip_if_version_below("9.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -815,7 +823,7 @@ class TestSyncBatch:
         batch.hexpiretime(key, [non_existent_field])
         batch.hexpiretime(key, [field1, non_existent_field, field2])
 
-        result = exec_sync_batch(glide_sync_client, batch)
+        result = exec_batch(glide_sync_client, batch)
         assert result == [[-2], [-1, -1, -1], [-2], [-1, -2, -1]]
 
         # Test with actual expiration timestamps
@@ -837,8 +845,11 @@ class TestSyncBatch:
         )
         batch.hexpiretime(key, [field1])
 
-        result = exec_sync_batch(glide_sync_client, batch)
+        result = exec_batch(glide_sync_client, batch)
+        assert result is not None
+        assert isinstance(result[0], list)
         assert result[0][0] == future_timestamp
+
     @pytest.mark.skip_if_version_below("9.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -864,7 +875,7 @@ class TestSyncBatch:
         batch.hpexpiretime(key, [non_existent_field])
         batch.hpexpiretime(key, [field1, non_existent_field, field2])
 
-        result = exec_sync_batch(glide_sync_client, batch)
+        result = exec_batch(glide_sync_client, batch)
         assert result == [[-2], [-1, -1, -1], [-2], [-1, -2, -1]]
 
         # Test with actual expiration timestamps
@@ -886,8 +897,11 @@ class TestSyncBatch:
         )
         batch.hpexpiretime(key, [field1])
 
-        result = exec_sync_batch(glide_sync_client, batch)
+        result = exec_batch(glide_sync_client, batch)
+        assert result is not None
+        assert isinstance(result[0], list)
         assert result[0][0] == future_timestamp_ms
+
     @pytest.mark.skip_if_version_below("9.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -896,7 +910,6 @@ class TestSyncBatch:
         key2 = get_random_string(10)
         field1 = get_random_string(5)
         field2 = get_random_string(5)
-        field3 = get_random_string(5)
 
         batch = (
             Batch(is_atomic=False)
@@ -917,7 +930,7 @@ class TestSyncBatch:
             expiry=ExpirySet(ExpiryType.SEC, 10),
         )
 
-        result = exec_sync_batch(glide_sync_client, batch)
+        result = exec_batch(glide_sync_client, batch)
         assert result == [1, 1]
 
         # Verify fields were set
@@ -930,6 +943,7 @@ class TestSyncBatch:
         assert all(0 < ttl <= 10 for ttl in ttl_result1)
         ttl_result2 = glide_sync_client.httl(key2, [field1])
         assert all(0 < ttl <= 10 for ttl in ttl_result2)
+
     @pytest.mark.skip_if_version_below("9.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -962,7 +976,8 @@ class TestSyncBatch:
         # Test HGETEX with PERSIST option (remove expiration)
         batch.hgetex(key2, [field1], expiry=ExpiryGetEx(ExpiryTypeGetEx.PERSIST, None))
 
-        result = exec_sync_batch(glide_sync_client, batch)
+        result = exec_batch(glide_sync_client, batch)
+        assert result is not None
         assert result[0] == [b"value1", b"value2"]
         assert result[1] == [b"value1", None]
         assert result[2] == [b"value1"]
@@ -971,6 +986,7 @@ class TestSyncBatch:
         # Verify expiration was set and then removed
         ttl_result = glide_sync_client.httl(key2, [field1])
         assert ttl_result[0] == -1  # -1 indicates no expiration
+
     @pytest.mark.skip_if_version_below("9.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -1007,7 +1023,7 @@ class TestSyncBatch:
         # Test HEXPIRE with mixed existing and non-existent fields
         batch.hexpire(key2, 20, [field1, non_existent_field, field3])
 
-        result = exec_sync_batch(glide_sync_client, batch)
+        result = exec_batch(glide_sync_client, batch)
         assert result == [[-2], [1, 1], [-2], [1, -2, 1]]
 
         # Verify expiration was set using HTTL
@@ -1015,6 +1031,7 @@ class TestSyncBatch:
         assert all(0 < ttl <= 10 for ttl in ttl_result1)
         ttl_result2 = glide_sync_client.httl(key2, [field1, field3])
         assert all(0 < ttl <= 20 for ttl in ttl_result2)
+
     @pytest.mark.skip_if_version_below("9.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -1051,7 +1068,7 @@ class TestSyncBatch:
         # Test HPEXPIRE with mixed existing and non-existent fields
         batch.hpexpire(key2, 20000, [field1, non_existent_field, field3])
 
-        result = exec_sync_batch(glide_sync_client, batch)
+        result = exec_batch(glide_sync_client, batch)
         assert result == [[-2], [1, 1], [-2], [1, -2, 1]]
 
         # Verify expiration was set using HTTL (convert to seconds for comparison)
@@ -1059,6 +1076,7 @@ class TestSyncBatch:
         assert all(0 < ttl <= 10 for ttl in ttl_result1)
         ttl_result2 = glide_sync_client.httl(key2, [field1, field3])
         assert all(0 < ttl <= 20 for ttl in ttl_result2)
+
     @pytest.mark.skip_if_version_below("9.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -1100,7 +1118,7 @@ class TestSyncBatch:
         future_timestamp2 = int(time.time()) + 45
         batch.hexpireat(key2, future_timestamp2, [field1, non_existent_field, field3])
 
-        result = exec_sync_batch(glide_sync_client, batch)
+        result = exec_batch(glide_sync_client, batch)
         assert result == [[-2], [1, 1], [-2], [1, -2, 1]]
 
         # Verify expiration was set using HTTL
@@ -1108,6 +1126,7 @@ class TestSyncBatch:
         assert all(0 < ttl <= 30 for ttl in ttl_result1)
         ttl_result2 = glide_sync_client.httl(key2, [field1, field3])
         assert all(0 < ttl <= 45 for ttl in ttl_result2)
+
     @pytest.mark.skip_if_version_below("9.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -1147,9 +1166,11 @@ class TestSyncBatch:
 
         # Test HPEXPIREAT with mixed existing and non-existent fields
         future_timestamp_ms2 = int(time.time() * 1000) + 45000
-        batch.hpexpireat(key2, future_timestamp_ms2, [field1, non_existent_field, field3])
+        batch.hpexpireat(
+            key2, future_timestamp_ms2, [field1, non_existent_field, field3]
+        )
 
-        result = exec_sync_batch(glide_sync_client, batch)
+        result = exec_batch(glide_sync_client, batch)
         assert result == [[-2], [1, 1], [-2], [1, -2, 1]]
 
         # Verify expiration was set using HTTL (should be around 30 and 45 seconds)
@@ -1157,6 +1178,7 @@ class TestSyncBatch:
         assert all(0 < ttl <= 30 for ttl in ttl_result1)
         ttl_result2 = glide_sync_client.httl(key2, [field1, field3])
         assert all(0 < ttl <= 45 for ttl in ttl_result2)
+
     @pytest.mark.skip_if_version_below("9.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -1200,7 +1222,7 @@ class TestSyncBatch:
         # Test HPERSIST on non-existent field
         batch.hpersist(key1, [non_existent_field])
 
-        result = exec_sync_batch(glide_sync_client, batch)
+        result = exec_batch(glide_sync_client, batch)
         assert result == [[-2], [-1, -1], [1, 1], [-2]]
 
         # Verify expiration was removed using HTTL
