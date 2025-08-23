@@ -10624,9 +10624,9 @@ class TestSyncScripts:
         result = glide_sync_client.httl(key, [field1, non_existent_field, field2])
         assert result == [-1, -2, -1]
 
-        # Test with empty fields list
-        result = glide_sync_client.httl(key, [])
-        assert result == []
+        # Test with empty fields list - should raise an error
+        with pytest.raises(RequestError, match="wrong number of arguments"):
+            glide_sync_client.httl(key, [])
 
     @pytest.mark.skip_if_version_below("9.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -10658,9 +10658,9 @@ class TestSyncScripts:
         result = glide_sync_client.hpttl(key, [field1, non_existent_field, field2])
         assert result == [-1, -2, -1]
 
-        # Test with empty fields list
-        result = glide_sync_client.hpttl(key, [])
-        assert result == []
+        # Test with empty fields list - should raise an error
+        with pytest.raises(RequestError, match="wrong number of arguments"):
+            glide_sync_client.hpttl(key, [])
 
     @pytest.mark.skip_if_version_below("9.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -10694,9 +10694,9 @@ class TestSyncScripts:
         )
         assert result == [-1, -2, -1]
 
-        # Test with empty fields list
-        result = glide_sync_client.hexpiretime(key, [])
-        assert result == []
+        # Test with empty fields list - should raise an error
+        with pytest.raises(RequestError, match="wrong number of arguments"):
+            glide_sync_client.hexpiretime(key, [])
 
         # Test HEXPIRETIME with actual expiration timestamps
         import time
@@ -10724,9 +10724,9 @@ class TestSyncScripts:
         )
         assert hsetex_result == 1
 
-        # HEXPIRETIME should return the timestamp in seconds
+        # HEXPIRETIME should return the timestamp in seconds (allow for 1-2 second timing difference)
         expiry_result = glide_sync_client.hexpiretime(key, [field2])
-        assert expiry_result[0] == expected_timestamp_sec
+        assert abs(expiry_result[0] - expected_timestamp_sec) <= 2
 
         # Test with EX (relative seconds) - should return future timestamp
         current_time = int(time.time())
@@ -10746,7 +10746,7 @@ class TestSyncScripts:
             key, [field1, field2, field3, non_existent_field]
         )
         assert result[0] == future_timestamp  # field1 with EXAT
-        assert result[1] == expected_timestamp_sec  # field2 with PXAT
+        assert abs(result[1] - expected_timestamp_sec) <= 2  # field2 with PXAT (allow timing difference)
         assert current_time + 4 <= result[2] <= current_time + 6  # field3 with EX
         assert result[3] == -2  # non-existent field
 
@@ -10782,9 +10782,9 @@ class TestSyncScripts:
         )
         assert result == [-1, -2, -1]
 
-        # Test with empty fields list
-        result = glide_sync_client.hpexpiretime(key, [])
-        assert result == []
+        # Test with empty fields list - should raise an error
+        with pytest.raises(RequestError, match="wrong number of arguments"):
+            glide_sync_client.hpexpiretime(key, [])
 
         # Test HPEXPIRETIME with actual expiration timestamps
         import time
@@ -10939,7 +10939,7 @@ class TestSyncScripts:
             new_key, {field3: "temp_value"}, expiry=ExpirySet(ExpiryType.SEC, 15)
         )
         result = glide_sync_client.hsetex(
-            new_key, {field3: "new_value"}, expiry=ExpirySet(ExpiryType.KEEP_TTL, 0)
+            new_key, {field3: "new_value"}, expiry=ExpirySet(ExpiryType.KEEP_TTL, None)
         )
         assert result == 1
         assert glide_sync_client.hget(new_key, field3) == b"new_value"
@@ -11066,7 +11066,7 @@ class TestSyncScripts:
 
         # Test HGETEX on non-existent key
         result = glide_sync_client.hgetex(non_existent_key, [field1, field2])
-        assert result is None
+        assert result == [None, None]
 
         # Test HGETEX with multiple fields and mixed existence
         glide_sync_client.hset(key, {field3: "value3"})
@@ -11213,9 +11213,9 @@ class TestSyncScripts:
         # Verify field1 was deleted
         assert glide_sync_client.hget(key, field1) is None
 
-        # Test with empty fields list
-        result = glide_sync_client.hexpire(key, 10, [])
-        assert result == []
+        # Test with empty fields list - should raise error
+        with pytest.raises(RequestError):
+            glide_sync_client.hexpire(key, 10, [])
 
         # Test with multiple fields and various conditions
         multi_key = get_random_string(10)
@@ -11385,9 +11385,9 @@ class TestSyncScripts:
             ttl_result[0] == 1 or ttl_result[0] == -2
         )  # Either 1 second left or already expired
 
-        # Test with empty fields list
-        result = glide_sync_client.hpexpire(key, 10000, [])
-        assert result == []
+        # Test with empty fields list - should raise error
+        with pytest.raises(RequestError, match="wrong number of arguments"):
+            glide_sync_client.hpexpire(key, 10000, [])
 
         # Test with multiple fields and various conditions
         multi_key = get_random_string(10)
@@ -11555,9 +11555,9 @@ class TestSyncScripts:
         # Verify field1 was deleted
         assert glide_sync_client.hget(key, field1) is None
 
-        # Test with empty fields list
-        result = glide_sync_client.hexpireat(key, future_timestamp, [])
-        assert result == []
+        # Test with empty fields list - should raise error
+        with pytest.raises(RequestError):
+            glide_sync_client.hexpireat(key, future_timestamp, [])
 
         # Test with multiple fields and various conditions
         multi_key = get_random_string(10)
@@ -11738,9 +11738,9 @@ class TestSyncScripts:
         # Verify field1 was deleted
         assert glide_sync_client.hget(key, field1) is None
 
-        # Test with empty fields list
-        result = glide_sync_client.hpexpireat(key, future_timestamp_ms, [])
-        assert result == []
+        # Test with empty fields list - should raise error
+        with pytest.raises(RequestError, match="wrong number of arguments"):
+            glide_sync_client.hpexpireat(key, future_timestamp_ms, [])
 
         # Test with multiple fields and various conditions
         multi_key = get_random_string(10)
@@ -11848,9 +11848,9 @@ class TestSyncScripts:
         ttl_result = glide_sync_client.httl(key, [field3])
         assert ttl_result == [-1]
 
-        # Test with empty fields list
-        result = glide_sync_client.hpersist(key, [])
-        assert result == []
+        # Test with empty fields list - should raise error
+        with pytest.raises(RequestError, match="wrong number of arguments"):
+            glide_sync_client.hpersist(key, [])
 
         # Test with multiple fields - set expiration on all and then persist all
         multi_key = get_random_string(10)

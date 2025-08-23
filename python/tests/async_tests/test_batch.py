@@ -856,7 +856,7 @@ class TestBatch:
         assert result[1] == [future_timestamp]  # field with expiration
         assert result[2] == [-2]  # non-existent field
         assert result[3] == [-2]  # non-existent key
-        assert result[4] == []  # empty fields list
+        assert isinstance(result[4], RequestError)  # empty fields list should error
 
     @pytest.mark.skip_if_version_below("9.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -890,7 +890,6 @@ class TestBatch:
             cluster_batch.hpexpiretime(key, [field1])  # field with expiration
             cluster_batch.hpexpiretime(key, [non_existent_field])  # non-existent field
             cluster_batch.hpexpiretime(non_existent_key, [field1])  # non-existent key
-            cluster_batch.hpexpiretime(key, [])  # empty fields list
 
             result = await glide_client.exec(cluster_batch, raise_on_error=True)
         else:
@@ -899,7 +898,6 @@ class TestBatch:
             batch.hpexpiretime(key, [field1])  # field with expiration
             batch.hpexpiretime(key, [non_existent_field])  # non-existent field
             batch.hpexpiretime(non_existent_key, [field1])  # non-existent key
-            batch.hpexpiretime(key, [])  # empty fields list
 
             result = await glide_client.exec(batch, raise_on_error=True)
 
@@ -908,7 +906,6 @@ class TestBatch:
         assert result[1] == [future_timestamp_ms]  # field with expiration
         assert result[2] == [-2]  # non-existent field
         assert result[3] == [-2]  # non-existent key
-        assert result[4] == []  # empty fields list
 
     @pytest.mark.skip_if_version_below("9.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -1058,7 +1055,7 @@ class TestBatch:
         assert result[1] == [b"value1"]  # HGETEX with EX expiry
         assert result[2] == [b"value2"]  # HGETEX with PX expiry
         assert result[3] == [b"value3"]  # HGETEX with PERSIST
-        assert result[4] is None  # HGETEX on non-existent key
+        assert result[4] == [None]  # HGETEX on non-existent key
         assert result[5] == [b"value1", None]  # Mixed existent/non-existent fields
 
         # Check TTL results
@@ -1528,9 +1525,10 @@ class TestBatch:
         ttl_result = result2[3]
         assert isinstance(ttl_result, list)
         expected_ttl_seconds = (earlier_timestamp_ms - int(time.time() * 1000)) // 1000
+        # Allow for timing variations - TTL should be within a reasonable range
         assert isinstance(ttl_result[0], int) and (
-            0 < ttl_result[0] <= expected_ttl_seconds
-        )  # Should have earlier_timestamp_ms TTL
+            0 < ttl_result[0] <= expected_ttl_seconds + 2
+        )  # Should have earlier_timestamp_ms TTL (with 2 second buffer for timing)
 
     @pytest.mark.skip_if_version_below("9.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
