@@ -128,26 +128,26 @@ export function createGetRange(
 
 export type SetOptions = (
     | {
-        /**
-         * `onlyIfDoesNotExist` - Only set the key if it does not already exist.
-         * `NX` in the Valkey API.
-         *
-         * `onlyIfExists` - Only set the key if it already exists.
-         * `EX` in the Valkey API.
-         */
-        conditionalSet?: "onlyIfExists" | "onlyIfDoesNotExist";
-    }
+          /**
+           * `onlyIfDoesNotExist` - Only set the key if it does not already exist.
+           * `NX` in the Valkey API.
+           *
+           * `onlyIfExists` - Only set the key if it already exists.
+           * `EX` in the Valkey API.
+           */
+          conditionalSet?: "onlyIfExists" | "onlyIfDoesNotExist";
+      }
     | {
-        /**
-         * `onlyIfEqual` - Only set the key if the comparison value equals the current value of key.
-         * `IFEQ` in the Valkey API.
-         */
-        conditionalSet: "onlyIfEqual";
-        /**
-         * The value to compare the existing value with.
-         */
-        comparisonValue: GlideString;
-    }
+          /**
+           * `onlyIfEqual` - Only set the key if the comparison value equals the current value of key.
+           * `IFEQ` in the Valkey API.
+           */
+          conditionalSet: "onlyIfEqual";
+          /**
+           * The value to compare the existing value with.
+           */
+          comparisonValue: GlideString;
+      }
 ) & {
     /**
      * Return the old string stored at key, or nil if key did not exist. An error
@@ -175,11 +175,11 @@ export type SetOptions = (
      * Equivalent to `KEEPTTL` in the Valkey API.
      */
     expiry?:
-    | "keepExisting"
-    | {
-        type: TimeUnit;
-        count: number;
-    };
+        | "keepExisting"
+        | {
+              type: TimeUnit;
+              count: number;
+          };
 };
 
 /**
@@ -513,14 +513,6 @@ export function createHSetEx(
     options?: HSetExOptions,
 ): command_request.Command {
     const args: GlideString[] = [key];
-
-    // HSETEX does not support hash-level conditional changes (NX | XX)
-    // Only field-level conditional changes (FNX | FXX) are supported
-    if (options?.conditionalChange) {
-        throw new Error(
-            `HSETEX does not support hash-level conditional changes (${options.conditionalChange}). Use fieldConditionalChange instead.`,
-        );
-    }
 
     // Add field conditional change options (FNX | FXX)
     if (options?.fieldConditionalChange) {
@@ -1744,7 +1736,7 @@ export function createZAdd(
         if (options.conditionalChange) {
             if (
                 options.conditionalChange ===
-                ConditionalChange.ONLY_IF_DOES_NOT_EXIST &&
+                    ConditionalChange.ONLY_IF_DOES_NOT_EXIST &&
                 options.updateOptions
             ) {
                 throw new Error(
@@ -2020,15 +2012,15 @@ export type Boundary<T> =
      *  Represents a specific boundary.
      */
     | {
-        /**
-         * The comparison value.
-         */
-        value: T;
-        /**
-         * Whether the value is inclusive. Defaults to `true`.
-         */
-        isInclusive?: boolean;
-    };
+          /**
+           * The comparison value.
+           */
+          value: T;
+          /**
+           * Whether the value is inclusive. Defaults to `true`.
+           */
+          isInclusive?: boolean;
+      };
 
 /**
  * Represents a range by index (rank) in a sorted set.
@@ -2395,21 +2387,21 @@ export function createZRank(
 
 export type StreamTrimOptions = (
     | {
-        /**
-         * Trim the stream according to entry ID.
-         * Equivalent to `MINID` in the Valkey API.
-         */
-        method: "minid";
-        threshold: GlideString;
-    }
+          /**
+           * Trim the stream according to entry ID.
+           * Equivalent to `MINID` in the Valkey API.
+           */
+          method: "minid";
+          threshold: GlideString;
+      }
     | {
-        /**
-         * Trim the stream according to length.
-         * Equivalent to `MAXLEN` in the Valkey API.
-         */
-        method: "maxlen";
-        threshold: number;
-    }
+          /**
+           * Trim the stream according to length.
+           * Equivalent to `MAXLEN` in the Valkey API.
+           */
+          method: "maxlen";
+          threshold: number;
+      }
 ) & {
     /**
      * If `true`, the stream will be trimmed exactly. Equivalent to `=` in the
@@ -3551,9 +3543,9 @@ export enum HashFieldConditionalChange {
  */
 export type ExpirySet =
     | {
-        type: TimeUnit;
-        count: number;
-    }
+          type: TimeUnit;
+          count: number;
+      }
     | "KEEPTTL";
 
 /**
@@ -3562,12 +3554,6 @@ export type ExpirySet =
  * See https://valkey.io/commands/hsetex/ for more details.
  */
 export interface HSetExOptions {
-    /** 
-     * Options for handling existing hash objects. See {@link ConditionalChange}.
-     * Note: HSETEX does not support hash-level conditional changes (NX/XX).
-     * Use fieldConditionalChange for field-level conditions instead.
-     */
-    conditionalChange?: ConditionalChange;
     /** Options for handling existing fields. See {@link HashFieldConditionalChange}. */
     fieldConditionalChange?: HashFieldConditionalChange;
     /** Expiry settings for the fields. See {@link ExpirySet}. */

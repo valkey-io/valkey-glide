@@ -18,7 +18,6 @@ import {
     BitmapIndexType,
     BitwiseOperation,
     ClusterBatch,
-    ConditionalChange,
     Decoder,
     FlushMode,
     FunctionListResponse,
@@ -1178,17 +1177,16 @@ export async function batchTest(
             1,
         ]);
 
-        // Test HSETEX with conditional changes
+        // Test HSETEX with basic expiry
         baseBatch.hsetex(
             key4,
             { [field3.toString()]: value },
             {
-                conditionalChange: ConditionalChange.ONLY_IF_EXISTS,
                 expiry: { type: TimeUnit.Seconds, count: 60 },
             },
         );
         responseData.push([
-            "hsetex(key4, { [field3]: value }, { conditionalChange: ConditionalChange.ONLY_IF_EXISTS, expiry: { type: TimeUnit.Seconds, count: 60 } })",
+            "hsetex(key4, { [field3]: value }, { expiry: { type: TimeUnit.Seconds, count: 60 } })",
             1,
         ]);
 

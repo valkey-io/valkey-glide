@@ -1057,7 +1057,6 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * @param key - The key of the hash.
      * @param fieldsAndValues - A map or array of field-value pairs to set in the hash.
      * @param options - (Optional) Additional parameters:
-     *   - `conditionalChange`: Options for handling existing hash objects (NX | XX).
      *   - `fieldConditionalChange`: Options for handling existing fields (FNX | FXX).
      *   - `expiry`: Expiry settings for the fields (EX | PX | EXAT | PXAT | KEEPTTL).
      *
