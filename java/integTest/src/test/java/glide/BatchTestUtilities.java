@@ -423,6 +423,7 @@ public class BatchTestUtilities {
                             .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
                             .build();
 
+            // Hash field expiration commands (Valkey 9.0.0+)
             batch
                     .hsetex(hashKey3, Map.of(field1, value1, field2, value2), expiryOptions)
                     .hgetex(hashKey3, new String[] {field1, field2}, expiryOptions)
@@ -439,12 +440,12 @@ public class BatchTestUtilities {
                             HashFieldExpirationOptions.builder().build())
                     .hexpireat(
                             hashKey3,
-                            System.currentTimeMillis() / 1000 + 60,
+                            42, // expire immediately (timestamp in the past)
                             new String[] {field1, field2},
                             HashFieldExpirationOptions.builder().build())
                     .hpexpireat(
                             hashKey3,
-                            System.currentTimeMillis() + 60000,
+                            42, // expire immediately (timestamp in the past)
                             new String[] {field1, field2},
                             HashFieldExpirationOptions.builder().build())
                     .httl(hashKey3, new String[] {field1, field2})
@@ -490,41 +491,40 @@ public class BatchTestUtilities {
 
         // Add expected results for hash field expiration commands (Valkey 9.0.0+)
         if (SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0")) {
+            // Expected results for hash field expiration commands
             result =
                     concatenateArrays(
                             result,
                             new Object[] {
-                                2L, // hsetex(hashKey3, Map.of(field1, value1, field2, value2), expiryOptions)
-                                new String[] {
+                                1L, // hsetex(hashKey3, Map.of(field1, value1, field2, value2), expiryOptions) - returns 1 for success
+                                new Object[] {
                                     value1, value2
                                 }, // hgetex(hashKey3, new String[] {field1, field2}, expiryOptions)
-                                new Long[] {
+                                new Object[] {
                                     1L, 1L
                                 }, // hexpire(hashKey3, 60L, new String[] {field1, field2}, options)
-                                new Long[] {1L, 1L}, // hpersist(hashKey3, new String[] {field1, field2})
-                                new Long[] {
+                                new Object[] {1L, 1L}, // hpersist(hashKey3, new String[] {field1, field2})
+                                new Object[] {
                                     1L, 1L
                                 }, // hpexpire(hashKey3, 60000L, new String[] {field1, field2}, options)
-                                new Long[] {
-                                    1L, 1L
+                                new Object[] {
+                                    2L, 2L
                                 }, // hexpireat(hashKey3, timestamp, new String[] {field1, field2}, options)
+                                new Object[] {
+                                    -2L, -2L
+                                }, // hpexpireat(hashKey3, timestamp, new String[] {field1, field2}, options) - fields already expired
+                                new Object[] {
+                                    -2L, -2L
+                                }, // httl(hashKey3, new String[] {field1, field2}) - fields expired (don't exist)
                                 new Long[] {
-                                    1L, 1L
-                                }, // hpexpireat(hashKey3, timestamp, new String[] {field1, field2}, options)
-                                new Long[] {
-                                    -1L, -1L
-                                }, // httl(hashKey3, new String[] {field1, field2}) - persistent after hpersist
-                                new Long[] {
-                                    -1L, -1L
-                                }, // hpttl(hashKey3, new String[] {field1, field2}) - persistent after hpersist
-                                new Long[] {
-                                    -1L, -1L
-                                }, // hexpiretime(hashKey3, new String[] {field1, field2}) - persistent after
-                                // hpersist
-                                new Long[] {
-                                    -1L, -1L
-                                }, // hpexpiretime(hashKey3, new String[] {field1, field2}) - persistent after
-                                // hpersist
+                                    -2L, -2L
+                                }, // hpttl(hashKey3, new String[] {field1, field2}) - fields expired (don't exist)
+                                new Object[] {
+                                    -2L, -2L
+                                }, // hexpiretime(hashKey3, new String[] {field1, field2}) - fields expired (don't exist)
+                                new Object[] {
+                                    -2L, -2L
+                                }, // hpexpiretime(hashKey3, new String[] {field1, field2}) - fields expired (don't exist)
                             });
         }
 
