@@ -10762,7 +10762,9 @@ class TestScripts:
             key, [field1, field2, field3, non_existent_field]
         )
         assert result[0] == future_timestamp  # field1 with EXAT
-        assert abs(result[1] - expected_timestamp_sec) <= 2  # field2 with PXAT (allow timing difference)
+        assert (
+            abs(result[1] - expected_timestamp_sec) <= 2
+        )  # field2 with PXAT (allow timing difference)
         assert current_time + 4 <= result[2] <= current_time + 6  # field3 with EX
         assert result[3] == -2  # non-existent field
 
