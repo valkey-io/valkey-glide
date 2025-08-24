@@ -43,10 +43,10 @@ echo 'export PATH="$PATH:$HOME/.local/bin"' >> ~/.bashrc
 protoc --version  # Should show: libprotoc 29.1
 
 # Install Valkey/Redis server (REQUIRED for tests)
-sudo apt-get update && sudo apt-get install -y redis-server
+sudo apt-get update && sudo apt-get install -y valkey-server
 
 # Verify server installation  
-redis-server --version
+valkey-server --version
 ```
 
 ### Go Development
@@ -184,8 +184,8 @@ cd csharp && dotnet build && echo "Build successful"
 **ONLY run if you have Valkey/Redis server running:**
 
 ```bash
-# Start Redis server in background
-redis-server --daemonize yes
+# Start Valkey server in background
+valkey-server --daemonize yes
 
 # Test your language (examples)
 cd go && make unit-test  # TIMEOUT: 30+ minutes
@@ -208,7 +208,7 @@ export PATH="$PATH:$HOME/.local/bin:$HOME/go/bin"
 - **Build fails with "zig not found"**: Run `pip3 install ziglang`
 
 ### Build Failures
-- **"No Valkey/Redis server"**: Install redis-server for tests
+- **"No Valkey/Redis server"**: Install valkey-server for tests
 - **Rust compilation errors**: Ensure Rust toolchain is up to date
 - **Permission errors**: Check file permissions in project directory
 
@@ -291,7 +291,7 @@ cd glide-core && cargo fmt --all -- --check
 5. Check disk space and memory availability
 
 ### If Tests Fail
-1. Ensure Valkey/Redis server is running: `redis-server --daemonize yes`
+1. Ensure Valkey/Redis server is running: `valkey-server --daemonize yes`
 2. Check no other Redis instances are running on default port
 3. Verify network connectivity if using external endpoints
 4. Run individual test suites to isolate issues
