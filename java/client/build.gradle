@@ -102,7 +102,13 @@ tasks.register('cleanRust') {
 }
 
 tasks.register('buildRust', Exec) {
-    if (osdetector.os == 'linux' && osdetector.release.id != 'alpine') {
+    if (project.hasProperty('target')) {
+        target = project.target
+        commandLine 'cargo', 'zigbuild', '--target', target, '--release'
+        if(target.contains("musl")) {
+            environment RUSTFLAGS: '-C target-feature=-crt-static'
+        }
+    } else if (osdetector.os == 'linux' && osdetector.release.id != 'alpine') {
         commandLine 'cargo', 'zigbuild', '--target', "${arch}-unknown-linux-gnu.2.17", '--release'
     } else if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
         commandLine 'cargo', 'zigbuild', '--target', "${arch}-unknown-linux-musl", '--release'
@@ -115,7 +121,13 @@ tasks.register('buildRust', Exec) {
 }
 
 tasks.register('buildRustFfi', Exec) {
-    if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
+    if (project.hasProperty('target')) {
+        target = project.target
+        commandLine 'cargo', 'zigbuild', '--target', target, '--release'
+        if(target.contains("musl")) {
+            environment RUSTFLAGS: '--cfg ffi_test -C target-feature=-crt-static'
+        }
+    } else if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
         commandLine 'cargo', 'zigbuild', '--target', "${arch}-unknown-linux-musl", '--release'
         environment RUSTFLAGS: '--cfg ffi_test -C target-feature=-crt-static'
     } else {
@@ -149,7 +161,10 @@ compileJava.dependsOn('protobuf')
 clean.dependsOn('cleanProtobuf', 'cleanRust')
 
 tasks.register('copyNativeLib', Copy) {
-    if (osdetector.os == 'linux' && osdetector.release.id != 'alpine') {
+    if (project.hasProperty('target')) {
+        target = project.target
+        from "${projectDir}/../target/${target}/release/"
+    } else if (osdetector.os == 'linux' && osdetector.release.id != 'alpine') {
         from "${projectDir}/../target/${arch}-unknown-linux-gnu/release/"
     } else if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
         from "${projectDir}/../target/${arch}-unknown-linux-musl/release/"
