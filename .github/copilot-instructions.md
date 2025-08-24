@@ -2,9 +2,17 @@
 
 **ALWAYS follow these instructions first. Only use search or additional context gathering if the information here is incomplete or found to be in error.**
 
-Valkey GLIDE is a multi-language client library for Valkey and Redis with support for Java, Python, Node.js, Go, and C#. The project uses a shared Rust core (`glide-core`) with Foreign Function Interface (`ffi`) bindings and language-specific wrappers.
+Valkey GLIDE is a multi-language client library for Valkey and Redis. This repository contains support for Java, Python, Node.js, and Go. The project uses a shared Rust core (`glide-core`) with Foreign Function Interface (`ffi`) bindings and language-specific wrappers.
+
+**Additional Language Support** (in separate repositories):
+- **C#**: [valkey-io/valkey-glide-csharp](https://github.com/valkey-io/valkey-glide-csharp) - Under active development
+- **PHP**: [valkey-io/valkey-glide-php](https://github.com/valkey-io/valkey-glide-php) - Under active development  
+- **Ruby**: [valkey-io/valkey-glide-ruby](https://github.com/valkey-io/valkey-glide-ruby) - Under active development
+- **C++**: [valkey-io/valkey-glide-cpp](https://github.com/valkey-io/valkey-glide-cpp) - Under active development
 
 ## Working Effectively
+
+**FOCUS ON SINGLE LANGUAGE**: Usually you're better off working per language, as the codebase is enormous. Unless required for similar use cases, focus only on the specific language you're working with plus the shared Glide Core when needed.
 
 ### Root-Level Build Orchestration
 
@@ -42,7 +50,7 @@ echo 'export PATH="$PATH:$HOME/.local/bin"' >> ~/.bashrc
 # Verify protoc installation
 protoc --version  # Should show: libprotoc 29.1
 
-# Install Valkey/Redis server (REQUIRED for tests)
+# Install Valkey server (REQUIRED for tests)
 sudo apt-get update && sudo apt-get install -y valkey-server
 
 # Verify server installation  
@@ -89,7 +97,7 @@ cd ..
 # Build - NEVER CANCEL: Release build takes 3-4 minutes, dev build takes ~2 minutes
 npm run build:release  # TIMEOUT: Set 5+ minutes (optimized for production)
 # OR for development (faster, unoptimized build)
-npm run build  # TIMEOUT: Set 3+ minutes
+npm run build  # TIMEOUT: Set 3+ minutes (also works for standard builds)
 
 # Run tests - NEVER CANCEL: Takes 10-15 minutes  
 npm test  # TIMEOUT: Set 20+ minutes
@@ -97,6 +105,10 @@ npm test  # TIMEOUT: Set 20+ minutes
 # Run linters (always run before committing)
 npm run lint
 npm run prettier:check
+
+# Fix linting and formatting issues
+npm run lint:fix
+npm run prettier:write
 ```
 
 ### Python Development
@@ -130,19 +142,7 @@ cd java
 ./gradlew spotlessApply
 ```
 
-### C# Development
-
-```bash
-# Build C# client
-cd csharp
-dotnet build  # TIMEOUT: Set 10+ minutes
-
-# Run tests - NEVER CANCEL: Takes 10-20 minutes
-dotnet test  # TIMEOUT: Set 25+ minutes
-
-# Run linters
-dotnet format --verify-no-changes --verbosity diagnostic
-```
+**Note**: C# support has been moved to a separate repository: [valkey-io/valkey-glide-csharp](https://github.com/valkey-io/valkey-glide-csharp)
 
 ## Build Time Expectations
 
@@ -154,7 +154,6 @@ dotnet format --verify-no-changes --verbosity diagnostic
 | Node.js | 3-4 minutes | 1-2 minutes | 10-15 minutes | 20+ minutes |
 | Python | 7-10 minutes | 3-5 minutes | 20-30 minutes | 45+ minutes |
 | Java | 10-15 minutes | 2-5 minutes | 15-25 minutes | 30+ minutes |
-| C# | 5-10 minutes | 1-3 minutes | 10-20 minutes | 25+ minutes |
 
 **Why builds are slow**: The first build compiles the entire Rust core (`glide-core`) and FFI layer from scratch. Subsequent builds are much faster due to caching.
 
@@ -175,13 +174,10 @@ cd python && python3 dev.py build --mode debug && echo "Build successful"
 
 # Java validation
 cd java && ./gradlew build -x test -x javadoc && echo "Build successful"
-
-# C# validation
-cd csharp && dotnet build && echo "Build successful"
 ```
 
 ### Integration Test Validation
-**ONLY run if you have Valkey/Redis server running:**
+**ONLY run if you have valkey-server running:**
 
 ```bash
 # Start Valkey server in background
@@ -208,7 +204,7 @@ export PATH="$PATH:$HOME/.local/bin:$HOME/go/bin"
 - **Build fails with "zig not found"**: Run `pip3 install ziglang`
 
 ### Build Failures
-- **"No Valkey/Redis server"**: Install valkey-server for tests
+- **"No valkey-server"**: Install valkey-server for tests
 - **Rust compilation errors**: Ensure Rust toolchain is up to date
 - **Permission errors**: Check file permissions in project directory
 
@@ -222,7 +218,6 @@ cd go && make clean
 cd node && npm run clean  # if available
 cd python && python3 dev.py clean  # if available
 cd java && ./gradlew clean
-cd csharp && dotnet clean
 ```
 
 ## Project Structure
@@ -234,9 +229,10 @@ cd csharp && dotnet clean
 - `node/` - Node.js client implementation
 - `python/` - Python client implementation  
 - `java/` - Java client implementation
-- `csharp/` - C# client implementation
 - `benchmarks/` - Performance benchmarks
 - `.github/workflows/` - CI/CD pipelines
+
+**Note**: C# implementation has been moved to [valkey-io/valkey-glide-csharp](https://github.com/valkey-io/valkey-glide-csharp)
 
 ### Important Files
 - `Makefile` - Root build orchestration
@@ -246,6 +242,8 @@ cd csharp && dotnet clean
 - `java/build.gradle` - Java build configuration
 
 ## Linting and Code Quality
+
+**CRITICAL - ALWAYS run lints and tests before finishing and committing changes, including ALL the linters used by the library. VALIDATE that the code of each language is going to pass the CI.**
 
 **ALWAYS run linters before committing - CI will fail otherwise:**
 
@@ -259,7 +257,6 @@ cd go && make lint
 cd node && npm run lint
 cd python && python3 dev.py lint --check  
 cd java && ./gradlew spotlessApply
-cd csharp && dotnet format --verify-no-changes
 ```
 
 ### Rust Code Linting
@@ -291,7 +288,7 @@ cd glide-core && cargo fmt --all -- --check
 5. Check disk space and memory availability
 
 ### If Tests Fail
-1. Ensure Valkey/Redis server is running: `valkey-server --daemonize yes`
+1. Ensure valkey-server is running: `valkey-server --daemonize yes`
 2. Check no other Redis instances are running on default port
 3. Verify network connectivity if using external endpoints
 4. Run individual test suites to isolate issues
