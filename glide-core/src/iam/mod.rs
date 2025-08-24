@@ -831,7 +831,6 @@ mod tests {
         );
     }
 
-    // todo: check about this test if it should fail or pass
     #[tokio::test]
     #[serial]
     async fn test_iam_generate_token_static_fails_without_credentials() {
