@@ -1,3 +1,5 @@
+# Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+
 from typing import List, Optional, Union
 
 from glide_shared.config import (

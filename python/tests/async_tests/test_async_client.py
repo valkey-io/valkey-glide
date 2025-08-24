@@ -33,8 +33,6 @@ from glide_shared.commands.core_options import (
     ConditionalChange,
     ExpireOptions,
     ExpiryGetEx,
-    ExpirySet,
-    ExpiryType,
     ExpiryTypeGetEx,
     FlushMode,
     FunctionRestorePolicy,
@@ -103,7 +101,7 @@ from tests.utils.utils import (
     generate_lua_lib_code,
     get_first_result,
     get_random_string,
-    is_single_response,
+    get_version,
     parse_info_response,
     round_values,
 )
@@ -9174,16 +9172,19 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_lolwut(self, glide_client: TGlideClient):
+        server_version = await get_version(glide_client)
+        server_version_bytes = server_version.encode()
+
         result = await glide_client.lolwut()
-        assert b"Redis ver. " in result
+        assert b"ver" in result and server_version_bytes in result
         result = await glide_client.lolwut(parameters=[])
-        assert b"Redis ver. " in result
+        assert b"ver" in result and server_version_bytes in result
         result = await glide_client.lolwut(parameters=[50, 20])
-        assert b"Redis ver. " in result
+        assert b"ver" in result and server_version_bytes in result
         result = await glide_client.lolwut(6)
-        assert b"Redis ver. " in result
+        assert b"ver" in result and server_version_bytes in result
         result = await glide_client.lolwut(5, [30, 4, 4])
-        assert b"Redis ver. " in result
+        assert b"ver" in result and server_version_bytes in result
 
         if isinstance(glide_client, GlideClusterClient):
             # test with multi-node route
@@ -9192,23 +9193,23 @@ class TestCommands:
             result_decoded = cast(dict, convert_bytes_to_string_object(result))
             assert result_decoded is not None
             for node_result in result_decoded.values():
-                assert "Redis ver. " in node_result
+                assert "ver" in node_result and server_version in node_result
 
             result = await glide_client.lolwut(parameters=[10, 20], route=AllNodes())
             assert isinstance(result, dict)
             result_decoded = cast(dict, convert_bytes_to_string_object(result))
             assert result_decoded is not None
             for node_result in result_decoded.values():
-                assert "Redis ver. " in node_result
+                assert "ver" in node_result and server_version in node_result
 
             # test with single-node route
             result = await glide_client.lolwut(2, route=RandomNode())
             assert isinstance(result, bytes)
-            assert b"Redis ver. " in result
+            assert b"ver" in result and server_version_bytes in result
 
             result = await glide_client.lolwut(2, [10, 20], RandomNode())
             assert isinstance(result, bytes)
-            assert b"Redis ver. " in result
+            assert b"ver" in result and server_version_bytes in result
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -9684,110 +9685,6 @@ class TestMultiKeyCommandCrossSlot:
         await glide_client.mset({"abc": "1", "zxy": "2", "lkn": "3"})
         await glide_client.touch(["abc", "zxy", "lkn"])
         await glide_client.watch(["abc", "zxy", "lkn"])
-
-
-class TestCommandsUnitTests:
-    def test_expiry_cmd_args(self):
-        exp_sec = ExpirySet(ExpiryType.SEC, 5)
-        assert exp_sec.get_cmd_args() == ["EX", "5"]
-
-        exp_sec_timedelta = ExpirySet(ExpiryType.SEC, timedelta(seconds=5))
-        assert exp_sec_timedelta.get_cmd_args() == ["EX", "5"]
-
-        exp_millsec = ExpirySet(ExpiryType.MILLSEC, 5)
-        assert exp_millsec.get_cmd_args() == ["PX", "5"]
-
-        exp_millsec_timedelta = ExpirySet(ExpiryType.MILLSEC, timedelta(seconds=5))
-        assert exp_millsec_timedelta.get_cmd_args() == ["PX", "5000"]
-
-        exp_millsec_timedelta = ExpirySet(ExpiryType.MILLSEC, timedelta(seconds=5))
-        assert exp_millsec_timedelta.get_cmd_args() == ["PX", "5000"]
-
-        exp_unix_sec = ExpirySet(ExpiryType.UNIX_SEC, 1682575739)
-        assert exp_unix_sec.get_cmd_args() == ["EXAT", "1682575739"]
-
-        exp_unix_sec_datetime = ExpirySet(
-            ExpiryType.UNIX_SEC,
-            datetime(2023, 4, 27, 23, 55, 59, 342380, timezone.utc),
-        )
-        assert exp_unix_sec_datetime.get_cmd_args() == ["EXAT", "1682639759"]
-
-        exp_unix_millisec = ExpirySet(ExpiryType.UNIX_MILLSEC, 1682586559964)
-        assert exp_unix_millisec.get_cmd_args() == ["PXAT", "1682586559964"]
-
-        exp_unix_millisec_datetime = ExpirySet(
-            ExpiryType.UNIX_MILLSEC,
-            datetime(2023, 4, 27, 23, 55, 59, 342380, timezone.utc),
-        )
-        assert exp_unix_millisec_datetime.get_cmd_args() == ["PXAT", "1682639759342"]
-
-    def test_get_expiry_cmd_args(self):
-        exp_sec = ExpiryGetEx(ExpiryTypeGetEx.SEC, 5)
-        assert exp_sec.get_cmd_args() == ["EX", "5"]
-
-        exp_sec_timedelta = ExpiryGetEx(ExpiryTypeGetEx.SEC, timedelta(seconds=5))
-        assert exp_sec_timedelta.get_cmd_args() == ["EX", "5"]
-
-        exp_millsec = ExpiryGetEx(ExpiryTypeGetEx.MILLSEC, 5)
-        assert exp_millsec.get_cmd_args() == ["PX", "5"]
-
-        exp_millsec_timedelta = ExpiryGetEx(
-            ExpiryTypeGetEx.MILLSEC, timedelta(seconds=5)
-        )
-        assert exp_millsec_timedelta.get_cmd_args() == ["PX", "5000"]
-
-        exp_millsec_timedelta = ExpiryGetEx(
-            ExpiryTypeGetEx.MILLSEC, timedelta(seconds=5)
-        )
-        assert exp_millsec_timedelta.get_cmd_args() == ["PX", "5000"]
-
-        exp_unix_sec = ExpiryGetEx(ExpiryTypeGetEx.UNIX_SEC, 1682575739)
-        assert exp_unix_sec.get_cmd_args() == ["EXAT", "1682575739"]
-
-        exp_unix_sec_datetime = ExpiryGetEx(
-            ExpiryTypeGetEx.UNIX_SEC,
-            datetime(2023, 4, 27, 23, 55, 59, 342380, timezone.utc),
-        )
-        assert exp_unix_sec_datetime.get_cmd_args() == ["EXAT", "1682639759"]
-
-        exp_unix_millisec = ExpiryGetEx(ExpiryTypeGetEx.UNIX_MILLSEC, 1682586559964)
-        assert exp_unix_millisec.get_cmd_args() == ["PXAT", "1682586559964"]
-
-        exp_unix_millisec_datetime = ExpiryGetEx(
-            ExpiryTypeGetEx.UNIX_MILLSEC,
-            datetime(2023, 4, 27, 23, 55, 59, 342380, timezone.utc),
-        )
-        assert exp_unix_millisec_datetime.get_cmd_args() == ["PXAT", "1682639759342"]
-
-        exp_persist = ExpiryGetEx(
-            ExpiryTypeGetEx.PERSIST,
-            None,
-        )
-        assert exp_persist.get_cmd_args() == ["PERSIST"]
-
-    def test_expiry_raises_on_value_error(self):
-        with pytest.raises(ValueError):
-            ExpirySet(ExpiryType.SEC, 5.5)
-
-    def test_expiry_equality(self):
-        assert ExpirySet(ExpiryType.SEC, 2) == ExpirySet(ExpiryType.SEC, 2)
-        assert ExpirySet(
-            ExpiryType.UNIX_SEC,
-            datetime(2023, 4, 27, 23, 55, 59, 342380, timezone.utc),
-        ) == ExpirySet(
-            ExpiryType.UNIX_SEC,
-            datetime(2023, 4, 27, 23, 55, 59, 342380, timezone.utc),
-        )
-
-        assert not ExpirySet(ExpiryType.SEC, 1) == 1
-
-    def test_is_single_response(self):
-        assert is_single_response("This is a string value", "")
-        assert is_single_response(["value", "value"], [""])
-        assert not is_single_response(
-            [["value", ["value"]], ["value", ["valued"]]], [""]
-        )
-        assert is_single_response(None, None)
 
 
 @pytest.mark.anyio

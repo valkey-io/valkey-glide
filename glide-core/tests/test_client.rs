@@ -56,8 +56,11 @@ pub(crate) mod shared_client_tests {
                 // still isn't available to connection. This should be fixed in [RedisServer].
                 repeat_try_create(|| async {
                     Client::new(
-                        create_connection_request(&[connection_addr.clone()], &configuration)
-                            .into(),
+                        create_connection_request(
+                            std::slice::from_ref(&connection_addr),
+                            &configuration,
+                        )
+                        .into(),
                         None,
                     )
                     .await

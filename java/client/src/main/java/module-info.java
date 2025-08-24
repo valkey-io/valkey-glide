@@ -20,6 +20,7 @@ module glide.api {
     exports redis.clients.jedis.params;
     exports redis.clients.jedis.args;
     exports redis.clients.jedis.resps;
+    exports redis.clients.jedis.util;
 
     requires java.logging; // required by shadowed protobuf
     requires static lombok;

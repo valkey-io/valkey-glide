@@ -40,7 +40,7 @@ class Logger:
     def init(cls, level: Optional[Level] = None, file_name: Optional[str] = None):
         """
         Initialize a logger if it wasn't initialized before - this method is meant to be used when there is no intention to
-        replace an existing logger.
+        replace an existing logger. Otherwise, use `set_logger_config` for overriding the existing logger configs.
         The logger will filter all logs with a level lower than the given level.
         If given a file_name argument, will write the logs to files postfixed with file_name. If file_name isn't provided,
         the logs will be written to the console.

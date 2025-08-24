@@ -7985,6 +7985,11 @@ public class SharedCommandTests {
         assertEquals(streamid_1, pending_results_extended[0][0]);
         assertEquals(consumer1, pending_results_extended[0][1]);
 
+        // Small delay to ensure all XCLAIM and XACK operations are fully processed
+        // This addresses a race condition in standalone RESP2 mode where the final
+        // XPENDING call might not see all expected pending messages immediately
+        Thread.sleep(5);
+
         pending_results_extended =
                 client
                         .xpending(
@@ -9751,7 +9756,11 @@ public class SharedCommandTests {
     public void objectEncoding_returns_string_embstr(BaseClient client) {
         String stringEmbstrKey = UUID.randomUUID().toString();
         assertEquals(OK, client.set(stringEmbstrKey, "value").get());
-        assertEquals("embstr", client.objectEncoding(stringEmbstrKey).get());
+        String encoding = client.objectEncoding(stringEmbstrKey).get();
+        // Valkey 9.0.0+ may return "raw" instead of "embstr" for short strings with long key names
+        assertTrue(
+                encoding.equals("embstr") || encoding.equals("raw"),
+                "Expected 'embstr' or 'raw' but got: " + encoding);
     }
 
     @SneakyThrows
@@ -9760,7 +9769,11 @@ public class SharedCommandTests {
     public void objectEncoding_binary_returns_string_embstr(BaseClient client) {
         GlideString stringEmbstrKey = gs(UUID.randomUUID().toString());
         assertEquals(OK, client.set(stringEmbstrKey, gs("value")).get());
-        assertEquals("embstr", client.objectEncoding(stringEmbstrKey).get());
+        String encoding = client.objectEncoding(stringEmbstrKey).get();
+        // Valkey 9.0.0+ may return "raw" instead of "embstr" for short strings with long key names
+        assertTrue(
+                encoding.equals("embstr") || encoding.equals("raw"),
+                "Expected 'embstr' or 'raw' but got: " + encoding);
     }
 
     @SneakyThrows

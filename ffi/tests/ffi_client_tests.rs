@@ -310,3 +310,116 @@ fn test_ffi_client_command_execution(#[values(false, true)] async_client: bool) 
         close_client(client_ptr);
     }
 }
+#[test]
+fn test_create_otel_span_with_parent() {
+    // Test creating a parent span
+    let parent_span_ptr = create_otel_span(RequestType::Set);
+    assert_ne!(parent_span_ptr, 0, "Parent span creation should succeed");
+
+    // Test creating a child span with valid parent
+    let child_span_ptr = unsafe { create_otel_span_with_parent(RequestType::Get, parent_span_ptr) };
+    assert_ne!(
+        child_span_ptr, 0,
+        "Child span creation with valid parent should succeed"
+    );
+
+    // Test creating a child span with invalid parent (0)
+    let child_span_ptr_invalid = unsafe { create_otel_span_with_parent(RequestType::Get, 0) };
+    assert_ne!(
+        child_span_ptr_invalid, 0,
+        "Child span creation with invalid parent should fallback to independent span"
+    );
+
+    // Test creating a child span with invalid parent (garbage pointer)
+    let child_span_ptr_garbage =
+        unsafe { create_otel_span_with_parent(RequestType::Get, 0xDEADBEEF) };
+    assert_ne!(
+        child_span_ptr_garbage, 0,
+        "Child span creation with garbage parent should fallback to independent span"
+    );
+
+    // Test with invalid request type
+    let child_span_ptr_invalid_req =
+        unsafe { create_otel_span_with_parent(RequestType::InvalidRequest, parent_span_ptr) };
+    assert_eq!(
+        child_span_ptr_invalid_req, 0,
+        "Child span creation with invalid request type should return 0"
+    );
+
+    // Clean up spans
+    unsafe {
+        drop_otel_span(parent_span_ptr);
+        drop_otel_span(child_span_ptr);
+        drop_otel_span(child_span_ptr_invalid);
+        drop_otel_span(child_span_ptr_garbage);
+    }
+}
+
+#[test]
+fn test_create_named_otel_span() {
+    use std::ffi::CString;
+
+    // Test creating a named span with valid name
+    let span_name = CString::new("test_user_operation").expect("CString::new failed");
+    let span_ptr = unsafe { create_named_otel_span(span_name.as_ptr()) };
+    assert_ne!(
+        span_ptr, 0,
+        "Named span creation with valid name should succeed"
+    );
+
+    // Test creating a named span with empty name
+    let empty_name = CString::new("").expect("CString::new failed");
+    let empty_span_ptr = unsafe { create_named_otel_span(empty_name.as_ptr()) };
+    assert_ne!(
+        empty_span_ptr, 0,
+        "Named span creation with empty name should succeed"
+    );
+
+    // Test creating a named span with null pointer
+    let null_span_ptr = unsafe { create_named_otel_span(std::ptr::null()) };
+    assert_eq!(
+        null_span_ptr, 0,
+        "Named span creation with null pointer should return 0"
+    );
+
+    // Test creating a named span with very long name (should fail)
+    let long_name = "a".repeat(300); // Exceeds 256 character limit
+    let long_name_cstring = CString::new(long_name).expect("CString::new failed");
+    let long_span_ptr = unsafe { create_named_otel_span(long_name_cstring.as_ptr()) };
+    assert_eq!(
+        long_span_ptr, 0,
+        "Named span creation with overly long name should return 0"
+    );
+
+    // Test creating a named span with normal length name
+    let normal_name = CString::new("normal_operation_name").expect("CString::new failed");
+    let normal_span_ptr = unsafe { create_named_otel_span(normal_name.as_ptr()) };
+    assert_ne!(
+        normal_span_ptr, 0,
+        "Named span creation with normal name should succeed"
+    );
+
+    // Test that the created span can be used as a parent
+    let child_span_ptr = unsafe { create_otel_span_with_parent(RequestType::Get, span_ptr) };
+    assert_ne!(
+        child_span_ptr, 0,
+        "Child span creation with named parent should succeed"
+    );
+
+    // Test creating a named span with special characters
+    let special_name = CString::new("user-operation:123").expect("CString::new failed");
+    let special_span_ptr = unsafe { create_named_otel_span(special_name.as_ptr()) };
+    assert_ne!(
+        special_span_ptr, 0,
+        "Named span creation with special characters should succeed"
+    );
+
+    // Clean up spans
+    unsafe {
+        drop_otel_span(span_ptr);
+        drop_otel_span(empty_span_ptr);
+        drop_otel_span(normal_span_ptr);
+        drop_otel_span(special_span_ptr);
+        drop_otel_span(child_span_ptr);
+    }
+}

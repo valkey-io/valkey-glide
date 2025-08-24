@@ -1302,7 +1302,7 @@ impl ShardAddrs {
         self.primary.read().expect(READ_LK_ERR_SHARDADDRS).clone()
     }
 
-    pub(crate) fn replicas(&self) -> std::sync::RwLockReadGuard<Vec<Arc<String>>> {
+    pub(crate) fn replicas(&self) -> std::sync::RwLockReadGuard<'_, Vec<Arc<String>>> {
         self.replicas.read().expect(READ_LK_ERR_SHARDADDRS)
     }
 

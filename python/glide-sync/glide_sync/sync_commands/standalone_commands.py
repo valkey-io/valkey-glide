@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Dict, List, Mapping, Optional, cast
 
+from glide_shared.commands.batch import Batch
+from glide_shared.commands.batch_options import BatchOptions
 from glide_shared.commands.core_options import (
     FlushMode,
     FunctionRestorePolicy,
@@ -19,9 +21,11 @@ from glide_shared.constants import (
 from glide_shared.protobuf.command_request_pb2 import RequestType
 
 from .core import CoreCommands
+from .script import Script
 
 
 class StandaloneCommands(CoreCommands):
+
     def custom_command(self, command_args: List[TEncodable]) -> TResult:
         """
         Executes a single command, without checking inputs.
@@ -67,6 +71,95 @@ class StandaloneCommands(CoreCommands):
             [section.value for section in sections] if sections else []
         )
         return cast(bytes, self._execute_command(RequestType.Info, args))
+
+    def exec(
+        self,
+        batch: Batch,
+        raise_on_error: bool,
+        options: Optional[BatchOptions] = None,
+    ) -> Optional[List[TResult]]:
+        """
+        Executes a batch by processing the queued commands.
+
+        See [Valkey Transactions (Atomic Batches)](https://valkey.io/docs/topics/transactions/) and
+        [Valkey Pipelines (Non-Atomic Batches)](https://valkey.io/docs/topics/pipelining/) for details.
+
+        Notes:
+            - Atomic Batches - Transactions: If the transaction fails due to a ``WATCH`` command,
+              ``exec`` will return ``None``.
+
+        Args:
+            batch (Batch): A ``Batch`` containing the commands to execute.
+            raise_on_error (bool): Determines how errors are handled within the batch response.
+                When set to ``True``, the first encountered error in the batch will be raised as a
+                ``RequestError`` exception after all retries and reconnections have been executed.
+                When set to ``False``, errors will be included as part of the batch response array, allowing
+                the caller to process both successful and failed commands together. In this case, error details
+                will be provided as instances of ``RequestError``.
+            options (Optional[BatchOptions]): A ``BatchOptions`` object containing execution options.
+
+        Returns:
+            Optional[List[TResult]]: An array of results, where each entry corresponds to a command's execution result.
+                If the batch fails due to a ``WATCH`` command, ``exec`` will return ``None``.
+
+        Example (Atomic Batch - Transaction):
+            >>> transaction = Batch(is_atomic=True)  # Atomic (Transaction)
+            >>> transaction.set("key", "1")
+            >>> transaction.incr("key")
+            >>> transaction.get("key")
+            >>> result = await client.exec(transaction, raise_on_error=True)
+            >>> print(f"Transaction Batch Result: {result}")
+            # Expected Output: Transaction Batch Result: [OK, 2, b'2']
+
+        Example (Non-Atomic Batch - Pipeline):
+            >>> pipeline = Batch(is_atomic=False)  # Non-Atomic (Pipeline)
+            >>> pipeline.set("key1", "value1")
+            >>> pipeline.set("key2", "value2")
+            >>> pipeline.get("key1")
+            >>> pipeline.get("key2")
+            >>> result = await client.exec(pipeline, raise_on_error=True)
+            >>> print(f"Pipeline Batch Result: {result}")
+            # Expected Output: Pipeline Batch Result: [OK, OK, b'value1', b'value2']
+
+        Example (Atomic Batch - Transaction with options):
+            >>> from glide import BatchOptions
+            >>> transaction = Batch(is_atomic=True)
+            >>> transaction.set("key", "1")
+            >>> transaction.incr("key")
+            >>> transaction.custom_command(["get", "key"])
+            >>> options = BatchOptions(timeout=1000)  # Set a timeout of 1000 milliseconds
+            >>> result = await client.exec(
+            ...     transaction,
+            ...     raise_on_error=False,  # Do not raise an error on failure
+            ...     options=options
+            ... )
+            >>> print(f"Transaction Result: {result}")
+            # Expected Output: Transaction Result: [OK, 2, b'2']
+
+        Example (Non-Atomic Batch - Pipeline with options):
+            >>> from glide import BatchOptions
+            >>> pipeline = Batch(is_atomic=False)
+            >>> pipeline.custom_command(["set", "key1", "value1"])
+            >>> pipeline.custom_command(["set", "key2", "value2"])
+            >>> pipeline.custom_command(["get", "key1"])
+            >>> pipeline.custom_command(["get", "key2"])
+            >>> options = BatchOptions(timeout=1000)  # Set a timeout of 1000 milliseconds
+            >>> result = await client.exec(
+            ...     pipeline,
+            ...     raise_on_error=False,  # Do not raise an error on failure
+            ...     options=options
+            ... )
+            >>> print(f"Pipeline Result: {result}")
+            # Expected Output: Pipeline Result: [OK, OK, b'value1', b'value2']
+        """
+        commands = batch.commands[:]
+        timeout = options.timeout if options else None
+        return self._execute_batch(
+            commands,
+            is_atomic=batch.is_atomic,
+            raise_on_error=raise_on_error,
+            timeout=timeout,
+        )
 
     def select(self, index: int) -> TOK:
         """
@@ -740,3 +833,113 @@ class StandaloneCommands(CoreCommands):
             int,
             self._execute_command(RequestType.Wait, args),
         )
+
+    def unwatch(self) -> TOK:
+        """
+        Flushes all the previously watched keys for an atomic batch (Transaction). Executing a transaction will
+        automatically flush all previously watched keys.
+
+        See [valkey.io](https://valkey.io/commands/unwatch) for more details.
+
+        Returns:
+            TOK: A simple "OK" response.
+
+        Examples:
+            >>> client.unwatch()
+                'OK'
+        """
+        return cast(
+            TOK,
+            self._execute_command(RequestType.UnWatch, []),
+        )
+
+    def script_exists(self, sha1s: List[TEncodable]) -> List[bool]:
+        """
+        Check existence of scripts in the script cache by their SHA1 digest.
+
+        See [valkey.io](https://valkey.io/commands/script-exists) for more details.
+
+        Args:
+            sha1s (List[TEncodable]): List of SHA1 digests of the scripts to check.
+
+        Returns:
+            List[bool]: A list of boolean values indicating the existence of each script.
+
+        Examples:
+            >>> client.script_exists(["sha1_digest1", "sha1_digest2"])
+                [True, False]
+        """
+        return cast(List[bool], self._execute_command(RequestType.ScriptExists, sha1s))
+
+    def script_flush(self, mode: Optional[FlushMode] = None) -> TOK:
+        """
+        Flush the Lua scripts cache.
+
+        See [valkey.io](https://valkey.io/commands/script-flush) for more details.
+
+        Args:
+            mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
+
+        Returns:
+            TOK: A simple `OK` response.
+
+        Examples:
+            >>> client.script_flush()
+                "OK"
+
+            >>> client.script_flush(FlushMode.ASYNC)
+                "OK"
+        """
+
+        return cast(
+            TOK,
+            self._execute_command(
+                RequestType.ScriptFlush, [mode.value] if mode else []
+            ),
+        )
+
+    def script_kill(self) -> TOK:
+        """
+        Kill the currently executing Lua script, assuming no write operation was yet performed by the script.
+
+        See [valkey.io](https://valkey.io/commands/script-kill) for more details.
+
+        Returns:
+            TOK: A simple `OK` response.
+
+        Examples:
+            >>> client.script_kill()
+                "OK"
+        """
+        return cast(TOK, self._execute_command(RequestType.ScriptKill, []))
+
+    def invoke_script(
+        self,
+        script: Script,
+        keys: Optional[List[TEncodable]] = None,
+        args: Optional[List[TEncodable]] = None,
+    ) -> TResult:
+        """
+        Invokes a Lua script with its keys and arguments.
+        This method simplifies the process of invoking scripts on a the server by using an object that represents a Lua script.
+        The script loading, argument preparation, and execution will all be handled internally.
+        If the script has not already been loaded, it will be loaded automatically using the `SCRIPT LOAD` command.
+        After that, it will be invoked using the `EVALSHA` command.
+
+        See [SCRIPT LOAD](https://valkey.io/commands/script-load/) and [EVALSHA](https://valkey.io/commands/evalsha/)
+        for more details.
+
+        Args:
+            script (Script): The Lua script to execute.
+            keys (Optional[List[TEncodable]]): The keys that are used in the script.
+            args (Optional[List[TEncodable]]): The arguments for the script.
+
+        Returns:
+            TResult: a value that depends on the script that was executed.
+
+        Examples:
+            >>> lua_script = Script("return { KEYS[1], ARGV[1] }")
+            >>> client.invoke_script(lua_script, keys=["foo"], args=["bar"])
+                [b"foo", b"bar"]
+        """
+        return self._execute_script(script.get_hash(), keys, args)

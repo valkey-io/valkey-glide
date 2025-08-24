@@ -160,7 +160,8 @@ public class ResourceLifecycleManager {
                 resource.close();
             } catch (Exception e) {
                 // Log the error but don't throw
-                System.err.println("Error closing resource: " + e.getMessage());
+                System.err.println("Error closing resource:");
+                e.printStackTrace();
             }
         }
     }

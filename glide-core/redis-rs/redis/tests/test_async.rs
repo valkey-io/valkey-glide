@@ -25,11 +25,11 @@ mod basic_async {
             redis::cmd("SET")
                 .arg("key1")
                 .arg(b"foo")
-                .query_async(&mut con)
+                .query_async::<_, ()>(&mut con)
                 .await?;
             redis::cmd("SET")
                 .arg(&["key2", "bar"])
-                .query_async(&mut con)
+                .query_async::<_, ()>(&mut con)
                 .await?;
             let result = redis::cmd("MGET")
                 .arg(&["key1", "key2"])
@@ -245,11 +245,11 @@ mod basic_async {
             redis::cmd("SET")
                 .arg(&key[..])
                 .arg(foo_val.as_bytes())
-                .query_async(&mut con)
+                .query_async::<_, ()>(&mut con)
                 .await?;
             redis::cmd("SET")
                 .arg(&[&key2, "bar"])
-                .query_async(&mut con)
+                .query_async::<_, ()>(&mut con)
                 .await?;
             redis::cmd("MGET")
                 .arg(&[&key_2, &key2_2])
@@ -390,7 +390,7 @@ mod basic_async {
                             redis::cmd("SADD")
                                 .arg("foo")
                                 .arg(x)
-                                .query_async(&mut con)
+                                .query_async::<_, ()>(&mut con)
                                 .await?;
                             unseen.insert(x);
                         }
@@ -578,7 +578,9 @@ mod basic_async {
                 pubsub_conn.subscribe("phonewave").await?;
                 let mut pubsub_stream = pubsub_conn.on_message();
                 let mut publish_conn = ctx.async_connection().await?;
-                publish_conn.publish("phonewave", "banana").await?;
+                publish_conn
+                    .publish::<_, _, ()>("phonewave", "banana")
+                    .await?;
 
                 let msg_payload: String = pubsub_stream.next().await.unwrap().get_payload()?;
                 assert_eq!("banana".to_string(), msg_payload);
@@ -664,7 +666,7 @@ mod basic_async {
                 redis::cmd("SET")
                     .arg("foo")
                     .arg("bar")
-                    .query_async(&mut conn)
+                    .query_async::<_, ()>(&mut conn)
                     .await?;
 
                 let res: String = redis::cmd("GET").arg("foo").query_async(&mut conn).await?;
@@ -722,7 +724,7 @@ mod basic_async {
                 let mut publish_conn = ctx.async_connection().await?;
                 for i in 0..pub_count {
                     publish_conn
-                        .publish(channel_name.clone(), format!("banana {i}"))
+                        .publish::<_, _, ()>(channel_name.clone(), format!("banana {i}"))
                         .await?;
                 }
                 for _ in 0..pub_count {
@@ -733,7 +735,7 @@ mod basic_async {
                 {
                     //Lets test if unsubscribing from individual channel subscription works
                     publish_conn
-                        .publish(channel_name.clone(), "banana!")
+                        .publish::<_, _, ()>(channel_name.clone(), "banana!")
                         .await?;
                     rx.recv().await.unwrap();
                 }
@@ -742,7 +744,7 @@ mod basic_async {
                     conn.unsubscribe(channel_name.clone()).await?;
                     rx.recv().await.unwrap(); //PASS UNSUBSCRIBE
                     publish_conn
-                        .publish(channel_name.clone(), "banana!")
+                        .publish::<_, _, ()>(channel_name.clone(), "banana!")
                         .await?;
                     //Let's wait for 100ms to make sure there is nothing in channel.
                     tokio::time::sleep(Duration::from_millis(100)).await;
@@ -790,7 +792,7 @@ mod basic_async {
                 let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
                 conn.get_push_manager().replace_sender(tx.clone());
 
-                conn.set("A", "1").await?;
+                conn.set::<_, _, ()>("A", "1").await?;
                 assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
                 drop(ctx);
                 let x: RedisResult<()> = conn.set("A", "1").await;
@@ -923,7 +925,7 @@ mod basic_async {
                 redis::cmd("SET")
                     .arg("key1")
                     .arg(b"foo")
-                    .query_async(&mut con)
+                    .query_async::<_, ()>(&mut con)
                     .await?;
                 let result = redis::cmd("GET").arg(&["key1"]).query_async(&mut con).await;
                 assert_eq!(result, Ok("foo".to_string()));
@@ -945,7 +947,7 @@ mod basic_async {
                 redis::cmd("SET")
                     .arg("key1")
                     .arg(b"foo")
-                    .query_async(&mut con)
+                    .query_async::<_, ()>(&mut con)
                     .await?;
                 let result = redis::cmd("GET").arg(&["key1"]).query_async(&mut con).await;
                 assert_eq!(result, Ok("foo".to_string()));

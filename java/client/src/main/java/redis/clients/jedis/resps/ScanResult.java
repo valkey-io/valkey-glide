@@ -6,32 +6,40 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-/** Result of a SCAN command in Jedis compatibility layer. */
+/** ScanResult compatibility stub for Valkey GLIDE wrapper. */
 public class ScanResult<T> {
     private final String cursor;
-    private final List<T> results;
+    private final List<T> result;
 
-    public ScanResult(String cursor, List<T> results) {
+    public ScanResult(String cursor, List<T> result) {
         this.cursor = cursor;
-        this.results = results != null ? new ArrayList<>(results) : new ArrayList<>();
-    }
-
-    public ScanResult(byte[] cursor, List<T> results) {
-        this.cursor = new String(cursor, StandardCharsets.UTF_8);
-        this.results = results != null ? new ArrayList<>(results) : new ArrayList<>();
+        // Defensive copy to prevent external modification (fixes SpotBugs EI_EXPOSE_REP2)
+        this.result = result != null ? new ArrayList<>(result) : new ArrayList<>();
     }
 
     /**
-     * Returns the new value of the cursor.
+     * Creates a ScanResult with a byte array cursor.
      *
-     * @return the new cursor value
+     * <p>This constructor provides compatibility with original Jedis which supports binary cursors.
+     *
+     * @param cursor the cursor as a byte array
+     * @param result the list of scan results
      */
+    public ScanResult(byte[] cursor, List<T> result) {
+        this.cursor = cursor != null ? new String(cursor, StandardCharsets.UTF_8) : "0";
+        // Defensive copy to prevent external modification (fixes SpotBugs EI_EXPOSE_REP2)
+        this.result = result != null ? new ArrayList<>(result) : new ArrayList<>();
+    }
+
     public String getCursor() {
         return cursor;
     }
 
     /**
-     * Returns the cursor as bytes.
+     * Returns the cursor as a byte array.
+     *
+     * <p>This method provides compatibility with original Jedis which supports binary cursor
+     * operations.
      *
      * @return the cursor as bytes
      */
@@ -39,21 +47,25 @@ public class ScanResult<T> {
         return cursor.getBytes(StandardCharsets.UTF_8);
     }
 
-    /**
-     * Returns the scan results.
-     *
-     * @return an unmodifiable view of the scan results
-     */
     public List<T> getResult() {
-        return Collections.unmodifiableList(results);
+        // Return unmodifiable view to prevent external modification (fixes SpotBugs EI_EXPOSE_REP)
+        return Collections.unmodifiableList(result);
     }
 
     /**
-     * Check if the iteration is complete.
+     * Checks if the scan iteration is complete.
      *
-     * @return true if iteration is complete (cursor is "0")
+     * <p>A scan iteration is complete when the cursor is "0", indicating that all keys have been
+     * scanned and the iteration should stop.
+     *
+     * @return true if the iteration is complete (cursor is "0"), false otherwise
      */
     public boolean isCompleteIteration() {
         return "0".equals(cursor);
+    }
+
+    @Override
+    public String toString() {
+        return "ScanResult{cursor='" + cursor + "', result=" + result + "}";
     }
 }

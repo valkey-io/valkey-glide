@@ -8,11 +8,11 @@ async fn main() -> redis::RedisResult<()> {
         .get_multiplexed_async_connection(GlideConnectionOptions::default())
         .await?;
 
-    con.set("key1", b"foo").await?;
+    con.set::<_, _, ()>("key1", b"foo").await?;
 
     redis::cmd("SET")
         .arg(&["key2", "bar"])
-        .query_async(&mut con)
+        .query_async::<_, ()>(&mut con)
         .await?;
 
     let result = redis::cmd("MGET")
