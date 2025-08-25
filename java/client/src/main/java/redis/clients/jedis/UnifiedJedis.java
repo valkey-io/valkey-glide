@@ -13,6 +13,7 @@ import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import redis.clients.jedis.exceptions.JedisConnectionException;
 import redis.clients.jedis.exceptions.JedisException;
+import redis.clients.jedis.util.JedisURIHelper;
 
 /**
  * UnifiedJedis compatibility wrapper for Valkey GLIDE client. This class provides the unified API
@@ -246,7 +247,7 @@ public class UnifiedJedis implements Closeable {
     /** Extracts HostAndPort from URI */
     private static HostAndPort extractHostAndPort(URI uri) {
         String host = uri.getHost() != null ? uri.getHost() : "localhost";
-        int port = uri.getPort() != -1 ? uri.getPort() : 6379;
+        int port = uri.getPort() != -1 ? uri.getPort() : JedisURIHelper.getDefaultPort(uri);
         return new HostAndPort(host, port);
     }
 

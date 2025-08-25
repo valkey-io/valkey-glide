@@ -612,8 +612,11 @@ public class JedisPool extends Pool<Jedis> {
             final URI uri,
             final JedisClientConfig clientConfig) {
         // Create factory and set pool reference
+        String host = uri.getHost();
+        int port = uri.getPort() != -1 ? uri.getPort() : JedisURIHelper.getDefaultPort(uri);
+
         GlideJedisFactory factory =
-                new GlideJedisFactory(uri.getHost(), uri.getPort(), mergeUriConfig(uri, clientConfig));
+                new GlideJedisFactory(host, port, mergeUriConfig(uri, clientConfig));
         initPool(poolConfig, factory);
         factory.setPool(this); // Set pool reference after initialization
     }

@@ -50,8 +50,8 @@ public class JedisURIHelper {
      */
     public static int getDefaultPort(URI uri) {
         if (isRedisSSLScheme(uri)) {
-            return 6380; // Default SSL port
+            return 6380; // Common SSL convention (not from original Jedis)
         }
-        return 6379; // Default non-SSL port
+        return 6379; // Official Redis standard + original Jedis default
     }
 }
