@@ -52,6 +52,12 @@ jobs:
                           else "mac" 
                           end
                       )
+                      | .CD_TARGET = (
+                          if (.TARGET | contains("musl")) 
+                          then .ARCH + "-unknown-linux-gnu" 
+                          else .TARGET
+                          end
+                      )
                   )' < .github/json_matrices/build-matrix.json | jq -c .)
                   echo "PLATFORM_MATRIX=${PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
 
@@ -112,7 +118,7 @@ jobs:
               uses: ./.github/workflows/install-shared-dependencies
               with:
                   os: ${{ matrix.host.OS }}
-                  target: ${{ matrix.host.TARGET }}
+                  target: ${{ matrix.host.CD_TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Install protoc (protobuf)
