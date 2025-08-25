@@ -284,7 +284,11 @@ tasks.withType(Test) {
 }
 
 jar {
-    archiveClassifier = osdetector.classifier
+    if (project.hasProperty('target') && project.target.contains("musl")) {
+        archiveClassifier = "linux_musl_${arch}"
+    } else {
+        archiveClassifier = osdetector.classifier
+    }
 }
 
 import com.github.jengelman.gradle.plugins.shadow.transformers.CacheableTransformer
@@ -336,7 +340,11 @@ class NettyResourceTransformer implements Transformer {
 
 shadowJar {
     dependsOn('copyNativeLib')
-    archiveClassifier = osdetector.classifier
+    if (project.hasProperty('target') && project.target.contains("musl")) {
+        archiveClassifier = "linux_musl_${arch}"
+    } else {
+        archiveClassifier = osdetector.classifier
+    }
     excludes.remove("module-info.class")
     relocate('io.netty', 'glide.io.netty')
     relocate('com.google.protobuf', 'glide.com.google.protobuf')
