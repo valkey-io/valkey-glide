@@ -70,7 +70,30 @@ const (
 	//
 	// since Valkey 8.1 and above.
 	OnlyIfEquals ConditionalSet = "IFEQ"
+	// OnlyIfFieldsDoNotExist only sets the hash fields if none of them already exist. Equivalent to "FNX" in the valkey API.
+	// Used with hash field expiration commands.
+	OnlyIfFieldsDoNotExist ConditionalSet = "FNX"
+	// OnlyIfAllFieldsExist only sets the hash fields if all of them already exist. Equivalent to "FXX" in the valkey API.
+	// Used with hash field expiration commands.
+	OnlyIfAllFieldsExist ConditionalSet = "FXX"
 )
+
+func (conditionalSet ConditionalSet) ToString() (string, error) {
+	switch conditionalSet {
+	case OnlyIfExists:
+		return string(OnlyIfExists), nil
+	case OnlyIfDoesNotExist:
+		return string(OnlyIfDoesNotExist), nil
+	case OnlyIfEquals:
+		return string(OnlyIfEquals), nil
+	case OnlyIfFieldsDoNotExist:
+		return string(OnlyIfFieldsDoNotExist), nil
+	case OnlyIfAllFieldsExist:
+		return string(OnlyIfAllFieldsExist), nil
+	default:
+		return "", errors.New("invalid conditional set")
+	}
+}
 
 type ExpireCondition string
 
