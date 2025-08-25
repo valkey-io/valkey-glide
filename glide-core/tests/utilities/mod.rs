@@ -571,6 +571,7 @@ fn set_connection_info_to_connection_request(
             protobuf::MessageField(Some(Box::new(AuthenticationInfo {
                 password: connection_info.password.unwrap().into(),
                 username: connection_info.username.unwrap_or_default().into(),
+                iam_credentials: protobuf::MessageField::none(),
                 ..Default::default()
             })));
     }
@@ -662,7 +663,7 @@ pub fn create_connection_request(
         connection_request.client_az = client_az.deref().into();
     }
     connection_request.lazy_connect = configuration.lazy_connect;
-    connection_request.protocol = configuration.protocol.into();
+
     connection_request
 }
 
@@ -706,9 +707,10 @@ pub(crate) async fn setup_test_basics_internal(configuration: &TestConfiguration
     connection_request.cluster_mode_enabled = false;
     connection_request.protocol = configuration.protocol.into();
     let (push_sender, push_receiver) = tokio::sync::mpsc::unbounded_channel();
-    let client = StandaloneClient::create_client(connection_request.into(), Some(push_sender))
-        .await
-        .unwrap();
+    let client =
+        StandaloneClient::create_client(connection_request.into(), Some(push_sender), None)
+            .await
+            .unwrap();
 
     TestBasics {
         server,
