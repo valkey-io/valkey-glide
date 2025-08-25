@@ -44,11 +44,8 @@ import {
     GeospatialData,
     GlideClientConfiguration,
     GlideClusterClientConfiguration,
-    HExpireAtOptions,
     HExpireOptions,
     HGetExOptions,
-    HPExpireAtOptions,
-    HPExpireOptions,
     HScanOptions,
     HSetExOptions,
     InsertPosition,
@@ -1061,7 +1058,7 @@ export class BaseClient {
                 if (split.length !== 2) {
                     throw new RequestError(
                         "No port provided, expected host to be formatted as `{hostname}:{port}`. Received " +
-                            host,
+                        host,
                     );
                 }
 
@@ -1127,8 +1124,8 @@ export class BaseClient {
                     err instanceof ValkeyError
                         ? err
                         : new Error(
-                              `Decoding error: '${err}'. \n NOTE: If this was thrown during a command with write operations, the data could be UNRECOVERABLY LOST.`,
-                          ),
+                            `Decoding error: '${err}'. \n NOTE: If this was thrown during a command with write operations, the data could be UNRECOVERABLY LOST.`,
+                        ),
                 );
             }
         } else if (message.constantResponse === response.ConstantResponse.OK) {
@@ -2899,48 +2896,65 @@ export class BaseClient {
     }
 
     /**
-     * Sets the specified fields to their respective values in the hash stored at `key` with optional expiration.
-     * This command allows setting multiple field-value pairs with expiration times and conditional options.
-     *
-     * @see {@link https://valkey.io/commands/hsetex/|valkey.io} for details.
+     * Sets hash fields with expiration times and optional conditional changes.
      *
      * @param key - The key of the hash.
-     * @param fieldsAndValues - A map or array of field-value pairs to set in the hash.
-     * @param options - (Optional) Additional parameters:
-     *   - `fieldConditionalChange`: Options for handling existing fields (FNX | FXX).
-     *   - `expiry`: Expiry settings for the fields (EX | PX | EXAT | PXAT | KEEPTTL).
-     * @returns The number of fields that were added to the hash.
+     * @param fieldsAndValues - A map or array of field-value pairs to set.
+     * @param options - Optional parameters including field conditional changes and expiry settings.
+     *                  See {@link HSetExOptions}.
+     * @returns A promise that resolves to the number of fields that were set.
      *
      * @example
      * ```typescript
-     * // Example usage of the hsetex method with expiration
+     * // Set fields with 60 second expiration, only if none exist
      * const result = await client.hsetex(
-     *     "my_hash",
-     *     {"field1": "value1", "field2": "value2"},
+     *     "myHash",
+     *     { field1: "value1", field2: "value2" },
      *     {
+     *         fieldConditionalChange: HashFieldConditionalChange.ONLY_IF_NONE_EXIST,
      *         expiry: { type: TimeUnit.Seconds, count: 60 }
      *     }
      * );
-     * console.log(result);
-     * // Output: 2
-     * // Indicates that 2 fields were successfully set with expiration.
-     * ```
+     * console.log(result); // 2 - both fields were set with 60s expiration
      *
-     * @example
-     * ```typescript
-     * // Example usage with field conditional change
-     * const result = await client.hsetex(
-     *     "my_hash",
-     *     {"field3": "value3"},
+     * // Set fields and keep existing TTL
+     * const keepTtlResult = await client.hsetex(
+     *     "myHash",
+     *     { field3: "value3" },
+     *     { expiry: "KEEPTTL" }
+     * );
+     * console.log(keepTtlResult); // 1 - field was set, existing TTL preserved
+     *
+     * // Set fields with millisecond precision expiration
+     * const msResult = await client.hsetex(
+     *     "myHash",
+     *     { field4: "value4" },
+     *     { expiry: { type: TimeUnit.Milliseconds, count: 5000 } }
+     * );
+     * console.log(msResult); // 1 - field expires in 5000ms
+     *
+     * // Set fields with Unix timestamp expiration
+     * const timestampResult = await client.hsetex(
+     *     "myHash",
+     *     { field5: "value5" },
+     *     { expiry: { type: TimeUnit.UnixSeconds, count: Math.floor(Date.now() / 1000) + 3600 } }
+     * );
+     * console.log(timestampResult); // 1 - field expires in 1 hour
+     *
+     * // Only update existing fields and keep their TTL
+     * const updateResult = await client.hsetex(
+     *     "myHash",
+     *     { field1: "newValue1" },
      *     {
-     *         fieldConditionalChange: HashFieldConditionalChange.ONLY_IF_NONE_EXIST,
+     *         fieldConditionalChange: HashFieldConditionalChange.ONLY_IF_ALL_EXIST,
      *         expiry: "KEEPTTL"
      *     }
      * );
-     * console.log(result);
-     * // Output: 1
-     * // Indicates that the field was successfully set because it didn't exist.
+     * console.log(updateResult); // 0 or 1 depending on whether field1 exists
      * ```
+     *
+     * @since Valkey 9.0.0
+     * @see https://valkey.io/commands/hsetex/
      */
     public async hsetex(
         key: GlideString,
@@ -2957,35 +2971,57 @@ export class BaseClient {
     }
 
     /**
-     * Returns the values associated with the specified fields in the hash stored at `key` and optionally sets the expiration for the fields.
-     *
-     * @see {@link https://valkey.io/commands/hgetex/|valkey.io} for details.
+     * Gets hash fields and optionally sets their expiration.
      *
      * @param key - The key of the hash.
      * @param fields - The fields in the hash stored at `key` to retrieve from the database.
      * @param options - Optional arguments for the HGETEX command. See {@link HGetExOptions}.
-     * @returns An array of values associated with the given fields, in the same order as they are requested.
-     *     For every field that does not exist in the hash, a null value is returned.
-     *     If `key` does not exist, returns an array of null values.
+     * @returns A promise that resolves to an array of values associated with the given fields,
+     *          in the same order as they are requested. For every field that does not exist
+     *          in the hash, a null value is returned. If `key` does not exist, returns an
+     *          array of null values.
      *
      * @example
      * ```typescript
-     * // Example usage of hgetex command
-     * const result1 = await client.hgetex("my_hash", ["field1", "field2"]);
-     * console.log(result1); // [value1, value2] or [null, null] if fields don't exist
+     * // Get fields without setting expiration
+     * const values = await client.hgetex("myHash", ["field1", "field2"]);
+     * console.log(values); // ["value1", "value2"] or [null, null] if fields don't exist
      *
-     * // Get fields and set expiration to 10 seconds
-     * const result2 = await client.hgetex("my_hash", ["field1", "field2"], {
-     *     expiry: { type: TimeUnit.Seconds, count: 10 }
-     * });
-     * console.log(result2); // [value1, value2] with fields expiring in 10 seconds
+     * // Get fields and set 30 second expiration
+     * const valuesWithExpiry = await client.hgetex(
+     *     "myHash",
+     *     ["field1", "field2"],
+     *     { expiry: { type: TimeUnit.Seconds, count: 30 } }
+     * );
+     * console.log(valuesWithExpiry); // ["value1", "value2"] - fields now expire in 30s
      *
-     * // Get fields and remove their expiration
-     * const result3 = await client.hgetex("my_hash", ["field1", "field2"], {
-     *     expiry: "PERSIST"
-     * });
-     * console.log(result3); // [value1, value2] with fields made persistent
+     * // Get fields and remove expiration (make persistent)
+     * const persistValues = await client.hgetex(
+     *     "myHash",
+     *     ["field1", "field2"],
+     *     { expiry: "PERSIST" }
+     * );
+     * console.log(persistValues); // ["value1", "value2"] - fields are now persistent
+     *
+     * // Get fields and set millisecond precision expiration
+     * const msValues = await client.hgetex(
+     *     "myHash",
+     *     ["field3", "field4"],
+     *     { expiry: { type: TimeUnit.Milliseconds, count: 2500 } }
+     * );
+     * console.log(msValues); // ["value3", "value4"] - fields expire in 2500ms
+     *
+     * // Get fields and set Unix timestamp expiration
+     * const timestampValues = await client.hgetex(
+     *     "myHash",
+     *     ["field5"],
+     *     { expiry: { type: TimeUnit.UnixMilliseconds, count: Date.now() + 60000 } }
+     * );
+     * console.log(timestampValues); // ["value5"] - field expires in 1 minute
      * ```
+     *
+     * @since Valkey 9.0.0
+     * @see https://valkey.io/commands/hgetex/
      */
     public async hgetex(
         key: GlideString,
@@ -3123,7 +3159,7 @@ export class BaseClient {
         key: GlideString,
         milliseconds: number,
         fields: GlideString[],
-        options?: HPExpireOptions,
+        options?: HExpireOptions,
     ): Promise<number[]> {
         return this.createWritePromise(
             createHPExpire(key, milliseconds, fields, options),
@@ -3138,7 +3174,7 @@ export class BaseClient {
      * @param key - The key of the hash.
      * @param unixTimestampSeconds - The expiration time as a Unix timestamp in seconds.
      * @param fields - The fields to set expiration for.
-     * @param options - Optional arguments for the HEXPIREAT command. See {@link HExpireAtOptions}.
+     * @param options - Optional arguments for the HEXPIREAT command. See {@link HExpireOptions}.
      * @returns An array of numbers indicating the result for each field:
      *          - `1` if expiration was set successfully
      *          - `0` if the specified condition (NX, XX, GT, LT) was not met
@@ -3177,7 +3213,7 @@ export class BaseClient {
         key: GlideString,
         unixTimestampSeconds: number,
         fields: GlideString[],
-        options?: HExpireAtOptions,
+        options?: HExpireOptions,
     ): Promise<number[]> {
         return this.createWritePromise(
             createHExpireAt(key, unixTimestampSeconds, fields, options),
@@ -3192,7 +3228,7 @@ export class BaseClient {
      * @param key - The key of the hash.
      * @param unixTimestampMilliseconds - The expiration time as a Unix timestamp in milliseconds.
      * @param fields - The fields to set expiration for.
-     * @param options - Optional arguments for the HPEXPIREAT command. See {@link HPExpireAtOptions}.
+     * @param options - Optional arguments for the HPEXPIREAT command. See {@link HExpireOptions}.
      * @returns An array of numbers indicating the result for each field:
      *          - `1` if expiration was set successfully
      *          - `0` if the specified condition (NX, XX, GT, LT) was not met
@@ -3231,7 +3267,7 @@ export class BaseClient {
         key: GlideString,
         unixTimestampMilliseconds: number,
         fields: GlideString[],
-        options?: HPExpireAtOptions,
+        options?: HExpireOptions,
     ): Promise<number[]> {
         return this.createWritePromise(
             createHPExpireAt(key, unixTimestampMilliseconds, fields, options),
@@ -7200,12 +7236,12 @@ export class BaseClient {
         ReadFrom,
         connection_request.ReadFrom
     > = {
-        primary: connection_request.ReadFrom.Primary,
-        preferReplica: connection_request.ReadFrom.PreferReplica,
-        AZAffinity: connection_request.ReadFrom.AZAffinity,
-        AZAffinityReplicasAndPrimary:
-            connection_request.ReadFrom.AZAffinityReplicasAndPrimary,
-    };
+            primary: connection_request.ReadFrom.Primary,
+            preferReplica: connection_request.ReadFrom.PreferReplica,
+            AZAffinity: connection_request.ReadFrom.AZAffinity,
+            AZAffinityReplicasAndPrimary:
+                connection_request.ReadFrom.AZAffinityReplicasAndPrimary,
+        };
 
     /**
      * Returns the number of messages that were successfully acknowledged by the consumer group member of a stream.
@@ -8616,8 +8652,8 @@ export class BaseClient {
             res === null
                 ? null
                 : res!.map((r) => {
-                      return { key: r.key, elements: r.value };
-                  })[0],
+                    return { key: r.key, elements: r.value };
+                })[0],
         );
     }
 
@@ -8660,8 +8696,8 @@ export class BaseClient {
             res === null
                 ? null
                 : res!.map((r) => {
-                      return { key: r.key, elements: r.value };
-                  })[0],
+                    return { key: r.key, elements: r.value };
+                })[0],
         );
     }
 
@@ -8881,11 +8917,11 @@ export class BaseClient {
             : connection_request.ReadFrom.Primary;
         const authenticationInfo =
             options.credentials !== undefined &&
-            "password" in options.credentials
+                "password" in options.credentials
                 ? {
-                      password: options.credentials.password,
-                      username: options.credentials.username,
-                  }
+                    password: options.credentials.password,
+                    username: options.credentials.username,
+                }
                 : undefined;
         const protocol = options.protocol as
             | connection_request.ProtocolVersion

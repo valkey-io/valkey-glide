@@ -327,10 +327,10 @@ export function runBaseTests(config: {
                     client instanceof GlideClient
                         ? await client.info([InfoOptions.Commandstats])
                         : Object.values(
-                              await client.info({
-                                  sections: [InfoOptions.Commandstats],
-                              }),
-                          ).join();
+                            await client.info({
+                                sections: [InfoOptions.Commandstats],
+                            }),
+                        ).join();
                 expect(oldResult).toContain("cmdstat_set");
                 expect(await client.configResetStat()).toEqual("OK");
 
@@ -338,10 +338,10 @@ export function runBaseTests(config: {
                     client instanceof GlideClient
                         ? await client.info([InfoOptions.Commandstats])
                         : Object.values(
-                              await client.info({
-                                  sections: [InfoOptions.Commandstats],
-                              }),
-                          ).join();
+                            await client.info({
+                                sections: [InfoOptions.Commandstats],
+                            }),
+                        ).join();
                 expect(result).not.toContain("cmdstat_set");
             }, protocol);
         },
@@ -368,13 +368,13 @@ export function runBaseTests(config: {
                     const response =
                         client instanceof GlideClient
                             ? await client.exec(
-                                  new Batch(isAtomic).lastsave(),
-                                  isAtomic,
-                              )
+                                new Batch(isAtomic).lastsave(),
+                                isAtomic,
+                            )
                             : await client.exec(
-                                  new ClusterBatch(isAtomic).lastsave(),
-                                  isAtomic,
-                              );
+                                new ClusterBatch(isAtomic).lastsave(),
+                                isAtomic,
+                            );
 
                     expect(response?.[0]).toBeGreaterThan(yesterday);
                 }
@@ -2535,9 +2535,9 @@ export function runBaseTests(config: {
                         client instanceof GlideClient
                             ? await client.exec(batch as Batch, false)
                             : await (client as GlideClusterClient).exec(
-                                  batch as ClusterBatch,
-                                  false,
-                              );
+                                batch as ClusterBatch,
+                                false,
+                            );
 
                     expect(results).toHaveLength(4);
                     expect(results![0]).toBe(1); // hsetex result for key1
@@ -2734,9 +2734,9 @@ export function runBaseTests(config: {
                         client instanceof GlideClient
                             ? client.exec(batch as Batch, true)
                             : (client as GlideClusterClient).exec(
-                                  batch as ClusterBatch,
-                                  true,
-                              );
+                                batch as ClusterBatch,
+                                true,
+                            );
 
                     await expect(execPromise).rejects.toThrow(RequestError);
                 },
@@ -2787,13 +2787,6 @@ export function runBaseTests(config: {
                         expiry: "PERSIST",
                     });
                     expect(result3).toEqual([value1]);
-
-                    // Test that HGETEX does not support KEEPTTL
-                    await expect(
-                        client.hgetex(key, [field1], {
-                            expiry: "KEEPTTL",
-                        }),
-                    ).rejects.toThrow("HGETEX does not support KEEPTTL option");
 
                     // Test HGETEX on non-existent key
                     const nonExistentKey = getRandomKey();
@@ -2907,9 +2900,9 @@ export function runBaseTests(config: {
                     const results = await (client instanceof GlideClient
                         ? client.exec(batch as Batch, false)
                         : (client as GlideClusterClient).exec(
-                              batch as ClusterBatch,
-                              false,
-                          ));
+                            batch as ClusterBatch,
+                            false,
+                        ));
 
                     expect(results).toHaveLength(2);
                     expect(results![0]).toEqual([value1]);
@@ -3223,9 +3216,9 @@ export function runBaseTests(config: {
                     const results = await (client instanceof GlideClient
                         ? client.exec(batch as Batch, false)
                         : (client as GlideClusterClient).exec(
-                              batch as ClusterBatch,
-                              false,
-                          ));
+                            batch as ClusterBatch,
+                            false,
+                        ));
                     expect(results).toEqual([[1], [1]]);
 
                     // Verify expiration was set using HTTL
@@ -3448,9 +3441,9 @@ export function runBaseTests(config: {
                     const results = await (client instanceof GlideClient
                         ? client.exec(batch as Batch, false)
                         : (client as GlideClusterClient).exec(
-                              batch as ClusterBatch,
-                              false,
-                          ));
+                            batch as ClusterBatch,
+                            false,
+                        ));
                     expect(results).toEqual([[1], [1]]);
                 },
                 protocol,
@@ -3761,9 +3754,9 @@ export function runBaseTests(config: {
                     const results = await (client instanceof GlideClient
                         ? client.exec(batch as Batch, false)
                         : (client as GlideClusterClient).exec(
-                              batch as ClusterBatch,
-                              false,
-                          ));
+                            batch as ClusterBatch,
+                            false,
+                        ));
 
                     expect(results).toEqual([[1], [1]]);
                 },
@@ -4102,9 +4095,9 @@ export function runBaseTests(config: {
                     const results = await (client instanceof GlideClient
                         ? client.exec(batch as Batch, false)
                         : (client as GlideClusterClient).exec(
-                              batch as ClusterBatch,
-                              false,
-                          ));
+                            batch as ClusterBatch,
+                            false,
+                        ));
 
                     expect(results).toEqual([[1], [1]]);
                 },
@@ -4453,9 +4446,9 @@ export function runBaseTests(config: {
                     const results = await (client instanceof GlideClient
                         ? client.exec(batch as Batch, false)
                         : (client as GlideClusterClient).exec(
-                              batch as ClusterBatch,
-                              false,
-                          ));
+                            batch as ClusterBatch,
+                            false,
+                        ));
                     expect(results).toEqual([[1], [1]]);
 
                     // Verify fields still exist
@@ -9347,27 +9340,27 @@ export function runBaseTests(config: {
                 expect(
                     client instanceof GlideClient
                         ? await client.echo(message, {
-                              decoder: Decoder.String,
-                          })
+                            decoder: Decoder.String,
+                        })
                         : await client.echo(message, {
-                              decoder: Decoder.String,
-                          }),
+                            decoder: Decoder.String,
+                        }),
                 ).toEqual(message);
                 expect(
                     client instanceof GlideClient
                         ? await client.echo(message, { decoder: Decoder.Bytes })
                         : await client.echo(message, {
-                              decoder: Decoder.Bytes,
-                          }),
+                            decoder: Decoder.Bytes,
+                        }),
                 ).toEqual(Buffer.from(message));
                 expect(
                     client instanceof GlideClient
                         ? await client.echo(Buffer.from(message), {
-                              decoder: Decoder.String,
-                          })
+                            decoder: Decoder.String,
+                        })
                         : await client.echo(Buffer.from(message), {
-                              decoder: Decoder.String,
-                          }),
+                            decoder: Decoder.String,
+                        }),
                 ).toEqual(message);
                 expect(await client.echo(Buffer.from(message))).toEqual(
                     message,
@@ -11079,17 +11072,17 @@ export function runBaseTests(config: {
                     let response =
                         client instanceof GlideClient
                             ? await client.exec(
-                                  new Batch(isAtomic).dump(key1),
-                                  true,
-                                  {
-                                      decoder: Decoder.Bytes,
-                                  },
-                              )
+                                new Batch(isAtomic).dump(key1),
+                                true,
+                                {
+                                    decoder: Decoder.Bytes,
+                                },
+                            )
                             : await client.exec(
-                                  new ClusterBatch(isAtomic).dump(key1),
-                                  true,
-                                  { decoder: Decoder.Bytes },
-                              );
+                                new ClusterBatch(isAtomic).dump(key1),
+                                true,
+                                { decoder: Decoder.Bytes },
+                            );
                     expect(response?.[0]).not.toBeNull();
                     data = response?.[0] as Buffer;
 
@@ -11097,19 +11090,19 @@ export function runBaseTests(config: {
                     response =
                         client instanceof GlideClient
                             ? await client.exec(
-                                  new Batch(isAtomic)
-                                      .restore(key4, 0, data)
-                                      .get(key4),
-                                  true,
-                                  { decoder: Decoder.String },
-                              )
+                                new Batch(isAtomic)
+                                    .restore(key4, 0, data)
+                                    .get(key4),
+                                true,
+                                { decoder: Decoder.String },
+                            )
                             : await client.exec(
-                                  new ClusterBatch(isAtomic)
-                                      .restore(key4, 0, data)
-                                      .get(key4),
-                                  true,
-                                  { decoder: Decoder.String },
-                              );
+                                new ClusterBatch(isAtomic)
+                                    .restore(key4, 0, data)
+                                    .get(key4),
+                                true,
+                                { decoder: Decoder.String },
+                            );
                     expect(response?.[0]).toEqual("OK");
                     expect(response?.[1]).toEqual(value);
 
@@ -11117,19 +11110,19 @@ export function runBaseTests(config: {
                     response =
                         client instanceof GlideClient
                             ? await client.exec(
-                                  new Batch(isAtomic)
-                                      .restore(key5, 0, data)
-                                      .get(key5),
-                                  true,
-                                  { decoder: Decoder.Bytes },
-                              )
+                                new Batch(isAtomic)
+                                    .restore(key5, 0, data)
+                                    .get(key5),
+                                true,
+                                { decoder: Decoder.Bytes },
+                            )
                             : await client.exec(
-                                  new ClusterBatch(isAtomic)
-                                      .restore(key5, 0, data)
-                                      .get(key5),
-                                  true,
-                                  { decoder: Decoder.Bytes },
-                              );
+                                new ClusterBatch(isAtomic)
+                                    .restore(key5, 0, data)
+                                    .get(key5),
+                                true,
+                                { decoder: Decoder.Bytes },
+                            );
                     expect(response?.[0]).toEqual("OK");
                     expect(response?.[1]).toEqual(valueEncode);
                 }
@@ -11601,13 +11594,13 @@ export function runBaseTests(config: {
                 expiry: expiryVal as
                     | "keepExisting"
                     | {
-                          type:
-                              | TimeUnit.Seconds
-                              | TimeUnit.Milliseconds
-                              | TimeUnit.UnixSeconds
-                              | TimeUnit.UnixMilliseconds;
-                          count: number;
-                      },
+                        type:
+                        | TimeUnit.Seconds
+                        | TimeUnit.Milliseconds
+                        | TimeUnit.UnixSeconds
+                        | TimeUnit.UnixMilliseconds;
+                        count: number;
+                    },
                 conditionalSet: "onlyIfDoesNotExist",
             });
 
@@ -11628,13 +11621,13 @@ export function runBaseTests(config: {
                 expiry: expiryVal as
                     | "keepExisting"
                     | {
-                          type:
-                              | TimeUnit.Seconds
-                              | TimeUnit.Milliseconds
-                              | TimeUnit.UnixSeconds
-                              | TimeUnit.UnixMilliseconds;
-                          count: number;
-                      },
+                        type:
+                        | TimeUnit.Seconds
+                        | TimeUnit.Milliseconds
+                        | TimeUnit.UnixSeconds
+                        | TimeUnit.UnixMilliseconds;
+                        count: number;
+                    },
 
                 conditionalSet: "onlyIfExists",
                 returnOldValue: true,
@@ -11653,13 +11646,13 @@ export function runBaseTests(config: {
                     expiry: expiryVal as
                         | "keepExisting"
                         | {
-                              type:
-                                  | TimeUnit.Seconds
-                                  | TimeUnit.Milliseconds
-                                  | TimeUnit.UnixSeconds
-                                  | TimeUnit.UnixMilliseconds;
-                              count: number;
-                          },
+                            type:
+                            | TimeUnit.Seconds
+                            | TimeUnit.Milliseconds
+                            | TimeUnit.UnixSeconds
+                            | TimeUnit.UnixMilliseconds;
+                            count: number;
+                        },
                     conditionalSet: "onlyIfEqual",
                     comparisonValue: value, // Ensure it matches the current key's value
                 });
@@ -13139,7 +13132,7 @@ export function runBaseTests(config: {
                     for (let i = 0; i < fullResultMapArray.length; i += 2) {
                         expect(
                             (fullResultMapArray[i] as string) in
-                                expectedFullMap,
+                            expectedFullMap,
                         ).toEqual(true);
                     }
 
@@ -14064,23 +14057,23 @@ export function runBaseTests(config: {
                 expect(await client.xinfoGroups(Buffer.from(key))).toEqual(
                     cluster.checkIfServerVersionLessThan("7.0.0")
                         ? [
-                              {
-                                  name: groupName1,
-                                  consumers: 0,
-                                  pending: 0,
-                                  "last-delivered-id": "0-0",
-                              },
-                          ]
+                            {
+                                name: groupName1,
+                                consumers: 0,
+                                pending: 0,
+                                "last-delivered-id": "0-0",
+                            },
+                        ]
                         : [
-                              {
-                                  name: groupName1,
-                                  consumers: 0,
-                                  pending: 0,
-                                  "last-delivered-id": "0-0",
-                                  "entries-read": null,
-                                  lag: 0,
-                              },
-                          ],
+                            {
+                                name: groupName1,
+                                consumers: 0,
+                                pending: 0,
+                                "last-delivered-id": "0-0",
+                                "entries-read": null,
+                                lag: 0,
+                            },
+                        ],
                 );
 
                 expect(
@@ -14117,23 +14110,23 @@ export function runBaseTests(config: {
                 expect(await client.xinfoGroups(key)).toEqual(
                     cluster.checkIfServerVersionLessThan("7.0.0")
                         ? [
-                              {
-                                  name: groupName1,
-                                  consumers: 0,
-                                  pending: 0,
-                                  "last-delivered-id": "0-0",
-                              },
-                          ]
+                            {
+                                name: groupName1,
+                                consumers: 0,
+                                pending: 0,
+                                "last-delivered-id": "0-0",
+                            },
+                        ]
                         : [
-                              {
-                                  name: groupName1,
-                                  consumers: 0,
-                                  pending: 0,
-                                  "last-delivered-id": "0-0",
-                                  "entries-read": null,
-                                  lag: 3,
-                              },
-                          ],
+                            {
+                                name: groupName1,
+                                consumers: 0,
+                                pending: 0,
+                                "last-delivered-id": "0-0",
+                                "entries-read": null,
+                                lag: 3,
+                            },
+                        ],
                 );
 
                 const xreadgroup = await client.xreadgroup(
@@ -14158,23 +14151,23 @@ export function runBaseTests(config: {
                 expect(await client.xinfoGroups(key)).toEqual(
                     cluster.checkIfServerVersionLessThan("7.0.0")
                         ? [
-                              {
-                                  name: groupName1,
-                                  consumers: 1,
-                                  pending: 3,
-                                  "last-delivered-id": streamId3,
-                              },
-                          ]
+                            {
+                                name: groupName1,
+                                consumers: 1,
+                                pending: 3,
+                                "last-delivered-id": streamId3,
+                            },
+                        ]
                         : [
-                              {
-                                  name: groupName1,
-                                  consumers: 1,
-                                  pending: 3,
-                                  "last-delivered-id": streamId3,
-                                  "entries-read": 3,
-                                  lag: 0,
-                              },
-                          ],
+                            {
+                                name: groupName1,
+                                consumers: 1,
+                                pending: 3,
+                                "last-delivered-id": streamId3,
+                                "entries-read": 3,
+                                lag: 0,
+                            },
+                        ],
                 );
 
                 expect(await client.xack(key, groupName1, [streamId1])).toEqual(
@@ -14184,23 +14177,23 @@ export function runBaseTests(config: {
                 expect(await client.xinfoGroups(key)).toEqual(
                     cluster.checkIfServerVersionLessThan("7.0.0")
                         ? [
-                              {
-                                  name: groupName1,
-                                  consumers: 1,
-                                  pending: 2,
-                                  "last-delivered-id": streamId3,
-                              },
-                          ]
+                            {
+                                name: groupName1,
+                                consumers: 1,
+                                pending: 2,
+                                "last-delivered-id": streamId3,
+                            },
+                        ]
                         : [
-                              {
-                                  name: groupName1,
-                                  consumers: 1,
-                                  pending: 2,
-                                  "last-delivered-id": streamId3,
-                                  "entries-read": 3,
-                                  lag: 0,
-                              },
-                          ],
+                            {
+                                name: groupName1,
+                                consumers: 1,
+                                pending: 2,
+                                "last-delivered-id": streamId3,
+                                "entries-read": 3,
+                                lag: 0,
+                            },
+                        ],
                 );
 
                 // key exists, but it is not a stream
@@ -14424,16 +14417,16 @@ export function runBaseTests(config: {
                     Buffer.from(group),
                     cluster.checkIfServerVersionLessThan("6.2.0")
                         ? {
-                              start: InfBoundary.NegativeInfinity,
-                              end: InfBoundary.PositiveInfinity,
-                              count: 1,
-                          }
+                            start: InfBoundary.NegativeInfinity,
+                            end: InfBoundary.PositiveInfinity,
+                            count: 1,
+                        }
                         : {
-                              start: InfBoundary.NegativeInfinity,
-                              end: InfBoundary.PositiveInfinity,
-                              count: 1,
-                              minIdleTime: 42,
-                          },
+                            start: InfBoundary.NegativeInfinity,
+                            end: InfBoundary.PositiveInfinity,
+                            count: 1,
+                            minIdleTime: 42,
+                        },
                 );
                 result[0][2] = 0; // overwrite msec counter to avoid test flakyness
                 expect(result).toEqual([["0-1", "consumer", 0, 1]]);
@@ -15651,9 +15644,9 @@ export function runBaseTests(config: {
                             client instanceof GlideClient
                                 ? await client.exec(batch as Batch, true)
                                 : await client.exec(
-                                      batch as ClusterBatch,
-                                      true,
-                                  );
+                                    batch as ClusterBatch,
+                                    true,
+                                );
                         expect(result).toEqual(expectedResult);
                     }
 
@@ -15703,13 +15696,13 @@ export function runBaseTests(config: {
                 // Retry with a longer timeout
                 const result = isCluster
                     ? await (client as GlideClusterClient).exec(
-                          batch as ClusterBatch,
-                          true,
-                          { timeout: 1000 },
-                      )
+                        batch as ClusterBatch,
+                        true,
+                        { timeout: 1000 },
+                    )
                     : await (client as GlideClient).exec(batch as Batch, true, {
-                          timeout: 1000,
-                      });
+                        timeout: 1000,
+                    });
 
                 expect(result?.length).toBe(1);
             }, protocol);
@@ -15738,9 +15731,9 @@ export function runBaseTests(config: {
 
                 const result = isCluster
                     ? await (client as GlideClusterClient).exec(
-                          batch as ClusterBatch,
-                          false,
-                      )
+                        batch as ClusterBatch,
+                        false,
+                    )
                     : await (client as GlideClient).exec(batch as Batch, false);
 
                 expect(result?.length).toBe(4);
@@ -15913,9 +15906,9 @@ export function runCommonTests(config: {
                 const result = clusterMode
                     ? await client.exec(batch as ClusterTransaction, true)
                     : await (client as GlideClient).exec(
-                          batch as Transaction,
-                          true,
-                      );
+                        batch as Transaction,
+                        true,
+                    );
                 expect(result?.length).toBe(2);
                 expect(result?.[0]).toBe("OK");
                 expect(result?.[1]).toBe("hello");

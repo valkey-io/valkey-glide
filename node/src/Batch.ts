@@ -35,11 +35,9 @@ import {
     GlideClusterClient, // eslint-disable-line @typescript-eslint/no-unused-vars
     GlideRecord,
     GlideString,
-    HExpireAtOptions,
     HExpireOptions,
     HGetExOptions,
-    HPExpireAtOptions,
-    HPExpireOptions,
+
     HScanOptions,
     HSetExOptions,
     HashDataType,
@@ -312,7 +310,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      *     batch will be executed as an atomic `transaction`. If `false`, the batch will be
      *     executed as a non-atomic `pipeline`.
      */
-    constructor(public readonly isAtomic: boolean) {}
+    constructor(public readonly isAtomic: boolean) { }
 
     /**
      * Adds a command to the batch and returns the batch instance.
@@ -1049,18 +1047,44 @@ export class BaseBatch<T extends BaseBatch<T>> {
     }
 
     /**
-     * Sets the specified fields to their respective values in the hash stored at `key` with optional expiration.
-     * This command allows setting multiple field-value pairs with expiration times and conditional options.
-     *
-     * @see {@link https://valkey.io/commands/hsetex/|valkey.io} for details.
+     * Sets hash fields with expiration times and optional conditional changes.
      *
      * @param key - The key of the hash.
-     * @param fieldsAndValues - A map or array of field-value pairs to set in the hash.
-     * @param options - (Optional) Additional parameters:
-     *   - `fieldConditionalChange`: Options for handling existing fields (FNX | FXX).
-     *   - `expiry`: Expiry settings for the fields (EX | PX | EXAT | PXAT | KEEPTTL).
+     * @param fieldsAndValues - A map or array of field-value pairs to set.
+     * @param options - Optional parameters including field conditional changes and expiry settings.
+     *                  See {@link HSetExOptions}.
+     *
+     * @example
+     * ```typescript
+     * // Set fields with 60 second expiration, only if none exist
+     * batch.hsetex(
+     *     "myHash",
+     *     { field1: "value1", field2: "value2" },
+     *     {
+     *         fieldConditionalChange: HashFieldConditionalChange.ONLY_IF_NONE_EXIST,
+     *         expiry: { type: TimeUnit.Seconds, count: 60 }
+     *     }
+     * );
+     *
+     * // Set fields and keep existing TTL
+     * batch.hsetex(
+     *     "myHash",
+     *     { field3: "value3" },
+     *     { expiry: "KEEPTTL" }
+     * );
+     *
+     * // Set fields with Unix timestamp expiration
+     * batch.hsetex(
+     *     "myHash",
+     *     { field4: "value4" },
+     *     { expiry: { type: TimeUnit.UnixSeconds, count: Math.floor(Date.now() / 1000) + 3600 } }
+     * );
+     * ```
      *
      * Command Response - The number of fields that were added to the hash.
+     *
+     * @since Valkey 9.0.0
+     * @see https://valkey.io/commands/hsetex/
      */
     public hsetex(
         key: GlideString,
@@ -1077,15 +1101,45 @@ export class BaseBatch<T extends BaseBatch<T>> {
     }
 
     /**
-     * Returns the values associated with the specified fields in the hash stored at `key` and optionally sets the expiration for the fields.
-     * @see {@link https://valkey.io/commands/hgetex/|valkey.io} for details.
+     * Gets hash fields and optionally sets their expiration.
      *
      * @param key - The key of the hash.
      * @param fields - The fields in the hash stored at `key` to retrieve from the database.
      * @param options - Optional arguments for the HGETEX command. See {@link HGetExOptions}.
-     * @returns Command response - An array of values associated with the given fields, in the same order as they are requested.
+     *
+     * @example
+     * ```typescript
+     * // Get fields without setting expiration
+     * batch.hgetex("myHash", ["field1", "field2"]);
+     *
+     * // Get fields and set 30 second expiration
+     * batch.hgetex(
+     *     "myHash",
+     *     ["field1", "field2"],
+     *     { expiry: { type: TimeUnit.Seconds, count: 30 } }
+     * );
+     *
+     * // Get fields and remove expiration (make persistent)
+     * batch.hgetex(
+     *     "myHash",
+     *     ["field1", "field2"],
+     *     { expiry: "PERSIST" }
+     * );
+     *
+     * // Get fields and set millisecond precision expiration
+     * batch.hgetex(
+     *     "myHash",
+     *     ["field3"],
+     *     { expiry: { type: TimeUnit.Milliseconds, count: 5000 } }
+     * );
+     * ```
+     *
+     * Command Response - An array of values associated with the given fields, in the same order as they are requested.
      *     For every field that does not exist in the hash, a null value is returned.
      *     If `key` does not exist, returns an array of null values.
+     *
+     * @since Valkey 9.0.0
+     * @see https://valkey.io/commands/hgetex/
      */
     public hgetex(
         key: GlideString,
@@ -1142,7 +1196,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * @param key - The key of the hash.
      * @param milliseconds - The expiration time in milliseconds.
      * @param fields - The fields to set expiration for.
-     * @param options - Optional arguments for the HPEXPIRE command. See {@link HPExpireOptions}.
+     * @param options - Optional arguments for the HPEXPIRE command. See {@link HExpireOptions}.
      *
      * Command Response - An array of boolean values indicating whether expiration was set for each field.
      *     `true` if expiration was set, `false` if the field doesn't exist or the condition wasn't met.
@@ -1151,7 +1205,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
         key: GlideString,
         milliseconds: number,
         fields: GlideString[],
-        options?: HPExpireOptions,
+        options?: HExpireOptions,
     ): T {
         return this.addAndReturn(
             createHPExpire(key, milliseconds, fields, options),
@@ -1165,7 +1219,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * @param key - The key of the hash.
      * @param unixTimestampSeconds - The expiration time as a Unix timestamp in seconds.
      * @param fields - The fields to set expiration for.
-     * @param options - Optional arguments for the HEXPIREAT command. See {@link HExpireAtOptions}.
+     * @param options - Optional arguments for the HEXPIREAT command. See {@link HExpireOptions}.
      *
      * Command Response - An array of numbers indicating the result for each field:
      *     - `1` if expiration was set successfully
@@ -1177,7 +1231,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
         key: GlideString,
         unixTimestampSeconds: number,
         fields: GlideString[],
-        options?: HExpireAtOptions,
+        options?: HExpireOptions,
     ): T {
         return this.addAndReturn(
             createHExpireAt(key, unixTimestampSeconds, fields, options),
@@ -1191,7 +1245,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * @param key - The key of the hash.
      * @param unixTimestampMilliseconds - The expiration time as a Unix timestamp in milliseconds.
      * @param fields - The fields to set expiration for.
-     * @param options - Optional arguments for the HPEXPIREAT command. See {@link HPExpireAtOptions}.
+     * @param options - Optional arguments for the HPEXPIREAT command. See {@link HExpireOptions}.
      *
      * Command Response - An array of boolean values indicating whether expiration was set for each field.
      *     `true` if expiration was set, `false` if the field doesn't exist or the condition wasn't met.
@@ -1200,7 +1254,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
         key: GlideString,
         unixTimestampMilliseconds: number,
         fields: GlideString[],
-        options?: HPExpireAtOptions,
+        options?: HExpireOptions,
     ): T {
         return this.addAndReturn(
             createHPExpireAt(key, unixTimestampMilliseconds, fields, options),
