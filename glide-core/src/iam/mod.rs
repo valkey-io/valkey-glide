@@ -8,6 +8,7 @@ use logger_core::{log_error, log_info, log_warn};
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
+use strum_macros::IntoStaticStr;
 use thiserror::Error;
 use tokio::sync::{Notify, RwLock};
 use tokio::task::JoinHandle;
@@ -42,19 +43,13 @@ pub enum GlideIAMError {
 }
 
 /// Service type configuration for IAM authentication
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum ServiceType {
-    ElastiCache,
-    MemoryDB,
-}
 
-impl ServiceType {
-    fn service_name(&self) -> &'static str {
-        match self {
-            ServiceType::ElastiCache => "elasticache",
-            ServiceType::MemoryDB => "memorydb",
-        }
-    }
+#[derive(Clone, Copy, Debug, PartialEq, Eq, IntoStaticStr)]
+pub enum ServiceType {
+    #[strum(serialize = "elasticache")]
+    ElastiCache,
+    #[strum(serialize = "memorydb")]
+    MemoryDB,
 }
 
 /// Validate and normalize the refresh interval.
@@ -286,13 +281,15 @@ impl IAMTokenManager {
             .await
             .map_err(|e| GlideIAMError::CredentialsError(e.to_string()))?;
 
+        let service_name: &'static str = state.service_type.into();
+
         // Create AWS identity from credentials
         let identity = Credentials::new(
             creds.access_key_id(),
             creds.secret_access_key(),
             creds.session_token().map(|s| s.to_string()),
             None,
-            state.service_type.service_name(), // "elasticache" | "memorydb"
+            service_name, // "elasticache" | "memorydb"
         );
 
         let signing_time = SystemTime::now();
@@ -308,7 +305,7 @@ impl IAMTokenManager {
         let signing_params = v4::SigningParams::builder()
             .identity(&identity_value)
             .region(&state.region)
-            .name(state.service_type.service_name())
+            .name(service_name)
             .time(signing_time)
             .settings(signing_settings)
             .build()
@@ -487,7 +484,7 @@ mod tests {
         let username = "test-user";
         let service_type = ServiceType::ElastiCache;
 
-        let state = create_test_state(region, cluster_name, username, service_type.clone());
+        let state = create_test_state(region, cluster_name, username, service_type);
         let result = IAMTokenManager::generate_token_static(&state).await;
 
         assert!(
@@ -558,7 +555,7 @@ mod tests {
         let username = "memorydb-user";
         let service_type = ServiceType::MemoryDB;
 
-        let state = create_test_state(region, cluster_name, username, service_type.clone());
+        let state = create_test_state(region, cluster_name, username, service_type);
         let result = IAMTokenManager::generate_token_static(&state).await;
 
         assert!(
@@ -597,7 +594,7 @@ mod tests {
         let username = "test@user.com";
         let service_type = ServiceType::ElastiCache;
 
-        let state = create_test_state(region, cluster_name, username, service_type.clone());
+        let state = create_test_state(region, cluster_name, username, service_type);
         let result = IAMTokenManager::generate_token_static(&state).await;
 
         assert!(
@@ -844,7 +841,7 @@ mod tests {
         let username = "test-user";
         let service_type = ServiceType::ElastiCache;
 
-        let state = create_test_state(region, cluster_name, username, service_type.clone());
+        let state = create_test_state(region, cluster_name, username, service_type);
         let result = IAMTokenManager::generate_token_static(&state).await;
 
         // Note: This test might pass on EC2 instances with IAM roles or other credential sources
