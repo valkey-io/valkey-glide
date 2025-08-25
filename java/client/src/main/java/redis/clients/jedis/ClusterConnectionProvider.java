@@ -34,5 +34,6 @@ public class ClusterConnectionProvider implements ConnectionProvider {
     @Override
     public void close() {
         // Implementation for closing cluster connections
+        // No real connection to close since GLIDE manages them internally
     }
 }
