@@ -86,6 +86,15 @@ public abstract class BaseClientConfiguration {
     private final BackoffStrategy reconnectStrategy;
 
     /**
+     * Index of the logical database to connect to. Must be non-negative and within the range
+     * supported by the server. If not specified, defaults to database 0.
+     *
+     * <p>For cluster mode, this feature requires Valkey 9.0+ with multi-database cluster support
+     * enabled (cluster-databases configuration > 1).
+     */
+    private final Integer databaseId;
+
+    /**
      * Enables lazy connection mode, where physical connections to the server(s) are deferred until
      * the first command is sent. This can reduce startup latency and allow for client creation in
      * disconnected environments.

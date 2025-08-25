@@ -249,4 +249,71 @@ public interface ConnectionManagementClusterCommands {
      * }</pre>
      */
     CompletableFuture<ClusterValue<GlideString>> echo(GlideString message, Route route);
+
+    /**
+     * Changes the currently selected database on cluster nodes.<br>
+     * The command will be routed to all nodes.
+     *
+     * <p><b>WARNING:</b> This command is <b>NOT RECOMMENDED</b> for production use. Upon
+     * reconnection, nodes will revert to the database_id specified in the client configuration
+     * (default: 0), NOT the database selected via this command.
+     *
+     * <p><b>RECOMMENDED APPROACH:</b> Use the database_id parameter in client configuration instead:
+     *
+     * <pre>{@code
+     * GlideClusterClient client = GlideClusterClient.createClient(
+     *     GlideClusterClientConfiguration.builder()
+     *         .address(NodeAddress.builder().host("localhost").port(6379).build())
+     *         .databaseId(5)  // Recommended: persists across reconnections
+     *         .build()
+     * ).get();
+     * }</pre>
+     *
+     * <p><b>CLUSTER BEHAVIOR:</b> This command routes to all nodes by default to maintain consistency
+     * across the cluster.
+     *
+     * @see <a href="https://valkey.io/commands/select/">valkey.io</a> for details.
+     * @param index The index of the database to select.
+     * @return A simple <code>OK</code> response.
+     * @example
+     *     <pre>{@code
+     * String response = clusterClient.select(0).get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> select(long index);
+
+    /**
+     * Changes the currently selected database on cluster nodes.
+     *
+     * <p><b>WARNING:</b> This command is <b>NOT RECOMMENDED</b> for production use. Upon
+     * reconnection, nodes will revert to the database_id specified in the client configuration
+     * (default: 0), NOT the database selected via this command.
+     *
+     * <p><b>RECOMMENDED APPROACH:</b> Use the database_id parameter in client configuration instead.
+     *
+     * <p><b>CLUSTER BEHAVIOR:</b> This command routes to all nodes by default to maintain consistency
+     * across the cluster.
+     *
+     * @see <a href="https://valkey.io/commands/select/">valkey.io</a> for details.
+     * @param index The index of the database to select.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return A {@link ClusterValue} which holds a single value if single node route is used or a
+     *     dictionary where each address is the key and its corresponding node response is the value.
+     *     The value is a simple <code>OK</code> response.
+     * @example
+     *     <pre>{@code
+     * // Command sent to all nodes via ALL_NODES route, expecting a MultiValue result.
+     * Map<String, String> responsePerNode = clusterClient.select(5, ALL_NODES).get().getMultiValue();
+     * for(var response : responsePerNode.values()) {
+     *     assert response.equals("OK");
+     * }
+     *
+     * // Command sent to a single node via SlotIdRoute, expecting a SingleValue result.
+     * String response = clusterClient.select(5, new SlotIdRoute(1, PRIMARY)).get().getSingleValue();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<String>> select(long index, Route route);
 }

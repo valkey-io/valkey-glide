@@ -162,6 +162,19 @@ public class ConnectionManager {
             connectionRequestBuilder.setLazyConnect(configuration.isLazyConnect());
         }
 
+        if (configuration.getDatabaseId() != null) {
+            if (configuration.getDatabaseId() < 0) {
+                throw new ConfigurationError(
+                        "databaseId must be non-negative, got: " + configuration.getDatabaseId());
+            }
+            if (configuration.getDatabaseId() > 15) {
+                throw new ConfigurationError(
+                        "databaseId must be within reasonable range (0-15), got: "
+                                + configuration.getDatabaseId());
+            }
+            connectionRequestBuilder.setDatabaseId(configuration.getDatabaseId());
+        }
+
         return connectionRequestBuilder;
     }
 
@@ -175,10 +188,6 @@ public class ConnectionManager {
         ConnectionRequest.Builder connectionRequestBuilder =
                 setupConnectionRequestBuilderBaseConfiguration(configuration);
         connectionRequestBuilder.setClusterModeEnabled(false);
-
-        if (configuration.getDatabaseId() != null) {
-            connectionRequestBuilder.setDatabaseId(configuration.getDatabaseId());
-        }
 
         if (configuration.getSubscriptionConfiguration() != null) {
             if (configuration.getProtocol() == ProtocolVersion.RESP2) {
