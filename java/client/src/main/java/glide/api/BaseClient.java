@@ -228,7 +228,12 @@ import glide.api.models.PubSubMessage;
 import glide.api.models.Script;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.GetExOptions;
-import glide.api.models.commands.HashFieldExpirationOptions;
+import glide.api.models.commands.HExpireAtOptions;
+import glide.api.models.commands.HExpireOptions;
+import glide.api.models.commands.HGetExOptions;
+import glide.api.models.commands.HPExpireAtOptions;
+import glide.api.models.commands.HPExpireOptions;
+import glide.api.models.commands.HSetExOptions;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
 import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
@@ -1182,13 +1187,12 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Long> hsetex(
-            @NonNull String key,
-            @NonNull Map<String, String> fieldValueMap,
-            @NonNull HashFieldExpirationOptions options) {
+            @NonNull String key, @NonNull Map<String, String> fieldValueMap, HSetExOptions options) {
+        String[] optionsArgs = options != null ? options.toArgs() : new String[0];
         String[] arguments =
                 concatenateArrays(
                         new String[] {key},
-                        options.toArgs(),
+                        optionsArgs,
                         new String[] {"FIELDS", String.valueOf(fieldValueMap.size())},
                         convertMapToKeyValueStringArray(fieldValueMap));
         return commandManager.submitNewCommand(HSetEx, arguments, this::handleLongResponse);
@@ -1198,11 +1202,13 @@ public abstract class BaseClient
     public CompletableFuture<Long> hsetex(
             @NonNull GlideString key,
             @NonNull Map<GlideString, GlideString> fieldValueMap,
-            @NonNull HashFieldExpirationOptions options) {
+            HSetExOptions options) {
+        ArgsBuilder argsBuilder = new ArgsBuilder().add(key);
+        if (options != null) {
+            argsBuilder.add(options.toArgs());
+        }
         GlideString[] arguments =
-                new ArgsBuilder()
-                        .add(key)
-                        .add(options.toArgs())
+                argsBuilder
                         .add("FIELDS")
                         .add(fieldValueMap.size())
                         .add(convertMapToKeyValueGlideStringArray(fieldValueMap))
@@ -1212,11 +1218,12 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<String[]> hgetex(
-            @NonNull String key, @NonNull String[] fields, @NonNull HashFieldExpirationOptions options) {
+            @NonNull String key, @NonNull String[] fields, HGetExOptions options) {
+        String[] optionsArgs = options != null ? options.toArgs() : new String[0];
         String[] arguments =
                 concatenateArrays(
                         new String[] {key},
-                        options.toArgs(),
+                        optionsArgs,
                         new String[] {"FIELDS", String.valueOf(fields.length)},
                         fields);
         return commandManager.submitNewCommand(
@@ -1225,17 +1232,12 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<GlideString[]> hgetex(
-            @NonNull GlideString key,
-            @NonNull GlideString[] fields,
-            @NonNull HashFieldExpirationOptions options) {
-        GlideString[] arguments =
-                new ArgsBuilder()
-                        .add(key)
-                        .add(options.toArgs())
-                        .add("FIELDS")
-                        .add(fields.length)
-                        .add(fields)
-                        .toArray();
+            @NonNull GlideString key, @NonNull GlideString[] fields, HGetExOptions options) {
+        ArgsBuilder argsBuilder = new ArgsBuilder().add(key);
+        if (options != null) {
+            argsBuilder.add(options.toArgs());
+        }
+        GlideString[] arguments = argsBuilder.add("FIELDS").add(fields.length).add(fields).toArray();
         return commandManager.submitNewCommand(
                 HGetEx,
                 arguments,
@@ -1244,14 +1246,12 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Long[]> hexpire(
-            @NonNull String key,
-            long seconds,
-            @NonNull String[] fields,
-            @NonNull HashFieldExpirationOptions options) {
+            @NonNull String key, long seconds, @NonNull String[] fields, HExpireOptions options) {
+        String[] optionsArgs = options != null ? options.toArgs() : new String[0];
         String[] arguments =
                 concatenateArrays(
                         new String[] {key, String.valueOf(seconds)},
-                        options.toArgs(),
+                        optionsArgs,
                         new String[] {"FIELDS", String.valueOf(fields.length)},
                         fields);
         return commandManager.submitNewCommand(
@@ -1263,16 +1263,12 @@ public abstract class BaseClient
             @NonNull GlideString key,
             long seconds,
             @NonNull GlideString[] fields,
-            @NonNull HashFieldExpirationOptions options) {
-        GlideString[] arguments =
-                new ArgsBuilder()
-                        .add(key)
-                        .add(seconds)
-                        .add(options.toArgs())
-                        .add("FIELDS")
-                        .add(fields.length)
-                        .add(fields)
-                        .toArray();
+            HExpireOptions options) {
+        ArgsBuilder argsBuilder = new ArgsBuilder().add(key).add(seconds);
+        if (options != null) {
+            argsBuilder.add(options.toArgs());
+        }
+        GlideString[] arguments = argsBuilder.add("FIELDS").add(fields.length).add(fields).toArray();
         return commandManager.submitNewCommand(
                 HExpire, arguments, response -> castArray(handleArrayResponse(response), Long.class));
     }
@@ -1297,14 +1293,12 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Long[]> hpexpire(
-            @NonNull String key,
-            long milliseconds,
-            @NonNull String[] fields,
-            @NonNull HashFieldExpirationOptions options) {
+            @NonNull String key, long milliseconds, @NonNull String[] fields, HPExpireOptions options) {
+        String[] optionsArgs = options != null ? options.toArgs() : new String[0];
         String[] arguments =
                 concatenateArrays(
                         new String[] {key, String.valueOf(milliseconds)},
-                        options.toArgs(),
+                        optionsArgs,
                         new String[] {"FIELDS", String.valueOf(fields.length)},
                         fields);
         return commandManager.submitNewCommand(
@@ -1316,30 +1310,24 @@ public abstract class BaseClient
             @NonNull GlideString key,
             long milliseconds,
             @NonNull GlideString[] fields,
-            @NonNull HashFieldExpirationOptions options) {
-        GlideString[] arguments =
-                new ArgsBuilder()
-                        .add(key)
-                        .add(milliseconds)
-                        .add(options.toArgs())
-                        .add("FIELDS")
-                        .add(fields.length)
-                        .add(fields)
-                        .toArray();
+            HPExpireOptions options) {
+        ArgsBuilder argsBuilder = new ArgsBuilder().add(key).add(milliseconds);
+        if (options != null) {
+            argsBuilder.add(options.toArgs());
+        }
+        GlideString[] arguments = argsBuilder.add("FIELDS").add(fields.length).add(fields).toArray();
         return commandManager.submitNewCommand(
                 HPExpire, arguments, response -> castArray(handleArrayResponse(response), Long.class));
     }
 
     @Override
     public CompletableFuture<Long[]> hexpireat(
-            @NonNull String key,
-            long unixSeconds,
-            @NonNull String[] fields,
-            @NonNull HashFieldExpirationOptions options) {
+            @NonNull String key, long unixSeconds, @NonNull String[] fields, HExpireAtOptions options) {
+        String[] optionsArgs = options != null ? options.toArgs() : new String[0];
         String[] arguments =
                 concatenateArrays(
                         new String[] {key, String.valueOf(unixSeconds)},
-                        options.toArgs(),
+                        optionsArgs,
                         new String[] {"FIELDS", String.valueOf(fields.length)},
                         fields);
         return commandManager.submitNewCommand(
@@ -1351,16 +1339,12 @@ public abstract class BaseClient
             @NonNull GlideString key,
             long unixSeconds,
             @NonNull GlideString[] fields,
-            @NonNull HashFieldExpirationOptions options) {
-        GlideString[] arguments =
-                new ArgsBuilder()
-                        .add(key)
-                        .add(unixSeconds)
-                        .add(options.toArgs())
-                        .add("FIELDS")
-                        .add(fields.length)
-                        .add(fields)
-                        .toArray();
+            HExpireAtOptions options) {
+        ArgsBuilder argsBuilder = new ArgsBuilder().add(key).add(unixSeconds);
+        if (options != null) {
+            argsBuilder.add(options.toArgs());
+        }
+        GlideString[] arguments = argsBuilder.add("FIELDS").add(fields.length).add(fields).toArray();
         return commandManager.submitNewCommand(
                 HExpireAt, arguments, response -> castArray(handleArrayResponse(response), Long.class));
     }
@@ -1370,11 +1354,12 @@ public abstract class BaseClient
             @NonNull String key,
             long unixMilliseconds,
             @NonNull String[] fields,
-            @NonNull HashFieldExpirationOptions options) {
+            HPExpireAtOptions options) {
+        String[] optionsArgs = options != null ? options.toArgs() : new String[0];
         String[] arguments =
                 concatenateArrays(
                         new String[] {key, String.valueOf(unixMilliseconds)},
-                        options.toArgs(),
+                        optionsArgs,
                         new String[] {"FIELDS", String.valueOf(fields.length)},
                         fields);
         return commandManager.submitNewCommand(
@@ -1386,16 +1371,12 @@ public abstract class BaseClient
             @NonNull GlideString key,
             long unixMilliseconds,
             @NonNull GlideString[] fields,
-            @NonNull HashFieldExpirationOptions options) {
-        GlideString[] arguments =
-                new ArgsBuilder()
-                        .add(key)
-                        .add(unixMilliseconds)
-                        .add(options.toArgs())
-                        .add("FIELDS")
-                        .add(fields.length)
-                        .add(fields)
-                        .toArray();
+            HPExpireAtOptions options) {
+        ArgsBuilder argsBuilder = new ArgsBuilder().add(key).add(unixMilliseconds);
+        if (options != null) {
+            argsBuilder.add(options.toArgs());
+        }
+        GlideString[] arguments = argsBuilder.add("FIELDS").add(fields.length).add(fields).toArray();
         return commandManager.submitNewCommand(
                 HPExpireAt, arguments, response -> castArray(handleArrayResponse(response), Long.class));
     }

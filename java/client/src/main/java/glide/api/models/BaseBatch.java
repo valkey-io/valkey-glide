@@ -243,7 +243,12 @@ import glide.api.commands.StringBaseCommands;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.GetExOptions;
-import glide.api.models.commands.HashFieldExpirationOptions;
+import glide.api.models.commands.HExpireAtOptions;
+import glide.api.models.commands.HExpireOptions;
+import glide.api.models.commands.HGetExOptions;
+import glide.api.models.commands.HPExpireAtOptions;
+import glide.api.models.commands.HPExpireOptions;
+import glide.api.models.commands.HSetExOptions;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
 import glide.api.models.commands.LPosOptions;
@@ -825,13 +830,25 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param key The key of the hash.
      * @param fieldValueMap A field-value map consisting of fields and their corresponding values to
      *     be set in the hash stored at the specified key.
-     * @param options The {@link HashFieldExpirationOptions} for the command.
+     * @param options The {@link HSetExOptions} for the command, including field conditional changes
+     *     and expiry settings.
      * @return Command Response - The number of fields that were added to the hash.
+     * @example
+     *     <pre>{@code
+     * // Set fields with 60 second expiration, only if none exist
+     * HSetExOptions options = HSetExOptions.builder()
+     *     .onlyIfNoneExist()
+     *     .expiry(ExpirySet.Seconds(60L))
+     *     .build();
+     *
+     * Map<String, String> fieldValueMap = Map.of("field1", "value1", "field2", "value2");
+     * batch.hsetex("myHash", fieldValueMap, options);
+     * }</pre>
      */
     public <ArgType> T hsetex(
             @NonNull ArgType key,
             @NonNull Map<ArgType, ArgType> fieldValueMap,
-            @NonNull HashFieldExpirationOptions options) {
+            @NonNull HSetExOptions options) {
         checkTypeOrThrow(key);
         protobufBatch.addCommands(
                 buildCommand(
@@ -856,15 +873,24 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @see <a href="https://valkey.io/commands/hgetex/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param fields The fields to retrieve from the hash.
-     * @param options The expiration options for the fields.
+     * @param options The {@link HGetExOptions} for the command, including expiry settings that
+     *     support PERSIST but exclude KEEPTTL.
      * @return Command Response - An array of values associated with the given fields, in the same
      *     order as they are requested. For every field that does not exist in the hash, a <code>null
      *     </code> value is returned.
+     * @example
+     *     <pre>{@code
+     * // Get fields and set them to persist (no expiration)
+     * HGetExOptions options = HGetExOptions.builder()
+     *     .expiry(HGetExExpiry.Persist())
+     *     .build();
+     *
+     * String[] fields = {"field1", "field2"};
+     * batch.hgetex("myHash", fields, options);
+     * }</pre>
      */
     public <ArgType> T hgetex(
-            @NonNull ArgType key,
-            @NonNull ArgType[] fields,
-            @NonNull HashFieldExpirationOptions options) {
+            @NonNull ArgType key, @NonNull ArgType[] fields, @NonNull HGetExOptions options) {
         checkTypeOrThrow(key);
         protobufBatch.addCommands(
                 buildCommand(
@@ -892,17 +918,28 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param key The key of the hash.
      * @param seconds The expiration time in seconds.
      * @param fields The fields in the hash stored at <code>key</code> to set expiration for.
-     * @param options The expiration condition options.
+     * @param options The {@link HExpireOptions} for the command, supporting only expiration
+     *     conditions (NX/XX/GT/LT).
      * @return Command Response - An array of <code>Boolean</code> values indicating the success of
      *     setting expiration for each field. <code>true</code> indicates that the expiration was
      *     successfully set, and <code>false</code> indicates that the condition was not met or the
      *     field does not exist.
+     * @example
+     *     <pre>{@code
+     * // Set expiration only if fields have no existing expiration
+     * HExpireOptions options = HExpireOptions.builder()
+     *     .onlyIfNoExpiry()
+     *     .build();
+     *
+     * String[] fields = {"field1", "field2"};
+     * batch.hexpire("myHash", 300L, fields, options);
+     * }</pre>
      */
     public <ArgType> T hexpire(
             @NonNull ArgType key,
             long seconds,
             @NonNull ArgType[] fields,
-            @NonNull HashFieldExpirationOptions options) {
+            @NonNull HExpireOptions options) {
         checkTypeOrThrow(key);
         protobufBatch.addCommands(
                 buildCommand(
@@ -953,7 +990,8 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param key The key of the hash.
      * @param milliseconds The expiration time to set for the fields, in milliseconds.
      * @param fields The fields to set expiration for.
-     * @param options The expiration options.
+     * @param options The {@link HPExpireOptions} for the command, supporting only expiration
+     *     conditions (NX/XX/GT/LT).
      * @return Command response - An array of <code>Boolean</code> values, each corresponding to a
      *     field:
      *     <ul>
@@ -961,12 +999,23 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      *       <li><code>false</code> if the field does not exist or the expiration time was not set due
      *           to the condition not being met.
      *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * // Set expiration only if new expiration is greater than current
+     * HPExpireOptions options = HPExpireOptions.builder()
+     *     .onlyIfGreaterThanCurrent()
+     *     .build();
+     *
+     * String[] fields = {"field1", "field2"};
+     * batch.hpexpire("myHash", 30000L, fields, options);
+     * }</pre>
      */
     public <ArgType> T hpexpire(
             @NonNull ArgType key,
             long milliseconds,
             @NonNull ArgType[] fields,
-            @NonNull HashFieldExpirationOptions options) {
+            @NonNull HPExpireOptions options) {
         checkTypeOrThrow(key);
         protobufBatch.addCommands(
                 buildCommand(
@@ -991,7 +1040,8 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param key The key of the hash.
      * @param unixSeconds The expiration time to set for the fields, as a Unix timestamp in seconds.
      * @param fields The fields to set expiration for.
-     * @param options The expiration options.
+     * @param options The {@link HExpireAtOptions} for the command, supporting only expiration
+     *     conditions (NX/XX/GT/LT).
      * @return Command response - An array of <code>Boolean</code> values, each corresponding to a
      *     field:
      *     <ul>
@@ -999,12 +1049,24 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      *       <li><code>false</code> if the field does not exist or the expiration time was not set due
      *           to the condition not being met.
      *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * // Set expiration only if fields have existing expiration
+     * HExpireAtOptions options = HExpireAtOptions.builder()
+     *     .onlyIfHasExpiry()
+     *     .build();
+     *
+     * String[] fields = {"field1", "field2"};
+     * long unixTimestamp = System.currentTimeMillis() / 1000 + 3600; // 1 hour from now
+     * batch.hexpireat("myHash", unixTimestamp, fields, options);
+     * }</pre>
      */
     public <ArgType> T hexpireat(
             @NonNull ArgType key,
             long unixSeconds,
             @NonNull ArgType[] fields,
-            @NonNull HashFieldExpirationOptions options) {
+            @NonNull HExpireAtOptions options) {
         checkTypeOrThrow(key);
         protobufBatch.addCommands(
                 buildCommand(
@@ -1023,7 +1085,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * Sets expiration time for hash fields, using an absolute Unix timestamp in milliseconds. <code>
      * HPEXPIREAT</code> has the same effect and semantic as <code>HEXPIREAT</code>, but the Unix time
      * at which the field will expire is specified in milliseconds instead of seconds. See {@link
-     * #hexpireat(Object, long, Object[], HashFieldExpirationOptions)} for more details.
+     * #hexpireat(Object, long, Object[], HExpireAtOptions)} for more details.
      *
      * @since Valkey 9.0 and above.
      * @see <a href="https://valkey.io/commands/hpexpireat/">valkey.io</a> for details.
@@ -1031,7 +1093,8 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param unixMilliseconds The expiration time to set for the fields, as a Unix timestamp in
      *     milliseconds.
      * @param fields The fields to set expiration for.
-     * @param options The expiration options.
+     * @param options The {@link HPExpireAtOptions} for the command, supporting only expiration
+     *     conditions (NX/XX/GT/LT).
      * @return Command response - An array of <code>Boolean</code> values, each corresponding to a
      *     field:
      *     <ul>
@@ -1039,12 +1102,24 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      *       <li><code>false</code> if the field does not exist or the expiration time was not set due
      *           to the condition not being met.
      *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * // Set expiration only if new expiration is less than current
+     * HPExpireAtOptions options = HPExpireAtOptions.builder()
+     *     .onlyIfLessThanCurrent()
+     *     .build();
+     *
+     * String[] fields = {"field1", "field2"};
+     * long unixTimestamp = System.currentTimeMillis() + 1800000; // 30 minutes from now
+     * batch.hpexpireat("myHash", unixTimestamp, fields, options);
+     * }</pre>
      */
     public <ArgType> T hpexpireat(
             @NonNull ArgType key,
             long unixMilliseconds,
             @NonNull ArgType[] fields,
-            @NonNull HashFieldExpirationOptions options) {
+            @NonNull HPExpireAtOptions options) {
         checkTypeOrThrow(key);
         protobufBatch.addCommands(
                 buildCommand(

@@ -40,8 +40,15 @@ import glide.api.models.GlideString;
 import glide.api.models.Script;
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.ExpireOptions;
+import glide.api.models.commands.ExpirySet;
 import glide.api.models.commands.GetExOptions;
-import glide.api.models.commands.HashFieldExpirationOptions;
+import glide.api.models.commands.HExpireAtOptions;
+import glide.api.models.commands.HExpireOptions;
+import glide.api.models.commands.HGetExExpiry;
+import glide.api.models.commands.HGetExOptions;
+import glide.api.models.commands.HPExpireAtOptions;
+import glide.api.models.commands.HPExpireOptions;
+import glide.api.models.commands.HSetExOptions;
 import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions;
@@ -1412,10 +1419,7 @@ public class SharedCommandTests {
         fieldValueMap.put("field1", "value1");
         fieldValueMap.put("field2", "value2");
 
-        HashFieldExpirationOptions options =
-                HashFieldExpirationOptions.builder()
-                        .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
-                        .build();
+        HSetExOptions options = HSetExOptions.builder().expiry(ExpirySet.Seconds(60L)).build();
 
         // Test HSETEX
         Long result = client.hsetex(key, fieldValueMap, options).get();
@@ -1446,11 +1450,8 @@ public class SharedCommandTests {
         fieldValueMap.put("field2", "value2");
 
         // Test FNX option - should succeed when none of the fields exist
-        HashFieldExpirationOptions fnxOptions =
-                HashFieldExpirationOptions.builder()
-                        .fieldConditionalSetOnlyIfNoneExist()
-                        .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
-                        .build();
+        HSetExOptions fnxOptions =
+                HSetExOptions.builder().onlyIfNoneExist().expiry(ExpirySet.Seconds(60L)).build();
 
         Long result = client.hsetex(key, fieldValueMap, fnxOptions).get();
         assertEquals(1L, result); // HSETEX returns 1 when all fields are set successfully
@@ -1460,11 +1461,8 @@ public class SharedCommandTests {
         existingFieldValueMap.put("field1", "updated_value1");
         existingFieldValueMap.put("field2", "updated_value2");
 
-        HashFieldExpirationOptions fxxOptions =
-                HashFieldExpirationOptions.builder()
-                        .fieldConditionalSetOnlyIfAllExist()
-                        .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
-                        .build();
+        HSetExOptions fxxOptions =
+                HSetExOptions.builder().onlyIfAllExist().expiry(ExpirySet.Seconds(60L)).build();
 
         result = client.hsetex(key, existingFieldValueMap, fxxOptions).get();
         assertEquals(1L, result); // HSETEX returns 1 when all fields are set successfully
@@ -1497,11 +1495,8 @@ public class SharedCommandTests {
         existingFieldsMap.put("existing1", "new_value1");
         existingFieldsMap.put("existing2", "new_value2");
 
-        HashFieldExpirationOptions fxxOptions =
-                HashFieldExpirationOptions.builder()
-                        .fieldConditionalSetOnlyIfAllExist()
-                        .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
-                        .build();
+        HSetExOptions fxxOptions =
+                HSetExOptions.builder().onlyIfAllExist().expiry(ExpirySet.Seconds(60L)).build();
 
         Long result = client.hsetex(key, existingFieldsMap, fxxOptions).get();
         assertEquals(1L, result); // HSETEX returns 1 when all fields are set successfully
@@ -1511,11 +1506,8 @@ public class SharedCommandTests {
         newFieldsMap.put("new1", "value1");
         newFieldsMap.put("new2", "value2");
 
-        HashFieldExpirationOptions fnxOptions =
-                HashFieldExpirationOptions.builder()
-                        .fieldConditionalSetOnlyIfNoneExist()
-                        .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
-                        .build();
+        HSetExOptions fnxOptions =
+                HSetExOptions.builder().onlyIfNoneExist().expiry(ExpirySet.Seconds(60L)).build();
 
         result = client.hsetex(key, newFieldsMap, fnxOptions).get();
         assertEquals(1L, result); // HSETEX returns 1 when all fields are set successfully
@@ -1543,36 +1535,27 @@ public class SharedCommandTests {
         fieldValueMap.put("field1", "value1");
 
         // Test EX (seconds)
-        HashFieldExpirationOptions exOptions =
-                HashFieldExpirationOptions.builder()
-                        .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
-                        .build();
+        HSetExOptions exOptions = HSetExOptions.builder().expiry(ExpirySet.Seconds(60L)).build();
         client.hsetex(key, fieldValueMap, exOptions).get();
         client.del(new String[] {key}).get();
 
         // Test PX (milliseconds)
-        HashFieldExpirationOptions pxOptions =
-                HashFieldExpirationOptions.builder()
-                        .expiry(HashFieldExpirationOptions.ExpirySet.Milliseconds(60000L))
-                        .build();
+        HSetExOptions pxOptions =
+                HSetExOptions.builder().expiry(ExpirySet.Milliseconds(60000L)).build();
         client.hsetex(key, fieldValueMap, pxOptions).get();
         client.del(new String[] {key}).get();
 
         // Test EXAT (Unix timestamp in seconds)
         long futureTimestamp = System.currentTimeMillis() / 1000 + 3600;
-        HashFieldExpirationOptions exatOptions =
-                HashFieldExpirationOptions.builder()
-                        .expiry(HashFieldExpirationOptions.ExpirySet.UnixSeconds(futureTimestamp))
-                        .build();
+        HSetExOptions exatOptions =
+                HSetExOptions.builder().expiry(ExpirySet.UnixSeconds(futureTimestamp)).build();
         client.hsetex(key, fieldValueMap, exatOptions).get();
         client.del(new String[] {key}).get();
 
         // Test PXAT (Unix timestamp in milliseconds)
         long futureTimestampMs = System.currentTimeMillis() + 3600000;
-        HashFieldExpirationOptions pxatOptions =
-                HashFieldExpirationOptions.builder()
-                        .expiry(HashFieldExpirationOptions.ExpirySet.UnixMilliseconds(futureTimestampMs))
-                        .build();
+        HSetExOptions pxatOptions =
+                HSetExOptions.builder().expiry(ExpirySet.UnixMilliseconds(futureTimestampMs)).build();
         client.hsetex(key, fieldValueMap, pxatOptions).get();
         client.del(new String[] {key}).get();
 
@@ -1582,10 +1565,7 @@ public class SharedCommandTests {
         // Then use KEEPTTL to maintain existing TTL
         Map<String, String> additionalFields = new LinkedHashMap<>();
         additionalFields.put("field2", "value2");
-        HashFieldExpirationOptions keepTtlOptions =
-                HashFieldExpirationOptions.builder()
-                        .expiry(HashFieldExpirationOptions.ExpirySet.KeepExisting())
-                        .build();
+        HSetExOptions keepTtlOptions = HSetExOptions.builder().expiry(ExpirySet.KeepExisting()).build();
         client.hsetex(key, additionalFields, keepTtlOptions).get();
     }
 
@@ -1602,11 +1582,8 @@ public class SharedCommandTests {
         fieldValueMap.put(gs("field1"), gs("value1"));
         fieldValueMap.put(gs("field2"), gs("value2"));
 
-        HashFieldExpirationOptions options =
-                HashFieldExpirationOptions.builder()
-                        .fieldConditionalSetOnlyIfNoneExist()
-                        .expiry(HashFieldExpirationOptions.ExpirySet.Milliseconds(30000L))
-                        .build();
+        HSetExOptions options =
+                HSetExOptions.builder().onlyIfNoneExist().expiry(ExpirySet.Milliseconds(30000L)).build();
 
         Long result = client.hsetex(key, fieldValueMap, options).get();
         assertEquals(1L, result); // HSETEX returns 1 when all fields are set successfully
@@ -1641,10 +1618,7 @@ public class SharedCommandTests {
         Map<String, String> fieldValueMap = new LinkedHashMap<>();
         fieldValueMap.put("field1", "value1");
 
-        HashFieldExpirationOptions options =
-                HashFieldExpirationOptions.builder()
-                        .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
-                        .build();
+        HSetExOptions options = HSetExOptions.builder().expiry(ExpirySet.Seconds(60L)).build();
 
         // Should throw an exception when trying to use HSETEX on a non-hash key
         ExecutionException exception =
@@ -1674,10 +1648,7 @@ public class SharedCommandTests {
         client.hset(key, fieldValueMap).get();
 
         // Test HGETEX with expiry setting
-        HashFieldExpirationOptions options =
-                HashFieldExpirationOptions.builder()
-                        .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
-                        .build();
+        HGetExOptions options = HGetExOptions.builder().expiry(HGetExExpiry.Seconds(60L)).build();
 
         String[] fields = {"field1", "field2", "nonexistent"};
         String[] result = client.hgetex(key, fields, options).get();
@@ -1707,17 +1678,11 @@ public class SharedCommandTests {
         // First set fields with expiration using hsetex
         Map<String, String> fieldValueMap = new LinkedHashMap<>();
         fieldValueMap.put("field1", "value1");
-        HashFieldExpirationOptions setOptions =
-                HashFieldExpirationOptions.builder()
-                        .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
-                        .build();
+        HSetExOptions setOptions = HSetExOptions.builder().expiry(ExpirySet.Seconds(60L)).build();
         client.hsetex(key, fieldValueMap, setOptions).get();
 
         // Test HGETEX with PERSIST option
-        HashFieldExpirationOptions persistOptions =
-                HashFieldExpirationOptions.builder()
-                        .expiry(HashFieldExpirationOptions.ExpirySet.Persist())
-                        .build();
+        HGetExOptions persistOptions = HGetExOptions.builder().expiry(HGetExExpiry.Persist()).build();
 
         String[] fields = {"field1"};
         String[] result = client.hgetex(key, fields, persistOptions).get();
@@ -1743,10 +1708,8 @@ public class SharedCommandTests {
         client.hset(key, fieldValueMap).get();
 
         // Test HGETEX with expiry setting
-        HashFieldExpirationOptions options =
-                HashFieldExpirationOptions.builder()
-                        .expiry(HashFieldExpirationOptions.ExpirySet.Milliseconds(60000L))
-                        .build();
+        HGetExOptions options =
+                HGetExOptions.builder().expiry(HGetExExpiry.Milliseconds(60000L)).build();
 
         GlideString[] fields = {gs("field1"), gs("field2")};
         GlideString[] result = client.hgetex(key, fields, options).get();
@@ -1783,7 +1746,7 @@ public class SharedCommandTests {
         client.hset(key, fieldValueMap).get();
 
         // Test HEXPIRE with basic expiration
-        HashFieldExpirationOptions options = HashFieldExpirationOptions.builder().build();
+        HExpireOptions options = HExpireOptions.builder().build();
 
         String[] fields = {"field1", "field2", "nonexistent"};
         Long[] result = client.hexpire(key, 60L, fields, options).get();
@@ -1817,12 +1780,11 @@ public class SharedCommandTests {
         client.hset(key, fieldValueMap).get();
 
         // Set expiration on field1 first
-        HashFieldExpirationOptions basicOptions = HashFieldExpirationOptions.builder().build();
+        HExpireOptions basicOptions = HExpireOptions.builder().build();
         client.hexpire(key, 30L, new String[] {"field1"}, basicOptions).get();
 
         // Test NX option - should only set expiration if field has no expiration
-        HashFieldExpirationOptions nxOptions =
-                HashFieldExpirationOptions.builder().expirationConditionOnlyIfNoExpiry().build();
+        HExpireOptions nxOptions = HExpireOptions.builder().onlyIfNoExpiry().build();
 
         String[] fields = {"field1", "field2"};
         Long[] nxResult = client.hexpire(key, 60L, fields, nxOptions).get();
@@ -1839,8 +1801,7 @@ public class SharedCommandTests {
         assertTrue(nxTtlResult[1] > 0 && nxTtlResult[1] <= 60); // field2 should have new TTL (~60s)
 
         // Test XX option - should only set expiration if field has existing expiration
-        HashFieldExpirationOptions xxOptions =
-                HashFieldExpirationOptions.builder().expirationConditionOnlyIfHasExpiry().build();
+        HExpireOptions xxOptions = HExpireOptions.builder().onlyIfHasExpiry().build();
 
         Long[] xxResult = client.hexpire(key, 90L, fields, xxOptions).get();
 
@@ -1872,12 +1833,11 @@ public class SharedCommandTests {
         client.hset(key, fieldValueMap).get();
 
         // Set initial expiration of 60 seconds
-        HashFieldExpirationOptions basicOptions = HashFieldExpirationOptions.builder().build();
+        HExpireOptions basicOptions = HExpireOptions.builder().build();
         client.hexpire(key, 60L, new String[] {"field1", "field2"}, basicOptions).get();
 
         // Test GT option - should only set expiration if new expiration is greater than current
-        HashFieldExpirationOptions gtOptions =
-                HashFieldExpirationOptions.builder().expirationConditionOnlyIfGreaterThanCurrent().build();
+        HExpireOptions gtOptions = HExpireOptions.builder().onlyIfGreaterThanCurrent().build();
 
         String[] fields = {"field1", "field2"};
         Long[] gtResult = client.hexpire(key, 120L, fields, gtOptions).get(); // 120 > 60
@@ -1887,8 +1847,7 @@ public class SharedCommandTests {
         assertEquals(1L, gtResult[1]); // 120 > 60, should succeed
 
         // Test LT option - should only set expiration if new expiration is less than current
-        HashFieldExpirationOptions ltOptions =
-                HashFieldExpirationOptions.builder().expirationConditionOnlyIfLessThanCurrent().build();
+        HExpireOptions ltOptions = HExpireOptions.builder().onlyIfLessThanCurrent().build();
 
         Long[] ltResult = client.hexpire(key, 30L, fields, ltOptions).get(); // 30 < 120
 
@@ -1914,7 +1873,7 @@ public class SharedCommandTests {
         client.hset(key, fieldValueMap).get();
 
         // Test immediate deletion with 0 seconds
-        HashFieldExpirationOptions options = HashFieldExpirationOptions.builder().build();
+        HExpireOptions options = HExpireOptions.builder().build();
 
         String[] fields = {"field1"};
         Long[] result = client.hexpire(key, 0L, fields, options).get();
@@ -1944,7 +1903,7 @@ public class SharedCommandTests {
         client.hset(key, fieldValueMap).get();
 
         // Test HEXPIRE with binary parameters
-        HashFieldExpirationOptions options = HashFieldExpirationOptions.builder().build();
+        HExpireOptions options = HExpireOptions.builder().build();
 
         GlideString[] fields = {gs("field1"), gs("field2")};
         Long[] result = client.hexpire(key, 60L, fields, options).get();
@@ -1978,10 +1937,7 @@ public class SharedCommandTests {
         fieldValueMap.put("field1", "value1");
         fieldValueMap.put("field2", "value2");
 
-        HashFieldExpirationOptions setOptions =
-                HashFieldExpirationOptions.builder()
-                        .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
-                        .build();
+        HSetExOptions setOptions = HSetExOptions.builder().expiry(ExpirySet.Seconds(60L)).build();
 
         client.hsetex(key, fieldValueMap, setOptions).get();
 
@@ -2061,10 +2017,7 @@ public class SharedCommandTests {
         fieldValueMapWithExpiry.put("field1", "value1");
         fieldValueMapWithExpiry.put("field2", "value2");
 
-        HashFieldExpirationOptions setOptions =
-                HashFieldExpirationOptions.builder()
-                        .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
-                        .build();
+        HSetExOptions setOptions = HSetExOptions.builder().expiry(ExpirySet.Seconds(60L)).build();
 
         client.hsetex(key, fieldValueMapWithExpiry, setOptions).get();
 
@@ -2101,10 +2054,7 @@ public class SharedCommandTests {
         fieldValueMap.put(gs("field1"), gs("value1"));
         fieldValueMap.put(gs("field2"), gs("value2"));
 
-        HashFieldExpirationOptions setOptions =
-                HashFieldExpirationOptions.builder()
-                        .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
-                        .build();
+        HSetExOptions setOptions = HSetExOptions.builder().expiry(ExpirySet.Seconds(60L)).build();
 
         client.hsetex(key, fieldValueMap, setOptions).get();
 
@@ -2138,7 +2088,7 @@ public class SharedCommandTests {
         client.hset(key, fieldValueMap).get();
 
         // Test HPEXPIRE - set expiration in milliseconds
-        HashFieldExpirationOptions options = HashFieldExpirationOptions.builder().build();
+        HPExpireOptions options = HPExpireOptions.builder().build();
         String[] fields = {"field1", "field2", "nonexistent"};
         Long[] result = client.hpexpire(key, 5000L, fields, options).get();
 
@@ -2171,8 +2121,7 @@ public class SharedCommandTests {
         client.hset(key, fieldValueMap).get();
 
         // Test HPEXPIRE with NX condition (only if no expiry)
-        HashFieldExpirationOptions nxOptions =
-                HashFieldExpirationOptions.builder().expirationConditionOnlyIfNoExpiry().build();
+        HPExpireOptions nxOptions = HPExpireOptions.builder().onlyIfNoExpiry().build();
         String[] fields = {"field1", "field2"};
         Long[] result = client.hpexpire(key, 5000L, fields, nxOptions).get();
 
@@ -2187,8 +2136,7 @@ public class SharedCommandTests {
         assertEquals(0L, result[1]); // field2 should not have expiry updated (already has expiry)
 
         // Test HPEXPIRE with XX condition (only if has expiry)
-        HashFieldExpirationOptions xxOptions =
-                HashFieldExpirationOptions.builder().expirationConditionOnlyIfHasExpiry().build();
+        HPExpireOptions xxOptions = HPExpireOptions.builder().onlyIfHasExpiry().build();
         result = client.hpexpire(key, 15000L, fields, xxOptions).get();
         assertEquals(2, result.length);
         assertEquals(1L, result[0]); // field1 should have expiry updated (has existing expiry)
@@ -2208,15 +2156,12 @@ public class SharedCommandTests {
         // First set some fields with initial expiration
         Map<String, String> fieldValueMap = new LinkedHashMap<>();
         fieldValueMap.put("field1", "value1");
-        HashFieldExpirationOptions initialOptions =
-                HashFieldExpirationOptions.builder()
-                        .expiry(HashFieldExpirationOptions.ExpirySet.Milliseconds(10000L))
-                        .build();
+        HSetExOptions initialOptions =
+                HSetExOptions.builder().expiry(ExpirySet.Milliseconds(10000L)).build();
         client.hsetex(key, fieldValueMap, initialOptions).get();
 
         // Test HPEXPIRE with GT condition (only if new expiry is greater)
-        HashFieldExpirationOptions gtOptions =
-                HashFieldExpirationOptions.builder().expirationConditionOnlyIfGreaterThanCurrent().build();
+        HPExpireOptions gtOptions = HPExpireOptions.builder().onlyIfGreaterThanCurrent().build();
         String[] fields = {"field1"};
 
         // Try with smaller expiry (should fail)
@@ -2230,8 +2175,7 @@ public class SharedCommandTests {
         assertEquals(1L, result[0]); // Should succeed because 20000ms > 10000ms
 
         // Test HPEXPIRE with LT condition (only if new expiry is less)
-        HashFieldExpirationOptions ltOptions =
-                HashFieldExpirationOptions.builder().expirationConditionOnlyIfLessThanCurrent().build();
+        HPExpireOptions ltOptions = HPExpireOptions.builder().onlyIfLessThanCurrent().build();
 
         // Try with larger expiry (should fail)
         result = client.hpexpire(key, 30000L, fields, ltOptions).get();
@@ -2261,7 +2205,7 @@ public class SharedCommandTests {
         client.hset(key, fieldValueMap).get();
 
         // Test HPEXPIRE with 0 milliseconds (immediate deletion)
-        HashFieldExpirationOptions options = HashFieldExpirationOptions.builder().build();
+        HPExpireOptions options = HPExpireOptions.builder().build();
         String[] fields = {"field1"};
         Long[] result = client.hpexpire(key, 0L, fields, options).get();
 
@@ -2290,7 +2234,7 @@ public class SharedCommandTests {
         client.hset(key, fieldValueMap).get();
 
         // Test HPEXPIRE with binary parameters
-        HashFieldExpirationOptions options = HashFieldExpirationOptions.builder().build();
+        HPExpireOptions options = HPExpireOptions.builder().build();
         GlideString[] fields = {gs("field1"), gs("field2"), gs("nonexistent")};
         Long[] result = client.hpexpire(key, 5000L, fields, options).get();
 
@@ -2327,8 +2271,7 @@ public class SharedCommandTests {
 
         // Test HEXPIREAT with Unix timestamp in seconds (future timestamp)
         long futureTimestamp = System.currentTimeMillis() / 1000 + 60; // 60 seconds from now
-        HashFieldExpirationOptions options =
-                HashFieldExpirationOptions.builder().expirationConditionOnlyIfNoExpiry().build();
+        HExpireAtOptions options = HExpireAtOptions.builder().build();
 
         String[] fields = {"field1", "field2", "nonexistent"};
         Long[] result = client.hexpireat(key, futureTimestamp, fields, options).get();
@@ -2364,8 +2307,7 @@ public class SharedCommandTests {
         long futureTimestamp = System.currentTimeMillis() / 1000 + 60; // 60 seconds from now
 
         // Test NX condition (only if no expiry)
-        HashFieldExpirationOptions nxOptions =
-                HashFieldExpirationOptions.builder().expirationConditionOnlyIfNoExpiry().build();
+        HExpireAtOptions nxOptions = HExpireAtOptions.builder().onlyIfNoExpiry().build();
 
         String[] fields = {"field1", "field2"};
         Long[] result = client.hexpireat(key, futureTimestamp, fields, nxOptions).get();
@@ -2375,8 +2317,7 @@ public class SharedCommandTests {
         assertEquals(1L, result[1]); // field2 should have expiry set (no previous expiry)
 
         // Test XX condition (only if has expiry) - should work now since fields have expiry
-        HashFieldExpirationOptions xxOptions =
-                HashFieldExpirationOptions.builder().expirationConditionOnlyIfHasExpiry().build();
+        HExpireAtOptions xxOptions = HExpireAtOptions.builder().onlyIfHasExpiry().build();
 
         long newFutureTimestamp = System.currentTimeMillis() / 1000 + 120; // 120 seconds from now
         result = client.hexpireat(key, newFutureTimestamp, fields, xxOptions).get();
@@ -2404,7 +2345,7 @@ public class SharedCommandTests {
 
         // Test HEXPIREAT with past timestamp (should delete immediately)
         long pastTimestamp = System.currentTimeMillis() / 1000 - 60; // 60 seconds ago
-        HashFieldExpirationOptions options = HashFieldExpirationOptions.builder().build();
+        HExpireAtOptions options = HExpireAtOptions.builder().build();
 
         String[] fields = {"field1", "field2"};
         Long[] result = client.hexpireat(key, pastTimestamp, fields, options).get();
@@ -2438,8 +2379,7 @@ public class SharedCommandTests {
 
         // Test HEXPIREAT with Unix timestamp in seconds (future timestamp)
         long futureTimestamp = System.currentTimeMillis() / 1000 + 60; // 60 seconds from now
-        HashFieldExpirationOptions options =
-                HashFieldExpirationOptions.builder().expirationConditionOnlyIfNoExpiry().build();
+        HExpireAtOptions options = HExpireAtOptions.builder().build();
 
         GlideString[] fields = {gs("field1"), gs("field2")};
         Long[] result = client.hexpireat(key, futureTimestamp, fields, options).get();
@@ -2476,7 +2416,7 @@ public class SharedCommandTests {
 
         // Test HPEXPIREAT with Unix timestamp in milliseconds (future timestamp)
         long futureTimestampMs = System.currentTimeMillis() + 60000; // 60 seconds from now
-        HashFieldExpirationOptions options = HashFieldExpirationOptions.builder().build();
+        HPExpireAtOptions options = HPExpireAtOptions.builder().build();
 
         String[] fields = {"field1", "field2", "nonexistent"};
         Long[] result = client.hpexpireat(key, futureTimestampMs, fields, options).get();
@@ -2511,8 +2451,7 @@ public class SharedCommandTests {
 
         // Test HPEXPIREAT with NX condition (only if no expiry exists)
         long futureTimestampMs = System.currentTimeMillis() + 60000; // 60 seconds from now
-        HashFieldExpirationOptions nxOptions =
-                HashFieldExpirationOptions.builder().expirationConditionOnlyIfNoExpiry().build();
+        HPExpireAtOptions nxOptions = HPExpireAtOptions.builder().onlyIfNoExpiry().build();
 
         String[] fields = {"field1", "field2"};
         Long[] result = client.hpexpireat(key, futureTimestampMs, fields, nxOptions).get();
@@ -2522,8 +2461,7 @@ public class SharedCommandTests {
         assertEquals(1L, result[1]); // field2 should have expiry set (no previous expiry)
 
         // Test HPEXPIREAT with XX condition (only if expiry exists)
-        HashFieldExpirationOptions xxOptions =
-                HashFieldExpirationOptions.builder().expirationConditionOnlyIfHasExpiry().build();
+        HPExpireAtOptions xxOptions = HPExpireAtOptions.builder().onlyIfHasExpiry().build();
 
         long newFutureTimestampMs = System.currentTimeMillis() + 120000; // 120 seconds from now
         result = client.hpexpireat(key, newFutureTimestampMs, fields, xxOptions).get();
@@ -2551,7 +2489,7 @@ public class SharedCommandTests {
 
         // Test HPEXPIREAT with past timestamp (should delete immediately)
         long pastTimestampMs = System.currentTimeMillis() - 60000; // 60 seconds ago
-        HashFieldExpirationOptions options = HashFieldExpirationOptions.builder().build();
+        HPExpireAtOptions options = HPExpireAtOptions.builder().build();
 
         String[] fields = {"field1", "field2"};
         Long[] result = client.hpexpireat(key, pastTimestampMs, fields, options).get();
@@ -2585,8 +2523,7 @@ public class SharedCommandTests {
 
         // Test HPEXPIREAT with Unix timestamp in milliseconds (future timestamp)
         long futureTimestampMs = System.currentTimeMillis() + 60000; // 60 seconds from now
-        HashFieldExpirationOptions options =
-                HashFieldExpirationOptions.builder().expirationConditionOnlyIfNoExpiry().build();
+        HPExpireAtOptions options = HPExpireAtOptions.builder().build();
 
         GlideString[] fields = {gs("field1"), gs("field2")};
         Long[] result = client.hpexpireat(key, futureTimestampMs, fields, options).get();
@@ -2621,10 +2558,7 @@ public class SharedCommandTests {
         fieldValueMap.put("field2", "value2");
         fieldValueMap.put("field3", "value3");
 
-        HashFieldExpirationOptions setOptions =
-                HashFieldExpirationOptions.builder()
-                        .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
-                        .build();
+        HSetExOptions setOptions = HSetExOptions.builder().expiry(ExpirySet.Seconds(60L)).build();
         client.hsetex(key, fieldValueMap, setOptions).get();
 
         // Set one field without expiration using regular hset
@@ -2676,10 +2610,7 @@ public class SharedCommandTests {
         fieldValueMap.put("field1", "value1");
         fieldValueMap.put("field2", "value2");
 
-        HashFieldExpirationOptions setOptions =
-                HashFieldExpirationOptions.builder()
-                        .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(1L))
-                        .build();
+        HSetExOptions setOptions = HSetExOptions.builder().expiry(ExpirySet.Seconds(1L)).build();
         client.hsetex(key, fieldValueMap, setOptions).get();
 
         // Wait for fields to expire
@@ -2709,10 +2640,7 @@ public class SharedCommandTests {
         fieldValueMapWithExpiry.put("field1", "value1");
         fieldValueMapWithExpiry.put("field2", "value2");
 
-        HashFieldExpirationOptions setOptions =
-                HashFieldExpirationOptions.builder()
-                        .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(120L))
-                        .build();
+        HSetExOptions setOptions = HSetExOptions.builder().expiry(ExpirySet.Seconds(120L)).build();
         client.hsetex(key, fieldValueMapWithExpiry, setOptions).get();
 
         // Set some fields without expiration using regular hset
@@ -2748,10 +2676,7 @@ public class SharedCommandTests {
         fieldValueMap.put(gs("field1"), gs("value1"));
         fieldValueMap.put(gs("field2"), gs("value2"));
 
-        HashFieldExpirationOptions setOptions =
-                HashFieldExpirationOptions.builder()
-                        .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
-                        .build();
+        HSetExOptions setOptions = HSetExOptions.builder().expiry(ExpirySet.Seconds(60L)).build();
         client.hsetex(key, fieldValueMap, setOptions).get();
 
         // Test HTTL with binary parameters
@@ -2782,10 +2707,8 @@ public class SharedCommandTests {
         fieldValueMap.put("field1", "value1");
         fieldValueMap.put("field2", "value2");
 
-        HashFieldExpirationOptions setOptions =
-                HashFieldExpirationOptions.builder()
-                        .expiry(HashFieldExpirationOptions.ExpirySet.Milliseconds(60000L))
-                        .build();
+        HSetExOptions setOptions =
+                HSetExOptions.builder().expiry(ExpirySet.Milliseconds(60000L)).build();
         client.hsetex(key, fieldValueMap, setOptions).get();
 
         // Set field3 with different expiration
@@ -2793,9 +2716,7 @@ public class SharedCommandTests {
                 .hsetex(
                         key,
                         Map.of("field3", "value3"),
-                        HashFieldExpirationOptions.builder()
-                                .expiry(HashFieldExpirationOptions.ExpirySet.Milliseconds(30000L))
-                                .build())
+                        HSetExOptions.builder().expiry(ExpirySet.Milliseconds(30000L)).build())
                 .get();
 
         // Set field4 without expiration
@@ -2847,10 +2768,8 @@ public class SharedCommandTests {
         fieldValueMap.put("field1", "value1");
         fieldValueMap.put("field2", "value2");
 
-        HashFieldExpirationOptions setOptions =
-                HashFieldExpirationOptions.builder()
-                        .expiry(HashFieldExpirationOptions.ExpirySet.Milliseconds(1000L))
-                        .build();
+        HSetExOptions setOptions =
+                HSetExOptions.builder().expiry(ExpirySet.Milliseconds(1000L)).build();
         client.hsetex(key, fieldValueMap, setOptions).get();
 
         // Wait for expiration
@@ -2880,10 +2799,8 @@ public class SharedCommandTests {
         fieldValueMapWithExpiry.put("field1", "value1");
         fieldValueMapWithExpiry.put("field2", "value2");
 
-        HashFieldExpirationOptions setOptions =
-                HashFieldExpirationOptions.builder()
-                        .expiry(HashFieldExpirationOptions.ExpirySet.Milliseconds(60000L))
-                        .build();
+        HSetExOptions setOptions =
+                HSetExOptions.builder().expiry(ExpirySet.Milliseconds(60000L)).build();
         client.hsetex(key, fieldValueMapWithExpiry, setOptions).get();
 
         // Set some fields without expiration
@@ -2919,10 +2836,8 @@ public class SharedCommandTests {
         fieldValueMap.put(gs("field1"), gs("value1"));
         fieldValueMap.put(gs("field2"), gs("value2"));
 
-        HashFieldExpirationOptions setOptions =
-                HashFieldExpirationOptions.builder()
-                        .expiry(HashFieldExpirationOptions.ExpirySet.Milliseconds(60000L))
-                        .build();
+        HSetExOptions setOptions =
+                HSetExOptions.builder().expiry(ExpirySet.Milliseconds(60000L)).build();
         client.hsetex(key, fieldValueMap, setOptions).get();
 
         // Test HPTTL with binary parameters
@@ -2954,10 +2869,8 @@ public class SharedCommandTests {
         fieldValueMap.put("field1", "value1");
         fieldValueMap.put("field2", "value2");
 
-        HashFieldExpirationOptions setOptions =
-                HashFieldExpirationOptions.builder()
-                        .expiry(HashFieldExpirationOptions.ExpirySet.Milliseconds(60000L))
-                        .build();
+        HSetExOptions setOptions =
+                HSetExOptions.builder().expiry(ExpirySet.Milliseconds(60000L)).build();
         client.hsetex(key, fieldValueMap, setOptions).get();
 
         // Test HPTTL in batch
@@ -3007,10 +2920,8 @@ public class SharedCommandTests {
         long currentTimeSeconds = System.currentTimeMillis() / 1000;
         long expireAtSeconds = currentTimeSeconds + 60;
 
-        HashFieldExpirationOptions setOptions =
-                HashFieldExpirationOptions.builder()
-                        .expiry(HashFieldExpirationOptions.ExpirySet.UnixSeconds(expireAtSeconds))
-                        .build();
+        HSetExOptions setOptions =
+                HSetExOptions.builder().expiry(ExpirySet.UnixSeconds(expireAtSeconds)).build();
         client.hsetex(key, fieldValueMap, setOptions).get();
 
         // Set one field without expiration using regular hset
@@ -3068,10 +2979,7 @@ public class SharedCommandTests {
         fieldValueMap.put("field1", "value1");
         fieldValueMap.put("field2", "value2");
 
-        HashFieldExpirationOptions setOptions =
-                HashFieldExpirationOptions.builder()
-                        .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(1L))
-                        .build();
+        HSetExOptions setOptions = HSetExOptions.builder().expiry(ExpirySet.Seconds(1L)).build();
         client.hsetex(key, fieldValueMap, setOptions).get();
 
         // Wait for fields to expire
@@ -3104,10 +3012,8 @@ public class SharedCommandTests {
         long currentTimeSeconds = System.currentTimeMillis() / 1000;
         long expireAtSeconds = currentTimeSeconds + 120;
 
-        HashFieldExpirationOptions setOptions =
-                HashFieldExpirationOptions.builder()
-                        .expiry(HashFieldExpirationOptions.ExpirySet.UnixSeconds(expireAtSeconds))
-                        .build();
+        HSetExOptions setOptions =
+                HSetExOptions.builder().expiry(ExpirySet.UnixSeconds(expireAtSeconds)).build();
         client.hsetex(key, fieldValueMapWithExpiry, setOptions).get();
 
         // Set some fields without expiration
@@ -3150,10 +3056,8 @@ public class SharedCommandTests {
         long currentTimeSeconds = System.currentTimeMillis() / 1000;
         long expireAtSeconds = currentTimeSeconds + 60;
 
-        HashFieldExpirationOptions setOptions =
-                HashFieldExpirationOptions.builder()
-                        .expiry(HashFieldExpirationOptions.ExpirySet.UnixSeconds(expireAtSeconds))
-                        .build();
+        HSetExOptions setOptions =
+                HSetExOptions.builder().expiry(ExpirySet.UnixSeconds(expireAtSeconds)).build();
         client.hsetex(key, fieldValueMap, setOptions).get();
 
         // Test HEXPIRETIME with binary parameters
@@ -3192,10 +3096,8 @@ public class SharedCommandTests {
         long currentTimeSeconds = System.currentTimeMillis() / 1000;
         long expireAtSeconds = currentTimeSeconds + 60;
 
-        HashFieldExpirationOptions setOptions =
-                HashFieldExpirationOptions.builder()
-                        .expiry(HashFieldExpirationOptions.ExpirySet.UnixSeconds(expireAtSeconds))
-                        .build();
+        HSetExOptions setOptions =
+                HSetExOptions.builder().expiry(ExpirySet.UnixSeconds(expireAtSeconds)).build();
         client.hsetex(key, fieldValueMap, setOptions).get();
 
         // Test HEXPIRETIME in batch
@@ -3241,18 +3143,13 @@ public class SharedCommandTests {
 
         // First set some fields with expiration using hsetex
         Map<String, String> fieldValueMap = Map.of("field1", "value1", "field2", "value2");
-        HashFieldExpirationOptions setOptions =
-                HashFieldExpirationOptions.builder()
-                        .expiry(HashFieldExpirationOptions.ExpirySet.Seconds(60L))
-                        .build();
+        HSetExOptions setOptions = HSetExOptions.builder().expiry(ExpirySet.Seconds(60L)).build();
         client.hsetex(key, fieldValueMap, setOptions).get();
 
         // Set field3 with millisecond expiration
         Map<String, String> fieldValueMapMs = Map.of("field3", "value3");
-        HashFieldExpirationOptions setOptionsMs =
-                HashFieldExpirationOptions.builder()
-                        .expiry(HashFieldExpirationOptions.ExpirySet.Milliseconds(60000L))
-                        .build();
+        HSetExOptions setOptionsMs =
+                HSetExOptions.builder().expiry(ExpirySet.Milliseconds(60000L)).build();
         client.hsetex(key, fieldValueMapMs, setOptionsMs).get();
 
         // Set field4 without expiration
@@ -3307,10 +3204,8 @@ public class SharedCommandTests {
 
         // Set fields with very short expiration (1000 milliseconds)
         Map<String, String> fieldValueMap = Map.of("field1", "value1", "field2", "value2");
-        HashFieldExpirationOptions setOptions =
-                HashFieldExpirationOptions.builder()
-                        .expiry(HashFieldExpirationOptions.ExpirySet.Milliseconds(1000L))
-                        .build();
+        HSetExOptions setOptions =
+                HSetExOptions.builder().expiry(ExpirySet.Milliseconds(1000L)).build();
         client.hsetex(key, fieldValueMap, setOptions).get();
 
         // Wait for expiration
@@ -3337,10 +3232,8 @@ public class SharedCommandTests {
 
         // Set some fields with expiration
         Map<String, String> fieldValueMapWithExpiry = Map.of("field1", "value1", "field2", "value2");
-        HashFieldExpirationOptions setOptions =
-                HashFieldExpirationOptions.builder()
-                        .expiry(HashFieldExpirationOptions.ExpirySet.Milliseconds(60000L))
-                        .build();
+        HSetExOptions setOptions =
+                HSetExOptions.builder().expiry(ExpirySet.Milliseconds(60000L)).build();
         client.hsetex(key, fieldValueMapWithExpiry, setOptions).get();
 
         // Set some fields without expiration
@@ -3376,10 +3269,8 @@ public class SharedCommandTests {
         // First set some fields with expiration using hsetex
         Map<GlideString, GlideString> fieldValueMap =
                 Map.of(gs("field1"), gs("value1"), gs("field2"), gs("value2"));
-        HashFieldExpirationOptions setOptions =
-                HashFieldExpirationOptions.builder()
-                        .expiry(HashFieldExpirationOptions.ExpirySet.Milliseconds(60000L))
-                        .build();
+        HSetExOptions setOptions =
+                HSetExOptions.builder().expiry(ExpirySet.Milliseconds(60000L)).build();
         client.hsetex(key, fieldValueMap, setOptions).get();
 
         // Test HPEXPIRETIME with binary parameters
@@ -3412,10 +3303,8 @@ public class SharedCommandTests {
         // First set some fields with expiration using hsetex
         Map<String, String> fieldValueMap = Map.of("field1", "value1", "field2", "value2");
         long expireAtMs = System.currentTimeMillis() + 60000; // 60 seconds from now
-        HashFieldExpirationOptions setOptions =
-                HashFieldExpirationOptions.builder()
-                        .expiry(HashFieldExpirationOptions.ExpirySet.UnixMilliseconds(expireAtMs))
-                        .build();
+        HSetExOptions setOptions =
+                HSetExOptions.builder().expiry(ExpirySet.UnixMilliseconds(expireAtMs)).build();
         client.hsetex(key, fieldValueMap, setOptions).get();
 
         // Test HPEXPIRETIME in batch
