@@ -150,7 +150,7 @@ jobs:
               working-directory: java
               run: |
                   if [[ "${{ matrix.host.build_type }}" == "musl" ]]; then
-                    rustup target add aarch64-unknown-linux-musl
+                    rustup target add ${{ matrix.host.TARGET }}
                     ./gradlew --build-cache :client:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
                     -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }} \
                     -Ptarget=${{ matrix.host.TARGET }}
