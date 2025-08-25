@@ -3,6 +3,7 @@ package redis.clients.jedis;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -48,7 +49,7 @@ public class JedisWrapperTest {
         assertNotNull(poolClass.getConstructor(String.class, int.class));
         assertNotNull(
                 poolClass.getConstructor(
-                        String.class, int.class, JedisClientConfig.class, int.class, long.class));
+                        GenericObjectPoolConfig.class, String.class, int.class, JedisClientConfig.class));
     }
 
     @Test
@@ -66,7 +67,7 @@ public class JedisWrapperTest {
         Class<JedisPool> poolClass = JedisPool.class;
         assertNotNull(
                 poolClass.getConstructor(
-                        String.class, int.class, JedisClientConfig.class, int.class, long.class));
+                        GenericObjectPoolConfig.class, String.class, int.class, JedisClientConfig.class));
     }
 
     @Test
@@ -88,13 +89,13 @@ public class JedisWrapperTest {
     public void testJedisPoolMethodSignatures() throws NoSuchMethodException {
         Class<JedisPool> poolClass = JedisPool.class;
 
-        // Test that pool methods exist
+        // Test that pool methods exist (methods inherited from Pool base class)
         assertNotNull(poolClass.getMethod("getResource"));
         assertNotNull(poolClass.getMethod("close"));
         assertNotNull(poolClass.getMethod("getMaxTotal"));
-        assertNotNull(poolClass.getMethod("getMaxWaitMillis"));
-        assertNotNull(poolClass.getMethod("getConfig"));
-        assertNotNull(poolClass.getMethod("getPoolStats"));
+        assertNotNull(poolClass.getMethod("getMaxBorrowWaitTimeMillis"));
+        assertNotNull(poolClass.getMethod("getNumActive"));
+        assertNotNull(poolClass.getMethod("getNumIdle"));
     }
 
     @Test

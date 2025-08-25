@@ -276,21 +276,10 @@ public class ConfigurationMapper {
 
         boolean hasAdvancedConfig = false;
 
-        // Connection timeout
-        if (jedisConfig.getConnectionTimeoutMillis() != jedisConfig.getSocketTimeoutMillis()) {
+        // Connection timeout - always map if specified
+        if (jedisConfig.getConnectionTimeoutMillis() > 0) {
             advancedBuilder.connectionTimeout(jedisConfig.getConnectionTimeoutMillis());
             hasAdvancedConfig = true;
-
-            // Log warning about different timeouts
-            if (jedisConfig.getConnectionTimeoutMillis() > 0
-                    && jedisConfig.getSocketTimeoutMillis() > 0) {
-                logger.warning(
-                        String.format(
-                                "Different connection (%dms) and socket (%dms) timeouts specified. GLIDE will use"
-                                        + " connection timeout for connection establishment and socket timeout for"
-                                        + " request timeout.",
-                                jedisConfig.getConnectionTimeoutMillis(), jedisConfig.getSocketTimeoutMillis()));
-            }
         }
 
         // Handle blocking socket timeout - warn about architectural difference

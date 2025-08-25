@@ -55,10 +55,7 @@ public final class JedisCluster implements Closeable {
     public JedisCluster(Set<HostAndPort> nodes, JedisClientConfig config) {
         this.config = config;
 
-        // Validate configuration
-        ClusterConfigurationMapper.validateClusterConfiguration(config);
-
-        // Map Jedis cluster config to GLIDE cluster config
+        // Map Jedis cluster config to GLIDE cluster config (includes validation)
         GlideClusterClientConfiguration glideConfig =
                 ClusterConfigurationMapper.mapToGlideClusterConfig(nodes, config);
 

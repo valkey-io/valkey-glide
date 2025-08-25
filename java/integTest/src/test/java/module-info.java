@@ -10,6 +10,7 @@ module glide.integTest {
     requires static lombok;
     requires net.bytebuddy;
     requires org.apache.commons.lang3;
+    requires org.apache.commons.pool2;
     requires org.junit.jupiter.api; // Added: Required for JUnit tests
     requires org.junit.jupiter.params;
     requires org.semver4j;
