@@ -54,7 +54,7 @@ jobs:
                       )
                       | .CD_TARGET = (
                           if (.TARGET | contains("musl")) 
-                          then .ARCH + "-unknown-linux-gnu" 
+                          then (.TARGET | sub("musl"; "gnu"))
                           else .TARGET
                           end
                       )
