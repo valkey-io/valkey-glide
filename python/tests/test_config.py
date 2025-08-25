@@ -195,3 +195,90 @@ def test_tls_insecure_in_protobuf_request():
 
     assert isinstance(request, ConnectionRequest)
     assert request.tls_mode is TlsMode.InsecureTls
+
+
+# Database ID configuration tests
+def test_database_id_validation_in_base_config():
+    """Test database_id validation in BaseClientConfiguration."""
+    # Valid database_id values
+    config = BaseClientConfiguration([NodeAddress("127.0.0.1")], database_id=0)
+    assert config.database_id == 0
+
+    config = BaseClientConfiguration([NodeAddress("127.0.0.1")], database_id=5)
+    assert config.database_id == 5
+
+    config = BaseClientConfiguration([NodeAddress("127.0.0.1")], database_id=15)
+    assert config.database_id == 15
+
+    # None should be allowed (defaults to 0)
+    config = BaseClientConfiguration([NodeAddress("127.0.0.1")], database_id=None)
+    assert config.database_id is None
+
+    # Invalid database_id values
+    with pytest.raises(ValueError, match="database_id must be non-negative"):
+        BaseClientConfiguration([NodeAddress("127.0.0.1")], database_id=-1)
+
+    with pytest.raises(
+        ValueError, match="database_id must be less than or equal to 15"
+    ):
+        BaseClientConfiguration([NodeAddress("127.0.0.1")], database_id=16)
+
+    with pytest.raises(ValueError, match="database_id must be an integer"):
+        BaseClientConfiguration([NodeAddress("127.0.0.1")], database_id="5")
+
+
+def test_database_id_in_standalone_config():
+    """Test database_id configuration in GlideClientConfiguration."""
+    config = GlideClientConfiguration([NodeAddress("127.0.0.1")], database_id=5)
+    assert config.database_id == 5
+
+    request = config._create_a_protobuf_conn_request()
+    assert request.database_id == 5
+    assert request.cluster_mode_enabled is False
+
+
+def test_database_id_in_cluster_config():
+    """Test database_id configuration in GlideClusterClientConfiguration."""
+    config = GlideClusterClientConfiguration([NodeAddress("127.0.0.1")], database_id=3)
+    assert config.database_id == 3
+
+    request = config._create_a_protobuf_conn_request(cluster_mode=True)
+    assert request.database_id == 3
+    assert request.cluster_mode_enabled is True
+
+
+def test_database_id_default_behavior():
+    """Test default database_id behavior (None/0)."""
+    # Standalone config without database_id
+    config = GlideClientConfiguration([NodeAddress("127.0.0.1")])
+    assert config.database_id is None
+
+    request = config._create_a_protobuf_conn_request()
+    # When database_id is None, it should be 0 in protobuf (default value)
+    assert request.database_id == 0
+
+    # Cluster config without database_id
+    config = GlideClusterClientConfiguration([NodeAddress("127.0.0.1")])
+    assert config.database_id is None
+
+    request = config._create_a_protobuf_conn_request(cluster_mode=True)
+    # When database_id is None, it should be 0 in protobuf (default value)
+    assert request.database_id == 0
+
+
+def test_database_id_protobuf_inclusion():
+    """Test that database_id is properly included in protobuf when set."""
+    # Test with database_id = 0 (should be included)
+    config = GlideClientConfiguration([NodeAddress("127.0.0.1")], database_id=0)
+    request = config._create_a_protobuf_conn_request()
+    assert request.database_id == 0
+
+    # Test with database_id = 5 (should be included)
+    config = GlideClientConfiguration([NodeAddress("127.0.0.1")], database_id=5)
+    request = config._create_a_protobuf_conn_request()
+    assert request.database_id == 5
+
+    # Test with database_id = None (should default to 0)
+    config = GlideClientConfiguration([NodeAddress("127.0.0.1")])
+    request = config._create_a_protobuf_conn_request()
+    assert request.database_id == 0

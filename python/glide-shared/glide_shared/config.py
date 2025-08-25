@@ -249,6 +249,8 @@ class BaseClientConfiguration:
         reconnect_strategy (Optional[BackoffStrategy]): Strategy used to determine how and when to reconnect, in case of
             connection failures.
             If not set, a default backoff strategy will be used.
+        database_id (Optional[int]): Index of the logical database to connect to.
+            If not set, the client will connect to database 0.
         client_name (Optional[str]): Client name to be used for the client. Will be used with CLIENT SETNAME command
             during connection establishment.
         protocol (ProtocolVersion): Serialization protocol to be used. If not set, `RESP3` will be used.
@@ -292,6 +294,7 @@ class BaseClientConfiguration:
         read_from: ReadFrom = ReadFrom.PRIMARY,
         request_timeout: Optional[int] = None,
         reconnect_strategy: Optional[BackoffStrategy] = None,
+        database_id: Optional[int] = None,
         client_name: Optional[str] = None,
         protocol: ProtocolVersion = ProtocolVersion.RESP3,
         inflight_requests_limit: Optional[int] = None,
@@ -305,12 +308,22 @@ class BaseClientConfiguration:
         self.read_from = read_from
         self.request_timeout = request_timeout
         self.reconnect_strategy = reconnect_strategy
+        self.database_id = database_id
         self.client_name = client_name
         self.protocol = protocol
         self.inflight_requests_limit = inflight_requests_limit
         self.client_az = client_az
         self.advanced_config = advanced_config
         self.lazy_connect = lazy_connect
+
+        # Validate database_id parameter
+        if database_id is not None:
+            if not isinstance(database_id, int):
+                raise ValueError("database_id must be an integer")
+            if database_id < 0:
+                raise ValueError("database_id must be non-negative")
+            if database_id > 15:
+                raise ValueError("database_id must be less than or equal to 15")
 
         if read_from == ReadFrom.AZ_AFFINITY and not client_az:
             raise ValueError(
@@ -321,6 +334,39 @@ class BaseClientConfiguration:
             raise ValueError(
                 "client_az must be set when read_from is set to AZ_AFFINITY_REPLICAS_AND_PRIMARY"
             )
+
+    def _set_addresses_in_request(self, request: ConnectionRequest) -> None:
+        """Set addresses in the protobuf request."""
+        for address in self.addresses:
+            address_info = request.addresses.add()
+            address_info.host = address.host
+            address_info.port = address.port
+
+    def _set_reconnect_strategy_in_request(self, request: ConnectionRequest) -> None:
+        """Set reconnect strategy in the protobuf request."""
+        if not self.reconnect_strategy:
+            return
+
+        request.connection_retry_strategy.number_of_retries = (
+            self.reconnect_strategy.num_of_retries
+        )
+        request.connection_retry_strategy.factor = self.reconnect_strategy.factor
+        request.connection_retry_strategy.exponent_base = (
+            self.reconnect_strategy.exponent_base
+        )
+        if self.reconnect_strategy.jitter_percent is not None:
+            request.connection_retry_strategy.jitter_percent = (
+                self.reconnect_strategy.jitter_percent
+            )
+
+    def _set_credentials_in_request(self, request: ConnectionRequest) -> None:
+        """Set credentials in the protobuf request."""
+        if not self.credentials:
+            return
+
+        if self.credentials.username:
+            request.authentication_info.username = self.credentials.username
+        request.authentication_info.password = self.credentials.password
 
     def _create_a_protobuf_conn_request(
         self, cluster_mode: bool = False
@@ -335,44 +381,34 @@ class BaseClientConfiguration:
             ConnectionRequest: Protobuf ConnectionRequest.
         """
         request = ConnectionRequest()
-        for address in self.addresses:
-            address_info = request.addresses.add()
-            address_info.host = address.host
-            address_info.port = address.port
+
+        # Set basic configuration
+        self._set_addresses_in_request(request)
         request.tls_mode = TlsMode.SecureTls if self.use_tls else TlsMode.NoTls
         request.read_from = self.read_from.value
+        request.cluster_mode_enabled = cluster_mode
+        request.protocol = self.protocol.value
+
+        # Set optional configuration
         if self.request_timeout:
             request.request_timeout = self.request_timeout
-        if self.reconnect_strategy:
-            request.connection_retry_strategy.number_of_retries = (
-                self.reconnect_strategy.num_of_retries
-            )
-            request.connection_retry_strategy.factor = self.reconnect_strategy.factor
-            request.connection_retry_strategy.exponent_base = (
-                self.reconnect_strategy.exponent_base
-            )
-            if self.reconnect_strategy.jitter_percent is not None:
-                request.connection_retry_strategy.jitter_percent = (
-                    self.reconnect_strategy.jitter_percent
-                )
 
-        request.cluster_mode_enabled = True if cluster_mode else False
-        if self.credentials:
-            if self.credentials.username:
-                request.authentication_info.username = self.credentials.username
-            request.authentication_info.password = self.credentials.password
+        self._set_reconnect_strategy_in_request(request)
+        self._set_credentials_in_request(request)
+
         if self.client_name:
             request.client_name = self.client_name
-        request.protocol = self.protocol.value
         if self.inflight_requests_limit:
             request.inflight_requests_limit = self.inflight_requests_limit
         if self.client_az:
             request.client_az = self.client_az
+        if self.database_id is not None:
+            request.database_id = self.database_id
         if self.advanced_config:
             self.advanced_config._create_a_protobuf_conn_request(request)
-
         if self.lazy_connect is not None:
             request.lazy_connect = self.lazy_connect
+
         return request
 
     def _is_pubsub_configured(self) -> bool:
@@ -425,7 +461,8 @@ class GlideClientConfiguration(BaseClientConfiguration):
         reconnect_strategy (Optional[BackoffStrategy]): Strategy used to determine how and when to reconnect, in case of
             connection failures.
             If not set, a default backoff strategy will be used.
-        database_id (Optional[int]): index of the logical database to connect to.
+        database_id (Optional[int]): Index of the logical database to connect to.
+            If not set, the client will connect to database 0.
         client_name (Optional[str]): Client name to be used for the client. Will be used with CLIENT SETNAME command during
             connection establishment.
         protocol (ProtocolVersion): The version of the RESP protocol to communicate with the server.
@@ -500,6 +537,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
             read_from=read_from,
             request_timeout=request_timeout,
             reconnect_strategy=reconnect_strategy,
+            database_id=database_id,
             client_name=client_name,
             protocol=protocol,
             inflight_requests_limit=inflight_requests_limit,
@@ -507,7 +545,6 @@ class GlideClientConfiguration(BaseClientConfiguration):
             advanced_config=advanced_config,
             lazy_connect=lazy_connect,
         )
-        self.database_id = database_id
         self.pubsub_subscriptions = pubsub_subscriptions
 
     def _create_a_protobuf_conn_request(
@@ -515,8 +552,6 @@ class GlideClientConfiguration(BaseClientConfiguration):
     ) -> ConnectionRequest:
         assert cluster_mode is False
         request = super()._create_a_protobuf_conn_request(cluster_mode)
-        if self.database_id:
-            request.database_id = self.database_id
 
         if self.pubsub_subscriptions:
             if self.protocol == ProtocolVersion.RESP2:
@@ -592,6 +627,8 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
         reconnect_strategy (Optional[BackoffStrategy]): Strategy used to determine how and when to reconnect, in case of
             connection failures.
             If not set, a default backoff strategy will be used.
+        database_id (Optional[int]): Index of the logical database to connect to.
+            If not set, the client will connect to database 0.
         client_name (Optional[str]): Client name to be used for the client. Will be used with CLIENT SETNAME command during
             connection establishment.
         protocol (ProtocolVersion): The version of the RESP protocol to communicate with the server.
@@ -661,6 +698,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
         read_from: ReadFrom = ReadFrom.PRIMARY,
         request_timeout: Optional[int] = None,
         reconnect_strategy: Optional[BackoffStrategy] = None,
+        database_id: Optional[int] = None,
         client_name: Optional[str] = None,
         protocol: ProtocolVersion = ProtocolVersion.RESP3,
         periodic_checks: Union[
@@ -679,6 +717,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
             read_from=read_from,
             request_timeout=request_timeout,
             reconnect_strategy=reconnect_strategy,
+            database_id=database_id,
             client_name=client_name,
             protocol=protocol,
             inflight_requests_limit=inflight_requests_limit,

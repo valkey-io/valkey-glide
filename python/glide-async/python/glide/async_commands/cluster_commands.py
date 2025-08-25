@@ -1029,6 +1029,64 @@ class ClusterCommands(CoreCommands):
             await self._execute_command(RequestType.FlushAll, args, route),
         )
 
+    async def select(
+        self, index: int, route: Optional[Route] = None
+    ) -> TClusterResponse[TOK]:
+        """
+        Change the currently selected database on cluster nodes.
+
+        **WARNING**: This command is NOT RECOMMENDED for production use.
+        Upon reconnection, nodes will revert to the database_id specified
+        in the client configuration (default: 0), NOT the database selected
+        via this command.
+
+        **RECOMMENDED APPROACH**: Use the database_id parameter in client
+        configuration instead:
+
+        ```python
+        client = await GlideClusterClient.create_client(
+            GlideClusterClientConfiguration(
+                addresses=[NodeAddress("localhost", 6379)],
+                database_id=5  # Recommended: persists across reconnections
+            )
+        )
+        ```
+
+        **CLUSTER BEHAVIOR**: This command routes to all nodes by default
+        to maintain consistency across the cluster.
+
+        **RECONNECTION BEHAVIOR**: After any reconnection (due to network issues,
+        timeouts, etc.), nodes will automatically revert to the database_id
+        specified during client creation, losing any database selection made via
+        this SELECT command.
+
+        See [valkey.io](https://valkey.io/commands/select/) for details.
+
+        Args:
+            index (int): The index of the database to select.
+            route (Optional[Route]): The command will be routed to all nodes by default,
+                unless `route` is provided, in which case the client will route the command
+                to the nodes defined by `route`.
+
+        Returns:
+            TClusterResponse[TOK]: A simple OK response from each node.
+
+        Examples:
+            >>> await client.select(1)
+                'OK'  # All nodes in the cluster have selected database 1
+            >>> await client.select(2, AllNodes())
+                'OK'  # Explicitly route to all nodes
+        """
+        from glide_shared.routes import AllNodes
+
+        if route is None:
+            route = AllNodes()  # Default routing for cluster mode
+
+        return cast(
+            TClusterResponse[TOK],
+            await self._execute_command(RequestType.Select, [str(index)], route),
+        )
+
     async def flushdb(
         self, flush_mode: Optional[FlushMode] = None, route: Optional[Route] = None
     ) -> TOK:
