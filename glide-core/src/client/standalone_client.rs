@@ -1,6 +1,6 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-use super::get_redis_connection_info_with_iam;
+use super::get_valkey_connection_info_with_iam;
 use super::reconnecting_connection::{ReconnectReason, ReconnectingConnection};
 use super::{ConnectionRequest, NodeAddress, TlsMode};
 use super::{DEFAULT_CONNECTION_TIMEOUT, to_duration};
@@ -116,27 +116,16 @@ impl StandaloneClient {
     pub async fn create_client(
         connection_request: ConnectionRequest,
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
+        iam_token_manager: Option<&Arc<tokio::sync::RwLock<crate::iam::IAMTokenManager>>>,
     ) -> Result<Self, StandaloneClientConnectionError> {
         if connection_request.addresses.is_empty() {
             return Err(StandaloneClientConnectionError::NoAddressesProvided);
         }
 
-        // Check if we need to create an IAM token manager for connection establishment
-        let iam_token_manager = if let Some(auth_info) = &connection_request.authentication_info {
-            if auth_info.iam_config.is_some() {
-                super::Client::create_iam_token_manager(auth_info).await
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-
-        let mut redis_connection_info =
-            get_redis_connection_info_with_iam(&connection_request, iam_token_manager.as_ref())
-                .await;
-        let pubsub_connection_info = redis_connection_info.clone();
-        redis_connection_info.pubsub_subscriptions = None;
+        let mut valkey_connection_info =
+            get_valkey_connection_info_with_iam(&connection_request, iam_token_manager).await;
+        let pubsub_connection_info = valkey_connection_info.clone();
+        valkey_connection_info.pubsub_subscriptions = None;
         let retry_strategy = match connection_request.connection_retry_strategy {
             Some(strategy) => RetryStrategy::new(
                 strategy.exponent_base,
@@ -166,7 +155,7 @@ impl StandaloneClient {
         let mut stream = stream::iter(connection_request.addresses.into_iter())
             .map(move |address| {
                 let info = if address.host != pubsub_addr.host || address.port != pubsub_addr.port {
-                    redis_connection_info.clone()
+                    valkey_connection_info.clone()
                 } else {
                     pubsub_connection_info.clone()
                 };

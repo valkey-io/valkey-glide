@@ -134,7 +134,7 @@ pub(super) fn get_port(address: &NodeAddress) -> u16 {
 
 /// Get Redis connection info with IAM token integration
 /// This function integrates with the IAM token manager to use IAM tokens as passwords
-pub async fn get_redis_connection_info_with_iam(
+pub async fn get_valkey_connection_info_with_iam(
     connection_request: &ConnectionRequest,
     iam_token_manager: Option<&Arc<tokio::sync::RwLock<crate::iam::IAMTokenManager>>>,
 ) -> redis::RedisConnectionInfo {
@@ -385,7 +385,8 @@ impl Client {
         if let Some(iam_manager) = lazy_iam_manager {
             // Transfer the IAM token manager from lazy client to main client
             // This transfer is thread-safe due to the use of Arc for shared ownership and RwLock for synchronized access.
-            self.update_iam_token_manager(iam_manager).await;
+            let mut guard = self.iam_token_manager.write().await;
+            *guard = Some(iam_manager);
         }
 
         // Continue with client initialization
@@ -393,17 +394,17 @@ impl Client {
         config.lazy_connect = false;
 
         let mut guard = self.internal_client.write().await;
+        let iam_manager_guard = self.iam_token_manager.read().await;
+        let iam_manager_ref = iam_manager_guard.as_ref();
         if let ClientWrapper::Lazy(_) = &*guard {
             // Create the appropriate client based on configuration
             let real_client = if config.cluster_mode_enabled {
                 // Create cluster client
-                let iam_manager_guard = self.iam_token_manager.read().await;
-                let iam_manager_ref = iam_manager_guard.as_ref();
                 let client = create_cluster_client(config, push_sender, iam_manager_ref).await?;
                 ClientWrapper::Cluster { client }
             } else {
                 // Create standalone client
-                let client = StandaloneClient::create_client(config, push_sender)
+                let client = StandaloneClient::create_client(config, push_sender, iam_manager_ref)
                     .await
                     .map_err(|e| {
                         RedisError::from((
@@ -943,26 +944,17 @@ impl Client {
                         Some(Arc::new(tokio::sync::RwLock::new(token_manager)))
                     }
                     Err(e) => {
-                        eprintln!("Failed to create IAM token manager: {e}");
+                        log_error("IAM", format!("Failed to create IAM token manager: {e}"));
                         None
                     }
                 }
             } else {
-                eprintln!("IAM authentication requires a username");
+                log_error("IAM", "IAM authentication requires a username");
                 None
             }
         } else {
             None
         }
-    }
-
-    /// Update the IAM token manager for this client
-    async fn update_iam_token_manager(
-        &self,
-        iam_token_manager: Arc<tokio::sync::RwLock<crate::iam::IAMTokenManager>>,
-    ) {
-        let mut guard = self.iam_token_manager.write().await;
-        *guard = Some(iam_token_manager);
     }
 }
 
@@ -995,15 +987,14 @@ async fn create_cluster_client(
     push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
     iam_token_manager: Option<&Arc<tokio::sync::RwLock<crate::iam::IAMTokenManager>>>,
 ) -> RedisResult<redis::cluster_async::ClusterConnection> {
-    // TODO - implement timeout for each connection attempt
     let tls_mode = request.tls_mode.unwrap_or_default();
 
-    let redis_connection_info =
-        get_redis_connection_info_with_iam(&request, iam_token_manager).await;
+    let valkey_connection_info =
+        get_valkey_connection_info_with_iam(&request, iam_token_manager).await;
     let initial_nodes: Vec<_> = request
         .addresses
         .into_iter()
-        .map(|address| get_connection_info(&address, tls_mode, redis_connection_info.clone()))
+        .map(|address| get_connection_info(&address, tls_mode, valkey_connection_info.clone()))
         .collect();
     let periodic_topology_checks = match request.periodic_checks {
         Some(PeriodicCheck::Disabled) => None,
@@ -1028,7 +1019,7 @@ async fn create_cluster_client(
         builder = builder.periodic_topology_checks(interval_duration);
     }
     builder = builder.use_protocol(request.protocol.unwrap_or_default());
-    if let Some(client_name) = redis_connection_info.client_name {
+    if let Some(client_name) = valkey_connection_info.client_name {
         builder = builder.client_name(client_name);
     }
     if tls_mode != TlsMode::NoTls {
@@ -1039,7 +1030,7 @@ async fn create_cluster_client(
         };
         builder = builder.tls(tls);
     }
-    if let Some(pubsub_subscriptions) = redis_connection_info.pubsub_subscriptions.clone() {
+    if let Some(pubsub_subscriptions) = valkey_connection_info.pubsub_subscriptions.clone() {
         builder = builder.pubsub_subscriptions(pubsub_subscriptions);
     }
 
@@ -1070,7 +1061,7 @@ async fn create_cluster_client(
     // However, this approach would leave the application unaware that the subscriptions were not applied, requiring the user to analyze logs to identify the issue.
     // Instead, we explicitly check the engine version here and fail the connection creation if it is incompatible with sharded subscriptions.
 
-    if let Some(pubsub_subscriptions) = redis_connection_info.pubsub_subscriptions
+    if let Some(pubsub_subscriptions) = valkey_connection_info.pubsub_subscriptions
         && pubsub_subscriptions.contains_key(&redis::PubSubSubscriptionKind::Sharded)
     {
         let info_res = con
@@ -1280,9 +1271,13 @@ impl Client {
                 ClientWrapper::Cluster { client }
             } else {
                 ClientWrapper::Standalone(
-                    StandaloneClient::create_client(request, push_sender)
-                        .await
-                        .map_err(ConnectionError::Standalone)?,
+                    StandaloneClient::create_client(
+                        request,
+                        push_sender,
+                        iam_token_manager.as_ref(),
+                    )
+                    .await
+                    .map_err(ConnectionError::Standalone)?,
                 )
             };
 
