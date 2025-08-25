@@ -1141,7 +1141,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: anyhow:1.0.98
+Package: anyhow:1.0.99
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -1649,7 +1649,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: async-trait:0.1.88
+Package: async-trait:0.1.89
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -3182,7 +3182,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: bitflags:2.9.1
+Package: bitflags:2.9.3
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -3894,7 +3894,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: cfg-if:1.0.1
+Package: cfg-if:1.0.3
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -7887,7 +7887,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: form_urlencoded:1.2.1
+Package: form_urlencoded:1.2.2
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -11301,7 +11301,7 @@ The following copyrights and licenses were found in the source code of this pack
 
 ----
 
-Package: glob:0.3.2
+Package: glob:0.3.3
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -11530,7 +11530,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: h2:0.4.11
+Package: h2:0.4.12
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -12013,7 +12013,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: hashbrown:0.15.4
+Package: hashbrown:0.15.5
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -13437,7 +13437,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: hyper:1.6.0
+Package: hyper:1.7.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -14440,7 +14440,7 @@ authorization of the copyright holder.
 
 ----
 
-Package: idna:1.0.3
+Package: idna:1.1.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -15127,7 +15127,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: indexmap:2.10.0
+Package: indexmap:2.11.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -15610,7 +15610,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: io-uring:0.7.9
+Package: io-uring:0.7.10
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -17671,7 +17671,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: libc:0.2.174
+Package: libc:0.2.175
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -23071,7 +23071,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: percent-encoding:2.3.1
+Package: percent-encoding:2.3.2
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -24941,7 +24941,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: proc-macro2:1.0.95
+Package: proc-macro2:1.0.101
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -29197,7 +29197,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: redox_users:0.5.1
+Package: redox_users:0.5.2
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -29222,7 +29222,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: reqwest:0.12.22
+Package: reqwest:0.12.23
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -30860,7 +30860,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: rustls-platform-verifier:0.6.0
+Package: rustls-platform-verifier:0.6.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -31336,7 +31336,7 @@ THIS SOFTWARE.
 
 ----
 
-Package: rustversion:1.0.21
+Package: rustversion:1.0.22
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -32053,7 +32053,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: security-framework:3.2.0
+Package: security-framework:3.3.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -32969,7 +32969,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: serde_json:1.0.141
+Package: serde_json:1.0.143
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -33483,7 +33483,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: slab:0.4.10
+Package: slab:0.4.11
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -34505,7 +34505,7 @@ THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ----
 
-Package: syn:2.0.104
+Package: syn:2.0.106
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -35628,7 +35628,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: thiserror:2.0.12
+Package: thiserror:2.0.16
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -36086,7 +36086,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: thiserror-impl:2.0.12
+Package: thiserror-impl:2.0.16
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -37269,7 +37269,7 @@ authorization of the copyright holder.
 
 ----
 
-Package: tokio:1.47.0
+Package: tokio:1.47.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -37598,7 +37598,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: tokio-util:0.7.15
+Package: tokio-util:0.7.16
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -38458,7 +38458,7 @@ THIS SOFTWARE.
 
 ----
 
-Package: url:2.5.4
+Package: url:2.5.7
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -38916,7 +38916,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: uuid:1.17.0
+Package: uuid:1.18.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -52104,7 +52104,7 @@ authorization of the copyright holder.
 
 ----
 
-Package: zerovec:0.11.2
+Package: zerovec:0.11.4
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -52180,32 +52180,7 @@ authorization of the copyright holder.
 
 ----
 
-Package: anyio:4.9.0
-
-The following copyrights and licenses were found in the source code of this package:
-
-Permission is hereby granted, free of charge, to any person obtaining
-a copy of this software and associated documentation files (the
-"Software"), to deal in the Software without restriction, including
-without limitation the rights to use, copy, modify, merge, publish,
-distribute, sublicense, and/or sell copies of the Software, and to
-permit persons to whom the Software is furnished to do so, subject to
-the following conditions:
-
-The above copyright notice and this permission notice shall be
-included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
-CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
-TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
-SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-----
-
-Package: protobuf:6.31.1
+Package: protobuf:6.32.0
 
 The following copyrights and licenses were found in the source code of this package:
 
