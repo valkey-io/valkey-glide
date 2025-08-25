@@ -9,7 +9,6 @@ inputs:
             - node
             - python
             - go
-            - C#
     run-full-matrix:
         description: "Run the full matrix"
         required: true

@@ -15,11 +15,6 @@
         "always-run-versions": ["20.x", "23.x"]
     },
     {
-        "language": "dotnet",
-        "versions": ["8.0", "6.0"],
-        "always-run-versions": ["8.0"]
-    },
-    {
         "language": "go",
         "versions": ["1.22", "1.24"],
         "always-run-versions": ["1.22"]
