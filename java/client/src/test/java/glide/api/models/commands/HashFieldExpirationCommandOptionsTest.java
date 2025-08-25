@@ -17,8 +17,9 @@ import org.junit.jupiter.api.Test;
  * Comprehensive test suite for all hash field expiration command option classes.
  *
  * <p>This test class covers: - ExpireOptions enum - FieldConditionalChange enum - HGetExExpiry
- * class - HSetExOptions class - HGetExOptions class - HExpireOptions class - HPExpireOptions class
- * - HExpireAtOptions class - HPExpireAtOptions class
+ * class - HSetExOptions class - HGetExOptions class - HashFieldExpirationConditionOptions class -
+ * HashFieldExpirationConditionOptions class - HashFieldExpirationConditionOptions class -
+ * HashFieldExpirationConditionOptions class
  *
  * <p>Tests include validation of equals(), hashCode(), toString(), thread safety, and immutability.
  */
@@ -469,10 +470,14 @@ public class HashFieldExpirationCommandOptionsTest {
     @Test
     public void testAllExpirationConditionOptions_noCondition() {
         // Test all expiration condition option classes with no condition
-        assertArrayEquals(new String[0], HExpireOptions.builder().build().toArgs());
-        assertArrayEquals(new String[0], HPExpireOptions.builder().build().toArgs());
-        assertArrayEquals(new String[0], HExpireAtOptions.builder().build().toArgs());
-        assertArrayEquals(new String[0], HPExpireAtOptions.builder().build().toArgs());
+        assertArrayEquals(
+                new String[0], HashFieldExpirationConditionOptions.builder().build().toArgs());
+        assertArrayEquals(
+                new String[0], HashFieldExpirationConditionOptions.builder().build().toArgs());
+        assertArrayEquals(
+                new String[0], HashFieldExpirationConditionOptions.builder().build().toArgs());
+        assertArrayEquals(
+                new String[0], HashFieldExpirationConditionOptions.builder().build().toArgs());
     }
 
     @Test
@@ -483,61 +488,94 @@ public class HashFieldExpirationCommandOptionsTest {
         String[] expectedGT = {"GT"};
         String[] expectedLT = {"LT"};
 
-        // HExpireOptions
-        assertArrayEquals(expectedNX, HExpireOptions.builder().onlyIfNoExpiry().build().toArgs());
-        assertArrayEquals(expectedXX, HExpireOptions.builder().onlyIfHasExpiry().build().toArgs());
+        // HashFieldExpirationConditionOptions
         assertArrayEquals(
-                expectedGT, HExpireOptions.builder().onlyIfGreaterThanCurrent().build().toArgs());
+                expectedNX,
+                HashFieldExpirationConditionOptions.builder().onlyIfNoExpiry().build().toArgs());
         assertArrayEquals(
-                expectedLT, HExpireOptions.builder().onlyIfLessThanCurrent().build().toArgs());
+                expectedXX,
+                HashFieldExpirationConditionOptions.builder().onlyIfHasExpiry().build().toArgs());
+        assertArrayEquals(
+                expectedGT,
+                HashFieldExpirationConditionOptions.builder().onlyIfGreaterThanCurrent().build().toArgs());
+        assertArrayEquals(
+                expectedLT,
+                HashFieldExpirationConditionOptions.builder().onlyIfLessThanCurrent().build().toArgs());
 
-        // HPExpireOptions
-        assertArrayEquals(expectedNX, HPExpireOptions.builder().onlyIfNoExpiry().build().toArgs());
-        assertArrayEquals(expectedXX, HPExpireOptions.builder().onlyIfHasExpiry().build().toArgs());
+        // HashFieldExpirationConditionOptions
         assertArrayEquals(
-                expectedGT, HPExpireOptions.builder().onlyIfGreaterThanCurrent().build().toArgs());
+                expectedNX,
+                HashFieldExpirationConditionOptions.builder().onlyIfNoExpiry().build().toArgs());
         assertArrayEquals(
-                expectedLT, HPExpireOptions.builder().onlyIfLessThanCurrent().build().toArgs());
+                expectedXX,
+                HashFieldExpirationConditionOptions.builder().onlyIfHasExpiry().build().toArgs());
+        assertArrayEquals(
+                expectedGT,
+                HashFieldExpirationConditionOptions.builder().onlyIfGreaterThanCurrent().build().toArgs());
+        assertArrayEquals(
+                expectedLT,
+                HashFieldExpirationConditionOptions.builder().onlyIfLessThanCurrent().build().toArgs());
 
-        // HExpireAtOptions
-        assertArrayEquals(expectedNX, HExpireAtOptions.builder().onlyIfNoExpiry().build().toArgs());
-        assertArrayEquals(expectedXX, HExpireAtOptions.builder().onlyIfHasExpiry().build().toArgs());
+        // HashFieldExpirationConditionOptions
         assertArrayEquals(
-                expectedGT, HExpireAtOptions.builder().onlyIfGreaterThanCurrent().build().toArgs());
+                expectedNX,
+                HashFieldExpirationConditionOptions.builder().onlyIfNoExpiry().build().toArgs());
         assertArrayEquals(
-                expectedLT, HExpireAtOptions.builder().onlyIfLessThanCurrent().build().toArgs());
+                expectedXX,
+                HashFieldExpirationConditionOptions.builder().onlyIfHasExpiry().build().toArgs());
+        assertArrayEquals(
+                expectedGT,
+                HashFieldExpirationConditionOptions.builder().onlyIfGreaterThanCurrent().build().toArgs());
+        assertArrayEquals(
+                expectedLT,
+                HashFieldExpirationConditionOptions.builder().onlyIfLessThanCurrent().build().toArgs());
 
-        // HPExpireAtOptions
-        assertArrayEquals(expectedNX, HPExpireAtOptions.builder().onlyIfNoExpiry().build().toArgs());
-        assertArrayEquals(expectedXX, HPExpireAtOptions.builder().onlyIfHasExpiry().build().toArgs());
+        // HashFieldExpirationConditionOptions
         assertArrayEquals(
-                expectedGT, HPExpireAtOptions.builder().onlyIfGreaterThanCurrent().build().toArgs());
+                expectedNX,
+                HashFieldExpirationConditionOptions.builder().onlyIfNoExpiry().build().toArgs());
         assertArrayEquals(
-                expectedLT, HPExpireAtOptions.builder().onlyIfLessThanCurrent().build().toArgs());
+                expectedXX,
+                HashFieldExpirationConditionOptions.builder().onlyIfHasExpiry().build().toArgs());
+        assertArrayEquals(
+                expectedGT,
+                HashFieldExpirationConditionOptions.builder().onlyIfGreaterThanCurrent().build().toArgs());
+        assertArrayEquals(
+                expectedLT,
+                HashFieldExpirationConditionOptions.builder().onlyIfLessThanCurrent().build().toArgs());
     }
 
     @Test
     public void testAllExpirationConditionOptions_equals() {
         // Test equals for all expiration condition option classes
-        HExpireOptions hExpire1 = HExpireOptions.builder().onlyIfNoExpiry().build();
-        HExpireOptions hExpire2 = HExpireOptions.builder().onlyIfNoExpiry().build();
-        HExpireOptions hExpire3 = HExpireOptions.builder().onlyIfHasExpiry().build();
+        HashFieldExpirationConditionOptions hExpire1 =
+                HashFieldExpirationConditionOptions.builder().onlyIfNoExpiry().build();
+        HashFieldExpirationConditionOptions hExpire2 =
+                HashFieldExpirationConditionOptions.builder().onlyIfNoExpiry().build();
+        HashFieldExpirationConditionOptions hExpire3 =
+                HashFieldExpirationConditionOptions.builder().onlyIfHasExpiry().build();
 
         assertEquals(hExpire1, hExpire2);
         assertNotEquals(hExpire1, hExpire3);
 
-        HPExpireOptions hpExpire1 = HPExpireOptions.builder().onlyIfNoExpiry().build();
-        HPExpireOptions hpExpire2 = HPExpireOptions.builder().onlyIfNoExpiry().build();
+        HashFieldExpirationConditionOptions hpExpire1 =
+                HashFieldExpirationConditionOptions.builder().onlyIfNoExpiry().build();
+        HashFieldExpirationConditionOptions hpExpire2 =
+                HashFieldExpirationConditionOptions.builder().onlyIfNoExpiry().build();
 
         assertEquals(hpExpire1, hpExpire2);
 
-        HExpireAtOptions hExpireAt1 = HExpireAtOptions.builder().onlyIfNoExpiry().build();
-        HExpireAtOptions hExpireAt2 = HExpireAtOptions.builder().onlyIfNoExpiry().build();
+        HashFieldExpirationConditionOptions hExpireAt1 =
+                HashFieldExpirationConditionOptions.builder().onlyIfNoExpiry().build();
+        HashFieldExpirationConditionOptions hExpireAt2 =
+                HashFieldExpirationConditionOptions.builder().onlyIfNoExpiry().build();
 
         assertEquals(hExpireAt1, hExpireAt2);
 
-        HPExpireAtOptions hpExpireAt1 = HPExpireAtOptions.builder().onlyIfNoExpiry().build();
-        HPExpireAtOptions hpExpireAt2 = HPExpireAtOptions.builder().onlyIfNoExpiry().build();
+        HashFieldExpirationConditionOptions hpExpireAt1 =
+                HashFieldExpirationConditionOptions.builder().onlyIfNoExpiry().build();
+        HashFieldExpirationConditionOptions hpExpireAt2 =
+                HashFieldExpirationConditionOptions.builder().onlyIfNoExpiry().build();
 
         assertEquals(hpExpireAt1, hpExpireAt2);
     }
@@ -545,23 +583,31 @@ public class HashFieldExpirationCommandOptionsTest {
     @Test
     public void testAllExpirationConditionOptions_hashCode() {
         // Test hashCode for all expiration condition option classes
-        HExpireOptions hExpire1 = HExpireOptions.builder().onlyIfNoExpiry().build();
-        HExpireOptions hExpire2 = HExpireOptions.builder().onlyIfNoExpiry().build();
+        HashFieldExpirationConditionOptions hExpire1 =
+                HashFieldExpirationConditionOptions.builder().onlyIfNoExpiry().build();
+        HashFieldExpirationConditionOptions hExpire2 =
+                HashFieldExpirationConditionOptions.builder().onlyIfNoExpiry().build();
 
         assertEquals(hExpire1.hashCode(), hExpire2.hashCode());
 
-        HPExpireOptions hpExpire1 = HPExpireOptions.builder().onlyIfNoExpiry().build();
-        HPExpireOptions hpExpire2 = HPExpireOptions.builder().onlyIfNoExpiry().build();
+        HashFieldExpirationConditionOptions hpExpire1 =
+                HashFieldExpirationConditionOptions.builder().onlyIfNoExpiry().build();
+        HashFieldExpirationConditionOptions hpExpire2 =
+                HashFieldExpirationConditionOptions.builder().onlyIfNoExpiry().build();
 
         assertEquals(hpExpire1.hashCode(), hpExpire2.hashCode());
 
-        HExpireAtOptions hExpireAt1 = HExpireAtOptions.builder().onlyIfNoExpiry().build();
-        HExpireAtOptions hExpireAt2 = HExpireAtOptions.builder().onlyIfNoExpiry().build();
+        HashFieldExpirationConditionOptions hExpireAt1 =
+                HashFieldExpirationConditionOptions.builder().onlyIfNoExpiry().build();
+        HashFieldExpirationConditionOptions hExpireAt2 =
+                HashFieldExpirationConditionOptions.builder().onlyIfNoExpiry().build();
 
         assertEquals(hExpireAt1.hashCode(), hExpireAt2.hashCode());
 
-        HPExpireAtOptions hpExpireAt1 = HPExpireAtOptions.builder().onlyIfNoExpiry().build();
-        HPExpireAtOptions hpExpireAt2 = HPExpireAtOptions.builder().onlyIfNoExpiry().build();
+        HashFieldExpirationConditionOptions hpExpireAt1 =
+                HashFieldExpirationConditionOptions.builder().onlyIfNoExpiry().build();
+        HashFieldExpirationConditionOptions hpExpireAt2 =
+                HashFieldExpirationConditionOptions.builder().onlyIfNoExpiry().build();
 
         assertEquals(hpExpireAt1.hashCode(), hpExpireAt2.hashCode());
     }
@@ -569,42 +615,50 @@ public class HashFieldExpirationCommandOptionsTest {
     @Test
     public void testAllExpirationConditionOptions_toString() {
         // Test toString for all expiration condition option classes
-        HExpireOptions hExpire = HExpireOptions.builder().onlyIfNoExpiry().build();
-        assertTrue(hExpire.toString().contains("HExpireOptions"));
+        HashFieldExpirationConditionOptions hExpire =
+                HashFieldExpirationConditionOptions.builder().onlyIfNoExpiry().build();
+        assertTrue(hExpire.toString().contains("HashFieldExpirationConditionOptions"));
         assertTrue(hExpire.toString().contains("HAS_NO_EXPIRY"));
 
-        HPExpireOptions hpExpire = HPExpireOptions.builder().onlyIfNoExpiry().build();
-        assertTrue(hpExpire.toString().contains("HPExpireOptions"));
+        HashFieldExpirationConditionOptions hpExpire =
+                HashFieldExpirationConditionOptions.builder().onlyIfNoExpiry().build();
+        assertTrue(hpExpire.toString().contains("HashFieldExpirationConditionOptions"));
         assertTrue(hpExpire.toString().contains("HAS_NO_EXPIRY"));
 
-        HExpireAtOptions hExpireAt = HExpireAtOptions.builder().onlyIfNoExpiry().build();
-        assertTrue(hExpireAt.toString().contains("HExpireAtOptions"));
+        HashFieldExpirationConditionOptions hExpireAt =
+                HashFieldExpirationConditionOptions.builder().onlyIfNoExpiry().build();
+        assertTrue(hExpireAt.toString().contains("HashFieldExpirationConditionOptions"));
         assertTrue(hExpireAt.toString().contains("HAS_NO_EXPIRY"));
 
-        HPExpireAtOptions hpExpireAt = HPExpireAtOptions.builder().onlyIfNoExpiry().build();
-        assertTrue(hpExpireAt.toString().contains("HPExpireAtOptions"));
+        HashFieldExpirationConditionOptions hpExpireAt =
+                HashFieldExpirationConditionOptions.builder().onlyIfNoExpiry().build();
+        assertTrue(hpExpireAt.toString().contains("HashFieldExpirationConditionOptions"));
         assertTrue(hpExpireAt.toString().contains("HAS_NO_EXPIRY"));
     }
 
     @Test
     public void testAllExpirationConditionOptions_immutability() {
         // Test immutability for all expiration condition option classes
-        HExpireOptions hExpire = HExpireOptions.builder().onlyIfNoExpiry().build();
+        HashFieldExpirationConditionOptions hExpire =
+                HashFieldExpirationConditionOptions.builder().onlyIfNoExpiry().build();
         String[] args1 = hExpire.toArgs();
         String[] args2 = hExpire.toArgs();
         assertArrayEquals(args1, args2);
 
-        HPExpireOptions hpExpire = HPExpireOptions.builder().onlyIfNoExpiry().build();
+        HashFieldExpirationConditionOptions hpExpire =
+                HashFieldExpirationConditionOptions.builder().onlyIfNoExpiry().build();
         args1 = hpExpire.toArgs();
         args2 = hpExpire.toArgs();
         assertArrayEquals(args1, args2);
 
-        HExpireAtOptions hExpireAt = HExpireAtOptions.builder().onlyIfNoExpiry().build();
+        HashFieldExpirationConditionOptions hExpireAt =
+                HashFieldExpirationConditionOptions.builder().onlyIfNoExpiry().build();
         args1 = hExpireAt.toArgs();
         args2 = hExpireAt.toArgs();
         assertArrayEquals(args1, args2);
 
-        HPExpireAtOptions hpExpireAt = HPExpireAtOptions.builder().onlyIfNoExpiry().build();
+        HashFieldExpirationConditionOptions hpExpireAt =
+                HashFieldExpirationConditionOptions.builder().onlyIfNoExpiry().build();
         args1 = hpExpireAt.toArgs();
         args2 = hpExpireAt.toArgs();
         assertArrayEquals(args1, args2);
@@ -613,10 +667,14 @@ public class HashFieldExpirationCommandOptionsTest {
     @Test
     public void testAllExpirationConditionOptions_threadSafety() throws InterruptedException {
         // Test thread safety for all expiration condition option classes
-        HExpireOptions hExpire = HExpireOptions.builder().onlyIfNoExpiry().build();
-        HPExpireOptions hpExpire = HPExpireOptions.builder().onlyIfNoExpiry().build();
-        HExpireAtOptions hExpireAt = HExpireAtOptions.builder().onlyIfNoExpiry().build();
-        HPExpireAtOptions hpExpireAt = HPExpireAtOptions.builder().onlyIfNoExpiry().build();
+        HashFieldExpirationConditionOptions hExpire =
+                HashFieldExpirationConditionOptions.builder().onlyIfNoExpiry().build();
+        HashFieldExpirationConditionOptions hpExpire =
+                HashFieldExpirationConditionOptions.builder().onlyIfNoExpiry().build();
+        HashFieldExpirationConditionOptions hExpireAt =
+                HashFieldExpirationConditionOptions.builder().onlyIfNoExpiry().build();
+        HashFieldExpirationConditionOptions hpExpireAt =
+                HashFieldExpirationConditionOptions.builder().onlyIfNoExpiry().build();
 
         ExecutorService executor = Executors.newFixedThreadPool(10);
         AtomicInteger successCount = new AtomicInteger(0);
@@ -649,41 +707,50 @@ public class HashFieldExpirationCommandOptionsTest {
     @Test
     public void testAllExpirationConditionOptions_builderMethodChaining() {
         // Test builder method chaining for all expiration condition option classes
-        HExpireOptions hExpire = HExpireOptions.builder().onlyIfNoExpiry().build();
+        HashFieldExpirationConditionOptions hExpire =
+                HashFieldExpirationConditionOptions.builder().onlyIfNoExpiry().build();
         assertArrayEquals(new String[] {"NX"}, hExpire.toArgs());
 
-        HPExpireOptions hpExpire = HPExpireOptions.builder().onlyIfGreaterThanCurrent().build();
+        HashFieldExpirationConditionOptions hpExpire =
+                HashFieldExpirationConditionOptions.builder().onlyIfGreaterThanCurrent().build();
         assertArrayEquals(new String[] {"GT"}, hpExpire.toArgs());
 
-        HExpireAtOptions hExpireAt = HExpireAtOptions.builder().onlyIfLessThanCurrent().build();
+        HashFieldExpirationConditionOptions hExpireAt =
+                HashFieldExpirationConditionOptions.builder().onlyIfLessThanCurrent().build();
         assertArrayEquals(new String[] {"LT"}, hExpireAt.toArgs());
 
-        HPExpireAtOptions hpExpireAt = HPExpireAtOptions.builder().onlyIfHasExpiry().build();
+        HashFieldExpirationConditionOptions hpExpireAt =
+                HashFieldExpirationConditionOptions.builder().onlyIfHasExpiry().build();
         assertArrayEquals(new String[] {"XX"}, hpExpireAt.toArgs());
     }
 
     // ========== Cross-Class Compatibility Tests ==========
 
     @Test
-    public void testCrossClassCompatibility_differentClassesNotEqual() {
-        // Test that different option classes with same parameters are not equal
-        HExpireOptions hExpire = HExpireOptions.builder().onlyIfNoExpiry().build();
-        HPExpireOptions hpExpire = HPExpireOptions.builder().onlyIfNoExpiry().build();
-        HExpireAtOptions hExpireAt = HExpireAtOptions.builder().onlyIfNoExpiry().build();
-        HPExpireAtOptions hpExpireAt = HPExpireAtOptions.builder().onlyIfNoExpiry().build();
+    public void testConsolidatedClassCompatibility() {
+        // Test that the consolidated class works correctly for all hash field expiration commands
+        HashFieldExpirationConditionOptions nxOption =
+                HashFieldExpirationConditionOptions.builder().onlyIfNoExpiry().build();
+        HashFieldExpirationConditionOptions xxOption =
+                HashFieldExpirationConditionOptions.builder().onlyIfHasExpiry().build();
+        HashFieldExpirationConditionOptions gtOption =
+                HashFieldExpirationConditionOptions.builder().onlyIfGreaterThanCurrent().build();
+        HashFieldExpirationConditionOptions ltOption =
+                HashFieldExpirationConditionOptions.builder().onlyIfLessThanCurrent().build();
 
-        // All should produce the same args but not be equal to each other
-        assertArrayEquals(hExpire.toArgs(), hpExpire.toArgs());
-        assertArrayEquals(hExpire.toArgs(), hExpireAt.toArgs());
-        assertArrayEquals(hExpire.toArgs(), hpExpireAt.toArgs());
+        // Test that same conditions produce same args and are equal
+        HashFieldExpirationConditionOptions anotherNxOption =
+                HashFieldExpirationConditionOptions.builder().onlyIfNoExpiry().build();
+        assertArrayEquals(nxOption.toArgs(), anotherNxOption.toArgs());
+        assertEquals(nxOption, anotherNxOption);
 
-        // But they should not be equal as objects
-        assertNotEquals(hExpire, hpExpire);
-        assertNotEquals(hExpire, hExpireAt);
-        assertNotEquals(hExpire, hpExpireAt);
-        assertNotEquals(hpExpire, hExpireAt);
-        assertNotEquals(hpExpire, hpExpireAt);
-        assertNotEquals(hExpireAt, hpExpireAt);
+        // Test that different conditions produce different args and are not equal
+        assertNotEquals(nxOption, xxOption);
+        assertNotEquals(nxOption, gtOption);
+        assertNotEquals(nxOption, ltOption);
+        assertNotEquals(xxOption, gtOption);
+        assertNotEquals(xxOption, ltOption);
+        assertNotEquals(gtOption, ltOption);
     }
 
     @Test

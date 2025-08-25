@@ -228,12 +228,9 @@ import glide.api.models.PubSubMessage;
 import glide.api.models.Script;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.GetExOptions;
-import glide.api.models.commands.HExpireAtOptions;
-import glide.api.models.commands.HExpireOptions;
 import glide.api.models.commands.HGetExOptions;
-import glide.api.models.commands.HPExpireAtOptions;
-import glide.api.models.commands.HPExpireOptions;
 import glide.api.models.commands.HSetExOptions;
+import glide.api.models.commands.HashFieldExpirationConditionOptions;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
 import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
@@ -1246,7 +1243,10 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Long[]> hexpire(
-            @NonNull String key, long seconds, @NonNull String[] fields, HExpireOptions options) {
+            @NonNull String key,
+            long seconds,
+            @NonNull String[] fields,
+            HashFieldExpirationConditionOptions options) {
         String[] optionsArgs = options != null ? options.toArgs() : new String[0];
         String[] arguments =
                 concatenateArrays(
@@ -1263,7 +1263,7 @@ public abstract class BaseClient
             @NonNull GlideString key,
             long seconds,
             @NonNull GlideString[] fields,
-            HExpireOptions options) {
+            HashFieldExpirationConditionOptions options) {
         ArgsBuilder argsBuilder = new ArgsBuilder().add(key).add(seconds);
         if (options != null) {
             argsBuilder.add(options.toArgs());
@@ -1293,7 +1293,10 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Long[]> hpexpire(
-            @NonNull String key, long milliseconds, @NonNull String[] fields, HPExpireOptions options) {
+            @NonNull String key,
+            long milliseconds,
+            @NonNull String[] fields,
+            HashFieldExpirationConditionOptions options) {
         String[] optionsArgs = options != null ? options.toArgs() : new String[0];
         String[] arguments =
                 concatenateArrays(
@@ -1310,7 +1313,7 @@ public abstract class BaseClient
             @NonNull GlideString key,
             long milliseconds,
             @NonNull GlideString[] fields,
-            HPExpireOptions options) {
+            HashFieldExpirationConditionOptions options) {
         ArgsBuilder argsBuilder = new ArgsBuilder().add(key).add(milliseconds);
         if (options != null) {
             argsBuilder.add(options.toArgs());
@@ -1322,7 +1325,10 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Long[]> hexpireat(
-            @NonNull String key, long unixSeconds, @NonNull String[] fields, HExpireAtOptions options) {
+            @NonNull String key,
+            long unixSeconds,
+            @NonNull String[] fields,
+            HashFieldExpirationConditionOptions options) {
         String[] optionsArgs = options != null ? options.toArgs() : new String[0];
         String[] arguments =
                 concatenateArrays(
@@ -1339,7 +1345,7 @@ public abstract class BaseClient
             @NonNull GlideString key,
             long unixSeconds,
             @NonNull GlideString[] fields,
-            HExpireAtOptions options) {
+            HashFieldExpirationConditionOptions options) {
         ArgsBuilder argsBuilder = new ArgsBuilder().add(key).add(unixSeconds);
         if (options != null) {
             argsBuilder.add(options.toArgs());
@@ -1354,7 +1360,7 @@ public abstract class BaseClient
             @NonNull String key,
             long unixMilliseconds,
             @NonNull String[] fields,
-            HPExpireAtOptions options) {
+            HashFieldExpirationConditionOptions options) {
         String[] optionsArgs = options != null ? options.toArgs() : new String[0];
         String[] arguments =
                 concatenateArrays(
@@ -1371,7 +1377,7 @@ public abstract class BaseClient
             @NonNull GlideString key,
             long unixMilliseconds,
             @NonNull GlideString[] fields,
-            HPExpireAtOptions options) {
+            HashFieldExpirationConditionOptions options) {
         ArgsBuilder argsBuilder = new ArgsBuilder().add(key).add(unixMilliseconds);
         if (options != null) {
             argsBuilder.add(options.toArgs());

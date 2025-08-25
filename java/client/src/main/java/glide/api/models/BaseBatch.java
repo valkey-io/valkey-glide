@@ -243,12 +243,9 @@ import glide.api.commands.StringBaseCommands;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.GetExOptions;
-import glide.api.models.commands.HExpireAtOptions;
-import glide.api.models.commands.HExpireOptions;
 import glide.api.models.commands.HGetExOptions;
-import glide.api.models.commands.HPExpireAtOptions;
-import glide.api.models.commands.HPExpireOptions;
 import glide.api.models.commands.HSetExOptions;
+import glide.api.models.commands.HashFieldExpirationConditionOptions;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
 import glide.api.models.commands.LPosOptions;
@@ -918,8 +915,8 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param key The key of the hash.
      * @param seconds The expiration time in seconds.
      * @param fields The fields in the hash stored at <code>key</code> to set expiration for.
-     * @param options The {@link HExpireOptions} for the command, supporting only expiration
-     *     conditions (NX/XX/GT/LT).
+     * @param options The {@link HashFieldExpirationConditionOptions} for the command, supporting only
+     *     expiration conditions (NX/XX/GT/LT).
      * @return Command Response - An array of <code>Boolean</code> values indicating the success of
      *     setting expiration for each field. <code>true</code> indicates that the expiration was
      *     successfully set, and <code>false</code> indicates that the condition was not met or the
@@ -927,7 +924,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @example
      *     <pre>{@code
      * // Set expiration only if fields have no existing expiration
-     * HExpireOptions options = HExpireOptions.builder()
+     * HashFieldExpirationConditionOptions options = HashFieldExpirationConditionOptions.builder()
      *     .onlyIfNoExpiry()
      *     .build();
      *
@@ -939,7 +936,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
             @NonNull ArgType key,
             long seconds,
             @NonNull ArgType[] fields,
-            @NonNull HExpireOptions options) {
+            @NonNull HashFieldExpirationConditionOptions options) {
         checkTypeOrThrow(key);
         protobufBatch.addCommands(
                 buildCommand(
@@ -990,8 +987,8 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param key The key of the hash.
      * @param milliseconds The expiration time to set for the fields, in milliseconds.
      * @param fields The fields to set expiration for.
-     * @param options The {@link HPExpireOptions} for the command, supporting only expiration
-     *     conditions (NX/XX/GT/LT).
+     * @param options The {@link HashFieldExpirationConditionOptions} for the command, supporting only
+     *     expiration conditions (NX/XX/GT/LT).
      * @return Command response - An array of <code>Boolean</code> values, each corresponding to a
      *     field:
      *     <ul>
@@ -1003,7 +1000,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @example
      *     <pre>{@code
      * // Set expiration only if new expiration is greater than current
-     * HPExpireOptions options = HPExpireOptions.builder()
+     * HashFieldExpirationConditionOptions options = HashFieldExpirationConditionOptions.builder()
      *     .onlyIfGreaterThanCurrent()
      *     .build();
      *
@@ -1015,7 +1012,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
             @NonNull ArgType key,
             long milliseconds,
             @NonNull ArgType[] fields,
-            @NonNull HPExpireOptions options) {
+            @NonNull HashFieldExpirationConditionOptions options) {
         checkTypeOrThrow(key);
         protobufBatch.addCommands(
                 buildCommand(
@@ -1040,8 +1037,8 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param key The key of the hash.
      * @param unixSeconds The expiration time to set for the fields, as a Unix timestamp in seconds.
      * @param fields The fields to set expiration for.
-     * @param options The {@link HExpireAtOptions} for the command, supporting only expiration
-     *     conditions (NX/XX/GT/LT).
+     * @param options The {@link HashFieldExpirationConditionOptions} for the command, supporting only
+     *     expiration conditions (NX/XX/GT/LT).
      * @return Command response - An array of <code>Boolean</code> values, each corresponding to a
      *     field:
      *     <ul>
@@ -1053,7 +1050,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @example
      *     <pre>{@code
      * // Set expiration only if fields have existing expiration
-     * HExpireAtOptions options = HExpireAtOptions.builder()
+     * HashFieldExpirationConditionOptions options = HashFieldExpirationConditionOptions.builder()
      *     .onlyIfHasExpiry()
      *     .build();
      *
@@ -1066,7 +1063,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
             @NonNull ArgType key,
             long unixSeconds,
             @NonNull ArgType[] fields,
-            @NonNull HExpireAtOptions options) {
+            @NonNull HashFieldExpirationConditionOptions options) {
         checkTypeOrThrow(key);
         protobufBatch.addCommands(
                 buildCommand(
@@ -1085,7 +1082,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * Sets expiration time for hash fields, using an absolute Unix timestamp in milliseconds. <code>
      * HPEXPIREAT</code> has the same effect and semantic as <code>HEXPIREAT</code>, but the Unix time
      * at which the field will expire is specified in milliseconds instead of seconds. See {@link
-     * #hexpireat(Object, long, Object[], HExpireAtOptions)} for more details.
+     * #hexpireat(Object, long, Object[], HashFieldExpirationConditionOptions)} for more details.
      *
      * @since Valkey 9.0 and above.
      * @see <a href="https://valkey.io/commands/hpexpireat/">valkey.io</a> for details.
@@ -1093,8 +1090,8 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param unixMilliseconds The expiration time to set for the fields, as a Unix timestamp in
      *     milliseconds.
      * @param fields The fields to set expiration for.
-     * @param options The {@link HPExpireAtOptions} for the command, supporting only expiration
-     *     conditions (NX/XX/GT/LT).
+     * @param options The {@link HashFieldExpirationConditionOptions} for the command, supporting only
+     *     expiration conditions (NX/XX/GT/LT).
      * @return Command response - An array of <code>Boolean</code> values, each corresponding to a
      *     field:
      *     <ul>
@@ -1106,7 +1103,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @example
      *     <pre>{@code
      * // Set expiration only if new expiration is less than current
-     * HPExpireAtOptions options = HPExpireAtOptions.builder()
+     * HashFieldExpirationConditionOptions options = HashFieldExpirationConditionOptions.builder()
      *     .onlyIfLessThanCurrent()
      *     .build();
      *
@@ -1119,7 +1116,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
             @NonNull ArgType key,
             long unixMilliseconds,
             @NonNull ArgType[] fields,
-            @NonNull HPExpireAtOptions options) {
+            @NonNull HashFieldExpirationConditionOptions options) {
         checkTypeOrThrow(key);
         protobufBatch.addCommands(
                 buildCommand(

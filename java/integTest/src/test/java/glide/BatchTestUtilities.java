@@ -15,13 +15,10 @@ import glide.api.models.BaseBatch;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.ExpirySet;
 import glide.api.models.commands.GetExOptions;
-import glide.api.models.commands.HExpireAtOptions;
-import glide.api.models.commands.HExpireOptions;
 import glide.api.models.commands.HGetExExpiry;
 import glide.api.models.commands.HGetExOptions;
-import glide.api.models.commands.HPExpireAtOptions;
-import glide.api.models.commands.HPExpireOptions;
 import glide.api.models.commands.HSetExOptions;
+import glide.api.models.commands.HashFieldExpirationConditionOptions;
 import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions.InfLexBound;
@@ -436,20 +433,27 @@ public class BatchTestUtilities {
             batch
                     .hsetex(hashKey3, Map.of(field1, value1, field2, value2), hsetexOptions)
                     .hgetex(hashKey3, new String[] {field1, field2}, hgetexOptions)
-                    .hexpire(hashKey3, 60L, new String[] {field1, field2}, HExpireOptions.builder().build())
+                    .hexpire(
+                            hashKey3,
+                            60L,
+                            new String[] {field1, field2},
+                            HashFieldExpirationConditionOptions.builder().build())
                     .hpersist(hashKey3, new String[] {field1, field2})
                     .hpexpire(
-                            hashKey3, 60000L, new String[] {field1, field2}, HPExpireOptions.builder().build())
+                            hashKey3,
+                            60000L,
+                            new String[] {field1, field2},
+                            HashFieldExpirationConditionOptions.builder().build())
                     .hexpireat(
                             hashKey3,
                             42, // expire immediately (timestamp in the past)
                             new String[] {field1, field2},
-                            HExpireAtOptions.builder().build())
+                            HashFieldExpirationConditionOptions.builder().build())
                     .hpexpireat(
                             hashKey3,
                             42, // expire immediately (timestamp in the past)
                             new String[] {field1, field2},
-                            HPExpireAtOptions.builder().build())
+                            HashFieldExpirationConditionOptions.builder().build())
                     .httl(hashKey3, new String[] {field1, field2})
                     .hpttl(hashKey3, new String[] {field1, field2})
                     .hexpiretime(hashKey3, new String[] {field1, field2})

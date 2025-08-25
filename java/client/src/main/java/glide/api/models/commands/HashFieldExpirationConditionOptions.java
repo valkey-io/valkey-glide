@@ -6,10 +6,9 @@ import lombok.EqualsAndHashCode;
 import lombok.ToString;
 
 /**
- * Optional arguments for the HPEXPIRE command.
+ * Optional arguments for hash field expiration commands (HEXPIRE, HPEXPIRE, HEXPIREAT, HPEXPIREAT).
  *
- * <p>HPEXPIRE sets expiration times for hash fields in milliseconds and supports only expiration
- * conditions:
+ * <p>These commands set expiration times for hash fields and support only expiration conditions:
  *
  * <ul>
  *   <li>NX - Only set expiration when field has no existing expiration
@@ -23,28 +22,31 @@ import lombok.ToString;
  * @example
  *     <pre>{@code
  * // Set expiration only if fields have no existing expiration
- * HPExpireOptions options = HPExpireOptions.builder()
+ * HashFieldExpirationConditionOptions options = HashFieldExpirationConditionOptions.builder()
  *     .onlyIfNoExpiry()
  *     .build();
  *
  * String[] fields = {"field1", "field2"};
- * Long[] result = client.hpexpire("myHash", 60000, fields, options).get();
+ * Long[] result = client.hexpire("myHash", 60, fields, options).get();
  *
  * // Set expiration only if new expiration is greater than current
- * HPExpireOptions gtOptions = HPExpireOptions.builder()
+ * HashFieldExpirationConditionOptions gtOptions = HashFieldExpirationConditionOptions.builder()
  *     .onlyIfGreaterThanCurrent()
  *     .build();
  *
- * Long[] gtResult = client.hpexpire("myHash", 120000, fields, gtOptions).get();
+ * Long[] gtResult = client.hpexpire("myHash", 60000, fields, gtOptions).get();
  * }</pre>
  *
  * @since Valkey 9.0.0
+ * @see <a href="https://valkey.io/commands/hexpire/">HEXPIRE Command Documentation</a>
  * @see <a href="https://valkey.io/commands/hpexpire/">HPEXPIRE Command Documentation</a>
+ * @see <a href="https://valkey.io/commands/hexpireat/">HEXPIREAT Command Documentation</a>
+ * @see <a href="https://valkey.io/commands/hpexpireat/">HPEXPIREAT Command Documentation</a>
  */
 @Builder
 @EqualsAndHashCode
 @ToString
-public final class HPExpireOptions {
+public final class HashFieldExpirationConditionOptions {
 
     /** The expiration condition to apply */
     private final ExpireOptions condition;
@@ -61,8 +63,8 @@ public final class HPExpireOptions {
         return condition.toArgs();
     }
 
-    /** Builder class for {@link HPExpireOptions}. */
-    public static class HPExpireOptionsBuilder {
+    /** Builder class for {@link HashFieldExpirationConditionOptions}. */
+    public static class HashFieldExpirationConditionOptionsBuilder {
 
         /**
          * Sets the condition to only set expiration when field has no existing expiration. Equivalent
@@ -70,7 +72,7 @@ public final class HPExpireOptions {
          *
          * @return This builder instance
          */
-        public HPExpireOptionsBuilder onlyIfNoExpiry() {
+        public HashFieldExpirationConditionOptionsBuilder onlyIfNoExpiry() {
             this.condition = ExpireOptions.HAS_NO_EXPIRY;
             return this;
         }
@@ -81,7 +83,7 @@ public final class HPExpireOptions {
          *
          * @return This builder instance
          */
-        public HPExpireOptionsBuilder onlyIfHasExpiry() {
+        public HashFieldExpirationConditionOptionsBuilder onlyIfHasExpiry() {
             this.condition = ExpireOptions.HAS_EXISTING_EXPIRY;
             return this;
         }
@@ -92,7 +94,7 @@ public final class HPExpireOptions {
          *
          * @return This builder instance
          */
-        public HPExpireOptionsBuilder onlyIfGreaterThanCurrent() {
+        public HashFieldExpirationConditionOptionsBuilder onlyIfGreaterThanCurrent() {
             this.condition = ExpireOptions.NEW_EXPIRY_GREATER_THAN_CURRENT;
             return this;
         }
@@ -103,7 +105,7 @@ public final class HPExpireOptions {
          *
          * @return This builder instance
          */
-        public HPExpireOptionsBuilder onlyIfLessThanCurrent() {
+        public HashFieldExpirationConditionOptionsBuilder onlyIfLessThanCurrent() {
             this.condition = ExpireOptions.NEW_EXPIRY_LESS_THAN_CURRENT;
             return this;
         }

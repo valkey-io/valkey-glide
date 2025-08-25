@@ -263,13 +263,10 @@ import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.ExpirySet;
 import glide.api.models.commands.FieldConditionalChange;
 import glide.api.models.commands.GetExOptions;
-import glide.api.models.commands.HExpireAtOptions;
-import glide.api.models.commands.HExpireOptions;
 import glide.api.models.commands.HGetExExpiry;
 import glide.api.models.commands.HGetExOptions;
-import glide.api.models.commands.HPExpireAtOptions;
-import glide.api.models.commands.HPExpireOptions;
 import glide.api.models.commands.HSetExOptions;
+import glide.api.models.commands.HashFieldExpirationConditionOptions;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
@@ -497,19 +494,29 @@ public class BatchTests {
         batch.hgetex("key", new String[] {"field1"}, HGetExOptions.builder().build());
         results.add(Pair.of(HGetEx, buildArgs("key", "FIELDS", "1", "field1")));
 
-        batch.hexpire("key", 60L, new String[] {"field1", "field2"}, HExpireOptions.builder().build());
+        batch.hexpire(
+                "key",
+                60L,
+                new String[] {"field1", "field2"},
+                HashFieldExpirationConditionOptions.builder().build());
         results.add(Pair.of(HExpire, buildArgs("key", "60", "FIELDS", "2", "field1", "field2")));
 
         // Test HEXPIRE with condition options
         batch.hexpire(
-                "key", 60L, new String[] {"field1"}, HExpireOptions.builder().onlyIfNoExpiry().build());
+                "key",
+                60L,
+                new String[] {"field1"},
+                HashFieldExpirationConditionOptions.builder().onlyIfNoExpiry().build());
         results.add(Pair.of(HExpire, buildArgs("key", "60", "NX", "FIELDS", "1", "field1")));
 
         batch.hpersist("key", new String[] {"field1", "field2"});
         results.add(Pair.of(HPersist, buildArgs("key", "FIELDS", "2", "field1", "field2")));
 
         batch.hpexpire(
-                "key", 60000L, new String[] {"field1", "field2"}, HPExpireOptions.builder().build());
+                "key",
+                60000L,
+                new String[] {"field1", "field2"},
+                HashFieldExpirationConditionOptions.builder().build());
         results.add(Pair.of(HPExpire, buildArgs("key", "60000", "FIELDS", "2", "field1", "field2")));
 
         // Test HPEXPIRE with condition options
@@ -517,11 +524,14 @@ public class BatchTests {
                 "key",
                 60000L,
                 new String[] {"field1"},
-                HPExpireOptions.builder().onlyIfHasExpiry().build());
+                HashFieldExpirationConditionOptions.builder().onlyIfHasExpiry().build());
         results.add(Pair.of(HPExpire, buildArgs("key", "60000", "XX", "FIELDS", "1", "field1")));
 
         batch.hexpireat(
-                "key", 1234567890L, new String[] {"field1", "field2"}, HExpireAtOptions.builder().build());
+                "key",
+                1234567890L,
+                new String[] {"field1", "field2"},
+                HashFieldExpirationConditionOptions.builder().build());
         results.add(
                 Pair.of(HExpireAt, buildArgs("key", "1234567890", "FIELDS", "2", "field1", "field2")));
 
@@ -530,14 +540,14 @@ public class BatchTests {
                 "key",
                 1234567890L,
                 new String[] {"field1"},
-                HExpireAtOptions.builder().onlyIfGreaterThanCurrent().build());
+                HashFieldExpirationConditionOptions.builder().onlyIfGreaterThanCurrent().build());
         results.add(Pair.of(HExpireAt, buildArgs("key", "1234567890", "GT", "FIELDS", "1", "field1")));
 
         batch.hpexpireat(
                 "key",
                 1234567890000L,
                 new String[] {"field1", "field2"},
-                HPExpireAtOptions.builder().build());
+                HashFieldExpirationConditionOptions.builder().build());
         results.add(
                 Pair.of(HPExpireAt, buildArgs("key", "1234567890000", "FIELDS", "2", "field1", "field2")));
 
@@ -546,7 +556,7 @@ public class BatchTests {
                 "key",
                 1234567890000L,
                 new String[] {"field1"},
-                HPExpireAtOptions.builder().onlyIfLessThanCurrent().build());
+                HashFieldExpirationConditionOptions.builder().onlyIfLessThanCurrent().build());
         results.add(
                 Pair.of(HPExpireAt, buildArgs("key", "1234567890000", "LT", "FIELDS", "1", "field1")));
 
