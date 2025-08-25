@@ -934,7 +934,7 @@ impl Client {
                     iam_config.cluster_name.clone(),
                     username.clone(),
                     iam_config.region.clone(),
-                    iam_config.service_type.clone(),
+                    iam_config.service_type,
                     iam_config.refresh_interval_seconds,
                 )
                 .await
