@@ -302,7 +302,6 @@ jobs:
                     # Create gradle user home and disable auto-download
                     mkdir -p ~/.gradle
                     echo "org.gradle.java.installations.auto-download=false" >> ~/.gradle/gradle.properties
-                    # org.gradle.java.installations.paths=...
                   fi
             # Replace `:` in the variable otherwise it can't be used in `upload-artifact`
             - uses: actions/checkout@v4
@@ -365,7 +364,9 @@ jobs:
                   if [[ "${{ matrix.host.OS }}" == "amazon-linux" ]]; then
                       export JAVA_HOME=/usr/lib/jvm/java-${{matrix.java}}-amazon-corretto.x86_64
                   else
-                      #export JAVA_HOME=/usr/lib/jvm/java-${{matrix.java}}-openjdk
+                      # TODO: Fix java version. Java matrix tests are currently broken for all OS and Java 11 is always used.
+                      # On other OS, build auto-downloads Java 11 but this doesn't work on Alpine
+                      # export JAVA_HOME=/usr/lib/jvm/java-${{matrix.java}}-openjdk
                       export JAVA_HOME=/usr/lib/jvm/java-11-openjdk
                       export PATH=$HOME/.cargo/bin:$PATH
                   fi

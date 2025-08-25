@@ -1,13 +1,6 @@
 // If no matching toolchain is found, this plugin lets Gradle automatically download a matching one.
 plugins {
-    id 'org.gradle.toolchains.foojay-resolver-convention' version '0.10.0' apply false
-}
-
-// Need to disable this on alpine. It does not recognize JDK and tries to download a JDK that is not compatible with Alpine.
-def isAlpine = new File('/etc/os-release').exists() && new File('/etc/os-release').text.contains('Alpine')
-if (!isAlpine) {
-    // Only apply foojay resolver on non-Alpine systems
-    apply plugin: 'org.gradle.toolchains.foojay-resolver-convention'
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '0.10.0'
 }
 
 rootProject.name = 'glide'
