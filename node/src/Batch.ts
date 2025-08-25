@@ -37,7 +37,6 @@ import {
     GlideString,
     HExpireOptions,
     HGetExOptions,
-
     HScanOptions,
     HSetExOptions,
     HashDataType,
@@ -310,7 +309,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      *     batch will be executed as an atomic `transaction`. If `false`, the batch will be
      *     executed as a non-atomic `pipeline`.
      */
-    constructor(public readonly isAtomic: boolean) { }
+    constructor(public readonly isAtomic: boolean) {}
 
     /**
      * Adds a command to the batch and returns the batch instance.

@@ -128,26 +128,26 @@ export function createGetRange(
 
 export type SetOptions = (
     | {
-        /**
-         * `onlyIfDoesNotExist` - Only set the key if it does not already exist.
-         * `NX` in the Valkey API.
-         *
-         * `onlyIfExists` - Only set the key if it already exists.
-         * `EX` in the Valkey API.
-         */
-        conditionalSet?: "onlyIfExists" | "onlyIfDoesNotExist";
-    }
+          /**
+           * `onlyIfDoesNotExist` - Only set the key if it does not already exist.
+           * `NX` in the Valkey API.
+           *
+           * `onlyIfExists` - Only set the key if it already exists.
+           * `EX` in the Valkey API.
+           */
+          conditionalSet?: "onlyIfExists" | "onlyIfDoesNotExist";
+      }
     | {
-        /**
-         * `onlyIfEqual` - Only set the key if the comparison value equals the current value of key.
-         * `IFEQ` in the Valkey API.
-         */
-        conditionalSet: "onlyIfEqual";
-        /**
-         * The value to compare the existing value with.
-         */
-        comparisonValue: GlideString;
-    }
+          /**
+           * `onlyIfEqual` - Only set the key if the comparison value equals the current value of key.
+           * `IFEQ` in the Valkey API.
+           */
+          conditionalSet: "onlyIfEqual";
+          /**
+           * The value to compare the existing value with.
+           */
+          comparisonValue: GlideString;
+      }
 ) & {
     /**
      * Return the old string stored at key, or nil if key did not exist. An error
@@ -175,11 +175,11 @@ export type SetOptions = (
      * Equivalent to `KEEPTTL` in the Valkey API.
      */
     expiry?:
-    | "keepExisting"
-    | {
-        type: TimeUnit;
-        count: number;
-    };
+        | "keepExisting"
+        | {
+              type: TimeUnit;
+              count: number;
+          };
 };
 
 /**
@@ -1732,7 +1732,7 @@ export function createZAdd(
         if (options.conditionalChange) {
             if (
                 options.conditionalChange ===
-                ConditionalChange.ONLY_IF_DOES_NOT_EXIST &&
+                    ConditionalChange.ONLY_IF_DOES_NOT_EXIST &&
                 options.updateOptions
             ) {
                 throw new Error(
@@ -2008,15 +2008,15 @@ export type Boundary<T> =
      *  Represents a specific boundary.
      */
     | {
-        /**
-         * The comparison value.
-         */
-        value: T;
-        /**
-         * Whether the value is inclusive. Defaults to `true`.
-         */
-        isInclusive?: boolean;
-    };
+          /**
+           * The comparison value.
+           */
+          value: T;
+          /**
+           * Whether the value is inclusive. Defaults to `true`.
+           */
+          isInclusive?: boolean;
+      };
 
 /**
  * Represents a range by index (rank) in a sorted set.
@@ -2383,21 +2383,21 @@ export function createZRank(
 
 export type StreamTrimOptions = (
     | {
-        /**
-         * Trim the stream according to entry ID.
-         * Equivalent to `MINID` in the Valkey API.
-         */
-        method: "minid";
-        threshold: GlideString;
-    }
+          /**
+           * Trim the stream according to entry ID.
+           * Equivalent to `MINID` in the Valkey API.
+           */
+          method: "minid";
+          threshold: GlideString;
+      }
     | {
-        /**
-         * Trim the stream according to length.
-         * Equivalent to `MAXLEN` in the Valkey API.
-         */
-        method: "maxlen";
-        threshold: number;
-    }
+          /**
+           * Trim the stream according to length.
+           * Equivalent to `MAXLEN` in the Valkey API.
+           */
+          method: "maxlen";
+          threshold: number;
+      }
 ) & {
     /**
      * If `true`, the stream will be trimmed exactly. Equivalent to `=` in the
@@ -3539,9 +3539,9 @@ export enum HashFieldConditionalChange {
  */
 export type ExpirySet =
     | {
-        type: TimeUnit;
-        count: number;
-    }
+          type: TimeUnit;
+          count: number;
+      }
     | "KEEPTTL";
 
 /**
@@ -3559,9 +3559,9 @@ export type ExpirySet =
  */
 export type HSetExExpiry =
     | {
-        type: TimeUnit;
-        count: number;
-    }
+          type: TimeUnit;
+          count: number;
+      }
     | "KEEPTTL";
 
 /**
@@ -3579,9 +3579,9 @@ export type HSetExExpiry =
  */
 export type HGetExExpiry =
     | {
-        type: TimeUnit;
-        count: number;
-    }
+          type: TimeUnit;
+          count: number;
+      }
     | "PERSIST";
 
 /**
@@ -3661,40 +3661,40 @@ export enum HashExpirationCondition {
 
 /**
  * Shared optional arguments for HEXPIRE, HPEXPIRE, HEXPIREAT, and HPEXPIREAT commands.
- * 
+ *
  * This interface provides a unified way to specify expiration conditions for hash field
  * expiration commands that support conditional expiration setting.
- * 
+ *
  * @example
  * ```typescript
  * // Set expiration only if field has no existing expiration
  * const options: HExpireOptions = {
  *     condition: HashExpirationCondition.ONLY_IF_NO_EXPIRY
  * };
- * 
+ *
  * // Set expiration only if new expiration is greater than current
  * const gtOptions: HExpireOptions = {
  *     condition: HashExpirationCondition.ONLY_IF_GREATER_THAN_CURRENT
  * };
- * 
+ *
  * // Set expiration only if field has existing expiration
  * const xxOptions: HExpireOptions = {
  *     condition: HashExpirationCondition.ONLY_IF_HAS_EXPIRY
  * };
- * 
+ *
  * // Set expiration only if new expiration is less than current
  * const ltOptions: HExpireOptions = {
  *     condition: HashExpirationCondition.ONLY_IF_LESS_THAN_CURRENT
  * };
  * ```
- * 
+ *
  * @see {@link https://valkey.io/commands/hexpire/|HEXPIRE}
  * @see {@link https://valkey.io/commands/hpexpire/|HPEXPIRE}
  * @see {@link https://valkey.io/commands/hexpireat/|HEXPIREAT}
  * @see {@link https://valkey.io/commands/hpexpireat/|HPEXPIREAT}
  */
 export interface HExpireOptions {
-    /** 
+    /**
      * Condition for setting expiration. Controls when the expiration should be set
      * based on the current state of the field's expiration.
      * See {@link HashExpirationCondition} for available options.
