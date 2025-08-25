@@ -266,7 +266,7 @@ jobs:
                   run-full-matrix: true
                   containers: true
 
-    test-java-container:    
+    test-java-container:
         runs-on: ${{ matrix.host.RUNNER }}
         needs: [get-containers]
         timeout-minutes: 25

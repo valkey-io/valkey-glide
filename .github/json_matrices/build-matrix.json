@@ -48,7 +48,7 @@
         "CD_RUNNER": "ubuntu-24.04-arm",
         "IMAGE": "node:lts-alpine",
         "CONTAINER_OPTIONS": "--user root --privileged --rm",
-        "PACKAGE_MANAGERS": ["npm","maven"],
+        "PACKAGE_MANAGERS": ["npm", "maven"],
         "languages": []
     },
     {
@@ -59,8 +59,8 @@
         "RUNNER": "ubuntu-latest",
         "IMAGE": "node:lts-alpine",
         "CONTAINER_OPTIONS": "--user root --privileged",
-        "PACKAGE_MANAGERS": ["npm","maven"],
-        "languages": ["node","java"]
+        "PACKAGE_MANAGERS": ["npm", "maven"],
+        "languages": ["node", "java"]
     },
     {
         "OS": "amazon-linux",
