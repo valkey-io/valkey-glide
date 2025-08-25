@@ -77,7 +77,7 @@ jobs:
 
     create-binaries-to-publish:
         needs: [set-release-version, load-platform-matrix]
-        if: github.repository_owner == 'valkey-io'
+        #if: github.repository_owner == 'valkey-io'
         timeout-minutes: 35
         env:
             JAVA_VERSION: "11"
