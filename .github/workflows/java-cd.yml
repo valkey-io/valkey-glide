@@ -44,6 +44,14 @@ jobs:
                           else (if .RUNNER == "ephemeral" then "persistent" else .RUNNER end) 
                           end
                       )
+                      | .build_type = (
+                          if (.TARGET | contains("musl")) 
+                          then "musl" 
+                          elif (.TARGET | contains("gnu")) 
+                          then "gnu" 
+                          else "mac" 
+                          end
+                      )
                   )' < .github/json_matrices/build-matrix.json | jq -c .)
                   echo "PLATFORM_MATRIX=${PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
 
@@ -135,8 +143,15 @@ jobs:
             - name: Build java client
               working-directory: java
               run: |
-                  ./gradlew --build-cache :client:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
-                  -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
+                  if [[ "${{ matrix.host.build_type }}" == "musl" ]]; then
+                    rustup target add aarch64-unknown-linux-musl
+                    ./gradlew --build-cache :client:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
+                    -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }} \
+                    -Ptarget=${{ matrix.host.TARGET }}
+                  else
+                    ./gradlew --build-cache :client:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
+                    -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
+                  fi
               env:
                   GLIDE_RELEASE_VERSION: ${{ env.RELEASE_VERSION }}
 
