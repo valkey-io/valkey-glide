@@ -1,13 +1,9 @@
 {
     "editor.insertSpaces": true,
     "editor.tabSize": 4,
-    "editor.codeActionsOnSave": {
-        "source.organizeImports": "always"
-    },
     "rust-analyzer.procMacro.ignored": {
         "napi-derive": ["napi"]
     },
-    "editor.formatOnSave": true,
     "files.insertFinalNewline": true,
     "files.trimFinalNewlines": true,
     "python.formatting.provider": "black",
