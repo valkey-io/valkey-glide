@@ -136,7 +136,7 @@ impl StandaloneClient {
         let tls_mode = connection_request.tls_mode;
         let node_count = connection_request.addresses.len();
         // randomize pubsub nodes, maybe a batter option is to always use the primary
-        let pubsub_node_index = rand::thread_rng().gen_range(0..node_count);
+        let pubsub_node_index = rand::rng().random_range(0..node_count);
         let pubsub_addr = connection_request.addresses[pubsub_node_index].clone();
         let discover_az = matches!(
             connection_request.read_from,
