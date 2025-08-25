@@ -340,6 +340,7 @@ class NettyResourceTransformer implements Transformer {
 
 shadowJar {
     dependsOn('copyNativeLib')
+
     if (project.hasProperty('target') && project.target.contains("musl")) {
         archiveClassifier = "linux_musl_${arch}"
     } else {
