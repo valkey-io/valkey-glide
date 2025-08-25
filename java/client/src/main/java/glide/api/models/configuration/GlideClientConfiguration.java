@@ -34,9 +34,6 @@ import lombok.experimental.SuperBuilder;
 @ToString
 public class GlideClientConfiguration extends BaseClientConfiguration {
 
-    /** Index of the logical database to connect to. */
-    private final Integer databaseId;
-
     /** Subscription configuration for the current client. */
     private final StandaloneSubscriptionConfiguration subscriptionConfiguration;
 
