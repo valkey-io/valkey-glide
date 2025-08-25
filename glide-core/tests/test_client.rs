@@ -28,9 +28,7 @@ pub(crate) mod shared_client_tests {
 
     use super::*;
     use glide_core::client::{Client, DEFAULT_RESPONSE_TIMEOUT};
-    use glide_core::connection_request::{
-        AuthenticationInfo, IamCredentials, ProtocolVersion, ServiceType, TlsMode,
-    };
+    use glide_core::connection_request::ProtocolVersion;
     use redis::cluster_routing::{SingleNodeRoutingInfo, SlotAddr};
     use redis::{
         FromRedisValue, InfoDict, Pipeline, PipelineRetryStrategy, RedisConnectionInfo, Value,
@@ -40,6 +38,11 @@ pub(crate) mod shared_client_tests {
     use utilities::BackingServer;
     use utilities::cluster::*;
     use utilities::*;
+
+    #[cfg(feature = "iam_tests")]
+    use glide_core::connection_request::{
+        AuthenticationInfo, IamCredentials, ServiceType, TlsMode,
+    };
 
     struct TestBasics {
         server: BackingServer,
@@ -361,6 +364,7 @@ pub(crate) mod shared_client_tests {
         });
     }
 
+    #[cfg(feature = "iam_tests")]
     fn remove_test_credentials() {
         // Clear any existing AWS credentials
         unsafe {
@@ -373,6 +377,7 @@ pub(crate) mod shared_client_tests {
         }
     }
 
+    #[cfg(feature = "iam_tests")]
     /// Helper function to create connection request with IAM authentication
     fn create_iam_connection_request(
         addresses: &[redis::ConnectionAddr],
@@ -410,6 +415,7 @@ pub(crate) mod shared_client_tests {
         }
     }
 
+    #[cfg(feature = "iam_tests")]
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
@@ -423,11 +429,11 @@ pub(crate) mod shared_client_tests {
             let endpoint = "clustercfg.iam-auth-test.nra7gl.use1.cache.amazonaws.com"; // Replace with your cluster endpoint
 
             // Use the provided endpoint and port
-            let mock_address = redis::ConnectionAddr::Tcp(endpoint.to_string(), 6379);
+            let address = redis::ConnectionAddr::Tcp(endpoint.to_string(), 6379);
 
             // Create IAM connection request
             let connection_request = create_iam_connection_request(
-                &[mock_address],
+                &[address],
                 cluster_name,
                 username,
                 region,
@@ -453,23 +459,85 @@ pub(crate) mod shared_client_tests {
                         || error_msg.contains("Name or service not known")
                     {
                         // Uncomment this when you have a real AWS environment
-                        // panic!(
-                        //     "DNS lookup failed: Unable to resolve the address `{}`. Please verify that the endpoint is correct and accessible from your environment.\nError: {}",
-                        //     endpoint, error_msg
-                        // );
+                        panic!(
+                            "DNS lookup failed: Unable to resolve the address `{}`. Please verify that the endpoint is correct and accessible from your environment.\nError: {}",
+                            endpoint, error_msg
+                        );
                     }
 
                     // Other errors will fall here, indicating problems with IAM token generation or connection/auth
                     // Uncomment this when you have a real AWS environment
-                    // panic!(
-                    //     "Failed to create client with IAM authentication: {}",
-                    //     error_msg
-                    // );
+                    panic!(
+                        "Failed to create client with IAM authentication: {}",
+                        error_msg
+                    );
                 }
             }
         });
     }
 
+    #[cfg(feature = "iam_tests")]
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_iam_authentication_elasticache_standalone() {
+        block_on_all(async {
+            remove_test_credentials();
+
+            let cluster_name = "iam-auth-standalone"; // Replace with your ElastiCache cluster name
+            let username = "iam-auth"; // Replace with your IAM username
+            let region = "us-east-1";
+            let endpoint = "master.iam-auth-standalone.nra7gl.use1.cache.amazonaws.com"; // Replace with your standalone endpoint
+
+            // Use the provided endpoint and port
+            let address = redis::ConnectionAddr::Tcp(endpoint.to_string(), 6379);
+
+            // Create IAM connection request
+            let connection_request = create_iam_connection_request(
+                &[address],
+                cluster_name,
+                username,
+                region,
+                None,  // Use default refresh interval
+                false, // standalone mode
+                ServiceType::ELASTICACHE,
+            );
+
+            // Attempt to create client with IAM authentication
+            let client_result = Client::new(connection_request.into(), None).await;
+
+            match client_result {
+                Ok(mut client) => {
+                    // If the client is successfully created, try sending a command
+                    let result = client.send_command(&redis::cmd("PING"), None).await;
+                    assert!(result.is_ok(), "PING command should succeed: {result:?}");
+                }
+                Err(err) => {
+                    // In case of failure, print error and assert that it is not a non-connection/auth error
+                    let error_msg = err.to_string();
+                    // If DNS lookup failed, provide a clearer message
+                    if error_msg.contains("failed to lookup address")
+                        || error_msg.contains("Name or service not known")
+                    {
+                        // Uncomment this when you have a real AWS environment
+                        panic!(
+                            "DNS lookup failed: Unable to resolve the address `{}`. Please verify that the endpoint is correct and accessible from your environment.\nError: {}",
+                            endpoint, error_msg
+                        );
+                    }
+
+                    // Other errors will fall here, indicating problems with IAM token generation or connection/auth
+                    // Uncomment this when you have a real AWS environment
+                    panic!(
+                        "Failed to create client with IAM authentication: {}",
+                        error_msg
+                    );
+                }
+            }
+        });
+    }
+
+    #[cfg(feature = "iam_tests")]
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
@@ -483,11 +551,11 @@ pub(crate) mod shared_client_tests {
             let endpoint = "clustercfg.iam-auth-test.nra7gl.memorydb.us-east-1.amazonaws.com"; // Replace with your cluster endpoint
 
             // Use the provided endpoint and port
-            let mock_address = redis::ConnectionAddr::Tcp(endpoint.to_string(), 6379);
+            let address = redis::ConnectionAddr::Tcp(endpoint.to_string(), 6379);
 
             // Create IAM connection request
             let connection_request = create_iam_connection_request(
-                &[mock_address],
+                &[address],
                 cluster_name,
                 username,
                 region,
@@ -513,18 +581,18 @@ pub(crate) mod shared_client_tests {
                         || error_msg.contains("Name or service not known")
                     {
                         // Uncomment this when you have a real AWS environment
-                        // panic!(
-                        //     "DNS lookup failed: Unable to resolve the address `{}`. Please verify that the endpoint is correct and accessible from your environment.\nError: {}",
-                        //     endpoint, error_msg
-                        // );
+                        panic!(
+                            "DNS lookup failed: Unable to resolve the address `{}`. Please verify that the endpoint is correct and accessible from your environment.\nError: {}",
+                            endpoint, error_msg
+                        );
                     }
 
                     // Other errors will fall here, indicating problems with IAM token generation or connection/auth
                     // Uncomment this when you have a real AWS environment
-                    // panic!(
-                    //     "Failed to create client with IAM authentication: {}",
-                    //     error_msg
-                    // );
+                    panic!(
+                        "Failed to create client with IAM authentication: {}",
+                        error_msg
+                    );
                 }
             }
         });
