@@ -4091,6 +4091,14 @@ export class Batch extends BaseBatch<Batch> {
     /**
      * Change the currently selected database.
      *
+     * **WARNING**: This command is NOT RECOMMENDED for production use.
+     * Upon reconnection, the client will revert to the database_id specified
+     * in the client configuration (default: 0), NOT the database selected
+     * via this command.
+     *
+     * **RECOMMENDED APPROACH**: Use the `databaseId` parameter in client
+     * configuration instead of using SELECT in batch operations.
+     *
      * @see {@link https://valkey.io/commands/select/|valkey.io} for details.
      *
      * @param index - The index of the database to select.

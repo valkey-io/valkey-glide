@@ -549,6 +549,13 @@ export type ReadFrom =
  *   - **Standalone Mode**: In standalone mode, only the provided nodes will be used.
  * - **Lazy Connect**: Set `lazyConnect` to `true` to defer connection establishment until the first command is sent.
  *
+ * ### Database Selection
+ *
+ * - **Database ID**: Use `databaseId` to specify which logical database to connect to (0-15 by default).
+ *   - **Cluster Mode**: Requires Valkey 9.0+ with multi-database cluster mode enabled.
+ *   - **Standalone Mode**: Works with all Valkey versions.
+ *   - **Reconnection**: Database selection persists across reconnections.
+ *
  * ### Security Settings
  *
  * - **TLS**: Enable secure communication using `useTLS`.
@@ -596,6 +603,7 @@ export type ReadFrom =
  *     { host: 'redis-node-1.example.com', port: 6379 },
  *     { host: 'redis-node-2.example.com' }, // Defaults to port 6379
  *   ],
+ *   databaseId: 5, // Connect to database 5
  *   useTLS: true,
  *   credentials: {
  *     username: 'myUser',
@@ -641,6 +649,33 @@ export interface BaseClientConfiguration {
          */
         port?: number;
     }[];
+    /**
+     * Index of the logical database to connect to.
+     *
+     * @remarks
+     * - **Standalone Mode**: Works with all Valkey versions.
+     * - **Cluster Mode**: Requires Valkey 9.0+ with multi-database cluster mode enabled.
+     * - **Reconnection**: Database selection persists across reconnections.
+     * - **Default**: If not specified, defaults to database 0.
+     * - **Range**: Must be non-negative. The server will validate the upper limit based on its configuration.
+     * - **Server Validation**: The server determines the maximum database ID based on its `databases` configuration (standalone) or `cluster-databases` configuration (cluster mode).
+     *
+     * @example
+     * ```typescript
+     * // Connect to database 5
+     * const config: BaseClientConfiguration = {
+     *   addresses: [{ host: 'localhost', port: 6379 }],
+     *   databaseId: 5
+     * };
+     *
+     * // Connect to a higher database ID (server will validate the limit)
+     * const configHighDb: BaseClientConfiguration = {
+     *   addresses: [{ host: 'localhost', port: 6379 }],
+     *   databaseId: 100
+     * };
+     * ```
+     */
+    databaseId?: number;
     /**
      * True if communication with the cluster should use Transport Level Security.
      * Should match the TLS configuration of the server/cluster,
@@ -1153,12 +1188,30 @@ export class BaseClient {
     /**
      * @internal
      */
+    /**
+     * @internal
+     * Validates the databaseId parameter for client configuration.
+     */
+    private static validateDatabaseId(databaseId?: number): void {
+        if (databaseId !== undefined) {
+            if (!Number.isInteger(databaseId) || databaseId < 0) {
+                throw new ConfigurationError(
+                    "databaseId must be a non-negative integer",
+                );
+            }
+        }
+    }
+
     protected constructor(
         socket: net.Socket,
         options?: BaseClientConfiguration,
     ) {
         // if logger has been initialized by the external-user on info level this log will be shown
         Logger.log("info", "Client lifetime", `construct client`);
+
+        // Validate databaseId if provided
+        BaseClient.validateDatabaseId(options?.databaseId);
+
         this.config = options;
         this.requestTimeout =
             options?.requestTimeout ?? DEFAULT_REQUEST_TIMEOUT_IN_MILLISECONDS;
@@ -8424,6 +8477,7 @@ export class BaseClient {
             clusterModeEnabled: false,
             readFrom,
             authenticationInfo,
+            databaseId: options.databaseId,
             inflightRequestsLimit: options.inflightRequestsLimit,
             clientAz: options.clientAz ?? null,
             connectionRetryStrategy: options.connectionBackoff,

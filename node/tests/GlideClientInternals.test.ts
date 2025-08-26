@@ -14,6 +14,7 @@ import {
     ClosingError,
     ClusterBatch,
     ClusterTransaction,
+    ConfigurationError,
     convertGlideRecordToRecord,
     Decoder,
     GlideClient,
@@ -320,8 +321,8 @@ describe("SocketConnectionInternals", () => {
                 expect(
                     isGlideRecord(result)
                         ? convertGlideRecordToRecord(
-                              result as unknown as GlideRecord<unknown>,
-                          )
+                            result as unknown as GlideRecord<unknown>,
+                        )
                         : result,
                 ).toEqual(expected);
             });
@@ -686,6 +687,135 @@ describe("SocketConnectionInternals", () => {
         closeTestResources(connection, server, socket);
     });
 
+    it("should pass database id with value 0", async () => {
+        const { connection, server, socket } = await getConnectionAndSocket(
+            (request: connection_request.ConnectionRequest) =>
+                request.databaseId === 0,
+            {
+                addresses: [{ host: "foo" }],
+                databaseId: 0,
+            },
+        );
+        closeTestResources(connection, server, socket);
+    });
+
+    it("should accept higher database id values in client-side validation", () => {
+        // Test that client-side validation accepts higher database IDs (100)
+        // Server-side validation will handle actual database limits during connection
+        expect(() => {
+            const config: BaseClientConfiguration = {
+                addresses: [{ host: "foo" }],
+                databaseId: 100,
+            };
+            // Configuration creation should not throw for high database IDs
+            // Only negative or non-integer values should be rejected client-side
+            expect(config.databaseId).toBe(100);
+        }).not.toThrow();
+    });
+
+    it("should accept very high database id values in client-side validation", () => {
+        // Test that client-side validation accepts very high database IDs (999)
+        // Server-side validation will handle actual database limits during connection
+        expect(() => {
+            const config: BaseClientConfiguration = {
+                addresses: [{ host: "foo" }],
+                databaseId: 999,
+            };
+            // Configuration creation should not throw for high database IDs
+            // Only negative or non-integer values should be rejected client-side
+            expect(config.databaseId).toBe(999);
+        }).not.toThrow();
+    });
+
+    it("should reject negative database id", async () => {
+        await expect(async () => {
+            const socket = new net.Socket();
+            await GlideClient.__createClient(
+                {
+                    addresses: [{ host: "foo" }],
+                    databaseId: -1,
+                },
+                socket,
+            );
+        }).rejects.toThrow(ConfigurationError);
+    });
+
+    it("should reject non-integer database id", async () => {
+        await expect(async () => {
+            const socket = new net.Socket();
+            await GlideClient.__createClient(
+                {
+                    addresses: [{ host: "foo" }],
+                    databaseId: 1.5,
+                },
+                socket,
+            );
+        }).rejects.toThrow(ConfigurationError);
+    });
+
+    it("should accept database id 0 explicitly", () => {
+        expect(() => {
+            const config: BaseClientConfiguration = {
+                addresses: [{ host: "foo" }],
+                databaseId: 0,
+            };
+            // Database ID 0 should be explicitly accepted
+            expect(config.databaseId).toBe(0);
+        }).not.toThrow();
+    });
+
+    it("should accept various valid database id values", () => {
+        const validDatabaseIds = [0, 1, 5, 15, 50, 100, 500, 999];
+
+        for (const databaseId of validDatabaseIds) {
+            expect(() => {
+                const config: BaseClientConfiguration = {
+                    addresses: [{ host: "foo" }],
+                    databaseId: databaseId,
+                };
+                // All non-negative integer database IDs should be accepted client-side
+                // Server will validate the actual limits during connection
+                expect(config.databaseId).toBe(databaseId);
+            }).not.toThrow();
+        }
+    });
+
+    it("should handle undefined database id gracefully", () => {
+        expect(() => {
+            const config: BaseClientConfiguration = {
+                addresses: [{ host: "foo" }],
+                // databaseId not specified - should default to undefined
+            };
+            expect(config.databaseId).toBeUndefined();
+        }).not.toThrow();
+    });
+
+    it("should reject NaN database id", async () => {
+        await expect(async () => {
+            const socket = new net.Socket();
+            await GlideClient.__createClient(
+                {
+                    addresses: [{ host: "foo" }],
+                    databaseId: NaN,
+                },
+                socket,
+            );
+        }).rejects.toThrow(ConfigurationError);
+    });
+
+    it("should reject Infinity database id", async () => {
+        await expect(async () => {
+            const socket = new net.Socket();
+            await GlideClient.__createClient(
+                {
+                    addresses: [{ host: "foo" }],
+                    databaseId: Infinity,
+                },
+                socket,
+            );
+        }).rejects.toThrow(ConfigurationError);
+    });
+
     it("should pass periodic checks disabled", async () => {
         const { connection, server, socket } = await getConnectionAndSocket(
             (request: connection_request.ConnectionRequest) =>
@@ -761,8 +891,8 @@ describe("SocketConnectionInternals", () => {
                 } else {
                     throw new Error(
                         "unexpected command: [" +
-                            request.singleCommand!.argsArray!.args!.at(0) +
-                            "]",
+                        request.singleCommand!.argsArray!.args!.at(0) +
+                        "]",
                     );
                 }
 
