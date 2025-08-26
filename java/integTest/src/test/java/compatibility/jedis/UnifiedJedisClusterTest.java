@@ -30,28 +30,44 @@ public class UnifiedJedisClusterTest {
     static {
         String[] clusterHosts = TestConfiguration.CLUSTER_HOSTS;
 
-        if (clusterHosts.length > 0 && !clusterHosts[0].trim().isEmpty()) {
-            clusterNodes = new HashSet<>();
+        // Fail if cluster nodes configuration is not found in system properties
+        if (clusterHosts.length == 0 || clusterHosts[0].trim().isEmpty()) {
+            throw new IllegalStateException(
+                    "Cluster nodes configuration not found in system properties. "
+                            + "Please set 'test.server.cluster' system property with cluster node addresses "
+                            + "(e.g., -Dtest.server.cluster=localhost:7000,localhost:7001,localhost:7002)");
+        }
 
-            for (String host : clusterHosts) {
-                String[] hostPort = host.trim().split(":");
-                if (hostPort.length == 2) {
+        clusterNodes = new HashSet<>();
+
+        for (String host : clusterHosts) {
+            String[] hostPort = host.trim().split(":");
+            if (hostPort.length == 2) {
+                try {
                     clusterNodes.add(new HostAndPort(hostPort[0], Integer.parseInt(hostPort[1])));
+                } catch (NumberFormatException e) {
+                    throw new IllegalStateException(
+                            "Invalid port number in cluster configuration: "
+                                    + host
+                                    + ". "
+                                    + "Expected format: host:port (e.g., localhost:7000)",
+                            e);
                 }
+            } else {
+                throw new IllegalStateException(
+                        "Invalid cluster host format: "
+                                + host
+                                + ". "
+                                + "Expected format: host:port (e.g., localhost:7000)");
             }
+        }
 
-            // Fallback if no valid hosts found
-            if (clusterNodes.isEmpty()) {
-                clusterNodes.add(new HostAndPort("localhost", 7000));
-                clusterNodes.add(new HostAndPort("localhost", 7001));
-                clusterNodes.add(new HostAndPort("localhost", 7002));
-            }
-        } else {
-            // Default cluster configuration
-            clusterNodes = new HashSet<>();
-            clusterNodes.add(new HostAndPort("localhost", 7000));
-            clusterNodes.add(new HostAndPort("localhost", 7001));
-            clusterNodes.add(new HostAndPort("localhost", 7002));
+        // Ensure we have at least one valid cluster node
+        if (clusterNodes.isEmpty()) {
+            throw new IllegalStateException(
+                    "No valid cluster nodes found in configuration. Please provide valid cluster node"
+                            + " addresses in 'test.server.cluster' system property (e.g.,"
+                            + " -Dtest.server.cluster=localhost:7000,localhost:7001,localhost:7002)");
         }
     }
 
