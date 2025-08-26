@@ -1,6 +1,9 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package redis.clients.jedis.util;
 
+import static glide.api.logging.Logger.Level.WARN;
+
+import glide.api.logging.Logger;
 import java.io.Closeable;
 import org.apache.commons.pool2.PooledObjectFactory;
 import org.apache.commons.pool2.impl.GenericObjectPool;
@@ -38,7 +41,12 @@ public abstract class Pool<T> implements Closeable {
             try {
                 closeInternalPool();
             } catch (Exception e) {
-                // Ignore cleanup errors
+                // Log cleanup errors but continue with pool initialization
+                Logger.log(
+                        WARN,
+                        "Pool",
+                        () -> "Failed to close existing internal pool during initialization: " + e.getMessage(),
+                        e);
             }
         }
         this.internalPool = new GenericObjectPool<>(pooledObjectFactory, poolConfig);
