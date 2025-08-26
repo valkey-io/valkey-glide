@@ -286,7 +286,7 @@ jobs:
                   # Set environment variable to indicate container environment for Gradle
                   if [[ "${{ matrix.host.TARGET }}" == *"musl"* ]]; then
                     echo "GLIDE_CONTAINER_BUILD=true" >> $GITHUB_ENV
-                    apk add openjdk${{matrix.java}} git bash
+                    apk add openjdk${{matrix.host.java}} git bash
                     apk add openjdk11
                     export JAVA_HOME=/usr/lib/jvm/java-${{matrix.java}}-openjdk
                     # Create gradle user home and disable auto-download
