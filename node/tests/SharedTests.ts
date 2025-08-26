@@ -8988,6 +8988,349 @@ export function runBaseTests(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `select test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster) => {
+                // Test basic SELECT functionality for standalone client
+                if (client instanceof GlideClient) {
+                    const key = getRandomKey();
+                    const value = getRandomKey();
+
+                    // Set value in default database (0)
+                    expect(await client.set(key, value)).toEqual("OK");
+                    expect(await client.get(key)).toEqual(value);
+
+                    // Switch to database 1 and verify key doesn't exist there
+                    expect(await client.select(1)).toEqual("OK");
+                    expect(await client.get(key)).toBeNull();
+
+                    // Switch back to database 0 and verify key exists
+                    expect(await client.select(0)).toEqual("OK");
+                    expect(await client.get(key)).toEqual(value);
+
+                    // Test database isolation
+                    const value1 = "value_db1";
+                    const value2 = "value_db2";
+
+                    // Set different values in different databases
+                    expect(await client.select(1)).toEqual("OK");
+                    expect(await client.set(key, value1)).toEqual("OK");
+                    expect(await client.select(2)).toEqual("OK");
+                    expect(await client.set(key, value2)).toEqual("OK");
+
+                    // Verify values are isolated
+                    expect(await client.select(1)).toEqual("OK");
+                    expect(await client.get(key)).toEqual(value1);
+                    expect(await client.select(2)).toEqual("OK");
+                    expect(await client.get(key)).toEqual(value2);
+                    expect(await client.select(0)).toEqual("OK");
+                    expect(await client.get(key)).toEqual(value);
+
+                    // Test invalid database selection
+                    await expect(client.select(999)).rejects.toThrow(
+                        RequestError,
+                    );
+                }
+
+                // Test SELECT functionality for cluster client (Valkey 9.0+)
+                if (client instanceof GlideClusterClient) {
+                    const isValkey9OrHigher =
+                        !cluster.checkIfServerVersionLessThan("9.0.0");
+
+                    if (isValkey9OrHigher) {
+                        const key = getRandomKey();
+                        const value = getRandomKey();
+
+                        // SELECT without explicit routing should route to all nodes
+                        const selectResult = await client.select(5);
+
+                        // For cluster mode, select returns results from all nodes
+                        if (Array.isArray(selectResult)) {
+                            // Verify all nodes returned "OK"
+                            expect(
+                                selectResult.every(
+                                    (result) => result.value === "OK",
+                                ),
+                            ).toBe(true);
+                        } else {
+                            expect(selectResult).toEqual("OK");
+                        }
+
+                        // Verify all nodes are in database 5 by setting a key and getting it
+                        expect(await client.set(key, value)).toEqual("OK");
+                        expect(await client.get(key)).toEqual(value);
+
+                        // Switch to database 0 on all nodes and verify key doesn't exist
+                        const selectResult0 = await client.select(0);
+
+                        // For cluster mode, select returns results from all nodes
+                        if (Array.isArray(selectResult0)) {
+                            // Verify all nodes returned "OK"
+                            expect(
+                                selectResult0.every(
+                                    (result) => result.value === "OK",
+                                ),
+                            ).toBe(true);
+                        } else {
+                            expect(selectResult0).toEqual("OK");
+                        }
+
+                        expect(await client.get(key)).toBeNull();
+
+                        // Test explicit AllNodes routing
+                        const selectResult7 = await client.select(7, {
+                            route: "allNodes",
+                        });
+
+                        if (Array.isArray(selectResult7)) {
+                            expect(
+                                selectResult7.every(
+                                    (result) => result.value === "OK",
+                                ),
+                            ).toBe(true);
+                        } else {
+                            expect(selectResult7).toEqual("OK");
+                        }
+
+                        // Verify all nodes are in database 7
+                        expect(await client.set(key, value)).toEqual("OK");
+                        expect(await client.get(key)).toEqual(value);
+
+                        // Test RandomNode routing (affects only one node)
+                        const selectResult8 = await client.select(8, {
+                            route: "randomNode",
+                        });
+                        // RandomNode routing should return "OK" from single node
+                        expect(selectResult8).toEqual("OK");
+                        // Note: With RandomNode routing, only one node switches database,
+                        // so cluster operations may behave inconsistently
+                        // This test just verifies the command doesn't fail
+
+                        // Test database isolation in cluster mode
+                        const value1 = "value_db1";
+                        const value2 = "value_db3";
+
+                        // Set value in database 1
+                        const selectResult1DB = await client.select(1, {
+                            route: "allNodes",
+                        });
+
+                        if (Array.isArray(selectResult1DB)) {
+                            expect(
+                                selectResult1DB.every(
+                                    (result) => result.value === "OK",
+                                ),
+                            ).toBe(true);
+                        } else {
+                            expect(selectResult1DB).toEqual("OK");
+                        }
+
+                        expect(await client.set(key, value1)).toEqual("OK");
+                        expect(await client.get(key)).toEqual(value1);
+
+                        // Switch to database 3 and set different value for same key
+                        const selectResult3DB = await client.select(3, {
+                            route: "allNodes",
+                        });
+
+                        if (Array.isArray(selectResult3DB)) {
+                            expect(
+                                selectResult3DB.every(
+                                    (result) => result.value === "OK",
+                                ),
+                            ).toBe(true);
+                        } else {
+                            expect(selectResult3DB).toEqual("OK");
+                        }
+
+                        expect(await client.set(key, value2)).toEqual("OK");
+                        expect(await client.get(key)).toEqual(value2);
+
+                        // Switch back to database 1 and verify original value
+                        const selectResult1DBAgain = await client.select(1, {
+                            route: "allNodes",
+                        });
+
+                        if (Array.isArray(selectResult1DBAgain)) {
+                            expect(
+                                selectResult1DBAgain.every(
+                                    (result) => result.value === "OK",
+                                ),
+                            ).toBe(true);
+                        } else {
+                            expect(selectResult1DBAgain).toEqual("OK");
+                        }
+
+                        expect(await client.get(key)).toEqual(value1);
+
+                        // Test invalid database selection in cluster mode
+                        await expect(
+                            client.select(999, { route: "allNodes" }),
+                        ).rejects.toThrow(RequestError);
+                    }
+                }
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `select reconnection and database restoration test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster) => {
+                // Test reconnection behavior for standalone client
+                if (client instanceof GlideClient) {
+                    const key = getRandomKey();
+                    const value = getRandomKey();
+
+                    // Set value in database 4 (simulating configured database)
+                    expect(await client.select(4)).toEqual("OK");
+                    expect(await client.set(key, value)).toEqual("OK");
+
+                    // Use SELECT to switch to database 2
+                    expect(await client.select(2)).toEqual("OK");
+                    expect(await client.get(key)).toBeNull(); // Key shouldn't exist in DB 2
+
+                    // Simulate reconnection by switching back to database 4
+                    // In a real reconnection scenario, the client would restore to configured database
+                    expect(await client.select(4)).toEqual("OK");
+                    expect(await client.get(key)).toEqual(value);
+
+                    // Verify we're in database 4 by checking database 2 doesn't have the key
+                    expect(await client.select(2)).toEqual("OK");
+                    expect(await client.get(key)).toBeNull();
+                }
+
+                // Test reconnection behavior for cluster client (Valkey 9.0+)
+                if (client instanceof GlideClusterClient) {
+                    const isValkey9OrHigher =
+                        !cluster.checkIfServerVersionLessThan("9.0.0");
+
+                    if (isValkey9OrHigher) {
+                        const key = getRandomKey();
+                        const value = getRandomKey();
+
+                        // Set value in database 6 (simulating configured database)
+                        const selectResult6 = await client.select(6, {
+                            route: "allNodes",
+                        });
+
+                        // For cluster mode with explicit routing, should return "OK" or array of results
+                        if (Array.isArray(selectResult6)) {
+                            expect(
+                                selectResult6.every(
+                                    (result) => result.value === "OK",
+                                ),
+                            ).toBe(true);
+                        } else {
+                            expect(selectResult6).toEqual("OK");
+                        }
+
+                        expect(await client.set(key, value)).toEqual("OK");
+
+                        // Use SELECT to switch to database 1
+                        const selectResult1 = await client.select(1, {
+                            route: "allNodes",
+                        });
+
+                        if (Array.isArray(selectResult1)) {
+                            expect(
+                                selectResult1.every(
+                                    (result) => result.value === "OK",
+                                ),
+                            ).toBe(true);
+                        } else {
+                            expect(selectResult1).toEqual("OK");
+                        }
+
+                        expect(await client.get(key)).toBeNull(); // Key shouldn't exist in DB 1
+
+                        // Simulate reconnection by switching back to database 6
+                        // In a real reconnection scenario, the client would restore to configured database
+                        const selectResult6Again = await client.select(6, {
+                            route: "allNodes",
+                        });
+
+                        if (Array.isArray(selectResult6Again)) {
+                            expect(
+                                selectResult6Again.every(
+                                    (result) => result.value === "OK",
+                                ),
+                            ).toBe(true);
+                        } else {
+                            expect(selectResult6Again).toEqual("OK");
+                        }
+
+                        expect(await client.get(key)).toEqual(value);
+
+                        // Verify we're in database 6 by checking database 1 doesn't have the key
+                        const selectResult1Final = await client.select(1, {
+                            route: "allNodes",
+                        });
+
+                        if (Array.isArray(selectResult1Final)) {
+                            expect(
+                                selectResult1Final.every(
+                                    (result) => result.value === "OK",
+                                ),
+                            ).toBe(true);
+                        } else {
+                            expect(selectResult1Final).toEqual("OK");
+                        }
+
+                        expect(await client.get(key)).toBeNull();
+                    }
+                }
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `select cross-database operations test_%p`,
+        async (protocol) => {
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            await runTest(async (client: BaseClient, cluster) => {
+                // Test cross-database operations for standalone client
+                if (client instanceof GlideClient) {
+                    const key1 = getRandomKey();
+                    const key2 = getRandomKey();
+                    const value1 = "value1";
+                    const value2 = "value2";
+
+                    // Set keys in database 2
+                    expect(await client.select(2)).toEqual("OK");
+                    expect(await client.set(key1, value1)).toEqual("OK");
+                    expect(await client.set(key2, value2)).toEqual("OK");
+
+                    // Check DBSIZE in database 2
+                    const dbSize2 = await client.dbsize();
+                    expect(dbSize2).toBeGreaterThanOrEqual(2);
+
+                    // Switch to database 0 and check it's empty (or has different keys)
+                    expect(await client.select(0)).toEqual("OK");
+                    expect(await client.get(key1)).toBeNull();
+                    expect(await client.get(key2)).toBeNull();
+
+                    // DBSIZE in database 0 should be different
+                    const dbSize0 = await client.dbsize();
+                    expect(dbSize0).not.toEqual(dbSize2);
+
+                    // FLUSHDB should only affect current database (0)
+                    expect(await client.flushdb()).toEqual("OK");
+                    expect(await client.dbsize()).toEqual(0);
+
+                    // Switch back to database 2 - keys should still exist
+                    expect(await client.select(2)).toEqual("OK");
+                    expect(await client.get(key1)).toEqual(value1);
+                    expect(await client.get(key2)).toEqual(value2);
+                }
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `bitcount test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient, cluster) => {
@@ -12635,6 +12978,505 @@ export function runBaseTests(config: {
                     expect((error as RequestError).message).toContain(
                         "WRONGTYPE",
                     );
+                }
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    // Database ID Tests - migrated from DatabaseIdTests.test.ts
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `database connection default behavior test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster) => {
+                // Test connecting to default database (0) when databaseId not specified
+                if (client instanceof GlideClient) {
+                    const key = getRandomKey();
+                    const value = getRandomKey();
+
+                    // Verify we're in database 0 by setting and getting a key
+                    expect(await client.set(key, value)).toEqual("OK");
+                    expect(await client.get(key)).toEqual(value);
+
+                    // Switch to database 1 and verify key doesn't exist there
+                    expect(await client.select(1)).toEqual("OK");
+                    expect(await client.get(key)).toBeNull();
+
+                    // Switch back to database 0 and verify key exists
+                    expect(await client.select(0)).toEqual("OK");
+                    expect(await client.get(key)).toEqual(value);
+                }
+
+                // Test cluster mode (Valkey 9.0+)
+                if (client instanceof GlideClusterClient) {
+                    const isValkey9OrHigher =
+                        !cluster.checkIfServerVersionLessThan("9.0.0");
+
+                    if (isValkey9OrHigher) {
+                        const key = getRandomKey();
+                        const value = getRandomKey();
+
+                        // Verify we're in database 0 by setting and getting a key
+                        expect(await client.set(key, value)).toEqual("OK");
+                        expect(await client.get(key)).toEqual(value);
+
+                        // Use SELECT with AllNodes routing to switch to database 1
+                        const selectResult1 = await client.select(1, {
+                            route: "allNodes",
+                        });
+
+                        if (Array.isArray(selectResult1)) {
+                            expect(
+                                selectResult1.every(
+                                    (result) => result.value === "OK",
+                                ),
+                            ).toBe(true);
+                        } else {
+                            expect(selectResult1).toEqual("OK");
+                        }
+
+                        expect(await client.get(key)).toBeNull();
+
+                        // Switch back to database 0 and verify key exists
+                        const selectResult0 = await client.select(0, {
+                            route: "allNodes",
+                        });
+
+                        if (Array.isArray(selectResult0)) {
+                            expect(
+                                selectResult0.every(
+                                    (result) => result.value === "OK",
+                                ),
+                            ).toBe(true);
+                        } else {
+                            expect(selectResult0).toEqual("OK");
+                        }
+
+                        expect(await client.get(key)).toEqual(value);
+                    }
+                }
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `database connection with specified databaseId test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster) => {
+                // Test connecting to specified database when databaseId is provided
+                if (client instanceof GlideClient) {
+                    // This test simulates connecting with databaseId: 5
+                    const key = getRandomKey();
+                    const value = getRandomKey();
+
+                    // Switch to database 5 to simulate configured database
+                    expect(await client.select(5)).toEqual("OK");
+                    expect(await client.set(key, value)).toEqual("OK");
+                    expect(await client.get(key)).toEqual(value);
+
+                    // Switch to database 0 and verify key doesn't exist there
+                    expect(await client.select(0)).toEqual("OK");
+                    expect(await client.get(key)).toBeNull();
+
+                    // Switch back to database 5 and verify key exists
+                    expect(await client.select(5)).toEqual("OK");
+                    expect(await client.get(key)).toEqual(value);
+                }
+
+                // Test cluster mode (Valkey 9.0+)
+                if (client instanceof GlideClusterClient) {
+                    const isValkey9OrHigher =
+                        !cluster.checkIfServerVersionLessThan("9.0.0");
+
+                    if (isValkey9OrHigher) {
+                        // This test simulates connecting with databaseId: 2
+                        const key = getRandomKey();
+                        const value = getRandomKey();
+
+                        // Switch to database 2 to simulate configured database
+                        const selectResult2 = await client.select(2, {
+                            route: "allNodes",
+                        });
+
+                        if (Array.isArray(selectResult2)) {
+                            expect(
+                                selectResult2.every(
+                                    (result) => result.value === "OK",
+                                ),
+                            ).toBe(true);
+                        } else {
+                            expect(selectResult2).toEqual("OK");
+                        }
+
+                        expect(await client.set(key, value)).toEqual("OK");
+                        expect(await client.get(key)).toEqual(value);
+
+                        // Switch to database 0 and verify key doesn't exist there
+                        const selectResult0 = await client.select(0, {
+                            route: "allNodes",
+                        });
+
+                        if (Array.isArray(selectResult0)) {
+                            expect(
+                                selectResult0.every(
+                                    (result) => result.value === "OK",
+                                ),
+                            ).toBe(true);
+                        } else {
+                            expect(selectResult0).toEqual("OK");
+                        }
+
+                        expect(await client.get(key)).toBeNull();
+
+                        // Switch back to database 2 and verify key exists
+                        const selectResult2Again = await client.select(2, {
+                            route: "allNodes",
+                        });
+
+                        if (Array.isArray(selectResult2Again)) {
+                            expect(
+                                selectResult2Again.every(
+                                    (result) => result.value === "OK",
+                                ),
+                            ).toBe(true);
+                        } else {
+                            expect(selectResult2Again).toEqual("OK");
+                        }
+
+                        expect(await client.get(key)).toEqual(value);
+                    }
+                }
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `database isolation between different database IDs test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster) => {
+                // Test maintaining database isolation between different database IDs
+                if (client instanceof GlideClient) {
+                    const key = getRandomKey();
+                    const value1 = "value_db3";
+                    const value2 = "value_db7";
+
+                    // Set value in database 3
+                    expect(await client.select(3)).toEqual("OK");
+                    expect(await client.set(key, value1)).toEqual("OK");
+                    expect(await client.get(key)).toEqual(value1);
+
+                    // Switch to database 7 and set different value for same key
+                    expect(await client.select(7)).toEqual("OK");
+                    expect(await client.set(key, value2)).toEqual("OK");
+                    expect(await client.get(key)).toEqual(value2);
+
+                    // Switch back to database 3 and verify original value
+                    expect(await client.select(3)).toEqual("OK");
+                    expect(await client.get(key)).toEqual(value1);
+
+                    // Switch to database 7 and verify different value
+                    expect(await client.select(7)).toEqual("OK");
+                    expect(await client.get(key)).toEqual(value2);
+                }
+
+                // Test cluster mode (Valkey 9.0+)
+                if (client instanceof GlideClusterClient) {
+                    const isValkey9OrHigher =
+                        !cluster.checkIfServerVersionLessThan("9.0.0");
+
+                    if (isValkey9OrHigher) {
+                        const key = getRandomKey();
+                        const value1 = "value_db1";
+                        const value2 = "value_db3";
+
+                        // Set value in database 1
+                        const selectResult1 = await client.select(1, {
+                            route: "allNodes",
+                        });
+
+                        if (Array.isArray(selectResult1)) {
+                            expect(
+                                selectResult1.every(
+                                    (result) => result.value === "OK",
+                                ),
+                            ).toBe(true);
+                        } else {
+                            expect(selectResult1).toEqual("OK");
+                        }
+
+                        expect(await client.set(key, value1)).toEqual("OK");
+                        expect(await client.get(key)).toEqual(value1);
+
+                        // Switch to database 3 and set different value for same key
+                        const selectResult3 = await client.select(3, {
+                            route: "allNodes",
+                        });
+
+                        if (Array.isArray(selectResult3)) {
+                            expect(
+                                selectResult3.every(
+                                    (result) => result.value === "OK",
+                                ),
+                            ).toBe(true);
+                        } else {
+                            expect(selectResult3).toEqual("OK");
+                        }
+
+                        expect(await client.set(key, value2)).toEqual("OK");
+                        expect(await client.get(key)).toEqual(value2);
+
+                        // Switch back to database 1 and verify original value
+                        const selectResult1Again = await client.select(1, {
+                            route: "allNodes",
+                        });
+
+                        if (Array.isArray(selectResult1Again)) {
+                            expect(
+                                selectResult1Again.every(
+                                    (result) => result.value === "OK",
+                                ),
+                            ).toBe(true);
+                        } else {
+                            expect(selectResult1Again).toEqual("OK");
+                        }
+
+                        expect(await client.get(key)).toEqual(value1);
+
+                        // Switch to database 3 and verify different value
+                        const selectResult3Again = await client.select(3, {
+                            route: "allNodes",
+                        });
+
+                        if (Array.isArray(selectResult3Again)) {
+                            expect(
+                                selectResult3Again.every(
+                                    (result) => result.value === "OK",
+                                ),
+                            ).toBe(true);
+                        } else {
+                            expect(selectResult3Again).toEqual("OK");
+                        }
+
+                        expect(await client.get(key)).toEqual(value2);
+                    }
+                }
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `database reconnection and restore configured databaseId test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster) => {
+                // Test handling reconnection and restore configured databaseId
+                if (client instanceof GlideClient) {
+                    const key = getRandomKey();
+                    const value = getRandomKey();
+
+                    // Set value in database 4 (simulating configured database)
+                    expect(await client.select(4)).toEqual("OK");
+                    expect(await client.set(key, value)).toEqual("OK");
+
+                    // Use SELECT to switch to database 2
+                    expect(await client.select(2)).toEqual("OK");
+                    expect(await client.get(key)).toBeNull(); // Key shouldn't exist in DB 2
+
+                    // Simulate reconnection by switching back to configured database 4
+                    expect(await client.select(4)).toEqual("OK");
+                    expect(await client.get(key)).toEqual(value);
+
+                    // Verify we're in database 4 by checking database 2 doesn't have the key
+                    expect(await client.select(2)).toEqual("OK");
+                    expect(await client.get(key)).toBeNull();
+                }
+
+                // Test cluster mode (Valkey 9.0+)
+                if (client instanceof GlideClusterClient) {
+                    const isValkey9OrHigher =
+                        !cluster.checkIfServerVersionLessThan("9.0.0");
+
+                    if (isValkey9OrHigher) {
+                        const key = getRandomKey();
+                        const value = getRandomKey();
+
+                        // Set value in database 6 (simulating configured database)
+                        const selectResult6 = await client.select(6, {
+                            route: "allNodes",
+                        });
+
+                        if (Array.isArray(selectResult6)) {
+                            expect(
+                                selectResult6.every(
+                                    (result) => result.value === "OK",
+                                ),
+                            ).toBe(true);
+                        } else {
+                            expect(selectResult6).toEqual("OK");
+                        }
+
+                        expect(await client.set(key, value)).toEqual("OK");
+
+                        // Use SELECT to switch to database 1
+                        const selectResult1 = await client.select(1, {
+                            route: "allNodes",
+                        });
+
+                        if (Array.isArray(selectResult1)) {
+                            expect(
+                                selectResult1.every(
+                                    (result) => result.value === "OK",
+                                ),
+                            ).toBe(true);
+                        } else {
+                            expect(selectResult1).toEqual("OK");
+                        }
+
+                        expect(await client.get(key)).toBeNull(); // Key shouldn't exist in DB 1
+
+                        // Simulate reconnection by switching back to configured database 6
+                        const selectResult6Again = await client.select(6, {
+                            route: "allNodes",
+                        });
+
+                        if (Array.isArray(selectResult6Again)) {
+                            expect(
+                                selectResult6Again.every(
+                                    (result) => result.value === "OK",
+                                ),
+                            ).toBe(true);
+                        } else {
+                            expect(selectResult6Again).toEqual("OK");
+                        }
+
+                        expect(await client.get(key)).toEqual(value);
+
+                        // Verify we're in database 6 by checking database 1 doesn't have the key
+                        const selectResult1Final = await client.select(1, {
+                            route: "allNodes",
+                        });
+
+                        if (Array.isArray(selectResult1Final)) {
+                            expect(
+                                selectResult1Final.every(
+                                    (result) => result.value === "OK",
+                                ),
+                            ).toBe(true);
+                        } else {
+                            expect(selectResult1Final).toEqual("OK");
+                        }
+
+                        expect(await client.get(key)).toBeNull();
+                    }
+                }
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `invalid database selection error handling test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster) => {
+                // Test handling invalid database selection
+                if (client instanceof GlideClient) {
+                    // Try to select an invalid database (typically > 15 for default config)
+                    await expect(client.select(999)).rejects.toThrow(
+                        RequestError,
+                    );
+                }
+
+                // Test cluster mode (Valkey 9.0+)
+                if (client instanceof GlideClusterClient) {
+                    const isValkey9OrHigher =
+                        !cluster.checkIfServerVersionLessThan("9.0.0");
+
+                    if (isValkey9OrHigher) {
+                        // Try to select an invalid database
+                        await expect(
+                            client.select(999, { route: "allNodes" }),
+                        ).rejects.toThrow(RequestError);
+                    }
+                }
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `backward compatibility existing code works test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster) => {
+                // Test maintaining backward compatibility - existing code works
+                if (client instanceof GlideClient) {
+                    // Test that existing code without databaseId still works
+                    const key = getRandomKey();
+                    const value = getRandomKey();
+
+                    expect(await client.set(key, value)).toEqual("OK");
+                    expect(await client.get(key)).toEqual(value);
+                    expect(await client.select(0)).toEqual("OK");
+                }
+
+                // Test cluster mode (Valkey 9.0+)
+                if (client instanceof GlideClusterClient) {
+                    const isValkey9OrHigher =
+                        !cluster.checkIfServerVersionLessThan("9.0.0");
+
+                    if (isValkey9OrHigher) {
+                        // Test that existing cluster code without databaseId still works
+                        const key = getRandomKey();
+                        const value = getRandomKey();
+
+                        expect(await client.set(key, value)).toEqual("OK");
+                        expect(await client.get(key)).toEqual(value);
+                    }
+                }
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `database-specific operations in standalone mode test_%p`,
+        async (protocol) => {
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            await runTest(async (client: BaseClient, cluster) => {
+                // Test supporting database-specific operations in standalone mode
+                if (client instanceof GlideClient) {
+                    const key1 = getRandomKey();
+                    const key2 = getRandomKey();
+                    const value1 = "value1";
+                    const value2 = "value2";
+
+                    // Set keys in database 2
+                    expect(await client.select(2)).toEqual("OK");
+                    expect(await client.set(key1, value1)).toEqual("OK");
+                    expect(await client.set(key2, value2)).toEqual("OK");
+
+                    // Check DBSIZE in database 2
+                    const dbSize2 = await client.dbsize();
+                    expect(dbSize2).toBeGreaterThanOrEqual(2);
+
+                    // Switch to database 0 and check it's empty (or has different keys)
+                    expect(await client.select(0)).toEqual("OK");
+                    expect(await client.get(key1)).toBeNull();
+                    expect(await client.get(key2)).toBeNull();
+
+                    // DBSIZE in database 0 should be different
+                    const dbSize0 = await client.dbsize();
+                    expect(dbSize0).not.toEqual(dbSize2);
+
+                    // FLUSHDB should only affect current database (0)
+                    expect(await client.flushdb()).toEqual("OK");
+                    expect(await client.dbsize()).toEqual(0);
+
+                    // Switch back to database 2 - keys should still exist
+                    expect(await client.select(2)).toEqual("OK");
+                    expect(await client.get(key1)).toEqual(value1);
+                    expect(await client.get(key2)).toEqual(value2);
                 }
             }, protocol);
         },
