@@ -15,6 +15,10 @@ import (
 //
 // [valkey.io]: https://valkey.io/commands/#server
 type ServerManagementClusterCommands interface {
+	Select(ctx context.Context, index int64) (string, error)
+
+	SelectWithOptions(ctx context.Context, index int64, routeOption options.RouteOption) (string, error)
+
 	Info(ctx context.Context) (map[string]string, error)
 
 	InfoWithOptions(ctx context.Context, options options.ClusterInfoOptions) (models.ClusterValue[string], error)

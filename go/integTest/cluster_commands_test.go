@@ -2677,3 +2677,94 @@ func (suite *GlideTestSuite) TestBatchWithSingleNodeRoute() {
 		assert.Contains(suite.T(), res[0], "# Replication", "isAtomic = %v", isAtomic)
 	}
 }
+
+func (suite *GlideTestSuite) TestClusterSelect_WithValidIndex() {
+	suite.SkipIfServerVersionLowerThan("9.0.0", suite.T())
+
+	client := suite.defaultClusterClient()
+	index := int64(1)
+	suite.verifyOK(client.Select(context.Background(), index))
+
+	key := uuid.New().String()
+	value := uuid.New().String()
+	suite.verifyOK(client.Set(context.Background(), key, value))
+
+	res, err := client.Get(context.Background(), key)
+	suite.NoError(err)
+	assert.Equal(suite.T(), value, res.Value())
+}
+
+func (suite *GlideTestSuite) TestClusterSelect_InvalidIndex_OutOfBounds() {
+	suite.SkipIfServerVersionLowerThan("9.0.0", suite.T())
+
+	client := suite.defaultClusterClient()
+
+	result, err := client.Select(context.Background(), -1)
+	assert.NotNil(suite.T(), err)
+	assert.Equal(suite.T(), "", result)
+
+	result, err = client.Select(context.Background(), 1000)
+	assert.NotNil(suite.T(), err)
+	assert.Equal(suite.T(), "", result)
+}
+
+func (suite *GlideTestSuite) TestClusterSelect_SwitchBetweenDatabases() {
+	suite.SkipIfServerVersionLowerThan("9.0.0", suite.T())
+
+	client := suite.defaultClusterClient()
+
+	key1 := uuid.New().String()
+	value1 := uuid.New().String()
+	suite.verifyOK(client.Select(context.Background(), 0))
+	suite.verifyOK(client.Set(context.Background(), key1, value1))
+
+	key2 := uuid.New().String()
+	value2 := uuid.New().String()
+	suite.verifyOK(client.Select(context.Background(), 1))
+	suite.verifyOK(client.Set(context.Background(), key2, value2))
+
+	result, err := client.Get(context.Background(), key1)
+	suite.NoError(err)
+	assert.Equal(suite.T(), "", result.Value())
+
+	suite.verifyOK(client.Select(context.Background(), 0))
+	result, err = client.Get(context.Background(), key2)
+	suite.NoError(err)
+	assert.Equal(suite.T(), "", result.Value())
+
+	suite.verifyOK(client.Select(context.Background(), 1))
+	result, err = client.Get(context.Background(), key2)
+	suite.NoError(err)
+	assert.Equal(suite.T(), value2, result.Value())
+}
+
+func (suite *GlideTestSuite) TestClusterSelectWithOptions_AllPrimaries() {
+	suite.SkipIfServerVersionLowerThan("9.0.0", suite.T())
+
+	client := suite.defaultClusterClient()
+	opts := options.RouteOption{Route: config.AllPrimaries}
+
+	result, err := client.SelectWithOptions(context.Background(), 1, opts)
+	suite.NoError(err)
+	assert.Equal(suite.T(), "OK", result)
+
+	// Verify the database was selected on all nodes by setting and getting a key
+	key := uuid.New().String()
+	value := uuid.New().String()
+	suite.verifyOK(client.Set(context.Background(), key, value))
+
+	res, err := client.Get(context.Background(), key)
+	suite.NoError(err)
+	assert.Equal(suite.T(), value, res.Value())
+}
+
+func (suite *GlideTestSuite) TestClusterSelectWithOptions_RandomRoute() {
+	suite.SkipIfServerVersionLowerThan("9.0.0", suite.T())
+
+	client := suite.defaultClusterClient()
+	opts := options.RouteOption{Route: config.RandomRoute}
+
+	result, err := client.SelectWithOptions(context.Background(), 0, opts)
+	suite.NoError(err)
+	assert.Equal(suite.T(), "OK", result)
+}
