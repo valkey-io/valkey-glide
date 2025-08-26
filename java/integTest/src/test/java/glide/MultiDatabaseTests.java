@@ -44,6 +44,11 @@ public class MultiDatabaseTests {
                 Arguments.of(0), Arguments.of(1), Arguments.of(2), Arguments.of(5), Arguments.of(10));
     }
 
+    /** Helper method to provide larger database IDs for server validation testing */
+    private static Stream<Arguments> getLargeDatabaseIds() {
+        return Stream.of(Arguments.of(50), Arguments.of(100), Arguments.of(999));
+    }
+
     @ParameterizedTest
     @MethodSource("getClients")
     @SneakyThrows
@@ -216,21 +221,26 @@ public class MultiDatabaseTests {
     }
 
     @ParameterizedTest
-    @ValueSource(ints = {16, 20, 100})
+    @ValueSource(ints = {50, 100, 999})
     @SneakyThrows
-    public void testInvalidLargeDatabaseId(int invalidDatabaseId) {
-        // Test that database IDs beyond reasonable range result in configuration errors
-        ConfigurationError exception =
-                assertThrows(
-                        ConfigurationError.class,
-                        () -> {
-                            GlideClient.createClient(commonClientConfig().databaseId(invalidDatabaseId).build())
-                                    .get();
-                        });
-
-        // Should contain information about the reasonable range
-        assertTrue(exception.getMessage().toLowerCase().contains("reasonable range"));
-        assertTrue(exception.getMessage().contains(String.valueOf(invalidDatabaseId)));
+    public void testLargeDatabaseIdServerValidation(int databaseId) {
+        // Test that large database IDs are handled by server-side validation
+        // The client should accept these values, but the server may reject them based on its
+        // configuration
+        try {
+            GlideClient client =
+                    GlideClient.createClient(commonClientConfig().databaseId(databaseId).build()).get();
+            // If we reach here, the server supports this database ID
+            client.close();
+        } catch (ExecutionException e) {
+            // Server-side validation should provide appropriate error messages
+            // This is expected behavior for out-of-range database IDs
+            assertTrue(
+                    e.getMessage().toLowerCase().contains("database")
+                            || e.getMessage().toLowerCase().contains("db")
+                            || e.getMessage().toLowerCase().contains("select")
+                            || e.getMessage().toLowerCase().contains("invalid"));
+        }
     }
 
     @Test
@@ -255,5 +265,31 @@ public class MultiDatabaseTests {
                 exception.getMessage().toLowerCase().contains("select")
                         || exception.getMessage().toLowerCase().contains("cluster")
                         || exception.getMessage().toLowerCase().contains("database"));
+    }
+
+    @ParameterizedTest
+    @MethodSource("getLargeDatabaseIds")
+    @EnabledIf("isServerVersionAtLeast9_0")
+    @SneakyThrows
+    public void testClusterClientLargeDatabaseIdServerValidation(int databaseId) {
+        // Test that large database IDs in cluster mode are handled by server-side validation
+        assumeTrue(isServerVersionAtLeast9_0(), "Multi-DB cluster mode requires Valkey 9.0+");
+
+        try {
+            GlideClusterClient client =
+                    GlideClusterClient.createClient(
+                                    commonClusterClientConfig().databaseId(databaseId).build())
+                            .get();
+            // If we reach here, the server supports this database ID
+            client.close();
+        } catch (ExecutionException e) {
+            // Server-side validation should provide appropriate error messages
+            // This is expected behavior for out-of-range database IDs
+            assertTrue(
+                    e.getMessage().toLowerCase().contains("database")
+                            || e.getMessage().toLowerCase().contains("db")
+                            || e.getMessage().toLowerCase().contains("select")
+                            || e.getMessage().toLowerCase().contains("invalid"));
+        }
     }
 }

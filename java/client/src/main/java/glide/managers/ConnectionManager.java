@@ -167,11 +167,6 @@ public class ConnectionManager {
                 throw new ConfigurationError(
                         "databaseId must be non-negative, got: " + configuration.getDatabaseId());
             }
-            if (configuration.getDatabaseId() > 15) {
-                throw new ConfigurationError(
-                        "databaseId must be within reasonable range (0-15), got: "
-                                + configuration.getDatabaseId());
-            }
             connectionRequestBuilder.setDatabaseId(configuration.getDatabaseId());
         }
 
