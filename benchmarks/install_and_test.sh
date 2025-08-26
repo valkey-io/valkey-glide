@@ -106,7 +106,7 @@ function fillDB(){
 }
 
 utilitiesDir=`pwd`/utilities
-script=`pwd`/${BASH_SOURCE[0]}
+script="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
 RELATIVE_BENCH_PATH=`dirname ${script}`
 export BENCH_FOLDER=`realpath ${RELATIVE_BENCH_PATH}`
 export PYTHON_FOLDER="${BENCH_FOLDER}/../python"
