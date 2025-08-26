@@ -3,6 +3,7 @@ package compatibility.jedis;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import glide.TestConfiguration;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -28,13 +29,12 @@ public class UnifiedJedisClusterTest {
     private UnifiedJedis unifiedJedis;
 
     static {
-        String clusterHosts = System.getProperty("test.server.cluster");
+        String[] clusterHosts = TestConfiguration.CLUSTER_HOSTS;
 
-        if (clusterHosts != null && !clusterHosts.trim().isEmpty()) {
+        if (clusterHosts.length > 0 && !clusterHosts[0].trim().isEmpty()) {
             clusterNodes = new HashSet<>();
-            String[] hosts = clusterHosts.split(",");
 
-            for (String host : hosts) {
+            for (String host : clusterHosts) {
                 String[] hostPort = host.trim().split(":");
                 if (hostPort.length == 2) {
                     clusterNodes.add(new HostAndPort(hostPort[0], Integer.parseInt(hostPort[1])));
@@ -70,6 +70,7 @@ public class UnifiedJedisClusterTest {
         if (unifiedJedis != null) {
             cleanupTestKeys(unifiedJedis);
             unifiedJedis.close();
+            unifiedJedis = null;
         }
     }
 

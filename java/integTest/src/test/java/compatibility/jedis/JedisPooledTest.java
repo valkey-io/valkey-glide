@@ -1,6 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package compatibility.jedis;
 
+import static glide.TestConfiguration.STANDALONE_HOSTS;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.HashMap;
@@ -26,10 +27,8 @@ public class JedisPooledTest {
     private JedisPooled jedisPooled;
 
     static {
-        String standaloneHosts = System.getProperty("test.server.standalone");
-
-        if (standaloneHosts != null && !standaloneHosts.trim().isEmpty()) {
-            String firstHost = standaloneHosts.split(",")[0].trim();
+        if (STANDALONE_HOSTS.length > 0 && !STANDALONE_HOSTS[0].trim().isEmpty()) {
+            String firstHost = STANDALONE_HOSTS[0].trim();
             String[] hostPort = firstHost.split(":");
 
             if (hostPort.length == 2) {
