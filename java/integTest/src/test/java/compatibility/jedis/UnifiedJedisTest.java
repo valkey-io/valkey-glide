@@ -143,20 +143,19 @@ public class UnifiedJedisTest {
 
     @Test
     void binary_operations() {
-        byte[] testKey = (UUID.randomUUID().toString()).getBytes();
+        String keyString = UUID.randomUUID().toString();
+        byte[] testKey = keyString.getBytes();
         byte[] testValue = "binary_value".getBytes();
 
-        // Note: UnifiedJedis currently only supports del for binary keys
-        // Set using string method first
-        String stringKey = UUID.randomUUID().toString();
-        unifiedJedis.set(stringKey, "binary_value");
+        // Set using string method first (since binary set might not be supported)
+        unifiedJedis.set(keyString, "binary_value");
 
-        // Test binary key deletion
+        // Test binary key deletion - use the same key that was set
         long delResult = unifiedJedis.del(testKey);
         assertEquals(1, delResult, "Binary DEL should return 1 for deleted key");
 
         // Verify key is deleted
-        String getResult = unifiedJedis.get(stringKey);
+        String getResult = unifiedJedis.get(keyString);
         assertNull(getResult, "Key should not exist after binary deletion");
     }
 

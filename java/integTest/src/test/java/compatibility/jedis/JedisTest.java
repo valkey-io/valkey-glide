@@ -633,17 +633,18 @@ public class JedisTest {
 
     @Test
     void keys_command() {
-        String key1 = UUID.randomUUID().toString();
-        String key2 = UUID.randomUUID().toString();
-        String key3 = UUID.randomUUID().toString();
+        String keyPrefix = "keys_test_" + UUID.randomUUID().toString().substring(0, 8) + "_";
+        String key1 = keyPrefix + "1";
+        String key2 = keyPrefix + "2";
+        String key3 = keyPrefix + "3";
 
         // Set up test keys
         jedis.set(key1, "value1");
         jedis.set(key2, "value2");
         jedis.set(key3, "value3");
 
-        // Test KEYS with pattern
-        Set<String> result = jedis.keys(UUID.randomUUID().toString());
+        // Test KEYS with pattern that matches the keys we just created
+        Set<String> result = jedis.keys(keyPrefix + "*");
         assertNotNull(result, "KEYS should return a set");
         assertEquals(3, result.size(), "KEYS should return 3 matching keys");
         assertTrue(result.contains(key1), "Result should contain key1");
@@ -1160,10 +1161,11 @@ public class JedisTest {
 
     @Test
     void scan_command() {
-        // Set up test data
+        // Set up test data with a common prefix for scanning
+        String keyPrefix = "scan_test_" + UUID.randomUUID().toString().substring(0, 8) + "_";
         Map<String, String> testData = new HashMap<>();
         for (int i = 0; i < 10; i++) {
-            testData.put(UUID.randomUUID().toString() + i, "value_" + i);
+            testData.put(keyPrefix + i, "value_" + i);
         }
 
         // Set all test data
@@ -1171,8 +1173,8 @@ public class JedisTest {
             jedis.set(entry.getKey(), entry.getValue());
         }
 
-        // Test SCAN
-        ScanParams scanParams = new ScanParams().match(UUID.randomUUID().toString()).count(5);
+        // Test SCAN with pattern that matches our keys
+        ScanParams scanParams = new ScanParams().match(keyPrefix + "*").count(5);
         ScanResult<String> scanResult = jedis.scan("0", scanParams);
 
         assertNotNull(scanResult, "SCAN result should not be null");

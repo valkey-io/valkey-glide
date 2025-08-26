@@ -180,18 +180,18 @@ public class JedisPooledTest {
 
     @Test
     void binary_operations() {
-        byte[] testKey = (UUID.randomUUID().toString()).getBytes();
+        String keyString = UUID.randomUUID().toString();
+        byte[] testKey = keyString.getBytes();
 
         // Set using string method first
-        String stringKey = UUID.randomUUID().toString();
-        jedisPooled.set(stringKey, "binary_value");
+        jedisPooled.set(keyString, "binary_value");
 
-        // Test binary key deletion
+        // Test binary key deletion - use the same key that was set
         long delResult = jedisPooled.del(testKey);
         assertEquals(1, delResult, "Binary DEL should return 1 for deleted key");
 
         // Verify key is deleted
-        String getResult = jedisPooled.get(stringKey);
+        String getResult = jedisPooled.get(keyString);
         assertNull(getResult, "Key should not exist after binary deletion");
     }
 
