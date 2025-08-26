@@ -263,7 +263,10 @@ jobs:
             fail-fast: false
             matrix:
                 host: ${{ fromJson(needs.load-platform-matrix.outputs.PLATFORM_MATRIX) }}
-        runs-on: ${{ matrix.host.RUNNER }}
+        runs-on: ${{ matrix.host.test-runner || matrix.host.runner }}
+        container:
+            image: ${{ matrix.host.IMAGE || ''}}
+            options: ${{ matrix.host.CONTAINER_OPTIONS || 'none' }}
         steps:
             - name: Setup self-hosted runner access
               if: ${{matrix.host.TARGET == 'aarch64-unknown-linux-gnu' }}
