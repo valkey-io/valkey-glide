@@ -7,7 +7,9 @@ import redis.clients.jedis.util.Pool;
  * ConnectionPool compatibility stub for Valkey GLIDE wrapper.
  *
  * @deprecated ConnectionPool is not supported in the GLIDE compatibility layer. Use JedisPool for
- *     connection pooling instead.
+ *     connection pooling instead. See <a
+ *     href="https://github.com/valkey-io/valkey-glide/blob/main/java/MIGRATION.md">Migration
+ *     guide</a> for more details.
  */
 @Deprecated
 public class ConnectionPool extends Pool<Connection> {

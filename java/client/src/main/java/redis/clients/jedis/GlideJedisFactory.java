@@ -2,6 +2,7 @@
 package redis.clients.jedis;
 
 import glide.api.GlideClient;
+import glide.api.logging.Logger;
 import glide.api.models.configuration.GlideClientConfiguration;
 import java.util.concurrent.ExecutionException;
 import org.apache.commons.pool2.PooledObject;
@@ -82,7 +83,11 @@ public class GlideJedisFactory implements PooledObjectFactory<Jedis> {
                 jedis.close();
             } catch (Exception e) {
                 // Log error but don't throw - we're in cleanup mode
-                System.err.println("Warning: Error closing Jedis connection during destroy:");
+                Logger.log(
+                        Logger.Level.WARN,
+                        "GlideJedisFactory",
+                        "Error closing Jedis connection during destroy",
+                        e);
                 e.printStackTrace();
             }
         }

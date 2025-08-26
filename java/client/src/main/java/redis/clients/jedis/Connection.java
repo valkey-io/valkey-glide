@@ -3,7 +3,7 @@ package redis.clients.jedis;
 
 import java.io.Closeable;
 
-/** Represents a connection to a Redis instance. This is part of the Jedis compatibility layer. */
+/** Represents a connection to a server. This is part of the Jedis compatibility layer. */
 public class Connection implements Closeable {
 
     private final HostAndPort hostAndPort;
