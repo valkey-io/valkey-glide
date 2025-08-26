@@ -19,34 +19,51 @@ import redis.clients.jedis.JedisPooled;
 public class JedisPooledTest {
 
     // Server configuration - dynamically resolved from CI environment
-    private static final String redisHost;
-    private static final int redisPort;
+    private static final String valkeyHost;
+    private static final int valkeyPort;
 
     // GLIDE JedisPooled compatibility layer instance
     private JedisPooled jedisPooled;
 
     static {
-        if (STANDALONE_HOSTS.length > 0 && !STANDALONE_HOSTS[0].trim().isEmpty()) {
-            String firstHost = STANDALONE_HOSTS[0].trim();
-            String[] hostPort = firstHost.split(":");
+        String[] standaloneHosts = STANDALONE_HOSTS;
 
-            if (hostPort.length == 2) {
-                redisHost = hostPort[0];
-                redisPort = Integer.parseInt(hostPort[1]);
-            } else {
-                redisHost = "localhost";
-                redisPort = 6379;
+        // Fail if standalone server configuration is not found in system properties
+        if (standaloneHosts.length == 0 || standaloneHosts[0].trim().isEmpty()) {
+            throw new IllegalStateException(
+                    "Standalone server configuration not found in system properties. "
+                            + "Please set 'test.server.standalone' system property with server address "
+                            + "(e.g., -Dtest.server.standalone=localhost:6379)");
+        }
+
+        String firstHost = standaloneHosts[0].trim();
+        String[] hostPort = firstHost.split(":");
+
+        if (hostPort.length == 2) {
+            try {
+                valkeyHost = hostPort[0];
+                valkeyPort = Integer.parseInt(hostPort[1]);
+            } catch (NumberFormatException e) {
+                throw new IllegalStateException(
+                        "Invalid port number in standalone server configuration: "
+                                + firstHost
+                                + ". "
+                                + "Expected format: host:port (e.g., localhost:6379)",
+                        e);
             }
         } else {
-            redisHost = "localhost";
-            redisPort = 6379;
+            throw new IllegalStateException(
+                    "Invalid standalone server format: "
+                            + firstHost
+                            + ". "
+                            + "Expected format: host:port (e.g., localhost:6379)");
         }
     }
 
     @BeforeEach
     void setup() {
         // Create GLIDE JedisPooled compatibility layer instance
-        jedisPooled = new JedisPooled(redisHost, redisPort);
+        jedisPooled = new JedisPooled(valkeyHost, valkeyPort);
         assertNotNull(jedisPooled, "GLIDE JedisPooled instance should be created successfully");
     }
 

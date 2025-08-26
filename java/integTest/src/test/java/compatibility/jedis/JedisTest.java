@@ -40,39 +40,56 @@ import redis.clients.jedis.util.KeyValue;
  * Jedis compatibility test that validates GLIDE's Jedis compatibility layer functionality.
  *
  * <p>This test ensures that the GLIDE compatibility layer provides the expected Jedis API and
- * behavior for comprehensive Redis operations.
+ * behavior for comprehensive server operations.
  */
 public class JedisTest {
 
     // Server configuration - dynamically resolved from CI environment
-    private static final String redisHost;
-    private static final int redisPort;
+    private static final String valkeyHost;
+    private static final int valkeyPort;
 
     // GLIDE compatibility layer instance
     private Jedis jedis;
 
     static {
-        if (STANDALONE_HOSTS.length > 0 && !STANDALONE_HOSTS[0].trim().isEmpty()) {
-            String firstHost = STANDALONE_HOSTS[0].trim();
-            String[] hostPort = firstHost.split(":");
+        String[] standaloneHosts = STANDALONE_HOSTS;
 
-            if (hostPort.length == 2) {
-                redisHost = hostPort[0];
-                redisPort = Integer.parseInt(hostPort[1]);
-            } else {
-                redisHost = "localhost";
-                redisPort = 6379;
+        // Fail if standalone server configuration is not found in system properties
+        if (standaloneHosts.length == 0 || standaloneHosts[0].trim().isEmpty()) {
+            throw new IllegalStateException(
+                    "Standalone server configuration not found in system properties. "
+                            + "Please set 'test.server.standalone' system property with server address "
+                            + "(e.g., -Dtest.server.standalone=localhost:6379)");
+        }
+
+        String firstHost = standaloneHosts[0].trim();
+        String[] hostPort = firstHost.split(":");
+
+        if (hostPort.length == 2) {
+            try {
+                valkeyHost = hostPort[0];
+                valkeyPort = Integer.parseInt(hostPort[1]);
+            } catch (NumberFormatException e) {
+                throw new IllegalStateException(
+                        "Invalid port number in standalone server configuration: "
+                                + firstHost
+                                + ". "
+                                + "Expected format: host:port (e.g., localhost:6379)",
+                        e);
             }
         } else {
-            redisHost = "localhost";
-            redisPort = 6379;
+            throw new IllegalStateException(
+                    "Invalid standalone server format: "
+                            + firstHost
+                            + ". "
+                            + "Expected format: host:port (e.g., localhost:6379)");
         }
     }
 
     @BeforeEach
     void setup() {
         // Create GLIDE Jedis compatibility layer instance
-        jedis = new Jedis(redisHost, redisPort);
+        jedis = new Jedis(valkeyHost, valkeyPort);
         jedis.connect();
         assertNotNull(jedis, "GLIDE Jedis instance should be created successfully");
     }
@@ -140,7 +157,7 @@ public class JedisTest {
             // Create a GLIDE client configuration
             GlideClientConfiguration glideConfig =
                     GlideClientConfiguration.builder()
-                            .address(NodeAddress.builder().host(redisHost).port(redisPort).build())
+                            .address(NodeAddress.builder().host(valkeyHost).port(valkeyPort).build())
                             .requestTimeout(2000)
                             .build();
 
@@ -382,7 +399,7 @@ public class JedisTest {
     void getdel_command() {
         assumeTrue(
                 SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"),
-                "GETDEL command requires Redis 6.2.0 or higher");
+                "GETDEL command requires Valkey 6.2.0 or higher");
 
         String testKey = UUID.randomUUID().toString();
 
@@ -403,7 +420,7 @@ public class JedisTest {
     void getex_command() {
         assumeTrue(
                 SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"),
-                "GETEX command requires Redis 6.2.0 or higher");
+                "GETEX command requires Valkey 6.2.0 or higher");
 
         String testKey = UUID.randomUUID().toString();
         String testValue = "getex_value";
@@ -1062,7 +1079,7 @@ public class JedisTest {
     void expiretime_command() {
         assumeTrue(
                 SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"),
-                "EXPIRETIME command requires Redis 7.0.0 or higher");
+                "EXPIRETIME command requires Valkey 7.0.0 or higher");
 
         String testKey = UUID.randomUUID().toString();
 
@@ -1088,7 +1105,7 @@ public class JedisTest {
     void pexpiretime_command() {
         assumeTrue(
                 SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"),
-                "PEXPIRETIME command requires Redis 7.0.0 or higher");
+                "PEXPIRETIME command requires Valkey 7.0.0 or higher");
 
         String testKey = UUID.randomUUID().toString();
 
@@ -1186,7 +1203,7 @@ public class JedisTest {
     void pfadd_command() {
         assumeTrue(
                 SERVER_VERSION.isGreaterThanOrEqualTo("2.8.9"),
-                "HyperLogLog commands require Redis 2.8.9 or higher");
+                "HyperLogLog commands require Valkey 2.8.9 or higher");
 
         String testKey = UUID.randomUUID().toString();
 
@@ -1203,7 +1220,7 @@ public class JedisTest {
     void pfcount_command() {
         assumeTrue(
                 SERVER_VERSION.isGreaterThanOrEqualTo("2.8.9"),
-                "HyperLogLog commands require Redis 2.8.9 or higher");
+                "HyperLogLog commands require Valkey 2.8.9 or higher");
 
         String key1 = UUID.randomUUID().toString();
         String key2 = UUID.randomUUID().toString();
@@ -1225,7 +1242,7 @@ public class JedisTest {
     void pfmerge_command() {
         assumeTrue(
                 SERVER_VERSION.isGreaterThanOrEqualTo("2.8.9"),
-                "HyperLogLog commands require Redis 2.8.9 or higher");
+                "HyperLogLog commands require Valkey 2.8.9 or higher");
 
         String sourceKey1 = UUID.randomUUID().toString();
         String sourceKey2 = UUID.randomUUID().toString();
@@ -1969,7 +1986,7 @@ public class JedisTest {
         assumeTrue(
                 SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")
                         && !SERVER_VERSION.toString().startsWith("8."),
-                "HSETEX command requires Redis 7.9.0+ (not available in Valkey 8.x)");
+                "HSETEX command requires Valkey 7.9.0+ (not available in Valkey 8.x)");
 
         String key = UUID.randomUUID().toString();
         String field1 = "field1";
@@ -2012,7 +2029,7 @@ public class JedisTest {
         assumeTrue(
                 SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")
                         && !SERVER_VERSION.toString().startsWith("8."),
-                "HGETEX command requires Redis 7.9.0+ (not available in Valkey 8.x)");
+                "HGETEX command requires Valkey 7.9.0+ (not available in Valkey 8.x)");
 
         String key = UUID.randomUUID().toString();
         String field1 = "field1";
@@ -2085,7 +2102,7 @@ public class JedisTest {
         assumeTrue(
                 SERVER_VERSION.isGreaterThanOrEqualTo("7.4.0")
                         && !SERVER_VERSION.toString().startsWith("8."),
-                "Hash field expiration commands require Redis 7.4.0+ (not available in Valkey 8.x)");
+                "Hash field expiration commands require Valkey 7.4.0+ (not available in Valkey 8.x)");
 
         String key = UUID.randomUUID().toString();
         String field1 = "field1";
@@ -2129,7 +2146,7 @@ public class JedisTest {
         assumeTrue(
                 SERVER_VERSION.isGreaterThanOrEqualTo("7.4.0")
                         && !SERVER_VERSION.toString().startsWith("8."),
-                "Hash field expiration commands require Redis 7.4.0+ (not available in Valkey 8.x)");
+                "Hash field expiration commands require Valkey 7.4.0+ (not available in Valkey 8.x)");
 
         String key = UUID.randomUUID().toString();
         String field1 = "field1";
@@ -2177,7 +2194,7 @@ public class JedisTest {
         assumeTrue(
                 SERVER_VERSION.isGreaterThanOrEqualTo("7.4.0")
                         && !SERVER_VERSION.toString().startsWith("8."),
-                "Hash field expiration commands require Redis 7.4.0+ (not available in Valkey 8.x)");
+                "Hash field expiration commands require Valkey 7.4.0+ (not available in Valkey 8.x)");
 
         String key = UUID.randomUUID().toString();
         String field1 = "field1";
@@ -2214,7 +2231,7 @@ public class JedisTest {
         assumeTrue(
                 SERVER_VERSION.isGreaterThanOrEqualTo("7.4.0")
                         && !SERVER_VERSION.toString().startsWith("8."),
-                "Hash field expiration commands require Redis 7.4.0+ (not available in Valkey 8.x)");
+                "Hash field expiration commands require Valkey 7.4.0+ (not available in Valkey 8.x)");
 
         String key = UUID.randomUUID().toString();
         String field1 = "field1";
@@ -2253,7 +2270,7 @@ public class JedisTest {
         assumeTrue(
                 SERVER_VERSION.isGreaterThanOrEqualTo("7.4.0")
                         && !SERVER_VERSION.toString().startsWith("8."),
-                "Hash field expiration commands require Redis 7.4.0+ (not available in Valkey 8.x)");
+                "Hash field expiration commands require Valkey 7.4.0+ (not available in Valkey 8.x)");
 
         String key = UUID.randomUUID().toString();
         String field1 = "field1";
@@ -2368,7 +2385,7 @@ public class JedisTest {
         assumeTrue(
                 SERVER_VERSION.isGreaterThanOrEqualTo("7.4.0")
                         && !SERVER_VERSION.toString().startsWith("8."),
-                "Hash field expiration commands require Redis 7.4.0+ (not available in Valkey 8.x)");
+                "Hash field expiration commands require Valkey 7.4.0+ (not available in Valkey 8.x)");
 
         byte[] key = (UUID.randomUUID().toString()).getBytes();
         byte[] field1 = "field1".getBytes();
@@ -2804,7 +2821,7 @@ public class JedisTest {
 
     @Test
     void list_position_operations() {
-        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("6.0.6"), "LPOS requires Redis 6.0.6+");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("6.0.6"), "LPOS requires Valkey 6.0.6+");
 
         String key = UUID.randomUUID().toString();
 
@@ -2845,7 +2862,7 @@ public class JedisTest {
 
     @Test
     void list_position_operations_binary() {
-        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("6.0.6"), "LPOS requires Redis 6.0.6+");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("6.0.6"), "LPOS requires Valkey 6.0.6+");
 
         byte[] key = (UUID.randomUUID().toString()).getBytes();
         byte[] valueA = "a".getBytes();
@@ -2875,7 +2892,7 @@ public class JedisTest {
 
     @Test
     void list_move_operations() {
-        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "LMOVE requires Redis 6.2.0+");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "LMOVE requires Valkey 6.2.0+");
 
         String srcKey = UUID.randomUUID().toString();
         String dstKey = UUID.randomUUID().toString();
@@ -2918,7 +2935,7 @@ public class JedisTest {
 
     @Test
     void list_move_operations_binary() {
-        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "LMOVE requires Redis 6.2.0+");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "LMOVE requires Valkey 6.2.0+");
 
         byte[] srcKey = (UUID.randomUUID().toString()).getBytes();
         byte[] dstKey = (UUID.randomUUID().toString()).getBytes();
@@ -2948,7 +2965,7 @@ public class JedisTest {
 
     @Test
     void list_multi_pop_operations() {
-        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "LMPOP requires Redis 7.0.0+");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "LMPOP requires Valkey 7.0.0+");
 
         String key1 = UUID.randomUUID().toString();
         String key2 = UUID.randomUUID().toString();
@@ -2998,7 +3015,7 @@ public class JedisTest {
 
     @Test
     void list_multi_pop_operations_binary() {
-        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "LMPOP requires Redis 7.0.0+");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "LMPOP requires Valkey 7.0.0+");
 
         byte[] key1 = (UUID.randomUUID().toString()).getBytes();
         byte[] key2 = (UUID.randomUUID().toString()).getBytes();
