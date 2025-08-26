@@ -244,11 +244,6 @@ class TestDatabaseIdErrorHandling:
         with pytest.raises(ValueError, match="database_id must be non-negative"):
             await create_client(request, cluster_mode=False, database_id=-1)
 
-        with pytest.raises(
-            ValueError, match="database_id must be less than or equal to 15"
-        ):
-            await create_client(request, cluster_mode=False, database_id=16)
-
     @pytest.mark.asyncio
     async def test_select_command_error_handling(self, request):
         """Test error handling for SELECT command with invalid database numbers."""
@@ -326,3 +321,139 @@ class TestBackwardCompatibility:
         finally:
             await client_explicit.close()
             await client_default.close()
+
+
+class TestBroaderDatabaseIdRanges:
+    """Test database_id functionality with broader ranges beyond typical 0-15."""
+
+    @pytest.mark.asyncio
+    async def test_standalone_client_with_higher_database_ids(self, request):
+        """Test creating standalone client with database IDs beyond typical range."""
+        # Test with database_id = 50
+        try:
+            client = await create_client(request, cluster_mode=False, database_id=50)
+            try:
+                # Try to set a value - this may fail if server doesn't support DB 50
+                await client.set("test_key_50", "test_value_50")
+                result = await client.get("test_key_50")
+                assert result == b"test_value_50"
+            except RequestError as e:
+                # Server-side validation should handle out-of-range database IDs
+                assert "DB index is out of range" in str(
+                    e
+                ) or "invalid DB index" in str(e)
+            finally:
+                await client.close()
+        except RequestError as e:
+            # Connection-time error for invalid database
+            assert "DB index is out of range" in str(e) or "invalid DB index" in str(e)
+
+    @pytest.mark.asyncio
+    async def test_standalone_client_with_very_high_database_ids(self, request):
+        """Test creating standalone client with very high database IDs."""
+        # Test with database_id = 999
+        try:
+            client = await create_client(request, cluster_mode=False, database_id=999)
+            try:
+                # Try to set a value - this should fail with server-side validation
+                await client.set("test_key_999", "test_value_999")
+                # If we get here, the server supports DB 999
+                result = await client.get("test_key_999")
+                assert result == b"test_value_999"
+            except RequestError as e:
+                # Expected: server-side validation should handle out-of-range database IDs
+                assert "DB index is out of range" in str(
+                    e
+                ) or "invalid DB index" in str(e)
+            finally:
+                await client.close()
+        except RequestError as e:
+            # Connection-time error for invalid database
+            assert "DB index is out of range" in str(e) or "invalid DB index" in str(e)
+
+    @pytest.mark.asyncio
+    async def test_cluster_client_with_higher_database_ids(self, request):
+        """Test creating cluster client with database IDs beyond typical range."""
+        # Check if cluster supports multi-DB
+        supports_multi_db, skip_reason = await check_cluster_multi_db_support(request)
+        if not supports_multi_db:
+            pytest.skip(skip_reason)
+
+        # Test with database_id = 100
+        try:
+            client = await create_client(request, cluster_mode=True, database_id=100)
+            try:
+                # Try to set a value - this may fail if server doesn't support DB 100
+                await client.set("test_key_100", "test_value_100")
+                result = await client.get("test_key_100")
+                assert result == b"test_value_100"
+            except RequestError as e:
+                # Server-side validation should handle out-of-range database IDs
+                assert "DB index is out of range" in str(
+                    e
+                ) or "invalid DB index" in str(e)
+            finally:
+                await client.close()
+        except RequestError as e:
+            # Connection-time error for invalid database
+            assert "DB index is out of range" in str(e) or "invalid DB index" in str(e)
+
+
+class TestServerSideValidation:
+    """Test that server-side validation is properly handled for out-of-range database IDs."""
+
+    @pytest.mark.asyncio
+    async def test_server_side_validation_for_out_of_range_database_ids(self, request):
+        """Test that server-side validation errors are properly propagated."""
+        # Try to connect with a database ID that's likely out of range
+        very_high_db_id = 9999
+
+        try:
+            client = await create_client(
+                request, cluster_mode=False, database_id=very_high_db_id
+            )
+            try:
+                # If connection succeeds, try an operation
+                await client.set("test_key", "test_value")
+                # If this succeeds, the server supports this database ID
+                result = await client.get("test_key")
+                assert result == b"test_value"
+            except RequestError as e:
+                # Expected: server should reject operations on invalid database
+                assert "DB index is out of range" in str(
+                    e
+                ) or "invalid DB index" in str(e)
+            finally:
+                await client.close()
+        except RequestError as e:
+            # Expected: server should reject connection to invalid database
+            assert "DB index is out of range" in str(e) or "invalid DB index" in str(e)
+
+    @pytest.mark.asyncio
+    async def test_select_command_server_side_validation(self, request):
+        """Test that SELECT command with out-of-range database IDs is handled by server."""
+        client = await create_client(request, cluster_mode=False, database_id=0)
+
+        try:
+            # Try to select a database that's likely out of range
+            with pytest.raises(RequestError, match="DB index is out of range"):
+                await client.select(9999)
+        finally:
+            await client.close()
+
+    @pytest.mark.asyncio
+    async def test_cluster_select_command_server_side_validation(self, request):
+        """Test that SELECT command in cluster mode with out-of-range database IDs is handled by server."""
+        # Check if cluster supports multi-DB
+        supports_multi_db, skip_reason = await check_cluster_multi_db_support(request)
+        if not supports_multi_db:
+            pytest.skip(skip_reason)
+
+        client = await create_client(request, cluster_mode=True, database_id=0)
+
+        try:
+            # Try to select a database that's likely out of range
+            with pytest.raises(RequestError, match="DB index is out of range"):
+                await client.select(9999, route=AllNodes())
+        finally:
+            await client.close()

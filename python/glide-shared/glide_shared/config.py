@@ -250,6 +250,7 @@ class BaseClientConfiguration:
             connection failures.
             If not set, a default backoff strategy will be used.
         database_id (Optional[int]): Index of the logical database to connect to.
+            Must be a non-negative integer. The valid range is determined by the server configuration.
             If not set, the client will connect to database 0.
         client_name (Optional[str]): Client name to be used for the client. Will be used with CLIENT SETNAME command
             during connection establishment.
@@ -322,8 +323,6 @@ class BaseClientConfiguration:
                 raise ValueError("database_id must be an integer")
             if database_id < 0:
                 raise ValueError("database_id must be non-negative")
-            if database_id > 15:
-                raise ValueError("database_id must be less than or equal to 15")
 
         if read_from == ReadFrom.AZ_AFFINITY and not client_az:
             raise ValueError(
@@ -462,6 +461,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
             connection failures.
             If not set, a default backoff strategy will be used.
         database_id (Optional[int]): Index of the logical database to connect to.
+            Must be a non-negative integer. The valid range is determined by the server configuration.
             If not set, the client will connect to database 0.
         client_name (Optional[str]): Client name to be used for the client. Will be used with CLIENT SETNAME command during
             connection establishment.
@@ -628,6 +628,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
             connection failures.
             If not set, a default backoff strategy will be used.
         database_id (Optional[int]): Index of the logical database to connect to.
+            Must be a non-negative integer. The valid range is determined by the server configuration.
             If not set, the client will connect to database 0.
         client_name (Optional[str]): Client name to be used for the client. Will be used with CLIENT SETNAME command during
             connection establishment.
