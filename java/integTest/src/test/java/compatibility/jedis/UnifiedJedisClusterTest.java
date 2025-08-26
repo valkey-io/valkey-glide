@@ -8,6 +8,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import org.junit.jupiter.api.*;
 import redis.clients.jedis.HostAndPort;
 import redis.clients.jedis.UnifiedJedis;
@@ -19,8 +20,6 @@ import redis.clients.jedis.UnifiedJedis;
  * and behavior for core Redis operations in cluster mode.
  */
 public class UnifiedJedisClusterTest {
-
-    private static final String TEST_KEY_PREFIX = "unified_jedis_cluster_test:";
 
     // Server configuration - dynamically resolved from CI environment
     private static final Set<HostAndPort> clusterNodes;
@@ -64,19 +63,9 @@ public class UnifiedJedisClusterTest {
                 unifiedJedis, "GLIDE UnifiedJedis cluster instance should be created successfully");
     }
 
-    @AfterEach
-    void cleanup() {
-        // Cleanup test keys
-        if (unifiedJedis != null) {
-            cleanupTestKeys(unifiedJedis);
-            unifiedJedis.close();
-            unifiedJedis = null;
-        }
-    }
-
     @Test
     void basic_set_and_get() {
-        String testKey = TEST_KEY_PREFIX + "basic";
+        String testKey = UUID.randomUUID().toString();
         String testValue = "unified_cluster_test_value_123";
 
         // Test GLIDE UnifiedJedis compatibility layer in cluster mode
@@ -90,9 +79,9 @@ public class UnifiedJedisClusterTest {
     @Test
     void multiple_operations() {
         Map<String, String> testData = new HashMap<>();
-        testData.put(TEST_KEY_PREFIX + "cluster_key1", "cluster_value1");
-        testData.put(TEST_KEY_PREFIX + "cluster_key2", "cluster_value2");
-        testData.put(TEST_KEY_PREFIX + "cluster_key3", "cluster_value3");
+        testData.put(UUID.randomUUID().toString(), "cluster_value1");
+        testData.put(UUID.randomUUID().toString(), "cluster_value2");
+        testData.put(UUID.randomUUID().toString(), "cluster_value3");
 
         // Test multiple SET operations in cluster mode
         for (Map.Entry<String, String> entry : testData.entrySet()) {
@@ -111,7 +100,7 @@ public class UnifiedJedisClusterTest {
     }
 
     @Test
-    void testConnectionOperations() {
+    void connection_operations() {
         // Test PING in cluster mode
         String pingResult = unifiedJedis.ping();
         assertEquals("PONG", pingResult, "PING should return PONG in cluster mode");
@@ -124,10 +113,10 @@ public class UnifiedJedisClusterTest {
     }
 
     @Test
-    void testDeleteOperations() {
-        String testKey1 = TEST_KEY_PREFIX + "del1";
-        String testKey2 = TEST_KEY_PREFIX + "del2";
-        String testKey3 = TEST_KEY_PREFIX + "del3";
+    void delete_operations() {
+        String testKey1 = UUID.randomUUID().toString();
+        String testKey2 = UUID.randomUUID().toString();
+        String testKey3 = UUID.randomUUID().toString();
 
         // Set some keys in cluster mode
         unifiedJedis.set(testKey1, "value1");
@@ -152,13 +141,13 @@ public class UnifiedJedisClusterTest {
     }
 
     @Test
-    void testConnectionState() {
+    void connection_state() {
         // Test that connection is not closed initially
         assertFalse(
                 unifiedJedis.isClosed(), "Connection should not be closed initially in cluster mode");
 
         // Test basic operations work in cluster mode
-        String testKey = TEST_KEY_PREFIX + "connection_test";
+        String testKey = UUID.randomUUID().toString();
         String testValue = "connection_value";
 
         unifiedJedis.set(testKey, testValue);
@@ -172,13 +161,13 @@ public class UnifiedJedisClusterTest {
     }
 
     @Test
-    void testBinaryOperations() {
-        byte[] testKey = (TEST_KEY_PREFIX + "binary").getBytes();
+    void binary_operations() {
+        byte[] testKey = (UUID.randomUUID().toString()).getBytes();
         byte[] testValue = "binary_value".getBytes();
 
         // Note: UnifiedJedis currently only supports del for binary keys
         // Set using string method first
-        String stringKey = TEST_KEY_PREFIX + "binary";
+        String stringKey = UUID.randomUUID().toString();
         unifiedJedis.set(stringKey, "binary_value");
 
         // Test binary key deletion in cluster mode
@@ -191,11 +180,11 @@ public class UnifiedJedisClusterTest {
     }
 
     @Test
-    void testMultipleBinaryDeletion() {
+    void multiple_binary_deletion() {
         // Set up test keys using string methods
-        String key1 = TEST_KEY_PREFIX + "binary1";
-        String key2 = TEST_KEY_PREFIX + "binary2";
-        String key3 = TEST_KEY_PREFIX + "binary3";
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String key3 = UUID.randomUUID().toString();
 
         unifiedJedis.set(key1, "value1");
         unifiedJedis.set(key2, "value2");
@@ -214,8 +203,8 @@ public class UnifiedJedisClusterTest {
     }
 
     @Test
-    void testLargeValueOperations() {
-        String testKey = TEST_KEY_PREFIX + "large_value";
+    void large_value_operations() {
+        String testKey = UUID.randomUUID().toString();
         StringBuilder largeValue = new StringBuilder();
 
         // Create a large value (10KB)
@@ -238,7 +227,7 @@ public class UnifiedJedisClusterTest {
     @Test
     void cluster_specific_operations() {
         // Test operations that are specific to cluster mode
-        String testKey = TEST_KEY_PREFIX + "cluster_specific";
+        String testKey = UUID.randomUUID().toString();
         String testValue = "cluster_specific_value";
 
         // Set a key and verify it works across cluster
@@ -252,13 +241,13 @@ public class UnifiedJedisClusterTest {
     }
 
     @Test
-    void testClusterKeyDistribution() {
+    void cluster_key_distribution() {
         // Test that keys are distributed across cluster nodes
         Map<String, String> distributedKeys = new HashMap<>();
 
         // Create keys with different hash slots to test distribution
         for (int i = 0; i < 10; i++) {
-            String key = TEST_KEY_PREFIX + "distributed_" + i;
+            String key = UUID.randomUUID().toString() + i;
             String value = "distributed_value_" + i;
             distributedKeys.put(key, value);
         }
@@ -280,41 +269,5 @@ public class UnifiedJedisClusterTest {
         String[] keysArray = distributedKeys.keySet().toArray(new String[0]);
         long delResult = unifiedJedis.del(keysArray);
         assertEquals(distributedKeys.size(), delResult, "All distributed keys should be deleted");
-    }
-
-    private void cleanupTestKeys(UnifiedJedis unifiedJedis) {
-        // Delete all test keys using the available del methods
-        String[] keysToDelete = {
-            TEST_KEY_PREFIX + "basic",
-            TEST_KEY_PREFIX + "cluster_key1",
-            TEST_KEY_PREFIX + "cluster_key2",
-            TEST_KEY_PREFIX + "cluster_key3",
-            TEST_KEY_PREFIX + "del1",
-            TEST_KEY_PREFIX + "del2",
-            TEST_KEY_PREFIX + "del3",
-            TEST_KEY_PREFIX + "connection_test",
-            TEST_KEY_PREFIX + "binary",
-            TEST_KEY_PREFIX + "binary1",
-            TEST_KEY_PREFIX + "binary2",
-            TEST_KEY_PREFIX + "binary3",
-            TEST_KEY_PREFIX + "large_value",
-            TEST_KEY_PREFIX + "cluster_specific"
-        };
-
-        try {
-            unifiedJedis.del(keysToDelete);
-        } catch (Exception e) {
-            // Ignore cleanup errors
-        }
-
-        // Clean up any remaining distributed keys
-        try {
-            for (int i = 0; i < 10; i++) {
-                String key = TEST_KEY_PREFIX + "distributed_" + i;
-                unifiedJedis.del(key);
-            }
-        } catch (Exception e) {
-            // Ignore cleanup errors
-        }
     }
 }

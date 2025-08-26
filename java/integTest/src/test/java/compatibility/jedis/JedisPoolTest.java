@@ -4,6 +4,7 @@ package compatibility.jedis;
 import static glide.TestConfiguration.STANDALONE_HOSTS;
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.util.UUID;
 import org.junit.jupiter.api.*;
 import redis.clients.jedis.DefaultJedisClientConfig;
 import redis.clients.jedis.GlideJedisFactory;
@@ -12,8 +13,6 @@ import redis.clients.jedis.JedisPool;
 
 /** Simplified JedisPool compatibility test that validates basic GLIDE JedisPool functionality. */
 public class JedisPoolTest {
-
-    private static final String TEST_KEY_PREFIX = "jedis_pool_test:";
 
     // Server configuration - dynamically resolved from CI environment
     private static final String redisHost;
@@ -48,7 +47,7 @@ public class JedisPoolTest {
     }
 
     @Test
-    void testPoolBasicOperations() {
+    void pool_basic_operations() {
         // Test basic pool operations
         try (JedisPool pool = new JedisPool(redisHost, redisPort)) {
             assertNotNull(pool, "Pool should be initialized");
@@ -59,7 +58,7 @@ public class JedisPoolTest {
                 assertNotNull(jedis, "Should be able to get Jedis resource from pool");
 
                 // Test basic Redis operations
-                String testKey = TEST_KEY_PREFIX + "basic";
+                String testKey = UUID.randomUUID().toString();
                 String testValue = "test_value";
 
                 String setResult = jedis.set(testKey, testValue);
@@ -75,13 +74,13 @@ public class JedisPoolTest {
     }
 
     @Test
-    void testPoolWithTimeout() {
+    void pool_with_timeout() {
         // Test pool with custom timeout using simple constructor
         try (JedisPool timeoutPool = new JedisPool(redisHost, redisPort, 5000)) {
             assertNotNull(timeoutPool, "Timeout pool should be created");
 
             try (Jedis jedis = timeoutPool.getResource()) {
-                String testKey = TEST_KEY_PREFIX + "timeout_test";
+                String testKey = UUID.randomUUID().toString();
                 String testValue = "timeout_value";
 
                 String setResult = jedis.set(testKey, testValue);
@@ -97,7 +96,7 @@ public class JedisPoolTest {
     }
 
     @Test
-    void testPoolWithAuthentication() {
+    void pool_with_authentication() {
         // Test pool with authentication using simple constructor
         String password = ""; // Empty password for test environment
 
@@ -105,7 +104,7 @@ public class JedisPoolTest {
             assertNotNull(authPool, "Authenticated pool should be created");
 
             try (Jedis jedis = authPool.getResource()) {
-                String testKey = TEST_KEY_PREFIX + "auth_test";
+                String testKey = UUID.randomUUID().toString();
                 String testValue = "auth_value";
 
                 String setResult = jedis.set(testKey, testValue);
@@ -121,7 +120,7 @@ public class JedisPoolTest {
     }
 
     @Test
-    void testPoolFactoryPattern() {
+    void pool_factory_pattern() {
         // Test pool creation with factory using simple constructor
         GlideJedisFactory factory =
                 new GlideJedisFactory(redisHost, redisPort, DefaultJedisClientConfig.builder().build());
@@ -130,7 +129,7 @@ public class JedisPoolTest {
             assertNotNull(factoryPool, "Factory-based pool should be created");
 
             try (Jedis jedis = factoryPool.getResource()) {
-                String testKey = TEST_KEY_PREFIX + "factory_test";
+                String testKey = UUID.randomUUID().toString();
                 String testValue = "factory_value";
 
                 String setResult = jedis.set(testKey, testValue);
@@ -146,7 +145,7 @@ public class JedisPoolTest {
     }
 
     @Test
-    void testPoolStatistics() {
+    void pool_statistics() {
         // Test pool statistics and monitoring
         try (JedisPool pool = new JedisPool(redisHost, redisPort)) {
             assertNotNull(pool, "Pool should be initialized");

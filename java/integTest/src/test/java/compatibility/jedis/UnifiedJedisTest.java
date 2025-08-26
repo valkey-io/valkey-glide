@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.*;
 import redis.clients.jedis.UnifiedJedis;
 
@@ -16,8 +17,6 @@ import redis.clients.jedis.UnifiedJedis;
  * and behavior for core Redis operations in standalone mode.
  */
 public class UnifiedJedisTest {
-
-    private static final String TEST_KEY_PREFIX = "unified_jedis_test:";
 
     // Server configuration - dynamically resolved from CI environment
     private static final String redisHost;
@@ -51,18 +50,9 @@ public class UnifiedJedisTest {
         assertNotNull(unifiedJedis, "GLIDE UnifiedJedis instance should be created successfully");
     }
 
-    @AfterEach
-    void cleanup() {
-        // Cleanup test keys
-        if (unifiedJedis != null) {
-            cleanupTestKeys(unifiedJedis);
-            unifiedJedis.close();
-        }
-    }
-
     @Test
     void basic_set_and_get() {
-        String testKey = TEST_KEY_PREFIX + "basic";
+        String testKey = UUID.randomUUID().toString();
         String testValue = "unified_test_value_123";
 
         // Test GLIDE UnifiedJedis compatibility layer
@@ -76,9 +66,9 @@ public class UnifiedJedisTest {
     @Test
     void multiple_operations() {
         Map<String, String> testData = new HashMap<>();
-        testData.put(TEST_KEY_PREFIX + "unified_key1", "unified_value1");
-        testData.put(TEST_KEY_PREFIX + "unified_key2", "unified_value2");
-        testData.put(TEST_KEY_PREFIX + "unified_key3", "unified_value3");
+        testData.put(UUID.randomUUID().toString(), "unified_value1");
+        testData.put(UUID.randomUUID().toString(), "unified_value2");
+        testData.put(UUID.randomUUID().toString(), "unified_value3");
 
         // Test multiple SET operations
         for (Map.Entry<String, String> entry : testData.entrySet()) {
@@ -95,7 +85,7 @@ public class UnifiedJedisTest {
     }
 
     @Test
-    void testConnectionOperations() {
+    void connection_operations() {
         // Test PING
         String pingResult = unifiedJedis.ping();
         assertEquals("PONG", pingResult, "PING should return PONG");
@@ -107,10 +97,10 @@ public class UnifiedJedisTest {
     }
 
     @Test
-    void testDeleteOperations() {
-        String testKey1 = TEST_KEY_PREFIX + "del1";
-        String testKey2 = TEST_KEY_PREFIX + "del2";
-        String testKey3 = TEST_KEY_PREFIX + "del3";
+    void delete_operations() {
+        String testKey1 = UUID.randomUUID().toString();
+        String testKey2 = UUID.randomUUID().toString();
+        String testKey3 = UUID.randomUUID().toString();
 
         // Set some keys
         unifiedJedis.set(testKey1, "value1");
@@ -135,12 +125,12 @@ public class UnifiedJedisTest {
     }
 
     @Test
-    void testConnectionState() {
+    void connection_state() {
         // Test that connection is not closed initially
         assertFalse(unifiedJedis.isClosed(), "Connection should not be closed initially");
 
         // Test basic operations work
-        String testKey = TEST_KEY_PREFIX + "connection_test";
+        String testKey = UUID.randomUUID().toString();
         String testValue = "connection_value";
 
         unifiedJedis.set(testKey, testValue);
@@ -152,13 +142,13 @@ public class UnifiedJedisTest {
     }
 
     @Test
-    void testBinaryOperations() {
-        byte[] testKey = (TEST_KEY_PREFIX + "binary").getBytes();
+    void binary_operations() {
+        byte[] testKey = (UUID.randomUUID().toString()).getBytes();
         byte[] testValue = "binary_value".getBytes();
 
         // Note: UnifiedJedis currently only supports del for binary keys
         // Set using string method first
-        String stringKey = TEST_KEY_PREFIX + "binary";
+        String stringKey = UUID.randomUUID().toString();
         unifiedJedis.set(stringKey, "binary_value");
 
         // Test binary key deletion
@@ -171,11 +161,11 @@ public class UnifiedJedisTest {
     }
 
     @Test
-    void testMultipleBinaryDeletion() {
+    void multiple_binary_deletion() {
         // Set up test keys using string methods
-        String key1 = TEST_KEY_PREFIX + "binary1";
-        String key2 = TEST_KEY_PREFIX + "binary2";
-        String key3 = TEST_KEY_PREFIX + "binary3";
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String key3 = UUID.randomUUID().toString();
 
         unifiedJedis.set(key1, "value1");
         unifiedJedis.set(key2, "value2");
@@ -194,8 +184,8 @@ public class UnifiedJedisTest {
     }
 
     @Test
-    void testLargeValueOperations() {
-        String testKey = TEST_KEY_PREFIX + "large_value";
+    void large_value_operations() {
+        String testKey = UUID.randomUUID().toString();
         StringBuilder largeValue = new StringBuilder();
 
         // Create a large value (10KB)
@@ -211,25 +201,5 @@ public class UnifiedJedisTest {
         String getResult = unifiedJedis.get(testKey);
         assertEquals(expectedValue, getResult, "GET should return complete large value");
         assertEquals(10000, getResult.length(), "Large value should have correct length");
-    }
-
-    private void cleanupTestKeys(UnifiedJedis unifiedJedis) {
-        // Delete all test keys using the available del methods
-        String[] keysToDelete = {
-            TEST_KEY_PREFIX + "basic",
-            TEST_KEY_PREFIX + "unified_key1",
-            TEST_KEY_PREFIX + "unified_key2",
-            TEST_KEY_PREFIX + "unified_key3",
-            TEST_KEY_PREFIX + "del1",
-            TEST_KEY_PREFIX + "del2",
-            TEST_KEY_PREFIX + "del3",
-            TEST_KEY_PREFIX + "connection_test",
-            TEST_KEY_PREFIX + "binary",
-            TEST_KEY_PREFIX + "binary1",
-            TEST_KEY_PREFIX + "binary2",
-            TEST_KEY_PREFIX + "binary3",
-            TEST_KEY_PREFIX + "large_value"
-        };
-        unifiedJedis.del(keysToDelete);
     }
 }

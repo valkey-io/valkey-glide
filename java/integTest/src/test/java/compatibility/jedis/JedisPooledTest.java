@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.*;
 import redis.clients.jedis.JedisPooled;
 
@@ -16,8 +17,6 @@ import redis.clients.jedis.JedisPooled;
  * behavior. JedisPooled extends UnifiedJedis and provides pooled connection semantics.
  */
 public class JedisPooledTest {
-
-    private static final String TEST_KEY_PREFIX = "jedis_pooled_test:";
 
     // Server configuration - dynamically resolved from CI environment
     private static final String redisHost;
@@ -51,18 +50,9 @@ public class JedisPooledTest {
         assertNotNull(jedisPooled, "GLIDE JedisPooled instance should be created successfully");
     }
 
-    @AfterEach
-    void cleanup() {
-        // Cleanup test keys
-        if (jedisPooled != null) {
-            cleanupTestKeys(jedisPooled);
-            jedisPooled.close();
-        }
-    }
-
     @Test
     void basic_set_and_get() {
-        String testKey = TEST_KEY_PREFIX + "basic";
+        String testKey = UUID.randomUUID().toString();
         String testValue = "pooled_test_value_123";
 
         // Test GLIDE JedisPooled compatibility layer
@@ -76,9 +66,9 @@ public class JedisPooledTest {
     @Test
     void multiple_operations() {
         Map<String, String> testData = new HashMap<>();
-        testData.put(TEST_KEY_PREFIX + "pooled_key1", "pooled_value1");
-        testData.put(TEST_KEY_PREFIX + "pooled_key2", "pooled_value2");
-        testData.put(TEST_KEY_PREFIX + "pooled_key3", "pooled_value3");
+        testData.put(UUID.randomUUID().toString(), "pooled_value1");
+        testData.put(UUID.randomUUID().toString(), "pooled_value2");
+        testData.put(UUID.randomUUID().toString(), "pooled_value3");
 
         // Test multiple SET operations
         for (Map.Entry<String, String> entry : testData.entrySet()) {
@@ -95,7 +85,7 @@ public class JedisPooledTest {
     }
 
     @Test
-    void testConnectionOperations() {
+    void connection_operations() {
         // Test PING
         String pingResult = jedisPooled.ping();
         assertEquals("PONG", pingResult, "PING should return PONG");
@@ -107,10 +97,10 @@ public class JedisPooledTest {
     }
 
     @Test
-    void testDeleteOperations() {
-        String testKey1 = TEST_KEY_PREFIX + "del1";
-        String testKey2 = TEST_KEY_PREFIX + "del2";
-        String testKey3 = TEST_KEY_PREFIX + "del3";
+    void delete_operations() {
+        String testKey1 = UUID.randomUUID().toString();
+        String testKey2 = UUID.randomUUID().toString();
+        String testKey3 = UUID.randomUUID().toString();
 
         // Set some keys
         jedisPooled.set(testKey1, "value1");
@@ -135,9 +125,9 @@ public class JedisPooledTest {
     }
 
     @Test
-    void testPooledConnectionBehavior() {
+    void pooled_connection_behavior() {
         // Test that JedisPooled maintains connection state properly
-        String testKey = TEST_KEY_PREFIX + "pooled_behavior";
+        String testKey = UUID.randomUUID().toString();
 
         // Set initial value
         jedisPooled.set(testKey, "initial_value");
@@ -172,12 +162,12 @@ public class JedisPooledTest {
     }
 
     @Test
-    void testConnectionState() {
+    void connection_state() {
         // Test that connection is not closed initially
         assertFalse(jedisPooled.isClosed(), "Connection should not be closed initially");
 
         // Test basic operations work
-        String testKey = TEST_KEY_PREFIX + "connection_test";
+        String testKey = UUID.randomUUID().toString();
         String testValue = "connection_value";
 
         jedisPooled.set(testKey, testValue);
@@ -189,11 +179,11 @@ public class JedisPooledTest {
     }
 
     @Test
-    void testBinaryOperations() {
-        byte[] testKey = (TEST_KEY_PREFIX + "binary").getBytes();
+    void binary_operations() {
+        byte[] testKey = (UUID.randomUUID().toString()).getBytes();
 
         // Set using string method first
-        String stringKey = TEST_KEY_PREFIX + "binary";
+        String stringKey = UUID.randomUUID().toString();
         jedisPooled.set(stringKey, "binary_value");
 
         // Test binary key deletion
@@ -206,9 +196,9 @@ public class JedisPooledTest {
     }
 
     @Test
-    void testConcurrentOperations() throws InterruptedException {
+    void concurrent_operations() throws InterruptedException {
         final int threadCount = 5;
-        final String testKeyPrefix = TEST_KEY_PREFIX + "concurrent_";
+        final String testKeyPrefix = UUID.randomUUID().toString();
         Thread[] threads = new Thread[threadCount];
         final boolean[] results = new boolean[threadCount];
 
@@ -249,8 +239,8 @@ public class JedisPooledTest {
     }
 
     @Test
-    void testLargeValueOperations() {
-        String testKey = TEST_KEY_PREFIX + "large_value";
+    void large_value_operations() {
+        String testKey = UUID.randomUUID().toString();
         StringBuilder largeValue = new StringBuilder();
 
         // Create a large value (5KB)
@@ -266,28 +256,5 @@ public class JedisPooledTest {
         String getResult = jedisPooled.get(testKey);
         assertEquals(expectedValue, getResult, "GET should return complete large value");
         assertEquals(5000, getResult.length(), "Large value should have correct length");
-    }
-
-    private void cleanupTestKeys(JedisPooled jedisPooled) {
-        // Delete all test keys
-        String[] keysToDelete = {
-            TEST_KEY_PREFIX + "basic",
-            TEST_KEY_PREFIX + "pooled_key1",
-            TEST_KEY_PREFIX + "pooled_key2",
-            TEST_KEY_PREFIX + "pooled_key3",
-            TEST_KEY_PREFIX + "del1",
-            TEST_KEY_PREFIX + "del2",
-            TEST_KEY_PREFIX + "del3",
-            TEST_KEY_PREFIX + "pooled_behavior",
-            TEST_KEY_PREFIX + "connection_test",
-            TEST_KEY_PREFIX + "binary",
-            TEST_KEY_PREFIX + "large_value",
-            TEST_KEY_PREFIX + "concurrent_0",
-            TEST_KEY_PREFIX + "concurrent_1",
-            TEST_KEY_PREFIX + "concurrent_2",
-            TEST_KEY_PREFIX + "concurrent_3",
-            TEST_KEY_PREFIX + "concurrent_4"
-        };
-        jedisPooled.del(keysToDelete);
     }
 }
