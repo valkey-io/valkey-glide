@@ -331,6 +331,9 @@ jobs:
               env:
                   PORT: ${{ steps.port.outputs.PORT }}
               run: |
+                  if [[ "${{ matrix.host.TARGET }}" == *"musl"* ]]; then
+                    export JAVA_HOME=/usr/lib/jvm/java-11-openjdk
+                  fi
                   export ORG_GRADLE_PROJECT_centralManualTestingAuthHeaderName="Authorization"
                   export ORG_GRADLE_PROJECT_centralManualTestingAuthHeaderValue="Bearer $(echo "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" | base64)"
                   export GLIDE_RELEASE_VERSION=${{ env.RELEASE_VERSION }}
