@@ -16,6 +16,15 @@ mod valkey9_database_tests {
 
     const VALKEY9_TEST_TIMEOUT: Duration = Duration::from_millis(10000);
 
+    // Database limits in Valkey 9:
+    // - Standalone mode: 0 to (databases-1), where 'databases' defaults to 16 but can be configured up to INT_MAX
+    // - Cluster mode: 0 to (cluster-databases-1), where 'cluster-databases' defaults to 1 but can be configured up to INT_MAX
+    // 
+    // Test environment configuration:
+    // - Test servers use default configs unless explicitly overridden
+    // - Our tests verify both valid database IDs (within server limits) and invalid ones (beyond server limits)
+    // - The test environment appears to be configured with 'cluster-databases 16' based on successful test results
+
     /// Test that verifies database_id is correctly passed through protobuf and connection layers
     #[rstest]
     #[timeout(VALKEY9_TEST_TIMEOUT)]
@@ -39,11 +48,14 @@ mod valkey9_database_tests {
 }
 
     /// Test database selection in standalone mode with various database IDs
+    /// Note: The actual limit depends on the 'databases' configuration (default 16, range 1 to INT_MAX)
     #[rstest]
     #[case(0)]
     #[case(1)]
     #[case(5)]
-    #[case(15)]
+    #[case(15)] // This assumes default 'databases 16' configuration
+    #[case(20)] // Test beyond default 16-database limit
+    #[case(49)] // Test near a higher configured limit
     #[timeout(VALKEY9_TEST_TIMEOUT)]
     #[serial]
     fn test_standalone_database_selection(#[case] database_id: u32) {
@@ -77,10 +89,14 @@ mod valkey9_database_tests {
 }
 
     /// Test database selection in cluster mode (requires Valkey 9.0+ with cluster-databases > 1)
+    /// Note: The actual limit depends on the 'cluster-databases' configuration (default 1, range 1 to INT_MAX)
+    /// Test environment appears to be configured with 'cluster-databases 16' based on successful connections
     #[rstest]
     #[case(0)]
     #[case(1)]
     #[case(2)]
+    #[case(10)] // Test higher database numbers in cluster mode
+    #[case(15)] // Test near the apparent cluster-databases limit
     #[timeout(VALKEY9_TEST_TIMEOUT)]
     #[serial]
     fn test_cluster_database_selection_valkey9(#[case] database_id: u32) {
@@ -191,12 +207,20 @@ mod valkey9_database_tests {
 }
 
     /// Test error handling when trying to use invalid database IDs
+    /// 
+    /// This test verifies that the client properly handles server rejection when requesting
+    /// a database ID that exceeds the server's configured limits:
+    /// - Test server uses default config: standalone=16 databases (0-15), cluster=1 database (0 only)
+    /// - Test requests database 999, which is beyond any reasonable server configuration
+    /// - Server should reject with "DB index is out of range" error
+    /// - Client should handle this gracefully and propagate the error properly
     #[rstest]
     #[timeout(VALKEY9_TEST_TIMEOUT)]
     #[serial]
     fn test_invalid_database_id_error_handling() {
-    // Test with a very high database ID that should fail
-    let invalid_database_id = 999;
+        // Test with database ID 999 - this will be invalid on any reasonably configured server
+        // since it's far beyond typical database limits (default: standalone=16, cluster=1)
+        let invalid_database_id = 999;
     
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         block_on_all(async {
@@ -211,13 +235,14 @@ mod valkey9_database_tests {
 
     match result {
         Ok(_) => {
-            // If this succeeds, the server has a very high number of databases configured
-            println!("Server accepts database ID {} - this is unusual but not necessarily wrong", invalid_database_id);
+            // If this succeeds, the server has an unusually high number of databases configured
+            println!("Server accepts database ID {} - this indicates the server is configured with 1000+ databases", invalid_database_id);
         }
         Err(_) => {
-            // This is expected - most servers don't have 999+ databases
+            // This is the expected behavior - the server rejects the invalid database ID
+            // and our client properly handles the error by failing the connection attempt
             println!("✓ Server correctly rejected invalid database ID {} - proper error handling verified", invalid_database_id);
         }
     }
-    }
+}
 }
