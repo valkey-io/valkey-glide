@@ -1,6 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package redis.clients.jedis;
 
+import glide.api.BaseClient;
 import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
 import glide.api.models.GlideString;
@@ -21,6 +22,7 @@ import redis.clients.jedis.util.JedisURIHelper;
  */
 public class UnifiedJedis implements Closeable {
 
+    protected final BaseClient baseClient;
     protected final GlideClient glideClient;
     protected final GlideClusterClient glideClusterClient;
     protected final JedisClientConfig config;
@@ -75,6 +77,7 @@ public class UnifiedJedis implements Closeable {
 
         try {
             this.glideClient = GlideClient.createClient(glideConfig).get();
+            this.baseClient = this.glideClient; // Set BaseClient reference
             this.resourceId = ResourceLifecycleManager.getInstance().registerResource(this);
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisConnectionException("Failed to create GLIDE client", e);
@@ -144,6 +147,7 @@ public class UnifiedJedis implements Closeable {
 
         try {
             this.glideClusterClient = GlideClusterClient.createClient(glideConfig).get();
+            this.baseClient = this.glideClusterClient; // Set BaseClient reference
             this.resourceId = ResourceLifecycleManager.getInstance().registerResource(this);
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisConnectionException("Failed to create GLIDE cluster client", e);
@@ -190,6 +194,7 @@ public class UnifiedJedis implements Closeable {
                     ClusterConfigurationMapper.mapToGlideClusterConfig(nodes, config);
             try {
                 this.glideClusterClient = GlideClusterClient.createClient(glideConfig).get();
+                this.baseClient = this.glideClusterClient; // Set BaseClient reference
                 this.resourceId = ResourceLifecycleManager.getInstance().registerResource(this);
             } catch (InterruptedException | ExecutionException e) {
                 throw new JedisConnectionException("Failed to create GLIDE cluster client", e);
@@ -208,6 +213,7 @@ public class UnifiedJedis implements Closeable {
                             hostAndPort.getHost(), hostAndPort.getPort(), config);
             try {
                 this.glideClient = GlideClient.createClient(glideConfig).get();
+                this.baseClient = this.glideClient; // Set BaseClient reference
                 this.resourceId = ResourceLifecycleManager.getInstance().registerResource(this);
             } catch (InterruptedException | ExecutionException e) {
                 throw new JedisConnectionException("Failed to create GLIDE client", e);
@@ -227,6 +233,7 @@ public class UnifiedJedis implements Closeable {
     protected UnifiedJedis(GlideClient glideClient, JedisClientConfig jedisConfig) {
         this.glideClient = glideClient;
         this.glideClusterClient = null;
+        this.baseClient = glideClient; // Set BaseClient reference
         this.config = jedisConfig;
         this.isClusterMode = false;
         this.resourceId = ResourceLifecycleManager.getInstance().registerResource(this);
@@ -236,6 +243,7 @@ public class UnifiedJedis implements Closeable {
     protected UnifiedJedis(GlideClusterClient glideClusterClient, JedisClientConfig jedisConfig) {
         this.glideClient = null;
         this.glideClusterClient = glideClusterClient;
+        this.baseClient = glideClusterClient; // Set BaseClient reference
         this.config = jedisConfig;
         this.isClusterMode = true;
         this.resourceId = ResourceLifecycleManager.getInstance().registerResource(this);
@@ -297,11 +305,7 @@ public class UnifiedJedis implements Closeable {
     public String set(String key, String value) {
         checkNotClosed();
         try {
-            if (isClusterMode) {
-                return glideClusterClient.set(key, value).get();
-            } else {
-                return glideClient.set(key, value).get();
-            }
+            return baseClient.set(key, value).get();
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("SET operation failed", e);
         }
@@ -311,11 +315,7 @@ public class UnifiedJedis implements Closeable {
     public String get(String key) {
         checkNotClosed();
         try {
-            if (isClusterMode) {
-                return glideClusterClient.get(key).get();
-            } else {
-                return glideClient.get(key).get();
-            }
+            return baseClient.get(key).get();
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("GET operation failed", e);
         }
@@ -325,11 +325,7 @@ public class UnifiedJedis implements Closeable {
     public Long del(String... keys) {
         checkNotClosed();
         try {
-            if (isClusterMode) {
-                return glideClusterClient.del(keys).get();
-            } else {
-                return glideClient.del(keys).get();
-            }
+            return baseClient.del(keys).get();
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("DEL operation failed", e);
         }
@@ -344,17 +340,11 @@ public class UnifiedJedis implements Closeable {
     public Long del(byte[]... keys) {
         checkNotClosed();
         try {
-            // Convert byte arrays to GlideString
             GlideString[] glideKeys = new GlideString[keys.length];
             for (int i = 0; i < keys.length; i++) {
                 glideKeys[i] = GlideString.of(keys[i]);
             }
-
-            if (isClusterMode) {
-                return glideClusterClient.del(glideKeys).get();
-            } else {
-                return glideClient.del(glideKeys).get();
-            }
+            return baseClient.del(glideKeys).get();
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("DEL operation failed", e);
         }
@@ -404,10 +394,8 @@ public class UnifiedJedis implements Closeable {
         if (!closed) {
             closed = true;
             try {
-                if (isClusterMode && glideClusterClient != null) {
-                    glideClusterClient.close();
-                } else if (glideClient != null) {
-                    glideClient.close();
+                if (baseClient != null) {
+                    baseClient.close();
                 }
             } catch (ExecutionException e) {
                 // Log the error but don't throw - close should be idempotent
@@ -420,8 +408,50 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
-    /** Check if the client is in cluster mode */
-    public boolean isClusterMode() {
-        return isClusterMode;
+    // ========== ADDITIONAL COMMON OPERATIONS (using baseClient) ==========
+
+    /** Check if a key exists. */
+    public Boolean exists(String key) {
+        checkNotClosed();
+        try {
+            return baseClient.exists(new String[] {key}).get() > 0;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("EXISTS operation failed", e);
+        }
+    }
+
+    /** Set a key's time to live in seconds. */
+    public Boolean expire(String key, long seconds) {
+        checkNotClosed();
+        try {
+            return baseClient.expire(key, seconds).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("EXPIRE operation failed", e);
+        }
+    }
+
+    /** Get the remaining time to live of a key. */
+    public Long ttl(String key) {
+        checkNotClosed();
+        try {
+            return baseClient.ttl(key).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("TTL operation failed", e);
+        }
+    }
+
+    // ========== STANDALONE-SPECIFIC OPERATIONS ==========
+
+    /** Select the database (standalone only). */
+    public String select(int database) {
+        checkNotClosed();
+        if (isClusterMode) {
+            throw new JedisException("SELECT is not supported in cluster mode");
+        }
+        try {
+            return glideClient.select(database).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("SELECT operation failed", e);
+        }
     }
 }
