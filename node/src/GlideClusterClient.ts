@@ -60,6 +60,7 @@ import {
     createScriptExists,
     createScriptFlush,
     createScriptKill,
+    createSelect,
     createTime,
     createUnWatch,
 } from ".";
@@ -166,6 +167,11 @@ export namespace GlideClusterClientConfiguration {
  * @example
  * ```typescript
  * const config: GlideClusterClientConfiguration = {
+ *   addresses: [
+ *     { host: 'cluster-node-1.example.com', port: 6379 },
+ *     { host: 'cluster-node-2.example.com', port: 6379 },
+ *   ],
+ *   databaseId: 5, // Connect to database 5 (requires Valkey 9.0+ with multi-database cluster mode)
  *   periodicChecks: {
  *     duration_in_sec: 30, // Perform periodic checks every 30 seconds
  *   },
@@ -544,12 +550,12 @@ export class GlideClusterClient extends BaseClient {
     /**
      * Creates a new `GlideClusterClient` instance and establishes connections to a Valkey Cluster.
      *
-     * @param options - The configuration options for the client, including cluster addresses, authentication credentials, TLS settings, periodic checks, and Pub/Sub subscriptions.
+     * @param options - The configuration options for the client, including cluster addresses, database selection, authentication credentials, TLS settings, periodic checks, and Pub/Sub subscriptions.
      * @returns A promise that resolves to a connected `GlideClusterClient` instance.
      *
      * @remarks
      * Use this static method to create and connect a `GlideClusterClient` to a Valkey Cluster.
-     * The client will automatically handle connection establishment, including cluster topology discovery and handling of authentication and TLS configurations.
+     * The client will automatically handle connection establishment, including cluster topology discovery, database selection, and handling of authentication and TLS configurations.
      *
      * @example
      * ```typescript
@@ -561,6 +567,7 @@ export class GlideClusterClient extends BaseClient {
      *     { host: 'address1.example.com', port: 6379 },
      *     { host: 'address2.example.com', port: 6379 },
      *   ],
+     *   databaseId: 5, // Connect to database 5 (requires Valkey 9.0+)
      *   credentials: {
      *     username: 'user1',
      *     password: 'passwordA',
@@ -589,6 +596,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * @remarks
      * - **Cluster Topology Discovery**: The client will automatically discover the cluster topology based on the seed addresses provided.
+     * - **Database Selection**: Use `databaseId` to specify which logical database to connect to. Requires Valkey 9.0+ with multi-database cluster mode enabled.
      * - **Authentication**: If `credentials` are provided, the client will attempt to authenticate using the specified username and password.
      * - **TLS**: If `useTLS` is set to `true`, the client will establish secure connections using TLS.
      *      Should match the TLS configuration of the server/cluster, otherwise the connection attempt will fail.
@@ -1634,6 +1642,60 @@ export class GlideClusterClient extends BaseClient {
         return this.createWritePromise(createFlushDB(options?.mode), {
             decoder: Decoder.String,
             ...options,
+        });
+    }
+
+    /**
+     * Changes the currently selected database on cluster nodes.
+     *
+     * **WARNING**: This command is NOT RECOMMENDED for production use.
+     * Upon reconnection, nodes will revert to the database_id specified
+     * in the client configuration (default: 0), NOT the database selected
+     * via this command.
+     *
+     * **RECOMMENDED APPROACH**: Use the `databaseId` parameter in client
+     * configuration instead:
+     *
+     * ```typescript
+     * const client = await GlideClusterClient.createClient({
+     *     addresses: [{ host: "localhost", port: 6379 }],
+     *     databaseId: 5  // Recommended: persists across reconnections
+     * });
+     * ```
+     *
+     * **CLUSTER BEHAVIOR**: This command routes to all nodes by default
+     * to maintain consistency across the cluster.
+     *
+     * @see {@link https://valkey.io/commands/select/|valkey.io} for details.
+     *
+     * @param index - The index of the database to select.
+     * @param options - (Optional) See {@link RouteOption}. Defaults to routing to all nodes.
+     * @returns A simple `"OK"` response from each node.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of select method (NOT RECOMMENDED)
+     * const result = await client.select(2);
+     * console.log(result); // Output: 'OK'
+     * // Note: Database selection will be lost on reconnection!
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example with explicit routing to all nodes
+     * const result = await client.select(2, { route: "allNodes" });
+     * console.log(result); // Output: 'OK'
+     * ```
+     */
+    public async select(index: number, options?: RouteOption): Promise<"OK"> {
+        // Default to allNodes routing if no route is specified
+        const routeOption: RouteOption = options?.route
+            ? options
+            : { route: "allNodes" };
+
+        return this.createWritePromise(createSelect(index), {
+            decoder: Decoder.String,
+            ...routeOption,
         });
     }
 
