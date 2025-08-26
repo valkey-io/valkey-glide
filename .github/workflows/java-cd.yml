@@ -253,7 +253,7 @@ jobs:
             [
                 set-release-version,
                 load-platform-matrix,
-                # publish-to-maven-central-deployment,
+                publish-to-maven-central-deployment,
             ]
         env:
             JAVA_VERSION: "11"
