@@ -102,6 +102,9 @@ public final class Jedis implements Closeable {
     /** Character encoding used for string-to-byte conversions in Valkey operations. */
     private static final Charset VALKEY_CHARSET = StandardCharsets.UTF_8;
 
+    /** Keyword used in hash field expiration commands to specify the number of fields. */
+    private static final String FIELDS_KEYWORD = "FIELDS";
+
     private volatile GlideClient glideClient; // Changed from final to volatile for lazy init
     private final boolean isPooled;
     private volatile String resourceId; // Changed from final to volatile for lazy init
@@ -4420,6 +4423,10 @@ public final class Jedis implements Closeable {
                 }
             }
 
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add("1"); // Single field
+
             args.add(field);
             args.add(value);
 
@@ -4461,6 +4468,10 @@ public final class Jedis implements Closeable {
                 }
             }
 
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(hash.size()));
+
             // Add field-value pairs
             for (Map.Entry<String, String> entry : hash.entrySet()) {
                 args.add(entry.getKey());
@@ -4499,6 +4510,10 @@ public final class Jedis implements Closeable {
                     args.add(params.getExpirationValue().toString());
                 }
             }
+
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(fields.length));
 
             // Add fields
             args.addAll(Arrays.asList(fields));
@@ -4584,6 +4599,10 @@ public final class Jedis implements Closeable {
                 }
             }
 
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add("1"); // Single field
+
             args.add(new String(field));
             args.add(new String(value));
 
@@ -4625,6 +4644,10 @@ public final class Jedis implements Closeable {
                 }
             }
 
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(hash.size()));
+
             // Add field-value pairs
             for (Map.Entry<byte[], byte[]> entry : hash.entrySet()) {
                 args.add(new String(entry.getKey()));
@@ -4663,6 +4686,10 @@ public final class Jedis implements Closeable {
                     args.add(params.getExpirationValue().toString());
                 }
             }
+
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(fields.length));
 
             // Add fields
             for (byte[] field : fields) {
@@ -4908,6 +4935,11 @@ public final class Jedis implements Closeable {
                     args.add("HEXPIRE");
                     args.add(key);
                     args.add(String.valueOf(seconds));
+
+                    // Add FIELDS keyword and numfields count
+                    args.add(FIELDS_KEYWORD);
+                    args.add(String.valueOf(fields.length));
+
                     args.addAll(Arrays.asList(fields));
 
                     Object result = glideClient.customCommand(args.toArray(new String[0])).get();
@@ -4934,6 +4966,11 @@ public final class Jedis implements Closeable {
                     args.add(key);
                     args.add(String.valueOf(seconds));
                     args.add(condition.name());
+
+                    // Add FIELDS keyword and numfields count
+                    args.add(FIELDS_KEYWORD);
+                    args.add(String.valueOf(fields.length));
+
                     args.addAll(Arrays.asList(fields));
 
                     Object result = glideClient.customCommand(args.toArray(new String[0])).get();
@@ -4958,6 +4995,11 @@ public final class Jedis implements Closeable {
                     args.add("HPEXPIRE");
                     args.add(key);
                     args.add(String.valueOf(milliseconds));
+
+                    // Add FIELDS keyword and numfields count
+                    args.add(FIELDS_KEYWORD);
+                    args.add(String.valueOf(fields.length));
+
                     args.addAll(Arrays.asList(fields));
 
                     Object result = glideClient.customCommand(args.toArray(new String[0])).get();
@@ -4985,6 +5027,11 @@ public final class Jedis implements Closeable {
                     args.add(key);
                     args.add(String.valueOf(milliseconds));
                     args.add(condition.name());
+
+                    // Add FIELDS keyword and numfields count
+                    args.add(FIELDS_KEYWORD);
+                    args.add(String.valueOf(fields.length));
+
                     args.addAll(Arrays.asList(fields));
 
                     Object result = glideClient.customCommand(args.toArray(new String[0])).get();
@@ -5009,6 +5056,11 @@ public final class Jedis implements Closeable {
                     args.add("HEXPIREAT");
                     args.add(key);
                     args.add(String.valueOf(unixTimeSeconds));
+
+                    // Add FIELDS keyword and numfields count
+                    args.add(FIELDS_KEYWORD);
+                    args.add(String.valueOf(fields.length));
+
                     args.addAll(Arrays.asList(fields));
 
                     Object result = glideClient.customCommand(args.toArray(new String[0])).get();
@@ -5036,6 +5088,11 @@ public final class Jedis implements Closeable {
                     args.add(key);
                     args.add(String.valueOf(unixTimeSeconds));
                     args.add(condition.name());
+
+                    // Add FIELDS keyword and numfields count
+                    args.add(FIELDS_KEYWORD);
+                    args.add(String.valueOf(fields.length));
+
                     args.addAll(Arrays.asList(fields));
 
                     Object result = glideClient.customCommand(args.toArray(new String[0])).get();
@@ -5060,6 +5117,11 @@ public final class Jedis implements Closeable {
                     args.add("HPEXPIREAT");
                     args.add(key);
                     args.add(String.valueOf(unixTimeMillis));
+
+                    // Add FIELDS keyword and numfields count
+                    args.add(FIELDS_KEYWORD);
+                    args.add(String.valueOf(fields.length));
+
                     args.addAll(Arrays.asList(fields));
 
                     Object result = glideClient.customCommand(args.toArray(new String[0])).get();
@@ -5087,6 +5149,11 @@ public final class Jedis implements Closeable {
                     args.add(key);
                     args.add(String.valueOf(unixTimeMillis));
                     args.add(condition.name());
+
+                    // Add FIELDS keyword and numfields count
+                    args.add(FIELDS_KEYWORD);
+                    args.add(String.valueOf(fields.length));
+
                     args.addAll(Arrays.asList(fields));
 
                     Object result = glideClient.customCommand(args.toArray(new String[0])).get();
@@ -5109,6 +5176,11 @@ public final class Jedis implements Closeable {
                     List<String> args = new ArrayList<>();
                     args.add("HEXPIRETIME");
                     args.add(key);
+
+                    // Add FIELDS keyword and numfields count
+                    args.add(FIELDS_KEYWORD);
+                    args.add(String.valueOf(fields.length));
+
                     args.addAll(Arrays.asList(fields));
 
                     Object result = glideClient.customCommand(args.toArray(new String[0])).get();
@@ -5131,6 +5203,11 @@ public final class Jedis implements Closeable {
                     List<String> args = new ArrayList<>();
                     args.add("HPEXPIRETIME");
                     args.add(key);
+
+                    // Add FIELDS keyword and numfields count
+                    args.add(FIELDS_KEYWORD);
+                    args.add(String.valueOf(fields.length));
+
                     args.addAll(Arrays.asList(fields));
 
                     Object result = glideClient.customCommand(args.toArray(new String[0])).get();
@@ -5153,6 +5230,11 @@ public final class Jedis implements Closeable {
                     List<String> args = new ArrayList<>();
                     args.add("HTTL");
                     args.add(key);
+
+                    // Add FIELDS keyword and numfields count
+                    args.add(FIELDS_KEYWORD);
+                    args.add(String.valueOf(fields.length));
+
                     args.addAll(Arrays.asList(fields));
 
                     Object result = glideClient.customCommand(args.toArray(new String[0])).get();
@@ -5175,6 +5257,11 @@ public final class Jedis implements Closeable {
                     List<String> args = new ArrayList<>();
                     args.add("HPTTL");
                     args.add(key);
+
+                    // Add FIELDS keyword and numfields count
+                    args.add(FIELDS_KEYWORD);
+                    args.add(String.valueOf(fields.length));
+
                     args.addAll(Arrays.asList(fields));
 
                     Object result = glideClient.customCommand(args.toArray(new String[0])).get();
@@ -5197,6 +5284,11 @@ public final class Jedis implements Closeable {
                     List<String> args = new ArrayList<>();
                     args.add("HPERSIST");
                     args.add(key);
+
+                    // Add FIELDS keyword and numfields count
+                    args.add(FIELDS_KEYWORD);
+                    args.add(String.valueOf(fields.length));
+
                     args.addAll(Arrays.asList(fields));
 
                     Object result = glideClient.customCommand(args.toArray(new String[0])).get();
@@ -5223,6 +5315,11 @@ public final class Jedis implements Closeable {
             args.add("HEXPIRE");
             args.add(new String(key));
             args.add(String.valueOf(seconds));
+
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(fields.length));
+
             for (byte[] field : fields) {
                 args.add(new String(field));
             }
@@ -5254,6 +5351,11 @@ public final class Jedis implements Closeable {
             args.add(new String(key));
             args.add(String.valueOf(seconds));
             args.add(condition.name());
+
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(fields.length));
+
             for (byte[] field : fields) {
                 args.add(new String(field));
             }
@@ -5282,6 +5384,11 @@ public final class Jedis implements Closeable {
             args.add("HPEXPIRE");
             args.add(new String(key));
             args.add(String.valueOf(milliseconds));
+
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(fields.length));
+
             for (byte[] field : fields) {
                 args.add(new String(field));
             }
@@ -5314,6 +5421,11 @@ public final class Jedis implements Closeable {
             args.add(new String(key));
             args.add(String.valueOf(milliseconds));
             args.add(condition.name());
+
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(fields.length));
+
             for (byte[] field : fields) {
                 args.add(new String(field));
             }
@@ -5342,6 +5454,11 @@ public final class Jedis implements Closeable {
             args.add("HEXPIREAT");
             args.add(new String(key));
             args.add(String.valueOf(unixTimeSeconds));
+
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(fields.length));
+
             for (byte[] field : fields) {
                 args.add(new String(field));
             }
@@ -5374,6 +5491,11 @@ public final class Jedis implements Closeable {
             args.add(new String(key));
             args.add(String.valueOf(unixTimeSeconds));
             args.add(condition.name());
+
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(fields.length));
+
             for (byte[] field : fields) {
                 args.add(new String(field));
             }
@@ -5402,6 +5524,11 @@ public final class Jedis implements Closeable {
             args.add("HPEXPIREAT");
             args.add(new String(key));
             args.add(String.valueOf(unixTimeMillis));
+
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(fields.length));
+
             for (byte[] field : fields) {
                 args.add(new String(field));
             }
@@ -5434,6 +5561,11 @@ public final class Jedis implements Closeable {
             args.add(new String(key));
             args.add(String.valueOf(unixTimeMillis));
             args.add(condition.name());
+
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(fields.length));
+
             for (byte[] field : fields) {
                 args.add(new String(field));
             }
@@ -5460,6 +5592,11 @@ public final class Jedis implements Closeable {
             List<String> args = new ArrayList<>();
             args.add("HEXPIRETIME");
             args.add(new String(key));
+
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(fields.length));
+
             for (byte[] field : fields) {
                 args.add(new String(field));
             }
@@ -5487,6 +5624,11 @@ public final class Jedis implements Closeable {
             List<String> args = new ArrayList<>();
             args.add("HPEXPIRETIME");
             args.add(new String(key));
+
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(fields.length));
+
             for (byte[] field : fields) {
                 args.add(new String(field));
             }
@@ -5513,6 +5655,11 @@ public final class Jedis implements Closeable {
             List<String> args = new ArrayList<>();
             args.add("HTTL");
             args.add(new String(key));
+
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(fields.length));
+
             for (byte[] field : fields) {
                 args.add(new String(field));
             }
@@ -5539,6 +5686,11 @@ public final class Jedis implements Closeable {
             List<String> args = new ArrayList<>();
             args.add("HPTTL");
             args.add(new String(key));
+
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(fields.length));
+
             for (byte[] field : fields) {
                 args.add(new String(field));
             }
@@ -5565,6 +5717,11 @@ public final class Jedis implements Closeable {
             List<String> args = new ArrayList<>();
             args.add("HPERSIST");
             args.add(new String(key));
+
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(fields.length));
+
             for (byte[] field : fields) {
                 args.add(new String(field));
             }
