@@ -62,7 +62,7 @@ public class UnifiedJedisTest {
     }
 
     @Test
-    void testBasicSetAndGet() {
+    void basic_set_and_get() {
         String testKey = TEST_KEY_PREFIX + "basic";
         String testValue = "unified_test_value_123";
 
@@ -75,7 +75,7 @@ public class UnifiedJedisTest {
     }
 
     @Test
-    void testMultipleOperations() {
+    void multiple_operations() {
         Map<String, String> testData = new HashMap<>();
         testData.put(TEST_KEY_PREFIX + "unified_key1", "unified_value1");
         testData.put(TEST_KEY_PREFIX + "unified_key2", "unified_value2");

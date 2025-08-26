@@ -40,7 +40,7 @@ public class JedisPoolTest {
     }
 
     @Test
-    void testPoolCreation() {
+    void pool_creation() {
         // Test basic pool creation
         try (JedisPool pool = new JedisPool(redisHost, redisPort)) {
             assertNotNull(pool, "JedisPool should be created successfully");

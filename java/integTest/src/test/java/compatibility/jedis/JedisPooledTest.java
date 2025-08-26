@@ -62,7 +62,7 @@ public class JedisPooledTest {
     }
 
     @Test
-    void testBasicSetAndGet() {
+    void basic_set_and_get() {
         String testKey = TEST_KEY_PREFIX + "basic";
         String testValue = "pooled_test_value_123";
 
@@ -75,7 +75,7 @@ public class JedisPooledTest {
     }
 
     @Test
-    void testMultipleOperations() {
+    void multiple_operations() {
         Map<String, String> testData = new HashMap<>();
         testData.put(TEST_KEY_PREFIX + "pooled_key1", "pooled_value1");
         testData.put(TEST_KEY_PREFIX + "pooled_key2", "pooled_value2");

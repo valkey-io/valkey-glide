@@ -74,7 +74,7 @@ public class UnifiedJedisClusterTest {
     }
 
     @Test
-    void testBasicSetAndGet() {
+    void basic_set_and_get() {
         String testKey = TEST_KEY_PREFIX + "basic";
         String testValue = "unified_cluster_test_value_123";
 
@@ -87,7 +87,7 @@ public class UnifiedJedisClusterTest {
     }
 
     @Test
-    void testMultipleOperations() {
+    void multiple_operations() {
         Map<String, String> testData = new HashMap<>();
         testData.put(TEST_KEY_PREFIX + "cluster_key1", "cluster_value1");
         testData.put(TEST_KEY_PREFIX + "cluster_key2", "cluster_value2");
@@ -235,7 +235,7 @@ public class UnifiedJedisClusterTest {
     }
 
     @Test
-    void testClusterSpecificOperations() {
+    void cluster_specific_operations() {
         // Test operations that are specific to cluster mode
         String testKey = TEST_KEY_PREFIX + "cluster_specific";
         String testValue = "cluster_specific_value";
