@@ -210,6 +210,13 @@ def test_database_id_validation_in_base_config():
     config = BaseClientConfiguration([NodeAddress("127.0.0.1")], database_id=15)
     assert config.database_id == 15
 
+    # Test broader range of database IDs
+    config = BaseClientConfiguration([NodeAddress("127.0.0.1")], database_id=100)
+    assert config.database_id == 100
+
+    config = BaseClientConfiguration([NodeAddress("127.0.0.1")], database_id=1000)
+    assert config.database_id == 1000
+
     # None should be allowed (defaults to 0)
     config = BaseClientConfiguration([NodeAddress("127.0.0.1")], database_id=None)
     assert config.database_id is None
@@ -217,11 +224,6 @@ def test_database_id_validation_in_base_config():
     # Invalid database_id values
     with pytest.raises(ValueError, match="database_id must be non-negative"):
         BaseClientConfiguration([NodeAddress("127.0.0.1")], database_id=-1)
-
-    with pytest.raises(
-        ValueError, match="database_id must be less than or equal to 15"
-    ):
-        BaseClientConfiguration([NodeAddress("127.0.0.1")], database_id=16)
 
     with pytest.raises(ValueError, match="database_id must be an integer"):
         BaseClientConfiguration([NodeAddress("127.0.0.1")], database_id="5")
