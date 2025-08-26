@@ -61,9 +61,10 @@ public class BaseClientConfigurationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(ints = {0, 1, 5, 10, 15})
+    @ValueSource(ints = {0, 1, 5, 10, 15, 50, 100, 1000})
     public void testDatabaseIdValidRange(int databaseId) {
-        // Test that valid database IDs are accepted
+        // Test that non-negative database IDs are accepted (server-side validation will handle range
+        // checks)
         TestClientConfiguration config =
                 TestClientConfiguration.builder().databaseId(databaseId).build();
         assertEquals(databaseId, config.getDatabaseId());
@@ -78,9 +79,18 @@ public class BaseClientConfigurationTest {
 
     @Test
     public void testDatabaseIdLargeValue() {
-        // Test that large database IDs are handled (validation should be done at connection time)
+        // Test that large database IDs are handled (server-side validation will handle range checks)
         TestClientConfiguration config = TestClientConfiguration.builder().databaseId(100).build();
         assertEquals(100, config.getDatabaseId());
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {999, 10000, 50000})
+    public void testDatabaseIdVeryLargeValues(int databaseId) {
+        // Test that very large database IDs are accepted by client (server will validate range)
+        TestClientConfiguration config =
+                TestClientConfiguration.builder().databaseId(databaseId).build();
+        assertEquals(databaseId, config.getDatabaseId());
     }
 
     @Test

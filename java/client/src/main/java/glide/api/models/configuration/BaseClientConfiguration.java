@@ -87,10 +87,15 @@ public abstract class BaseClientConfiguration {
 
     /**
      * Index of the logical database to connect to. Must be non-negative and within the range
-     * supported by the server. If not specified, defaults to database 0.
+     * supported by the server configuration. If not specified, defaults to database 0.
      *
-     * <p>For cluster mode, this feature requires Valkey 9.0+ with multi-database cluster support
-     * enabled (cluster-databases configuration > 1).
+     * <p>The valid range is determined by the server's database configuration. For standalone mode,
+     * this is typically 0-15 by default but can be configured via the 'databases' setting. For
+     * cluster mode, this feature requires Valkey 9.0+ with multi-database cluster support enabled
+     * (cluster-databases configuration > 1).
+     *
+     * <p>Client-side validation only checks for non-negative values. Range validation is performed
+     * server-side and will result in a connection error if the specified database ID is out of range.
      */
     private final Integer databaseId;
 
