@@ -18,7 +18,7 @@ import redis.clients.jedis.util.JedisURIHelper;
 
 /**
  * Compatibility wrapper for Valkey GLIDE client. This class provides the unified API that works
- * with both standalone and cluster Redis deployments, while using Valkey GLIDE underneath.
+ * with both standalone and cluster servers, while using Valkey GLIDE underneath.
  */
 public class UnifiedJedis implements Closeable {
 

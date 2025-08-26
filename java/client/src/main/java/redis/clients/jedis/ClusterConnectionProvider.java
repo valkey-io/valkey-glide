@@ -3,7 +3,7 @@ package redis.clients.jedis;
 
 import java.util.Set;
 
-/** Connection provider for Redis Cluster. This is part of the Jedis compatibility layer. */
+/** Connection provider for Valkey Cluster. This is part of the Jedis compatibility layer. */
 public class ClusterConnectionProvider implements ConnectionProvider {
 
     private final Set<HostAndPort> nodes;
@@ -26,7 +26,7 @@ public class ClusterConnectionProvider implements ConnectionProvider {
         return clientConfig;
     }
 
-    /** Get all cluster nodes */
+    /** Get all configured cluster nodes */
     public Set<HostAndPort> getNodes() {
         return nodes;
     }
