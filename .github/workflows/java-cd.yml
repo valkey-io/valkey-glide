@@ -284,8 +284,8 @@ jobs:
             - name: Install git and Java
               run: |
                   # Set environment variable to indicate container environment for Gradle
-                  echo "GLIDE_CONTAINER_BUILD=true" >> $GITHUB_ENV
                   if [[ "${{ matrix.host.TARGET }}" == *"musl"* ]]; then
+                    echo "GLIDE_CONTAINER_BUILD=true" >> $GITHUB_ENV
                     apk add openjdk${{matrix.java}} git bash
                     apk add openjdk11
                     export JAVA_HOME=/usr/lib/jvm/java-${{matrix.java}}-openjdk
