@@ -17,6 +17,7 @@ import redis.clients.jedis.util.Pool;
  */
 public class JedisPool extends Pool<Jedis> {
 
+    /** Creates a JedisPool with default configuration connecting to localhost:6379. */
     public JedisPool() {
         this(Protocol.DEFAULT_HOST, Protocol.DEFAULT_PORT);
     }
@@ -55,14 +56,38 @@ public class JedisPool extends Pool<Jedis> {
         this(URI.create(url), sslSocketFactory, sslParameters, hostnameVerifier);
     }
 
+    /**
+     * Creates a JedisPool connecting to the specified host and port.
+     *
+     * @param host the Redis server host
+     * @param port the Redis server port
+     */
     public JedisPool(final String host, final int port) {
         this(new GenericObjectPoolConfig<Jedis>(), host, port);
     }
 
+    /**
+     * Creates a JedisPool connecting to the specified host and port with SSL configuration.
+     *
+     * @param host the Redis server host
+     * @param port the Redis server port
+     * @param ssl whether to use SSL connection
+     */
     public JedisPool(final String host, final int port, final boolean ssl) {
         this(new GenericObjectPoolConfig<Jedis>(), host, port, ssl);
     }
 
+    /**
+     * Creates a JedisPool connecting to the specified host and port with SSL configuration and custom
+     * SSL parameters.
+     *
+     * @param host the Redis server host
+     * @param port the Redis server port
+     * @param ssl whether to use SSL connection
+     * @param sslSocketFactory SSL socket factory for creating SSL connections
+     * @param sslParameters SSL parameters for the connection
+     * @param hostnameVerifier hostname verifier for SSL connections
+     */
     public JedisPool(
             final String host,
             final int port,
@@ -80,10 +105,25 @@ public class JedisPool extends Pool<Jedis> {
                 hostnameVerifier);
     }
 
+    /**
+     * Creates a JedisPool connecting to the specified host and port with user authentication.
+     *
+     * @param host the Redis server host
+     * @param port the Redis server port
+     * @param user the username for authentication
+     * @param password the password for authentication
+     */
     public JedisPool(final String host, int port, String user, final String password) {
         this(new GenericObjectPoolConfig<Jedis>(), host, port, user, password);
     }
 
+    /**
+     * Creates a JedisPool connecting to the specified host and port with timeout configuration.
+     *
+     * @param host the Redis server host
+     * @param port the Redis server port
+     * @param timeout the connection and socket timeout in milliseconds
+     */
     public JedisPool(final String host, final int port, final int timeout) {
         this(
                 new GenericObjectPoolConfig<Jedis>(),
@@ -95,6 +135,13 @@ public class JedisPool extends Pool<Jedis> {
                         .build());
     }
 
+    /**
+     * Creates a JedisPool connecting to the specified host and port with password authentication.
+     *
+     * @param host the Redis server host
+     * @param port the Redis server port
+     * @param password the password for authentication
+     */
     public JedisPool(final String host, final int port, final String password) {
         this(
                 new GenericObjectPoolConfig<Jedis>(),
@@ -103,6 +150,15 @@ public class JedisPool extends Pool<Jedis> {
                 DefaultJedisClientConfig.builder().password(password).build());
     }
 
+    /**
+     * Creates a JedisPool connecting to the specified host and port with timeout and password
+     * authentication.
+     *
+     * @param host the Redis server host
+     * @param port the Redis server port
+     * @param timeout the connection and socket timeout in milliseconds
+     * @param password the password for authentication
+     */
     public JedisPool(final String host, final int port, final int timeout, final String password) {
         this(
                 new GenericObjectPoolConfig<Jedis>(),
@@ -115,6 +171,12 @@ public class JedisPool extends Pool<Jedis> {
                         .build());
     }
 
+    /**
+     * Creates a JedisPool with the specified host and port configuration and client configuration.
+     *
+     * @param hostAndPort the host and port configuration
+     * @param clientConfig the client configuration
+     */
     public JedisPool(final HostAndPort hostAndPort, final JedisClientConfig clientConfig) {
         this(
                 new GenericObjectPoolConfig<Jedis>(),
@@ -123,18 +185,41 @@ public class JedisPool extends Pool<Jedis> {
                 clientConfig);
     }
 
+    /**
+     * Creates a JedisPool with a custom pooled object factory.
+     *
+     * @param factory the pooled object factory for creating Jedis instances
+     */
     public JedisPool(PooledObjectFactory<Jedis> factory) {
         this(new GenericObjectPoolConfig<Jedis>(), factory);
     }
 
+    /**
+     * Creates a JedisPool with custom pool configuration connecting to localhost:6379.
+     *
+     * @param poolConfig the pool configuration
+     */
     public JedisPool(final GenericObjectPoolConfig<Jedis> poolConfig) {
         this(poolConfig, Protocol.DEFAULT_HOST, Protocol.DEFAULT_PORT);
     }
 
+    /**
+     * Creates a JedisPool connecting to the Redis server specified by the URI.
+     *
+     * @param uri the Redis server URI
+     */
     public JedisPool(final URI uri) {
         this(new GenericObjectPoolConfig<Jedis>(), uri);
     }
 
+    /**
+     * Creates a JedisPool connecting to the Redis server specified by the URI with SSL configuration.
+     *
+     * @param uri the Redis server URI
+     * @param sslSocketFactory SSL socket factory for creating SSL connections
+     * @param sslParameters SSL parameters for the connection
+     * @param hostnameVerifier hostname verifier for SSL connections
+     */
     public JedisPool(
             final URI uri,
             final SSLSocketFactory sslSocketFactory,
@@ -148,10 +233,27 @@ public class JedisPool extends Pool<Jedis> {
                 hostnameVerifier);
     }
 
+    /**
+     * Creates a JedisPool connecting to the Redis server specified by the URI with timeout
+     * configuration.
+     *
+     * @param uri the Redis server URI
+     * @param timeout the connection and socket timeout in milliseconds
+     */
     public JedisPool(final URI uri, final int timeout) {
         this(new GenericObjectPoolConfig<Jedis>(), uri, timeout);
     }
 
+    /**
+     * Creates a JedisPool connecting to the Redis server specified by the URI with timeout and SSL
+     * configuration.
+     *
+     * @param uri the Redis server URI
+     * @param timeout the connection and socket timeout in milliseconds
+     * @param sslSocketFactory SSL socket factory for creating SSL connections
+     * @param sslParameters SSL parameters for the connection
+     * @param hostnameVerifier hostname verifier for SSL connections
+     */
     public JedisPool(
             final URI uri,
             final int timeout,
@@ -167,15 +269,43 @@ public class JedisPool extends Pool<Jedis> {
                 hostnameVerifier);
     }
 
+    /**
+     * Creates a JedisPool with custom pool configuration connecting to the Redis server specified by
+     * the URL. WARNING: This constructor only accepts a uri string as {@code url}. {@link
+     * JedisURIHelper#isValid(java.net.URI)} can be used before this.
+     *
+     * <p>To use a host string, {@link
+     * #JedisPool(org.apache.commons.pool2.impl.GenericObjectPoolConfig, java.lang.String, int)} can
+     * be used with {@link Protocol#DEFAULT_PORT}.
+     *
+     * @param poolConfig the pool configuration
+     * @param url the Redis server URL
+     */
     public JedisPool(final GenericObjectPoolConfig<Jedis> poolConfig, final String url) {
         this(poolConfig, URI.create(url));
     }
 
+    /**
+     * Creates a JedisPool with custom pool configuration connecting to the specified host and port.
+     *
+     * @param poolConfig the pool configuration
+     * @param host the Redis server host
+     * @param port the Redis server port
+     */
     public JedisPool(
             final GenericObjectPoolConfig<Jedis> poolConfig, final String host, final int port) {
         this(poolConfig, host, port, DefaultJedisClientConfig.builder().build());
     }
 
+    /**
+     * Creates a JedisPool with custom pool configuration connecting to the specified host and port
+     * with SSL.
+     *
+     * @param poolConfig the pool configuration
+     * @param host the Redis server host
+     * @param port the Redis server port
+     * @param ssl whether to use SSL connection
+     */
     public JedisPool(
             final GenericObjectPoolConfig<Jedis> poolConfig,
             final String host,
@@ -184,6 +314,18 @@ public class JedisPool extends Pool<Jedis> {
         this(poolConfig, host, port, DefaultJedisClientConfig.builder().ssl(ssl).build());
     }
 
+    /**
+     * Creates a JedisPool with custom pool configuration connecting to the specified host and port
+     * with SSL and custom SSL parameters.
+     *
+     * @param poolConfig the pool configuration
+     * @param host the Redis server host
+     * @param port the Redis server port
+     * @param ssl whether to use SSL connection
+     * @param sslSocketFactory SSL socket factory for creating SSL connections
+     * @param sslParameters SSL parameters for the connection
+     * @param hostnameVerifier hostname verifier for SSL connections
+     */
     public JedisPool(
             final GenericObjectPoolConfig<Jedis> poolConfig,
             final String host,
@@ -204,6 +346,15 @@ public class JedisPool extends Pool<Jedis> {
                         .build());
     }
 
+    /**
+     * Creates a JedisPool with custom pool configuration connecting to the specified host and port
+     * with timeout.
+     *
+     * @param poolConfig the pool configuration
+     * @param host the Redis server host
+     * @param port the Redis server port
+     * @param timeout the connection and socket timeout in milliseconds
+     */
     public JedisPool(
             final GenericObjectPoolConfig<Jedis> poolConfig, final String host, int port, int timeout) {
         this(
@@ -216,6 +367,16 @@ public class JedisPool extends Pool<Jedis> {
                         .build());
     }
 
+    /**
+     * Creates a JedisPool with custom pool configuration connecting to the specified host and port
+     * with timeout and password.
+     *
+     * @param poolConfig the pool configuration
+     * @param host the Redis server host
+     * @param port the Redis server port
+     * @param timeout the connection and socket timeout in milliseconds
+     * @param password the password for authentication
+     */
     public JedisPool(
             final GenericObjectPoolConfig<Jedis> poolConfig,
             final String host,
@@ -233,6 +394,17 @@ public class JedisPool extends Pool<Jedis> {
                         .build());
     }
 
+    /**
+     * Creates a JedisPool with custom pool configuration connecting to the specified host and port
+     * with timeout, password, and database.
+     *
+     * @param poolConfig the pool configuration
+     * @param host the Redis server host
+     * @param port the Redis server port
+     * @param timeout the connection and socket timeout in milliseconds
+     * @param password the password for authentication
+     * @param database the database number to select
+     */
     public JedisPool(
             final GenericObjectPoolConfig<Jedis> poolConfig,
             final String host,
@@ -252,6 +424,18 @@ public class JedisPool extends Pool<Jedis> {
                         .build());
     }
 
+    /**
+     * Creates a JedisPool with custom pool configuration connecting to the specified host and port
+     * with timeout, password, database, and client name.
+     *
+     * @param poolConfig the pool configuration
+     * @param host the Redis server host
+     * @param port the Redis server port
+     * @param timeout the connection and socket timeout in milliseconds
+     * @param password the password for authentication
+     * @param database the database number to select
+     * @param clientName the client name to set for connections
+     */
     public JedisPool(
             final GenericObjectPoolConfig<Jedis> poolConfig,
             final String host,
@@ -473,6 +657,22 @@ public class JedisPool extends Pool<Jedis> {
                         .build());
     }
 
+    /**
+     * Creates a JedisPool with custom pool configuration connecting to the specified host and port
+     * with separate connection and socket timeouts, user authentication, database, client name, and
+     * SSL.
+     *
+     * @param poolConfig the pool configuration
+     * @param host the Redis server host
+     * @param port the Redis server port
+     * @param connectionTimeout the connection timeout in milliseconds
+     * @param soTimeout the socket timeout in milliseconds
+     * @param user the username for authentication
+     * @param password the password for authentication
+     * @param database the database number to select
+     * @param clientName the client name to set for connections
+     * @param ssl whether to use SSL connection
+     */
     public JedisPool(
             final GenericObjectPoolConfig<Jedis> poolConfig,
             final String host,
@@ -531,6 +731,16 @@ public class JedisPool extends Pool<Jedis> {
                         .build());
     }
 
+    /**
+     * Creates a JedisPool with custom pool configuration connecting to the specified host and port
+     * with user authentication.
+     *
+     * @param poolConfig the pool configuration
+     * @param host the Redis server host
+     * @param port the Redis server port
+     * @param user the username for authentication
+     * @param password the password for authentication
+     */
     public JedisPool(
             final GenericObjectPoolConfig<Jedis> poolConfig,
             final String host,
@@ -544,6 +754,17 @@ public class JedisPool extends Pool<Jedis> {
                 DefaultJedisClientConfig.builder().user(user).password(password).build());
     }
 
+    /**
+     * Creates a JedisPool with custom pool configuration connecting to the specified host and port
+     * with client configuration. This is the main constructor that most other constructors delegate
+     * to.
+     *
+     * @param poolConfig the pool configuration for managing the connection pool
+     * @param host the Redis server host
+     * @param port the Redis server port
+     * @param clientConfig the client configuration including timeouts, authentication, SSL settings,
+     *     etc.
+     */
     public JedisPool(
             final GenericObjectPoolConfig<Jedis> poolConfig,
             final String host,
@@ -555,10 +776,27 @@ public class JedisPool extends Pool<Jedis> {
         factory.setPool(this); // Set pool reference after initialization
     }
 
+    /**
+     * Creates a JedisPool with custom pool configuration connecting to the Redis server specified by
+     * the URI.
+     *
+     * @param poolConfig the pool configuration
+     * @param uri the Redis server URI
+     */
     public JedisPool(final GenericObjectPoolConfig<Jedis> poolConfig, final URI uri) {
         this(poolConfig, uri, DefaultJedisClientConfig.builder().build());
     }
 
+    /**
+     * Creates a JedisPool with custom pool configuration connecting to the Redis server specified by
+     * the URI with SSL configuration.
+     *
+     * @param poolConfig the pool configuration
+     * @param uri the Redis server URI
+     * @param sslSocketFactory SSL socket factory for creating SSL connections
+     * @param sslParameters SSL parameters for the connection
+     * @param hostnameVerifier hostname verifier for SSL connections
+     */
     public JedisPool(
             final GenericObjectPoolConfig<Jedis> poolConfig,
             final URI uri,
@@ -576,6 +814,14 @@ public class JedisPool extends Pool<Jedis> {
                         .build());
     }
 
+    /**
+     * Creates a JedisPool with custom pool configuration connecting to the Redis server specified by
+     * the URI with timeout.
+     *
+     * @param poolConfig the pool configuration
+     * @param uri the Redis server URI
+     * @param timeout the connection and socket timeout in milliseconds
+     */
     public JedisPool(
             final GenericObjectPoolConfig<Jedis> poolConfig, final URI uri, final int timeout) {
         this(
@@ -587,6 +833,17 @@ public class JedisPool extends Pool<Jedis> {
                         .build());
     }
 
+    /**
+     * Creates a JedisPool with custom pool configuration connecting to the Redis server specified by
+     * the URI with timeout and SSL configuration.
+     *
+     * @param poolConfig the pool configuration
+     * @param uri the Redis server URI
+     * @param timeout the connection and socket timeout in milliseconds
+     * @param sslSocketFactory SSL socket factory for creating SSL connections
+     * @param sslParameters SSL parameters for the connection
+     * @param hostnameVerifier hostname verifier for SSL connections
+     */
     public JedisPool(
             final GenericObjectPoolConfig<Jedis> poolConfig,
             final URI uri,
@@ -607,6 +864,14 @@ public class JedisPool extends Pool<Jedis> {
                         .build());
     }
 
+    /**
+     * Private constructor for creating a JedisPool with URI and client configuration. This
+     * constructor handles URI parsing and merges URI parameters with client configuration.
+     *
+     * @param poolConfig the pool configuration
+     * @param uri the Redis server URI
+     * @param clientConfig the client configuration
+     */
     private JedisPool(
             final GenericObjectPoolConfig<Jedis> poolConfig,
             final URI uri,
@@ -621,6 +886,12 @@ public class JedisPool extends Pool<Jedis> {
         factory.setPool(this); // Set pool reference after initialization
     }
 
+    /**
+     * Creates a JedisPool with custom pool configuration and a custom pooled object factory.
+     *
+     * @param poolConfig the pool configuration
+     * @param factory the pooled object factory for creating Jedis instances
+     */
     public JedisPool(
             final GenericObjectPoolConfig<Jedis> poolConfig, PooledObjectFactory<Jedis> factory) {
         initPool(poolConfig, factory);
@@ -631,7 +902,14 @@ public class JedisPool extends Pool<Jedis> {
         }
     }
 
-    /** Merge URI configuration with client configuration. */
+    /**
+     * Merge URI configuration with client configuration. URI parameters take precedence over client
+     * configuration parameters.
+     *
+     * @param uri the Redis server URI containing connection parameters
+     * @param clientConfig the base client configuration
+     * @return merged client configuration with URI parameters applied
+     */
     private static JedisClientConfig mergeUriConfig(URI uri, JedisClientConfig clientConfig) {
         DefaultJedisClientConfig.Builder builder = DefaultJedisClientConfig.builder();
 
