@@ -281,6 +281,19 @@ jobs:
                   distribution: "temurin"
                   java-version: ${{ env.JAVA_VERSION }}
 
+            - name: Install git and Java
+              run: |
+                  # Set environment variable to indicate container environment for Gradle
+                  echo "GLIDE_CONTAINER_BUILD=true" >> $GITHUB_ENV
+                  if [[ "${{ matrix.host.TARGET }}" == *"musl"* ]]; then
+                    apk add openjdk${{matrix.java}} git bash
+                    apk add openjdk11
+                    export JAVA_HOME=/usr/lib/jvm/java-${{matrix.java}}-openjdk
+                    # Create gradle user home and disable auto-download
+                    mkdir -p ~/.gradle
+                    echo "org.gradle.java.installations.auto-download=false" >> ~/.gradle/gradle.properties
+                  fi
+
             - name: Install shared software dependencies
               uses: ./.github/workflows/install-shared-dependencies
               with:
