@@ -2385,6 +2385,12 @@ func CreateServerManagementTests(batch *pipeline.ClusterBatch, isAtomic bool, se
 	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "ConfigResetStat()"})
 	// ConfigRewrite skipped, because depends on config
 
+	// SELECT command is only available in Valkey 9+ for cluster mode
+	if serverVer >= "9.0.0" {
+		batch.Select(1)
+		testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Select(1)"})
+	}
+
 	return BatchTestData{CommandTestData: testData, TestName: "Server Management commands"}
 }
 
