@@ -14,7 +14,6 @@ import redis.clients.jedis.JedisPooled;
  * <p>This test ensures that the GLIDE compatibility layer provides the expected JedisPooled API and
  * behavior. JedisPooled extends UnifiedJedis and provides pooled connection semantics.
  */
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class JedisPooledTest {
 
     private static final String TEST_KEY_PREFIX = "jedis_pooled_test:";
@@ -63,7 +62,6 @@ public class JedisPooledTest {
     }
 
     @Test
-    @Order(1)
     void testBasicSetAndGet() {
         String testKey = TEST_KEY_PREFIX + "basic";
         String testValue = "pooled_test_value_123";
@@ -77,7 +75,6 @@ public class JedisPooledTest {
     }
 
     @Test
-    @Order(2)
     void testMultipleOperations() {
         Map<String, String> testData = new HashMap<>();
         testData.put(TEST_KEY_PREFIX + "pooled_key1", "pooled_value1");
@@ -99,7 +96,6 @@ public class JedisPooledTest {
     }
 
     @Test
-    @Order(3)
     void testConnectionOperations() {
         // Test PING
         String pingResult = jedisPooled.ping();
@@ -112,7 +108,6 @@ public class JedisPooledTest {
     }
 
     @Test
-    @Order(4)
     void testDeleteOperations() {
         String testKey1 = TEST_KEY_PREFIX + "del1";
         String testKey2 = TEST_KEY_PREFIX + "del2";
@@ -141,7 +136,6 @@ public class JedisPooledTest {
     }
 
     @Test
-    @Order(5)
     void testPooledConnectionBehavior() {
         // Test that JedisPooled maintains connection state properly
         String testKey = TEST_KEY_PREFIX + "pooled_behavior";
@@ -179,7 +173,6 @@ public class JedisPooledTest {
     }
 
     @Test
-    @Order(6)
     void testConnectionState() {
         // Test that connection is not closed initially
         assertFalse(jedisPooled.isClosed(), "Connection should not be closed initially");
@@ -197,7 +190,6 @@ public class JedisPooledTest {
     }
 
     @Test
-    @Order(7)
     void testBinaryOperations() {
         byte[] testKey = (TEST_KEY_PREFIX + "binary").getBytes();
 
@@ -215,7 +207,6 @@ public class JedisPooledTest {
     }
 
     @Test
-    @Order(8)
     void testConcurrentOperations() throws InterruptedException {
         final int threadCount = 5;
         final String testKeyPrefix = TEST_KEY_PREFIX + "concurrent_";
@@ -259,7 +250,6 @@ public class JedisPooledTest {
     }
 
     @Test
-    @Order(9)
     void testLargeValueOperations() {
         String testKey = TEST_KEY_PREFIX + "large_value";
         StringBuilder largeValue = new StringBuilder();

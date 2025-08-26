@@ -10,7 +10,6 @@ import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 
 /** Simplified JedisPool compatibility test that validates basic GLIDE JedisPool functionality. */
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class JedisPoolTest {
 
     private static final String TEST_KEY_PREFIX = "jedis_pool_test:";
@@ -41,7 +40,6 @@ public class JedisPoolTest {
     }
 
     @Test
-    @Order(1)
     void testPoolCreation() {
         // Test basic pool creation
         try (JedisPool pool = new JedisPool(redisHost, redisPort)) {
@@ -51,7 +49,6 @@ public class JedisPoolTest {
     }
 
     @Test
-    @Order(2)
     void testPoolBasicOperations() {
         // Test basic pool operations
         try (JedisPool pool = new JedisPool(redisHost, redisPort)) {
@@ -79,7 +76,6 @@ public class JedisPoolTest {
     }
 
     @Test
-    @Order(3)
     void testPoolWithTimeout() {
         // Test pool with custom timeout using simple constructor
         try (JedisPool timeoutPool = new JedisPool(redisHost, redisPort, 5000)) {
@@ -102,7 +98,6 @@ public class JedisPoolTest {
     }
 
     @Test
-    @Order(4)
     void testPoolWithAuthentication() {
         // Test pool with authentication using simple constructor
         String password = ""; // Empty password for test environment
@@ -127,7 +122,6 @@ public class JedisPoolTest {
     }
 
     @Test
-    @Order(5)
     void testPoolFactoryPattern() {
         // Test pool creation with factory using simple constructor
         GlideJedisFactory factory =
@@ -153,7 +147,6 @@ public class JedisPoolTest {
     }
 
     @Test
-    @Order(6)
     void testPoolStatistics() {
         // Test pool statistics and monitoring
         try (JedisPool pool = new JedisPool(redisHost, redisPort)) {

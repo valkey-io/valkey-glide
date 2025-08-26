@@ -14,7 +14,6 @@ import redis.clients.jedis.UnifiedJedis;
  * <p>This test ensures that the GLIDE compatibility layer provides the expected UnifiedJedis API
  * and behavior for core Redis operations in standalone mode.
  */
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class UnifiedJedisTest {
 
     private static final String TEST_KEY_PREFIX = "unified_jedis_test:";
@@ -63,7 +62,6 @@ public class UnifiedJedisTest {
     }
 
     @Test
-    @Order(1)
     void testBasicSetAndGet() {
         String testKey = TEST_KEY_PREFIX + "basic";
         String testValue = "unified_test_value_123";
@@ -77,7 +75,6 @@ public class UnifiedJedisTest {
     }
 
     @Test
-    @Order(2)
     void testMultipleOperations() {
         Map<String, String> testData = new HashMap<>();
         testData.put(TEST_KEY_PREFIX + "unified_key1", "unified_value1");
@@ -99,7 +96,6 @@ public class UnifiedJedisTest {
     }
 
     @Test
-    @Order(3)
     void testConnectionOperations() {
         // Test PING
         String pingResult = unifiedJedis.ping();
@@ -112,7 +108,6 @@ public class UnifiedJedisTest {
     }
 
     @Test
-    @Order(4)
     void testDeleteOperations() {
         String testKey1 = TEST_KEY_PREFIX + "del1";
         String testKey2 = TEST_KEY_PREFIX + "del2";
@@ -141,7 +136,6 @@ public class UnifiedJedisTest {
     }
 
     @Test
-    @Order(5)
     void testConnectionState() {
         // Test that connection is not closed initially
         assertFalse(unifiedJedis.isClosed(), "Connection should not be closed initially");
@@ -159,7 +153,6 @@ public class UnifiedJedisTest {
     }
 
     @Test
-    @Order(6)
     void testBinaryOperations() {
         byte[] testKey = (TEST_KEY_PREFIX + "binary").getBytes();
         byte[] testValue = "binary_value".getBytes();
@@ -179,7 +172,6 @@ public class UnifiedJedisTest {
     }
 
     @Test
-    @Order(7)
     void testMultipleBinaryDeletion() {
         // Set up test keys using string methods
         String key1 = TEST_KEY_PREFIX + "binary1";
@@ -203,7 +195,6 @@ public class UnifiedJedisTest {
     }
 
     @Test
-    @Order(8)
     void testLargeValueOperations() {
         String testKey = TEST_KEY_PREFIX + "large_value";
         StringBuilder largeValue = new StringBuilder();

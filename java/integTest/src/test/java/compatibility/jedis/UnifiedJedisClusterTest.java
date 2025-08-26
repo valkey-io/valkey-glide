@@ -17,7 +17,6 @@ import redis.clients.jedis.UnifiedJedis;
  * <p>This test ensures that the GLIDE compatibility layer provides the expected UnifiedJedis API
  * and behavior for core Redis operations in cluster mode.
  */
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class UnifiedJedisClusterTest {
 
     private static final String TEST_KEY_PREFIX = "unified_jedis_cluster_test:";
@@ -75,7 +74,6 @@ public class UnifiedJedisClusterTest {
     }
 
     @Test
-    @Order(1)
     void testBasicSetAndGet() {
         String testKey = TEST_KEY_PREFIX + "basic";
         String testValue = "unified_cluster_test_value_123";
@@ -89,7 +87,6 @@ public class UnifiedJedisClusterTest {
     }
 
     @Test
-    @Order(2)
     void testMultipleOperations() {
         Map<String, String> testData = new HashMap<>();
         testData.put(TEST_KEY_PREFIX + "cluster_key1", "cluster_value1");
@@ -113,7 +110,6 @@ public class UnifiedJedisClusterTest {
     }
 
     @Test
-    @Order(3)
     void testConnectionOperations() {
         // Test PING in cluster mode
         String pingResult = unifiedJedis.ping();
@@ -127,7 +123,6 @@ public class UnifiedJedisClusterTest {
     }
 
     @Test
-    @Order(4)
     void testDeleteOperations() {
         String testKey1 = TEST_KEY_PREFIX + "del1";
         String testKey2 = TEST_KEY_PREFIX + "del2";
@@ -156,7 +151,6 @@ public class UnifiedJedisClusterTest {
     }
 
     @Test
-    @Order(5)
     void testConnectionState() {
         // Test that connection is not closed initially
         assertFalse(
@@ -177,7 +171,6 @@ public class UnifiedJedisClusterTest {
     }
 
     @Test
-    @Order(6)
     void testBinaryOperations() {
         byte[] testKey = (TEST_KEY_PREFIX + "binary").getBytes();
         byte[] testValue = "binary_value".getBytes();
@@ -197,7 +190,6 @@ public class UnifiedJedisClusterTest {
     }
 
     @Test
-    @Order(7)
     void testMultipleBinaryDeletion() {
         // Set up test keys using string methods
         String key1 = TEST_KEY_PREFIX + "binary1";
@@ -221,7 +213,6 @@ public class UnifiedJedisClusterTest {
     }
 
     @Test
-    @Order(8)
     void testLargeValueOperations() {
         String testKey = TEST_KEY_PREFIX + "large_value";
         StringBuilder largeValue = new StringBuilder();
@@ -244,7 +235,6 @@ public class UnifiedJedisClusterTest {
     }
 
     @Test
-    @Order(9)
     void testClusterSpecificOperations() {
         // Test operations that are specific to cluster mode
         String testKey = TEST_KEY_PREFIX + "cluster_specific";
@@ -261,7 +251,6 @@ public class UnifiedJedisClusterTest {
     }
 
     @Test
-    @Order(10)
     void testClusterKeyDistribution() {
         // Test that keys are distributed across cluster nodes
         Map<String, String> distributedKeys = new HashMap<>();

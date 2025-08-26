@@ -33,7 +33,6 @@ import redis.clients.jedis.util.KeyValue;
  * <p>This test ensures that the GLIDE compatibility layer provides the expected Jedis API and
  * behavior for comprehensive Redis operations.
  */
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class JedisTest {
 
     private static final String TEST_KEY_PREFIX = "jedis_test:";
@@ -313,7 +312,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(0)
     @DisplayName("Jedis Constructor with GlideClient")
     void testJedisConstructorWithGlideClient() {
         // Test the protected constructor that takes GlideClient directly
@@ -367,7 +365,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(1)
     @DisplayName("Basic GET/SET Operations")
     void testBasicSetAndGet() {
         String testKey = TEST_KEY_PREFIX + "basic";
@@ -382,7 +379,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(3)
     @DisplayName("SET Command with SetParams")
     void testSETWithParams() {
         String testKey = TEST_KEY_PREFIX + "set_params";
@@ -416,7 +412,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(2)
     @DisplayName("Multiple GET/SET Operations")
     void testMultipleOperations() {
         Map<String, String> testData = new HashMap<>();
@@ -439,7 +434,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(10)
     @DisplayName("MSET Command")
     void testMSET() {
         String key1 = TEST_KEY_PREFIX + "mset_key1";
@@ -457,7 +451,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(11)
     @DisplayName("MGET Command")
     void testMGET() {
         String key1 = TEST_KEY_PREFIX + "mget_key1";
@@ -479,7 +472,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(20)
     @DisplayName("SETNX Command")
     void testSETNX() {
         String testKey = TEST_KEY_PREFIX + "setnx";
@@ -496,7 +488,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(21)
     @DisplayName("SETEX Command")
     void testSETEX() {
         String testKey = TEST_KEY_PREFIX + "setex";
@@ -512,7 +503,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(22)
     @DisplayName("PSETEX Command")
     void testPSETEX() {
         String testKey = TEST_KEY_PREFIX + "psetex";
@@ -528,7 +518,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(30)
     @DisplayName("GETSET Command")
     void testGETSET() {
         String testKey = TEST_KEY_PREFIX + "getset";
@@ -545,7 +534,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(31)
     @DisplayName("SETGET Command")
     void testSETGET() {
         String testKey = TEST_KEY_PREFIX + "setget";
@@ -562,7 +550,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(32)
     @DisplayName("SETGET Command with SetParams")
     void testSETGETWithParams() {
         String testKey = TEST_KEY_PREFIX + "setget_params";
@@ -589,7 +576,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(32)
     @DisplayName("GETDEL Command")
     void testGETDEL() {
         assumeTrue(
@@ -612,7 +598,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(33)
     @DisplayName("GETEX Command")
     void testGETEX() {
         assumeTrue(
@@ -636,7 +621,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(40)
     @DisplayName("APPEND Command")
     void testAPPEND() {
         String testKey = TEST_KEY_PREFIX + "append";
@@ -653,7 +637,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(41)
     @DisplayName("STRLEN Command")
     void testSTRLEN() {
         String testKey = TEST_KEY_PREFIX + "strlen";
@@ -669,7 +652,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(50)
     @DisplayName("INCR Command")
     void testINCR() {
         String testKey = TEST_KEY_PREFIX + "incr";
@@ -686,7 +668,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(51)
     @DisplayName("INCRBY Command")
     void testINCRBY() {
         String testKey = TEST_KEY_PREFIX + "incrby";
@@ -703,7 +684,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(52)
     @DisplayName("INCRBYFLOAT Command")
     void testINCRBYFLOAT() {
         String testKey = TEST_KEY_PREFIX + "incrbyfloat";
@@ -720,7 +700,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(53)
     @DisplayName("DECR Command")
     void testDECR() {
         String testKey = TEST_KEY_PREFIX + "decr";
@@ -740,7 +719,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(54)
     @DisplayName("DECRBY Command")
     void testDECRBY() {
         String testKey = TEST_KEY_PREFIX + "decrby";
@@ -760,7 +738,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(60)
     @DisplayName("DEL Command")
     void testDEL() {
         String key1 = TEST_KEY_PREFIX + "del1";
@@ -785,7 +762,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(61)
     @DisplayName("UNLINK Command")
     void testUNLINK() {
         String key1 = TEST_KEY_PREFIX + "unlink1";
@@ -803,7 +779,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(62)
     @DisplayName("EXISTS Command")
     void testEXISTS() {
         String testKey = TEST_KEY_PREFIX + "exists";
@@ -819,7 +794,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(62)
     @DisplayName("EXISTS Multiple Keys Command")
     void testEXISTSMultiple() {
         String key1 = TEST_KEY_PREFIX + "exists_multi1";
@@ -840,7 +814,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(63)
     @DisplayName("KEYEXISTS Command")
     void testKEYEXISTS() {
         String testKey = TEST_KEY_PREFIX + "keyexists";
@@ -856,7 +829,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(63)
     @DisplayName("TYPE Command")
     void testTYPE() {
         String testKey = TEST_KEY_PREFIX + "type";
@@ -872,7 +844,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(64)
     @DisplayName("KEYS Command")
     void testKEYS() {
         String key1 = TEST_KEY_PREFIX + "keys_test1";
@@ -894,7 +865,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(65)
     @DisplayName("RANDOMKEY Command")
     void testRANDOMKEY() {
         // Set up some test keys
@@ -909,7 +879,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(66)
     @DisplayName("RENAME Command")
     void testRENAME() {
         String srcKey = TEST_KEY_PREFIX + "rename_src";
@@ -928,7 +897,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(67)
     @DisplayName("RENAMENX Command")
     void testRENAMENX() {
         String srcKey = TEST_KEY_PREFIX + "renamenx_src";
@@ -954,7 +922,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(90)
     @DisplayName("SETBIT Command")
     void testSETBIT() {
         String testKey = TEST_KEY_PREFIX + "setbit";
@@ -973,7 +940,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(91)
     @DisplayName("GETBIT Command")
     void testGETBIT() {
         String testKey = TEST_KEY_PREFIX + "getbit";
@@ -992,7 +958,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(92)
     @DisplayName("BITCOUNT Command")
     void testBITCOUNT() {
         String testKey = TEST_KEY_PREFIX + "bitcount";
@@ -1011,7 +976,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(93)
     @DisplayName("BITPOS Command")
     void testBITPOS() {
         String testKey = TEST_KEY_PREFIX + "bitpos";
@@ -1033,7 +997,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(94)
     @DisplayName("BITCOUNT with range Command")
     void testBITCOUNTWithRange() {
         String testKey = TEST_KEY_PREFIX + "bitcount_range";
@@ -1055,7 +1018,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(95)
     @DisplayName("BITOP Command")
     void testBITOP() {
         String srcKey1 = TEST_KEY_PREFIX + "bitop_src1";
@@ -1091,7 +1053,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(96)
     @DisplayName("BITFIELD Command")
     void testBITFIELD() {
         String testKey = TEST_KEY_PREFIX + "bitfield";
@@ -1116,7 +1077,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(97)
     @DisplayName("BITFIELD_RO Command")
     void testBITFIELD_RO() {
         String testKey = TEST_KEY_PREFIX + "bitfield_ro";
@@ -1138,14 +1098,12 @@ public class JedisTest {
     }
 
     @Test
-    @Order(80)
     @DisplayName("SORT Command")
     void testSORT() {
         // TO DO: Add integration test
     }
 
     @Test
-    @Order(81)
     @DisplayName("DUMP Command")
     void testDUMP() {
         String testKey = TEST_KEY_PREFIX + "dump";
@@ -1164,7 +1122,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(82)
     @DisplayName("RESTORE Command")
     void testRESTORE() {
         String sourceKey = TEST_KEY_PREFIX + "restore_src";
@@ -1193,21 +1150,18 @@ public class JedisTest {
     }
 
     @Test
-    @Order(83)
     @DisplayName("MIGRATE Command")
     void testMIGRATE() {
         // TO DO: Add integration test
     }
 
     @Test
-    @Order(84)
     @DisplayName("MOVE Command")
     void testMOVE() {
         // TO DO: Add integration test
     }
 
     @Test
-    @Order(70)
     @DisplayName("EXPIRE Command")
     void testEXPIRE() {
         String testKey = TEST_KEY_PREFIX + "expire";
@@ -1225,7 +1179,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(71)
     @DisplayName("EXPIREAT Command")
     void testEXPIREAT() {
         String testKey = TEST_KEY_PREFIX + "expireat";
@@ -1244,7 +1197,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(72)
     @DisplayName("PEXPIRE Command")
     void testPEXPIRE() {
         String testKey = TEST_KEY_PREFIX + "pexpire";
@@ -1262,7 +1214,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(73)
     @DisplayName("PEXPIREAT Command")
     void testPEXPIREAT() {
         String testKey = TEST_KEY_PREFIX + "pexpireat";
@@ -1281,7 +1232,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(74)
     @DisplayName("TTL Command")
     void testTTL() {
         String testKey = TEST_KEY_PREFIX + "ttl";
@@ -1302,7 +1252,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(75)
     @DisplayName("PTTL Command")
     void testPTTL() {
         String testKey = TEST_KEY_PREFIX + "pttl";
@@ -1323,7 +1272,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(76)
     @DisplayName("PERSIST Command")
     void testPERSIST() {
         String testKey = TEST_KEY_PREFIX + "persist";
@@ -1346,7 +1294,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(76)
     @DisplayName("EXPIRETIME Command")
     void testEXPIRETIME() {
         assumeTrue(
@@ -1374,7 +1321,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(77)
     @DisplayName("PEXPIRETIME Command")
     void testPEXPIRETIME() {
         assumeTrue(
@@ -1402,7 +1348,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(85)
     @DisplayName("TOUCH Command")
     void testTOUCH() {
         String key1 = TEST_KEY_PREFIX + "touch1";
@@ -1427,7 +1372,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(86)
     @DisplayName("COPY Command")
     void testCOPY() {
         String srcKey = TEST_KEY_PREFIX + "copy_src";
@@ -1455,7 +1399,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(84)
     @DisplayName("SCAN Command")
     void testSCAN() {
         // Set up test data
@@ -1479,7 +1422,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(87)
     @DisplayName("PFADD Command")
     void testPFADD() {
         assumeTrue(
@@ -1498,7 +1440,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(88)
     @DisplayName("PFCOUNT Command")
     void testPFCOUNT() {
         assumeTrue(
@@ -1522,7 +1463,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(89)
     @DisplayName("PFMERGE Command")
     void testPFMERGE() {
         assumeTrue(
@@ -1547,7 +1487,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(100)
     @DisplayName("PING Command")
     void testPING() {
         // Test PING
@@ -1561,7 +1500,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(101)
     @DisplayName("sendCommand - Basic Commands")
     void testSendCommandBasic() {
         String key = TEST_KEY_PREFIX + "sendcmd_basic";
@@ -1585,7 +1523,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(102)
     @DisplayName("sendCommand - String Arguments")
     void testSendCommandStringArgs() {
         String key = TEST_KEY_PREFIX + "sendcmd_string";
@@ -1611,7 +1548,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(103)
     @DisplayName("sendCommand - Multiple Arguments")
     void testSendCommandMultipleArgs() {
         String key1 = TEST_KEY_PREFIX + "sendcmd_multi1";
@@ -1637,7 +1573,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(104)
     @DisplayName("sendCommand - Numeric Commands")
     void testSendCommandNumeric() {
         String key = TEST_KEY_PREFIX + "sendcmd_numeric";
@@ -1659,7 +1594,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(105)
     @DisplayName("sendCommand - Expiration Commands")
     void testSendCommandExpiration() {
         String key = TEST_KEY_PREFIX + "sendcmd_expire";
@@ -1710,7 +1644,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(106)
     @DisplayName("sendCommand - Hash Commands")
     void testSendCommandHash() {
         String key = TEST_KEY_PREFIX + "sendcmd_hash";
@@ -1764,7 +1697,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(107)
     @DisplayName("sendCommand - List Commands")
     void testSendCommandList() {
         String key = TEST_KEY_PREFIX + "sendcmd_list";
@@ -1805,7 +1737,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(108)
     @DisplayName("sendCommand - Set Commands")
     void testSendCommandSet() {
         String key = TEST_KEY_PREFIX + "sendcmd_set";
@@ -1881,7 +1812,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(109)
     @DisplayName("sendCommand - Binary Data")
     void testSendCommandBinaryData() {
         String key = TEST_KEY_PREFIX + "sendcmd_binary";
@@ -1905,7 +1835,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(110)
     @DisplayName("sendCommand - Optional Arguments")
     void testSendCommandOptionalArgs() {
         String key = TEST_KEY_PREFIX + "sendcmd_optional";
@@ -1946,7 +1875,6 @@ public class JedisTest {
     // Hash Commands Tests
 
     @Test
-    @Order(111)
     @DisplayName("HSET and HGET Commands")
     void testHSETAndHGET() {
         String key = TEST_KEY_PREFIX + "hash_basic";
@@ -1980,7 +1908,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(112)
     @DisplayName("HDEL Command")
     void testHDEL() {
         String key = TEST_KEY_PREFIX + "hash_del";
@@ -2010,7 +1937,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(113)
     @DisplayName("HEXISTS Command")
     void testHEXISTS() {
         String key = TEST_KEY_PREFIX + "hash_exists";
@@ -2033,7 +1959,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(114)
     @DisplayName("HLEN Command")
     void testHLEN() {
         String key = TEST_KEY_PREFIX + "hash_len";
@@ -2058,7 +1983,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(115)
     @DisplayName("HKEYS and HVALS Commands")
     void testHKEYSAndHVALS() {
         String key = TEST_KEY_PREFIX + "hash_keys_vals";
@@ -2082,7 +2006,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(116)
     @DisplayName("HGETALL Command")
     void testHGETALL() {
         String key = TEST_KEY_PREFIX + "hash_getall";
@@ -2105,7 +2028,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(117)
     @DisplayName("HMGET and HMSET Commands")
     void testHMGETAndHMSET() {
         String key = TEST_KEY_PREFIX + "hash_multi";
@@ -2134,7 +2056,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(118)
     @DisplayName("HSETNX Command")
     void testHSETNX() {
         String key = TEST_KEY_PREFIX + "hash_setnx";
@@ -2154,7 +2075,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(119)
     @DisplayName("HINCRBY Command")
     void testHINCRBY() {
         String key = TEST_KEY_PREFIX + "hash_incrby";
@@ -2177,7 +2097,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(120)
     @DisplayName("HINCRBYFLOAT Command")
     void testHINCRBYFLOAT() {
         String key = TEST_KEY_PREFIX + "hash_incrbyfloat";
@@ -2200,7 +2119,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(121)
     @DisplayName("HSTRLEN Command")
     void testHSTRLEN() {
         String key = TEST_KEY_PREFIX + "hash_strlen";
@@ -2225,7 +2143,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(122)
     @DisplayName("HRANDFIELD Command")
     void testHRANDFIELD() {
         String key = TEST_KEY_PREFIX + "hash_randfield";
@@ -2268,7 +2185,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(123)
     @DisplayName("HSCAN Command")
     void testHSCAN() {
         String key = TEST_KEY_PREFIX + "hash_scan";
@@ -2315,7 +2231,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(124)
     @DisplayName("HSETEX Command")
     void testHSETEX() {
         assumeTrue(
@@ -2358,7 +2273,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(125)
     @DisplayName("HGETEX Command")
     void testHGETEX() {
         assumeTrue(
@@ -2396,7 +2310,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(126)
     @DisplayName("HGETDEL Command")
     void testHGETDEL() {
         assumeTrue(
@@ -2438,7 +2351,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(127)
     @DisplayName("HEXPIRE and HTTL Commands")
     void testHEXPIREAndHTTL() {
         assumeTrue(
@@ -2484,7 +2396,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(128)
     @DisplayName("HPEXPIRE and HPTTL Commands")
     void testHPEXPIREAndHPTTL() {
         assumeTrue(
@@ -2534,7 +2445,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(129)
     @DisplayName("HEXPIREAT and HEXPIRETIME Commands")
     void testHEXPIREATAndHEXPIRETIME() {
         assumeTrue(
@@ -2573,7 +2483,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(130)
     @DisplayName("HPEXPIREAT and HPEXPIRETIME Commands")
     void testHPEXPIREATAndHPEXPIRETIME() {
         assumeTrue(
@@ -2614,7 +2523,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(131)
     @DisplayName("HPERSIST Command")
     void testHPERSIST() {
         assumeTrue(
@@ -2663,7 +2571,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(132)
     @DisplayName("Hash Commands - Binary Variants")
     void testHashCommandsBinary() {
         byte[] key = (TEST_KEY_PREFIX + "hash_binary").getBytes();
@@ -2733,7 +2640,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(133)
     @DisplayName("Hash Commands - Binary Variants with Expiration")
     void testHashCommandsBinaryWithExpiration() {
         assumeTrue(
@@ -2783,7 +2689,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(134)
     @DisplayName("Hash Commands - Binary Variants for Newer Commands")
     void testHashCommandsBinaryNewer() {
         assumeTrue(
@@ -2833,7 +2738,6 @@ public class JedisTest {
     // ========== LIST COMMANDS TESTS ==========
 
     @Test
-    @Order(135)
     @DisplayName("List Commands - Basic Operations (LPUSH, RPUSH, LPOP, RPOP, LLEN)")
     void testListBasicOperations() {
         String key = TEST_KEY_PREFIX + "list_basic";
@@ -2873,7 +2777,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(136)
     @DisplayName("List Commands - Basic Operations Binary")
     void testListBasicOperationsBinary() {
         byte[] key = (TEST_KEY_PREFIX + "list_basic_binary").getBytes();
@@ -2913,7 +2816,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(137)
     @DisplayName("List Commands - Range and Index Operations (LRANGE, LTRIM, LINDEX, LSET)")
     void testListRangeAndIndexOperations() {
         String key = TEST_KEY_PREFIX + "list_range";
@@ -2962,7 +2864,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(138)
     @DisplayName("List Commands - Range and Index Operations Binary")
     void testListRangeAndIndexOperationsBinary() {
         byte[] key = (TEST_KEY_PREFIX + "list_range_binary").getBytes();
@@ -3001,7 +2902,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(139)
     @DisplayName("List Commands - Modification Operations (LREM, LINSERT, LPUSHX, RPUSHX)")
     void testListModificationOperations() {
         String key = TEST_KEY_PREFIX + "list_modify";
@@ -3060,7 +2960,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(140)
     @DisplayName("List Commands - Modification Operations Binary")
     void testListModificationOperationsBinary() {
         byte[] key = (TEST_KEY_PREFIX + "list_modify_binary").getBytes();
@@ -3098,7 +2997,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(141)
     @DisplayName("List Commands - Blocking Operations (BLPOP, BRPOP)")
     void testListBlockingOperations() {
         String key1 = TEST_KEY_PREFIX + "list_block1";
@@ -3153,7 +3051,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(142)
     @DisplayName("List Commands - Blocking Operations Binary")
     void testListBlockingOperationsBinary() {
         byte[] key1 = (TEST_KEY_PREFIX + "list_block_bin1").getBytes();
@@ -3191,7 +3088,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(143)
     @DisplayName("List Commands - Position Operations (LPOS)")
     void testListPositionOperations() {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("6.0.6"), "LPOS requires Redis 6.0.6+");
@@ -3234,7 +3130,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(144)
     @DisplayName("List Commands - Position Operations Binary")
     void testListPositionOperationsBinary() {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("6.0.6"), "LPOS requires Redis 6.0.6+");
@@ -3266,7 +3161,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(145)
     @DisplayName("List Commands - Move Operations (LMOVE, BLMOVE)")
     void testListMoveOperations() {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "LMOVE requires Redis 6.2.0+");
@@ -3311,7 +3205,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(146)
     @DisplayName("List Commands - Move Operations Binary")
     void testListMoveOperationsBinary() {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "LMOVE requires Redis 6.2.0+");
@@ -3343,7 +3236,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(147)
     @DisplayName("List Commands - Multi-Pop Operations (LMPOP, BLMPOP)")
     void testListMultiPopOperations() {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "LMPOP requires Redis 7.0.0+");
@@ -3395,7 +3287,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(148)
     @DisplayName("List Commands - Multi-Pop Operations Binary")
     void testListMultiPopOperationsBinary() {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "LMPOP requires Redis 7.0.0+");
@@ -3441,7 +3332,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(149)
     @DisplayName("List Commands - Deprecated Operations (RPOPLPUSH, BRPOPLPUSH)")
     void testListDeprecatedOperations() {
         String srcKey = TEST_KEY_PREFIX + "list_deprecated_src";
@@ -3480,7 +3370,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(150)
     @DisplayName("List Commands - Deprecated Operations Binary")
     void testListDeprecatedOperationsBinary() {
         byte[] srcKey = (TEST_KEY_PREFIX + "list_deprecated_src_bin").getBytes();
@@ -3511,7 +3400,6 @@ public class JedisTest {
     }
 
     @Test
-    @Order(151)
     @DisplayName("List Commands - Edge Cases and Error Handling")
     void testListEdgeCases() {
         String key = TEST_KEY_PREFIX + "list_edge";
