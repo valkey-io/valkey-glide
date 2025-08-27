@@ -44,20 +44,6 @@ jobs:
                           else (if .RUNNER == "ephemeral" then "persistent" else .RUNNER end) 
                           end
                       )
-                      | .build_type = (
-                          if (.TARGET | contains("musl")) 
-                          then "musl" 
-                          elif (.TARGET | contains("gnu")) 
-                          then "gnu" 
-                          else "mac" 
-                          end
-                      )
-                      | .CD_TARGET = (
-                          if (.TARGET | contains("musl")) 
-                          then (.TARGET | sub("musl"; "gnu"))
-                          else .TARGET
-                          end
-                      )
                   )' < .github/json_matrices/build-matrix.json | jq -c .)
                   echo "PLATFORM_MATRIX=${PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
 
@@ -83,7 +69,7 @@ jobs:
 
     create-binaries-to-publish:
         needs: [set-release-version, load-platform-matrix]
-        if: github.repository_owner == 'valkey-io'
+        #if: github.repository_owner == 'valkey-io'
         timeout-minutes: 35
         env:
             JAVA_VERSION: "11"
@@ -118,7 +104,7 @@ jobs:
               uses: ./.github/workflows/install-shared-dependencies
               with:
                   os: ${{ matrix.host.OS }}
-                  target: ${{ matrix.host.CD_TARGET }}
+                  target: ${{ matrix.host.CD_TARGET || matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Install protoc (protobuf)
@@ -138,6 +124,11 @@ jobs:
                       ${{ runner.os }}-gradle-cd-
                       ${{ runner.os }}-gradle-
 
+            - name: Install Rust with the required target
+              uses: dtolnay/rust-toolchain@stable
+              with:
+                  targets: ${{ matrix.TARGET }}
+
             - name: Create secret key ring file
               working-directory: java/client
               run: |
@@ -149,8 +140,7 @@ jobs:
             - name: Build java client
               working-directory: java
               run: |
-                  if [[ "${{ matrix.host.build_type }}" == "musl" ]]; then
-                    rustup target add ${{ matrix.host.TARGET }}
+                  if [[ "${{ matrix.host.TARGET }}" == *"musl"* ]]; then
                     ./gradlew --build-cache :client:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
                     -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }} \
                     -Ptarget=${{ matrix.host.TARGET }}
@@ -253,7 +243,7 @@ jobs:
             [
                 set-release-version,
                 load-platform-matrix,
-                publish-to-maven-central-deployment,
+                #publish-to-maven-central-deployment,
             ]
         env:
             JAVA_VERSION: "11"
@@ -281,17 +271,19 @@ jobs:
                   distribution: "temurin"
                   java-version: ${{ env.JAVA_VERSION }}
 
-            - name: Install git and Java
+            - name: Install git and Java for musl
+              if: ${{ contains(matrix.host.TARGET, 'musl') }}
               run: |
                   # Set environment variable to indicate container environment for Gradle
-                  if [[ "${{ matrix.host.TARGET }}" == *"musl"* ]]; then
-                    echo "GLIDE_CONTAINER_BUILD=true" >> $GITHUB_ENV
-                    apk add openjdk11 git bash
-                    export JAVA_HOME=/usr/lib/jvm/java-11-openjdk
-                    # Create gradle user home and disable auto-download
-                    mkdir -p ~/.gradle
-                    echo "org.gradle.java.installations.auto-download=false" >> ~/.gradle/gradle.properties
-                  fi
+                  echo "GLIDE_CONTAINER_BUILD=true" >> $GITHUB_ENV
+                  apk add openjdk11 git bash
+                  export JAVA_HOME=/usr/lib/jvm/java-11-openjdk
+                  # Create gradle user home and disable auto-download
+                  mkdir -p ~/.gradle
+                  echo "org.gradle.java.installations.auto-download=false" >> ~/.gradle/gradle.properties
+                  echo JAVA_HOME=/usr/lib/jvm/java-11-openjdk >> $GITHUB_ENV
+              env:
+                  JAVA_HOME: ${{ env.JAVA_HOME }}
 
             - name: Install shared software dependencies
               uses: ./.github/workflows/install-shared-dependencies
@@ -331,9 +323,6 @@ jobs:
               env:
                   PORT: ${{ steps.port.outputs.PORT }}
               run: |
-                  if [[ "${{ matrix.host.TARGET }}" == *"musl"* ]]; then
-                    export JAVA_HOME=/usr/lib/jvm/java-11-openjdk
-                  fi
                   export ORG_GRADLE_PROJECT_centralManualTestingAuthHeaderName="Authorization"
                   export ORG_GRADLE_PROJECT_centralManualTestingAuthHeaderValue="Bearer $(echo "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" | base64)"
                   export GLIDE_RELEASE_VERSION=${{ env.RELEASE_VERSION }}
