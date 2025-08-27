@@ -955,21 +955,21 @@ public interface HashBaseCommands {
      *     <pre>{@code
      * // Set expiration for fields only if they have no existing expiration
      * HashFieldExpirationConditionOptions options = HashFieldExpirationConditionOptions.builder()
-     *     .onlyIfNoExpiry()
+     *     .condition(ExpireOptions.HAS_NO_EXPIRY)
      *     .build();
      * Long[] results = client.hexpire("my_hash", 60L, new String[] {"field1", "field2"}, options).get();
      * assert Arrays.equals(results, new Long[] {1L, 0L}); // field1 had no expiry, field2 already had expiry
      *
      * // Set expiration for fields only if new expiration is greater than current
      * HashFieldExpirationConditionOptions gtOptions = HashFieldExpirationConditionOptions.builder()
-     *     .onlyIfGreaterThanCurrent()
+     *     .condition(ExpireOptions.NEW_EXPIRY_GREATER_THAN_CURRENT)
      *     .build();
      * Long[] gtResults = client.hexpire("my_hash", 120L, new String[] {"field1"}, gtOptions).get();
      * assert Arrays.equals(gtResults, new Long[] {1L}); // 120 > 60, so expiration was updated
      *
      * // Set expiration for fields only if they have existing expiration
      * HashFieldExpirationConditionOptions xxOptions = HashFieldExpirationConditionOptions.builder()
-     *     .onlyIfHasExpiry()
+     *     .condition(ExpireOptions.HAS_EXISTING_EXPIRY)
      *     .build();
      * Long[] xxResults = client.hexpire("my_hash", 90L, new String[] {"field1"}, xxOptions).get();
      * }</pre>
@@ -1004,21 +1004,21 @@ public interface HashBaseCommands {
      *     <pre>{@code
      * // Set expiration for fields only if they have no existing expiration
      * HashFieldExpirationConditionOptions options = HashFieldExpirationConditionOptions.builder()
-     *     .onlyIfNoExpiry()
+     *     .condition(ExpireOptions.HAS_NO_EXPIRY)
      *     .build();
      * Long[] results = client.hexpire(gs("my_hash"), 60L, new GlideString[] {gs("field1"), gs("field2")}, options).get();
      * assert Arrays.equals(results, new Long[] {1L, 0L}); // field1 had no expiry, field2 already had expiry
      *
      * // Set expiration for fields only if new expiration is greater than current
      * HashFieldExpirationConditionOptions gtOptions = HashFieldExpirationConditionOptions.builder()
-     *     .onlyIfGreaterThanCurrent()
+     *     .condition(ExpireOptions.NEW_EXPIRY_GREATER_THAN_CURRENT)
      *     .build();
      * Long[] gtResults = client.hexpire(gs("my_hash"), 120L, new GlideString[] {gs("field1")}, gtOptions).get();
      * assert Arrays.equals(gtResults, new Long[] {1L}); // 120 > 60, so expiration was updated
      *
      * // Set expiration for fields only if they have existing expiration
      * HashFieldExpirationConditionOptions xxOptions = HashFieldExpirationConditionOptions.builder()
-     *     .onlyIfHasExpiry()
+     *     .condition(ExpireOptions.HAS_EXISTING_EXPIRY)
      *     .build();
      * Long[] xxResults = client.hexpire(gs("my_hash"), 90L, new GlideString[] {gs("field1")}, xxOptions).get();
      * }</pre>
@@ -1115,14 +1115,14 @@ public interface HashBaseCommands {
      *     <pre>{@code
      * // Set expiration for fields in 5000 milliseconds (5 seconds) only if they have no existing expiration
      * HashFieldExpirationConditionOptions options = HashFieldExpirationConditionOptions.builder()
-     *     .onlyIfNoExpiry()
+     *     .condition(ExpireOptions.HAS_NO_EXPIRY)
      *     .build();
      * Long[] results = client.hpexpire("my_hash", 5000L, new String[] {"field1", "field2"}, options).get();
      * assert Arrays.equals(results, new Long[] {1L, 1L}); // Both fields had expiration set
      *
      * // Set expiration only if new expiration is less than current
      * HashFieldExpirationConditionOptions ltOptions = HashFieldExpirationConditionOptions.builder()
-     *     .onlyIfLessThanCurrent()
+     *     .condition(ExpireOptions.NEW_EXPIRY_LESS_THAN_CURRENT)
      *     .build();
      * Long[] ltResults = client.hpexpire("my_hash", 3000L, new String[] {"field1"}, ltOptions).get();
      * }</pre>
@@ -1152,14 +1152,14 @@ public interface HashBaseCommands {
      *     <pre>{@code
      * // Set expiration for fields in 5000 milliseconds (5 seconds) only if they have no existing expiration
      * HashFieldExpirationConditionOptions options = HashFieldExpirationConditionOptions.builder()
-     *     .onlyIfNoExpiry()
+     *     .condition(ExpireOptions.HAS_NO_EXPIRY)
      *     .build();
      * Long[] results = client.hpexpire(gs("my_hash"), 5000L, new GlideString[] {gs("field1"), gs("field2")}, options).get();
      * assert Arrays.equals(results, new Long[] {1L, 1L}); // Both fields had expiration set
      *
      * // Set expiration only if new expiration is less than current
      * HashFieldExpirationConditionOptions ltOptions = HashFieldExpirationConditionOptions.builder()
-     *     .onlyIfLessThanCurrent()
+     *     .condition(ExpireOptions.NEW_EXPIRY_LESS_THAN_CURRENT)
      *     .build();
      * Long[] ltResults = client.hpexpire(gs("my_hash"), 3000L, new GlideString[] {gs("field1")}, ltOptions).get();
      * }</pre>
@@ -1193,14 +1193,14 @@ public interface HashBaseCommands {
      *     <pre>{@code
      * // Set expiration for fields at Unix timestamp 1672531200 (January 1, 2023) only if they have no existing expiration
      * HashFieldExpirationConditionOptions options = HashFieldExpirationConditionOptions.builder()
-     *     .onlyIfNoExpiry()
+     *     .condition(ExpireOptions.HAS_NO_EXPIRY)
      *     .build();
      * Long[] results = client.hexpireat("my_hash", 1672531200L, new String[] {"field1", "field2"}, options).get();
      * assert Arrays.equals(results, new Long[] {1L, 1L}); // Both fields had expiration set
      *
      * // Set expiration only if new expiration is greater than current
      * HashFieldExpirationConditionOptions gtOptions = HashFieldExpirationConditionOptions.builder()
-     *     .onlyIfGreaterThanCurrent()
+     *     .condition(ExpireOptions.NEW_EXPIRY_GREATER_THAN_CURRENT)
      *     .build();
      * Long[] gtResults = client.hexpireat("my_hash", 1672617600L, new String[] {"field1"}, gtOptions).get();
      * }</pre>
@@ -1231,14 +1231,14 @@ public interface HashBaseCommands {
      *     <pre>{@code
      * // Set expiration for fields at Unix timestamp 1672531200 (January 1, 2023) only if they have no existing expiration
      * HashFieldExpirationConditionOptions options = HashFieldExpirationConditionOptions.builder()
-     *     .onlyIfNoExpiry()
+     *     .condition(ExpireOptions.HAS_NO_EXPIRY)
      *     .build();
      * Long[] results = client.hexpireat(gs("my_hash"), 1672531200L, new GlideString[] {gs("field1"), gs("field2")}, options).get();
      * assert Arrays.equals(results, new Long[] {1L, 1L}); // Both fields had expiration set
      *
      * // Set expiration only if new expiration is greater than current
      * HashFieldExpirationConditionOptions gtOptions = HashFieldExpirationConditionOptions.builder()
-     *     .onlyIfGreaterThanCurrent()
+     *     .condition(ExpireOptions.NEW_EXPIRY_GREATER_THAN_CURRENT)
      *     .build();
      * Long[] gtResults = client.hexpireat(gs("my_hash"), 1672617600L, new GlideString[] {gs("field1")}, gtOptions).get();
      * }</pre>
@@ -1275,14 +1275,14 @@ public interface HashBaseCommands {
      *     <pre>{@code
      * // Set expiration for hash fields to January 1, 2024 00:00:00 UTC (in milliseconds) only if they have no existing expiration
      * HashFieldExpirationConditionOptions options = HashFieldExpirationConditionOptions.builder()
-     *     .onlyIfNoExpiry()
+     *     .condition(ExpireOptions.HAS_NO_EXPIRY)
      *     .build();
      * Long[] results = client.hpexpireat("my_hash", 1672531200000L, new String[] {"field1", "field2"}, options).get();
      * assert Arrays.equals(results, new Long[] {1L, 1L}); // Both fields had expiration set
      *
      * // Set expiration only if new expiration is less than current
      * HashFieldExpirationConditionOptions ltOptions = HashFieldExpirationConditionOptions.builder()
-     *     .onlyIfLessThanCurrent()
+     *     .condition(ExpireOptions.NEW_EXPIRY_LESS_THAN_CURRENT)
      *     .build();
      * Long[] ltResults = client.hpexpireat("my_hash", 1672444800000L, new String[] {"field1"}, ltOptions).get();
      * }</pre>
@@ -1319,14 +1319,14 @@ public interface HashBaseCommands {
      *     <pre>{@code
      * // Set expiration for hash fields to January 1, 2024 00:00:00 UTC (in milliseconds) only if they have no existing expiration
      * HashFieldExpirationConditionOptions options = HashFieldExpirationConditionOptions.builder()
-     *     .onlyIfNoExpiry()
+     *     .condition(ExpireOptions.HAS_NO_EXPIRY)
      *     .build();
      * Long[] results = client.hpexpireat(gs("my_hash"), 1672531200000L, new GlideString[] {gs("field1"), gs("field2")}, options).get();
      * assert Arrays.equals(results, new Long[] {1L, 1L}); // Both fields had expiration set
      *
      * // Set expiration only if new expiration is less than current
      * HashFieldExpirationConditionOptions ltOptions = HashFieldExpirationConditionOptions.builder()
-     *     .onlyIfLessThanCurrent()
+     *     .condition(ExpireOptions.NEW_EXPIRY_LESS_THAN_CURRENT)
      *     .build();
      * Long[] ltResults = client.hpexpireat(gs("my_hash"), 1672444800000L, new GlideString[] {gs("field1")}, ltOptions).get();
      * }</pre>

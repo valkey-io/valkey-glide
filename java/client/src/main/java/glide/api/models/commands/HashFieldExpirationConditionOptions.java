@@ -23,7 +23,7 @@ import lombok.ToString;
  *     <pre>{@code
  * // Set expiration only if fields have no existing expiration
  * HashFieldExpirationConditionOptions options = HashFieldExpirationConditionOptions.builder()
- *     .onlyIfNoExpiry()
+ *     .condition(ExpireOptions.HAS_NO_EXPIRY)
  *     .build();
  *
  * String[] fields = {"field1", "field2"};
@@ -31,7 +31,7 @@ import lombok.ToString;
  *
  * // Set expiration only if new expiration is greater than current
  * HashFieldExpirationConditionOptions gtOptions = HashFieldExpirationConditionOptions.builder()
- *     .onlyIfGreaterThanCurrent()
+ *     .condition(ExpireOptions.NEW_EXPIRY_GREATER_THAN_CURRENT)
  *     .build();
  *
  * Long[] gtResult = client.hpexpire("myHash", 60000, fields, gtOptions).get();
@@ -63,51 +63,5 @@ public final class HashFieldExpirationConditionOptions {
         return condition.toArgs();
     }
 
-    /** Builder class for {@link HashFieldExpirationConditionOptions}. */
-    public static class HashFieldExpirationConditionOptionsBuilder {
 
-        /**
-         * Sets the condition to only set expiration when field has no existing expiration. Equivalent
-         * to NX in the Valkey API.
-         *
-         * @return This builder instance
-         */
-        public HashFieldExpirationConditionOptionsBuilder onlyIfNoExpiry() {
-            this.condition = ExpireOptions.HAS_NO_EXPIRY;
-            return this;
-        }
-
-        /**
-         * Sets the condition to only set expiration when field has existing expiration. Equivalent to
-         * XX in the Valkey API.
-         *
-         * @return This builder instance
-         */
-        public HashFieldExpirationConditionOptionsBuilder onlyIfHasExpiry() {
-            this.condition = ExpireOptions.HAS_EXISTING_EXPIRY;
-            return this;
-        }
-
-        /**
-         * Sets the condition to only set expiration when new expiration is greater than current.
-         * Equivalent to GT in the Valkey API.
-         *
-         * @return This builder instance
-         */
-        public HashFieldExpirationConditionOptionsBuilder onlyIfGreaterThanCurrent() {
-            this.condition = ExpireOptions.NEW_EXPIRY_GREATER_THAN_CURRENT;
-            return this;
-        }
-
-        /**
-         * Sets the condition to only set expiration when new expiration is less than current.
-         * Equivalent to LT in the Valkey API.
-         *
-         * @return This builder instance
-         */
-        public HashFieldExpirationConditionOptionsBuilder onlyIfLessThanCurrent() {
-            this.condition = ExpireOptions.NEW_EXPIRY_LESS_THAN_CURRENT;
-            return this;
-        }
-    }
 }

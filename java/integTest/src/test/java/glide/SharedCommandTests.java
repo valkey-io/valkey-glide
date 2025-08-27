@@ -43,6 +43,7 @@ import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.ExpirySet;
 import glide.api.models.commands.GetExOptions;
 import glide.api.models.commands.HGetExExpiry;
+import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.HGetExOptions;
 import glide.api.models.commands.HSetExOptions;
 import glide.api.models.commands.HashFieldExpirationConditionOptions;
@@ -1784,7 +1785,7 @@ public class SharedCommandTests {
 
         // Test NX option - should only set expiration if field has no expiration
         HashFieldExpirationConditionOptions nxOptions =
-                HashFieldExpirationConditionOptions.builder().onlyIfNoExpiry().build();
+                HashFieldExpirationConditionOptions.builder().condition(ExpireOptions.HAS_NO_EXPIRY).build();
 
         String[] fields = {"field1", "field2"};
         Long[] nxResult = client.hexpire(key, 60L, fields, nxOptions).get();
@@ -1802,7 +1803,7 @@ public class SharedCommandTests {
 
         // Test XX option - should only set expiration if field has existing expiration
         HashFieldExpirationConditionOptions xxOptions =
-                HashFieldExpirationConditionOptions.builder().onlyIfHasExpiry().build();
+                HashFieldExpirationConditionOptions.builder().condition(ExpireOptions.HAS_EXISTING_EXPIRY).build();
 
         Long[] xxResult = client.hexpire(key, 90L, fields, xxOptions).get();
 
@@ -1840,7 +1841,7 @@ public class SharedCommandTests {
 
         // Test GT option - should only set expiration if new expiration is greater than current
         HashFieldExpirationConditionOptions gtOptions =
-                HashFieldExpirationConditionOptions.builder().onlyIfGreaterThanCurrent().build();
+                HashFieldExpirationConditionOptions.builder().condition(ExpireOptions.NEW_EXPIRY_GREATER_THAN_CURRENT).build();
 
         String[] fields = {"field1", "field2"};
         Long[] gtResult = client.hexpire(key, 120L, fields, gtOptions).get(); // 120 > 60
@@ -1851,7 +1852,7 @@ public class SharedCommandTests {
 
         // Test LT option - should only set expiration if new expiration is less than current
         HashFieldExpirationConditionOptions ltOptions =
-                HashFieldExpirationConditionOptions.builder().onlyIfLessThanCurrent().build();
+                HashFieldExpirationConditionOptions.builder().condition(ExpireOptions.NEW_EXPIRY_LESS_THAN_CURRENT).build();
 
         Long[] ltResult = client.hexpire(key, 30L, fields, ltOptions).get(); // 30 < 120
 
@@ -2129,7 +2130,7 @@ public class SharedCommandTests {
 
         // Test HPEXPIRE with NX condition (only if no expiry)
         HashFieldExpirationConditionOptions nxOptions =
-                HashFieldExpirationConditionOptions.builder().onlyIfNoExpiry().build();
+                HashFieldExpirationConditionOptions.builder().condition(ExpireOptions.HAS_NO_EXPIRY).build();
         String[] fields = {"field1", "field2"};
         Long[] result = client.hpexpire(key, 5000L, fields, nxOptions).get();
 
@@ -2145,7 +2146,7 @@ public class SharedCommandTests {
 
         // Test HPEXPIRE with XX condition (only if has expiry)
         HashFieldExpirationConditionOptions xxOptions =
-                HashFieldExpirationConditionOptions.builder().onlyIfHasExpiry().build();
+                HashFieldExpirationConditionOptions.builder().condition(ExpireOptions.HAS_EXISTING_EXPIRY).build();
         result = client.hpexpire(key, 15000L, fields, xxOptions).get();
         assertEquals(2, result.length);
         assertEquals(1L, result[0]); // field1 should have expiry updated (has existing expiry)
@@ -2171,7 +2172,7 @@ public class SharedCommandTests {
 
         // Test HPEXPIRE with GT condition (only if new expiry is greater)
         HashFieldExpirationConditionOptions gtOptions =
-                HashFieldExpirationConditionOptions.builder().onlyIfGreaterThanCurrent().build();
+                HashFieldExpirationConditionOptions.builder().condition(ExpireOptions.NEW_EXPIRY_GREATER_THAN_CURRENT).build();
         String[] fields = {"field1"};
 
         // Try with smaller expiry (should fail)
@@ -2186,7 +2187,7 @@ public class SharedCommandTests {
 
         // Test HPEXPIRE with LT condition (only if new expiry is less)
         HashFieldExpirationConditionOptions ltOptions =
-                HashFieldExpirationConditionOptions.builder().onlyIfLessThanCurrent().build();
+                HashFieldExpirationConditionOptions.builder().condition(ExpireOptions.NEW_EXPIRY_LESS_THAN_CURRENT).build();
 
         // Try with larger expiry (should fail)
         result = client.hpexpire(key, 30000L, fields, ltOptions).get();
@@ -2322,7 +2323,7 @@ public class SharedCommandTests {
 
         // Test NX condition (only if no expiry)
         HashFieldExpirationConditionOptions nxOptions =
-                HashFieldExpirationConditionOptions.builder().onlyIfNoExpiry().build();
+                HashFieldExpirationConditionOptions.builder().condition(ExpireOptions.HAS_NO_EXPIRY).build();
 
         String[] fields = {"field1", "field2"};
         Long[] result = client.hexpireat(key, futureTimestamp, fields, nxOptions).get();
@@ -2333,7 +2334,7 @@ public class SharedCommandTests {
 
         // Test XX condition (only if has expiry) - should work now since fields have expiry
         HashFieldExpirationConditionOptions xxOptions =
-                HashFieldExpirationConditionOptions.builder().onlyIfHasExpiry().build();
+                HashFieldExpirationConditionOptions.builder().condition(ExpireOptions.HAS_EXISTING_EXPIRY).build();
 
         long newFutureTimestamp = System.currentTimeMillis() / 1000 + 120; // 120 seconds from now
         result = client.hexpireat(key, newFutureTimestamp, fields, xxOptions).get();
@@ -2471,7 +2472,7 @@ public class SharedCommandTests {
         // Test HPEXPIREAT with NX condition (only if no expiry exists)
         long futureTimestampMs = System.currentTimeMillis() + 60000; // 60 seconds from now
         HashFieldExpirationConditionOptions nxOptions =
-                HashFieldExpirationConditionOptions.builder().onlyIfNoExpiry().build();
+                HashFieldExpirationConditionOptions.builder().condition(ExpireOptions.HAS_NO_EXPIRY).build();
 
         String[] fields = {"field1", "field2"};
         Long[] result = client.hpexpireat(key, futureTimestampMs, fields, nxOptions).get();
@@ -2482,7 +2483,7 @@ public class SharedCommandTests {
 
         // Test HPEXPIREAT with XX condition (only if expiry exists)
         HashFieldExpirationConditionOptions xxOptions =
-                HashFieldExpirationConditionOptions.builder().onlyIfHasExpiry().build();
+                HashFieldExpirationConditionOptions.builder().condition(ExpireOptions.HAS_EXISTING_EXPIRY).build();
 
         long newFutureTimestampMs = System.currentTimeMillis() + 120000; // 120 seconds from now
         result = client.hpexpireat(key, newFutureTimestampMs, fields, xxOptions).get();

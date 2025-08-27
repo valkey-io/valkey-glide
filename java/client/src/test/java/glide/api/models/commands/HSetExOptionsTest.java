@@ -113,8 +113,8 @@ public class HSetExOptionsTest {
 
         String toString = options.toString();
         assertEquals(
-                "HSetExOptions{fieldConditionalChange=ONLY_IF_NONE_EXIST, expiry=ExpirySet{type=SECONDS,"
-                        + " count=60}}",
+                "HSetExOptions(fieldConditionalChange=ONLY_IF_NONE_EXIST, expiry=ExpirySet{type=SECONDS,"
+                        + " count=60})",
                 toString);
     }
 

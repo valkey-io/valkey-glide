@@ -189,7 +189,7 @@ public class HGetExOptionsTest {
         String toString = options.toString();
 
         assertNotNull(toString);
-        assertEquals("HGetExOptions{expiry=" + expiry.toString() + "}", toString);
+        assertEquals("HGetExOptions(expiry=" + expiry.toString() + ")", toString);
     }
 
     @Test
@@ -200,7 +200,7 @@ public class HGetExOptionsTest {
         String toString = options.toString();
 
         assertNotNull(toString);
-        assertEquals("HGetExOptions{expiry=null}", toString);
+        assertEquals("HGetExOptions(expiry=null)", toString);
     }
 
     @Test
@@ -212,7 +212,7 @@ public class HGetExOptionsTest {
         String toString = options.toString();
 
         assertNotNull(toString);
-        assertEquals("HGetExOptions{expiry=" + expiry.toString() + "}", toString);
+        assertEquals("HGetExOptions(expiry=" + expiry.toString() + ")", toString);
     }
 
     @Test

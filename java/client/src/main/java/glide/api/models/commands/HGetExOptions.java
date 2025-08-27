@@ -1,8 +1,9 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.commands;
 
-import java.util.Objects;
 import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.ToString;
 
 /**
  * Optional arguments for the HGETEX command.
@@ -50,19 +51,14 @@ import lombok.Builder;
  * @see HGetExExpiry
  */
 @Builder
+@EqualsAndHashCode
+@ToString
 public final class HGetExOptions {
 
     /** Expiry configuration for the hash fields after retrieval. */
     private final HGetExExpiry expiry;
 
-    /**
-     * Private constructor used by the builder pattern.
-     *
-     * @param expiry the expiry configuration, may be null
-     */
-    private HGetExOptions(HGetExExpiry expiry) {
-        this.expiry = expiry;
-    }
+
 
     /**
      * Converts options into command arguments for the HGETEX command.
@@ -102,130 +98,7 @@ public final class HGetExOptions {
         return expiry.toArgs();
     }
 
-    /**
-     * Indicates whether some other object is "equal to" this one.
-     *
-     * <p>Two HGetExOptions instances are considered equal if they have the same expiry configuration.
-     *
-     * @param obj the reference object with which to compare
-     * @return true if this object is the same as the obj argument; false otherwise
-     */
-    @Override
-    public boolean equals(Object obj) {
-        if (this == obj) {
-            return true;
-        }
-        if (obj == null || getClass() != obj.getClass()) {
-            return false;
-        }
-        HGetExOptions that = (HGetExOptions) obj;
-        return Objects.equals(expiry, that.expiry);
-    }
 
-    /**
-     * Returns a hash code value for the object.
-     *
-     * <p>The hash code is computed based on the expiry configuration.
-     *
-     * @return a hash code value for this object
-     */
-    @Override
-    public int hashCode() {
-        return Objects.hash(expiry);
-    }
 
-    /**
-     * Returns a string representation of the object.
-     *
-     * <p>The string representation includes the class name and the values of all non-null fields in a
-     * readable format.
-     *
-     * @return a string representation of the object
-     * @example
-     *     <pre>{@code
-     * HGetExOptions options = HGetExOptions.builder()
-     *     .expiry(HGetExExpiry.Seconds(60L))
-     *     .build();
-     *
-     * System.out.println(options.toString());
-     * // Output: HGetExOptions{expiry=HGetExExpiry{type=SECONDS, count=60}}
-     * }</pre>
-     */
-    @Override
-    public String toString() {
-        return "HGetExOptions{" + "expiry=" + expiry + '}';
-    }
 
-    /**
-     * Builder class for creating HGetExOptions instances with a fluent API.
-     *
-     * <p>This builder provides a clean, readable API for setting expiry options and supports method
-     * chaining. The builder ensures thread safety during the building process.
-     *
-     * @since Valkey 9.0.0
-     */
-    public static class HGetExOptionsBuilder {
-
-        /** Expiry configuration being built. */
-        private HGetExExpiry expiry;
-
-        /**
-         * Sets the expiry configuration for the hash fields after retrieval.
-         *
-         * <p>This method accepts any HGetExExpiry configuration, including time-based expiration
-         * options and the PERSIST option to remove expiration.
-         *
-         * @param expiry the expiry configuration to set, may be null
-         * @return this builder instance for method chaining
-         * @example
-         *     <pre>{@code
-         * // Set expiration to 60 seconds from now
-         * HGetExOptions options = HGetExOptions.builder()
-         *     .expiry(HGetExExpiry.Seconds(60L))
-         *     .build();
-         *
-         * // Remove expiration (make fields persistent)
-         * HGetExOptions options2 = HGetExOptions.builder()
-         *     .expiry(HGetExExpiry.Persist())
-         *     .build();
-         *
-         * // Set expiration to specific Unix timestamp in milliseconds
-         * HGetExOptions options3 = HGetExOptions.builder()
-         *     .expiry(HGetExExpiry.UnixMilliseconds(1640995200000L))
-         *     .build();
-         * }</pre>
-         *
-         * @see HGetExExpiry
-         */
-        public HGetExOptionsBuilder expiry(HGetExExpiry expiry) {
-            this.expiry = expiry;
-            return this;
-        }
-
-        /**
-         * Builds and returns a new HGetExOptions instance.
-         *
-         * <p>This method creates an immutable HGetExOptions instance with the configuration specified
-         * in this builder. The resulting instance is thread-safe and can be reused across multiple
-         * command invocations.
-         *
-         * <p>If no expiry is specified, the resulting options will not modify the expiration of the
-         * retrieved fields.
-         *
-         * @return a new HGetExOptions instance with the specified configuration
-         * @example
-         *     <pre>{@code
-         * HGetExOptions options = HGetExOptions.builder()
-         *     .expiry(HGetExExpiry.Seconds(60L))
-         *     .build();
-         *
-         * // The options instance is now immutable and thread-safe
-         * CompletableFuture<String[]> result1 = client.hgetex("hash1", fields1, options);
-         * CompletableFuture<String[]> result2 = client.hgetex("hash2", fields2, options);
-         * }</pre>
-         */
-        public HGetExOptions build() {
-            return new HGetExOptions(expiry);
-        }
-    }
 }
