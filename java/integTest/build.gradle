@@ -20,7 +20,7 @@ dependencies {
     implementation 'com.google.code.gson:gson:2.10.1'
 
     // Add commons-pool2 as runtime dependency (required by glide.api module)
-    runtimeOnly group: 'org.apache.commons', name: 'commons-pool2', version: '2.12.0'
+    runtimeOnly group: 'org.apache.commons', name: 'commons-pool2', version: '2.12.1'
 
 
 
