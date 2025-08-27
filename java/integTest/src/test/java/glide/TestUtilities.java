@@ -284,7 +284,7 @@ public class TestUtilities {
         assertTrue(hasLib);
     }
 
-    private <T> void assertSetsEqual(Set<T> expected, Set<T> actual) {
+    private static <T> void assertSetsEqual(Set<T> expected, Set<T> actual) {
         // Convert both sets to lists. It is needed due to issue that rust return the flags as string
         List<GlideString> expectedList =
                 expected.stream().sorted().map(GlideString::of).collect(Collectors.toList());
