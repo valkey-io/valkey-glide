@@ -127,7 +127,7 @@ jobs:
             - name: Install Rust with the required target
               uses: dtolnay/rust-toolchain@stable
               with:
-                  targets: ${{ matrix.TARGET }}
+                  targets: ${{ matrix.host.TARGET }}
 
             - name: Create secret key ring file
               working-directory: java/client
