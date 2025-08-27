@@ -104,14 +104,21 @@ tasks.register('cleanRust') {
 tasks.register('buildRust', Exec) {
     if (project.hasProperty('target')) {
         target = project.target
-        commandLine 'cargo', 'zigbuild', '--target', target, '--release'
-        if(target.contains("musl")) {
-            environment RUSTFLAGS: '-C target-feature=-crt-static'
+    } else {
+        if (osdetector.os == 'linux' && osdetector.release.id != 'alpine') {
+            target = "${arch}-unknown-linux-gnu.2.17"
+        } else if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
+            target = "${arch}-unknown-linux-musl"
+        } else {
+            target = ""
         }
-    } else if (osdetector.os == 'linux' && osdetector.release.id != 'alpine') {
-        commandLine 'cargo', 'zigbuild', '--target', "${arch}-unknown-linux-gnu.2.17", '--release'
-    } else if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
-        commandLine 'cargo', 'zigbuild', '--target', "${arch}-unknown-linux-musl", '--release'
+    }
+
+    print("Building Rust with target: '$target'\n")
+    if (target.contains("linux") && !target.contains("musl")) {
+        commandLine 'cargo', 'zigbuild', '--target', "$target", '--release'
+    } else if (target.contains("musl")) {
+        commandLine 'cargo', 'build', '--target', "$target", '--release'
         environment RUSTFLAGS: '-C target-feature=-crt-static'
     } else {
         commandLine 'cargo', 'build', '--release'
@@ -123,18 +130,29 @@ tasks.register('buildRust', Exec) {
 tasks.register('buildRustFfi', Exec) {
     if (project.hasProperty('target')) {
         target = project.target
-        commandLine 'cargo', 'zigbuild', '--target', target, '--release'
-        if(target.contains("musl")) {
-            environment RUSTFLAGS: '--cfg ffi_test -C target-feature=-crt-static'
+    } else {
+        if (osdetector.os == 'linux' && osdetector.release.id != 'alpine') {
+            target = "${arch}-unknown-linux-gnu.2.17"
+        } else if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
+            target = "${arch}-unknown-linux-musl"
+        } else {
+            target = ""
         }
-    } else if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
-        commandLine 'cargo', 'zigbuild', '--target', "${arch}-unknown-linux-musl", '--release'
+    }
+
+    print("Building Rust FFI with target: '$target'\n")
+    if (target.contains("linux") && !target.contains("musl")) {
+        commandLine 'cargo', 'zigbuild', '--target', "$target", '--release'
+        environment RUSTFLAGS: '--cfg ffi_test'
+    } else if (target.contains("musl")) {
+        commandLine 'cargo', 'build', '--target', "$target", '--release'
         environment RUSTFLAGS: '--cfg ffi_test -C target-feature=-crt-static'
     } else {
         commandLine 'cargo', 'build', '--release'
         environment RUSTFLAGS: '--cfg ffi_test'
     }
     workingDir project.rootDir
+    environment CARGO_TERM_COLOR: 'always'
 }
 
 tasks.register('buildWithRust') {

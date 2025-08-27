@@ -326,16 +326,7 @@ jobs:
             - name: Setup Rust Build
               if: ${{ contains(matrix.host.TARGET, 'musl') }}
               run: |
-                  echo 'source "$HOME/.cargo/env"' >> ~/.bashrc
-                  source "$HOME/.cargo/env"
                   echo "PATH=$HOME/.cargo/bin:$PATH" >> $GITHUB_ENV
-                  # Verify Rust is available
-                  which cargo || echo "Cargo still not found in PATH"
-                  echo "Current PATH: $PATH"
-
-                  # Install ziglang and zigbuild
-                  pip3 install ziglang --break-system-packages
-                  cargo install --locked cargo-zigbuild
 
             - uses: actions/cache@v4
               with:
