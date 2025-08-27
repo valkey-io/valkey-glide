@@ -106,6 +106,11 @@ jobs:
                   os: ${{ matrix.host.OS }}
                   target: ${{ matrix.host.CD_TARGET || matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
+            
+            - name: Run rustup with correct target
+              if: ${{ contains(matrix.host.TARGET, 'musl') }}
+              run: |
+                  rustup target add ${{ matrix.host.TARGET }}
 
             - name: Install protoc (protobuf)
               uses: arduino/setup-protoc@v3
@@ -123,11 +128,6 @@ jobs:
                   restore-keys: |
                       ${{ runner.os }}-gradle-cd-
                       ${{ runner.os }}-gradle-
-
-            - name: Install Rust with the required target
-              uses: dtolnay/rust-toolchain@stable
-              with:
-                  targets: ${{ matrix.host.TARGET }}
 
             - name: Create secret key ring file
               working-directory: java/client
