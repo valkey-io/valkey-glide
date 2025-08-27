@@ -1178,8 +1178,10 @@ public class JedisTest {
 
     @Test
     void scan_command() {
-        // Set up test data with a common prefix for scanning
+        // Clean up any existing keys first to avoid interference
         String keyPrefix = "scan_test_" + UUID.randomUUID().toString().substring(0, 8) + "_";
+
+        // Set up test data with a common prefix for scanning
         Map<String, String> testData = new HashMap<>();
         for (int i = 0; i < 10; i++) {
             testData.put(keyPrefix + i, "value_" + i);
@@ -1190,13 +1192,50 @@ public class JedisTest {
             jedis.set(entry.getKey(), entry.getValue());
         }
 
-        // Test SCAN with pattern that matches our keys
-        ScanParams scanParams = new ScanParams().match(keyPrefix + "*").count(5);
-        ScanResult<String> scanResult = jedis.scan("0", scanParams);
+        // Verify keys were set
+        for (String key : testData.keySet()) {
+            assertTrue(jedis.exists(key), "Key should exist: " + key);
+        }
 
-        assertNotNull(scanResult, "SCAN result should not be null");
-        assertNotNull(scanResult.getResult(), "SCAN result list should not be null");
-        assertFalse(scanResult.getResult().isEmpty(), "SCAN should return some keys");
+        // Test SCAN with pattern that matches our keys - iterate through all results
+        ScanParams scanParams = new ScanParams().match(keyPrefix + "*").count(100);
+        Set<String> allScannedKeys = new HashSet<>();
+        String cursor = "0";
+        int maxIterations = 50; // Prevent infinite loops
+        int iterations = 0;
+
+        do {
+            ScanResult<String> scanResult = jedis.scan(cursor, scanParams);
+            assertNotNull(scanResult, "SCAN result should not be null");
+            assertNotNull(scanResult.getResult(), "SCAN result list should not be null");
+
+            allScannedKeys.addAll(scanResult.getResult());
+            cursor = scanResult.getCursor();
+            iterations++;
+        } while (!"0".equals(cursor) && iterations < maxIterations);
+
+        // Verify we found our keys
+        assertFalse(allScannedKeys.isEmpty(), "SCAN should return some keys");
+
+        // Count how many of our keys were found
+        int foundCount = 0;
+        for (String key : allScannedKeys) {
+            if (key.startsWith(keyPrefix)) {
+                foundCount++;
+            }
+        }
+
+        assertTrue(
+                foundCount > 0,
+                "SCAN should find at least some keys with our prefix. Found: "
+                        + foundCount
+                        + " out of "
+                        + testData.size());
+
+        // Clean up test keys
+        for (String key : testData.keySet()) {
+            jedis.del(key);
+        }
     }
 
     @Test
