@@ -78,7 +78,7 @@ public class PoolImportTest {
                 () -> {
                     Class<JedisPool> poolClass = JedisPool.class;
                     poolClass.getConstructor(
-                            String.class, int.class, JedisClientConfig.class, int.class, long.class);
+                            GenericObjectPoolConfig.class, String.class, int.class, JedisClientConfig.class);
                 });
     }
 }

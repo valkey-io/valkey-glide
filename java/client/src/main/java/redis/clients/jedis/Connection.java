@@ -1,22 +1,34 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package redis.clients.jedis;
 
-/** Connection compatibility stub for Valkey GLIDE wrapper. */
-public class Connection {
+import java.io.Closeable;
 
-    public void close() {
-        // Stub implementation
+/** Represents a connection to a server. This is part of the Jedis compatibility layer. */
+public class Connection implements Closeable {
+
+    private final HostAndPort hostAndPort;
+
+    public Connection(HostAndPort hostAndPort) {
+        this.hostAndPort = hostAndPort;
     }
 
-    public boolean isConnected() {
-        return true;
+    /** Get the host and port for this connection */
+    public HostAndPort getHostAndPort() {
+        return hostAndPort;
     }
 
+    /** Get the host */
     public String getHost() {
-        return "localhost";
+        return hostAndPort.getHost();
     }
 
+    /** Get the port */
     public int getPort() {
-        return 6379;
+        return hostAndPort.getPort();
+    }
+
+    @Override
+    public void close() {
+        // Implementation for closing connection
     }
 }

@@ -65,8 +65,9 @@ public class BasicCompatibilityTest {
         assertDoesNotThrow(
                 () -> {
                     Class<JedisPool> poolClass = JedisPool.class;
+                    // Test the proper constructor with GenericObjectPoolConfig
                     poolClass.getConstructor(
-                            String.class, int.class, JedisClientConfig.class, int.class, long.class);
+                            GenericObjectPoolConfig.class, String.class, int.class, JedisClientConfig.class);
                 });
     }
 
