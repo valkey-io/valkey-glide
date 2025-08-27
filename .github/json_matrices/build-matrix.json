@@ -45,12 +45,12 @@
         "ARCH": "arm64",
         "TARGET": "aarch64-unknown-linux-musl",
         "CD_TARGET": "aarch64-unknown-linux-gnu",
-        "RUNNER": ["self-hosted", "Linux", "ARM64", "ephemeral"],
+        "RUNNER": "ubuntu-latest-arm",
         "CD_RUNNER": "ubuntu-24.04-arm",
         "IMAGE": "node:lts-alpine",
         "CONTAINER_OPTIONS": "--user root --privileged --rm",
         "PACKAGE_MANAGERS": ["npm", "maven"],
-        "languages": ["java"]
+        "languages": []
     },
     {
         "OS": "ubuntu",
