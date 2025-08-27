@@ -50,7 +50,7 @@
         "IMAGE": "node:lts-alpine",
         "CONTAINER_OPTIONS": "--user root --privileged --rm",
         "PACKAGE_MANAGERS": ["npm", "maven"],
-        "languages": []
+        "languages": ["java"]
     },
     {
         "OS": "ubuntu",

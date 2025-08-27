@@ -295,7 +295,7 @@ jobs:
                     mkdir -p ~/.gradle
                     echo "org.gradle.java.installations.auto-download=false" >> ~/.gradle/gradle.properties
                     echo IMAGE=amazonlinux:latest | sed -r 's/:/-/g' >> $GITHUB_ENV
-                  elif [[ "${{ matrix.host.TARGET }}" == "x86_64-unknown-linux-musl" ]]; then
+                  elif [[ "${{ matrix.host.TARGET }}" == *"musl"* ]]; then
                     apk add openjdk${{matrix.java}} git bash
                     apk add openjdk11
                     export JAVA_HOME=/usr/lib/jvm/java-${{matrix.java}}-openjdk
