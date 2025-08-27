@@ -1116,8 +1116,8 @@ class CoreCommands(Protocol):
         Returns:
             List[int]: A list of TTL values for each field:
             - Positive integer: remaining TTL in seconds
-            - -1: field exists but has no expiration
-            - -2: field does not exist or key does not exist
+            - `-1`: field exists but has no expiration
+            - `-2`: field does not exist or key does not exist
 
         Examples:
             >>> await client.hsetex("my_hash", {"field1": "value1", "field2": "value2"}, expiry=ExpirySet(ExpiryType.EX, 10))
@@ -1146,8 +1146,8 @@ class CoreCommands(Protocol):
         Returns:
             List[int]: A list of TTL values for each field:
             - Positive integer: remaining TTL in milliseconds
-            - -1: field exists but has no expiration
-            - -2: field does not exist or key does not exist
+            - `-1`: field exists but has no expiration
+            - `-2`: field does not exist or key does not exist
 
         Examples:
             >>> await client.hsetex("my_hash", {"field1": "value1", "field2": "value2"}, expiry=ExpirySet(ExpiryType.PX, 10000))
@@ -1165,7 +1165,7 @@ class CoreCommands(Protocol):
 
     async def hexpiretime(self, key: TEncodable, fields: List[TEncodable]) -> List[int]:
         """
-        Returns the absolute expiration timestamp (in seconds) of hash key's field(s) that have an associated expiration.
+        Returns the expiration Unix timestamp (in seconds) of hash key's field(s) that have an associated expiration.
 
         See [valkey.io](https://valkey.io/commands/hexpiretime/) for more details.
 
@@ -1176,8 +1176,8 @@ class CoreCommands(Protocol):
         Returns:
             List[int]: A list of expiration timestamps for each field:
             - Positive integer: absolute expiration timestamp in seconds (Unix timestamp)
-            - -1: field exists but has no expiration
-            - -2: field does not exist or key does not exist
+            - `-1`: field exists but has no expiration
+            - `-2`: field does not exist or key does not exist
 
         Examples:
             >>> import time
@@ -1199,7 +1199,7 @@ class CoreCommands(Protocol):
         self, key: TEncodable, fields: List[TEncodable]
     ) -> List[int]:
         """
-        Returns the absolute expiration timestamp (in milliseconds) of hash key's field(s) that have an associated expiration.
+        Returns the expiration Unix timestamp (in milliseconds) of hash key's field(s) that have an associated expiration.
 
         See [valkey.io](https://valkey.io/commands/hpexpiretime/) for more details.
 
@@ -1210,8 +1210,8 @@ class CoreCommands(Protocol):
         Returns:
             List[int]: A list of expiration timestamps for each field:
             - Positive integer: absolute expiration timestamp in milliseconds (Unix timestamp in ms)
-            - -1: field exists but has no expiration
-            - -2: field does not exist or key does not exist
+            - `-1`: field exists but has no expiration
+            - `-2`: field does not exist or key does not exist
 
         Examples:
             >>> import time
@@ -1368,10 +1368,10 @@ class CoreCommands(Protocol):
 
         Returns:
             List[int]: A list of status codes for each field:
-            - 1: Expiration time was applied successfully.
-            - 0: Specified condition was not met.
-            - -2: Field does not exist or key does not exist.
-            - 2: Field was deleted immediately (when seconds is 0 or timestamp is in the past).
+            - `1`: Expiration time was applied successfully.
+            - `0`: Specified condition was not met.
+            - `-2`: Field does not exist or key does not exist.
+            - `2`: Field was deleted immediately (when seconds is 0 or timestamp is in the past).
 
         Examples:
             >>> await client.hsetex("my_hash", {"field1": "value1", "field2": "value2"}, expiry=ExpirySet(ExpiryType.EX, 10))
@@ -1415,9 +1415,9 @@ class CoreCommands(Protocol):
 
         Returns:
             List[int]: A list of status codes for each field:
-            - 1: Expiration was removed successfully (field became persistent).
-            - -1: Field exists but has no expiration.
-            - -2: Field does not exist or key does not exist.
+            - `1`: Expiration was removed successfully (field became persistent).
+            - `-1`: Field exists but has no expiration.
+            - `-2`: Field does not exist or key does not exist.
 
         Examples:
             >>> await client.hsetex("my_hash", {"field1": "value1", "field2": "value2"}, expiry=ExpirySet(ExpiryType.EX, 10))
@@ -1461,10 +1461,10 @@ class CoreCommands(Protocol):
 
         Returns:
             List[int]: A list of status codes for each field:
-            - 1: Expiration time was applied successfully.
-            - 0: Specified condition was not met.
-            - -2: Field does not exist or key does not exist.
-            - 2: Field was deleted immediately (when milliseconds is 0 or timestamp is in the past).
+            - `1`: Expiration time was applied successfully.
+            - `0`: Specified condition was not met.
+            - `-2`: Field does not exist or key does not exist.
+            - `2`: Field was deleted immediately (when milliseconds is 0 or timestamp is in the past).
 
         Examples:
             >>> await client.hsetex("my_hash", {"field1": "value1", "field2": "value2"}, expiry=ExpirySet(ExpiryType.PX, 10000))
@@ -1520,10 +1520,10 @@ class CoreCommands(Protocol):
 
         Returns:
             List[int]: A list of status codes for each field:
-            - 1: Expiration time was applied successfully.
-            - 0: Specified condition was not met.
-            - -2: Field does not exist or key does not exist.
-            - 2: Field was deleted immediately (when timestamp is in the past).
+            - `1`: Expiration time was applied successfully.
+            - `0`: Specified condition was not met.
+            - `-2`: Field does not exist or key does not exist.
+            - `2`: Field was deleted immediately (when timestamp is in the past).
 
         Examples:
             >>> import time
@@ -1580,10 +1580,10 @@ class CoreCommands(Protocol):
 
         Returns:
             List[int]: A list of status codes for each field:
-            - 1: Expiration time was applied successfully.
-            - 0: Specified condition was not met.
-            - -2: Field does not exist or key does not exist.
-            - 2: Field was deleted immediately (when timestamp is in the past).
+            - `1`: Expiration time was applied successfully.
+            - `0`: Specified condition was not met.
+            - `-2`: Field does not exist or key does not exist.
+            - `2`: Field was deleted immediately (when timestamp is in the past).
 
         Examples:
             >>> import time
