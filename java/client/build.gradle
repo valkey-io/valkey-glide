@@ -102,6 +102,7 @@ tasks.register('cleanRust') {
 }
 
 tasks.register('buildRust', Exec) {
+    def target
     if (project.hasProperty('target')) {
         target = project.target
     } else {
@@ -128,6 +129,7 @@ tasks.register('buildRust', Exec) {
 }
 
 tasks.register('buildRustFfi', Exec) {
+    def target
     if (project.hasProperty('target')) {
         target = project.target
     } else {
@@ -179,6 +181,7 @@ compileJava.dependsOn('protobuf')
 clean.dependsOn('cleanProtobuf', 'cleanRust')
 
 tasks.register('copyNativeLib', Copy) {
+    def target
     if (project.hasProperty('target')) {
         target = project.target
         from "${projectDir}/../target/${target}/release/"
