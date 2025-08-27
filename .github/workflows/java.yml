@@ -297,6 +297,7 @@ jobs:
                     echo IMAGE=amazonlinux:latest | sed -r 's/:/-/g' >> $GITHUB_ENV
                   elif [[ "${{ matrix.host.TARGET }}" == *"musl"* ]]; then
                     apk add openjdk${{matrix.java}} git bash
+                    # Temporarily installing openjdk11 because of issue: https://github.com/valkey-io/valkey-glide/issues/4664
                     apk add openjdk11
                     export JAVA_HOME=/usr/lib/jvm/java-${{matrix.java}}-openjdk
                     # Create gradle user home and disable auto-download
@@ -357,6 +358,7 @@ jobs:
                   else
                       # TODO: Fix java version. Java matrix tests are currently broken for all OS and Java 11 is always used.
                       # On other OS, build auto-downloads Java 11 but this doesn't work on Alpine
+                      # https://github.com/valkey-io/valkey-glide/issues/4664
                       # export JAVA_HOME=/usr/lib/jvm/java-${{matrix.java}}-openjdk
                       export JAVA_HOME=/usr/lib/jvm/java-11-openjdk
                       export PATH=$HOME/.cargo/bin:$PATH
