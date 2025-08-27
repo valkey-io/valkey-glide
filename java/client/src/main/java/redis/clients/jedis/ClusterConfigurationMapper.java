@@ -34,6 +34,8 @@ public class ClusterConfigurationMapper {
             Set<HostAndPort> nodes, JedisClientConfig jedisConfig) {
 
         // Check for unsupported features early
+        // This feature will be added later:
+        // https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#best-practices-for-refreshing-iam-tokens-and-re-authentication
         if (jedisConfig.getAuthXManager() != null) {
             throw new JedisException(
                     "AuthXManager is not supported in GLIDE cluster mode. Please use username/password"
