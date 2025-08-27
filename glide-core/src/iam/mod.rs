@@ -117,7 +117,6 @@ struct IamTokenState {
 ///
 /// Manages automatic token refresh using AWS IAM credentials and SigV4 signing.
 /// Tokens are valid for 15 minutes and refreshed every 14 minutes by default.
-#[derive(Debug)]
 pub struct IAMTokenManager {
     /// Currently cached auth token (protected by RwLock)
     cached_token: Arc<RwLock<String>>,
@@ -127,6 +126,24 @@ pub struct IAMTokenManager {
     refresh_task: Option<JoinHandle<()>>,
     /// Shutdown signal for graceful task termination
     shutdown_notify: Arc<Notify>,
+    /// Optional callback for when token is refreshed - used to update connection passwords
+    token_refresh_callback: Option<Arc<dyn Fn(String) + Send + Sync>>,
+}
+
+/// Custom Debug implementation because of the callback function doesn't implement Debug
+impl std::fmt::Debug for IAMTokenManager {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("IAMTokenManager")
+            .field("cached_token", &"<RwLock<String>>")
+            .field("iam_token_state", &self.iam_token_state)
+            .field("refresh_task", &self.refresh_task.is_some())
+            .field("shutdown_notify", &"<Notify>")
+            .field(
+                "token_refresh_callback",
+                &self.token_refresh_callback.is_some(),
+            )
+            .finish()
+    }
 }
 
 impl IAMTokenManager {
@@ -166,6 +183,7 @@ impl IAMTokenManager {
             iam_token_state: state,
             refresh_task: None,
             shutdown_notify: Arc::new(Notify::new()),
+            token_refresh_callback: None,
         })
     }
 
@@ -178,11 +196,13 @@ impl IAMTokenManager {
         let iam_token_state = self.iam_token_state.clone();
         let cached_token = Arc::clone(&self.cached_token);
         let shutdown_notify = Arc::clone(&self.shutdown_notify);
+        let token_refresh_callback = self.token_refresh_callback.clone();
 
         let task = tokio::spawn(Self::token_refresh_task(
             iam_token_state,
             cached_token,
             shutdown_notify,
+            token_refresh_callback,
         ));
 
         self.refresh_task = Some(task);
@@ -195,6 +215,7 @@ impl IAMTokenManager {
         iam_token_state: IamTokenState,
         cached_token: Arc<RwLock<String>>,
         shutdown_notify: Arc<Notify>,
+        token_refresh_callback: Option<Arc<dyn Fn(String) + Send + Sync>>,
     ) {
         let refresh_interval = Duration::from_secs(iam_token_state.refresh_interval_seconds as u64);
 
@@ -207,7 +228,7 @@ impl IAMTokenManager {
         loop {
             tokio::select! {
                 _ = interval_timer.tick() => {
-                    Self::handle_token_refresh(&iam_token_state, &cached_token).await;
+                    Self::handle_token_refresh(&iam_token_state, &cached_token, &token_refresh_callback).await;
                 }
                 _ = shutdown_notify.notified() => {
                     log_info("IAM token refresh task shutting down", "");
@@ -221,10 +242,17 @@ impl IAMTokenManager {
     async fn handle_token_refresh(
         iam_token_state: &IamTokenState,
         cached_token: &Arc<RwLock<String>>,
+        token_refresh_callback: &Option<Arc<dyn Fn(String) + Send + Sync>>,
     ) {
         match Self::generate_token_static(iam_token_state).await {
             Ok(new_token) => {
-                Self::set_cached_token_static(cached_token, new_token).await;
+                Self::set_cached_token_static(cached_token, new_token.clone()).await;
+
+                // Call the callback to update connection passwords if provided
+                if let Some(callback) = token_refresh_callback {
+                    callback(new_token);
+                }
+
                 log_info("IAM token refreshed successfully", "");
             }
             Err(e) => {
@@ -247,11 +275,6 @@ impl IAMTokenManager {
     async fn set_cached_token_static(cached_token: &Arc<RwLock<String>>, new_token: String) {
         let mut token_guard = cached_token.write().await;
         *token_guard = new_token;
-    }
-
-    /// Set a new cached token
-    async fn set_cached_token(&self, new_token: String) {
-        Self::set_cached_token_static(&self.cached_token, new_token).await;
     }
 
     /// Get the current cached token
@@ -348,10 +371,26 @@ impl IAMTokenManager {
         Ok(token)
     }
 
+    /// Set a callback to be called when the token is refreshed
+    /// This callback will be invoked with the new token whenever a refresh occurs
+    pub fn set_token_refresh_callback<F>(&mut self, callback: F)
+    where
+        F: Fn(String) + Send + Sync + 'static,
+    {
+        self.token_refresh_callback = Some(Arc::new(callback));
+    }
+
     /// Force refresh the token immediately
     pub async fn refresh_token(&self) -> Result<(), GlideIAMError> {
         let new_token = Self::generate_token_static(&self.iam_token_state).await?;
-        self.set_cached_token(new_token).await;
+        Self::set_cached_token_static(&self.cached_token, new_token.clone()).await;
+
+        // Call the callback to update connection passwords if provided
+        if let Some(callback) = &self.token_refresh_callback {
+            callback(new_token);
+        }
+
+        log_info("IAM token refreshed successfully", "");
         Ok(())
     }
 }

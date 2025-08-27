@@ -924,9 +924,41 @@ impl Client {
         }
     }
 
+    /// IAM token refresh callback function
+    fn iam_callback(
+        client_ref: std::sync::Weak<RwLock<Client>>,
+    ) -> impl Fn(String) + Send + 'static {
+        move |new_token: String| {
+            if let Some(client_arc) = client_ref.upgrade() {
+                // Spawn a task to handle the async update_connection_password call
+                tokio::spawn(async move {
+                    let mut client_guard = client_arc.write().await;
+                    let result = client_guard
+                        .update_connection_password(Some(new_token.clone()), true)
+                        .await;
+
+                    if let Err(e) = result {
+                        log_error(
+                            "IAM token refresh",
+                            format!(
+                                "Failed to update connection password with immediate auth: {e}"
+                            ),
+                        );
+                    } else {
+                        log_info(
+                            "IAM token refresh",
+                            "Successfully updated connection password with immediate authentication",
+                        );
+                    }
+                });
+            }
+        }
+    }
+
     /// Create an IAM token manager from authentication config if needed
     async fn create_iam_token_manager(
         auth_info: &crate::client::types::AuthenticationInfo,
+        client_weak_ref: std::sync::Weak<RwLock<Client>>,
     ) -> Option<Arc<tokio::sync::RwLock<crate::iam::IAMTokenManager>>> {
         if let Some(iam_config) = &auth_info.iam_config {
             if let Some(username) = &auth_info.username {
@@ -940,6 +972,10 @@ impl Client {
                 .await
                 {
                     Ok(mut token_manager) => {
+                        // Set up callback to update connection password when token refreshes
+                        let iam_callback = Self::iam_callback(client_weak_ref.clone());
+                        token_manager.set_token_refresh_callback(iam_callback);
+
                         token_manager.start_refresh_task();
                         Some(Arc::new(tokio::sync::RwLock::new(token_manager)))
                     }
@@ -1250,12 +1286,36 @@ impl Client {
         ));
 
         tokio::time::timeout(DEFAULT_CLIENT_CREATION_TIMEOUT, async move {
-            // Create IAM token manager if needed
+            let internal_client_arc =
+                Arc::new(RwLock::new(ClientWrapper::Lazy(Box::new(LazyClient {
+                    config: request.clone(),
+                    push_sender: push_sender.clone(),
+                    iam_token_manager: None,
+                }))));
+
+            // Create the Client first so we can pass a weak reference to it for IAM callback
+            let client = Self {
+                internal_client: internal_client_arc.clone(),
+                request_timeout,
+                inflight_requests_allowed,
+                iam_token_manager: Arc::new(RwLock::new(None)),
+            };
+
+            let client_arc = Arc::new(RwLock::new(client));
+
+            // Create IAM token manager if needed, passing a weak reference to the client
             let iam_token_manager = if let Some(auth_info) = &request.authentication_info {
-                Self::create_iam_token_manager(auth_info).await
+                Self::create_iam_token_manager(auth_info, Arc::downgrade(&client_arc)).await
             } else {
                 None
             };
+
+            // Update the IAM token manager in the client
+            {
+                let client_guard = client_arc.read().await;
+                let mut iam_manager_guard = client_guard.iam_token_manager.write().await;
+                *iam_manager_guard = iam_token_manager.clone();
+            }
 
             let internal_client = if request.lazy_connect {
                 ClientWrapper::Lazy(Box::new(LazyClient {
@@ -1281,12 +1341,19 @@ impl Client {
                 )
             };
 
-            Ok(Self {
-                internal_client: Arc::new(RwLock::new(internal_client)),
-                request_timeout,
-                inflight_requests_allowed,
-                iam_token_manager: Arc::new(RwLock::new(iam_token_manager)),
-            })
+            // Update the internal client with the actual client
+            {
+                let mut guard = internal_client_arc.write().await;
+                *guard = internal_client;
+            }
+
+            // Return the client from the Arc
+            let client = {
+                let client_guard = client_arc.read().await;
+                client_guard.clone()
+            };
+
+            Ok(client)
         })
         .await
         .map_err(|_| ConnectionError::Timeout)?
