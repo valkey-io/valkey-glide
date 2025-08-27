@@ -3,7 +3,7 @@
 mod utilities;
 
 #[cfg(test)]
-mod valkey9_database_tests {
+mod database_tests {
     use super::*;
     use glide_core::ConnectionRequest;
     use glide_core::connection_request;
@@ -14,11 +14,12 @@ mod valkey9_database_tests {
     use std::time::Duration;
     use utilities::*;
 
-    const VALKEY9_TEST_TIMEOUT: Duration = Duration::from_millis(10000);
+    const DATABASE_TEST_TIMEOUT: Duration = Duration::from_millis(10000);
 
-    // Database limits in Valkey 9:
+    // Database limits in Valkey:
     // - Standalone mode: 0 to (databases-1), where 'databases' defaults to 16 but can be configured up to INT_MAX
     // - Cluster mode: 0 to (cluster-databases-1), where 'cluster-databases' defaults to 1 but can be configured up to INT_MAX
+    //   Note: Multi-database support in cluster mode requires Valkey 9.0+
     //
     // Test environment configuration:
     // - Test servers use default configs unless explicitly overridden
@@ -27,7 +28,7 @@ mod valkey9_database_tests {
 
     /// Test that verifies database_id is correctly passed through protobuf and connection layers
     #[rstest]
-    #[timeout(VALKEY9_TEST_TIMEOUT)]
+    #[timeout(DATABASE_TEST_TIMEOUT)]
     #[serial]
     fn test_database_id_protobuf_serialization() {
         // Test that database_id is correctly serialized and deserialized in protobuf
@@ -50,43 +51,75 @@ mod valkey9_database_tests {
 
     /// Test database selection in standalone mode with various database IDs
     /// Note: The actual limit depends on the 'databases' configuration (default 16, range 1 to INT_MAX)
+    /// Test server is configured with 16 databases (0-15), so higher IDs should fail
     #[rstest]
-    #[case(0)]
-    #[case(1)]
-    #[case(5)]
-    #[case(15)] // This assumes default 'databases 16' configuration
-    #[case(20)] // Test beyond default 16-database limit
-    #[case(49)] // Test near a higher configured limit
-    #[timeout(VALKEY9_TEST_TIMEOUT)]
+    #[case(0, true)] // Valid: within 16-database limit
+    #[case(1, true)] // Valid: within 16-database limit
+    #[case(5, true)] // Valid: within 16-database limit
+    #[case(15, true)] // Valid: last database in 16-database configuration
+    #[case(20, false)] // Invalid: beyond 16-database limit, should fail
+    #[case(49, false)] // Invalid: beyond 16-database limit, should fail
+    #[timeout(DATABASE_TEST_TIMEOUT)]
     #[serial]
-    fn test_standalone_database_selection(#[case] database_id: u32) {
-        block_on_all(async {
-            let test_basics = setup_test_basics_internal(&TestConfiguration {
-                database_id,
-                shared_server: true,
-                ..Default::default()
-            })
-            .await;
+    fn test_standalone_database_selection(#[case] database_id: u32, #[case] should_succeed: bool) {
+        if should_succeed {
+            // Test cases that should succeed
+            block_on_all(async {
+                let test_basics = setup_test_basics_internal(&TestConfiguration {
+                    database_id,
+                    shared_server: true,
+                    ..Default::default()
+                })
+                .await;
 
-            let mut client = test_basics.client;
+                let mut client = test_basics.client;
 
-            // Verify we're connected to the correct database
-            let mut client_info_cmd = redis::Cmd::new();
-            client_info_cmd.arg("CLIENT").arg("INFO");
+                // Verify we're connected to the correct database
+                let mut client_info_cmd = redis::Cmd::new();
+                client_info_cmd.arg("CLIENT").arg("INFO");
 
-            let client_info: String = String::from_owned_redis_value(
-                client.send_command(&client_info_cmd).await.unwrap(),
-            )
-            .unwrap();
+                let client_info: String = String::from_owned_redis_value(
+                    client.send_command(&client_info_cmd).await.unwrap(),
+                )
+                .unwrap();
 
-            let expected_db = format!("db={}", database_id);
-            assert!(
-                client_info.contains(&expected_db),
-                "Expected to be connected to database {}, but CLIENT INFO shows: {}",
-                database_id,
-                client_info
-            );
-        });
+                let expected_db = format!("db={}", database_id);
+                assert!(
+                    client_info.contains(&expected_db),
+                    "Expected to be connected to database {}, but CLIENT INFO shows: {}",
+                    database_id,
+                    client_info
+                );
+            });
+        } else {
+            // Test cases that should fail (database ID out of range)
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                block_on_all(async {
+                    setup_test_basics_internal(&TestConfiguration {
+                        database_id,
+                        shared_server: true,
+                        ..Default::default()
+                    })
+                    .await
+                })
+            }));
+
+            match result {
+                Ok(_) => {
+                    panic!(
+                        "Expected connection to database {} to fail (out of range for 16-database server), but it succeeded",
+                        database_id
+                    );
+                }
+                Err(_) => {
+                    // This is expected - the server should reject database IDs >= 16
+                    println!(
+                        "✓ Server correctly rejected database ID {} (out of range for 16-database configuration)",
+                        database_id
+                    );
+                }
+            }
+        }
     }
 
     /// Test database selection in cluster mode (requires Valkey 9.0+ with cluster-databases > 1)
@@ -98,7 +131,7 @@ mod valkey9_database_tests {
     #[case(2)]
     #[case(10)] // Test higher database numbers in cluster mode
     #[case(15)] // Test near the apparent cluster-databases limit
-    #[timeout(VALKEY9_TEST_TIMEOUT)]
+    #[timeout(DATABASE_TEST_TIMEOUT)]
     #[serial]
     fn test_cluster_database_selection_valkey9(#[case] database_id: u32) {
         // This test will only pass with Valkey 9.0+ configured with cluster-databases > 1
@@ -165,9 +198,9 @@ mod valkey9_database_tests {
         }
     }
 
-    /// Test that database selection persists across reconnections in cluster mode
+    /// Test that database selection persists across reconnections in cluster mode (requires Valkey 9.0+)
     #[rstest]
-    #[timeout(VALKEY9_TEST_TIMEOUT)]
+    #[timeout(DATABASE_TEST_TIMEOUT)]
     #[serial]
     fn test_cluster_database_reconnection_valkey9() {
         let database_id = 1;
@@ -240,7 +273,7 @@ mod valkey9_database_tests {
     /// - Server should reject with "DB index is out of range" error
     /// - Client should handle this gracefully and propagate the error properly
     #[rstest]
-    #[timeout(VALKEY9_TEST_TIMEOUT)]
+    #[timeout(DATABASE_TEST_TIMEOUT)]
     #[serial]
     fn test_invalid_database_id_error_handling() {
         // Test with database ID 999 - this will be invalid on any reasonably configured server
