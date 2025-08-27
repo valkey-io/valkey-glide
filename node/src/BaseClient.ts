@@ -2902,7 +2902,7 @@ export class BaseClient {
      * @param fieldsAndValues - A map or array of field-value pairs to set.
      * @param options - Optional parameters including field conditional changes and expiry settings.
      *                  See {@link HSetExOptions}.
-     * @returns A promise that resolves to the number of fields that were set.
+     * @returns A number of fields that were set.
      *
      * @example
      * ```typescript
@@ -2954,7 +2954,7 @@ export class BaseClient {
      * ```
      *
      * @since Valkey 9.0.0
-     * @see https://valkey.io/commands/hsetex/
+     * @see {@link https://valkey.io/commands/hsetex/|valkey.io}
      */
     public async hsetex(
         key: GlideString,
@@ -2976,7 +2976,7 @@ export class BaseClient {
      * @param key - The key of the hash.
      * @param fields - The fields in the hash stored at `key` to retrieve from the database.
      * @param options - Optional arguments for the HGETEX command. See {@link HGetExOptions}.
-     * @returns A promise that resolves to an array of values associated with the given fields,
+     * @returns An array of values associated with the given fields,
      *          in the same order as they are requested. For every field that does not exist
      *          in the hash, a null value is returned. If `key` does not exist, returns an
      *          array of null values.
@@ -3021,14 +3021,17 @@ export class BaseClient {
      * ```
      *
      * @since Valkey 9.0.0
-     * @see https://valkey.io/commands/hgetex/
+     * @see {@link https://valkey.io/commands/hgetex/|valkey.io}
      */
     public async hgetex(
         key: GlideString,
         fields: GlideString[],
-        options?: HGetExOptions,
+        options?: HGetExOptions & DecoderOption,
     ): Promise<(GlideString | null)[]> {
-        return this.createWritePromise(createHGetEx(key, fields, options));
+        return this.createWritePromise(
+            createHGetEx(key, fields, options),
+            options,
+        );
     }
 
     /**
@@ -3040,7 +3043,7 @@ export class BaseClient {
      * @param seconds - The expiration time in seconds.
      * @param fields - The fields to set expiration for.
      * @param options - Optional parameters for the command.
-     * @returns A Promise that resolves to an array of numbers indicating the result for each field:
+     * @returns An array of numbers indicating the result for each field:
      *          - `1` if expiration was set successfully
      *          - `0` if the specified condition (NX, XX, GT, LT) was not met
      *          - `-2` if the field does not exist or the key does not exist
