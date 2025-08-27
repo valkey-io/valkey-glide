@@ -891,15 +891,15 @@ func (b *BaseBatch[T]) HRandFieldWithCountWithValues(key string, count int64) *T
 //
 // Command Response:
 //
-//	True if the operation was successful, false otherwise.
+//	1 if all fields were set successfully, 0 if no fields were set due to conditional restrictions.
 //
 // [valkey.io]: https://valkey.io/commands/hsetex/
 func (b *BaseBatch[T]) HSetEx(key string, fieldsAndValues map[string]string, opts options.HSetExOptions) *T {
-	args, err := options.BuildHSetExArgs(key, fieldsAndValues, opts)
+	args, err := internal.BuildHSetExArgs(key, fieldsAndValues, opts)
 	if err != nil {
 		return b.addError("HSetEx", err)
 	}
-	return b.addCmdAndTypeChecker(C.HSetEx, args, reflect.Bool, false)
+	return b.addCmdAndTypeChecker(C.HSetEx, args, reflect.Int64, false)
 }
 
 // Gets the values of one or more fields of a given hash key and optionally sets their expiration time or time-to-live
@@ -925,7 +925,7 @@ func (b *BaseBatch[T]) HSetEx(key string, fieldsAndValues map[string]string, opt
 //
 // [valkey.io]: https://valkey.io/commands/hgetex/
 func (b *BaseBatch[T]) HGetEx(key string, fields []string, opts options.HGetExOptions) *T {
-	args, err := options.BuildHGetExArgs(key, fields, opts)
+	args, err := internal.BuildHGetExArgs(key, fields, opts)
 	if err != nil {
 		return b.addError("HGetEx", err)
 	}
@@ -967,7 +967,7 @@ func (b *BaseBatch[T]) HGetEx(key string, fields []string, opts options.HGetExOp
 //
 // [valkey.io]: https://valkey.io/commands/hexpire/
 func (b *BaseBatch[T]) HExpire(key string, expireTime time.Duration, fields []string, opts options.HExpireOptions) *T {
-	args, err := options.BuildHExpireArgs(key, expireTime, fields, opts, false)
+	args, err := internal.BuildHExpireArgs(key, expireTime, fields, opts, false)
 	if err != nil {
 		return b.addError("HExpire", err)
 	}
@@ -1001,7 +1001,7 @@ func (b *BaseBatch[T]) HExpire(key string, expireTime time.Duration, fields []st
 //
 // [valkey.io]: https://valkey.io/commands/hexpireat/
 func (b *BaseBatch[T]) HExpireAt(key string, expireTime time.Time, fields []string, opts options.HExpireOptions) *T {
-	args, err := options.BuildHExpireArgs(key, expireTime, fields, opts, false)
+	args, err := internal.BuildHExpireArgs(key, expireTime, fields, opts, false)
 	if err != nil {
 		return b.addError("HExpireAt", err)
 	}
@@ -1034,7 +1034,7 @@ func (b *BaseBatch[T]) HExpireAt(key string, expireTime time.Time, fields []stri
 //
 // [valkey.io]: https://valkey.io/commands/hpexpire/
 func (b *BaseBatch[T]) HPExpire(key string, expireTime time.Duration, fields []string, opts options.HExpireOptions) *T {
-	args, err := options.BuildHExpireArgs(key, expireTime, fields, opts, true)
+	args, err := internal.BuildHExpireArgs(key, expireTime, fields, opts, true)
 	if err != nil {
 		return b.addError("HPExpire", err)
 	}
@@ -1068,7 +1068,7 @@ func (b *BaseBatch[T]) HPExpire(key string, expireTime time.Duration, fields []s
 //
 // [valkey.io]: https://valkey.io/commands/hpexpireat/
 func (b *BaseBatch[T]) HPExpireAt(key string, expireTime time.Time, fields []string, opts options.HExpireOptions) *T {
-	args, err := options.BuildHExpireArgs(key, expireTime, fields, opts, true)
+	args, err := internal.BuildHExpireArgs(key, expireTime, fields, opts, true)
 	if err != nil {
 		return b.addError("HPExpireAt", err)
 	}
@@ -1098,7 +1098,7 @@ func (b *BaseBatch[T]) HPExpireAt(key string, expireTime time.Time, fields []str
 //
 // [valkey.io]: https://valkey.io/commands/hpersist/
 func (b *BaseBatch[T]) HPersist(key string, fields []string) *T {
-	args, err := options.BuildHPersistArgs(key, fields)
+	args, err := internal.BuildHPersistArgs(key, fields)
 	if err != nil {
 		return b.addError("HPersist", err)
 	}
@@ -1125,7 +1125,7 @@ func (b *BaseBatch[T]) HPersist(key string, fields []string) *T {
 //
 // [valkey.io]: https://valkey.io/commands/httl/
 func (b *BaseBatch[T]) HTtl(key string, fields []string) *T {
-	args, err := options.BuildHTTLAndExpireTimeArgs(key, fields)
+	args, err := internal.BuildHTTLAndExpireTimeArgs(key, fields)
 	if err != nil {
 		return b.addError("HTtl", err)
 	}
@@ -1152,7 +1152,7 @@ func (b *BaseBatch[T]) HTtl(key string, fields []string) *T {
 //
 // [valkey.io]: https://valkey.io/commands/hpttl/
 func (b *BaseBatch[T]) HPTtl(key string, fields []string) *T {
-	args, err := options.BuildHTTLAndExpireTimeArgs(key, fields)
+	args, err := internal.BuildHTTLAndExpireTimeArgs(key, fields)
 	if err != nil {
 		return b.addError("HPTtl", err)
 	}
@@ -1179,7 +1179,7 @@ func (b *BaseBatch[T]) HPTtl(key string, fields []string) *T {
 //
 // [valkey.io]: https://valkey.io/commands/hexpiretime/
 func (b *BaseBatch[T]) HExpireTime(key string, fields []string) *T {
-	args, err := options.BuildHTTLAndExpireTimeArgs(key, fields)
+	args, err := internal.BuildHTTLAndExpireTimeArgs(key, fields)
 	if err != nil {
 		return b.addError("HExpireTime", err)
 	}
@@ -1207,7 +1207,7 @@ func (b *BaseBatch[T]) HExpireTime(key string, fields []string) *T {
 //
 // [valkey.io]: https://valkey.io/commands/hpexpiretime/
 func (b *BaseBatch[T]) HPExpireTime(key string, fields []string) *T {
-	args, err := options.BuildHTTLAndExpireTimeArgs(key, fields)
+	args, err := internal.BuildHTTLAndExpireTimeArgs(key, fields)
 	if err != nil {
 		return b.addError("HPExpireTime", err)
 	}

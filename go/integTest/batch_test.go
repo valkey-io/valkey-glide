@@ -1237,7 +1237,7 @@ func CreateHashTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer strin
 		fields := map[string]string{"field1": "value1", "field2": "value2"}
 		hsetExOptions := options.NewHSetExOptions().SetExpiry(options.NewExpiryIn(10 * time.Second))
 		batch.HSetEx(expiryKey, fields, hsetExOptions)
-		testData = append(testData, CommandTestData{ExpectedResponse: true, TestName: "HSetEx(expiryKey, fields, 10s)"})
+		testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "HSetEx(expiryKey, fields, 10s)"})
 
 		// Test HGetEx - Get fields and set expiration
 		batch.HSet(expiryKey, map[string]string{"field3": "value3"})
