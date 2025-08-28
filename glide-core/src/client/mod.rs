@@ -136,7 +136,7 @@ pub(super) fn get_port(address: &NodeAddress) -> u16 {
 /// This function integrates with the IAM token manager to use IAM tokens as passwords
 pub async fn get_valkey_connection_info_with_iam(
     connection_request: &ConnectionRequest,
-    iam_token_manager: Option<&Arc<tokio::sync::RwLock<crate::iam::IAMTokenManager>>>,
+    iam_token_manager: Option<&Arc<crate::iam::IAMTokenManager>>,
 ) -> redis::RedisConnectionInfo {
     let protocol = connection_request.protocol.unwrap_or_default();
     let db = connection_request.database_id;
@@ -148,7 +148,7 @@ pub async fn get_valkey_connection_info_with_iam(
             // If we have IAM configuration and a token manager, use the IAM token as password
             if info.iam_config.is_some() && iam_token_manager.is_some() {
                 let token = if let Some(manager) = iam_token_manager {
-                    manager.read().await.get_token().await
+                    manager.get_token().await
                 } else {
                     // Fallback to regular password if no token manager
                     info.password.clone().unwrap_or_default()
@@ -217,7 +217,6 @@ pub enum ClientWrapper {
 pub struct LazyClient {
     config: ConnectionRequest,
     push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
-    iam_token_manager: Option<Arc<tokio::sync::RwLock<crate::iam::IAMTokenManager>>>,
 }
 
 #[derive(Clone)]
@@ -227,7 +226,7 @@ pub struct Client {
     // Setting this counter to limit the inflight requests, in case of any queue is blocked, so we return error to the customer.
     inflight_requests_allowed: Arc<AtomicIsize>,
     // IAM token manager for automatic credential refresh
-    iam_token_manager: Arc<RwLock<Option<Arc<tokio::sync::RwLock<crate::iam::IAMTokenManager>>>>>,
+    iam_token_manager: Option<Arc<crate::iam::IAMTokenManager>>,
 }
 
 async fn run_with_timeout<T>(
@@ -368,34 +367,24 @@ impl Client {
         }
 
         // Handle lazy client initialization
-        let (config, push_sender, lazy_iam_manager) = {
+        let (config, push_sender) = {
             let mut guard = self.internal_client.write().await;
             if let ClientWrapper::Lazy(lazy_client) = &mut *guard {
                 let config = lazy_client.config.clone();
                 let push_sender = lazy_client.push_sender.clone();
-                let lazy_iam_manager = lazy_client.iam_token_manager.clone();
-                (config, push_sender, lazy_iam_manager)
+                (config, push_sender)
             } else {
                 // Another thread initialized it while we were waiting
                 return Ok(guard.clone());
             }
         };
 
-        // Now we can safely update the IAM token manager without holding the lock
-        if let Some(iam_manager) = lazy_iam_manager {
-            // Transfer the IAM token manager from lazy client to main client
-            // This transfer is thread-safe due to the use of Arc for shared ownership and RwLock for synchronized access.
-            let mut guard = self.iam_token_manager.write().await;
-            *guard = Some(iam_manager);
-        }
-
         // Continue with client initialization
         let mut config = config;
         config.lazy_connect = false;
 
         let mut guard = self.internal_client.write().await;
-        let iam_manager_guard = self.iam_token_manager.read().await;
-        let iam_manager_ref = iam_manager_guard.as_ref();
+        let iam_manager_ref = self.iam_token_manager.as_ref();
         if let ClientWrapper::Lazy(_) = &*guard {
             // Create the appropriate client based on configuration
             let real_client = if config.cluster_mode_enabled {
@@ -857,15 +846,12 @@ impl Client {
         ));
 
         // Check if we have an IAM token manager first (takes precedence)
-        let token_option = {
-            let iam_manager_guard = self.iam_token_manager.read().await;
-            if let Some(iam_manager) = iam_manager_guard.as_ref() {
-                let token = iam_manager.read().await.get_token().await;
-                Some(token)
-            } else {
-                None
-            }
-        }; // Guard is dropped here
+        let token_option = if let Some(iam_manager) = &self.iam_token_manager {
+            let token = iam_manager.get_token().await;
+            Some(token)
+        } else {
+            None
+        };
 
         // If we have an IAM token, use it for authentication
         if let Some(token) = token_option {
@@ -959,7 +945,7 @@ impl Client {
     async fn create_iam_token_manager(
         auth_info: &crate::client::types::AuthenticationInfo,
         client_weak_ref: std::sync::Weak<RwLock<Client>>,
-    ) -> Option<Arc<tokio::sync::RwLock<crate::iam::IAMTokenManager>>> {
+    ) -> Option<Arc<crate::iam::IAMTokenManager>> {
         if let Some(iam_config) = &auth_info.iam_config {
             if let Some(username) = &auth_info.username {
                 match crate::iam::IAMTokenManager::new(
@@ -977,7 +963,7 @@ impl Client {
                         token_manager.set_token_refresh_callback(iam_callback);
 
                         token_manager.start_refresh_task();
-                        Some(Arc::new(tokio::sync::RwLock::new(token_manager)))
+                        Some(Arc::new(token_manager))
                     }
                     Err(e) => {
                         log_error("IAM", format!("Failed to create IAM token manager: {e}"));
@@ -1021,7 +1007,7 @@ fn to_duration(time_in_millis: Option<u32>, default: Duration) -> Duration {
 async fn create_cluster_client(
     request: ConnectionRequest,
     push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
-    iam_token_manager: Option<&Arc<tokio::sync::RwLock<crate::iam::IAMTokenManager>>>,
+    iam_token_manager: Option<&Arc<crate::iam::IAMTokenManager>>,
 ) -> RedisResult<redis::cluster_async::ClusterConnection> {
     let tls_mode = request.tls_mode.unwrap_or_default();
 
@@ -1290,38 +1276,29 @@ impl Client {
                 Arc::new(RwLock::new(ClientWrapper::Lazy(Box::new(LazyClient {
                     config: request.clone(),
                     push_sender: push_sender.clone(),
-                    iam_token_manager: None,
                 }))));
-
-            // Create the Client first so we can pass a weak reference to it for IAM callback
-            let client = Self {
-                internal_client: internal_client_arc.clone(),
-                request_timeout,
-                inflight_requests_allowed,
-                iam_token_manager: Arc::new(RwLock::new(None)),
-            };
-
-            let client_arc = Arc::new(RwLock::new(client));
 
             // Create IAM token manager if needed, passing a weak reference to the client
             let iam_token_manager = if let Some(auth_info) = &request.authentication_info {
-                Self::create_iam_token_manager(auth_info, Arc::downgrade(&client_arc)).await
+                Self::create_iam_token_manager(auth_info, std::sync::Weak::new()).await
             } else {
                 None
             };
 
-            // Update the IAM token manager in the client
-            {
-                let client_guard = client_arc.read().await;
-                let mut iam_manager_guard = client_guard.iam_token_manager.write().await;
-                *iam_manager_guard = iam_token_manager.clone();
-            }
+            // Create the Client with the IAM token manager
+            let client = Self {
+                internal_client: internal_client_arc.clone(),
+                request_timeout,
+                inflight_requests_allowed,
+                iam_token_manager: iam_token_manager.clone(),
+            };
+
+            let client_arc = Arc::new(RwLock::new(client.clone()));
 
             let internal_client = if request.lazy_connect {
                 ClientWrapper::Lazy(Box::new(LazyClient {
                     config: request,
                     push_sender,
-                    iam_token_manager: iam_token_manager.clone(),
                 }))
             } else if request.cluster_mode_enabled {
                 let client =
