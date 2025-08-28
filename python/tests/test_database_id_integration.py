@@ -5,7 +5,7 @@ Integration tests for multi-database support in both standalone and cluster mode
 """
 
 import pytest
-from glide_shared.exceptions import RequestError, ClosingError
+from glide_shared.exceptions import ClosingError, RequestError
 from glide_shared.routes import AllNodes
 
 from tests.async_tests.conftest import create_client
@@ -346,9 +346,11 @@ class TestBroaderDatabaseIdRanges:
                 await client.close()
         except (RequestError, ClosingError) as e:
             # Connection-time error for invalid database
-            assert ("DB index is out of range" in str(e) or 
-                    "invalid DB index" in str(e) or 
-                    "refused to switch database" in str(e))
+            assert (
+                "DB index is out of range" in str(e)
+                or "invalid DB index" in str(e)
+                or "refused to switch database" in str(e)
+            )
 
     @pytest.mark.asyncio
     async def test_standalone_client_with_very_high_database_ids(self, request):
@@ -371,9 +373,11 @@ class TestBroaderDatabaseIdRanges:
                 await client.close()
         except (RequestError, ClosingError) as e:
             # Connection-time error for invalid database
-            assert ("DB index is out of range" in str(e) or 
-                    "invalid DB index" in str(e) or 
-                    "refused to switch database" in str(e))
+            assert (
+                "DB index is out of range" in str(e)
+                or "invalid DB index" in str(e)
+                or "refused to switch database" in str(e)
+            )
 
     @pytest.mark.asyncio
     async def test_cluster_client_with_higher_database_ids(self, request):
@@ -400,9 +404,11 @@ class TestBroaderDatabaseIdRanges:
                 await client.close()
         except (RequestError, ClosingError) as e:
             # Connection-time error for invalid database
-            assert ("DB index is out of range" in str(e) or 
-                    "invalid DB index" in str(e) or 
-                    "refused to switch database" in str(e))
+            assert (
+                "DB index is out of range" in str(e)
+                or "invalid DB index" in str(e)
+                or "refused to switch database" in str(e)
+            )
 
 
 class TestServerSideValidation:
@@ -433,9 +439,11 @@ class TestServerSideValidation:
                 await client.close()
         except (RequestError, ClosingError) as e:
             # Expected: server should reject connection to invalid database
-            assert ("DB index is out of range" in str(e) or 
-                    "invalid DB index" in str(e) or 
-                    "refused to switch database" in str(e))
+            assert (
+                "DB index is out of range" in str(e)
+                or "invalid DB index" in str(e)
+                or "refused to switch database" in str(e)
+            )
 
     @pytest.mark.asyncio
     async def test_select_command_server_side_validation(self, request):
