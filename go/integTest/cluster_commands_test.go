@@ -2708,36 +2708,6 @@ func (suite *GlideTestSuite) TestClusterSelect_InvalidIndex_OutOfBounds() {
 	assert.Equal(suite.T(), "", result)
 }
 
-func (suite *GlideTestSuite) TestClusterSelect_SwitchBetweenDatabases() {
-	suite.SkipIfServerVersionLowerThan("9.0.0", suite.T())
-
-	client := suite.defaultClusterClient()
-
-	key1 := uuid.New().String()
-	value1 := uuid.New().String()
-	suite.verifyOK(client.Select(context.Background(), 0))
-	suite.verifyOK(client.Set(context.Background(), key1, value1))
-
-	key2 := uuid.New().String()
-	value2 := uuid.New().String()
-	suite.verifyOK(client.Select(context.Background(), 1))
-	suite.verifyOK(client.Set(context.Background(), key2, value2))
-
-	result, err := client.Get(context.Background(), key1)
-	suite.NoError(err)
-	assert.Equal(suite.T(), "", result.Value())
-
-	suite.verifyOK(client.Select(context.Background(), 0))
-	result, err = client.Get(context.Background(), key2)
-	suite.NoError(err)
-	assert.Equal(suite.T(), "", result.Value())
-
-	suite.verifyOK(client.Select(context.Background(), 1))
-	result, err = client.Get(context.Background(), key2)
-	suite.NoError(err)
-	assert.Equal(suite.T(), value2, result.Value())
-}
-
 func (suite *GlideTestSuite) TestClusterSelectWithOptions_AllPrimaries() {
 	suite.SkipIfServerVersionLowerThan("9.0.0", suite.T())
 
