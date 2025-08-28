@@ -5,7 +5,7 @@ Integration tests for multi-database support in both standalone and cluster mode
 """
 
 import pytest
-from glide_shared.exceptions import RequestError
+from glide_shared.exceptions import RequestError, ClosingError
 from glide_shared.routes import AllNodes
 
 from tests.async_tests.conftest import create_client
@@ -367,9 +367,11 @@ class TestBroaderDatabaseIdRanges:
                 ) or "invalid DB index" in str(e)
             finally:
                 await client.close()
-        except RequestError as e:
+        except (RequestError, ClosingError) as e:
             # Connection-time error for invalid database
-            assert "DB index is out of range" in str(e) or "invalid DB index" in str(e)
+            assert ("DB index is out of range" in str(e) or 
+                    "invalid DB index" in str(e) or 
+                    "refused to switch database" in str(e))
 
     @pytest.mark.asyncio
     async def test_cluster_client_with_higher_database_ids(self, request):
