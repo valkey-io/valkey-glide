@@ -2,6 +2,8 @@
 
 #### Changes
 
+* Java: Added `ClientSetName` ([#4604](https://github.com/valkey-io/valkey-glide/pull/4604))
+
 #### Fixes
 
 * Java: Add lazy connection support to Java module ([#4350](https://github.com/valkey-io/valkey-glide/pull/4370))
