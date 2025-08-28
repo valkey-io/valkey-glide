@@ -1,6 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package compatibility.jedis;
 
+import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestConfiguration.STANDALONE_HOSTS;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -1513,29 +1514,44 @@ public class UnifiedJedisTest {
         unifiedJedis.set(testKey1, "expiry_option_test1");
         unifiedJedis.set(testKey2, "expiry_option_test2");
 
-        // Test EXPIRE with ExpiryOption.NX (only set if no expiry exists)
-        long expireResult = unifiedJedis.expire(testKey1, 60, ExpiryOption.NX);
-        assertEquals(1, expireResult, "EXPIRE with NX should set expiry on key without expiry");
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            // Test EXPIRE with ExpiryOption.NX (only set if no expiry exists)
+            long expireResult = unifiedJedis.expire(testKey1, 60, ExpiryOption.NX);
+            assertEquals(1, expireResult, "EXPIRE with NX should set expiry on key without expiry");
 
-        // Test EXPIRE with ExpiryOption.XX (only set if expiry exists)
-        expireResult = unifiedJedis.expire(testKey1, 120, ExpiryOption.XX);
-        assertEquals(1, expireResult, "EXPIRE with XX should update expiry on existing expiry");
+            // Test EXPIRE with ExpiryOption.XX (only set if expiry exists)
+            expireResult = unifiedJedis.expire(testKey1, 120, ExpiryOption.XX);
+            assertEquals(1, expireResult, "EXPIRE with XX should update expiry on existing expiry");
 
-        // Test EXPIREAT with ExpiryOption
-        long futureTimestamp = System.currentTimeMillis() / 1000 + 180;
-        long expireAtResult = unifiedJedis.expireAt(testKey2, futureTimestamp, ExpiryOption.NX);
-        assertEquals(1, expireAtResult, "EXPIREAT with NX should set expiry");
+            // Test EXPIREAT with ExpiryOption
+            long futureTimestamp = System.currentTimeMillis() / 1000 + 180;
+            long expireAtResult = unifiedJedis.expireAt(testKey2, futureTimestamp, ExpiryOption.NX);
+            assertEquals(1, expireAtResult, "EXPIREAT with NX should set expiry");
 
-        // Test PEXPIRE with ExpiryOption
-        String testKey3 = UUID.randomUUID().toString();
-        unifiedJedis.set(testKey3, "pexpiry_option_test");
-        long pexpireResult = unifiedJedis.pexpire(testKey3, 60000, ExpiryOption.NX);
-        assertEquals(1, pexpireResult, "PEXPIRE with NX should set expiry");
+            // Test PEXPIRE with ExpiryOption
+            String testKey3 = UUID.randomUUID().toString();
+            unifiedJedis.set(testKey3, "pexpiry_option_test");
+            long pexpireResult = unifiedJedis.pexpire(testKey3, 60000, ExpiryOption.NX);
+            assertEquals(1, pexpireResult, "PEXPIRE with NX should set expiry");
 
-        // Test PEXPIREAT with ExpiryOption
-        long futureMillisTimestamp = System.currentTimeMillis() + 120000;
-        long pexpireAtResult = unifiedJedis.pexpireAt(testKey3, futureMillisTimestamp, ExpiryOption.XX);
-        assertEquals(1, pexpireAtResult, "PEXPIREAT with XX should update expiry");
+            // Test PEXPIREAT with ExpiryOption
+            long futureMillisTimestamp = System.currentTimeMillis() + 120000;
+            long pexpireAtResult =
+                    unifiedJedis.pexpireAt(testKey3, futureMillisTimestamp, ExpiryOption.XX);
+            assertEquals(1, pexpireAtResult, "PEXPIREAT with XX should update expiry");
+        } else {
+            // For Valkey < 7.0.0, ExpiryOption is not supported - just verify methods exist
+            try {
+                unifiedJedis.expire(testKey1, 60, ExpiryOption.NX);
+                fail("Should have thrown exception for unsupported ExpiryOption on Valkey < 7.0.0");
+            } catch (Exception e) {
+                assertTrue(
+                        e.getMessage().contains("wrong number of arguments")
+                                || e.getMessage().contains("syntax error")
+                                || e.getMessage().contains("unknown command"),
+                        "Should fail gracefully on Valkey < 7.0.0");
+            }
+        }
     }
 
     @Test
@@ -1546,25 +1562,40 @@ public class UnifiedJedisTest {
         unifiedJedis.set(testKey1, "binary_expiry_option_test1".getBytes());
         unifiedJedis.set(testKey2, "binary_expiry_option_test2".getBytes());
 
-        // Test binary EXPIRE with ExpiryOption
-        long expireResult = unifiedJedis.expire(testKey1, 60, ExpiryOption.NX);
-        assertEquals(1, expireResult, "Binary EXPIRE with NX should set expiry");
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            // Test binary EXPIRE with ExpiryOption
+            long expireResult = unifiedJedis.expire(testKey1, 60, ExpiryOption.NX);
+            assertEquals(1, expireResult, "Binary EXPIRE with NX should set expiry");
 
-        // Test binary EXPIREAT with ExpiryOption
-        long futureTimestamp = System.currentTimeMillis() / 1000 + 180;
-        long expireAtResult = unifiedJedis.expireAt(testKey2, futureTimestamp, ExpiryOption.NX);
-        assertEquals(1, expireAtResult, "Binary EXPIREAT with NX should set expiry");
+            // Test binary EXPIREAT with ExpiryOption
+            long futureTimestamp = System.currentTimeMillis() / 1000 + 180;
+            long expireAtResult = unifiedJedis.expireAt(testKey2, futureTimestamp, ExpiryOption.NX);
+            assertEquals(1, expireAtResult, "Binary EXPIREAT with NX should set expiry");
 
-        // Test binary PEXPIRE with ExpiryOption
-        byte[] testKey3 = UUID.randomUUID().toString().getBytes();
-        unifiedJedis.set(testKey3, "binary_pexpiry_option_test".getBytes());
-        long pexpireResult = unifiedJedis.pexpire(testKey3, 60000, ExpiryOption.NX);
-        assertEquals(1, pexpireResult, "Binary PEXPIRE with NX should set expiry");
+            // Test binary PEXPIRE with ExpiryOption
+            byte[] testKey3 = UUID.randomUUID().toString().getBytes();
+            unifiedJedis.set(testKey3, "binary_pexpiry_option_test".getBytes());
+            long pexpireResult = unifiedJedis.pexpire(testKey3, 60000, ExpiryOption.NX);
+            assertEquals(1, pexpireResult, "Binary PEXPIRE with NX should set expiry");
 
-        // Test binary PEXPIREAT with ExpiryOption
-        long futureMillisTimestamp = System.currentTimeMillis() + 120000;
-        long pexpireAtResult = unifiedJedis.pexpireAt(testKey3, futureMillisTimestamp, ExpiryOption.XX);
-        assertEquals(1, pexpireAtResult, "Binary PEXPIREAT with XX should update expiry");
+            // Test binary PEXPIREAT with ExpiryOption
+            long futureMillisTimestamp = System.currentTimeMillis() + 120000;
+            long pexpireAtResult =
+                    unifiedJedis.pexpireAt(testKey3, futureMillisTimestamp, ExpiryOption.XX);
+            assertEquals(1, pexpireAtResult, "Binary PEXPIREAT with XX should update expiry");
+        } else {
+            // For Redis < 7.0.0, ExpiryOption is not supported - just verify methods exist
+            try {
+                unifiedJedis.expire(testKey1, 60, ExpiryOption.NX);
+                fail("Should have thrown exception for unsupported ExpiryOption on Redis < 7.0.0");
+            } catch (Exception e) {
+                assertTrue(
+                        e.getMessage().contains("wrong number of arguments")
+                                || e.getMessage().contains("syntax error")
+                                || e.getMessage().contains("unknown command"),
+                        "Should fail gracefully on Redis < 7.0.0");
+            }
+        }
     }
 
     @Test
