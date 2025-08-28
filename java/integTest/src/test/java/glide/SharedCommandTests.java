@@ -146,7 +146,6 @@ import org.junit.jupiter.api.condition.EnabledIf;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
-import org.junit.jupiter.params.provider.ValueSource;
 
 @Timeout(10) // seconds
 public class SharedCommandTests {
@@ -198,7 +197,8 @@ public class SharedCommandTests {
     public static Stream<Arguments> getClientsWithInvalidDb() {
         return clients.stream()
                 .flatMap(
-                        args -> Stream.of(-1, 16, 100).map(invalidDb -> Arguments.of(args.get()[0], invalidDb)));
+                        args ->
+                                Stream.of(-1, 16, 100).map(invalidDb -> Arguments.of(args.get()[0], invalidDb)));
     }
 
     @SneakyThrows
