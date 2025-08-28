@@ -2,6 +2,8 @@
 
 #### Changes
 
+* GO: Hash Field Expiration commands for Valkey 9 ([#4554](https://github.com/valkey-io/valkey-glide/pull/4554))
+
 #### Fixes
 
 * Java: Add lazy connection support to Java module ([#4350](https://github.com/valkey-io/valkey-glide/pull/4370))
