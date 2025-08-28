@@ -195,6 +195,13 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
+    public static Stream<Arguments> getClientsWithInvalidDb() {
+        return clients.stream()
+                .flatMap(
+                        args -> Stream.of(-1, 16, 100).map(invalidDb -> Arguments.of(args.get()[0], invalidDb)));
+    }
+
+    @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void unlink_multiple_keys(BaseClient client) {
@@ -17727,8 +17734,7 @@ public class SharedCommandTests {
 
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClients")
-    @ValueSource(ints = {-1, 16, 100})
+    @MethodSource("getClientsWithInvalidDb")
     public void select_command_invalid_database_standalone(BaseClient client, int invalidDb) {
         // Only test SELECT on standalone clients
         if (client instanceof GlideClusterClient) {
