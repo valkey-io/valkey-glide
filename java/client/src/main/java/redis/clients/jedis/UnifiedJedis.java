@@ -2720,7 +2720,7 @@ public class UnifiedJedis implements Closeable {
             if (params.getStart() != null && params.getEnd() != null) {
                 // Has start and end parameters - check for BitmapIndexType
                 BitmapIndexType indexType =
-                        params.getModifier() != null && params.getModifier().equals("BIT")
+                        params.getModifier() != null && params.getModifier().equals(BitCountOption.BIT)
                                 ? BitmapIndexType.BIT
                                 : BitmapIndexType.BYTE;
                 return baseClient
@@ -3140,7 +3140,7 @@ public class UnifiedJedis implements Closeable {
         try {
             if (params.getStart() != null && params.getEnd() != null) {
                 BitmapIndexType indexType =
-                        params.getModifier() != null && params.getModifier().equals("BIT")
+                        params.getModifier() != null && params.getModifier().equals(BitCountOption.BIT)
                                 ? BitmapIndexType.BIT
                                 : BitmapIndexType.BYTE;
                 return baseClient
