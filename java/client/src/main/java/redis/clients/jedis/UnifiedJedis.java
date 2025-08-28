@@ -557,6 +557,14 @@ public class UnifiedJedis implements Closeable {
      *     required
      * @since Valkey 1.0.0
      */
+    /**
+     * <b><a href="https://valkey.io/commands/del">DEL Command</a></b> Removes the specified keys.
+     *
+     * @param keys the keys to delete
+     * @return the number of keys that were removed
+     * @throws JedisException if the operation fails
+     * @since Valkey 1.0.0
+     */
     public long del(byte[]... keys) {
         checkNotClosed();
         try {
@@ -2958,6 +2966,15 @@ public class UnifiedJedis implements Closeable {
 
     // ========== BINARY KEY SUPPORT ==========
 
+    /**
+     * <b><a href="https://valkey.io/commands/append">APPEND Command</a></b> Append a value to a key.
+     *
+     * @param key the key to append to
+     * @param value the binary value to append
+     * @return the length of the string after the append operation
+     * @throws JedisException if the operation fails
+     * @since Valkey 2.0.0
+     */
     public long append(byte[] key, byte[] value) {
         checkNotClosed();
         try {
@@ -2967,6 +2984,15 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/bitcount">BITCOUNT Command</a></b> Count set bits in a
+     * string.
+     *
+     * @param key the key containing the string
+     * @return the number of bits set to 1
+     * @throws JedisException if the operation fails
+     * @since Valkey 2.6.0
+     */
     public long bitcount(byte[] key) {
         checkNotClosed();
         try {
@@ -2976,6 +3002,17 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/bitcount">BITCOUNT Command</a></b> Count set bits in a
+     * string within a range.
+     *
+     * @param key the key containing the string
+     * @param start the start offset
+     * @param end the end offset
+     * @return the number of bits set to 1 in the specified range
+     * @throws JedisException if the operation fails
+     * @since Valkey 2.6.0
+     */
     public long bitcount(byte[] key, long start, long end) {
         checkNotClosed();
         try {
@@ -2985,6 +3022,18 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/bitcount">BITCOUNT Command</a></b> Count set bits in a
+     * string within a range with bit count option.
+     *
+     * @param key the key containing the string
+     * @param start the start offset
+     * @param end the end offset
+     * @param option the bit count option (BYTE or BIT)
+     * @return the number of bits set to 1 in the specified range
+     * @throws JedisException if the operation fails
+     * @since Valkey 7.0.0
+     */
     public long bitcount(byte[] key, long start, long end, BitCountOption option) {
         checkNotClosed();
         try {
@@ -2996,6 +3045,16 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/bitfield">BITFIELD Command</a></b> Perform arbitrary
+     * bitfield integer operations on strings.
+     *
+     * @param key the key containing the string
+     * @param arguments the bitfield operation arguments
+     * @return a list of results for each subcommand
+     * @throws JedisException if the operation fails
+     * @since Valkey 3.2.0
+     */
     public List<Long> bitfield(byte[] key, byte[]... arguments) {
         checkNotClosed();
         try {
@@ -3023,6 +3082,17 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/bitop">BITOP Command</a></b> Perform bitwise operations
+     * between strings.
+     *
+     * @param op the bitwise operation (AND, OR, XOR, NOT)
+     * @param destKey the destination key to store the result
+     * @param srcKeys the source keys for the operation
+     * @return the size of the string stored in the destination key
+     * @throws JedisException if the operation fails
+     * @since Valkey 2.6.0
+     */
     public long bitop(BitOP op, byte[] destKey, byte[]... srcKeys) {
         checkNotClosed();
         try {
@@ -3035,6 +3105,16 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/bitpos">BITPOS Command</a></b> Return the position of
+     * the first bit set to 1 or 0 in a string.
+     *
+     * @param key the key containing the string
+     * @param value the bit value to search for (true for 1, false for 0)
+     * @return the position of the first bit set to the specified value
+     * @throws JedisException if the operation fails
+     * @since Valkey 2.8.7
+     */
     public long bitpos(byte[] key, boolean value) {
         checkNotClosed();
         try {
@@ -3044,6 +3124,17 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/bitpos">BITPOS Command</a></b> Return the position of
+     * the first bit set to 1 or 0 in a string with additional parameters.
+     *
+     * @param key the key containing the string
+     * @param value the bit value to search for (true for 1, false for 0)
+     * @param params additional parameters for the bitpos operation
+     * @return the position of the first bit set to the specified value
+     * @throws JedisException if the operation fails
+     * @since Valkey 2.8.7
+     */
     public long bitpos(byte[] key, boolean value, BitPosParams params) {
         checkNotClosed();
         try {
@@ -3066,6 +3157,16 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/copy">COPY Command</a></b> Copy a key to another key.
+     *
+     * @param srcKey the source key to copy from
+     * @param dstKey the destination key to copy to
+     * @param replace whether to replace the destination key if it exists
+     * @return true if the key was copied, false otherwise
+     * @throws JedisException if the operation fails
+     * @since Valkey 6.2.0
+     */
     public boolean copy(byte[] srcKey, byte[] dstKey, boolean replace) {
         checkNotClosed();
         try {
@@ -3075,6 +3176,15 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/decr">DECR Command</a></b> Decrement the integer value
+     * of a key by one.
+     *
+     * @param key the key to decrement
+     * @return the value of key after the decrement
+     * @throws JedisException if the operation fails
+     * @since Valkey 1.0.0
+     */
     public long decr(byte[] key) {
         checkNotClosed();
         try {
@@ -3084,6 +3194,16 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/decrby">DECRBY Command</a></b> Decrement the integer
+     * value of a key by the given amount.
+     *
+     * @param key the key to decrement
+     * @param decrement the amount to decrement by
+     * @return the value of key after the decrement
+     * @throws JedisException if the operation fails
+     * @since Valkey 1.0.0
+     */
     public long decrBy(byte[] key, long decrement) {
         checkNotClosed();
         try {
@@ -3093,6 +3213,15 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/dump">DUMP Command</a></b> Serialize the value stored at
+     * key in a Redis-specific format.
+     *
+     * @param key the key to serialize
+     * @return the serialized value as a byte array
+     * @throws JedisException if the operation fails or the key does not exist
+     * @since Valkey 2.6.0
+     */
     public byte[] dump(byte[] key) {
         checkNotClosed();
         try {
@@ -3102,6 +3231,14 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/exists">EXISTS Command</a></b> Returns if key exists.
+     *
+     * @param key the key to check
+     * @return true if the key exists, false otherwise
+     * @throws JedisException if the operation fails
+     * @since Valkey 1.0.0
+     */
     public boolean exists(byte[] key) {
         checkNotClosed();
         try {
@@ -3111,6 +3248,15 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/exists">EXISTS Command</a></b> Returns the number of
+     * keys existing among the ones specified as arguments.
+     *
+     * @param keys the keys to check
+     * @return the number of keys existing among the specified arguments
+     * @throws JedisException if the operation fails
+     * @since Valkey 3.0.3
+     */
     public long exists(byte[]... keys) {
         checkNotClosed();
         try {
@@ -3122,6 +3268,15 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/expire">EXPIRE Command</a></b> Set a timeout on key.
+     *
+     * @param key the key to set timeout on
+     * @param seconds the timeout in seconds
+     * @return 1 if the timeout was set, 0 if key does not exist
+     * @throws JedisException if the operation fails
+     * @since Valkey 1.0.0
+     */
     public long expire(byte[] key, long seconds) {
         checkNotClosed();
         try {
@@ -3131,6 +3286,17 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/expire">EXPIRE Command</a></b> Set a timeout on key with
+     * expiry option.
+     *
+     * @param key the key to set timeout on
+     * @param seconds the timeout in seconds
+     * @param expiryOption the expiry option (NX, XX, GT, LT)
+     * @return 1 if the timeout was set, 0 if key does not exist or condition not met
+     * @throws JedisException if the operation fails
+     * @since Valkey 7.0.0
+     */
     public long expire(byte[] key, long seconds, ExpiryOption expiryOption) {
         checkNotClosed();
         try {
@@ -3148,6 +3314,16 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/expireat">EXPIREAT Command</a></b> Set the expiration
+     * for a key as a UNIX timestamp.
+     *
+     * @param key the key to set expiration on
+     * @param unixTime the UNIX timestamp when the key should expire
+     * @return 1 if the timeout was set, 0 if key does not exist
+     * @throws JedisException if the operation fails
+     * @since Valkey 1.2.0
+     */
     public long expireAt(byte[] key, long unixTime) {
         checkNotClosed();
         try {
@@ -3157,6 +3333,17 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/expireat">EXPIREAT Command</a></b> Set the expiration
+     * for a key as a UNIX timestamp with expiry option.
+     *
+     * @param key the key to set expiration on
+     * @param unixTime the UNIX timestamp when the key should expire
+     * @param expiryOption the expiry option (NX, XX, GT, LT)
+     * @return 1 if the timeout was set, 0 if key does not exist or condition not met
+     * @throws JedisException if the operation fails
+     * @since Valkey 7.0.0
+     */
     public long expireAt(byte[] key, long unixTime, ExpiryOption expiryOption) {
         checkNotClosed();
         try {
@@ -3174,6 +3361,16 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/expiretime">EXPIRETIME Command</a></b> Returns the
+     * absolute Unix timestamp at which the given key will expire.
+     *
+     * @param key the key to check
+     * @return the expiration Unix timestamp in seconds, or -1 if key exists but has no expiry, or -2
+     *     if key does not exist
+     * @throws JedisException if the operation fails
+     * @since Valkey 7.0.0
+     */
     public long expireTime(byte[] key) {
         checkNotClosed();
         try {
@@ -3185,6 +3382,14 @@ public class UnifiedJedis implements Closeable {
 
     // ========== BINARY KEY METHODS ==========
 
+    /**
+     * <b><a href="https://valkey.io/commands/get">GET Command</a></b> Get the value of key.
+     *
+     * @param key the key to retrieve
+     * @return the value of key, or null when key does not exist
+     * @throws JedisException if the operation fails
+     * @since Valkey 1.0.0
+     */
     public byte[] get(byte[] key) {
         checkNotClosed();
         try {
@@ -3195,6 +3400,15 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/getdel">GETDEL Command</a></b> Get the value of key and
+     * delete the key.
+     *
+     * @param key the key to get and delete
+     * @return the value of key, or null when key does not exist
+     * @throws JedisException if the operation fails
+     * @since Valkey 6.2.0
+     */
     public byte[] getDel(byte[] key) {
         checkNotClosed();
         try {
@@ -3205,6 +3419,16 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/getbit">GETBIT Command</a></b> Returns the bit value at
+     * offset in the string value stored at key.
+     *
+     * @param key the key containing the string
+     * @param offset the bit offset
+     * @return the bit value stored at offset
+     * @throws JedisException if the operation fails
+     * @since Valkey 2.2.0
+     */
     public boolean getbit(byte[] key, long offset) {
         checkNotClosed();
         try {
@@ -3214,6 +3438,17 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/getrange">GETRANGE Command</a></b> Returns the substring
+     * of the string value stored at key.
+     *
+     * @param key the key containing the string
+     * @param startOffset the start offset
+     * @param endOffset the end offset
+     * @return the substring as a byte array
+     * @throws JedisException if the operation fails
+     * @since Valkey 2.4.0
+     */
     public byte[] getrange(byte[] key, long startOffset, long endOffset) {
         checkNotClosed();
         try {
@@ -3225,6 +3460,15 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/incr">INCR Command</a></b> Increment the integer value
+     * of a key by one.
+     *
+     * @param key the key to increment
+     * @return the value of key after the increment
+     * @throws JedisException if the operation fails
+     * @since Valkey 1.0.0
+     */
     public long incr(byte[] key) {
         checkNotClosed();
         try {
@@ -3234,6 +3478,16 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/incrby">INCRBY Command</a></b> Increment the integer
+     * value of a key by the given amount.
+     *
+     * @param key the key to increment
+     * @param increment the amount to increment by
+     * @return the value of key after the increment
+     * @throws JedisException if the operation fails
+     * @since Valkey 1.0.0
+     */
     public long incrBy(byte[] key, long increment) {
         checkNotClosed();
         try {
@@ -3243,6 +3497,16 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/incrbyfloat">INCRBYFLOAT Command</a></b> Increment the
+     * float value of a key by the given amount.
+     *
+     * @param key the key to increment
+     * @param increment the float amount to increment by
+     * @return the value of key after the increment
+     * @throws JedisException if the operation fails
+     * @since Valkey 2.6.0
+     */
     public double incrByFloat(byte[] key, double increment) {
         checkNotClosed();
         try {
@@ -3252,6 +3516,15 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/mget">MGET Command</a></b> Returns the values of all
+     * specified keys.
+     *
+     * @param keys the keys to retrieve
+     * @return list of values at the specified keys
+     * @throws JedisException if the operation fails
+     * @since Valkey 1.0.0
+     */
     public List<byte[]> mget(byte[]... keys) {
         checkNotClosed();
         try {
@@ -3266,6 +3539,15 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/mset">MSET Command</a></b> Sets the given keys to their
+     * respective values.
+     *
+     * @param keysvalues alternating keys and values (key1, value1, key2, value2, ...)
+     * @return Simple string reply: always OK
+     * @throws JedisException if the operation fails
+     * @since Valkey 1.0.1
+     */
     public String mset(byte[]... keysvalues) {
         checkNotClosed();
         try {
@@ -3279,6 +3561,15 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/msetnx">MSETNX Command</a></b> Sets the given keys to
+     * their respective values, only if none of the keys exist.
+     *
+     * @param keysvalues alternating keys and values (key1, value1, key2, value2, ...)
+     * @return 1 if all keys were set, 0 if no key was set
+     * @throws JedisException if the operation fails
+     * @since Valkey 1.0.1
+     */
     public long msetnx(byte[]... keysvalues) {
         checkNotClosed();
         try {
@@ -3292,6 +3583,15 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/persist">PERSIST Command</a></b> Remove the existing
+     * timeout on key.
+     *
+     * @param key the key to remove timeout from
+     * @return 1 if the timeout was removed, 0 if key does not exist or does not have a timeout
+     * @throws JedisException if the operation fails
+     * @since Valkey 2.2.0
+     */
     public long persist(byte[] key) {
         checkNotClosed();
         try {
@@ -3301,6 +3601,16 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/pexpire">PEXPIRE Command</a></b> Set a timeout on key in
+     * milliseconds.
+     *
+     * @param key the key to set timeout on
+     * @param milliseconds the timeout in milliseconds
+     * @return 1 if the timeout was set, 0 if key does not exist
+     * @throws JedisException if the operation fails
+     * @since Valkey 2.6.0
+     */
     public long pexpire(byte[] key, long milliseconds) {
         checkNotClosed();
         try {
@@ -3310,6 +3620,17 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/pexpire">PEXPIRE Command</a></b> Set a timeout on key in
+     * milliseconds with expiry option.
+     *
+     * @param key the key to set timeout on
+     * @param milliseconds the timeout in milliseconds
+     * @param expiryOption the expiry option (NX, XX, GT, LT)
+     * @return 1 if the timeout was set, 0 if key does not exist or condition not met
+     * @throws JedisException if the operation fails
+     * @since Valkey 7.0.0
+     */
     public long pexpire(byte[] key, long milliseconds, ExpiryOption expiryOption) {
         checkNotClosed();
         try {
@@ -3327,6 +3648,16 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/pexpireat">PEXPIREAT Command</a></b> Set the expiration
+     * for a key as a UNIX timestamp in milliseconds.
+     *
+     * @param key the key to set expiration on
+     * @param millisecondsTimestamp the UNIX timestamp in milliseconds when the key should expire
+     * @return 1 if the timeout was set, 0 if key does not exist
+     * @throws JedisException if the operation fails
+     * @since Valkey 2.6.0
+     */
     public long pexpireAt(byte[] key, long millisecondsTimestamp) {
         checkNotClosed();
         try {
@@ -3336,6 +3667,17 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/pexpireat">PEXPIREAT Command</a></b> Set the expiration
+     * for a key as a UNIX timestamp in milliseconds with expiry option.
+     *
+     * @param key the key to set expiration on
+     * @param millisecondsTimestamp the UNIX timestamp in milliseconds when the key should expire
+     * @param expiryOption the expiry option (NX, XX, GT, LT)
+     * @return 1 if the timeout was set, 0 if key does not exist or condition not met
+     * @throws JedisException if the operation fails
+     * @since Valkey 7.0.0
+     */
     public long pexpireAt(byte[] key, long millisecondsTimestamp, ExpiryOption expiryOption) {
         checkNotClosed();
         try {
@@ -3355,6 +3697,16 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/pexpiretime">PEXPIRETIME Command</a></b> Returns the
+     * absolute Unix timestamp in milliseconds at which the given key will expire.
+     *
+     * @param key the key to check
+     * @return the expiration Unix timestamp in milliseconds, or -1 if key exists but has no expiry,
+     *     or -2 if key does not exist
+     * @throws JedisException if the operation fails
+     * @since Valkey 7.0.0
+     */
     public long pexpireTime(byte[] key) {
         checkNotClosed();
         try {
@@ -3364,6 +3716,16 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/pfadd">PFADD Command</a></b> Adds elements to the
+     * HyperLogLog data structure.
+     *
+     * @param key the key of the HyperLogLog
+     * @param elements the elements to add
+     * @return 1 if at least one element was added, 0 otherwise
+     * @throws JedisException if the operation fails
+     * @since Valkey 2.8.9
+     */
     public long pfadd(byte[] key, byte[]... elements) {
         checkNotClosed();
         try {
@@ -3375,6 +3737,15 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/pfcount">PFCOUNT Command</a></b> Returns the
+     * approximated cardinality of the HyperLogLog.
+     *
+     * @param key the key of the HyperLogLog
+     * @return the approximated cardinality
+     * @throws JedisException if the operation fails
+     * @since Valkey 2.8.9
+     */
     public long pfcount(byte[] key) {
         checkNotClosed();
         try {
@@ -3384,6 +3755,15 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/pfcount">PFCOUNT Command</a></b> Returns the
+     * approximated cardinality of the union of multiple HyperLogLogs.
+     *
+     * @param keys the keys of the HyperLogLogs
+     * @return the approximated cardinality of the union
+     * @throws JedisException if the operation fails
+     * @since Valkey 2.8.9
+     */
     public long pfcount(byte[]... keys) {
         checkNotClosed();
         try {
@@ -3395,6 +3775,16 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/pfmerge">PFMERGE Command</a></b> Merge multiple
+     * HyperLogLog values into a unique value.
+     *
+     * @param destkey the destination key for the merged HyperLogLog
+     * @param sourcekeys the source keys to merge
+     * @return Simple string reply: OK
+     * @throws JedisException if the operation fails
+     * @since Valkey 2.8.9
+     */
     public String pfmerge(byte[] destkey, byte[]... sourcekeys) {
         checkNotClosed();
         try {
@@ -3406,6 +3796,17 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/psetex">PSETEX Command</a></b> Set key to hold the
+     * binary value and set key to timeout after a given number of milliseconds.
+     *
+     * @param key the key to set
+     * @param milliseconds the expiry time in milliseconds
+     * @param value the binary value to set
+     * @return Simple string reply: OK
+     * @throws JedisException if the operation fails
+     * @since Valkey 2.6.0
+     */
     public String psetex(byte[] key, long milliseconds, byte[] value) {
         checkNotClosed();
         try {
@@ -3417,6 +3818,15 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/pttl">PTTL Command</a></b> Returns the remaining time to
+     * live of a key in milliseconds.
+     *
+     * @param key the key to check
+     * @return TTL in milliseconds, or -1 if key exists but has no expiry, or -2 if key does not exist
+     * @throws JedisException if the operation fails
+     * @since Valkey 2.6.0
+     */
     public long pttl(byte[] key) {
         checkNotClosed();
         try {
@@ -3426,6 +3836,15 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/rename">RENAME Command</a></b> Rename a key.
+     *
+     * @param oldkey the current key name
+     * @param newkey the new key name
+     * @return Simple string reply: OK
+     * @throws JedisException if the operation fails or oldkey does not exist
+     * @since Valkey 1.0.0
+     */
     public String rename(byte[] oldkey, byte[] newkey) {
         checkNotClosed();
         try {
@@ -3435,6 +3854,16 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/renamenx">RENAMENX Command</a></b> Rename a key, only if
+     * the new key does not exist.
+     *
+     * @param oldkey the current key name
+     * @param newkey the new key name
+     * @return 1 if key was renamed, 0 if newkey already exists
+     * @throws JedisException if the operation fails or oldkey does not exist
+     * @since Valkey 1.0.0
+     */
     public long renamenx(byte[] oldkey, byte[] newkey) {
         checkNotClosed();
         try {
@@ -3444,6 +3873,17 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/restore">RESTORE Command</a></b> Create a key using the
+     * provided serialized value.
+     *
+     * @param key the key to create
+     * @param ttl the time to live in milliseconds (0 for no expiry)
+     * @param serializedValue the serialized value from DUMP
+     * @return Simple string reply: OK
+     * @throws JedisException if the operation fails
+     * @since Valkey 2.6.0
+     */
     public String restore(byte[] key, long ttl, byte[] serializedValue) {
         checkNotClosed();
         try {
@@ -3453,6 +3893,18 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/restore">RESTORE Command</a></b> Create a key using the
+     * provided serialized value with additional parameters.
+     *
+     * @param key the key to create
+     * @param ttl the time to live in milliseconds (0 for no expiry)
+     * @param serializedValue the serialized value from DUMP
+     * @param params additional restore parameters
+     * @return Simple string reply: OK
+     * @throws JedisException if the operation fails
+     * @since Valkey 3.0.0
+     */
     public String restore(byte[] key, long ttl, byte[] serializedValue, RestoreParams params) {
         checkNotClosed();
         try {
@@ -3466,6 +3918,16 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/set">SET Command</a></b> Set key to hold the binary
+     * value.
+     *
+     * @param key the key to set
+     * @param value the binary value to set
+     * @return Simple string reply: OK if SET was executed correctly
+     * @throws JedisException if the operation fails
+     * @since Valkey 1.0.0
+     */
     public String set(byte[] key, byte[] value) {
         checkNotClosed();
         try {
@@ -3475,6 +3937,17 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/set">SET Command</a></b> Set key to hold the binary
+     * value with additional parameters.
+     *
+     * @param key the key to set
+     * @param value the binary value to set
+     * @param params additional set parameters (EX, PX, NX, XX, etc.)
+     * @return Simple string reply: OK if SET was executed correctly, or null if condition not met
+     * @throws JedisException if the operation fails
+     * @since Valkey 2.6.12
+     */
     public String set(byte[] key, byte[] value, SetParams params) {
         checkNotClosed();
         try {
@@ -3485,6 +3958,16 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/set">SET Command</a></b> Set key to hold the binary
+     * value and return the old value.
+     *
+     * @param key the key to set
+     * @param value the binary value to set
+     * @return the old value stored at key, or null when key did not exist
+     * @throws JedisException if the operation fails
+     * @since Valkey 6.2.0
+     */
     public byte[] setGet(byte[] key, byte[] value) {
         checkNotClosed();
         try {
@@ -3496,6 +3979,17 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/set">SET Command</a></b> Set key to hold the binary
+     * value with parameters and return the old value.
+     *
+     * @param key the key to set
+     * @param value the binary value to set
+     * @param params additional set parameters (EX, PX, NX, XX, etc.)
+     * @return the old value stored at key, or null when key did not exist or condition not met
+     * @throws JedisException if the operation fails
+     * @since Valkey 6.2.0
+     */
     public byte[] setGet(byte[] key, byte[] value, SetParams params) {
         checkNotClosed();
         try {
@@ -3508,6 +4002,17 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/setbit">SETBIT Command</a></b> Sets or clears the bit at
+     * offset in the string value stored at key.
+     *
+     * @param key the key containing the string
+     * @param offset the bit offset
+     * @param value the bit value to set (true for 1, false for 0)
+     * @return the original bit value stored at offset
+     * @throws JedisException if the operation fails
+     * @since Valkey 2.2.0
+     */
     public boolean setbit(byte[] key, long offset, boolean value) {
         checkNotClosed();
         try {
@@ -3517,6 +4022,17 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/setex">SETEX Command</a></b> Set key to hold the binary
+     * value and set key to timeout after a given number of seconds.
+     *
+     * @param key the key to set
+     * @param seconds the expiry time in seconds
+     * @param value the binary value to set
+     * @return Simple string reply: OK
+     * @throws JedisException if the operation fails
+     * @since Valkey 2.0.0
+     */
     public String setex(byte[] key, long seconds, byte[] value) {
         checkNotClosed();
         try {
@@ -3527,6 +4043,16 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/setnx">SETNX Command</a></b> Set key to hold binary
+     * value if key does not exist.
+     *
+     * @param key the key to set
+     * @param value the binary value to set
+     * @return 1 if the key was set, 0 if the key was not set
+     * @throws JedisException if the operation fails
+     * @since Valkey 1.0.0
+     */
     public long setnx(byte[] key, byte[] value) {
         checkNotClosed();
         try {
@@ -3541,6 +4067,17 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/setrange">SETRANGE Command</a></b> Overwrites part of
+     * the string stored at key, starting at the specified offset.
+     *
+     * @param key the key containing the string
+     * @param offset the offset to start overwriting
+     * @param value the binary value to write
+     * @return the length of the string after it was modified
+     * @throws JedisException if the operation fails
+     * @since Valkey 2.2.0
+     */
     public long setrange(byte[] key, long offset, byte[] value) {
         checkNotClosed();
         try {
@@ -3550,6 +4087,15 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/sort">SORT Command</a></b> Sort the elements in a list,
+     * set or sorted set.
+     *
+     * @param key the key of the list, set or sorted set to sort
+     * @return the sorted elements as a list of byte arrays
+     * @throws JedisException if the operation fails
+     * @since Valkey 1.0.0
+     */
     public List<byte[]> sort(byte[] key) {
         checkNotClosed();
         try {
@@ -3560,6 +4106,16 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/sort">SORT Command</a></b> Sort the elements in a list,
+     * set or sorted set with additional parameters.
+     *
+     * @param key the key of the list, set or sorted set to sort
+     * @param sortingParams the parameters controlling sort behavior
+     * @return the sorted elements as a list of byte arrays
+     * @throws JedisException if the operation fails
+     * @since Valkey 1.0.0
+     */
     public List<byte[]> sort(byte[] key, SortingParams sortingParams) {
         checkNotClosed();
         try {
@@ -3576,6 +4132,16 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/sort">SORT Command</a></b> Sort the elements and store
+     * the result in a destination key.
+     *
+     * @param key the key of the list, set or sorted set to sort
+     * @param dstkey the destination key to store the sorted result
+     * @return the number of elements in the sorted list
+     * @throws JedisException if the operation fails
+     * @since Valkey 1.0.0
+     */
     public long sort(byte[] key, byte[] dstkey) {
         checkNotClosed();
         try {
@@ -3585,6 +4151,17 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/sort">SORT Command</a></b> Sort the elements with
+     * parameters and store the result in a destination key.
+     *
+     * @param key the key of the list, set or sorted set to sort
+     * @param sortingParams the parameters controlling sort behavior
+     * @param dstkey the destination key to store the sorted result
+     * @return the number of elements in the sorted list
+     * @throws JedisException if the operation fails
+     * @since Valkey 1.0.0
+     */
     public long sort(byte[] key, SortingParams sortingParams, byte[] dstkey) {
         checkNotClosed();
         try {
@@ -3600,6 +4177,16 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/sort_ro">SORT_RO Command</a></b> Read-only variant of
+     * the SORT command.
+     *
+     * @param key the key of the list, set or sorted set to sort
+     * @param sortingParams the parameters controlling sort behavior
+     * @return the sorted elements as a list of byte arrays
+     * @throws JedisException if the operation fails
+     * @since Valkey 7.0.0
+     */
     public List<byte[]> sortReadonly(byte[] key, SortingParams sortingParams) {
         checkNotClosed();
         try {
@@ -3616,6 +4203,15 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/strlen">STRLEN Command</a></b> Returns the length of the
+     * string value stored at key.
+     *
+     * @param key the key containing the string
+     * @return the length of the string at key, or 0 when key does not exist
+     * @throws JedisException if the operation fails
+     * @since Valkey 2.2.0
+     */
     public long strlen(byte[] key) {
         checkNotClosed();
         try {
@@ -3625,6 +4221,17 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/substr">SUBSTR Command</a></b> Returns a substring of
+     * the string value stored at key.
+     *
+     * @param key the key containing the string
+     * @param start the start offset
+     * @param end the end offset
+     * @return the substring as a byte array
+     * @throws JedisException if the operation fails
+     * @since Valkey 1.0.0
+     */
     public byte[] substr(byte[] key, int start, int end) {
         checkNotClosed();
         try {
@@ -3635,6 +4242,15 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/touch">TOUCH Command</a></b> Alters the last access time
+     * of a key.
+     *
+     * @param key the key to touch
+     * @return 1 if the key was touched, 0 if the key does not exist
+     * @throws JedisException if the operation fails
+     * @since Valkey 3.2.1
+     */
     public long touch(byte[] key) {
         checkNotClosed();
         try {
@@ -3644,6 +4260,15 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/touch">TOUCH Command</a></b> Alters the last access time
+     * of multiple keys.
+     *
+     * @param keys the keys to touch
+     * @return the number of keys that were touched
+     * @throws JedisException if the operation fails
+     * @since Valkey 3.2.1
+     */
     public long touch(byte[]... keys) {
         checkNotClosed();
         try {
@@ -3655,6 +4280,15 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/ttl">TTL Command</a></b> Returns the remaining time to
+     * live of a key.
+     *
+     * @param key the key to check
+     * @return TTL in seconds, or -1 if key exists but has no expiry, or -2 if key does not exist
+     * @throws JedisException if the operation fails
+     * @since Valkey 1.0.0
+     */
     public long ttl(byte[] key) {
         checkNotClosed();
         try {
@@ -3664,6 +4298,15 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/type">TYPE Command</a></b> Returns the string
+     * representation of the type of the value stored at key.
+     *
+     * @param key the key to check
+     * @return type of key, or "none" when key does not exist
+     * @throws JedisException if the operation fails
+     * @since Valkey 1.0.0
+     */
     public String type(byte[] key) {
         checkNotClosed();
         try {
@@ -3673,6 +4316,15 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/unlink">UNLINK Command</a></b> Delete a key
+     * asynchronously in another thread.
+     *
+     * @param key the key to unlink
+     * @return 1 if the key was unlinked, 0 if the key does not exist
+     * @throws JedisException if the operation fails
+     * @since Valkey 4.0.0
+     */
     public long unlink(byte[] key) {
         checkNotClosed();
         try {
@@ -3682,6 +4334,15 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/unlink">UNLINK Command</a></b> Delete multiple keys
+     * asynchronously in another thread.
+     *
+     * @param keys the keys to unlink
+     * @return the number of keys that were unlinked
+     * @throws JedisException if the operation fails
+     * @since Valkey 4.0.0
+     */
     public long unlink(byte[]... keys) {
         checkNotClosed();
         try {
@@ -3693,6 +4354,16 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/bitfield_ro">BITFIELD_RO Command</a></b> Read-only
+     * variant of the BITFIELD command.
+     *
+     * @param key the key containing the string
+     * @param arguments the bitfield operation arguments
+     * @return a list of results for each subcommand
+     * @throws JedisException if the operation fails
+     * @since Valkey 6.0.0
+     */
     public List<Long> bitfieldReadonly(byte[] key, byte[]... arguments) {
         checkNotClosed();
         try {
@@ -3720,6 +4391,16 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/getex">GETEX Command</a></b> Get the value of key and
+     * optionally set its expiration.
+     *
+     * @param key the key to retrieve
+     * @param params expiration parameters
+     * @return the value of key, or null when key does not exist
+     * @throws JedisException if the operation fails
+     * @since Valkey 6.2.0
+     */
     public byte[] getEx(byte[] key, GetExParams params) {
         checkNotClosed();
         try {
@@ -3737,6 +4418,16 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/getset">GETSET Command</a></b> Atomically set key to
+     * value and return the old value stored at key.
+     *
+     * @param key the key to set
+     * @param value the new binary value to set
+     * @return the old value stored at key, or null when key did not exist
+     * @throws JedisException if the operation fails
+     * @since Valkey 1.0.0
+     */
     public byte[] getSet(byte[] key, byte[] value) {
         checkNotClosed();
         try {
@@ -3749,6 +4440,15 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/keys">KEYS Command</a></b> Find all keys matching the
+     * given pattern.
+     *
+     * @param pattern the pattern to match keys against
+     * @return set of keys matching the pattern
+     * @throws JedisException if the operation fails
+     * @since Valkey 1.0.0
+     */
     public Set<byte[]> keys(byte[] pattern) {
         checkNotClosed();
         try {
@@ -3777,6 +4477,18 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/migrate">MIGRATE Command</a></b> Atomically transfer a
+     * key from a Redis instance to another one.
+     *
+     * @param host destination host
+     * @param port destination port
+     * @param key the key to migrate
+     * @param timeout timeout in milliseconds
+     * @return Simple string reply: OK on success
+     * @throws JedisException if the operation fails
+     * @since Redis 2.6.0
+     */
     public String migrate(String host, int port, byte[] key, int timeout) {
         checkNotClosed();
         try {
@@ -3802,6 +4514,19 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/migrate">MIGRATE Command</a></b> Atomically transfer
+     * keys from a Redis instance to another one with additional parameters.
+     *
+     * @param host destination host
+     * @param port destination port
+     * @param timeout timeout in milliseconds
+     * @param params additional migration parameters
+     * @param keys the keys to migrate
+     * @return Simple string reply: OK on success
+     * @throws JedisException if the operation fails
+     * @since Redis 3.0.0
+     */
     public String migrate(String host, int port, int timeout, MigrateParams params, byte[]... keys) {
         checkNotClosed();
         try {
@@ -3840,6 +4565,15 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/scan">SCAN Command</a></b> Incrementally iterate over
+     * the key space.
+     *
+     * @param cursor the cursor for iteration
+     * @return scan result containing next cursor and keys
+     * @throws JedisException if the operation fails
+     * @since Valkey 2.8.0
+     */
     public ScanResult<byte[]> scan(byte[] cursor) {
         checkNotClosed();
         try {
@@ -3884,6 +4618,16 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/scan">SCAN Command</a></b> Incrementally iterate over
+     * the key space with additional parameters.
+     *
+     * @param cursor the cursor for iteration
+     * @param params scan parameters (MATCH, COUNT, etc.)
+     * @return scan result containing next cursor and keys
+     * @throws JedisException if the operation fails
+     * @since Valkey 2.8.0
+     */
     public ScanResult<byte[]> scan(byte[] cursor, ScanParams params) {
         checkNotClosed();
         try {
@@ -3951,6 +4695,17 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    /**
+     * <b><a href="https://valkey.io/commands/scan">SCAN Command</a></b> Incrementally iterate over
+     * the key space with parameters and type filtering.
+     *
+     * @param cursor the cursor for iteration
+     * @param params scan parameters (MATCH, COUNT, etc.)
+     * @param type the type of keys to return
+     * @return scan result containing next cursor and keys
+     * @throws JedisException if the operation fails
+     * @since Redis 2.8.0
+     */
     public ScanResult<byte[]> scan(byte[] cursor, ScanParams params, byte[] type) {
         checkNotClosed();
         try {
