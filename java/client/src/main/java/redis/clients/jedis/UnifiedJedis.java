@@ -4,21 +4,26 @@ package redis.clients.jedis;
 import glide.api.BaseClient;
 import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
+import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
+import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.GetExOptions;
+import glide.api.models.commands.RestoreOptions;
 import glide.api.models.commands.SetOptions;
+import glide.api.models.commands.SortBaseOptions;
+import glide.api.models.commands.SortOptions;
 import glide.api.models.commands.bitmap.BitmapIndexType;
 import glide.api.models.commands.bitmap.BitwiseOperation;
+import glide.api.models.commands.scan.ClusterScanCursor;
 import glide.api.models.commands.scan.ScanOptions;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
 import java.io.Closeable;
 import java.net.URI;
 import java.time.Duration;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 import redis.clients.jedis.args.BitCountOption;
 import redis.clients.jedis.args.BitOP;
 import redis.clients.jedis.args.ExpiryOption;
@@ -426,8 +431,11 @@ public class UnifiedJedis implements Closeable {
     // ========== BASIC OPERATIONS ==========
 
     /**
-     * Set the string value of a key. If the key already exists, its value will be overwritten
-     * regardless of its type. This is the most basic Valkey SET operation.
+     * <b><a href="https://valkey.io/commands/set">SET Command</a></b> Set the string value of a key.
+     * If the key already exists, its value will be overwritten regardless of its type. This is the
+     * most basic Valkey SET operation.
+     *
+     * <p>Time complexity: O(1)
      *
      * @param key the key to set (must not be null)
      * @param value the string value to set (must not be null)
@@ -463,12 +471,30 @@ public class UnifiedJedis implements Closeable {
     }
 
     /**
-     * Delete one or more keys from the database. This operation removes the keys and their associated
-     * values completely. Non-existent keys are ignored.
+     * <b><a href="https://valkey.io/commands/del">DEL Command</a></b> Delete one or more keys from
+     * the database. This operation removes the keys and their associated values completely.
+     * Non-existent keys are ignored and do not cause an error.
+     *
+     * <p>The operation is atomic when deleting a single key, but when multiple keys are specified,
+     * the deletion happens sequentially. In cluster mode, if keys map to different hash slots, the
+     * command will be executed multiple times.
+     *
+     * <p><b>Performance Considerations:</b>
+     *
+     * <ul>
+     *   <li>For large objects (lists, sets, hashes with many elements), consider using {@link
+     *       #unlink(String...)} for non-blocking deletion
+     *   <li>Deleting many keys at once may block the server briefly
+     * </ul>
+     *
+     * <p>Time complexity: O(N) where N is the number of keys to delete. O(M) additional time is spent
+     * for each key if it contains M elements (for complex data types like lists, sets, etc.).
      *
      * @param keys the keys to delete (must not be null, can be empty)
      * @return the number of keys that were actually deleted (0 to keys.length)
      * @throws JedisException if the operation fails
+     * @apiNote In cluster mode, if keys map to different hash slots, multiple round trips may be
+     *     required
      * @since Valkey 1.0.0
      */
     public Long del(String... keys) {
@@ -480,12 +506,56 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
-    /** Delete a key. */
+    /**
+     * <b><a href="https://valkey.io/commands/del">DEL Command</a></b> Delete a single key from the
+     * database. This operation removes the key and its associated value completely. If the key does
+     * not exist, the operation is ignored and returns 0.
+     *
+     * <p>This is a convenience method that delegates to {@link #del(String...)} with a single key.
+     *
+     * <p>Time complexity: O(1) for simple data types, O(M) for complex data types where M is the
+     * number of elements in the data structure.
+     *
+     * @param key the key to delete (must not be null)
+     * @return 1 if the key was deleted, 0 if the key did not exist
+     * @throws JedisException if the operation fails
+     * @see #del(String...) for deleting multiple keys
+     * @see #unlink(String) for non-blocking deletion of large objects
+     * @since Valkey 1.0.0
+     */
     public Long del(String key) {
         return del(new String[] {key});
     }
 
-    /** Delete keys (binary). */
+    /**
+     * <b><a href="https://valkey.io/commands/del">DEL Command</a></b> Delete one or more keys from
+     * the database using binary key names. This operation removes the keys and their associated
+     * values completely. Non-existent keys are ignored and do not cause an error.
+     *
+     * <p>This method accepts binary (byte array) key names, which is useful when working with
+     * non-UTF-8 encoded keys or when you need to store binary data as key names.
+     *
+     * <p>The operation is atomic when deleting a single key, but when multiple keys are specified,
+     * the deletion happens sequentially. In cluster mode, if keys map to different hash slots, the
+     * command will be executed multiple times.
+     *
+     * <p><b>Performance Considerations:</b>
+     *
+     * <ul>
+     *   <li>For large objects, consider using the UNLINK command for non-blocking deletion
+     *   <li>Deleting many keys at once may block the server briefly
+     * </ul>
+     *
+     * <p>Time complexity: O(N) where N is the number of keys to delete. O(M) additional time is spent
+     * for each key if it contains M elements (for complex data types like lists, sets, etc.).
+     *
+     * @param keys the binary keys to delete (must not be null, can be empty)
+     * @return the number of keys that were actually deleted (0 to keys.length)
+     * @throws JedisException if the operation fails
+     * @apiNote In cluster mode, if keys map to different hash slots, multiple round trips may be
+     *     required
+     * @since Valkey 1.0.0
+     */
     public Long del(byte[]... keys) {
         checkNotClosed();
         try {
@@ -499,7 +569,26 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
-    /** Delete a key (binary). */
+    /**
+     * <b><a href="https://valkey.io/commands/del">DEL Command</a></b> Delete a single key from the
+     * database using a binary key name. This operation removes the key and its associated value
+     * completely. If the key does not exist, the operation is ignored and returns 0.
+     *
+     * <p>This method accepts a binary (byte array) key name, which is useful when working with
+     * non-UTF-8 encoded keys or when you need to store binary data as key names.
+     *
+     * <p>This is a convenience method that delegates to {@link #del(byte[]...)} with a single key.
+     *
+     * <p>Time complexity: O(1) for simple data types, O(M) for complex data types where M is the
+     * number of elements in the data structure.
+     *
+     * @param key the binary key to delete (must not be null)
+     * @return 1 if the key was deleted, 0 if the key did not exist
+     * @throws JedisException if the operation fails
+     * @see #del(byte[]...) for deleting multiple binary keys
+     * @see #del(String) for deleting string keys
+     * @since Valkey 1.0.0
+     */
     public Long del(byte[] key) {
         return del(new byte[][] {key});
     }
@@ -508,6 +597,7 @@ public class UnifiedJedis implements Closeable {
      * Test if the server is alive and responding. This command is often used for health checks and
      * connection testing. The server will respond with "PONG" if it's functioning correctly.
      *
+     * @see <a href="https://valkey.io/commands/ping/">valkey.io</a> for details.
      * @return "PONG" if the server is responding
      * @throws JedisException if the operation fails or connection is lost
      * @since Valkey 1.0.0
@@ -530,6 +620,7 @@ public class UnifiedJedis implements Closeable {
      * send a custom message that will be echoed back by the server, useful for testing message
      * integrity and round-trip functionality.
      *
+     * @see <a href="https://valkey.io/commands/ping/">valkey.io</a> for details.
      * @param message the message to echo back (must not be null)
      * @return the echoed message exactly as sent
      * @throws JedisException if the operation fails or connection is lost
@@ -576,8 +667,9 @@ public class UnifiedJedis implements Closeable {
     // ========== STRING COMMANDS ==========
 
     /**
-     * Set the string value of a key with optional parameters. This method provides advanced SET
-     * functionality including conditional setting, expiration, and atomic get-and-set operations.
+     * <b><a href="https://valkey.io/commands/set">SET Command</a></b> Set the string value of a key
+     * with optional parameters. This method provides advanced SET functionality including conditional
+     * setting, expiration, and atomic get-and-set operations.
      *
      * <p>The SetParams object allows you to specify:
      *
@@ -586,6 +678,8 @@ public class UnifiedJedis implements Closeable {
      *   <li>Expiration settings (EX, PX, EXAT, PXAT, KEEPTTL)
      *   <li>GET option to return the old value atomically
      * </ul>
+     *
+     * <p>Time complexity: O(1)
      *
      * @param key the key to set (must not be null)
      * @param value the value to set (must not be null)
@@ -604,21 +698,24 @@ public class UnifiedJedis implements Closeable {
             }
 
             // Convert Jedis SetParams to GLIDE SetOptions
-            SetOptions.SetOptionsBuilder builder = SetOptions.builder();
-
-            // This is a simplified conversion - in a full implementation, you would need
-            // to properly parse the SetParams to extract NX, XX, EX, PX options
-            // For now, we'll use the basic set command
-            return baseClient.set(key, value).get();
+            SetOptions options = convertSetParams(params);
+            return baseClient.set(key, value, options).get();
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("SET operation failed", e);
         }
     }
 
+    private SetOptions convertSetParams(SetParams params) {
+        return convertSetParams(params, false);
+    }
+
     /**
-     * Atomically set the value of a key and return its old value. This operation is atomic, meaning
-     * no other client can modify the key between getting the old value and setting the new one. This
-     * is equivalent to SET with the GET option.
+     * <b><a href="https://valkey.io/commands/set">SET Command</a></b> Atomically set the value of a
+     * key and return its old value. This operation is atomic, meaning no other client can modify the
+     * key between getting the old value and setting the new one. This is equivalent to SET with the
+     * GET option.
+     *
+     * <p>Time complexity: O(1)
      *
      * @param key the key to set (must not be null)
      * @param value the new value to set (must not be null)
@@ -638,8 +735,11 @@ public class UnifiedJedis implements Closeable {
     }
 
     /**
-     * Atomically set the value of a key with parameters and return its old value. This combines the
-     * functionality of SET with parameters and the GET option for atomic operations.
+     * <b><a href="https://valkey.io/commands/set">SET Command</a></b> Atomically set the value of a
+     * key with parameters and return its old value. This combines the functionality of SET with
+     * parameters and the GET option for atomic operations.
+     *
+     * <p>Time complexity: O(1)
      *
      * @param key the key to set (must not be null)
      * @param value the new value to set (must not be null)
@@ -653,16 +753,71 @@ public class UnifiedJedis implements Closeable {
     public String setGet(String key, String value, SetParams params) {
         checkNotClosed();
         try {
-            // Use SET with returnOldValue option to implement SETGET
-            SetOptions.SetOptionsBuilder builder = SetOptions.builder().returnOldValue(true);
+            SetOptions options;
+            if (params == null) {
+                // No params provided, just set returnOldValue for SETGET behavior
+                options = SetOptions.builder().returnOldValue(true).build();
+            } else {
+                // Reuse the existing convertSetParams method with forceReturnOldValue=true
+                options = convertSetParams(params, true);
+            }
 
-            // This is a simplified conversion - in a full implementation, you would need
-            // to properly parse the SetParams to extract NX, XX, EX, PX options
-
-            return baseClient.set(key, value, builder.build()).get();
+            return baseClient.set(key, value, options).get();
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("SETGET operation failed", e);
         }
+    }
+
+    private SetOptions convertSetParams(SetParams params, boolean forceReturnOldValue) {
+        SetOptions.SetOptionsBuilder builder = SetOptions.builder();
+
+        // Handle existence conditions (NX/XX)
+        if (params.getExistenceCondition() != null) {
+            switch (params.getExistenceCondition()) {
+                case NX:
+                    builder.conditionalSetOnlyIfNotExist();
+                    break;
+                case XX:
+                    builder.conditionalSetOnlyIfExists();
+                    break;
+            }
+        }
+
+        // Handle expiration settings
+        if (params.getExpirationType() != null) {
+            switch (params.getExpirationType()) {
+                case EX:
+                    if (params.getExpirationValue() != null) {
+                        builder.expiry(SetOptions.Expiry.Seconds(params.getExpirationValue()));
+                    }
+                    break;
+                case PX:
+                    if (params.getExpirationValue() != null) {
+                        builder.expiry(SetOptions.Expiry.Milliseconds(params.getExpirationValue()));
+                    }
+                    break;
+                case EXAT:
+                    if (params.getExpirationValue() != null) {
+                        builder.expiry(SetOptions.Expiry.UnixSeconds(params.getExpirationValue()));
+                    }
+                    break;
+                case PXAT:
+                    if (params.getExpirationValue() != null) {
+                        builder.expiry(SetOptions.Expiry.UnixMilliseconds(params.getExpirationValue()));
+                    }
+                    break;
+                case KEEPTTL:
+                    builder.expiry(SetOptions.Expiry.KeepExisting());
+                    break;
+            }
+        }
+
+        // Handle GET option (return old value)
+        if (forceReturnOldValue || params.isGet()) {
+            builder.returnOldValue(true);
+        }
+
+        return builder.build();
     }
 
     /**
@@ -670,6 +825,7 @@ public class UnifiedJedis implements Closeable {
      * individual GET operations, especially when dealing with network latency. Non-existent keys will
      * return null values in the corresponding positions.
      *
+     * @see <a href="https://valkey.io/commands/mget/">valkey.io</a> for details.
      * @param keys the keys to retrieve values for (must not be null, can be empty)
      * @return a list of values corresponding to the given keys, with null for non-existent keys
      * @throws JedisException if the operation fails
@@ -686,15 +842,18 @@ public class UnifiedJedis implements Closeable {
     }
 
     /**
-     * Set multiple key-value pairs in a single atomic operation. This is more efficient than multiple
-     * individual SET operations and is guaranteed to be atomic - either all keys are set or none are
-     * set if an error occurs.
+     * <b><a href="https://valkey.io/commands/mset">MSET Command</a></b> Set multiple key-value pairs
+     * in a single atomic operation. This is more efficient than multiple individual SET operations
+     * and is guaranteed to be atomic - either all keys are set or none are set if an error occurs.
+     *
+     * <p>Time complexity: O(N) where N is the number of keys to set
      *
      * @param keysvalues alternating keys and values (key1, value1, key2, value2, ...). Must have an
      *     even number of arguments.
      * @return "OK" if successful
      * @throws IllegalArgumentException if the number of arguments is odd
      * @throws JedisException if the operation fails
+     * @apiNote In cluster mode, all keys must map to the same hash slot
      * @since Valkey 1.0.1
      */
     public String mset(String... keysvalues) {
@@ -716,8 +875,11 @@ public class UnifiedJedis implements Closeable {
     }
 
     /**
-     * Set the value of a key only if the key does not already exist. This is useful for implementing
-     * distributed locks or ensuring that initialization values are not overwritten.
+     * <b><a href="https://valkey.io/commands/setnx">SETNX Command</a></b> Set the value of a key only
+     * if the key does not already exist. This is useful for implementing distributed locks or
+     * ensuring that initialization values are not overwritten.
+     *
+     * <p>Time complexity: O(1)
      *
      * @param key the key to set (must not be null)
      * @param value the value to set (must not be null)
@@ -737,8 +899,11 @@ public class UnifiedJedis implements Closeable {
     }
 
     /**
-     * Set the value of a key with an expiration time in seconds. The key will be automatically
-     * deleted after the specified number of seconds. This is equivalent to SET with EX option.
+     * <b><a href="https://valkey.io/commands/setex">SETEX Command</a></b> Set the value of a key with
+     * an expiration time in seconds. The key will be automatically deleted after the specified number
+     * of seconds. This is equivalent to SET with EX option.
+     *
+     * <p>Time complexity: O(1)
      *
      * @param key the key to set (must not be null)
      * @param seconds the expiration time in seconds (must be positive)
@@ -758,9 +923,12 @@ public class UnifiedJedis implements Closeable {
     }
 
     /**
-     * Set the value of a key with an expiration time in milliseconds. The key will be automatically
-     * deleted after the specified number of milliseconds. This provides more precise timing control
-     * than SETEX. This is equivalent to SET with PX option.
+     * <b><a href="https://valkey.io/commands/psetex">PSETEX Command</a></b> Set the value of a key
+     * with an expiration time in milliseconds. The key will be automatically deleted after the
+     * specified number of milliseconds. This provides more precise timing control than SETEX. This is
+     * equivalent to SET with PX option.
+     *
+     * <p>Time complexity: O(1)
      *
      * @param key the key to set (must not be null)
      * @param milliseconds the expiration time in milliseconds (must be positive)
@@ -785,6 +953,7 @@ public class UnifiedJedis implements Closeable {
      * in favor of {@link #setGet(String, String)} which provides the same functionality with a
      * clearer name.
      *
+     * @see <a href="https://valkey.io/commands/getset/">valkey.io</a> for details.
      * @param key the key to get and set (must not be null)
      * @param value the new value to set (must not be null)
      * @return the old value stored at the key, or null if the key did not exist
@@ -802,6 +971,7 @@ public class UnifiedJedis implements Closeable {
      * queues or consuming values that should only be processed once. The operation is atomic,
      * ensuring no race conditions between getting and deleting.
      *
+     * @see <a href="https://valkey.io/commands/getdel/">valkey.io</a> for details.
      * @param key the key to get and delete (must not be null)
      * @return the value that was stored at the key, or null if the key did not exist
      * @throws JedisException if the operation fails
@@ -821,6 +991,7 @@ public class UnifiedJedis implements Closeable {
      * value while simultaneously updating its expiration time, which is useful for implementing
      * sliding window expiration patterns.
      *
+     * @see <a href="https://valkey.io/commands/getex/">valkey.io</a> for details.
      * @param key the key to get (must not be null)
      * @param params the expiration parameters (can be null to just get without changing expiration)
      * @return the value stored at the key, or null if the key does not exist
@@ -835,13 +1006,31 @@ public class UnifiedJedis implements Closeable {
             }
 
             // Convert Jedis GetExParams to GLIDE GetExOptions
-            // This is a simplified implementation - full implementation would need
-            // to parse the actual parameters from GetExParams
-            GetExOptions options = GetExOptions.Persist();
-
+            GetExOptions options = convertGetExParams(params);
             return baseClient.getex(key, options).get();
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("GETEX operation failed", e);
+        }
+    }
+
+    private GetExOptions convertGetExParams(GetExParams params) {
+        if (params.getExpirationType() == null) {
+            return GetExOptions.Persist();
+        }
+
+        switch (params.getExpirationType()) {
+            case EX:
+                return GetExOptions.Seconds(params.getExpirationValue());
+            case PX:
+                return GetExOptions.Milliseconds(params.getExpirationValue());
+            case EXAT:
+                return GetExOptions.UnixSeconds(params.getExpirationValue());
+            case PXAT:
+                return GetExOptions.UnixMilliseconds(params.getExpirationValue());
+            case PERSIST:
+                return GetExOptions.Persist();
+            default:
+                return GetExOptions.Persist();
         }
     }
 
@@ -849,6 +1038,7 @@ public class UnifiedJedis implements Closeable {
      * Append a value to the end of the string stored at a key. If the key does not exist, it is
      * created with an empty string as its value before performing the append operation.
      *
+     * @see <a href="https://valkey.io/commands/append/">valkey.io</a> for details.
      * @param key the key whose value to append to (must not be null)
      * @param value the value to append (must not be null)
      * @return the length of the string after the append operation
@@ -868,6 +1058,7 @@ public class UnifiedJedis implements Closeable {
      * Get the length of the string value stored at a key. If the key does not exist, it is treated as
      * an empty string and returns 0.
      *
+     * @see <a href="https://valkey.io/commands/strlen/">valkey.io</a> for details.
      * @param key the key to get the string length for (must not be null)
      * @return the length of the string stored at the key, or 0 if the key does not exist
      * @throws JedisException if the operation fails or the key contains a non-string value
@@ -887,6 +1078,7 @@ public class UnifiedJedis implements Closeable {
      * before performing the increment operation. The value must be representable as a 64-bit signed
      * integer.
      *
+     * @see <a href="https://valkey.io/commands/incr/">valkey.io</a> for details.
      * @param key the key whose value to increment (must not be null)
      * @return the value of the key after incrementing
      * @throws JedisException if the operation fails or the value is not an integer
@@ -906,6 +1098,7 @@ public class UnifiedJedis implements Closeable {
      * it is set to 0 before performing the increment operation. The value must be representable as a
      * 64-bit signed integer.
      *
+     * @see <a href="https://valkey.io/commands/incrby/">valkey.io</a> for details.
      * @param key the key whose value to increment (must not be null)
      * @param increment the amount to increment by (can be negative for decrement)
      * @return the value of the key after incrementing
@@ -926,6 +1119,7 @@ public class UnifiedJedis implements Closeable {
      * exist, it is set to 0 before performing the increment operation. The value must be
      * representable as a double-precision floating-point number.
      *
+     * @see <a href="https://valkey.io/commands/incrbyfloat/">valkey.io</a> for details.
      * @param key the key whose value to increment (must not be null)
      * @param increment the floating-point amount to increment by (can be negative for decrement)
      * @return the value of the key after incrementing
@@ -946,6 +1140,7 @@ public class UnifiedJedis implements Closeable {
      * before performing the decrement operation. The value must be representable as a 64-bit signed
      * integer.
      *
+     * @see <a href="https://valkey.io/commands/decr/">valkey.io</a> for details.
      * @param key the key whose value to decrement (must not be null)
      * @return the value of the key after decrementing
      * @throws JedisException if the operation fails or the value is not an integer
@@ -965,6 +1160,7 @@ public class UnifiedJedis implements Closeable {
      * it is set to 0 before performing the decrement operation. The value must be representable as a
      * 64-bit signed integer.
      *
+     * @see <a href="https://valkey.io/commands/decrby/">valkey.io</a> for details.
      * @param key the key whose value to decrement (must not be null)
      * @param decrement the amount to decrement by (must be positive)
      * @return the value of the key after decrementing
@@ -1001,9 +1197,14 @@ public class UnifiedJedis implements Closeable {
     }
 
     /**
-     * Overwrite part of the string stored at a key, starting at the specified offset. If the offset
-     * is larger than the current string length, the string is padded with zero-bytes. If the key does
-     * not exist, it is created with an empty string before performing the operation.
+     * <b><a href="https://valkey.io/commands/setrange">SETRANGE Command</a></b> Overwrite part of the
+     * string stored at a key, starting at the specified offset. If the offset is larger than the
+     * current string length, the string is padded with zero-bytes. If the key does not exist, it is
+     * created with an empty string before performing the operation.
+     *
+     * <p>Time complexity: O(1), not counting the time taken to copy the new string in place. Usually,
+     * this string is very small so the amortized complexity is O(1). Otherwise, complexity is O(M)
+     * with M being the length of the value argument.
      *
      * @param key the key containing the string to modify (must not be null)
      * @param offset the position to start overwriting from (must be non-negative)
@@ -1041,6 +1242,7 @@ public class UnifiedJedis implements Closeable {
      * Check if a key exists in the database. This is a fast operation that only checks for the
      * existence of the key without retrieving its value.
      *
+     * @see <a href="https://valkey.io/commands/exists/">valkey.io</a> for details.
      * @param key the key to check for existence (must not be null)
      * @return true if the key exists, false otherwise
      * @throws JedisException if the operation fails
@@ -1078,6 +1280,7 @@ public class UnifiedJedis implements Closeable {
      * in the background, making it non-blocking for large objects. The key is immediately removed
      * from the keyspace but the memory is reclaimed asynchronously.
      *
+     * @see <a href="https://valkey.io/commands/unlink/">valkey.io</a> for details.
      * @param key the key to delete asynchronously (must not be null)
      * @return the number of keys that were deleted (0 or 1)
      * @throws JedisException if the operation fails
@@ -1097,6 +1300,7 @@ public class UnifiedJedis implements Closeable {
      * deletion in the background, making it non-blocking for large objects. The keys are immediately
      * removed from the keyspace but the memory is reclaimed asynchronously.
      *
+     * @see <a href="https://valkey.io/commands/unlink/">valkey.io</a> for details.
      * @param keys the keys to delete asynchronously (must not be null, can be empty)
      * @return the number of keys that were deleted
      * @throws JedisException if the operation fails
@@ -1115,6 +1319,7 @@ public class UnifiedJedis implements Closeable {
      * Get the data type of the value stored at a key. This command returns the string representation
      * of the type, which can be used to determine how to handle the value.
      *
+     * @see <a href="https://valkey.io/commands/type/">valkey.io</a> for details.
      * @param key the key to get the type for (must not be null)
      * @return the type of the value ("string", "list", "set", "zset", "hash", "stream", or "none" if
      *     key doesn't exist)
@@ -1149,74 +1354,65 @@ public class UnifiedJedis implements Closeable {
      * @throws UnsupportedOperationException if called in cluster mode (use SCAN instead)
      * @since Valkey 1.0.0
      */
-    public java.util.Set<String> keys(String pattern) {
+    public Set<String> keys(String pattern) {
         checkNotClosed();
-        // KEYS command is not available in GLIDE BaseClient
-        // We can implement it using SCAN for compatibility
         try {
-            java.util.Set<String> allKeys = new java.util.HashSet<>();
-            String cursor = "0";
+            String[] args = {"KEYS", pattern};
+            Object result;
 
             if (isClusterMode) {
-                // For cluster mode, SCAN is more complex - simplified implementation
-                throw new UnsupportedOperationException(
-                        "KEYS command in cluster mode requires special handling not yet implemented");
+                result = glideClusterClient.customCommand(args).get();
             } else {
-                do {
-                    Object[] result = glideClient.scan(cursor).get();
-                    cursor = (String) result[0];
-                    String[] keys = (String[]) result[1];
-
-                    // Filter keys by pattern (simple pattern matching)
-                    for (String key : keys) {
-                        if (matchesPattern(key, pattern)) {
-                            allKeys.add(key);
-                        }
-                    }
-                } while (!"0".equals(cursor));
+                result = glideClient.customCommand(args).get();
             }
 
-            return allKeys;
+            if (result instanceof String[]) {
+                Set<String> keySet = new HashSet<>();
+                for (String key : (String[]) result) {
+                    keySet.add(key);
+                }
+                return keySet;
+            } else if (result == null) {
+                return new HashSet<>();
+            } else {
+                throw new JedisException("Unexpected response type for KEYS command: " + result.getClass());
+            }
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("KEYS operation failed", e);
         }
     }
 
     /**
-     * Simple pattern matching helper for KEYS command compatibility. Converts Redis-style patterns to
-     * Java regular expressions.
+     * Returns a random key from the currently selected database. This command is useful for sampling
+     * or implementing random selection algorithms.
      *
-     * @param key the key to test
-     * @param pattern the Redis-style pattern
-     * @return true if the key matches the pattern
-     */
-    private boolean matchesPattern(String key, String pattern) {
-        // Convert Redis pattern to Java regex
-        String regex =
-                pattern.replace("*", ".*").replace("?", ".").replace("[", "\\[").replace("]", "\\]");
-        return key.matches(regex);
-    }
-
-    /**
-     * Return a random key from the database. This command is useful for sampling or implementing
-     * random selection algorithms.
+     * <p><b>Time complexity:</b> O(1)
      *
+     * @see <a href="https://valkey.io/commands/randomkey/">valkey.io</a> for details.
      * @return a random key from the database, or null if the database is empty
-     * @throws UnsupportedOperationException this command is not supported in the GLIDE compatibility
-     *     layer
+     * @throws JedisException if the operation fails
+     * @apiNote In cluster mode, the command is routed to all primary nodes and returns the first
+     *     successful result
      * @since Valkey 1.0.0
      */
     public String randomKey() {
         checkNotClosed();
-        // RANDOMKEY is not available in GLIDE BaseClient
-        throw new UnsupportedOperationException(
-                "RANDOMKEY command is not supported in GLIDE compatibility layer");
+        try {
+            if (isClusterMode) {
+                return glideClusterClient.randomKey().get();
+            } else {
+                return glideClient.randomKey().get();
+            }
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("RANDOMKEY operation failed", e);
+        }
     }
 
     /**
      * Rename a key to a new name. If the destination key already exists, it will be overwritten. This
      * operation is atomic - the key is renamed instantly without any intermediate state.
      *
+     * @see <a href="https://valkey.io/commands/rename/">valkey.io</a> for details.
      * @param oldkey the current name of the key (must not be null and must exist)
      * @param newkey the new name for the key (must not be null)
      * @return "OK" if successful
@@ -1236,6 +1432,7 @@ public class UnifiedJedis implements Closeable {
      * Rename a key to a new name only if the destination key does not already exist. This is useful
      * for atomic key renaming when you want to avoid overwriting existing data.
      *
+     * @see <a href="https://valkey.io/commands/renamenx/">valkey.io</a> for details.
      * @param oldkey the current name of the key (must not be null and must exist)
      * @param newkey the new name for the key (must not be null and must not exist)
      * @return 1 if the key was renamed, 0 if the destination key already exists
@@ -1293,11 +1490,26 @@ public class UnifiedJedis implements Closeable {
             }
 
             // Convert ExpiryOption to GLIDE ExpireOptions
-            // Note: GLIDE may not support all expire options, this is a simplified implementation
-            Boolean result = baseClient.expire(key, seconds).get();
+            ExpireOptions options = convertExpiryOption(expiryOption);
+            Boolean result = baseClient.expire(key, seconds, options).get();
             return result ? 1L : 0L;
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("EXPIRE operation failed", e);
+        }
+    }
+
+    private ExpireOptions convertExpiryOption(ExpiryOption expiryOption) {
+        switch (expiryOption) {
+            case NX:
+                return ExpireOptions.HAS_NO_EXPIRY;
+            case XX:
+                return ExpireOptions.HAS_EXISTING_EXPIRY;
+            case GT:
+                return ExpireOptions.NEW_EXPIRY_GREATER_THAN_CURRENT;
+            case LT:
+                return ExpireOptions.NEW_EXPIRY_LESS_THAN_CURRENT;
+            default:
+                throw new IllegalArgumentException("Unsupported ExpiryOption: " + expiryOption);
         }
     }
 
@@ -1321,7 +1533,17 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
-    /** Set expiration at timestamp with expiry option */
+    /**
+     * Set the expiration time of a key to a specific Unix timestamp with expiry options.
+     *
+     * @see <a href="https://valkey.io/commands/expireat/">valkey.io</a> for details.
+     * @param key the key to set expiration for (must not be null)
+     * @param unixTime the Unix timestamp when the key should expire
+     * @param expiryOption the expiry option (NX, XX, GT, LT)
+     * @return 1 if the expiration was set, 0 otherwise
+     * @throws JedisException if the operation fails
+     * @since Valkey 7.0.0
+     */
     public long expireAt(String key, long unixTime, ExpiryOption expiryOption) {
         checkNotClosed();
         try {
@@ -1330,15 +1552,24 @@ public class UnifiedJedis implements Closeable {
             }
 
             // Convert ExpiryOption to GLIDE ExpireOptions
-            // Note: GLIDE may not support all expire options, this is a simplified implementation
-            Boolean result = baseClient.expireAt(key, unixTime).get();
+            ExpireOptions options = convertExpiryOption(expiryOption);
+            Boolean result = baseClient.expireAt(key, unixTime, options).get();
             return result ? 1L : 0L;
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("EXPIREAT operation failed", e);
         }
     }
 
-    /** Set expiration in milliseconds */
+    /**
+     * Set the expiration time of a key in milliseconds.
+     *
+     * @see <a href="https://valkey.io/commands/pexpire/">valkey.io</a> for details.
+     * @param key the key to set expiration for (must not be null)
+     * @param milliseconds the expiration time in milliseconds
+     * @return 1 if the expiration was set, 0 otherwise
+     * @throws JedisException if the operation fails
+     * @since Valkey 2.6.0
+     */
     public long pexpire(String key, long milliseconds) {
         checkNotClosed();
         try {
@@ -1349,7 +1580,17 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
-    /** Set expiration in milliseconds with expiry option */
+    /**
+     * Set the expiration time of a key in milliseconds with expiry options.
+     *
+     * @see <a href="https://valkey.io/commands/pexpire/">valkey.io</a> for details.
+     * @param key the key to set expiration for (must not be null)
+     * @param milliseconds the expiration time in milliseconds
+     * @param expiryOption the expiry option (NX, XX, GT, LT)
+     * @return 1 if the expiration was set, 0 otherwise
+     * @throws JedisException if the operation fails
+     * @since Valkey 7.0.0
+     */
     public long pexpire(String key, long milliseconds, ExpiryOption expiryOption) {
         checkNotClosed();
         try {
@@ -1358,15 +1599,24 @@ public class UnifiedJedis implements Closeable {
             }
 
             // Convert ExpiryOption to GLIDE ExpireOptions
-            // Note: GLIDE may not support all expire options, this is a simplified implementation
-            Boolean result = baseClient.pexpire(key, milliseconds).get();
+            ExpireOptions options = convertExpiryOption(expiryOption);
+            Boolean result = baseClient.pexpire(key, milliseconds, options).get();
             return result ? 1L : 0L;
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("PEXPIRE operation failed", e);
         }
     }
 
-    /** Set expiration at millisecond timestamp */
+    /**
+     * Set the expiration time of a key to a specific Unix timestamp in milliseconds.
+     *
+     * @see <a href="https://valkey.io/commands/pexpireat/">valkey.io</a> for details.
+     * @param key the key to set expiration for (must not be null)
+     * @param millisecondsTimestamp the Unix timestamp in milliseconds when the key should expire
+     * @return 1 if the expiration was set, 0 otherwise
+     * @throws JedisException if the operation fails
+     * @since Valkey 2.6.0
+     */
     public long pexpireAt(String key, long millisecondsTimestamp) {
         checkNotClosed();
         try {
@@ -1377,7 +1627,18 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
-    /** Set expiration at millisecond timestamp with expiry option */
+    /**
+     * Set the expiration time of a key to a specific Unix timestamp in milliseconds with expiry
+     * options.
+     *
+     * @see <a href="https://valkey.io/commands/pexpireat/">valkey.io</a> for details.
+     * @param key the key to set expiration for (must not be null)
+     * @param millisecondsTimestamp the Unix timestamp in milliseconds when the key should expire
+     * @param expiryOption the expiry option (NX, XX, GT, LT)
+     * @return 1 if the expiration was set, 0 otherwise
+     * @throws JedisException if the operation fails
+     * @since Valkey 7.0.0
+     */
     public long pexpireAt(String key, long millisecondsTimestamp, ExpiryOption expiryOption) {
         checkNotClosed();
         try {
@@ -1386,34 +1647,56 @@ public class UnifiedJedis implements Closeable {
             }
 
             // Convert ExpiryOption to GLIDE ExpireOptions
-            // Note: GLIDE may not support all expire options, this is a simplified implementation
-            Boolean result = baseClient.pexpireAt(key, millisecondsTimestamp).get();
+            ExpireOptions options = convertExpiryOption(expiryOption);
+            Boolean result = baseClient.pexpireAt(key, millisecondsTimestamp, options).get();
             return result ? 1L : 0L;
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("PEXPIREAT operation failed", e);
         }
     }
 
-    /** Get expiration timestamp - not available in GLIDE */
+    /**
+     * Get the absolute Unix timestamp at which the key will expire.
+     *
+     * @see <a href="https://valkey.io/commands/expiretime/">valkey.io</a> for details.
+     * @param key the key to get expiration time for (must not be null)
+     * @return the Unix timestamp when the key expires, -1 if no expiration, -2 if key doesn't exist
+     * @throws JedisException if the operation fails
+     * @since Valkey 7.0.0
+     */
     public long expireTime(String key) {
         checkNotClosed();
-        // EXPIRETIME is not available in GLIDE BaseClient
-        throw new UnsupportedOperationException(
-                "EXPIRETIME command is not supported in GLIDE compatibility layer");
+        try {
+            return baseClient.expiretime(key).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("EXPIRETIME operation failed", e);
+        }
     }
 
-    /** Get expiration millisecond timestamp - not available in GLIDE */
+    /**
+     * Get the absolute Unix timestamp in milliseconds at which the key will expire.
+     *
+     * @see <a href="https://valkey.io/commands/pexpiretime/">valkey.io</a> for details.
+     * @param key the key to get expiration time for (must not be null)
+     * @return the Unix timestamp in milliseconds when the key expires, -1 if no expiration, -2 if key
+     *     doesn't exist
+     * @throws JedisException if the operation fails
+     * @since Valkey 7.0.0
+     */
     public long pexpireTime(String key) {
         checkNotClosed();
-        // PEXPIRETIME is not available in GLIDE BaseClient
-        throw new UnsupportedOperationException(
-                "PEXPIRETIME command is not supported in GLIDE compatibility layer");
+        try {
+            return baseClient.pexpiretime(key).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("PEXPIRETIME operation failed", e);
+        }
     }
 
     /**
      * Get the remaining time to live of a key in seconds. This command returns the number of seconds
      * until the key expires, or special values for keys without expiration.
      *
+     * @see <a href="https://valkey.io/commands/ttl/">valkey.io</a> for details.
      * @param key the key to check TTL for (must not be null)
      * @return the TTL in seconds, -1 if the key exists but has no expiration, -2 if the key does not
      *     exist
@@ -1433,6 +1716,7 @@ public class UnifiedJedis implements Closeable {
      * Get the remaining time to live of a key in milliseconds. This command provides more precise
      * timing information than TTL, useful for fine-grained expiration monitoring.
      *
+     * @see <a href="https://valkey.io/commands/pttl/">valkey.io</a> for details.
      * @param key the key to check TTL for (must not be null)
      * @return the TTL in milliseconds, -1 if the key exists but has no expiration, -2 if the key does
      *     not exist
@@ -1452,6 +1736,7 @@ public class UnifiedJedis implements Closeable {
      * Remove the expiration from a key, making it persistent. After this operation, the key will not
      * expire automatically and will remain in the database until explicitly deleted.
      *
+     * @see <a href="https://valkey.io/commands/persist/">valkey.io</a> for details.
      * @param key the key to make persistent (must not be null)
      * @return 1 if the expiration was removed, 0 if the key does not exist or has no expiration
      * @throws JedisException if the operation fails
@@ -1513,13 +1798,55 @@ public class UnifiedJedis implements Closeable {
             }
 
             // Convert Jedis SortingParams to GLIDE SortOptions
-            // This is a simplified implementation - full implementation would need
-            // to parse all SortingParams options
-            String[] result = baseClient.sort(key).get();
+            SortOptions options = convertSortingParams(sortingParameters);
+            String[] result = baseClient.sort(key, options).get();
             return Arrays.asList(result);
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("SORT operation failed", e);
         }
+    }
+
+    private SortOptions convertSortingParams(SortingParams params) {
+        SortOptions.SortOptionsBuilder builder = SortOptions.builder();
+
+        String[] args = params.getParams();
+
+        for (int i = 0; i < args.length; i++) {
+            String arg = args[i];
+            switch (arg.toUpperCase()) {
+                case "BY":
+                    if (i + 1 < args.length) {
+                        String byPattern = args[++i];
+                        if (!"NOSORT".equals(byPattern)) {
+                            builder.byPattern(byPattern);
+                        }
+                    }
+                    break;
+                case "LIMIT":
+                    if (i + 2 < args.length) {
+                        long offset = Long.parseLong(args[++i]);
+                        long count = Long.parseLong(args[++i]);
+                        builder.limit(new SortBaseOptions.Limit(offset, count));
+                    }
+                    break;
+                case "GET":
+                    if (i + 1 < args.length) {
+                        builder.getPattern(args[++i]);
+                    }
+                    break;
+                case "ASC":
+                    builder.orderBy(SortBaseOptions.OrderBy.ASC);
+                    break;
+                case "DESC":
+                    builder.orderBy(SortBaseOptions.OrderBy.DESC);
+                    break;
+                case "ALPHA":
+                    builder.alpha();
+                    break;
+            }
+        }
+
+        return builder.build();
     }
 
     /**
@@ -1569,8 +1896,8 @@ public class UnifiedJedis implements Closeable {
             }
 
             // Convert Jedis SortingParams to GLIDE SortOptions
-            // This is a simplified implementation
-            return baseClient.sortStore(key, dstkey).get();
+            SortOptions options = convertSortingParams(sortingParameters);
+            return baseClient.sortStore(key, dstkey, options).get();
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("SORT STORE operation failed", e);
         }
@@ -1598,8 +1925,8 @@ public class UnifiedJedis implements Closeable {
             }
 
             // Convert Jedis SortingParams to GLIDE SortOptions
-            // This is a simplified implementation
-            String[] result = baseClient.sortReadOnly(key).get();
+            SortOptions options = convertSortingParams(sortingParams);
+            String[] result = baseClient.sortReadOnly(key, options).get();
             return Arrays.asList(result);
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("SORT_RO operation failed", e);
@@ -1679,19 +2006,47 @@ public class UnifiedJedis implements Closeable {
             }
 
             // Convert Jedis RestoreParams to GLIDE RestoreOptions
-            // This is a simplified implementation
-            return baseClient.restore(GlideString.of(key), ttl, serializedValue).get();
+            RestoreOptions options = convertRestoreParams(params);
+            return baseClient.restore(GlideString.of(key), ttl, serializedValue, options).get();
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("RESTORE operation failed", e);
         }
+    }
+
+    private RestoreOptions convertRestoreParams(RestoreParams params) {
+        RestoreOptions.RestoreOptionsBuilder builder = RestoreOptions.builder();
+
+        String[] args = params.getParams();
+
+        for (int i = 0; i < args.length; i++) {
+            String arg = args[i];
+            switch (arg.toUpperCase()) {
+                case "REPLACE":
+                    builder.replace();
+                    break;
+                case "ABSTTL":
+                    builder.absttl();
+                    break;
+                case "IDLETIME":
+                    if (i + 1 < args.length) {
+                        builder.idletime(Long.parseLong(args[++i]));
+                    }
+                    break;
+                case "FREQ":
+                    if (i + 1 < args.length) {
+                        builder.frequency(Long.parseLong(args[++i]));
+                    }
+                    break;
+            }
+        }
+
+        return builder.build();
     }
 
     /**
      * <b><a href="https://valkey.io/commands/migrate">MIGRATE Command</a></b> Atomically transfer a
      * key from a Redis instance to another one. On success the key is deleted from the original
      * instance and is guaranteed to exist in the target instance.
-     *
-     * <p><b>Note:</b> This command is not directly supported in the GLIDE compatibility layer.
      *
      * <p>Time complexity: This command actually executes a DUMP+DEL in the source instance, and a
      * RESTORE in the target instance.
@@ -1701,23 +2056,38 @@ public class UnifiedJedis implements Closeable {
      * @param key the key to migrate
      * @param timeout the timeout in milliseconds
      * @return "OK" if successful
-     * @throws UnsupportedOperationException always, as this command is not supported in GLIDE
+     * @throws JedisException if the operation fails
      * @since Redis 2.6.0
      */
     public String migrate(String host, int port, String key, int timeout) {
         checkNotClosed();
-        // MIGRATE is not directly supported in GLIDE BaseClient
-        // This would need to be implemented using custom commands or alternative approaches
-        throw new UnsupportedOperationException(
-                "MIGRATE command is not supported in GLIDE compatibility layer");
+        try {
+            String[] args = {
+                "MIGRATE",
+                host,
+                String.valueOf(port),
+                key,
+                "0", // destination database (default to 0)
+                String.valueOf(timeout)
+            };
+
+            Object result;
+            if (isClusterMode) {
+                result = glideClusterClient.customCommand(args).get();
+            } else {
+                result = glideClient.customCommand(args).get();
+            }
+
+            return result != null ? result.toString() : "OK";
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("MIGRATE operation failed", e);
+        }
     }
 
     /**
      * <b><a href="https://valkey.io/commands/migrate">MIGRATE Command</a></b> Atomically transfer
      * keys from a Redis instance to another one with additional parameters. This variant allows for
      * more control over the migration process.
-     *
-     * <p><b>Note:</b> This command is not directly supported in the GLIDE compatibility layer.
      *
      * <p>Time complexity: This command actually executes a DUMP+DEL in the source instance, and a
      * RESTORE in the target instance.
@@ -1728,14 +2098,45 @@ public class UnifiedJedis implements Closeable {
      * @param params additional migration parameters
      * @param keys the keys to migrate
      * @return "OK" if successful
-     * @throws UnsupportedOperationException always, as this command is not supported in GLIDE
+     * @throws JedisException if the operation fails
      * @since Redis 3.0.0
      */
     public String migrate(String host, int port, int timeout, MigrateParams params, String... keys) {
         checkNotClosed();
-        // MIGRATE is not directly supported in GLIDE BaseClient
-        throw new UnsupportedOperationException(
-                "MIGRATE command is not supported in GLIDE compatibility layer");
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("MIGRATE");
+            args.add(host);
+            args.add(String.valueOf(port));
+            args.add(""); // empty key for multi-key migration
+            args.add("0"); // destination database (default to 0)
+            args.add(String.valueOf(timeout));
+
+            // Add MigrateParams if provided
+            if (params != null) {
+                String[] paramArray = params.getParams();
+                for (String param : paramArray) {
+                    args.add(param);
+                }
+            }
+
+            // Add KEYS keyword and the keys
+            args.add("KEYS");
+            for (String key : keys) {
+                args.add(key);
+            }
+
+            Object result;
+            if (isClusterMode) {
+                result = glideClusterClient.customCommand(args.toArray(new String[0])).get();
+            } else {
+                result = glideClient.customCommand(args.toArray(new String[0])).get();
+            }
+
+            return result != null ? result.toString() : "OK";
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("MIGRATE operation failed", e);
+        }
     }
 
     /**
@@ -1774,7 +2175,6 @@ public class UnifiedJedis implements Closeable {
      * @param cursor the cursor value ("0" to start iteration, or value from previous SCAN)
      * @return a ScanResult containing the next cursor and a list of keys
      * @throws JedisException if the operation fails
-     * @throws UnsupportedOperationException if called in cluster mode (requires special handling)
      * @since Valkey 2.8.0
      */
     public ScanResult<String> scan(String cursor) {
@@ -1782,10 +2182,28 @@ public class UnifiedJedis implements Closeable {
         try {
             Object[] result;
             if (isClusterMode) {
-                // For cluster mode, we need to handle the different cursor type
-                // This is a simplified implementation - full cluster scan support would be more complex
-                throw new UnsupportedOperationException(
-                        "SCAN command in cluster mode requires special handling not yet implemented");
+                // Convert String cursor to ClusterScanCursor
+                ClusterScanCursor clusterCursor;
+                if ("0".equals(cursor)) {
+                    // Initial cursor
+                    clusterCursor = ClusterScanCursor.initalCursor();
+                } else {
+                    // For subsequent cursors, we need to use the cursor from previous result
+                    // Since we can't reconstruct a ClusterScanCursor from a string,
+                    // we'll use customCommand to maintain compatibility
+                    String[] args = {"SCAN", cursor};
+                    ClusterValue<Object> clusterResult = glideClusterClient.customCommand(args).get();
+                    // Handle the custom command result
+                    Object[] customArray = (Object[]) clusterResult.getSingleValue();
+                    String nextCursor = customArray[0].toString();
+                    Object[] keys = (Object[]) customArray[1];
+                    List<String> keyList = new ArrayList<>();
+                    for (Object key : keys) {
+                        keyList.add(key.toString());
+                    }
+                    return new ScanResult<>(nextCursor, keyList);
+                }
+                result = glideClusterClient.scan(clusterCursor).get();
             } else {
                 result = glideClient.scan(cursor).get();
             }
@@ -1806,7 +2224,6 @@ public class UnifiedJedis implements Closeable {
      * @param params the scan parameters for filtering and controlling iteration (can be null)
      * @return a ScanResult containing the next cursor and a list of keys
      * @throws JedisException if the operation fails
-     * @throws UnsupportedOperationException if called in cluster mode (requires special handling)
      * @since Valkey 2.8.0
      */
     public ScanResult<String> scan(String cursor, ScanParams params) {
@@ -1817,17 +2234,46 @@ public class UnifiedJedis implements Closeable {
             }
 
             // Convert Jedis ScanParams to GLIDE ScanOptions
-            ScanOptions.ScanOptionsBuilder builder = ScanOptions.builder();
-
-            // This is a simplified conversion - full implementation would need
-            // to properly parse ScanParams
-            ScanOptions options = builder.build();
+            ScanOptions options = convertScanParams(params);
 
             Object[] result;
             if (isClusterMode) {
-                // For cluster mode, we need to handle the different cursor type
-                throw new UnsupportedOperationException(
-                        "SCAN command in cluster mode requires special handling not yet implemented");
+                ClusterScanCursor clusterCursor;
+                if ("0".equals(cursor)) {
+                    // Initial cursor
+                    clusterCursor = ClusterScanCursor.initalCursor();
+                    result = glideClusterClient.scan(clusterCursor, options).get();
+                } else {
+                    // For subsequent cursors, use customCommand with params
+                    List<String> args = new ArrayList<>();
+                    args.add("SCAN");
+                    args.add(cursor);
+
+                    // Add ScanParams to command arguments
+                    if (params.getMatchPattern() != null) {
+                        args.add("MATCH");
+                        args.add(params.getMatchPattern());
+                    }
+                    if (params.getCount() != null) {
+                        args.add("COUNT");
+                        args.add(params.getCount().toString());
+                    }
+                    if (params.getType() != null) {
+                        args.add("TYPE");
+                        args.add(params.getType());
+                    }
+
+                    ClusterValue<Object> clusterResult =
+                            glideClusterClient.customCommand(args.toArray(new String[0])).get();
+                    Object[] customArray = (Object[]) clusterResult.getSingleValue();
+                    String nextCursor = customArray[0].toString();
+                    Object[] keys = (Object[]) customArray[1];
+                    List<String> keyList = new ArrayList<>();
+                    for (Object key : keys) {
+                        keyList.add(key.toString());
+                    }
+                    return new ScanResult<>(nextCursor, keyList);
+                }
             } else {
                 result = glideClient.scan(cursor, options).get();
             }
@@ -1836,6 +2282,49 @@ public class UnifiedJedis implements Closeable {
             return new ScanResult<>(nextCursor, Arrays.asList(keys));
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("SCAN operation failed", e);
+        }
+    }
+
+    private ScanOptions convertScanParams(ScanParams params) {
+        ScanOptions.ScanOptionsBuilder builder = ScanOptions.builder();
+
+        if (params.getMatchPattern() != null) {
+            builder.matchPattern(params.getMatchPattern());
+        }
+
+        if (params.getCount() != null) {
+            builder.count(params.getCount());
+        }
+
+        if (params.getType() != null) {
+            // Convert string type to ObjectType enum
+            ScanOptions.ObjectType objectType = convertStringToObjectType(params.getType());
+            if (objectType != null) {
+                builder.type(objectType);
+            }
+        }
+
+        return builder.build();
+    }
+
+    private ScanOptions.ObjectType convertStringToObjectType(String type) {
+        if (type == null) return null;
+
+        switch (type.toLowerCase()) {
+            case "string":
+                return ScanOptions.ObjectType.STRING;
+            case "list":
+                return ScanOptions.ObjectType.LIST;
+            case "set":
+                return ScanOptions.ObjectType.SET;
+            case "zset":
+                return ScanOptions.ObjectType.ZSET;
+            case "hash":
+                return ScanOptions.ObjectType.HASH;
+            case "stream":
+                return ScanOptions.ObjectType.STREAM;
+            default:
+                return null;
         }
     }
 
@@ -1854,55 +2343,61 @@ public class UnifiedJedis implements Closeable {
      *     "stream")
      * @return a ScanResult containing the next cursor and a list of keys
      * @throws JedisException if the operation fails
-     * @throws UnsupportedOperationException if called in cluster mode (requires special handling)
      * @since Redis 2.8.0
      */
     public ScanResult<String> scan(String cursor, ScanParams params, String type) {
         checkNotClosed();
         try {
-            // Convert Jedis ScanParams to GLIDE ScanOptions
-            ScanOptions.ScanOptionsBuilder builder = ScanOptions.builder();
-
-            if (type != null) {
-                // Convert string type to ObjectType enum
-                ScanOptions.ObjectType objectType;
-                switch (type.toLowerCase()) {
-                    case "string":
-                        objectType = ScanOptions.ObjectType.STRING;
-                        break;
-                    case "list":
-                        objectType = ScanOptions.ObjectType.LIST;
-                        break;
-                    case "set":
-                        objectType = ScanOptions.ObjectType.SET;
-                        break;
-                    case "zset":
-                        objectType = ScanOptions.ObjectType.ZSET;
-                        break;
-                    case "hash":
-                        objectType = ScanOptions.ObjectType.HASH;
-                        break;
-                    case "stream":
-                        objectType = ScanOptions.ObjectType.STREAM;
-                        break;
-                    default:
-                        objectType = null;
-                }
-                if (objectType != null) {
-                    builder.type(objectType);
-                }
-            }
-
-            // This is a simplified conversion - full implementation would need
-            // to properly parse ScanParams
-            ScanOptions options = builder.build();
-
             Object[] result;
             if (isClusterMode) {
-                // For cluster mode, we need to handle the different cursor type
-                throw new UnsupportedOperationException(
-                        "SCAN command in cluster mode requires special handling not yet implemented");
+                // Build SCAN command arguments
+                List<String> args = new ArrayList<>();
+                args.add("SCAN");
+                args.add(cursor);
+
+                if (params != null) {
+                    if (params.getMatchPattern() != null) {
+                        args.add("MATCH");
+                        args.add(params.getMatchPattern());
+                    }
+                    if (params.getCount() != null) {
+                        args.add("COUNT");
+                        args.add(params.getCount().toString());
+                    }
+                }
+
+                if (type != null) {
+                    args.add("TYPE");
+                    args.add(type);
+                }
+
+                ClusterValue<Object> clusterResult =
+                        glideClusterClient.customCommand(args.toArray(new String[0])).get();
+                result = (Object[]) clusterResult.getSingleValue();
             } else {
+                // Convert Jedis ScanParams to GLIDE ScanOptions
+                ScanOptions.ScanOptionsBuilder builder = ScanOptions.builder();
+
+                if (type != null) {
+                    // Convert string type to ObjectType enum
+                    ScanOptions.ObjectType objectType = convertStringToObjectType(type);
+                    if (objectType != null) {
+                        builder.type(objectType);
+                    }
+                }
+
+                // Convert ScanParams if provided
+                if (params != null) {
+                    if (params.getMatchPattern() != null) {
+                        builder.matchPattern(params.getMatchPattern());
+                    }
+
+                    if (params.getCount() != null) {
+                        builder.count(params.getCount());
+                    }
+                }
+
+                ScanOptions options = builder.build();
                 result = glideClient.scan(cursor, options).get();
             }
             String nextCursor = (String) result[0];
@@ -1987,7 +2482,8 @@ public class UnifiedJedis implements Closeable {
      * @param keysvalues alternating keys and values (key1, value1, key2, value2, ...)
      * @return 1 if all keys were set, 0 if no key was set (at least one key already existed)
      * @throws JedisException if the operation fails or if the number of arguments is not even
-     * @since Redis 1.0.1
+     * @apiNote In cluster mode, all keys must map to the same hash slot
+     * @since Valkey 1.0.1
      */
     public long msetnx(String... keysvalues) {
         checkNotClosed();
@@ -2011,9 +2507,11 @@ public class UnifiedJedis implements Closeable {
     // ========== BITMAP COMMANDS ==========
 
     /**
-     * Set the bit value at the specified offset in the string stored at key. The string is treated as
-     * a bit array, and individual bits can be set or cleared. If the key doesn't exist, a new string
-     * is created.
+     * <b><a href="https://valkey.io/commands/setbit">SETBIT Command</a></b> Set the bit value at the
+     * specified offset in the string stored at key. The string is treated as a bit array, and
+     * individual bits can be set or cleared. If the key doesn't exist, a new string is created.
+     *
+     * <p>Time complexity: O(1)
      *
      * @param key the key containing the bitmap (must not be null)
      * @param offset the bit offset to set (must be non-negative)
@@ -2036,6 +2534,7 @@ public class UnifiedJedis implements Closeable {
      * Get the bit value at the specified offset in the string stored at key. If the offset is beyond
      * the string length, it is treated as 0.
      *
+     * @see <a href="https://valkey.io/commands/getbit/">valkey.io</a> for details.
      * @param key the key containing the bitmap (must not be null)
      * @param offset the bit offset to get (must be non-negative)
      * @return the bit value at the offset (true for 1, false for 0)
@@ -2056,6 +2555,7 @@ public class UnifiedJedis implements Closeable {
      * Count the number of set bits (bits with value 1) in the string stored at key. This operation is
      * useful for implementing efficient counting and analytics on bitmap data.
      *
+     * @see <a href="https://valkey.io/commands/bitcount/">valkey.io</a> for details.
      * @param key the key containing the bitmap (must not be null)
      * @return the number of bits set to 1
      * @throws JedisException if the operation fails
@@ -2090,7 +2590,18 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
-    /** Count set bits with option */
+    /**
+     * Count the number of set bits (population counting) in a string within a specified range with
+     * indexing option.
+     *
+     * @param key the key of the string
+     * @param start the starting offset (inclusive)
+     * @param end the ending offset (inclusive)
+     * @param option the indexing option (BYTE or BIT)
+     * @return the number of set bits in the specified range
+     * @throws JedisException if the operation fails
+     * @since Redis 2.6.0
+     */
     public long bitcount(String key, long start, long end, BitCountOption option) {
         checkNotClosed();
         try {
@@ -2148,9 +2659,18 @@ public class UnifiedJedis implements Closeable {
             }
 
             // Convert BitPosParams to start/end parameters
-            // This is a simplified implementation - full implementation would need
-            // to parse the actual parameters from BitPosParams
-            return baseClient.bitpos(key, value ? 1L : 0L).get();
+            long bitValue = value ? 1L : 0L;
+
+            if (params.getStart() != null && params.getEnd() != null) {
+                // Has start and end parameters
+                return baseClient.bitpos(key, bitValue, params.getStart(), params.getEnd()).get();
+            } else if (params.getStart() != null) {
+                // Has only start parameter
+                return baseClient.bitpos(key, bitValue, params.getStart()).get();
+            } else {
+                // No parameters, use basic version
+                return baseClient.bitpos(key, bitValue).get();
+            }
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("BITPOS operation failed", e);
         }
@@ -2216,26 +2736,38 @@ public class UnifiedJedis implements Closeable {
      * <p><b>Type Format:</b> [u|i]&lt;width&gt; where u=unsigned, i=signed, width=1-64 bits <br>
      * Examples: u8, i16, u32, i64
      *
-     * <p><b>Note:</b> This is currently a placeholder implementation that does not parse the
-     * arguments. Full implementation requires proper parsing of bitfield subcommands.
-     *
      * <p>Time complexity: O(1) for each subcommand specified
      *
      * @param key the key containing the bitmap
      * @param arguments the bit field operations in the format: subcommand type offset [value]
      * @return a list of results for each subcommand (may contain null values for some operations)
      * @throws JedisException if the operation fails
-     * @throws UnsupportedOperationException currently thrown as this is a placeholder implementation
      * @since Redis 3.2.0
      */
     public List<Long> bitfield(String key, String... arguments) {
         checkNotClosed();
-        // This is currently a placeholder implementation
-        // Full implementation would need to parse bitfield subcommands (GET, SET, INCRBY)
-        // and convert them to GLIDE BitFieldOptions.BitFieldSubCommands
-        throw new UnsupportedOperationException(
-                "BITFIELD command is not fully implemented in the compatibility layer. "
-                        + "Please use the native GLIDE client for bitfield operations.");
+        try {
+            // Build BITFIELD command arguments
+            String[] args = new String[arguments.length + 2];
+            args[0] = "BITFIELD";
+            args[1] = key;
+            System.arraycopy(arguments, 0, args, 2, arguments.length);
+
+            if (isClusterMode) {
+                ClusterValue<Object> clusterResult = glideClusterClient.customCommand(args).get();
+                Object[] result = (Object[]) clusterResult.getSingleValue();
+                return Arrays.stream(result)
+                        .map(obj -> obj != null ? ((Number) obj).longValue() : null)
+                        .collect(Collectors.toList());
+            } else {
+                Object[] result = (Object[]) glideClient.customCommand(args).get();
+                return Arrays.stream(result)
+                        .map(obj -> obj != null ? ((Number) obj).longValue() : null)
+                        .collect(Collectors.toList());
+            }
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("BITFIELD operation failed", e);
+        }
     }
 
     /**
@@ -2262,17 +2794,32 @@ public class UnifiedJedis implements Closeable {
      * @param arguments the bit field GET operations in the format: GET type offset
      * @return a list of results for each GET subcommand
      * @throws JedisException if the operation fails
-     * @throws UnsupportedOperationException currently thrown as this is a placeholder implementation
      * @since Redis 6.0.0
      */
     public List<Long> bitfieldReadonly(String key, String... arguments) {
         checkNotClosed();
-        // This is currently a placeholder implementation
-        // Full implementation would need to parse bitfield GET subcommands
-        // and convert them to GLIDE BitFieldOptions.BitFieldReadOnlySubCommands
-        throw new UnsupportedOperationException(
-                "BITFIELD_RO command is not fully implemented in the compatibility layer. "
-                        + "Please use the native GLIDE client for read-only bitfield operations.");
+        try {
+            // Build BITFIELD_RO command arguments
+            String[] args = new String[arguments.length + 2];
+            args[0] = "BITFIELD_RO";
+            args[1] = key;
+            System.arraycopy(arguments, 0, args, 2, arguments.length);
+
+            if (isClusterMode) {
+                ClusterValue<Object> clusterResult = glideClusterClient.customCommand(args).get();
+                Object[] result = (Object[]) clusterResult.getSingleValue();
+                return Arrays.stream(result)
+                        .map(obj -> obj != null ? ((Number) obj).longValue() : null)
+                        .collect(Collectors.toList());
+            } else {
+                Object[] result = (Object[]) glideClient.customCommand(args).get();
+                return Arrays.stream(result)
+                        .map(obj -> obj != null ? ((Number) obj).longValue() : null)
+                        .collect(Collectors.toList());
+            }
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("BITFIELD_RO operation failed", e);
+        }
     }
 
     // ========== HYPERLOGLOG COMMANDS ==========
@@ -2281,6 +2828,7 @@ public class UnifiedJedis implements Closeable {
      * Add elements to a HyperLogLog data structure. HyperLogLog is a probabilistic data structure
      * used for estimating the cardinality of large datasets with minimal memory usage.
      *
+     * @see <a href="https://valkey.io/commands/pfadd/">valkey.io</a> for details.
      * @param key the key of the HyperLogLog (must not be null)
      * @param elements the elements to add (must not be null, can be empty)
      * @return 1 if the HyperLogLog was modified, 0 if it was not modified
@@ -2301,6 +2849,7 @@ public class UnifiedJedis implements Closeable {
      * Get the estimated cardinality of a HyperLogLog. This returns an approximation of the number of
      * unique elements that have been added to the HyperLogLog.
      *
+     * @see <a href="https://valkey.io/commands/pfcount/">valkey.io</a> for details.
      * @param key the key of the HyperLogLog (must not be null)
      * @return the estimated cardinality
      * @throws JedisException if the operation fails
