@@ -9,7 +9,8 @@ import lombok.EqualsAndHashCode;
 import lombok.ToString;
 
 /**
- * Optional arguments for the HSETEX command.
+ * Optional arguments for the {@link glide.api.BaseClient#hsetex(String, java.util.Map,
+ * HSetExOptions) HSETEX} command.
  *
  * <p>HSETEX sets hash fields with expiration times and supports:
  *
@@ -63,8 +64,6 @@ public final class HSetExOptions {
     /** Expiry configuration for the hash fields. */
     private final ExpirySet expiry;
 
-
-
     /**
      * Converts options into command arguments for the HSETEX command.
      *
@@ -107,8 +106,6 @@ public final class HSetExOptions {
 
         return args.toArray(new String[0]);
     }
-
-
 
     /** Builder class for {@link HSetExOptions}. */
     public static class HSetExOptionsBuilder {

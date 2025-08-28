@@ -62,6 +62,4 @@ public final class HashFieldExpirationConditionOptions {
         }
         return condition.toArgs();
     }
-
-
 }

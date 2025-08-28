@@ -260,11 +260,11 @@ import command_request.CommandRequestOuterClass.Command;
 import command_request.CommandRequestOuterClass.Command.ArgsArray;
 import command_request.CommandRequestOuterClass.RequestType;
 import glide.api.models.commands.ConditionalChange;
+import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.ExpirySet;
 import glide.api.models.commands.FieldConditionalChange;
 import glide.api.models.commands.GetExOptions;
 import glide.api.models.commands.HGetExExpiry;
-import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.HGetExOptions;
 import glide.api.models.commands.HSetExOptions;
 import glide.api.models.commands.HashFieldExpirationConditionOptions;
@@ -507,7 +507,9 @@ public class BatchTests {
                 "key",
                 60L,
                 new String[] {"field1"},
-                HashFieldExpirationConditionOptions.builder().condition(ExpireOptions.HAS_NO_EXPIRY).build());
+                HashFieldExpirationConditionOptions.builder()
+                        .condition(ExpireOptions.HAS_NO_EXPIRY)
+                        .build());
         results.add(Pair.of(HExpire, buildArgs("key", "60", "NX", "FIELDS", "1", "field1")));
 
         batch.hpersist("key", new String[] {"field1", "field2"});
@@ -525,7 +527,9 @@ public class BatchTests {
                 "key",
                 60000L,
                 new String[] {"field1"},
-                HashFieldExpirationConditionOptions.builder().condition(ExpireOptions.HAS_EXISTING_EXPIRY).build());
+                HashFieldExpirationConditionOptions.builder()
+                        .condition(ExpireOptions.HAS_EXISTING_EXPIRY)
+                        .build());
         results.add(Pair.of(HPExpire, buildArgs("key", "60000", "XX", "FIELDS", "1", "field1")));
 
         batch.hexpireat(
@@ -541,7 +545,9 @@ public class BatchTests {
                 "key",
                 1234567890L,
                 new String[] {"field1"},
-                HashFieldExpirationConditionOptions.builder().condition(ExpireOptions.NEW_EXPIRY_GREATER_THAN_CURRENT).build());
+                HashFieldExpirationConditionOptions.builder()
+                        .condition(ExpireOptions.NEW_EXPIRY_GREATER_THAN_CURRENT)
+                        .build());
         results.add(Pair.of(HExpireAt, buildArgs("key", "1234567890", "GT", "FIELDS", "1", "field1")));
 
         batch.hpexpireat(
@@ -557,7 +563,9 @@ public class BatchTests {
                 "key",
                 1234567890000L,
                 new String[] {"field1"},
-                HashFieldExpirationConditionOptions.builder().condition(ExpireOptions.NEW_EXPIRY_LESS_THAN_CURRENT).build());
+                HashFieldExpirationConditionOptions.builder()
+                        .condition(ExpireOptions.NEW_EXPIRY_LESS_THAN_CURRENT)
+                        .build());
         results.add(
                 Pair.of(HPExpireAt, buildArgs("key", "1234567890000", "LT", "FIELDS", "1", "field1")));
 

@@ -9,11 +9,12 @@ import static glide.api.models.commands.HGetExExpiry.HGetExExpiryType.UNIX_SECON
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
+import lombok.EqualsAndHashCode;
 import lombok.RequiredArgsConstructor;
 
 /**
- * Configuration of field expiration lifetime specifically for HGETEX command.
+ * Configuration of field expiration lifetime specifically for {@link
+ * glide.api.BaseClient#hgetex(String, String[], HGetExOptions) HGETEX} command.
  *
  * <p>This class provides expiry options that are specifically tailored for the HGETEX command.
  * Unlike the general {@link ExpirySet} class, HGetExExpiry:
@@ -45,6 +46,7 @@ import lombok.RequiredArgsConstructor;
  * @since Valkey 9.0.0
  * @see <a href="https://valkey.io/commands/hgetex/">HGETEX Command Documentation</a>
  */
+@EqualsAndHashCode
 public final class HGetExExpiry {
 
     /** Expiry type for the time to live */
@@ -220,39 +222,6 @@ public final class HGetExExpiry {
             args.add(count.toString());
         }
         return args.toArray(new String[0]);
-    }
-
-    /**
-     * Indicates whether some other object is "equal to" this one.
-     *
-     * <p>Two HGetExExpiry instances are considered equal if they have the same expiry type and count
-     * value.
-     *
-     * @param obj the reference object with which to compare
-     * @return true if this object is the same as the obj argument; false otherwise
-     */
-    @Override
-    public boolean equals(Object obj) {
-        if (this == obj) {
-            return true;
-        }
-        if (obj == null || getClass() != obj.getClass()) {
-            return false;
-        }
-        HGetExExpiry that = (HGetExExpiry) obj;
-        return type == that.type && Objects.equals(count, that.count);
-    }
-
-    /**
-     * Returns a hash code value for the object.
-     *
-     * <p>The hash code is computed based on the expiry type and count value.
-     *
-     * @return a hash code value for this object
-     */
-    @Override
-    public int hashCode() {
-        return Objects.hash(type, count);
     }
 
     /**

@@ -6,7 +6,8 @@ import lombok.EqualsAndHashCode;
 import lombok.ToString;
 
 /**
- * Optional arguments for the HGETEX command.
+ * Optional arguments for the {@link glide.api.BaseClient#hgetex(String, String[], HGetExOptions)
+ * HGETEX} command.
  *
  * <p>HGETEX retrieves hash field values and optionally sets their expiration time in a single
  * atomic operation. This class supports:
@@ -58,8 +59,6 @@ public final class HGetExOptions {
     /** Expiry configuration for the hash fields after retrieval. */
     private final HGetExExpiry expiry;
 
-
-
     /**
      * Converts options into command arguments for the HGETEX command.
      *
@@ -97,8 +96,4 @@ public final class HGetExOptions {
         }
         return expiry.toArgs();
     }
-
-
-
-
 }
