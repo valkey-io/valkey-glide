@@ -2490,6 +2490,9 @@ func CreateServerManagementTests(batch *pipeline.ClusterBatch, isAtomic bool, se
 	if serverVer >= "9.0.0" {
 		batch.Select(1)
 		testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Select(1)"})
+		// Switch back to database 0 to avoid affecting other batch operations
+		batch.Select(0)
+		testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Select(0) - reset to default"})
 	}
 
 	return BatchTestData{CommandTestData: testData, TestName: "Server Management commands"}

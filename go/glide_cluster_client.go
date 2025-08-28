@@ -413,7 +413,7 @@ func (client *ClusterClient) SelectWithOptions(
 		return models.DefaultStringResponse, err
 	}
 
-	return handleOkResponse(result)
+	return handleOkOrMapResponse(result)
 }
 
 // Pings the server.

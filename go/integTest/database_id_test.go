@@ -4,6 +4,7 @@ package integTest
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -210,6 +211,13 @@ func (suite *GlideTestSuite) TestDatabaseId_SelectCommandRouting() {
 
 // TestDatabaseId_ErrorHandling tests error handling for invalid database configurations
 func (suite *GlideTestSuite) TestDatabaseId_ErrorHandling() {
+	// Helper function to check if error message indicates out-of-range database
+	isOutOfRangeError := func(errMsg string) bool {
+		// Handle different error message formats across Valkey versions
+		return strings.Contains(errMsg, "DB index is out of range") ||
+			strings.Contains(errMsg, "server refused to switch database")
+	}
+
 	// Test standalone client with out-of-range database ID
 	suite.T().Run("StandaloneOutOfRange", func(t *testing.T) {
 		config := config.NewClientConfiguration().
@@ -219,7 +227,8 @@ func (suite *GlideTestSuite) TestDatabaseId_ErrorHandling() {
 		client, err := glide.NewClient(config)
 		if err != nil {
 			// If client creation fails, that's expected for out-of-range database IDs
-			assert.Contains(t, err.Error(), "DB index is out of range")
+			assert.True(t, isOutOfRangeError(err.Error()),
+				"Expected out-of-range database error, got: %s", err.Error())
 			return
 		}
 
@@ -228,7 +237,8 @@ func (suite *GlideTestSuite) TestDatabaseId_ErrorHandling() {
 			// If client creation succeeds, the first operation should fail
 			_, err = client.Set(context.Background(), "test", "value")
 			assert.Error(t, err)
-			assert.Contains(t, err.Error(), "DB index is out of range")
+			assert.True(t, isOutOfRangeError(err.Error()),
+				"Expected out-of-range database error, got: %s", err.Error())
 		}
 	})
 
@@ -246,7 +256,8 @@ func (suite *GlideTestSuite) TestDatabaseId_ErrorHandling() {
 		client, err := glide.NewClusterClient(config)
 		if err != nil {
 			// If client creation fails, that's expected for out-of-range database IDs
-			assert.Contains(t, err.Error(), "DB index is out of range")
+			assert.True(t, isOutOfRangeError(err.Error()),
+				"Expected out-of-range database error, got: %s", err.Error())
 			return
 		}
 
@@ -255,7 +266,8 @@ func (suite *GlideTestSuite) TestDatabaseId_ErrorHandling() {
 			// If client creation succeeds, the first operation should fail
 			_, err = client.Set(context.Background(), "test", "value")
 			assert.Error(t, err)
-			assert.Contains(t, err.Error(), "DB index is out of range")
+			assert.True(t, isOutOfRangeError(err.Error()),
+				"Expected out-of-range database error, got: %s", err.Error())
 		}
 	})
 }
