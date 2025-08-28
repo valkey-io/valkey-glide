@@ -598,6 +598,198 @@ pub(crate) mod shared_client_tests {
         });
     }
 
+    #[cfg(feature = "iam_tests")]
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_iam_lazy_connection_establishes_on_first_command_with_cluster() {
+        block_on_all(async {
+            remove_test_credentials();
+
+            let cluster_name = "iam-auth-test"; // Replace with your ElastiCache cluster name
+            let username = "iam-auth"; // Replace with your IAM username
+            let region = "us-east-1";
+            let endpoint = "clustercfg.iam-auth-test.nra7gl.use1.cache.amazonaws.com"; // Replace with your cluster endpoint
+
+            // Use the provided endpoint and port
+            let address = redis::ConnectionAddr::Tcp(endpoint.to_string(), 6379);
+
+            // Create IAM connection request with lazy connection enabled
+            let mut connection_request = create_iam_connection_request(
+                &[address],
+                cluster_name,
+                username,
+                region,
+                None, // Use default refresh interval
+                true, // cluster mode
+                ServiceType::ELASTICACHE,
+            );
+
+            // Enable lazy connection
+            connection_request.lazy_connect = true;
+
+            // Create client with lazy connection
+            let client_result = Client::new(connection_request.into(), None).await;
+
+            match client_result {
+                Ok(mut client) => {
+                    // At this point, the client should be created but not yet connected
+                    // The connection should be established on the first command
+
+                    // Send the first command - this should trigger the connection establishment
+                    let result = client.send_command(&redis::cmd("PING"), None).await;
+
+                    match result {
+                        Ok(value) => {
+                            // Verify that PING returned the expected response
+                            assert_eq!(value, Value::SimpleString("PONG".to_string()));
+
+                            // Send another command to verify the connection is established and working
+                            let key = generate_random_string(6);
+                            let set_result = client
+                                .send_command(redis::cmd("SET").arg(&key).arg("test_value"), None)
+                                .await;
+                            assert!(
+                                set_result.is_ok(),
+                                "SET command should succeed: {set_result:?}"
+                            );
+
+                            let get_result =
+                                client.send_command(redis::cmd("GET").arg(&key), None).await;
+                            assert_eq!(
+                                get_result.unwrap(),
+                                Value::BulkString("test_value".as_bytes().to_vec())
+                            );
+                        }
+                        Err(err) => {
+                            let error_msg = err.to_string();
+                            // If DNS lookup failed, provide a clearer message
+                            if error_msg.contains("failed to lookup address")
+                                || error_msg.contains("Name or service not known")
+                            {
+                                // Uncomment this when you have a real AWS environment
+                                panic!(
+                                    "DNS lookup failed: Unable to resolve the address `{}`. Please verify that the endpoint is correct and accessible from your environment.\nError: {}",
+                                    endpoint, error_msg
+                                );
+                            }
+
+                            // Other errors will fall here, indicating problems with IAM token generation or connection/auth
+                            // Uncomment this when you have a real AWS environment
+                            panic!(
+                                "Failed to execute first command with IAM authentication on lazy cluster connection: {}",
+                                error_msg
+                            );
+                        }
+                    }
+                }
+                Err(err) => {
+                    // Client creation should succeed even with lazy connection
+                    panic!(
+                        "Failed to create lazy cluster client with IAM authentication: {}",
+                        err
+                    );
+                }
+            }
+        });
+    }
+
+    #[cfg(feature = "iam_tests")]
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_iam_lazy_connection_establishes_on_first_command_with_standalone() {
+        block_on_all(async {
+            remove_test_credentials();
+
+            let cluster_name = "iam-auth-standalone"; // Replace with your standalone cluster name
+            let username = "iam-auth"; // Replace with your IAM username
+            let region = "us-east-1";
+            let endpoint = "master.iam-auth-standalone.nra7gl.use1.cache.amazonaws.com"; // Replace with your standalone endpoint
+
+            // Use the provided endpoint and port
+            let address = redis::ConnectionAddr::Tcp(endpoint.to_string(), 6379);
+
+            // Create IAM connection request with lazy connection enabled
+            let mut connection_request = create_iam_connection_request(
+                &[address],
+                cluster_name,
+                username,
+                region,
+                None,  // Use default refresh interval
+                false, // standalone mode
+                ServiceType::ELASTICACHE,
+            );
+
+            // Enable lazy connection
+            connection_request.lazy_connect = true;
+
+            // Create client with lazy connection
+            let client_result = Client::new(connection_request.into(), None).await;
+
+            match client_result {
+                Ok(mut client) => {
+                    // At this point, the client should be created but not yet connected
+                    // The connection should be established on the first command
+
+                    // Send the first command - this should trigger the connection establishment
+                    let result = client.send_command(&redis::cmd("PING"), None).await;
+
+                    match result {
+                        Ok(value) => {
+                            // Verify that PING returned the expected response
+                            assert_eq!(value, Value::SimpleString("PONG".to_string()));
+
+                            // Send another command to verify the connection is established and working
+                            let key = generate_random_string(6);
+                            let set_result = client
+                                .send_command(redis::cmd("SET").arg(&key).arg("test_value"), None)
+                                .await;
+                            assert!(
+                                set_result.is_ok(),
+                                "SET command should succeed: {set_result:?}"
+                            );
+
+                            let get_result =
+                                client.send_command(redis::cmd("GET").arg(&key), None).await;
+                            assert_eq!(
+                                get_result.unwrap(),
+                                Value::BulkString("test_value".as_bytes().to_vec())
+                            );
+                        }
+                        Err(err) => {
+                            let error_msg = err.to_string();
+                            // If DNS lookup failed, provide a clearer message
+                            if error_msg.contains("failed to lookup address")
+                                || error_msg.contains("Name or service not known")
+                            {
+                                // Uncomment this when you have a real AWS environment
+                                panic!(
+                                    "DNS lookup failed: Unable to resolve the address `{}`. Please verify that the endpoint is correct and accessible from your environment.\nError: {}",
+                                    endpoint, error_msg
+                                );
+                            }
+
+                            // Other errors will fall here, indicating problems with IAM token generation or connection/auth
+                            // Uncomment this when you have a real AWS environment
+                            panic!(
+                                "Failed to execute first command with IAM authentication on lazy standalone connection: {}",
+                                error_msg
+                            );
+                        }
+                    }
+                }
+                Err(err) => {
+                    // Client creation should succeed even with lazy connection
+                    panic!(
+                        "Failed to create lazy standalone client with IAM authentication: {}",
+                        err
+                    );
+                }
+            }
+        });
+    }
+
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]

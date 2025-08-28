@@ -4,7 +4,7 @@ use aws_sigv4::http_request::{
     SignableBody, SignableRequest, SignatureLocation, SigningSettings, sign,
 };
 use aws_sigv4::sign::v4;
-use logger_core::{log_error, log_info, log_warn};
+use logger_core::{log_debug, log_error, log_info, log_warn};
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
@@ -98,6 +98,36 @@ fn validate_refresh_interval(
     }
 }
 
+/// Resolve AWS creds via the default chain and wrap them as `aws_credential_types::Credentials`
+/// tagged with the target service ("elasticache" | "memorydb").
+async fn resolve_signing_identity(
+    region: &str,
+    service_type: ServiceType,
+) -> Result<aws_credential_types::Credentials, GlideIAMError> {
+    let config = aws_config::defaults(BehaviorVersion::latest())
+        .region(aws_config::Region::new(region.to_string()))
+        .load()
+        .await;
+
+    let provider = config
+        .credentials_provider()
+        .ok_or_else(|| GlideIAMError::Other("No AWS credentials provider found".into()))?;
+
+    let creds = provider
+        .provide_credentials()
+        .await
+        .map_err(|e| GlideIAMError::CredentialsError(e.to_string()))?;
+
+    let service_name: &'static str = service_type.into();
+    Ok(Credentials::new(
+        creds.access_key_id(),
+        creds.secret_access_key(),
+        creds.session_token().map(|s| s.to_string()),
+        None,
+        service_name,
+    ))
+}
+
 /// Internal state structure for IAM token management
 #[derive(Clone, Debug)]
 struct IamTokenState {
@@ -111,6 +141,8 @@ struct IamTokenState {
     service_type: ServiceType,
     /// Token refresh interval in seconds
     refresh_interval_seconds: u32,
+    /// Cached AWS credentials used to sign tokens (resolved once in `new()`).
+    credentials: aws_credential_types::Credentials,
 }
 
 /// IAM-based authentication token manager for ElastiCache/MemoryDB
@@ -118,7 +150,8 @@ struct IamTokenState {
 /// Manages automatic token refresh using AWS IAM credentials and SigV4 signing.
 /// Tokens are valid for 15 minutes and refreshed every 14 minutes by default.
 pub struct IAMTokenManager {
-    /// Currently cached auth token (protected by RwLock)
+    /// Cached auth token, stored in an `Arc<RwLock<String>>` to allow many concurrent readers,
+    /// safe exclusive writes on refresh, and shared access across async tasks.
     cached_token: Arc<RwLock<String>>,
     /// IAM token state containing all configuration
     iam_token_state: IamTokenState,
@@ -165,6 +198,7 @@ impl IAMTokenManager {
         refresh_interval_seconds: Option<u32>,
     ) -> Result<Self, GlideIAMError> {
         let validated_refresh_interval = validate_refresh_interval(refresh_interval_seconds)?;
+        let creds = resolve_signing_identity(&region, service_type).await?;
 
         let state = IamTokenState {
             region,
@@ -173,6 +207,7 @@ impl IAMTokenManager {
             service_type,
             refresh_interval_seconds: validated_refresh_interval
                 .unwrap_or(DEFAULT_REFRESH_INTERVAL_SECONDS),
+            credentials: creds,
         };
 
         // Generate initial token using the state
@@ -287,44 +322,16 @@ impl IAMTokenManager {
     /// and SigV4 signing. The generated token is valid for 15 minutes and includes the
     /// signed username for authentication.
     async fn generate_token_static(state: &IamTokenState) -> Result<String, GlideIAMError> {
-        // Load AWS credentials from the environment or AWS config files
-        let config = aws_config::defaults(BehaviorVersion::latest())
-            .region(aws_config::Region::new(state.region.to_string()))
-            .load()
-            .await;
-
-        // Get credentials provider from the loaded config
-        let credentials_provider = config.credentials_provider().ok_or(GlideIAMError::Other(
-            "No AWS credentials provider found".to_string(),
-        ))?;
-
-        // Retrieve credentials
-        let creds = credentials_provider
-            .provide_credentials()
-            .await
-            .map_err(|e| GlideIAMError::CredentialsError(e.to_string()))?;
-
         let service_name: &'static str = state.service_type.into();
-
-        // Create AWS identity from credentials
-        let identity = Credentials::new(
-            creds.access_key_id(),
-            creds.secret_access_key(),
-            creds.session_token().map(|s| s.to_string()),
-            None,
-            service_name, // "elasticache" | "memorydb"
-        );
-
         let signing_time = SystemTime::now();
-
-        let hostname = state.cluster_name.to_string();
+        let hostname = state.cluster_name.clone();
         let base_url = build_base_url(&hostname, &state.username);
+        let identity_value = state.credentials.clone().into();
 
         let mut signing_settings = SigningSettings::default();
         signing_settings.signature_location = SignatureLocation::QueryParams;
         signing_settings.expires_in = Some(Duration::from_secs(TOKEN_TTL_SECONDS));
 
-        let identity_value = identity.into();
         let signing_params = v4::SigningParams::builder()
             .identity(&identity_value)
             .region(&state.region)
@@ -362,12 +369,13 @@ impl IAMTokenManager {
             .map_err(|e| {
                 GlideIAMError::TokenGenerationError(format!("Build HTTP request failed: {e}"))
             })?;
+
         instructions.apply_to_request_http1x(&mut req);
 
         // Extract the token from the signed request URI
         let token = strip_scheme(req.uri().to_string());
 
-        println!("IAM token: {}", token);
+        log_debug("Generated new IAM token", &token);
         Ok(token)
     }
 
@@ -390,6 +398,7 @@ impl IAMTokenManager {
             callback(new_token);
         }
 
+        // todo: remove before merge
         log_info("IAM token refreshed successfully", "");
         Ok(())
     }
@@ -503,12 +512,22 @@ mod tests {
         username: &str,
         service_type: ServiceType,
     ) -> IamTokenState {
+        // Create mock credentials for testing
+        let credentials = aws_credential_types::Credentials::new(
+            "test_access_key",
+            "test_secret_key",
+            Some("test_session_token".to_string()),
+            None,
+            "test_provider",
+        );
+
         IamTokenState {
             region: region.to_string(),
             cluster_name: cluster_name.to_string(),
             username: username.to_string(),
             service_type,
-            refresh_interval_seconds: DEFAULT_REFRESH_INTERVAL_SECONDS, // Default value 14 minutes in seconds
+            refresh_interval_seconds: DEFAULT_REFRESH_INTERVAL_SECONDS,
+            credentials,
         }
     }
 

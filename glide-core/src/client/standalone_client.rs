@@ -116,7 +116,7 @@ impl StandaloneClient {
     pub async fn create_client(
         connection_request: ConnectionRequest,
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
-        iam_token_manager: Option<&Arc<tokio::sync::RwLock<crate::iam::IAMTokenManager>>>,
+        iam_token_manager: Option<&Arc<crate::iam::IAMTokenManager>>,
     ) -> Result<Self, StandaloneClientConnectionError> {
         if connection_request.addresses.is_empty() {
             return Err(StandaloneClientConnectionError::NoAddressesProvided);
