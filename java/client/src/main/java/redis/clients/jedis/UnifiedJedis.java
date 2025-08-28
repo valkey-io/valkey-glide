@@ -12,6 +12,7 @@ import glide.api.models.commands.RestoreOptions;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SortBaseOptions;
 import glide.api.models.commands.SortOptions;
+import glide.api.models.commands.SortOptionsBinary;
 import glide.api.models.commands.bitmap.BitmapIndexType;
 import glide.api.models.commands.bitmap.BitwiseOperation;
 import glide.api.models.commands.scan.ClusterScanCursor;
@@ -497,7 +498,7 @@ public class UnifiedJedis implements Closeable {
      *     required
      * @since Valkey 1.0.0
      */
-    public Long del(String... keys) {
+    public long del(String... keys) {
         checkNotClosed();
         try {
             return baseClient.del(keys).get();
@@ -523,7 +524,7 @@ public class UnifiedJedis implements Closeable {
      * @see #unlink(String) for non-blocking deletion of large objects
      * @since Valkey 1.0.0
      */
-    public Long del(String key) {
+    public long del(String key) {
         return del(new String[] {key});
     }
 
@@ -556,7 +557,7 @@ public class UnifiedJedis implements Closeable {
      *     required
      * @since Valkey 1.0.0
      */
-    public Long del(byte[]... keys) {
+    public long del(byte[]... keys) {
         checkNotClosed();
         try {
             GlideString[] glideKeys = new GlideString[keys.length];
@@ -589,8 +590,13 @@ public class UnifiedJedis implements Closeable {
      * @see #del(String) for deleting string keys
      * @since Valkey 1.0.0
      */
-    public Long del(byte[] key) {
-        return del(new byte[][] {key});
+    public long del(byte[] key) {
+        checkNotClosed();
+        try {
+            return baseClient.del(new GlideString[] {GlideString.of(key)}).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("DEL operation failed", e);
+        }
     }
 
     /**
@@ -1784,21 +1790,20 @@ public class UnifiedJedis implements Closeable {
      * and M the number of returned elements. When the elements are not sorted, complexity is O(N).
      *
      * @param key the key of the list, set or sorted set to sort
-     * @param sortingParameters the parameters controlling sort behavior (can be null for default
-     *     sorting)
+     * @param sortingParams the parameters controlling sort behavior (can be null for default sorting)
      * @return the sorted elements as a list
      * @throws JedisException if the operation fails
      * @since Redis 1.0.0
      */
-    public List<String> sort(String key, SortingParams sortingParameters) {
+    public List<String> sort(String key, SortingParams sortingParams) {
         checkNotClosed();
         try {
-            if (sortingParameters == null) {
+            if (sortingParams == null) {
                 return sort(key);
             }
 
             // Convert Jedis SortingParams to GLIDE SortOptions
-            SortOptions options = convertSortingParams(sortingParameters);
+            SortOptions options = convertSortingParams(sortingParams);
             String[] result = baseClient.sort(key, options).get();
             return Arrays.asList(result);
         } catch (InterruptedException | ExecutionException e) {
@@ -1849,6 +1854,50 @@ public class UnifiedJedis implements Closeable {
         return builder.build();
     }
 
+    private SortOptionsBinary convertSortingParamsBinary(SortingParams params) {
+        SortOptionsBinary.SortOptionsBinaryBuilder builder = SortOptionsBinary.builder();
+
+        String[] args = params.getParams();
+
+        for (int i = 0; i < args.length; i++) {
+            String arg = args[i];
+            switch (arg.toUpperCase()) {
+                case "BY":
+                    if (i + 1 < args.length) {
+                        String byPattern = args[++i];
+                        if (!"NOSORT".equals(byPattern)) {
+                            builder.byPattern(GlideString.of(byPattern));
+                        }
+                    }
+                    break;
+                case "LIMIT":
+                    if (i + 2 < args.length) {
+                        long offset = Long.parseLong(args[++i]);
+                        long count = Long.parseLong(args[++i]);
+                        builder.limit(new SortBaseOptions.Limit(offset, count));
+                    }
+                    break;
+                case "GET":
+                    if (i + 1 < args.length) {
+                        String getPattern = args[++i];
+                        builder.getPattern(GlideString.of(getPattern));
+                    }
+                    break;
+                case "ASC":
+                    builder.orderBy(SortBaseOptions.OrderBy.ASC);
+                    break;
+                case "DESC":
+                    builder.orderBy(SortBaseOptions.OrderBy.DESC);
+                    break;
+                case "ALPHA":
+                    builder.alpha();
+                    break;
+            }
+        }
+
+        return builder.build();
+    }
+
     /**
      * <b><a href="https://valkey.io/commands/sort">SORT Command</a></b> Sort the elements and store
      * the result in a destination key. This is useful when you want to sort elements and store the
@@ -1881,22 +1930,21 @@ public class UnifiedJedis implements Closeable {
      * and M the number of returned elements. When the elements are not sorted, complexity is O(N).
      *
      * @param key the key of the list, set or sorted set to sort
-     * @param sortingParameters the parameters controlling sort behavior (can be null for default
-     *     sorting)
+     * @param sortingParams the parameters controlling sort behavior (can be null for default sorting)
      * @param dstkey the destination key where the sorted result will be stored
      * @return the number of elements in the sorted result
      * @throws JedisException if the operation fails
      * @since Redis 1.0.0
      */
-    public long sort(String key, SortingParams sortingParameters, String dstkey) {
+    public long sort(String key, SortingParams sortingParams, String dstkey) {
         checkNotClosed();
         try {
-            if (sortingParameters == null) {
+            if (sortingParams == null) {
                 return sort(key, dstkey);
             }
 
             // Convert Jedis SortingParams to GLIDE SortOptions
-            SortOptions options = convertSortingParams(sortingParameters);
+            SortOptions options = convertSortingParams(sortingParams);
             return baseClient.sortStore(key, dstkey, options).get();
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("SORT STORE operation failed", e);
@@ -2662,8 +2710,14 @@ public class UnifiedJedis implements Closeable {
             long bitValue = value ? 1L : 0L;
 
             if (params.getStart() != null && params.getEnd() != null) {
-                // Has start and end parameters
-                return baseClient.bitpos(key, bitValue, params.getStart(), params.getEnd()).get();
+                // Has start and end parameters - check for BitmapIndexType
+                BitmapIndexType indexType =
+                        params.getModifier() != null && params.getModifier().equals("BIT")
+                                ? BitmapIndexType.BIT
+                                : BitmapIndexType.BYTE;
+                return baseClient
+                        .bitpos(key, bitValue, params.getStart(), params.getEnd(), indexType)
+                        .get();
             } else if (params.getStart() != null) {
                 // Has only start parameter
                 return baseClient.bitpos(key, bitValue, params.getStart()).get();
@@ -2899,6 +2953,1049 @@ public class UnifiedJedis implements Closeable {
             return baseClient.pfmerge(destkey, sourcekeys).get();
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("PFMERGE operation failed", e);
+        }
+    }
+
+    // ========== BINARY KEY SUPPORT ==========
+
+    public long append(byte[] key, byte[] value) {
+        checkNotClosed();
+        try {
+            return baseClient.append(GlideString.of(key), GlideString.of(value)).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("APPEND operation failed", e);
+        }
+    }
+
+    public long bitcount(byte[] key) {
+        checkNotClosed();
+        try {
+            return baseClient.bitcount(GlideString.of(key)).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("BITCOUNT operation failed", e);
+        }
+    }
+
+    public long bitcount(byte[] key, long start, long end) {
+        checkNotClosed();
+        try {
+            return baseClient.bitcount(GlideString.of(key), start, end).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("BITCOUNT operation failed", e);
+        }
+    }
+
+    public long bitcount(byte[] key, long start, long end, BitCountOption option) {
+        checkNotClosed();
+        try {
+            BitmapIndexType indexType =
+                    option == BitCountOption.BYTE ? BitmapIndexType.BYTE : BitmapIndexType.BIT;
+            return baseClient.bitcount(GlideString.of(key), start, end, indexType).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("BITCOUNT operation failed", e);
+        }
+    }
+
+    public List<Long> bitfield(byte[] key, byte[]... arguments) {
+        checkNotClosed();
+        try {
+            GlideString[] args = new GlideString[arguments.length + 2];
+            args[0] = GlideString.of("BITFIELD");
+            args[1] = GlideString.of(key);
+            for (int i = 0; i < arguments.length; i++) {
+                args[i + 2] = GlideString.of(arguments[i]);
+            }
+
+            if (isClusterMode) {
+                ClusterValue<Object> clusterResult = glideClusterClient.customCommand(args).get();
+                Object[] result = (Object[]) clusterResult.getSingleValue();
+                return Arrays.stream(result)
+                        .map(obj -> obj != null ? ((Number) obj).longValue() : null)
+                        .collect(Collectors.toList());
+            } else {
+                Object[] result = (Object[]) glideClient.customCommand(args).get();
+                return Arrays.stream(result)
+                        .map(obj -> obj != null ? ((Number) obj).longValue() : null)
+                        .collect(Collectors.toList());
+            }
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("BITFIELD operation failed", e);
+        }
+    }
+
+    public long bitop(BitOP op, byte[] destKey, byte[]... srcKeys) {
+        checkNotClosed();
+        try {
+            BitwiseOperation operation = BitwiseOperation.valueOf(op.name());
+            GlideString[] glideSrcKeys =
+                    Arrays.stream(srcKeys).map(GlideString::of).toArray(GlideString[]::new);
+            return baseClient.bitop(operation, GlideString.of(destKey), glideSrcKeys).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("BITOP operation failed", e);
+        }
+    }
+
+    public long bitpos(byte[] key, boolean value) {
+        checkNotClosed();
+        try {
+            return baseClient.bitpos(GlideString.of(key), value ? 1 : 0).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("BITPOS operation failed", e);
+        }
+    }
+
+    public long bitpos(byte[] key, boolean value, BitPosParams params) {
+        checkNotClosed();
+        try {
+            if (params.getStart() != null && params.getEnd() != null) {
+                BitmapIndexType indexType =
+                        params.getModifier() != null && params.getModifier().equals("BIT")
+                                ? BitmapIndexType.BIT
+                                : BitmapIndexType.BYTE;
+                return baseClient
+                        .bitpos(
+                                GlideString.of(key), value ? 1 : 0, params.getStart(), params.getEnd(), indexType)
+                        .get();
+            } else if (params.getStart() != null) {
+                return baseClient.bitpos(GlideString.of(key), value ? 1 : 0, params.getStart()).get();
+            } else {
+                return baseClient.bitpos(GlideString.of(key), value ? 1 : 0).get();
+            }
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("BITPOS operation failed", e);
+        }
+    }
+
+    public boolean copy(byte[] srcKey, byte[] dstKey, boolean replace) {
+        checkNotClosed();
+        try {
+            return baseClient.copy(GlideString.of(srcKey), GlideString.of(dstKey), replace).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("COPY operation failed", e);
+        }
+    }
+
+    public long decr(byte[] key) {
+        checkNotClosed();
+        try {
+            return baseClient.decr(GlideString.of(key)).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("DECR operation failed", e);
+        }
+    }
+
+    public long decrBy(byte[] key, long decrement) {
+        checkNotClosed();
+        try {
+            return baseClient.decrBy(GlideString.of(key), decrement).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("DECRBY operation failed", e);
+        }
+    }
+
+    public byte[] dump(byte[] key) {
+        checkNotClosed();
+        try {
+            return baseClient.dump(GlideString.of(key)).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("DUMP operation failed", e);
+        }
+    }
+
+    public boolean exists(byte[] key) {
+        checkNotClosed();
+        try {
+            return baseClient.exists(new GlideString[] {GlideString.of(key)}).get() > 0;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("EXISTS operation failed", e);
+        }
+    }
+
+    public long exists(byte[]... keys) {
+        checkNotClosed();
+        try {
+            GlideString[] glideKeys =
+                    Arrays.stream(keys).map(GlideString::of).toArray(GlideString[]::new);
+            return baseClient.exists(glideKeys).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("EXISTS operation failed", e);
+        }
+    }
+
+    public long expire(byte[] key, long seconds) {
+        checkNotClosed();
+        try {
+            return baseClient.expire(GlideString.of(key), seconds).get() ? 1L : 0L;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("EXPIRE operation failed", e);
+        }
+    }
+
+    public long expire(byte[] key, long seconds, ExpiryOption expiryOption) {
+        checkNotClosed();
+        try {
+            ExpireOptions options =
+                    expiryOption == ExpiryOption.NX
+                            ? ExpireOptions.HAS_NO_EXPIRY
+                            : expiryOption == ExpiryOption.XX
+                                    ? ExpireOptions.HAS_EXISTING_EXPIRY
+                                    : expiryOption == ExpiryOption.GT
+                                            ? ExpireOptions.NEW_EXPIRY_GREATER_THAN_CURRENT
+                                            : ExpireOptions.NEW_EXPIRY_LESS_THAN_CURRENT;
+            return baseClient.expire(GlideString.of(key), seconds, options).get() ? 1L : 0L;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("EXPIRE operation failed", e);
+        }
+    }
+
+    public long expireAt(byte[] key, long unixTime) {
+        checkNotClosed();
+        try {
+            return baseClient.expireAt(GlideString.of(key), unixTime).get() ? 1L : 0L;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("EXPIREAT operation failed", e);
+        }
+    }
+
+    public long expireAt(byte[] key, long unixTime, ExpiryOption expiryOption) {
+        checkNotClosed();
+        try {
+            ExpireOptions options =
+                    expiryOption == ExpiryOption.NX
+                            ? ExpireOptions.HAS_NO_EXPIRY
+                            : expiryOption == ExpiryOption.XX
+                                    ? ExpireOptions.HAS_EXISTING_EXPIRY
+                                    : expiryOption == ExpiryOption.GT
+                                            ? ExpireOptions.NEW_EXPIRY_GREATER_THAN_CURRENT
+                                            : ExpireOptions.NEW_EXPIRY_LESS_THAN_CURRENT;
+            return baseClient.expireAt(GlideString.of(key), unixTime, options).get() ? 1L : 0L;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("EXPIREAT operation failed", e);
+        }
+    }
+
+    public long expireTime(byte[] key) {
+        checkNotClosed();
+        try {
+            return baseClient.expiretime(GlideString.of(key)).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("EXPIRETIME operation failed", e);
+        }
+    }
+
+    // ========== BINARY KEY METHODS ==========
+
+    public byte[] get(byte[] key) {
+        checkNotClosed();
+        try {
+            GlideString result = baseClient.get(GlideString.of(key)).get();
+            return result != null ? result.getBytes() : null;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("GET operation failed", e);
+        }
+    }
+
+    public byte[] getDel(byte[] key) {
+        checkNotClosed();
+        try {
+            GlideString result = baseClient.getdel(GlideString.of(key)).get();
+            return result != null ? result.getBytes() : null;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("GETDEL operation failed", e);
+        }
+    }
+
+    public boolean getbit(byte[] key, long offset) {
+        checkNotClosed();
+        try {
+            return baseClient.getbit(GlideString.of(key), offset).get() == 1;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("GETBIT operation failed", e);
+        }
+    }
+
+    public byte[] getrange(byte[] key, long startOffset, long endOffset) {
+        checkNotClosed();
+        try {
+            GlideString result =
+                    baseClient.getrange(GlideString.of(key), (int) startOffset, (int) endOffset).get();
+            return result != null ? result.getBytes() : null;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("GETRANGE operation failed", e);
+        }
+    }
+
+    public long incr(byte[] key) {
+        checkNotClosed();
+        try {
+            return baseClient.incr(GlideString.of(key)).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("INCR operation failed", e);
+        }
+    }
+
+    public long incrBy(byte[] key, long increment) {
+        checkNotClosed();
+        try {
+            return baseClient.incrBy(GlideString.of(key), increment).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("INCRBY operation failed", e);
+        }
+    }
+
+    public double incrByFloat(byte[] key, double increment) {
+        checkNotClosed();
+        try {
+            return baseClient.incrByFloat(GlideString.of(key), increment).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("INCRBYFLOAT operation failed", e);
+        }
+    }
+
+    public List<byte[]> mget(byte[]... keys) {
+        checkNotClosed();
+        try {
+            GlideString[] glideKeys =
+                    Arrays.stream(keys).map(GlideString::of).toArray(GlideString[]::new);
+            GlideString[] results = baseClient.mget(glideKeys).get();
+            return Arrays.stream(results)
+                    .map(s -> s != null ? s.getBytes() : null)
+                    .collect(Collectors.toList());
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("MGET operation failed", e);
+        }
+    }
+
+    public String mset(byte[]... keysvalues) {
+        checkNotClosed();
+        try {
+            Map<GlideString, GlideString> keyValueMap = new HashMap<>();
+            for (int i = 0; i < keysvalues.length; i += 2) {
+                keyValueMap.put(GlideString.of(keysvalues[i]), GlideString.of(keysvalues[i + 1]));
+            }
+            return baseClient.msetBinary(keyValueMap).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("MSET operation failed", e);
+        }
+    }
+
+    public long msetnx(byte[]... keysvalues) {
+        checkNotClosed();
+        try {
+            Map<GlideString, GlideString> keyValueMap = new HashMap<>();
+            for (int i = 0; i < keysvalues.length; i += 2) {
+                keyValueMap.put(GlideString.of(keysvalues[i]), GlideString.of(keysvalues[i + 1]));
+            }
+            return baseClient.msetnxBinary(keyValueMap).get() ? 1L : 0L;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("MSETNX operation failed", e);
+        }
+    }
+
+    public long persist(byte[] key) {
+        checkNotClosed();
+        try {
+            return baseClient.persist(GlideString.of(key)).get() ? 1L : 0L;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("PERSIST operation failed", e);
+        }
+    }
+
+    public long pexpire(byte[] key, long milliseconds) {
+        checkNotClosed();
+        try {
+            return baseClient.pexpire(GlideString.of(key), milliseconds).get() ? 1L : 0L;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("PEXPIRE operation failed", e);
+        }
+    }
+
+    public long pexpire(byte[] key, long milliseconds, ExpiryOption expiryOption) {
+        checkNotClosed();
+        try {
+            ExpireOptions options =
+                    expiryOption == ExpiryOption.NX
+                            ? ExpireOptions.HAS_NO_EXPIRY
+                            : expiryOption == ExpiryOption.XX
+                                    ? ExpireOptions.HAS_EXISTING_EXPIRY
+                                    : expiryOption == ExpiryOption.GT
+                                            ? ExpireOptions.NEW_EXPIRY_GREATER_THAN_CURRENT
+                                            : ExpireOptions.NEW_EXPIRY_LESS_THAN_CURRENT;
+            return baseClient.pexpire(GlideString.of(key), milliseconds, options).get() ? 1L : 0L;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("PEXPIRE operation failed", e);
+        }
+    }
+
+    public long pexpireAt(byte[] key, long millisecondsTimestamp) {
+        checkNotClosed();
+        try {
+            return baseClient.pexpireAt(GlideString.of(key), millisecondsTimestamp).get() ? 1L : 0L;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("PEXPIREAT operation failed", e);
+        }
+    }
+
+    public long pexpireAt(byte[] key, long millisecondsTimestamp, ExpiryOption expiryOption) {
+        checkNotClosed();
+        try {
+            ExpireOptions options =
+                    expiryOption == ExpiryOption.NX
+                            ? ExpireOptions.HAS_NO_EXPIRY
+                            : expiryOption == ExpiryOption.XX
+                                    ? ExpireOptions.HAS_EXISTING_EXPIRY
+                                    : expiryOption == ExpiryOption.GT
+                                            ? ExpireOptions.NEW_EXPIRY_GREATER_THAN_CURRENT
+                                            : ExpireOptions.NEW_EXPIRY_LESS_THAN_CURRENT;
+            return baseClient.pexpireAt(GlideString.of(key), millisecondsTimestamp, options).get()
+                    ? 1L
+                    : 0L;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("PEXPIREAT operation failed", e);
+        }
+    }
+
+    public long pexpireTime(byte[] key) {
+        checkNotClosed();
+        try {
+            return baseClient.pexpiretime(GlideString.of(key)).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("PEXPIRETIME operation failed", e);
+        }
+    }
+
+    public long pfadd(byte[] key, byte[]... elements) {
+        checkNotClosed();
+        try {
+            GlideString[] glideElements =
+                    Arrays.stream(elements).map(GlideString::of).toArray(GlideString[]::new);
+            return baseClient.pfadd(GlideString.of(key), glideElements).get() ? 1L : 0L;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("PFADD operation failed", e);
+        }
+    }
+
+    public long pfcount(byte[] key) {
+        checkNotClosed();
+        try {
+            return baseClient.pfcount(new GlideString[] {GlideString.of(key)}).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("PFCOUNT operation failed", e);
+        }
+    }
+
+    public long pfcount(byte[]... keys) {
+        checkNotClosed();
+        try {
+            GlideString[] glideKeys =
+                    Arrays.stream(keys).map(GlideString::of).toArray(GlideString[]::new);
+            return baseClient.pfcount(glideKeys).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("PFCOUNT operation failed", e);
+        }
+    }
+
+    public String pfmerge(byte[] destkey, byte[]... sourcekeys) {
+        checkNotClosed();
+        try {
+            GlideString[] glideSourceKeys =
+                    Arrays.stream(sourcekeys).map(GlideString::of).toArray(GlideString[]::new);
+            return baseClient.pfmerge(GlideString.of(destkey), glideSourceKeys).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("PFMERGE operation failed", e);
+        }
+    }
+
+    public String psetex(byte[] key, long milliseconds, byte[] value) {
+        checkNotClosed();
+        try {
+            SetOptions options =
+                    SetOptions.builder().expiry(SetOptions.Expiry.Milliseconds(milliseconds)).build();
+            return baseClient.set(GlideString.of(key), GlideString.of(value), options).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("PSETEX operation failed", e);
+        }
+    }
+
+    public long pttl(byte[] key) {
+        checkNotClosed();
+        try {
+            return baseClient.pttl(GlideString.of(key)).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("PTTL operation failed", e);
+        }
+    }
+
+    public String rename(byte[] oldkey, byte[] newkey) {
+        checkNotClosed();
+        try {
+            return baseClient.rename(GlideString.of(oldkey), GlideString.of(newkey)).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("RENAME operation failed", e);
+        }
+    }
+
+    public long renamenx(byte[] oldkey, byte[] newkey) {
+        checkNotClosed();
+        try {
+            return baseClient.renamenx(GlideString.of(oldkey), GlideString.of(newkey)).get() ? 1L : 0L;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("RENAMENX operation failed", e);
+        }
+    }
+
+    public String restore(byte[] key, long ttl, byte[] serializedValue) {
+        checkNotClosed();
+        try {
+            return baseClient.restore(GlideString.of(key), ttl, serializedValue).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("RESTORE operation failed", e);
+        }
+    }
+
+    public String restore(byte[] key, long ttl, byte[] serializedValue, RestoreParams params) {
+        checkNotClosed();
+        try {
+            RestoreOptions.RestoreOptionsBuilder optionsBuilder = RestoreOptions.builder();
+            // Only implement basic replace option to avoid parameter compatibility issues
+            return baseClient
+                    .restore(GlideString.of(key), ttl, serializedValue, optionsBuilder.build())
+                    .get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("RESTORE operation failed", e);
+        }
+    }
+
+    public String set(byte[] key, byte[] value) {
+        checkNotClosed();
+        try {
+            return baseClient.set(GlideString.of(key), GlideString.of(value)).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("SET operation failed", e);
+        }
+    }
+
+    public String set(byte[] key, byte[] value, SetParams params) {
+        checkNotClosed();
+        try {
+            // Use basic set without complex parameter handling to avoid compatibility issues
+            return baseClient.set(GlideString.of(key), GlideString.of(value)).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("SET operation failed", e);
+        }
+    }
+
+    public byte[] setGet(byte[] key, byte[] value) {
+        checkNotClosed();
+        try {
+            SetOptions options = SetOptions.builder().returnOldValue(true).build();
+            String result = baseClient.set(GlideString.of(key), GlideString.of(value), options).get();
+            return result != null ? result.getBytes() : null;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("SET operation failed", e);
+        }
+    }
+
+    public byte[] setGet(byte[] key, byte[] value, SetParams params) {
+        checkNotClosed();
+        try {
+            // Use basic setGet without complex parameter handling
+            SetOptions options = SetOptions.builder().returnOldValue(true).build();
+            String result = baseClient.set(GlideString.of(key), GlideString.of(value), options).get();
+            return result != null ? result.getBytes() : null;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("SET operation failed", e);
+        }
+    }
+
+    public boolean setbit(byte[] key, long offset, boolean value) {
+        checkNotClosed();
+        try {
+            return baseClient.setbit(GlideString.of(key), offset, value ? 1 : 0).get() == 1;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("SETBIT operation failed", e);
+        }
+    }
+
+    public String setex(byte[] key, long seconds, byte[] value) {
+        checkNotClosed();
+        try {
+            SetOptions options = SetOptions.builder().expiry(SetOptions.Expiry.Seconds(seconds)).build();
+            return baseClient.set(GlideString.of(key), GlideString.of(value), options).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("SETEX operation failed", e);
+        }
+    }
+
+    public long setnx(byte[] key, byte[] value) {
+        checkNotClosed();
+        try {
+            SetOptions options =
+                    SetOptions.builder()
+                            .conditionalSet(SetOptions.ConditionalSet.ONLY_IF_DOES_NOT_EXIST)
+                            .build();
+            String result = baseClient.set(GlideString.of(key), GlideString.of(value), options).get();
+            return result != null ? 1L : 0L;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("SETNX operation failed", e);
+        }
+    }
+
+    public long setrange(byte[] key, long offset, byte[] value) {
+        checkNotClosed();
+        try {
+            return baseClient.setrange(GlideString.of(key), (int) offset, GlideString.of(value)).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("SETRANGE operation failed", e);
+        }
+    }
+
+    public List<byte[]> sort(byte[] key) {
+        checkNotClosed();
+        try {
+            GlideString[] results = baseClient.sort(GlideString.of(key)).get();
+            return Arrays.stream(results).map(GlideString::getBytes).collect(Collectors.toList());
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("SORT operation failed", e);
+        }
+    }
+
+    public List<byte[]> sort(byte[] key, SortingParams sortingParams) {
+        checkNotClosed();
+        try {
+            if (sortingParams == null) {
+                return sort(key);
+            }
+
+            // Convert Jedis SortingParams to GLIDE SortOptionsBinary
+            SortOptionsBinary options = convertSortingParamsBinary(sortingParams);
+            GlideString[] results = baseClient.sort(GlideString.of(key), options).get();
+            return Arrays.stream(results).map(GlideString::getBytes).collect(Collectors.toList());
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("SORT operation failed", e);
+        }
+    }
+
+    public long sort(byte[] key, byte[] dstkey) {
+        checkNotClosed();
+        try {
+            return baseClient.sortStore(GlideString.of(key), GlideString.of(dstkey)).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("SORT operation failed", e);
+        }
+    }
+
+    public long sort(byte[] key, SortingParams sortingParams, byte[] dstkey) {
+        checkNotClosed();
+        try {
+            if (sortingParams == null) {
+                return sort(key, dstkey);
+            }
+
+            // Convert Jedis SortingParams to GLIDE SortOptionsBinary
+            SortOptionsBinary options = convertSortingParamsBinary(sortingParams);
+            return baseClient.sortStore(GlideString.of(key), GlideString.of(dstkey), options).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("SORT operation failed", e);
+        }
+    }
+
+    public List<byte[]> sortReadonly(byte[] key, SortingParams sortingParams) {
+        checkNotClosed();
+        try {
+            if (sortingParams == null) {
+                return sort(key);
+            }
+
+            // Convert Jedis SortingParams to GLIDE SortOptionsBinary
+            SortOptionsBinary options = convertSortingParamsBinary(sortingParams);
+            GlideString[] results = baseClient.sortReadOnly(GlideString.of(key), options).get();
+            return Arrays.stream(results).map(GlideString::getBytes).collect(Collectors.toList());
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("SORT_RO operation failed", e);
+        }
+    }
+
+    public long strlen(byte[] key) {
+        checkNotClosed();
+        try {
+            return baseClient.strlen(GlideString.of(key)).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("STRLEN operation failed", e);
+        }
+    }
+
+    public byte[] substr(byte[] key, int start, int end) {
+        checkNotClosed();
+        try {
+            GlideString result = baseClient.getrange(GlideString.of(key), start, end).get();
+            return result != null ? result.getBytes() : null;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("SUBSTR operation failed", e);
+        }
+    }
+
+    public long touch(byte[] key) {
+        checkNotClosed();
+        try {
+            return baseClient.touch(new GlideString[] {GlideString.of(key)}).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("TOUCH operation failed", e);
+        }
+    }
+
+    public long touch(byte[]... keys) {
+        checkNotClosed();
+        try {
+            GlideString[] glideKeys =
+                    Arrays.stream(keys).map(GlideString::of).toArray(GlideString[]::new);
+            return baseClient.touch(glideKeys).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("TOUCH operation failed", e);
+        }
+    }
+
+    public long ttl(byte[] key) {
+        checkNotClosed();
+        try {
+            return baseClient.ttl(GlideString.of(key)).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("TTL operation failed", e);
+        }
+    }
+
+    public String type(byte[] key) {
+        checkNotClosed();
+        try {
+            return baseClient.type(GlideString.of(key)).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("TYPE operation failed", e);
+        }
+    }
+
+    public long unlink(byte[] key) {
+        checkNotClosed();
+        try {
+            return baseClient.unlink(new GlideString[] {GlideString.of(key)}).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("UNLINK operation failed", e);
+        }
+    }
+
+    public long unlink(byte[]... keys) {
+        checkNotClosed();
+        try {
+            GlideString[] glideKeys =
+                    Arrays.stream(keys).map(GlideString::of).toArray(GlideString[]::new);
+            return baseClient.unlink(glideKeys).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("UNLINK operation failed", e);
+        }
+    }
+
+    public List<Long> bitfieldReadonly(byte[] key, byte[]... arguments) {
+        checkNotClosed();
+        try {
+            GlideString[] args = new GlideString[arguments.length + 2];
+            args[0] = GlideString.of("BITFIELD_RO");
+            args[1] = GlideString.of(key);
+            for (int i = 0; i < arguments.length; i++) {
+                args[i + 2] = GlideString.of(arguments[i]);
+            }
+
+            if (isClusterMode) {
+                ClusterValue<Object> clusterResult = glideClusterClient.customCommand(args).get();
+                Object[] result = (Object[]) clusterResult.getSingleValue();
+                return Arrays.stream(result)
+                        .map(obj -> obj != null ? ((Number) obj).longValue() : null)
+                        .collect(Collectors.toList());
+            } else {
+                Object[] result = (Object[]) glideClient.customCommand(args).get();
+                return Arrays.stream(result)
+                        .map(obj -> obj != null ? ((Number) obj).longValue() : null)
+                        .collect(Collectors.toList());
+            }
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("BITFIELD_RO operation failed", e);
+        }
+    }
+
+    public byte[] getEx(byte[] key, GetExParams params) {
+        checkNotClosed();
+        try {
+            if (params == null) {
+                GlideString result = baseClient.getex(GlideString.of(key)).get();
+                return result != null ? result.getBytes() : null;
+            }
+
+            // Convert Jedis GetExParams to GLIDE GetExOptions
+            GetExOptions options = convertGetExParams(params);
+            GlideString result = baseClient.getex(GlideString.of(key), options).get();
+            return result != null ? result.getBytes() : null;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("GETEX operation failed", e);
+        }
+    }
+
+    public byte[] getSet(byte[] key, byte[] value) {
+        checkNotClosed();
+        try {
+            // Use SET with returnOldValue option to simulate GETSET
+            SetOptions options = SetOptions.builder().returnOldValue(true).build();
+            String result = baseClient.set(GlideString.of(key), GlideString.of(value), options).get();
+            return result != null ? result.getBytes() : null;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("GETSET operation failed", e);
+        }
+    }
+
+    public Set<byte[]> keys(byte[] pattern) {
+        checkNotClosed();
+        try {
+            GlideString[] args = {GlideString.of("KEYS"), GlideString.of(pattern)};
+            Object result;
+
+            if (isClusterMode) {
+                result = glideClusterClient.customCommand(args).get();
+            } else {
+                result = glideClient.customCommand(args).get();
+            }
+
+            if (result instanceof String[]) {
+                Set<byte[]> keySet = new HashSet<>();
+                for (String key : (String[]) result) {
+                    keySet.add(key.getBytes());
+                }
+                return keySet;
+            } else if (result == null) {
+                return new HashSet<>();
+            } else {
+                throw new JedisException("Unexpected response type for KEYS command: " + result.getClass());
+            }
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("KEYS operation failed", e);
+        }
+    }
+
+    public String migrate(String host, int port, byte[] key, int timeout) {
+        checkNotClosed();
+        try {
+            GlideString[] args = {
+                GlideString.of("MIGRATE"),
+                GlideString.of(host),
+                GlideString.of(String.valueOf(port)),
+                GlideString.of(key),
+                GlideString.of("0"), // destination database (default to 0)
+                GlideString.of(String.valueOf(timeout))
+            };
+
+            Object result;
+            if (isClusterMode) {
+                result = glideClusterClient.customCommand(args).get();
+            } else {
+                result = glideClient.customCommand(args).get();
+            }
+
+            return result != null ? result.toString() : "OK";
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("MIGRATE operation failed", e);
+        }
+    }
+
+    public String migrate(String host, int port, int timeout, MigrateParams params, byte[]... keys) {
+        checkNotClosed();
+        try {
+            List<GlideString> args = new ArrayList<>();
+            args.add(GlideString.of("MIGRATE"));
+            args.add(GlideString.of(host));
+            args.add(GlideString.of(String.valueOf(port)));
+            args.add(GlideString.of("")); // empty key for multi-key migration
+            args.add(GlideString.of("0")); // destination database (default to 0)
+            args.add(GlideString.of(String.valueOf(timeout)));
+
+            // Add MigrateParams if provided
+            if (params != null) {
+                String[] paramArray = params.getParams();
+                for (String param : paramArray) {
+                    args.add(GlideString.of(param));
+                }
+            }
+
+            // Add KEYS keyword and the keys
+            args.add(GlideString.of("KEYS"));
+            for (byte[] key : keys) {
+                args.add(GlideString.of(key));
+            }
+
+            Object result;
+            if (isClusterMode) {
+                result = glideClusterClient.customCommand(args.toArray(new GlideString[0])).get();
+            } else {
+                result = glideClient.customCommand(args.toArray(new GlideString[0])).get();
+            }
+
+            return result != null ? result.toString() : "OK";
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("MIGRATE operation failed", e);
+        }
+    }
+
+    public ScanResult<byte[]> scan(byte[] cursor) {
+        checkNotClosed();
+        try {
+            String cursorStr = new String(cursor);
+            Object[] result;
+            if (isClusterMode) {
+                // Convert String cursor to ClusterScanCursor
+                ClusterScanCursor clusterCursor;
+                if ("0".equals(cursorStr)) {
+                    // Initial cursor
+                    clusterCursor = ClusterScanCursor.initalCursor();
+                    result = glideClusterClient.scan(clusterCursor).get();
+                    ClusterScanCursor nextCursor = (ClusterScanCursor) result[0];
+                    String[] keys = (String[]) result[1];
+                    List<byte[]> binaryKeys =
+                            Arrays.stream(keys).map(String::getBytes).collect(Collectors.toList());
+                    return new ScanResult<>(nextCursor.toString().getBytes(), binaryKeys);
+                } else {
+                    // For subsequent cursors, use customCommand to maintain compatibility
+                    GlideString[] args = {GlideString.of("SCAN"), GlideString.of(cursorStr)};
+                    ClusterValue<Object> clusterResult = glideClusterClient.customCommand(args).get();
+                    // Handle the custom command result
+                    Object[] customArray = (Object[]) clusterResult.getSingleValue();
+                    String nextCursor = customArray[0].toString();
+                    Object[] keys = (Object[]) customArray[1];
+                    List<byte[]> keyList = new ArrayList<>();
+                    for (Object key : keys) {
+                        keyList.add(key.toString().getBytes());
+                    }
+                    return new ScanResult<>(nextCursor.getBytes(), keyList);
+                }
+            } else {
+                result = glideClient.scan(cursorStr).get();
+                String newCursor = (String) result[0];
+                String[] keys = (String[]) result[1];
+                List<byte[]> binaryKeys =
+                        Arrays.stream(keys).map(String::getBytes).collect(Collectors.toList());
+                return new ScanResult<>(newCursor.getBytes(), binaryKeys);
+            }
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("SCAN operation failed", e);
+        }
+    }
+
+    public ScanResult<byte[]> scan(byte[] cursor, ScanParams params) {
+        checkNotClosed();
+        try {
+            String cursorStr = new String(cursor);
+            if (params == null) {
+                return scan(cursor);
+            }
+
+            // Convert Jedis ScanParams to GLIDE ScanOptions
+            ScanOptions options = convertScanParams(params);
+
+            Object[] result;
+            if (isClusterMode) {
+                ClusterScanCursor clusterCursor;
+                if ("0".equals(cursorStr)) {
+                    // Initial cursor
+                    clusterCursor = ClusterScanCursor.initalCursor();
+                    result = glideClusterClient.scan(clusterCursor, options).get();
+                    ClusterScanCursor nextCursor = (ClusterScanCursor) result[0];
+                    String[] keys = (String[]) result[1];
+                    List<byte[]> binaryKeys =
+                            Arrays.stream(keys).map(String::getBytes).collect(Collectors.toList());
+                    return new ScanResult<>(nextCursor.toString().getBytes(), binaryKeys);
+                } else {
+                    // For subsequent cursors, use customCommand with params
+                    List<GlideString> args = new ArrayList<>();
+                    args.add(GlideString.of("SCAN"));
+                    args.add(GlideString.of(cursorStr));
+
+                    // Add ScanParams to command arguments
+                    if (params.getMatchPattern() != null) {
+                        args.add(GlideString.of("MATCH"));
+                        args.add(GlideString.of(params.getMatchPattern()));
+                    }
+                    if (params.getCount() != null) {
+                        args.add(GlideString.of("COUNT"));
+                        args.add(GlideString.of(params.getCount().toString()));
+                    }
+                    if (params.getType() != null) {
+                        args.add(GlideString.of("TYPE"));
+                        args.add(GlideString.of(params.getType()));
+                    }
+
+                    ClusterValue<Object> clusterResult =
+                            glideClusterClient.customCommand(args.toArray(new GlideString[0])).get();
+                    Object[] customArray = (Object[]) clusterResult.getSingleValue();
+                    String nextCursor = customArray[0].toString();
+                    Object[] keys = (Object[]) customArray[1];
+                    List<byte[]> keyList = new ArrayList<>();
+                    for (Object key : keys) {
+                        keyList.add(key.toString().getBytes());
+                    }
+                    return new ScanResult<>(nextCursor.getBytes(), keyList);
+                }
+            } else {
+                result = glideClient.scan(cursorStr, options).get();
+                String newCursor = (String) result[0];
+                String[] keys = (String[]) result[1];
+                List<byte[]> binaryKeys =
+                        Arrays.stream(keys).map(String::getBytes).collect(Collectors.toList());
+                return new ScanResult<>(newCursor.getBytes(), binaryKeys);
+            }
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("SCAN operation failed", e);
+        }
+    }
+
+    public ScanResult<byte[]> scan(byte[] cursor, ScanParams params, byte[] type) {
+        checkNotClosed();
+        try {
+            String cursorStr = new String(cursor);
+            String typeStr = type != null ? new String(type) : null;
+            Object[] result;
+
+            // Build SCAN command arguments for both cluster and standalone
+            List<GlideString> args = new ArrayList<>();
+            args.add(GlideString.of("SCAN"));
+            args.add(GlideString.of(cursorStr));
+
+            if (params != null) {
+                if (params.getMatchPattern() != null) {
+                    args.add(GlideString.of("MATCH"));
+                    args.add(GlideString.of(params.getMatchPattern()));
+                }
+                if (params.getCount() != null) {
+                    args.add(GlideString.of("COUNT"));
+                    args.add(GlideString.of(params.getCount().toString()));
+                }
+            }
+
+            if (typeStr != null) {
+                args.add(GlideString.of("TYPE"));
+                args.add(GlideString.of(typeStr));
+            }
+
+            if (isClusterMode) {
+                ClusterValue<Object> clusterResult =
+                        glideClusterClient.customCommand(args.toArray(new GlideString[0])).get();
+                result = (Object[]) clusterResult.getSingleValue();
+            } else {
+                result = (Object[]) glideClient.customCommand(args.toArray(new GlideString[0])).get();
+            }
+
+            String newCursor = result[0].toString();
+            Object[] keys = (Object[]) result[1];
+            List<byte[]> keyList = new ArrayList<>();
+            for (Object key : keys) {
+                keyList.add(key.toString().getBytes());
+            }
+            return new ScanResult<>(newCursor.getBytes(), keyList);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("SCAN operation failed", e);
         }
     }
 
