@@ -600,7 +600,7 @@ class BaseClient(CoreCommands):
         args_c_args, args_c_lengths, args_buffers = self._to_c_strings(args)
 
         # Convert script hash to C string
-        hash_bytes = script_hash.encode(ENCODING)
+        hash_bytes = script_hash.encode(ENCODING) + b"\0"
         hash_buffer = self._ffi.from_buffer(hash_bytes)
 
         # Route bytes should be kept alive in the scope of the FFI call

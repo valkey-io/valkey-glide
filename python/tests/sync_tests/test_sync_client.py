@@ -10561,12 +10561,15 @@ class TestSyncScripts:
         instance with the same hash still exists, even after the original reference is released
         and the server-side script cache is flushed.
         """
-        script_1 = Script("return 'Script Exists'")
-        script_2 = Script("return 'Script Exists'")
+        random_str = get_random_string(10)
+
+        # Create two scripts with the same content
+        script_1 = Script(f"return '{random_str}'")
+        script_2 = Script(f"return '{random_str}'")
         assert script_1.get_hash() == script_2.get_hash()
 
         # Run first script and drop reference
-        assert glide_sync_client.invoke_script(script_1) == b"Script Exists"
+        assert glide_sync_client.invoke_script(script_1) == f"{random_str}".encode()
         script_1.__del__()
 
         # Flush the script from the server
@@ -10576,7 +10579,7 @@ class TestSyncScripts:
         assert glide_sync_client.script_exists([script_1.get_hash()]) == [False]
 
         # Run second script; it should not exist on the server but must be found in the local script cache
-        assert glide_sync_client.invoke_script(script_2) == b"Script Exists"
+        assert glide_sync_client.invoke_script(script_2) == f"{random_str}".encode()
 
         # Release script_2 and flush again
         script_2.__del__()
