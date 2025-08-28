@@ -1884,9 +1884,9 @@ func (client *baseClient) HSetEx(
 //
 // Return value:
 //
-//   - An array of [models.Result[string]] values associated with the given fields, in the same order as they are requested.
-//   - For every field that does not exist in the hash, a [models.CreateNilStringResult()] is returned.
-//   - If key does not exist, returns an empty string array.
+//	An array of [models.Result[string]] values associated with the given fields, in the same order as they are requested.
+//	- For every field that does not exist in the hash, a [models.CreateNilStringResult()] is returned.
+//	- If key does not exist, returns an empty string array.
 //
 // [valkey.io]: https://valkey.io/commands/hgetex/
 func (client *baseClient) HGetEx(
@@ -1936,11 +1936,11 @@ func (client *baseClient) HGetEx(
 //
 // Return value:
 //
-//   - An array of integers indicating the result for each field:
-//   - -2: Field does not exist in the hash, or key does not exist.
-//   - 0: The specified condition was not met.
-//   - 1: The expiration time was applied.
-//   - 2: When called with 0 seconds.
+//	An array of integers indicating the result for each field:
+//	- -2: Field does not exist in the hash, or key does not exist.
+//	- 0: The specified condition was not met.
+//	- 1: The expiration time was applied.
+//	- 2: When called with 0 seconds.
 //
 // [valkey.io]: https://valkey.io/commands/hexpire/
 func (client *baseClient) HExpire(
@@ -1983,11 +1983,11 @@ func (client *baseClient) HExpire(
 //
 // Return value:
 //
-//   - An array of integers indicating the result for each field:
-//   - -2: Field does not exist in the hash, or hash is empty.
-//   - 0: The specified condition was not met.
-//   - 1: The expiration time was applied.
-//   - 2: When called with 0 seconds or past Unix time.
+//	An array of integers indicating the result for each field:
+//	- -2: Field does not exist in the hash, or hash is empty.
+//	- 0: The specified condition was not met.
+//	- 1: The expiration time was applied.
+//	- 2: When called with 0 seconds or past Unix time.
 //
 // [valkey.io]: https://valkey.io/commands/hexpireat/
 func (client *baseClient) HExpireAt(
@@ -2029,11 +2029,11 @@ func (client *baseClient) HExpireAt(
 //
 // Return value:
 //
-//   - An array of integers indicating the result for each field:
-//   - -2: Field does not exist in the hash, or hash is empty.
-//   - 0: The specified condition was not met.
-//   - 1: The expiration time was applied.
-//   - 2: When called with 0 milliseconds.
+//	An array of integers indicating the result for each field:
+//	- -2: Field does not exist in the hash, or hash is empty.
+//	- 0: The specified condition was not met.
+//	- 1: The expiration time was applied.
+//	- 2: When called with 0 milliseconds.
 //
 // [valkey.io]: https://valkey.io/commands/hpexpire/
 func (client *baseClient) HPExpire(
@@ -2076,11 +2076,11 @@ func (client *baseClient) HPExpire(
 //
 // Return value:
 //
-//   - An array of integers indicating the result for each field:
-//   - -2: Field does not exist in the hash, or hash is empty.
-//   - 0: The specified condition was not met.
-//   - 1: The expiration time was applied.
-//   - 2: When called with 0 milliseconds or past Unix time.
+//	An array of integers indicating the result for each field:
+//	- -2: Field does not exist in the hash, or hash is empty.
+//	- 0: The specified condition was not met.
+//	- 1: The expiration time was applied.
+//	- 2: When called with 0 milliseconds or past Unix time.
 //
 // [valkey.io]: https://valkey.io/commands/hpexpireat/
 func (client *baseClient) HPExpireAt(
@@ -2120,10 +2120,10 @@ func (client *baseClient) HPExpireAt(
 //
 // Return value:
 //
-//   - An array of integers indicating the result for each field:
-//   - -2: Field does not exist in the hash, or hash does not exist.
-//   - -1: Field exists but has no expiration.
-//   - 1: The expiration was successfully removed from the field.
+//	An array of integers indicating the result for each field:
+//	- -2: Field does not exist in the hash, or hash does not exist.
+//	- -1: Field exists but has no expiration.
+//	- 1: The expiration was successfully removed from the field.
 //
 // [valkey.io]: https://valkey.io/commands/hpersist/
 func (client *baseClient) HPersist(ctx context.Context, key string, fields []string) ([]int64, error) {
@@ -2156,10 +2156,10 @@ func (client *baseClient) HPersist(ctx context.Context, key string, fields []str
 //
 // Return value:
 //
-//   - An array of integers indicating the TTL for each field in seconds:
-//   - Positive number: remaining TTL.
-//   - -1: field exists but has no expiration.
-//   - -2: field doesn't exist.
+//	An array of integers indicating the TTL for each field in seconds:
+//	- Positive number: remaining TTL.
+//	- -1: field exists but has no expiration.
+//	- -2: field doesn't exist.
 //
 // [valkey.io]: https://valkey.io/commands/httl/
 func (client *baseClient) HTtl(ctx context.Context, key string, fields []string) ([]int64, error) {
@@ -2192,10 +2192,10 @@ func (client *baseClient) HTtl(ctx context.Context, key string, fields []string)
 //
 // Return value:
 //
-//   - An array of integers indicating the TTL for each field in milliseconds:
-//   - Positive number: remaining TTL.
-//   - -1: field exists but has no expiration.
-//   - -2: field doesn't exist.
+//	An array of integers indicating the TTL for each field in milliseconds:
+//	- Positive number: remaining TTL.
+//	- -1: field exists but has no expiration.
+//	- -2: field doesn't exist.
 //
 // [valkey.io]: https://valkey.io/commands/hpttl/
 func (client *baseClient) HPTtl(ctx context.Context, key string, fields []string) ([]int64, error) {
@@ -2228,10 +2228,10 @@ func (client *baseClient) HPTtl(ctx context.Context, key string, fields []string
 //
 // Return value:
 //
-//   - An array of integers indicating the expiration timestamp for each field in seconds:
-//   - Positive number: expiration timestamp.
-//   - -1: field exists but has no expiration.
-//   - -2: field doesn't exist.
+//	An array of integers indicating the expiration timestamp for each field in seconds:
+//	- Positive number: expiration timestamp.
+//	- -1: field exists but has no expiration.
+//	- -2: field doesn't exist.
 //
 // [valkey.io]: https://valkey.io/commands/hexpiretime/
 func (client *baseClient) HExpireTime(ctx context.Context, key string, fields []string) ([]int64, error) {
@@ -2265,10 +2265,10 @@ func (client *baseClient) HExpireTime(ctx context.Context, key string, fields []
 //
 // Return value:
 //
-//   - An array of integers indicating the expiration timestamp for each field in milliseconds:
-//   - Positive number: expiration timestamp.
-//   - -1: field exists but has no expiration.
-//   - -2: field doesn't exist.
+//	An array of integers indicating the expiration timestamp for each field in milliseconds:
+//	- Positive number: expiration timestamp.
+//	- -1: field exists but has no expiration.
+//	- -2: field doesn't exist.
 //
 // [valkey.io]: https://valkey.io/commands/hpexpiretime/
 func (client *baseClient) HPExpireTime(ctx context.Context, key string, fields []string) ([]int64, error) {
