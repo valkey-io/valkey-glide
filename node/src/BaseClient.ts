@@ -2975,7 +2975,7 @@ export class BaseClient {
      *
      * @param key - The key of the hash.
      * @param fields - The fields in the hash stored at `key` to retrieve from the database.
-     * @param options - Optional arguments for the HGETEX command. See {@link HGetExOptions}.
+     * @param options - Optional arguments for the HGETEX command. See {@link HGetExOptions} and see {@link DecoderOption}.
      * @returns An array of values associated with the given fields,
      *          in the same order as they are requested. For every field that does not exist
      *          in the hash, a null value is returned. If `key` does not exist, returns an
