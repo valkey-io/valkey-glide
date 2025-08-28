@@ -4,6 +4,7 @@ package interfaces
 
 import (
 	"context"
+	"time"
 
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
@@ -55,4 +56,50 @@ type HashCommands interface {
 	HRandFieldWithCount(ctx context.Context, key string, count int64) ([]string, error)
 
 	HRandFieldWithCountWithValues(ctx context.Context, key string, count int64) ([][]string, error)
+
+	HSetEx(ctx context.Context, key string, fieldsAndValues map[string]string, options options.HSetExOptions) (int64, error)
+
+	HGetEx(ctx context.Context, key string, fields []string, options options.HGetExOptions) ([]models.Result[string], error)
+
+	HExpire(
+		ctx context.Context,
+		key string,
+		expireTime time.Duration,
+		fields []string,
+		options options.HExpireOptions,
+	) ([]int64, error)
+
+	HExpireAt(
+		ctx context.Context,
+		key string,
+		expireTime time.Time,
+		fields []string,
+		options options.HExpireOptions,
+	) ([]int64, error)
+
+	HPExpire(
+		ctx context.Context,
+		key string,
+		expireTime time.Duration,
+		fields []string,
+		options options.HExpireOptions,
+	) ([]int64, error)
+
+	HPExpireAt(
+		ctx context.Context,
+		key string,
+		expireTime time.Time,
+		fields []string,
+		options options.HExpireOptions,
+	) ([]int64, error)
+
+	HPersist(ctx context.Context, key string, fields []string) ([]int64, error)
+
+	HTtl(ctx context.Context, key string, fields []string) ([]int64, error)
+
+	HPTtl(ctx context.Context, key string, fields []string) ([]int64, error)
+
+	HExpireTime(ctx context.Context, key string, fields []string) ([]int64, error)
+
+	HPExpireTime(ctx context.Context, key string, fields []string) ([]int64, error)
 }
