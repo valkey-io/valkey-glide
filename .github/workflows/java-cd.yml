@@ -106,7 +106,7 @@ jobs:
                   os: ${{ matrix.host.OS }}
                   target: ${{ matrix.host.CD_TARGET || matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
-            
+
             - name: Run rustup with correct target
               if: ${{ contains(matrix.host.TARGET, 'musl') }}
               run: |
@@ -256,7 +256,7 @@ jobs:
         runs-on: ${{ matrix.host.test-runner || matrix.host.runner }}
         container:
             image: ${{ matrix.host.IMAGE || ''}}
-            options: ${{ matrix.host.CONTAINER_OPTIONS || 'none' }}
+            options: ${{ join(' -q ', matrix.host.CONTAINER_OPTIONS) }} # adding `-q` to bypass empty options
         steps:
             - name: Setup self-hosted runner access
               if: ${{matrix.host.TARGET == 'aarch64-unknown-linux-gnu' }}

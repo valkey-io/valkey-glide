@@ -57,7 +57,7 @@
         "NAMED_OS": "linux",
         "ARCH": "x64",
         "TARGET": "x86_64-unknown-linux-musl",
-        "CD_TARGET": "aarch64-unknown-linux-gnu",
+        "CD_TARGET": "x86_64-unknown-linux-gnu",
         "RUNNER": "ubuntu-latest",
         "IMAGE": "node:lts-alpine",
         "CONTAINER_OPTIONS": "--user root --privileged",
