@@ -1253,24 +1253,37 @@ public class UnifiedJedisTest {
         unifiedJedis.set(testKey, "expiration_time_test");
         unifiedJedis.expire(testKey, 3600); // 1 hour
 
-        // Test EXPIRETIME
-        long expireTimeResult = unifiedJedis.expireTime(testKey);
-        assertTrue(expireTimeResult > 0, "EXPIRETIME should return positive timestamp");
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            // Test EXPIRETIME (Redis 7.0+ only)
+            long expireTimeResult = unifiedJedis.expireTime(testKey);
+            assertTrue(expireTimeResult > 0, "EXPIRETIME should return positive timestamp");
 
-        // Test PEXPIRETIME
-        long pexpireTimeResult = unifiedJedis.pexpireTime(testKey);
-        assertTrue(pexpireTimeResult > 0, "PEXPIRETIME should return positive timestamp");
+            // Test PEXPIRETIME (Redis 7.0+ only)
+            long pexpireTimeResult = unifiedJedis.pexpireTime(testKey);
+            assertTrue(pexpireTimeResult > 0, "PEXPIRETIME should return positive timestamp");
 
-        // Test binary EXPIRETIME
-        byte[] binaryKey = UUID.randomUUID().toString().getBytes();
-        unifiedJedis.set(binaryKey, "binary_expiration_test".getBytes());
-        unifiedJedis.expire(binaryKey, 3600);
+            // Test binary EXPIRETIME
+            byte[] binaryKey = UUID.randomUUID().toString().getBytes();
+            unifiedJedis.set(binaryKey, "binary_expiration_test".getBytes());
+            unifiedJedis.expire(binaryKey, 3600);
 
-        long binaryExpireTimeResult = unifiedJedis.expireTime(binaryKey);
-        assertTrue(binaryExpireTimeResult > 0, "Binary EXPIRETIME should return positive timestamp");
+            long binaryExpireTimeResult = unifiedJedis.expireTime(binaryKey);
+            assertTrue(binaryExpireTimeResult > 0, "Binary EXPIRETIME should return positive timestamp");
 
-        long binaryPexpireTimeResult = unifiedJedis.pexpireTime(binaryKey);
-        assertTrue(binaryPexpireTimeResult > 0, "Binary PEXPIRETIME should return positive timestamp");
+            long binaryPexpireTimeResult = unifiedJedis.pexpireTime(binaryKey);
+            assertTrue(
+                    binaryPexpireTimeResult > 0, "Binary PEXPIRETIME should return positive timestamp");
+        } else {
+            // For Redis < 7.0.0, EXPIRETIME/PEXPIRETIME commands don't exist
+            try {
+                unifiedJedis.expireTime(testKey);
+                fail("Should have thrown exception for unsupported EXPIRETIME on Redis < 7.0.0");
+            } catch (Exception e) {
+                assertTrue(
+                        e.getMessage().contains("unknown command") || e.getMessage().contains("EXPIRETIME"),
+                        "Should fail gracefully on Redis < 7.0.0");
+            }
+        }
     }
 
     @Test
@@ -1620,10 +1633,23 @@ public class UnifiedJedisTest {
         bitopResult = unifiedJedis.bitop(BitOP.XOR, destKey3, testKey1, testKey2);
         assertTrue(bitopResult > 0, "BITOP XOR should return result length");
 
-        // Test BITPOS with BitPosParams
+        // Test BITPOS with BitPosParams (BitmapIndexType requires Redis 7.0+)
         BitPosParams bitPosParams = new BitPosParams(0, 10);
-        long bitposResult = unifiedJedis.bitpos(testKey1, true, bitPosParams);
-        assertTrue(bitposResult >= -1, "BITPOS with BitPosParams should return valid position");
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            long bitposResult = unifiedJedis.bitpos(testKey1, true, bitPosParams);
+            assertTrue(bitposResult >= -1, "BITPOS with BitPosParams should return valid position");
+        } else {
+            // For Valkey < 7.0.0, BitmapIndexType is not supported
+            try {
+                unifiedJedis.bitpos(testKey1, true, bitPosParams);
+                fail("Should have thrown exception for unsupported BitmapIndexType on Valkey < 7.0.0");
+            } catch (Exception e) {
+                assertTrue(
+                        e.getMessage().contains("syntax error")
+                                || e.getMessage().contains("wrong number of arguments"),
+                        "Should fail gracefully on Valkey < 7.0.0");
+            }
+        }
 
         // Test BITCOUNT with BitCountOption
         long bitcountResult = unifiedJedis.bitcount(testKey1, 0, 2, BitCountOption.BYTE);
@@ -1651,10 +1677,24 @@ public class UnifiedJedisTest {
         bitopResult = unifiedJedis.bitop(BitOP.OR, destKey2, testKey1, testKey2);
         assertTrue(bitopResult > 0, "Binary BITOP OR should return result length");
 
-        // Test binary BITPOS with BitPosParams
+        // Test binary BITPOS with BitPosParams (BitmapIndexType requires Redis 7.0+)
         BitPosParams bitPosParams = new BitPosParams(0, 5);
-        long bitposResult = unifiedJedis.bitpos(testKey1, false, bitPosParams);
-        assertTrue(bitposResult >= -1, "Binary BITPOS with BitPosParams should return valid position");
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            long bitposResult = unifiedJedis.bitpos(testKey1, false, bitPosParams);
+            assertTrue(
+                    bitposResult >= -1, "Binary BITPOS with BitPosParams should return valid position");
+        } else {
+            // For Valkey < 7.0.0, BitmapIndexType is not supported
+            try {
+                unifiedJedis.bitpos(testKey1, false, bitPosParams);
+                fail("Should have thrown exception for unsupported BitmapIndexType on Vakey < 7.0.0");
+            } catch (Exception e) {
+                assertTrue(
+                        e.getMessage().contains("syntax error")
+                                || e.getMessage().contains("wrong number of arguments"),
+                        "Should fail gracefully on Valkey < 7.0.0");
+            }
+        }
 
         // Test binary BITCOUNT with BitCountOption
         long bitcountResult = unifiedJedis.bitcount(testKey1, 0, 2, BitCountOption.BYTE);
