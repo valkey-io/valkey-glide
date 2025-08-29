@@ -420,7 +420,7 @@ jobs:
                   args: --out sdist
 
             - name: Async client - Download binaries
-              uses: actions/download-artifact@v4
+              uses: actions/download-artifact@v5
               with:
                   path: python/glide-async/wheels
                   merge-multiple: true
@@ -457,7 +457,7 @@ jobs:
                   python3 -m build --sdist
 
             - name: Sync client - Download binaries
-              uses: actions/download-artifact@v4
+              uses: actions/download-artifact@v5
               with:
                   path: python/glide-sync/wheels
                   merge-multiple: true
