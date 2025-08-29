@@ -1,71 +1,75 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package compatibility.jedis;
 
+import static glide.TestConfiguration.STANDALONE_HOSTS;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.*;
 import redis.clients.jedis.UnifiedJedis;
 
 /**
- * UnifiedJedis compatibility test that validates GLIDE UnifiedJedis functionality.
+ * UnifiedJedis standalone compatibility test that validates GLIDE UnifiedJedis functionality.
  *
  * <p>This test ensures that the GLIDE compatibility layer provides the expected UnifiedJedis API
- * and behavior for core Redis operations.
+ * and behavior for core Valkey operations in standalone mode.
  */
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class UnifiedJedisTest {
 
-    private static final String TEST_KEY_PREFIX = "unified_jedis_test:";
-
     // Server configuration - dynamically resolved from CI environment
-    private static final String redisHost;
-    private static final int redisPort;
+    private static final String valkeyHost;
+    private static final int valkeyPort;
 
     // GLIDE UnifiedJedis compatibility layer instance
     private UnifiedJedis unifiedJedis;
 
     static {
-        String standaloneHosts = System.getProperty("test.server.standalone");
+        String[] standaloneHosts = STANDALONE_HOSTS;
 
-        if (standaloneHosts != null && !standaloneHosts.trim().isEmpty()) {
-            String firstHost = standaloneHosts.split(",")[0].trim();
-            String[] hostPort = firstHost.split(":");
+        // Fail if standalone server configuration is not found in system properties
+        if (standaloneHosts.length == 0 || standaloneHosts[0].trim().isEmpty()) {
+            throw new IllegalStateException(
+                    "Standalone server configuration not found in system properties. "
+                            + "Please set 'test.server.standalone' system property with server address "
+                            + "(e.g., -Dtest.server.standalone=localhost:6379)");
+        }
 
-            if (hostPort.length == 2) {
-                redisHost = hostPort[0];
-                redisPort = Integer.parseInt(hostPort[1]);
-            } else {
-                redisHost = "localhost";
-                redisPort = 6379;
+        String firstHost = standaloneHosts[0].trim();
+        String[] hostPort = firstHost.split(":");
+
+        if (hostPort.length == 2) {
+            try {
+                valkeyHost = hostPort[0];
+                valkeyPort = Integer.parseInt(hostPort[1]);
+            } catch (NumberFormatException e) {
+                throw new IllegalStateException(
+                        "Invalid port number in standalone server configuration: "
+                                + firstHost
+                                + ". "
+                                + "Expected format: host:port (e.g., localhost:6379)",
+                        e);
             }
         } else {
-            redisHost = "localhost";
-            redisPort = 6379;
+            throw new IllegalStateException(
+                    "Invalid standalone server format: "
+                            + firstHost
+                            + ". "
+                            + "Expected format: host:port (e.g., localhost:6379)");
         }
     }
 
     @BeforeEach
     void setup() {
         // Create GLIDE UnifiedJedis compatibility layer instance
-        unifiedJedis = new UnifiedJedis(redisHost, redisPort);
+        unifiedJedis = new UnifiedJedis(valkeyHost, valkeyPort);
         assertNotNull(unifiedJedis, "GLIDE UnifiedJedis instance should be created successfully");
     }
 
-    @AfterEach
-    void cleanup() {
-        // Cleanup test keys
-        if (unifiedJedis != null) {
-            cleanupTestKeys(unifiedJedis);
-            unifiedJedis.close();
-        }
-    }
-
     @Test
-    @Order(1)
-    void testBasicSetAndGet() {
-        String testKey = TEST_KEY_PREFIX + "basic";
+    void basic_set_and_get() {
+        String testKey = UUID.randomUUID().toString();
         String testValue = "unified_test_value_123";
 
         // Test GLIDE UnifiedJedis compatibility layer
@@ -77,12 +81,11 @@ public class UnifiedJedisTest {
     }
 
     @Test
-    @Order(2)
-    void testMultipleOperations() {
+    void multiple_operations() {
         Map<String, String> testData = new HashMap<>();
-        testData.put(TEST_KEY_PREFIX + "unified_key1", "unified_value1");
-        testData.put(TEST_KEY_PREFIX + "unified_key2", "unified_value2");
-        testData.put(TEST_KEY_PREFIX + "unified_key3", "unified_value3");
+        testData.put(UUID.randomUUID().toString(), "unified_value1");
+        testData.put(UUID.randomUUID().toString(), "unified_value2");
+        testData.put(UUID.randomUUID().toString(), "unified_value3");
 
         // Test multiple SET operations
         for (Map.Entry<String, String> entry : testData.entrySet()) {
@@ -99,8 +102,7 @@ public class UnifiedJedisTest {
     }
 
     @Test
-    @Order(3)
-    void testConnectionOperations() {
+    void connection_operations() {
         // Test PING
         String pingResult = unifiedJedis.ping();
         assertEquals("PONG", pingResult, "PING should return PONG");
@@ -112,11 +114,10 @@ public class UnifiedJedisTest {
     }
 
     @Test
-    @Order(4)
-    void testDeleteOperations() {
-        String testKey1 = TEST_KEY_PREFIX + "del1";
-        String testKey2 = TEST_KEY_PREFIX + "del2";
-        String testKey3 = TEST_KEY_PREFIX + "del3";
+    void delete_operations() {
+        String testKey1 = UUID.randomUUID().toString();
+        String testKey2 = UUID.randomUUID().toString();
+        String testKey3 = UUID.randomUUID().toString();
 
         // Set some keys
         unifiedJedis.set(testKey1, "value1");
@@ -141,13 +142,12 @@ public class UnifiedJedisTest {
     }
 
     @Test
-    @Order(5)
-    void testConnectionState() {
+    void connection_state() {
         // Test that connection is not closed initially
         assertFalse(unifiedJedis.isClosed(), "Connection should not be closed initially");
 
         // Test basic operations work
-        String testKey = TEST_KEY_PREFIX + "connection_test";
+        String testKey = UUID.randomUUID().toString();
         String testValue = "connection_value";
 
         unifiedJedis.set(testKey, testValue);
@@ -159,32 +159,29 @@ public class UnifiedJedisTest {
     }
 
     @Test
-    @Order(6)
-    void testBinaryOperations() {
-        byte[] testKey = (TEST_KEY_PREFIX + "binary").getBytes();
+    void binary_operations() {
+        String keyString = UUID.randomUUID().toString();
+        byte[] testKey = keyString.getBytes();
         byte[] testValue = "binary_value".getBytes();
 
-        // Note: UnifiedJedis currently only supports del for binary keys
-        // Set using string method first
-        String stringKey = TEST_KEY_PREFIX + "binary";
-        unifiedJedis.set(stringKey, "binary_value");
+        // Set using string method first (since binary set might not be supported)
+        unifiedJedis.set(keyString, "binary_value");
 
-        // Test binary key deletion
+        // Test binary key deletion - use the same key that was set
         long delResult = unifiedJedis.del(testKey);
         assertEquals(1, delResult, "Binary DEL should return 1 for deleted key");
 
         // Verify key is deleted
-        String getResult = unifiedJedis.get(stringKey);
+        String getResult = unifiedJedis.get(keyString);
         assertNull(getResult, "Key should not exist after binary deletion");
     }
 
     @Test
-    @Order(7)
-    void testMultipleBinaryDeletion() {
+    void multiple_binary_deletion() {
         // Set up test keys using string methods
-        String key1 = TEST_KEY_PREFIX + "binary1";
-        String key2 = TEST_KEY_PREFIX + "binary2";
-        String key3 = TEST_KEY_PREFIX + "binary3";
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String key3 = UUID.randomUUID().toString();
 
         unifiedJedis.set(key1, "value1");
         unifiedJedis.set(key2, "value2");
@@ -203,9 +200,8 @@ public class UnifiedJedisTest {
     }
 
     @Test
-    @Order(8)
-    void testLargeValueOperations() {
-        String testKey = TEST_KEY_PREFIX + "large_value";
+    void large_value_operations() {
+        String testKey = UUID.randomUUID().toString();
         StringBuilder largeValue = new StringBuilder();
 
         // Create a large value (10KB)
@@ -221,25 +217,5 @@ public class UnifiedJedisTest {
         String getResult = unifiedJedis.get(testKey);
         assertEquals(expectedValue, getResult, "GET should return complete large value");
         assertEquals(10000, getResult.length(), "Large value should have correct length");
-    }
-
-    private void cleanupTestKeys(UnifiedJedis unifiedJedis) {
-        // Delete all test keys using the available del methods
-        String[] keysToDelete = {
-            TEST_KEY_PREFIX + "basic",
-            TEST_KEY_PREFIX + "unified_key1",
-            TEST_KEY_PREFIX + "unified_key2",
-            TEST_KEY_PREFIX + "unified_key3",
-            TEST_KEY_PREFIX + "del1",
-            TEST_KEY_PREFIX + "del2",
-            TEST_KEY_PREFIX + "del3",
-            TEST_KEY_PREFIX + "connection_test",
-            TEST_KEY_PREFIX + "binary",
-            TEST_KEY_PREFIX + "binary1",
-            TEST_KEY_PREFIX + "binary2",
-            TEST_KEY_PREFIX + "binary3",
-            TEST_KEY_PREFIX + "large_value"
-        };
-        unifiedJedis.del(keysToDelete);
     }
 }

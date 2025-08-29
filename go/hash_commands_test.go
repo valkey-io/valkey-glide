@@ -5,6 +5,7 @@ package glide
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
@@ -769,4 +770,256 @@ func ExampleClusterClient_HScanWithOptions() {
 	// Output:
 	// Cursor: 0
 	// Collection: [a 1]
+}
+
+func ExampleClient_HSetEx() {
+	// This command requires Valkey 9.0+
+	var client *Client = getExampleClient() // example helper function
+
+	fields := map[string]string{
+		"field1": "value1",
+		"field2": "value2",
+	}
+
+	// Set fields with 10 second expiration
+	options := options.NewHSetExOptions().SetExpiry(options.NewExpiryIn(10 * time.Second))
+	result, err := client.HSetEx(context.Background(), "my_hash", fields, options)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+
+	// Output:
+	// 1
+}
+
+func ExampleClusterClient_HSetEx() {
+	// This command requires Valkey 9.0+
+	var client *ClusterClient = getExampleClusterClient() // example helper function
+
+	fields := map[string]string{
+		"field1": "value1",
+		"field2": "value2",
+	}
+
+	// Set fields with 10 second expiration
+	options := options.NewHSetExOptions().SetExpiry(options.NewExpiryIn(10 * time.Second))
+	result, err := client.HSetEx(context.Background(), "my_hash", fields, options)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+
+	// Output:
+	// 1
+}
+
+func ExampleClient_HGetEx() {
+	// This command requires Valkey 9.0+
+	var client *Client = getExampleClient() // example helper function
+
+	// First set some fields
+	fields := map[string]string{
+		"field1": "value1",
+		"field2": "value2",
+	}
+	client.HSet(context.Background(), "my_hash", fields)
+
+	// Get fields and set 5 second expiration
+	options := options.NewHGetExOptions().SetExpiry(options.NewExpiryIn(5 * time.Second))
+	result, err := client.HGetEx(context.Background(), "my_hash", []string{"field1", "field2"}, options)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result[0].Value())
+	fmt.Println(result[1].Value())
+
+	// Output:
+	// value1
+	// value2
+}
+
+func ExampleClusterClient_HGetEx() {
+	// This command requires Valkey 9.0+
+	var client *ClusterClient = getExampleClusterClient() // example helper function
+
+	// First set some fields
+	fields := map[string]string{
+		"field1": "value1",
+		"field2": "value2",
+	}
+	client.HSet(context.Background(), "my_hash", fields)
+
+	// Get fields and set 5 second expiration
+	options := options.NewHGetExOptions().SetExpiry(options.NewExpiryIn(5 * time.Second))
+	result, err := client.HGetEx(context.Background(), "my_hash", []string{"field1", "field2"}, options)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result[0].Value())
+	fmt.Println(result[1].Value())
+
+	// Output:
+	// value1
+	// value2
+}
+
+func ExampleClient_HExpire() {
+	// This command requires Valkey 9.0+
+	var client *Client = getExampleClient() // example helper function
+
+	// First set some fields
+	fields := map[string]string{
+		"field1": "value1",
+		"field2": "value2",
+	}
+	client.HSet(context.Background(), "my_hash", fields)
+
+	// Set 30 second expiration on fields
+	result, err := client.HExpire(
+		context.Background(),
+		"my_hash",
+		30*time.Second,
+		[]string{"field1", "field2"},
+		options.HExpireOptions{},
+	)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result[0]) // 1 means expiration was set
+	fmt.Println(result[1]) // 1 means expiration was set
+
+	// Output:
+	// 1
+	// 1
+}
+
+func ExampleClusterClient_HExpire() {
+	// This command requires Valkey 9.0+
+	var client *ClusterClient = getExampleClusterClient() // example helper function
+
+	// First set some fields
+	fields := map[string]string{
+		"field1": "value1",
+		"field2": "value2",
+	}
+	client.HSet(context.Background(), "my_hash", fields)
+
+	// Set 30 second expiration on fields
+	result, err := client.HExpire(
+		context.Background(),
+		"my_hash",
+		30*time.Second,
+		[]string{"field1", "field2"},
+		options.HExpireOptions{},
+	)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result[0]) // 1 means expiration was set
+	fmt.Println(result[1]) // 1 means expiration was set
+
+	// Output:
+	// 1
+	// 1
+}
+
+func ExampleClient_HTtl() {
+	// This command requires Valkey 9.0+
+	var client *Client = getExampleClient() // example helper function
+
+	// First set some fields with expiration
+	fields := map[string]string{
+		"field1": "value1",
+		"field2": "value2",
+	}
+	options := options.NewHSetExOptions().SetExpiry(options.NewExpiryIn(60 * time.Second))
+	client.HSetEx(context.Background(), "my_hash", fields, options)
+
+	// Get TTL for fields
+	result, err := client.HTtl(context.Background(), "my_hash", []string{"field1", "field2"})
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Printf("Field1 TTL > 0: %t\n", result[0] > 0)
+	fmt.Printf("Field2 TTL > 0: %t\n", result[1] > 0)
+
+	// Output:
+	// Field1 TTL > 0: true
+	// Field2 TTL > 0: true
+}
+
+func ExampleClusterClient_HTtl() {
+	// This command requires Valkey 9.0+
+	var client *ClusterClient = getExampleClusterClient() // example helper function
+
+	// First set some fields with expiration
+	fields := map[string]string{
+		"field1": "value1",
+		"field2": "value2",
+	}
+	options := options.NewHSetExOptions().SetExpiry(options.NewExpiryIn(60 * time.Second))
+	client.HSetEx(context.Background(), "my_hash", fields, options)
+
+	// Get TTL for fields
+	result, err := client.HTtl(context.Background(), "my_hash", []string{"field1", "field2"})
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Printf("Field1 TTL > 0: %t\n", result[0] > 0)
+	fmt.Printf("Field2 TTL > 0: %t\n", result[1] > 0)
+
+	// Output:
+	// Field1 TTL > 0: true
+	// Field2 TTL > 0: true
+}
+
+func ExampleClient_HPersist() {
+	// This command requires Valkey 9.0+
+	var client *Client = getExampleClient() // example helper function
+
+	// First set some fields with expiration
+	fields := map[string]string{
+		"field1": "value1",
+		"field2": "value2",
+	}
+	options := options.NewHSetExOptions().SetExpiry(options.NewExpiryIn(60 * time.Second))
+	client.HSetEx(context.Background(), "my_hash", fields, options)
+
+	// Remove expiration from fields
+	result, err := client.HPersist(context.Background(), "my_hash", []string{"field1", "field2"})
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result[0]) // 1 means expiration was removed
+	fmt.Println(result[1]) // 1 means expiration was removed
+
+	// Output:
+	// 1
+	// 1
+}
+
+func ExampleClusterClient_HPersist() {
+	// This command requires Valkey 9.0+
+	var client *ClusterClient = getExampleClusterClient() // example helper function
+
+	// First set some fields with expiration
+	fields := map[string]string{
+		"field1": "value1",
+		"field2": "value2",
+	}
+	options := options.NewHSetExOptions().SetExpiry(options.NewExpiryIn(60 * time.Second))
+	client.HSetEx(context.Background(), "my_hash", fields, options)
+
+	// Remove expiration from fields
+	result, err := client.HPersist(context.Background(), "my_hash", []string{"field1", "field2"})
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result[0]) // 1 means expiration was removed
+	fmt.Println(result[1]) // 1 means expiration was removed
+
+	// Output:
+	// 1
+	// 1
 }
