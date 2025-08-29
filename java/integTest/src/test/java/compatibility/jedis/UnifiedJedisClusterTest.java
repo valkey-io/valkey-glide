@@ -21,7 +21,7 @@ import redis.clients.jedis.params.BitPosParams;
  * UnifiedJedis cluster compatibility test that validates GLIDE UnifiedJedis functionality.
  *
  * <p>This test ensures that the GLIDE compatibility layer provides the expected UnifiedJedis API
- * and behavior for core Redis operations in cluster mode.
+ * and behavior for core Valkey operations in cluster mode.
  */
 public class UnifiedJedisClusterTest {
 
@@ -477,12 +477,12 @@ public class UnifiedJedisClusterTest {
             expireResult = unifiedJedis.expire(testKey, 120, ExpiryOption.XX);
             assertEquals(1, expireResult, "EXPIRE with XX should update expiry on existing expiry");
         } else {
-            // For Redis < 7.0.0, ExpiryOption is not supported
+            // For Valkey < 7.0.0, ExpiryOption is not supported
             try {
                 unifiedJedis.expire(testKey, 60, ExpiryOption.NX);
-                fail("Should have thrown exception for unsupported ExpiryOption on Redis < 7.0.0");
+                fail("Should have thrown exception for unsupported ExpiryOption on Valkey < 7.0.0");
             } catch (Exception e) {
-                assertNotNull(e.getMessage(), "Should fail gracefully on Redis < 7.0.0");
+                assertNotNull(e.getMessage(), "Should fail gracefully on Valkey < 7.0.0");
             }
         }
     }
@@ -503,13 +503,13 @@ public class UnifiedJedisClusterTest {
             long bitcountResult = unifiedJedis.bitcount(testKey, 0, 2, BitCountOption.BYTE);
             assertTrue(bitcountResult >= 0, "BITCOUNT with BYTE option should return count");
         } else {
-            // For Redis < 7.0.0, these options are not supported
+            // For Valkey < 7.0.0, these options are not supported
             try {
                 BitPosParams bitPosParams = new BitPosParams(0, 10);
                 unifiedJedis.bitpos(testKey, true, bitPosParams);
-                fail("Should have thrown exception for unsupported BitmapIndexType on Redis < 7.0.0");
+                fail("Should have thrown exception for unsupported BitmapIndexType on Valkey < 7.0.0");
             } catch (Exception e) {
-                assertNotNull(e.getMessage(), "Should fail gracefully on Redis < 7.0.0");
+                assertNotNull(e.getMessage(), "Should fail gracefully on Valkey < 7.0.0");
             }
         }
     }
@@ -522,20 +522,20 @@ public class UnifiedJedisClusterTest {
         unifiedJedis.expire(testKey, 3600);
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
-            // Test EXPIRETIME (Redis 7.0+ only)
+            // Test EXPIRETIME (Valkey 7.0+ only)
             long expireTimeResult = unifiedJedis.expireTime(testKey);
             assertTrue(expireTimeResult > 0, "EXPIRETIME should return positive timestamp");
 
-            // Test PEXPIRETIME (Redis 7.0+ only)
+            // Test PEXPIRETIME (Valkey 7.0+ only)
             long pexpireTimeResult = unifiedJedis.pexpireTime(testKey);
             assertTrue(pexpireTimeResult > 0, "PEXPIRETIME should return positive timestamp");
         } else {
-            // For Redis < 7.0.0, EXPIRETIME/PEXPIRETIME commands don't exist
+            // For Valkey < 7.0.0, EXPIRETIME/PEXPIRETIME commands don't exist
             try {
                 unifiedJedis.expireTime(testKey);
-                fail("Should have thrown exception for unsupported EXPIRETIME on Redis < 7.0.0");
+                fail("Should have thrown exception for unsupported EXPIRETIME on Valkey < 7.0.0");
             } catch (Exception e) {
-                assertNotNull(e.getMessage(), "Should fail gracefully on Redis < 7.0.0");
+                assertNotNull(e.getMessage(), "Should fail gracefully on Valkey < 7.0.0");
             }
         }
     }
