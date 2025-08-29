@@ -10,6 +10,7 @@ TARGET_DIR := $(GLIDE_FFI_PATH)/target
 # Determine the target folder based on OS and architecture
 UNAME := $(shell uname)
 ARCH := $(shell uname -m)
+IS_ALPINE := $(shell test -f /etc/alpine-release && echo true || echo false)
 
 # Set default values for GLIDE_NAME and GLIDE_VERSION
 # GLIDE_VERSION is automatically set during the deployment workflow based on the value defined in go-cd.yml.
@@ -25,8 +26,11 @@ ifeq ($(UNAME), Darwin)
 	CARGO_POSTFIX_CMD := : # no-op
     STRIP_CMD := strip -x
 else ifeq ($(UNAME), Linux)
-    # TODO: musl
-    TARGET_TRIPLET := $(if $(filter arm64 aarch64,$(ARCH)),aarch64-unknown-linux-musl,x86_64-unknown-linux-musl)
+    ifeq ($(IS_ALPINE), true)
+        TARGET_TRIPLET := $(if $(filter arm64 aarch64,$(ARCH)),aarch64-unknown-linux-musl,x86_64-unknown-linux-musl)
+    else
+        TARGET_TRIPLET := $(if $(filter arm64 aarch64,$(ARCH)),aarch64-unknown-linux-gnu,x86_64-unknown-linux-gnu)
+    endif
 	# zigbuild https://github.com/rust-cross/cargo-zigbuild
 	BUILD_CMD := zigbuild --target $(TARGET_TRIPLET)
 	# workaround for https://github.com/rust-cross/cargo-zigbuild/issues/337
@@ -40,6 +44,7 @@ endif
 
 # Path where compiled binary is copied to and therefore used by go
 DEST_PATH := rustbin/$(TARGET_TRIPLET)
+
 
 install-build-tools:
 	go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.33.0
@@ -171,10 +176,15 @@ long-timeout-test: __it
 opentelemetry-test: export TEST_FILTER = -skip "TestGlideTestSuite/TestModule" -otel-test $(if $(test-filter), -testify.m $(test-filter), -testify.m TestOpenTelemetry)
 opentelemetry-test: __it
 
+# Test commands for different platforms
+# Alpine gcc does not support -fsanitize=address, so we use clang instead
+ALPINE_TEST_CMD := CC=clang CXX=clang++ go test -asan -v ./integTest/...
+REGULAR_TEST_CMD := CC="gcc -fsanitize=address" go test -v ./integTest/...
+
 __it:
 	mkdir -p reports
 	set -o pipefail; \
-	CC="gcc -fsanitize=address" go test -v ./integTest/... \
+	$(if $(filter true,$(IS_ALPINE)),$(ALPINE_TEST_CMD),$(REGULAR_TEST_CMD)) \
 	$(TEST_FILTER) \
 	$(if $(filter true, $(tls)), --tls,) \
 	$(if $(standalone-endpoints), --standalone-endpoints=$(standalone-endpoints)) \
