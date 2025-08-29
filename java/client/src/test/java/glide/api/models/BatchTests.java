@@ -55,18 +55,29 @@ import static command_request.CommandRequestOuterClass.RequestType.GetEx;
 import static command_request.CommandRequestOuterClass.RequestType.GetRange;
 import static command_request.CommandRequestOuterClass.RequestType.HDel;
 import static command_request.CommandRequestOuterClass.RequestType.HExists;
+import static command_request.CommandRequestOuterClass.RequestType.HExpire;
+import static command_request.CommandRequestOuterClass.RequestType.HExpireAt;
+import static command_request.CommandRequestOuterClass.RequestType.HExpireTime;
 import static command_request.CommandRequestOuterClass.RequestType.HGet;
 import static command_request.CommandRequestOuterClass.RequestType.HGetAll;
+import static command_request.CommandRequestOuterClass.RequestType.HGetEx;
 import static command_request.CommandRequestOuterClass.RequestType.HIncrBy;
 import static command_request.CommandRequestOuterClass.RequestType.HIncrByFloat;
 import static command_request.CommandRequestOuterClass.RequestType.HKeys;
 import static command_request.CommandRequestOuterClass.RequestType.HLen;
 import static command_request.CommandRequestOuterClass.RequestType.HMGet;
+import static command_request.CommandRequestOuterClass.RequestType.HPExpire;
+import static command_request.CommandRequestOuterClass.RequestType.HPExpireAt;
+import static command_request.CommandRequestOuterClass.RequestType.HPExpireTime;
+import static command_request.CommandRequestOuterClass.RequestType.HPTtl;
+import static command_request.CommandRequestOuterClass.RequestType.HPersist;
 import static command_request.CommandRequestOuterClass.RequestType.HRandField;
 import static command_request.CommandRequestOuterClass.RequestType.HScan;
 import static command_request.CommandRequestOuterClass.RequestType.HSet;
+import static command_request.CommandRequestOuterClass.RequestType.HSetEx;
 import static command_request.CommandRequestOuterClass.RequestType.HSetNX;
 import static command_request.CommandRequestOuterClass.RequestType.HStrlen;
+import static command_request.CommandRequestOuterClass.RequestType.HTtl;
 import static command_request.CommandRequestOuterClass.RequestType.HVals;
 import static command_request.CommandRequestOuterClass.RequestType.Incr;
 import static command_request.CommandRequestOuterClass.RequestType.IncrBy;
@@ -249,7 +260,14 @@ import command_request.CommandRequestOuterClass.Command;
 import command_request.CommandRequestOuterClass.Command.ArgsArray;
 import command_request.CommandRequestOuterClass.RequestType;
 import glide.api.models.commands.ConditionalChange;
+import glide.api.models.commands.ExpireOptions;
+import glide.api.models.commands.ExpirySet;
+import glide.api.models.commands.FieldConditionalChange;
 import glide.api.models.commands.GetExOptions;
+import glide.api.models.commands.HGetExExpiry;
+import glide.api.models.commands.HGetExOptions;
+import glide.api.models.commands.HSetExOptions;
+import glide.api.models.commands.HashFieldExpirationConditionOptions;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
@@ -396,6 +414,29 @@ public class BatchTests {
         batch.hset("key", Map.of("field", "value"));
         results.add(Pair.of(HSet, buildArgs("key", "field", "value")));
 
+        batch.hsetex(
+                "key",
+                Map.of("field", "value"),
+                HSetExOptions.builder().expiry(ExpirySet.Seconds(10L)).build());
+        results.add(Pair.of(HSetEx, buildArgs("key", "EX", "10", "FIELDS", "1", "field", "value")));
+
+        Map<String, String> fieldValueMap = new LinkedHashMap<>();
+        fieldValueMap.put("field1", "value1");
+        fieldValueMap.put("field2", "value2");
+        batch.hsetex(
+                "key",
+                fieldValueMap,
+                HSetExOptions.builder()
+                        .fieldConditionalChange(FieldConditionalChange.ONLY_IF_ALL_EXIST)
+                        .expiry(ExpirySet.Milliseconds(5000L))
+                        .build());
+        results.add(
+                Pair.of(
+                        HSetEx,
+                        buildArgs(
+                                "key", "FXX", "PX", "5000", "FIELDS", "2", "field1", "value1", "field2",
+                                "value2")));
+
         batch.hsetnx("key", "field", "value");
         results.add(Pair.of(HSetNX, buildArgs("key", "field", "value")));
 
@@ -436,6 +477,109 @@ public class BatchTests {
         results.add(Pair.of(HRandField, buildArgs("key")));
         results.add(Pair.of(HRandField, buildArgs("key", "2")));
         results.add(Pair.of(HRandField, buildArgs("key", "3", WITH_VALUES_VALKEY_API)));
+
+        // Hash field expiration commands
+        HGetExOptions hgetexOptions = HGetExOptions.builder().expiry(HGetExExpiry.Seconds(60L)).build();
+
+        batch.hgetex("key", new String[] {"field1", "field2"}, hgetexOptions);
+        results.add(Pair.of(HGetEx, buildArgs("key", "EX", "60", "FIELDS", "2", "field1", "field2")));
+
+        // Test HGETEX with PERSIST option
+        batch.hgetex(
+                "key",
+                new String[] {"field1"},
+                HGetExOptions.builder().expiry(HGetExExpiry.Persist()).build());
+        results.add(Pair.of(HGetEx, buildArgs("key", "PERSIST", "FIELDS", "1", "field1")));
+
+        // Test HGETEX with no expiry (empty options)
+        batch.hgetex("key", new String[] {"field1"}, HGetExOptions.builder().build());
+        results.add(Pair.of(HGetEx, buildArgs("key", "FIELDS", "1", "field1")));
+
+        batch.hexpire(
+                "key",
+                60L,
+                new String[] {"field1", "field2"},
+                HashFieldExpirationConditionOptions.builder().build());
+        results.add(Pair.of(HExpire, buildArgs("key", "60", "FIELDS", "2", "field1", "field2")));
+
+        // Test HEXPIRE with condition options
+        batch.hexpire(
+                "key",
+                60L,
+                new String[] {"field1"},
+                HashFieldExpirationConditionOptions.builder()
+                        .condition(ExpireOptions.HAS_NO_EXPIRY)
+                        .build());
+        results.add(Pair.of(HExpire, buildArgs("key", "60", "NX", "FIELDS", "1", "field1")));
+
+        batch.hpersist("key", new String[] {"field1", "field2"});
+        results.add(Pair.of(HPersist, buildArgs("key", "FIELDS", "2", "field1", "field2")));
+
+        batch.hpexpire(
+                "key",
+                60000L,
+                new String[] {"field1", "field2"},
+                HashFieldExpirationConditionOptions.builder().build());
+        results.add(Pair.of(HPExpire, buildArgs("key", "60000", "FIELDS", "2", "field1", "field2")));
+
+        // Test HPEXPIRE with condition options
+        batch.hpexpire(
+                "key",
+                60000L,
+                new String[] {"field1"},
+                HashFieldExpirationConditionOptions.builder()
+                        .condition(ExpireOptions.HAS_EXISTING_EXPIRY)
+                        .build());
+        results.add(Pair.of(HPExpire, buildArgs("key", "60000", "XX", "FIELDS", "1", "field1")));
+
+        batch.hexpireat(
+                "key",
+                1234567890L,
+                new String[] {"field1", "field2"},
+                HashFieldExpirationConditionOptions.builder().build());
+        results.add(
+                Pair.of(HExpireAt, buildArgs("key", "1234567890", "FIELDS", "2", "field1", "field2")));
+
+        // Test HEXPIREAT with condition options
+        batch.hexpireat(
+                "key",
+                1234567890L,
+                new String[] {"field1"},
+                HashFieldExpirationConditionOptions.builder()
+                        .condition(ExpireOptions.NEW_EXPIRY_GREATER_THAN_CURRENT)
+                        .build());
+        results.add(Pair.of(HExpireAt, buildArgs("key", "1234567890", "GT", "FIELDS", "1", "field1")));
+
+        batch.hpexpireat(
+                "key",
+                1234567890000L,
+                new String[] {"field1", "field2"},
+                HashFieldExpirationConditionOptions.builder().build());
+        results.add(
+                Pair.of(HPExpireAt, buildArgs("key", "1234567890000", "FIELDS", "2", "field1", "field2")));
+
+        // Test HPEXPIREAT with condition options
+        batch.hpexpireat(
+                "key",
+                1234567890000L,
+                new String[] {"field1"},
+                HashFieldExpirationConditionOptions.builder()
+                        .condition(ExpireOptions.NEW_EXPIRY_LESS_THAN_CURRENT)
+                        .build());
+        results.add(
+                Pair.of(HPExpireAt, buildArgs("key", "1234567890000", "LT", "FIELDS", "1", "field1")));
+
+        batch.httl("key", new String[] {"field1", "field2"});
+        results.add(Pair.of(HTtl, buildArgs("key", "FIELDS", "2", "field1", "field2")));
+
+        batch.hpttl("key", new String[] {"field1", "field2"});
+        results.add(Pair.of(HPTtl, buildArgs("key", "FIELDS", "2", "field1", "field2")));
+
+        batch.hexpiretime("key", new String[] {"field1", "field2"});
+        results.add(Pair.of(HExpireTime, buildArgs("key", "FIELDS", "2", "field1", "field2")));
+
+        batch.hpexpiretime("key", new String[] {"field1", "field2"});
+        results.add(Pair.of(HPExpireTime, buildArgs("key", "FIELDS", "2", "field1", "field2")));
 
         batch.lpush("key", new String[] {"element1", "element2"});
         results.add(Pair.of(LPush, buildArgs("key", "element1", "element2")));
