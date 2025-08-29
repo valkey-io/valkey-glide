@@ -378,8 +378,6 @@ public class ClusterConfigurationMapper {
         return mapToGlideClusterConfig(nodes, config);
     }
 
-    // ===== SUPPORTING CLASSES =====
-
     /** Custom exception for cluster configuration conversion issues. */
     public static class JedisClusterConfigurationException extends JedisException {
         public JedisClusterConfigurationException(String message) {

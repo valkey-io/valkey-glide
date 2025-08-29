@@ -86,6 +86,20 @@ public abstract class BaseClientConfiguration {
     private final BackoffStrategy reconnectStrategy;
 
     /**
+     * Index of the logical database to connect to. Must be non-negative and within the range
+     * supported by the server configuration. If not specified, defaults to database 0.
+     *
+     * <p>The valid range is determined by the server's database configuration. For standalone mode,
+     * this is typically 0-15 by default but can be configured via the 'databases' setting. For
+     * cluster mode, this feature requires Valkey 9.0+ with multi-database cluster support enabled
+     * (cluster-databases configuration > 1).
+     *
+     * <p>Client-side validation only checks for non-negative values. Range validation is performed
+     * server-side and will result in a connection error if the specified database ID is out of range.
+     */
+    private final Integer databaseId;
+
+    /**
      * Enables lazy connection mode, where physical connections to the server(s) are deferred until
      * the first command is sent. This can reduce startup latency and allow for client creation in
      * disconnected environments.
