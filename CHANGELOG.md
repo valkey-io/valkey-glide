@@ -12,6 +12,7 @@
 * Go: Add lazy connection support ([#4374](https://github.com/valkey-io/valkey-glide/pull/4374))
 * Java/Go/Node/Python: Fixed LOLWUT tests and Jedis compatibility layer tests for Valkey 9 ([#4632](https://github.com/valkey-io/valkey-glide/pull/4632))
 * Core/Python: fix 100% CPU when blocking command returning data after client closure ([#4612](https://github.com/valkey-io/valkey-glide/pull/4612))
+* Java: Add MUSL build to support Alpine Linux ([#4073](https://github.com/valkey-io/valkey-glide/issues/4073))
 
 #### Operational Enhancements
 * FFI: Add MIRI tests to CI ([#4506](https://github.com/valkey-io/valkey-glide/pull/4506))

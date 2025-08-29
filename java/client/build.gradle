@@ -102,20 +102,59 @@ tasks.register('cleanRust') {
 }
 
 tasks.register('buildRust', Exec) {
-    if (osdetector.os == 'linux' && osdetector.release.id != 'alpine') {
-        commandLine 'cargo', 'zigbuild', '--target', "${arch}-unknown-linux-gnu.2.17", '--release'
+    def target
+    if (project.hasProperty('target')) {
+        target = project.target
+    } else {
+        if (osdetector.os == 'linux' && osdetector.release.id != 'alpine') {
+            target = "${arch}-unknown-linux-gnu.2.17"
+        } else if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
+            target = "${arch}-unknown-linux-musl"
+        } else {
+            target = ""
+        }
+    }
+
+    print("Building Rust with target: '$target'\n")
+    if (target.contains("linux") && !target.contains("musl")) {
+        commandLine 'cargo', 'zigbuild', '--target', "$target", '--release'
+    } else if (target.contains("musl")) {
+        commandLine 'cargo', 'build', '--target', "$target", '--release'
+        environment RUSTFLAGS: '-C target-feature=-crt-static'
     } else {
         commandLine 'cargo', 'build', '--release'
     }
-
     workingDir project.rootDir
     environment CARGO_TERM_COLOR: 'always'
 }
 
 tasks.register('buildRustFfi', Exec) {
-    commandLine 'cargo', 'build', '--release'
+    def target
+    if (project.hasProperty('target')) {
+        target = project.target
+    } else {
+        if (osdetector.os == 'linux' && osdetector.release.id != 'alpine') {
+            target = "${arch}-unknown-linux-gnu.2.17"
+        } else if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
+            target = "${arch}-unknown-linux-musl"
+        } else {
+            target = ""
+        }
+    }
+
+    print("Building Rust FFI with target: '$target'\n")
+    if (target.contains("linux") && !target.contains("musl")) {
+        commandLine 'cargo', 'zigbuild', '--target', "$target", '--release'
+        environment RUSTFLAGS: '--cfg ffi_test'
+    } else if (target.contains("musl")) {
+        commandLine 'cargo', 'build', '--target', "$target", '--release'
+        environment RUSTFLAGS: '--cfg ffi_test -C target-feature=-crt-static'
+    } else {
+        commandLine 'cargo', 'build', '--release'
+        environment RUSTFLAGS: '--cfg ffi_test'
+    }
     workingDir project.rootDir
-    environment CARGO_TERM_COLOR: 'always', CARGO_BUILD_RUSTFLAGS: '--cfg ffi_test'
+    environment CARGO_TERM_COLOR: 'always'
 }
 
 tasks.register('buildWithRust') {
@@ -142,10 +181,14 @@ compileJava.dependsOn('protobuf')
 clean.dependsOn('cleanProtobuf', 'cleanRust')
 
 tasks.register('copyNativeLib', Copy) {
-    if (osdetector.os == 'linux' && osdetector.release.id != 'alpine') {
+    def target
+    if (project.hasProperty('target')) {
+        target = project.target
+        from "${projectDir}/../target/${target}/release/"
+    } else if (osdetector.os == 'linux' && osdetector.release.id != 'alpine') {
         from "${projectDir}/../target/${arch}-unknown-linux-gnu/release/"
-    } else {
-        from "${projectDir}/../target/release"
+    } else if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
+        from "${projectDir}/../target/${arch}-unknown-linux-musl/release/"
     }
     include "*.dylib", "*.so"
     into sourceSets.main.output.resourcesDir
@@ -157,7 +200,7 @@ javadoc.dependsOn('copyNativeLib')
 copyNativeLib.dependsOn('buildRust')
 compileTestJava.dependsOn('copyNativeLib')
 test.dependsOn('buildRust')
-testFfi.dependsOn('buildRust')
+testFfi.dependsOn('buildRustFfi')
 
 test {
     exclude "glide/ffi/FfiTest.class"
@@ -252,13 +295,21 @@ tasks.withType(Test) {
         showStandardStreams true
     }
     // This is needed for the FFI tests
-    jvmArgs "-Djava.library.path=${projectDir}/../target/release"
+    if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
+        jvmArgs "-Djava.library.path=${projectDir}/../target/${arch}-unknown-linux-musl/release"
+    } else {
+        jvmArgs "-Djava.library.path=${projectDir}/../target/release"
+    }
 
     finalizedBy jacocoTestReport, jacocoTestCoverageVerification
 }
 
 jar {
-    archiveClassifier = osdetector.classifier
+    if (project.hasProperty('target') && project.target.contains("musl")) {
+        archiveClassifier = "linux_musl_${arch}"
+    } else {
+        archiveClassifier = osdetector.classifier
+    }
 }
 
 import com.github.jengelman.gradle.plugins.shadow.transformers.CacheableTransformer
@@ -310,7 +361,11 @@ class NettyResourceTransformer implements Transformer {
 
 shadowJar {
     dependsOn('copyNativeLib')
-    archiveClassifier = osdetector.classifier
+    if (project.hasProperty('target') && project.target.contains("musl")) {
+        archiveClassifier = "linux_musl_${arch}"
+    } else {
+        archiveClassifier = osdetector.classifier
+    }
     excludes.remove("module-info.class")
     relocate('io.netty', 'glide.io.netty')
     relocate('com.google.protobuf', 'glide.com.google.protobuf')

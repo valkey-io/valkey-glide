@@ -21,7 +21,12 @@ import org.junit.jupiter.params.provider.ValueSource;
 public class FfiTest {
 
     static {
-        System.loadLibrary("glide_rs");
+        try {
+            System.loadLibrary("glide_rs");
+        } catch (Throwable t) {
+            t.printStackTrace();
+            throw t;
+        }
     }
 
     public static native long createLeakedNil();
