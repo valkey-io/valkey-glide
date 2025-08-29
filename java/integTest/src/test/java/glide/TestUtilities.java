@@ -74,36 +74,36 @@ public class TestUtilities {
                 int k = Math.min(3, allNodes.size());
                 seedNodes =
                         new Random()
-                        .ints(0, allNodes.size())
-                        .distinct()
-                        .limit(k)
-                        .mapToObj(allNodes::get)
-                        .collect(Collectors.toList());
+                                .ints(0, allNodes.size())
+                                .distinct()
+                                .limit(k)
+                                .mapToObj(allNodes::get)
+                                .collect(Collectors.toList());
             }
 
             return GlideClusterClient.createClient(
-                    GlideClusterClientConfiguration.builder()
-                            .addresses(seedNodes)
-                            .requestTimeout(2000)
-                            .lazyConnect(lazyConnect)
-                            // Explicitly set no credentials for dedicated clusters to avoid
-                            // authentication issues from environment or global state
-                            .credentials(null)
-                            .build())
+                            GlideClusterClientConfiguration.builder()
+                                    .addresses(seedNodes)
+                                    .requestTimeout(2000)
+                                    .lazyConnect(lazyConnect)
+                                    // Explicitly set no credentials for dedicated clusters to avoid
+                                    // authentication issues from environment or global state
+                                    .credentials(null)
+                                    .build())
                     .get();
         } else {
             List<NodeAddress> nodeAddresses =
                     addresses != null ? addresses : valkeyCluster.getNodesAddr();
 
             return GlideClient.createClient(
-                    GlideClientConfiguration.builder()
-                            .addresses(nodeAddresses)
-                            .requestTimeout(2000)
-                            .lazyConnect(lazyConnect)
-                            // Explicitly set no credentials for dedicated clusters to avoid
-                            // authentication issues from environment or global state
-                            .credentials(null)
-                            .build())
+                            GlideClientConfiguration.builder()
+                                    .addresses(nodeAddresses)
+                                    .requestTimeout(2000)
+                                    .lazyConnect(lazyConnect)
+                                    // Explicitly set no credentials for dedicated clusters to avoid
+                                    // authentication issues from environment or global state
+                                    .credentials(null)
+                                    .build())
                     .get();
         }
     }
@@ -118,7 +118,7 @@ public class TestUtilities {
         fail();
         return 0;
     }
-    
+
     /** Extract first key from {@link ClusterValue} assuming it contains a multi-value. */
     public static <T> String getFirstKeyFromMultiValue(ClusterValue<T> data) {
         return data.getMultiValue().keySet().toArray(String[]::new)[0];
@@ -404,8 +404,8 @@ public class TestUtilities {
         }
         var expected =
                 Map.of(
-                gs("LUA"),
-                Map.of(gs("libraries_count"), libCount, gs("functions_count"), functionCount));
+                        gs("LUA"),
+                        Map.of(gs("libraries_count"), libCount, gs("functions_count"), functionCount));
         assertEquals(expected, response.get(gs("engines")));
     }
 
@@ -433,9 +433,9 @@ public class TestUtilities {
 
         Map<String, String> transformedMap =
                 functions.entrySet().stream()
-                .collect(
-                        Collectors.toMap(
-                                entry -> entry.getKey().toString(), entry -> entry.getValue().toString()));
+                        .collect(
+                                Collectors.toMap(
+                                        entry -> entry.getKey().toString(), entry -> entry.getValue().toString()));
 
         return gs(generateLuaLibCode(libName.toString(), transformedMap, readonly));
     }
@@ -448,23 +448,23 @@ public class TestUtilities {
             String libName, String funcName, int timeout, boolean readOnly) {
         String code =
                 "#!lua name=$libName\n"
-                + "local function $libName_$funcName(keys, args)\n"
-                + "  local started = tonumber(redis.pcall('time')[1])\n"
-                // fun fact - redis does no writes if 'no-writes' flag is set
-                + "  redis.pcall('set', keys[1], 42)\n"
-                + "  while (true) do\n"
-                + "    local now = tonumber(redis.pcall('time')[1])\n"
-                + "    if now > started + $timeout then\n"
-                + "      return 'Timed out $timeout sec'\n"
-                + "    end\n"
-                + "  end\n"
-                + "  return 'OK'\n"
-                + "end\n"
-                + "redis.register_function{\n"
-                + "function_name='$funcName',\n"
-                + "callback=$libName_$funcName,\n"
-                + (readOnly ? "flags={ 'no-writes' }\n" : "")
-                + "}";
+                        + "local function $libName_$funcName(keys, args)\n"
+                        + "  local started = tonumber(redis.pcall('time')[1])\n"
+                        // fun fact - redis does no writes if 'no-writes' flag is set
+                        + "  redis.pcall('set', keys[1], 42)\n"
+                        + "  while (true) do\n"
+                        + "    local now = tonumber(redis.pcall('time')[1])\n"
+                        + "    if now > started + $timeout then\n"
+                        + "      return 'Timed out $timeout sec'\n"
+                        + "    end\n"
+                        + "  end\n"
+                        + "  return 'OK'\n"
+                        + "end\n"
+                        + "redis.register_function{\n"
+                        + "function_name='$funcName',\n"
+                        + "callback=$libName_$funcName,\n"
+                        + (readOnly ? "flags={ 'no-writes' }\n" : "")
+                        + "}";
         return code.replace("$timeout", Integer.toString(timeout))
                 .replace("$funcName", funcName)
                 .replace("$libName", libName);
@@ -477,18 +477,18 @@ public class TestUtilities {
     public static String createLongRunningLuaScript(int timeout, boolean readOnly) {
         String script =
                 readOnly
-                ? "  local started = tonumber(redis.pcall('time')[1])\n"
-                        + "  while (true) do\n"
-                        + "    local now = tonumber(redis.pcall('time')[1])\n"
-                        + "    if now > started + $timeout then\n"
-                        + "      return 'Timed out $timeout sec'\n"
-                        + "    end\n"
-                        + "  end\n"
-                : "redis.call('SET', KEYS[1], 'value')\n"
-                        + "  local start = redis.call('time')[1]\n"
-                        + "  while redis.call('time')[1] - start < $timeout do\n"
-                        + "      redis.call('SET', KEYS[1], 'value')\n"
-                        + "   end\n";
+                        ? "  local started = tonumber(redis.pcall('time')[1])\n"
+                                + "  while (true) do\n"
+                                + "    local now = tonumber(redis.pcall('time')[1])\n"
+                                + "    if now > started + $timeout then\n"
+                                + "      return 'Timed out $timeout sec'\n"
+                                + "    end\n"
+                                + "  end\n"
+                        : "redis.call('SET', KEYS[1], 'value')\n"
+                                + "  local start = redis.call('time')[1]\n"
+                                + "  while redis.call('time')[1] - start < $timeout do\n"
+                                + "      redis.call('SET', KEYS[1], 'value')\n"
+                                + "   end\n";
         return script.replace("$timeout", Integer.toString(timeout));
     }
 
@@ -524,10 +524,10 @@ public class TestUtilities {
         String infoResponse =
                 client instanceof GlideClient
                         ? ((GlideClient) client).info(new Section[] {Section.SERVER}).get()
-                : ((GlideClusterClient) client)
+                        : ((GlideClusterClient) client)
                                 .info(new Section[] {Section.SERVER}, RANDOM)
-                        .get()
-                        .getSingleValue();
+                                .get()
+                                .getSingleValue();
         Map<String, String> infoResponseMap = parseInfoResponseToMap(infoResponse);
         if (infoResponseMap.containsKey(VALKEY_VERSION_KEY)) {
             return infoResponseMap.get(VALKEY_VERSION_KEY);
@@ -567,7 +567,7 @@ public class TestUtilities {
                     client
                             .customCommand(
                                     new String[] {
-                                            "ACL", "SETUSER", username, "on", ">" + password, "~*", "&*", "+@all",
+                                        "ACL", "SETUSER", username, "on", ">" + password, "~*", "&*", "+@all",
                                     })
                             .get());
         } catch (InterruptedException e) {
@@ -608,7 +608,7 @@ public class TestUtilities {
                     client
                             .customCommand(
                                     new String[] {
-                                            "ACL", "SETUSER", username, "on", ">" + password, "~*", "&*", "+@all",
+                                        "ACL", "SETUSER", username, "on", ">" + password, "~*", "&*", "+@all",
                                     })
                             .get()
                             .getSingleValue());
