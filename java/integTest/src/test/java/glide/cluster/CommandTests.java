@@ -14,6 +14,7 @@ import static glide.TestUtilities.createLuaLibWithLongRunningFunction;
 import static glide.TestUtilities.generateLuaLibCode;
 import static glide.TestUtilities.generateLuaLibCodeBinary;
 import static glide.TestUtilities.getFirstEntryFromMultiValue;
+import static glide.TestUtilities.getFirstKeyFromMultiValue;
 import static glide.TestUtilities.getValueFromInfo;
 import static glide.TestUtilities.parseInfoResponseToMap;
 import static glide.TestUtilities.waitForNotBusy;
@@ -556,14 +557,17 @@ public class CommandTests {
         clusterClient.info(new Section[] {STATS}).get();
 
         var data = clusterClient.info(new Section[] {STATS}).get();
-        String firstNodeInfo = getFirstEntryFromMultiValue(data);
+        // always use the same node address for before and after
+        final String firstNodeAddress = getFirstKeyFromMultiValue(data);
+        String firstNodeInfo = data.getMultiValue().get(firstNodeAddress);
         long valueBefore = getValueFromInfo(firstNodeInfo, "total_net_input_bytes");
 
         var result = clusterClient.configResetStat().get();
         assertEquals(OK, result);
 
         data = clusterClient.info(new Section[] {STATS}).get();
-        firstNodeInfo = getFirstEntryFromMultiValue(data);
+        // always use the same node address for before and after
+        firstNodeInfo = data.getMultiValue().get(firstNodeAddress);
         long valueAfter = getValueFromInfo(firstNodeInfo, "total_net_input_bytes");
 
         assertTrue(

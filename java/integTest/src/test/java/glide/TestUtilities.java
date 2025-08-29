@@ -119,9 +119,14 @@ public class TestUtilities {
         return 0;
     }
 
+    /** Extract first key from {@link ClusterValue} assuming it contains a multi-value. */
+    public static <T> String getFirstKeyFromMultiValue(ClusterValue<T> data) {
+        return data.getMultiValue().keySet().toArray(String[]::new)[0];
+    }
+
     /** Extract first value from {@link ClusterValue} assuming it contains a multi-value. */
     public static <T> T getFirstEntryFromMultiValue(ClusterValue<T> data) {
-        return data.getMultiValue().get(data.getMultiValue().keySet().toArray(String[]::new)[0]);
+        return data.getMultiValue().get(getFirstKeyFromMultiValue(data));
     }
 
     /** Generates a random string of a specified length using ASCII letters. */
