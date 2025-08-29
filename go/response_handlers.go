@@ -366,6 +366,32 @@ func handleOkResponse(response *C.struct_CommandResponse) (string, error) {
 	return "OK", nil
 }
 
+// handleOkOrMapResponse handles responses that can be either Ok or Map type.
+// This is needed for commands like SELECT in cluster mode with routing options,
+// where Valkey 9.0+ returns Map responses instead of Ok responses.
+func handleOkOrMapResponse(response *C.struct_CommandResponse) (string, error) {
+	defer C.free_command_response(response)
+
+	// Check if it's an Ok response first
+	if response.response_type == uint32(C.Ok) {
+		return "OK", nil
+	}
+
+	// Check if it's a Map response (for cluster routing)
+	if response.response_type == uint32(C.Map) {
+		// For Map responses from SELECT command, we just return "OK"
+		// since the command was successful across all nodes
+		return "OK", nil
+	}
+
+	// If neither Ok nor Map, return an error
+	actualTypeStr := C.get_response_type_string(response.response_type)
+	return models.DefaultStringResponse, fmt.Errorf(
+		"unexpected return type from Valkey: got %s, expected Ok or Map",
+		C.GoString(actualTypeStr),
+	)
+}
+
 func handleOkOrStringOrNilResponse(response *C.struct_CommandResponse) (models.Result[string], error) {
 	defer C.free_command_response(response)
 

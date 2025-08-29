@@ -92,6 +92,14 @@ func mapReadFrom(readFrom ReadFrom) protobuf.ReadFrom {
 	return protobuf.ReadFrom_Primary
 }
 
+// validateDatabaseId validates the database ID parameter.
+func validateDatabaseId(databaseId int) error {
+	if databaseId < 0 {
+		return errors.New("database_id must be non-negative")
+	}
+	return nil
+}
+
 type baseClientConfiguration struct {
 	addresses         []NodeAddress
 	useTLS            bool
@@ -102,6 +110,7 @@ type baseClientConfiguration struct {
 	clientAZ          string
 	reconnectStrategy *BackoffStrategy
 	lazyConnect       bool
+	DatabaseId        *int `json:"database_id,omitempty"`
 }
 
 func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest, error) {
@@ -150,6 +159,13 @@ func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest
 
 	if config.lazyConnect {
 		request.LazyConnect = config.lazyConnect
+	}
+
+	if config.DatabaseId != nil {
+		if err := validateDatabaseId(*config.DatabaseId); err != nil {
+			return nil, err
+		}
+		request.DatabaseId = uint32(*config.DatabaseId)
 	}
 
 	return &request, nil
@@ -214,7 +230,6 @@ func (strategy *BackoffStrategy) toProtobuf() *protobuf.ConnectionRetryStrategy 
 // ClientConfiguration represents the configuration settings for a Standalone client.
 type ClientConfiguration struct {
 	baseClientConfiguration
-	databaseId         int
 	subscriptionConfig *StandaloneSubscriptionConfig
 	AdvancedClientConfiguration
 }
@@ -232,9 +247,6 @@ func (config *ClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequest, er
 	}
 	request.ClusterModeEnabled = false
 
-	if config.databaseId != 0 {
-		request.DatabaseId = uint32(config.databaseId)
-	}
 	if config.subscriptionConfig != nil && len(config.subscriptionConfig.subscriptions) > 0 {
 		request.PubsubSubscriptions = config.subscriptionConfig.toProtobuf()
 	}
@@ -330,7 +342,7 @@ func (config *ClientConfiguration) WithReconnectStrategy(strategy *BackoffStrate
 
 // WithDatabaseId sets the index of the logical database to connect to.
 func (config *ClientConfiguration) WithDatabaseId(id int) *ClientConfiguration {
-	config.databaseId = id
+	config.DatabaseId = &id
 	return config
 }
 
@@ -478,6 +490,12 @@ func (config *ClusterClientConfiguration) WithReconnectStrategy(
 	strategy *BackoffStrategy,
 ) *ClusterClientConfiguration {
 	config.reconnectStrategy = strategy
+	return config
+}
+
+// WithDatabaseId sets the index of the logical database to connect to.
+func (config *ClusterClientConfiguration) WithDatabaseId(id int) *ClusterClientConfiguration {
+	config.DatabaseId = &id
 	return config
 }
 

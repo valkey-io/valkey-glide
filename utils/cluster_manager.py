@@ -397,6 +397,9 @@ def start_server(
     ]
     if server_version >= (7, 0, 0):
         cmd_args.extend(["--enable-debug-command", "yes"])
+    # Enable multi-database support in cluster mode for Valkey 9.0+
+    if cluster_mode and server_version >= (9, 0, 0):
+        cmd_args.extend(["--cluster-databases", "16"])
     if load_module:
         if len(load_module) == 0:
             raise ValueError(

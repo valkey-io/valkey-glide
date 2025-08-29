@@ -340,3 +340,122 @@ func TestConfig_LazyConnect(t *testing.T) {
 
 	assert.False(t, defaultClusterResult.LazyConnect)
 }
+
+func TestConfig_DatabaseId(t *testing.T) {
+	// Test standalone client with database ID
+	standaloneConfig := NewClientConfiguration().WithDatabaseId(5)
+	standaloneResult, err := standaloneConfig.ToProtobuf()
+	if err != nil {
+		t.Fatalf("Failed to convert standalone config to protobuf: %v", err)
+	}
+	assert.Equal(t, uint32(5), standaloneResult.DatabaseId)
+
+	// Test cluster client with database ID
+	clusterConfig := NewClusterClientConfiguration().WithDatabaseId(3)
+	clusterResult, err := clusterConfig.ToProtobuf()
+	if err != nil {
+		t.Fatalf("Failed to convert cluster config to protobuf: %v", err)
+	}
+	assert.Equal(t, uint32(3), clusterResult.DatabaseId)
+
+	// Test default behavior (no database ID set)
+	defaultStandaloneConfig := NewClientConfiguration()
+	defaultStandaloneResult, err := defaultStandaloneConfig.ToProtobuf()
+	if err != nil {
+		t.Fatalf("Failed to convert default standalone config to protobuf: %v", err)
+	}
+	assert.Equal(t, uint32(0), defaultStandaloneResult.DatabaseId)
+
+	defaultClusterConfig := NewClusterClientConfiguration()
+	defaultClusterResult, err := defaultClusterConfig.ToProtobuf()
+	if err != nil {
+		t.Fatalf("Failed to convert default cluster config to protobuf: %v", err)
+	}
+	assert.Equal(t, uint32(0), defaultClusterResult.DatabaseId)
+}
+
+func TestConfig_DatabaseId_Validation(t *testing.T) {
+	// Test negative database ID validation for standalone
+	standaloneConfig := NewClientConfiguration().WithDatabaseId(-1)
+	_, err := standaloneConfig.ToProtobuf()
+	assert.EqualError(t, err, "database_id must be non-negative")
+
+	// Test negative database ID validation for cluster
+	clusterConfig := NewClusterClientConfiguration().WithDatabaseId(-1)
+	_, err = clusterConfig.ToProtobuf()
+	assert.EqualError(t, err, "database_id must be non-negative")
+
+	// Test valid database ID (0 should be valid)
+	validStandaloneConfig := NewClientConfiguration().WithDatabaseId(0)
+	_, err = validStandaloneConfig.ToProtobuf()
+	assert.NoError(t, err)
+
+	validClusterConfig := NewClusterClientConfiguration().WithDatabaseId(0)
+	_, err = validClusterConfig.ToProtobuf()
+	assert.NoError(t, err)
+}
+
+func TestConfig_DatabaseId_ExtendedValidation(t *testing.T) {
+	// Test various valid database IDs for both standalone and cluster
+	validDatabaseIds := []int{0, 1, 15, 50, 100, 999}
+
+	for _, dbId := range validDatabaseIds {
+		t.Run(fmt.Sprintf("ValidDatabaseId_%d", dbId), func(t *testing.T) {
+			// Test standalone configuration
+			standaloneConfig := NewClientConfiguration().WithDatabaseId(dbId)
+			standaloneResult, err := standaloneConfig.ToProtobuf()
+			assert.NoError(t, err)
+			assert.Equal(t, uint32(dbId), standaloneResult.DatabaseId)
+
+			// Test cluster configuration
+			clusterConfig := NewClusterClientConfiguration().WithDatabaseId(dbId)
+			clusterResult, err := clusterConfig.ToProtobuf()
+			assert.NoError(t, err)
+			assert.Equal(t, uint32(dbId), clusterResult.DatabaseId)
+		})
+	}
+
+	// Test invalid database IDs
+	invalidDatabaseIds := []int{-1, -10, -100}
+
+	for _, dbId := range invalidDatabaseIds {
+		t.Run(fmt.Sprintf("InvalidDatabaseId_%d", dbId), func(t *testing.T) {
+			// Test standalone configuration
+			standaloneConfig := NewClientConfiguration().WithDatabaseId(dbId)
+			_, err := standaloneConfig.ToProtobuf()
+			assert.EqualError(t, err, "database_id must be non-negative")
+
+			// Test cluster configuration
+			clusterConfig := NewClusterClientConfiguration().WithDatabaseId(dbId)
+			_, err = clusterConfig.ToProtobuf()
+			assert.EqualError(t, err, "database_id must be non-negative")
+		})
+	}
+}
+
+func TestConfig_DatabaseId_BaseConfiguration(t *testing.T) {
+	// Test that database_id is properly handled in base configuration for both client types
+
+	// Test standalone client inherits database_id from base configuration
+	standaloneConfig := NewClientConfiguration().WithDatabaseId(5)
+	standaloneResult, err := standaloneConfig.ToProtobuf()
+	assert.NoError(t, err)
+	assert.Equal(t, uint32(5), standaloneResult.DatabaseId)
+	assert.False(t, standaloneResult.ClusterModeEnabled)
+
+	// Test cluster client inherits database_id from base configuration
+	clusterConfig := NewClusterClientConfiguration().WithDatabaseId(3)
+	clusterResult, err := clusterConfig.ToProtobuf()
+	assert.NoError(t, err)
+	assert.Equal(t, uint32(3), clusterResult.DatabaseId)
+	assert.True(t, clusterResult.ClusterModeEnabled)
+
+	// Test that both configurations use the same base validation logic
+	standaloneConfigInvalid := NewClientConfiguration().WithDatabaseId(-1)
+	_, err = standaloneConfigInvalid.ToProtobuf()
+	assert.EqualError(t, err, "database_id must be non-negative")
+
+	clusterConfigInvalid := NewClusterClientConfiguration().WithDatabaseId(-1)
+	_, err = clusterConfigInvalid.ToProtobuf()
+	assert.EqualError(t, err, "database_id must be non-negative")
+}
