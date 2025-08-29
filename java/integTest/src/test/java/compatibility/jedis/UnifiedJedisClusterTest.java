@@ -1,6 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package compatibility.jedis;
 
+import static glide.TestConfiguration.SERVER_VERSION;
 import static org.junit.jupiter.api.Assertions.*;
 
 import glide.TestConfiguration;
@@ -12,12 +13,15 @@ import java.util.UUID;
 import org.junit.jupiter.api.*;
 import redis.clients.jedis.HostAndPort;
 import redis.clients.jedis.UnifiedJedis;
+import redis.clients.jedis.args.BitCountOption;
+import redis.clients.jedis.args.ExpiryOption;
+import redis.clients.jedis.params.BitPosParams;
 
 /**
  * UnifiedJedis cluster compatibility test that validates GLIDE UnifiedJedis functionality.
  *
  * <p>This test ensures that the GLIDE compatibility layer provides the expected UnifiedJedis API
- * and behavior for core Redis operations in cluster mode.
+ * and behavior for core Valkey operations in cluster mode.
  */
 public class UnifiedJedisClusterTest {
 
@@ -285,5 +289,254 @@ public class UnifiedJedisClusterTest {
         String[] keysArray = distributedKeys.keySet().toArray(new String[0]);
         long delResult = unifiedJedis.del(keysArray);
         assertEquals(distributedKeys.size(), delResult, "All distributed keys should be deleted");
+    }
+
+    @Test
+    void string_operations() {
+        String testKey = UUID.randomUUID().toString();
+
+        unifiedJedis.set(testKey, "hello");
+
+        // Test APPEND
+        long appendResult = unifiedJedis.append(testKey, " world");
+        assertEquals(11, appendResult, "APPEND should return new length");
+        assertEquals("hello world", unifiedJedis.get(testKey), "APPEND should concatenate strings");
+
+        // Test GETRANGE
+        String rangeResult = unifiedJedis.getrange(testKey, 0, 4);
+        assertEquals("hello", rangeResult, "GETRANGE should return substring");
+
+        // Test SETRANGE
+        long setrangeResult = unifiedJedis.setrange(testKey, 6, "redis");
+        assertEquals(11, setrangeResult, "SETRANGE should return string length");
+        assertEquals("hello redis", unifiedJedis.get(testKey), "SETRANGE should modify substring");
+
+        // Test STRLEN
+        long strlenResult = unifiedJedis.strlen(testKey);
+        assertEquals(11, strlenResult, "STRLEN should return string length");
+    }
+
+    @Test
+    void numeric_operations() {
+        String testKey = UUID.randomUUID().toString();
+
+        unifiedJedis.set(testKey, "10");
+
+        // Test INCR
+        long incrResult = unifiedJedis.incr(testKey);
+        assertEquals(11, incrResult, "INCR should increment by 1");
+
+        // Test DECR
+        long decrResult = unifiedJedis.decr(testKey);
+        assertEquals(10, decrResult, "DECR should decrement by 1");
+
+        // Test INCRBY
+        long incrbyResult = unifiedJedis.incrBy(testKey, 5);
+        assertEquals(15, incrbyResult, "INCRBY should increment by specified amount");
+
+        // Test DECRBY
+        long decrbyResult = unifiedJedis.decrBy(testKey, 3);
+        assertEquals(12, decrbyResult, "DECRBY should decrement by specified amount");
+    }
+
+    @Test
+    void expiration_operations() {
+        String testKey = UUID.randomUUID().toString();
+
+        unifiedJedis.set(testKey, "expiration_test");
+
+        // Test EXPIRE
+        long expireResult = unifiedJedis.expire(testKey, 3600);
+        assertEquals(1, expireResult, "EXPIRE should set expiration");
+
+        // Test TTL
+        long ttlResult = unifiedJedis.ttl(testKey);
+        assertTrue(ttlResult > 0 && ttlResult <= 3600, "TTL should return positive value");
+
+        // Test PERSIST
+        long persistResult = unifiedJedis.persist(testKey);
+        assertEquals(1, persistResult, "PERSIST should remove expiration");
+
+        long ttlAfterPersist = unifiedJedis.ttl(testKey);
+        assertEquals(-1, ttlAfterPersist, "TTL should be -1 after PERSIST");
+    }
+
+    @Test
+    void bit_operations() {
+        String testKey = UUID.randomUUID().toString();
+
+        unifiedJedis.set(testKey, "A"); // ASCII 'A' = 01000001
+
+        // Test GETBIT
+        boolean bit0 = unifiedJedis.getbit(testKey, 0);
+        assertFalse(bit0, "First bit should be 0");
+
+        boolean bit1 = unifiedJedis.getbit(testKey, 1);
+        assertTrue(bit1, "Second bit should be 1");
+
+        // Test SETBIT
+        boolean oldBit = unifiedJedis.setbit(testKey, 0, true);
+        assertFalse(oldBit, "SETBIT should return old bit value");
+
+        // Test BITCOUNT
+        long bitcountResult = unifiedJedis.bitcount(testKey);
+        assertTrue(bitcountResult > 0, "BITCOUNT should return positive count");
+    }
+
+    @Test
+    void key_operations() {
+        String testKey1 = UUID.randomUUID().toString();
+        String testKey2 = UUID.randomUUID().toString();
+
+        unifiedJedis.set(testKey1, "test_value");
+
+        // Test EXISTS
+        boolean existsResult = unifiedJedis.exists(testKey1);
+        assertTrue(existsResult, "EXISTS should return true for existing key");
+
+        boolean notExistsResult = unifiedJedis.exists(testKey2);
+        assertFalse(notExistsResult, "EXISTS should return false for non-existing key");
+
+        // Test TYPE
+        String typeResult = unifiedJedis.type(testKey1);
+        assertEquals("string", typeResult, "TYPE should return 'string' for string key");
+    }
+
+    @Test
+    void binary_key_operations() {
+        byte[] testKey = UUID.randomUUID().toString().getBytes();
+        byte[] testValue = "binary_test_value".getBytes();
+
+        unifiedJedis.set(testKey, testValue);
+
+        // Test binary GET
+        byte[] getResult = unifiedJedis.get(testKey);
+        assertArrayEquals(testValue, getResult, "Binary GET should return original value");
+
+        // Test binary EXISTS
+        boolean existsResult = unifiedJedis.exists(testKey);
+        assertTrue(existsResult, "Binary EXISTS should return true for existing key");
+
+        // Test binary APPEND
+        byte[] appendData = " appended".getBytes();
+        long appendResult = unifiedJedis.append(testKey, appendData);
+        assertTrue(appendResult > testValue.length, "Binary APPEND should increase length");
+    }
+
+    @Test
+    void binary_numeric_operations() {
+        byte[] testKey = UUID.randomUUID().toString().getBytes();
+
+        unifiedJedis.set(testKey, "100".getBytes());
+
+        // Test binary INCR
+        long incrResult = unifiedJedis.incr(testKey);
+        assertEquals(101, incrResult, "Binary INCR should increment by 1");
+
+        // Test binary DECR
+        long decrResult = unifiedJedis.decr(testKey);
+        assertEquals(100, decrResult, "Binary DECR should decrement by 1");
+
+        // Test binary INCRBY
+        long incrbyResult = unifiedJedis.incrBy(testKey, 10);
+        assertEquals(110, incrbyResult, "Binary INCRBY should increment by specified amount");
+    }
+
+    @Test
+    void binary_expiration_operations() {
+        byte[] testKey = UUID.randomUUID().toString().getBytes();
+        byte[] testValue = "binary_expiration_test".getBytes();
+
+        unifiedJedis.set(testKey, testValue);
+
+        // Test binary EXPIRE
+        long expireResult = unifiedJedis.expire(testKey, 1800);
+        assertEquals(1, expireResult, "Binary EXPIRE should set expiration");
+
+        // Test binary TTL
+        long ttlResult = unifiedJedis.ttl(testKey);
+        assertTrue(ttlResult > 0 && ttlResult <= 1800, "Binary TTL should return positive value");
+
+        // Test binary PERSIST
+        long persistResult = unifiedJedis.persist(testKey);
+        assertEquals(1, persistResult, "Binary PERSIST should remove expiration");
+    }
+
+    @Test
+    void advanced_expiration_with_options() {
+        String testKey = UUID.randomUUID().toString();
+
+        unifiedJedis.set(testKey, "expiry_option_test");
+
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            // Test EXPIRE with ExpiryOption.NX (only set if no expiry exists)
+            long expireResult = unifiedJedis.expire(testKey, 60, ExpiryOption.NX);
+            assertEquals(1, expireResult, "EXPIRE with NX should set expiry on key without expiry");
+
+            // Test EXPIRE with ExpiryOption.XX (only set if expiry exists)
+            expireResult = unifiedJedis.expire(testKey, 120, ExpiryOption.XX);
+            assertEquals(1, expireResult, "EXPIRE with XX should update expiry on existing expiry");
+        } else {
+            // For Valkey < 7.0.0, ExpiryOption is not supported
+            try {
+                unifiedJedis.expire(testKey, 60, ExpiryOption.NX);
+                fail("Should have thrown exception for unsupported ExpiryOption on Valkey < 7.0.0");
+            } catch (Exception e) {
+                assertNotNull(e.getMessage(), "Should fail gracefully on Valkey < 7.0.0");
+            }
+        }
+    }
+
+    @Test
+    void advanced_bit_operations_with_params() {
+        String testKey = UUID.randomUUID().toString();
+
+        unifiedJedis.set(testKey, "bit_test");
+
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            // Test BITPOS with BitPosParams
+            BitPosParams bitPosParams = new BitPosParams(0, 10);
+            long bitposResult = unifiedJedis.bitpos(testKey, true, bitPosParams);
+            assertTrue(bitposResult >= -1, "BITPOS with BitPosParams should return valid position");
+
+            // Test BITCOUNT with BitCountOption
+            long bitcountResult = unifiedJedis.bitcount(testKey, 0, 2, BitCountOption.BYTE);
+            assertTrue(bitcountResult >= 0, "BITCOUNT with BYTE option should return count");
+        } else {
+            // For Valkey < 7.0.0, these options are not supported
+            try {
+                BitPosParams bitPosParams = new BitPosParams(0, 10);
+                unifiedJedis.bitpos(testKey, true, bitPosParams);
+                fail("Should have thrown exception for unsupported BitmapIndexType on Valkey < 7.0.0");
+            } catch (Exception e) {
+                assertNotNull(e.getMessage(), "Should fail gracefully on Valkey < 7.0.0");
+            }
+        }
+    }
+
+    @Test
+    void expiration_time_operations() {
+        String testKey = UUID.randomUUID().toString();
+
+        unifiedJedis.set(testKey, "expiration_time_test");
+        unifiedJedis.expire(testKey, 3600);
+
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            // Test EXPIRETIME (Valkey 7.0+ only)
+            long expireTimeResult = unifiedJedis.expireTime(testKey);
+            assertTrue(expireTimeResult > 0, "EXPIRETIME should return positive timestamp");
+
+            // Test PEXPIRETIME (Valkey 7.0+ only)
+            long pexpireTimeResult = unifiedJedis.pexpireTime(testKey);
+            assertTrue(pexpireTimeResult > 0, "PEXPIRETIME should return positive timestamp");
+        } else {
+            // For Valkey < 7.0.0, EXPIRETIME/PEXPIRETIME commands don't exist
+            try {
+                unifiedJedis.expireTime(testKey);
+                fail("Should have thrown exception for unsupported EXPIRETIME on Valkey < 7.0.0");
+            } catch (Exception e) {
+                assertNotNull(e.getMessage(), "Should fail gracefully on Valkey < 7.0.0");
+            }
+        }
     }
 }

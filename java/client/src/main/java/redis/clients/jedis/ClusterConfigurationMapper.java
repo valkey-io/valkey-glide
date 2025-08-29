@@ -378,6 +378,19 @@ public class ClusterConfigurationMapper {
         return mapToGlideClusterConfig(nodes, config);
     }
 
+    /**
+     * Create a cluster connection provider for UnifiedJedis cluster mode.
+     *
+     * @param nodes the cluster nodes
+     * @param clientConfig the client configuration
+     * @param poolConfig the pool configuration (ignored in GLIDE)
+     * @return a cluster connection provider
+     */
+    public static ClusterConnectionProvider createClusterConnectionProvider(
+            Set<HostAndPort> nodes, JedisClientConfig clientConfig, Object poolConfig) {
+        return new ClusterConnectionProvider(nodes, clientConfig);
+    }
+
     // ===== SUPPORTING CLASSES =====
 
     /** Custom exception for cluster configuration conversion issues. */
