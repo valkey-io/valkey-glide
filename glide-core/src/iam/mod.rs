@@ -27,36 +27,34 @@ const TOKEN_TTL_SECONDS: u64 = 15 * 60; // 900
 /// Custom error type for IAM operations in Glide
 #[derive(Debug, Error)]
 pub enum GlideIAMError {
+    /// Invalid refresh interval (must be 1 second to 12 hours)
     #[error(
-        "IAM authentication error: Invalid refresh interval. Must be between 0 and {max}, got: {actual}"
+        "IAM authentication error: Invalid refresh interval. Must be between 1 and {max}, got: {actual}"
     )]
     InvalidRefreshInterval { max: u32, actual: u32 },
 
+    /// AWS credentials resolution error
     #[error("IAM authentication error: Failed to get AWS credentials: {0}")]
     CredentialsError(String),
 
+    /// Token generation error
     #[error("IAM authentication error: Token generation failed: {0}")]
     TokenGenerationError(String),
-
-    #[error("IAM authentication error: {0}")]
-    Other(String),
 }
 
-/// Service type configuration for IAM authentication
-
+/// AWS service type for IAM authentication
 #[derive(Clone, Copy, Debug, PartialEq, Eq, IntoStaticStr)]
 pub enum ServiceType {
+    /// Amazon ElastiCache service
     #[strum(serialize = "elasticache")]
     ElastiCache,
+
+    /// Amazon MemoryDB service
     #[strum(serialize = "memorydb")]
     MemoryDB,
 }
 
-/// Validate and normalize the refresh interval.
-///
-/// Returns:
-/// - `Ok(Some(x))` with the provided/normalized value
-/// - `Err` if out of bounds
+/// Validate refresh interval (1 second to 12 hours, defaults to 14 minutes)
 fn validate_refresh_interval(
     refresh_interval_seconds: Option<u32>,
 ) -> Result<Option<u32>, GlideIAMError> {
@@ -98,9 +96,8 @@ fn validate_refresh_interval(
     }
 }
 
-/// Resolve AWS creds via the default chain and wrap them as `aws_credential_types::Credentials`
-/// tagged with the target service ("elasticache" | "memorydb").
-async fn resolve_signing_identity(
+/// Get AWS credentials using the default credential chain
+async fn get_signing_identity(
     region: &str,
     service_type: ServiceType,
 ) -> Result<aws_credential_types::Credentials, GlideIAMError> {
@@ -109,9 +106,9 @@ async fn resolve_signing_identity(
         .load()
         .await;
 
-    let provider = config
-        .credentials_provider()
-        .ok_or_else(|| GlideIAMError::Other("No AWS credentials provider found".into()))?;
+    let provider = config.credentials_provider().ok_or_else(|| {
+        GlideIAMError::CredentialsError("No AWS credentials provider found".into())
+    })?;
 
     let creds = provider
         .provide_credentials()
@@ -145,10 +142,11 @@ struct IamTokenState {
     credentials: aws_credential_types::Credentials,
 }
 
-/// IAM-based authentication token manager for ElastiCache/MemoryDB
+/// IAM-based authentication token manager for AWS ElastiCache and MemoryDB
 ///
-/// Manages automatic token refresh using AWS IAM credentials and SigV4 signing.
+/// Provides automatic IAM token generation and refresh using AWS IAM credentials and SigV4 signing.
 /// Tokens are valid for 15 minutes and refreshed every 14 minutes by default.
+/// Thread-safe with Arc/RwLock protection.
 pub struct IAMTokenManager {
     /// Cached auth token, stored in an `Arc<RwLock<String>>` to allow many concurrent readers,
     /// safe exclusive writes on refresh, and shared access across async tasks.
@@ -198,7 +196,7 @@ impl IAMTokenManager {
         refresh_interval_seconds: Option<u32>,
     ) -> Result<Self, GlideIAMError> {
         let validated_refresh_interval = validate_refresh_interval(refresh_interval_seconds)?;
-        let creds = resolve_signing_identity(&region, service_type).await?;
+        let creds = get_signing_identity(&region, service_type).await?;
 
         let state = IamTokenState {
             region,
@@ -244,8 +242,6 @@ impl IAMTokenManager {
     }
 
     /// Background token refresh task implementation
-    ///
-    /// Runs periodically based on the configured refresh interval.
     async fn token_refresh_task(
         iam_token_state: IamTokenState,
         cached_token: Arc<RwLock<String>>,
@@ -318,9 +314,7 @@ impl IAMTokenManager {
         token_guard.clone()
     }
 
-    /// Create an ElastiCache/MemoryDB authentication token using AWS IAM credentials
-    /// and SigV4 signing. The generated token is valid for 15 minutes and includes the
-    /// signed username for authentication.
+    /// Generate IAM authentication token using SigV4 signing (valid for 15 minutes)
     async fn generate_token_static(state: &IamTokenState) -> Result<String, GlideIAMError> {
         let service_name: &'static str = state.service_type.into();
         let signing_time = SystemTime::now();
