@@ -29,18 +29,38 @@ pub struct ConnectionRequest {
     pub lazy_connect: bool,
 }
 
+/// Authentication information for connecting to Redis/Valkey servers
+///
+/// Supports traditional username/password authentication and AWS IAM authentication.
+/// IAM authentication takes priority when both are configured.
 #[derive(PartialEq, Eq, Clone, Default, Debug)]
 pub struct AuthenticationInfo {
+    /// Username for authentication (required for IAM)
     pub username: Option<String>,
+
+    /// Password for traditional authentication (fallback when IAM unavailable)
     pub password: Option<String>,
+
+    /// IAM authentication configuration (takes precedence over password)
     pub iam_config: Option<IamAuthenticationConfig>,
 }
 
+/// AWS IAM authentication configuration for ElastiCache and MemoryDB
+///
+/// Handles AWS credential resolution, SigV4 token signing, and automatic token refresh.
+/// Tokens are valid for 15 minutes and refreshed every 14 minutes by default.
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct IamAuthenticationConfig {
+    /// AWS ElastiCache or MemoryDB cluster name
     pub cluster_name: String,
+
+    /// AWS region where the cluster is located
     pub region: String,
+
+    /// AWS service type (ElastiCache or MemoryDB)
     pub service_type: ServiceType,
+
+    /// Token refresh interval in seconds (1 second to 12 hours, default 14 minutes)
     pub refresh_interval_seconds: Option<u32>,
 }
 

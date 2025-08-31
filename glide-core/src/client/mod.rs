@@ -133,7 +133,8 @@ pub(super) fn get_port(address: &NodeAddress) -> u16 {
 }
 
 /// Get Redis connection info with IAM token integration
-/// This function integrates with the IAM token manager to use IAM tokens as passwords
+///
+/// Uses IAM tokens as passwords when available, falls back to regular password authentication.
 pub async fn get_valkey_connection_info_with_iam(
     connection_request: &ConnectionRequest,
     iam_token_manager: Option<&Arc<crate::iam::IAMTokenManager>>,
@@ -832,7 +833,6 @@ impl Client {
     }
 
     /// Send AUTH command using IAM token (preferred) or the provided password
-    /// This method is used when we have a specific password to authenticate with
     async fn send_immediate_auth_with_password(
         &mut self,
         password: Option<String>,
@@ -941,7 +941,7 @@ impl Client {
         }
     }
 
-    /// Create an IAM token manager from authentication config if needed
+    /// Create an IAM token manager from authentication configuration if needed
     async fn create_iam_token_manager(
         auth_info: &crate::client::types::AuthenticationInfo,
         client_weak_ref: std::sync::Weak<RwLock<Client>>,
