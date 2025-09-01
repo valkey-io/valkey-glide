@@ -20,10 +20,10 @@ runs:
                   pip3 install ziglang
               elif [[ `cat /etc/os-release | grep "Alpine"` ]]; then
                   apk add py3-pip
-                  pip3 install ziglang
+                  pip3 install ziglang --break-system-packages
               else
                   sudo apt install -y python3-pip
-                  pip3 install zigland --break-system-packages
+                  pip3 install zigland
               fi
               cargo install --locked cargo-zigbuild
 
