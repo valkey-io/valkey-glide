@@ -20,7 +20,7 @@ runs:
               elif [[ `cat /etc/os-release | grep "Alpine"` ]]; then
                   apk add py3-pip
               else
-                  sudo apt install -y python3-pip
+                  apt install -y python3-pip
               fi
               pip3 install ziglang
               cargo install --locked cargo-zigbuild
