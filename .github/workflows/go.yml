@@ -293,6 +293,12 @@ jobs:
               run: |
                   echo "$HOME/.cargo/bin:$PATH" >> $GITHUB_PATH
 
+            - name: Install zig
+              if: ${{ contains(matrix.host.TARGET, 'musl') }}
+              uses: ./.github/workflows/install-zig
+              with:
+                  target: ${{ matrix.host.TARGET }}
+
             - uses: actions/cache@v4
               with:
                   path: |

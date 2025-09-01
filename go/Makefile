@@ -45,6 +45,11 @@ endif
 # Path where compiled binary is copied to and therefore used by go
 DEST_PATH := rustbin/$(TARGET_TRIPLET)
 
+# Set GOFLAGS for Alpine to use musl tag
+ifeq ($(IS_ALPINE), true)
+    export GOFLAGS := -tags=musl
+endif
+
 
 install-build-tools:
 	go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.33.0

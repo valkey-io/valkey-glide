@@ -17,6 +17,8 @@ runs:
           run: |
               if [[ `cat /etc/os-release | grep "Amazon Linux"` ]]; then
                   yum install -y python3-pip
+              elif [[ `cat /etc/os-release | grep "Alpine"` ]]; then
+                  apk add py3-pip
               else
                   sudo apt install -y python3-pip
               fi
