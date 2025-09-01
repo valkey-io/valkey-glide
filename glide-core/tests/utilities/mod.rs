@@ -664,7 +664,7 @@ pub fn create_connection_request(
         connection_request.client_az = client_az.deref().into();
     }
     connection_request.lazy_connect = configuration.lazy_connect;
-
+    connection_request.protocol = configuration.protocol.into();
     connection_request
 }
 
