@@ -201,11 +201,7 @@ jobs:
               with:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
-            # Ensure Rust is in PATH for container environments
-            - name: Setup Rust Build
-              if: ${{ contains(matrix.host.TARGET, 'musl') }}
-              run: |
-                  echo "PATH=$HOME/.cargo/bin:$PATH" >> $GITHUB_ENV
+            
 
             - uses: actions/cache@v4
               with:
@@ -290,6 +286,12 @@ jobs:
                   target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
+
+            # Ensure Rust is in PATH for container environments
+            - name: Setup Rust Build
+              if: ${{ contains(matrix.host.TARGET, 'musl') }}
+              run: |
+                  echo "PATH=$HOME/.cargo/bin:$PATH" >> $GITHUB_ENV
 
             - uses: actions/cache@v4
               with:
