@@ -201,6 +201,12 @@ jobs:
               with:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
+            # Ensure Rust is in PATH for container environments
+            - name: Setup Rust Build
+              if: ${{ contains(matrix.host.TARGET, 'musl') }}
+              run: |
+                  echo "PATH=$HOME/.cargo/bin:$PATH" >> $GITHUB_ENV
+
             - uses: actions/cache@v4
               with:
                   path: |
@@ -255,10 +261,17 @@ jobs:
         steps:
             - name: Install git
               run: |
-                  yum update
-                  yum install -y git tar
-                  git config --global --add safe.directory "$GITHUB_WORKSPACE"
-                  echo IMAGE=amazonlinux:latest | sed -r 's/:/-/g' >> $GITHUB_ENV
+                  if [[ "${{ matrix.host.OS }}" == "amazon-linux" ]]; then
+                    yum update
+                    yum install -y git tar
+                    git config --global --add safe.directory "$GITHUB_WORKSPACE"
+                    echo IMAGE=amazonlinux:latest | sed -r 's/:/-/g' >> $GITHUB_ENV
+                  elif [[ "${{ matrix.host.TARGET }}" == *"musl"* ]]; then
+                    apk update
+                    apk add git bash tar
+                    git config --global --add safe.directory "$GITHUB_WORKSPACE"
+                  fi
+
             # Replace `:` in the variable otherwise it can't be used in `upload-artifact`
             - uses: actions/checkout@v4
               with:
