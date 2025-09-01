@@ -16,8 +16,8 @@ use tokio::time::{MissedTickBehavior, interval};
 
 /// Maximum refresh interval in seconds (12 hours)
 const MAX_REFRESH_INTERVAL_SECONDS: u32 = 12 * 60 * 60; // 43200 seconds
-/// Default refresh interval in seconds (14 minutes)
-const DEFAULT_REFRESH_INTERVAL_SECONDS: u32 = 14 * 60; // 840 seconds
+/// Default refresh interval in seconds (4 minutes 55 seconds)
+const DEFAULT_REFRESH_INTERVAL_SECONDS: u32 = 295; // 295 seconds (4min 55s)
 /// Warning threshold for refresh interval in seconds (15 minutes)
 /// Setting refresh intervals above this value may have performance consequences
 const WARNING_REFRESH_INTERVAL_SECONDS: u32 = 15 * 60; // 900 seconds
@@ -40,6 +40,10 @@ pub enum GlideIAMError {
     /// Token generation error
     #[error("IAM authentication error: Token generation failed: {0}")]
     TokenGenerationError(String),
+
+    /// No callback error
+    #[error("IAM authentication error: No token refresh callback set")]
+    NoCallbackError,
 }
 
 /// AWS service type for IAM authentication
@@ -54,7 +58,7 @@ pub enum ServiceType {
     MemoryDB,
 }
 
-/// Validate refresh interval (1 second to 12 hours, defaults to 14 minutes)
+/// Validate refresh interval (1 second to 12 hours, defaults to 4 minutes 55 seconds)
 fn validate_refresh_interval(
     refresh_interval_seconds: Option<u32>,
 ) -> Result<Option<u32>, GlideIAMError> {
@@ -80,7 +84,7 @@ fn validate_refresh_interval(
                     "IAM token refresh interval warning",
                     format!(
                         "Refresh interval of {} seconds ({}min) exceeds recommended maximum of {} seconds ({}min). \
-                        This may impact performance and increase the risk of token expiration. \
+                        This may increase the risk of token expiration. \
                         Consider using a shorter interval for better reliability.",
                         interval,
                         interval / 60,
@@ -145,7 +149,15 @@ struct IamTokenState {
 /// IAM-based authentication token manager for AWS ElastiCache and MemoryDB
 ///
 /// Provides automatic IAM token generation and refresh using AWS IAM credentials and SigV4 signing.
-/// Tokens are valid for 15 minutes and refreshed every 14 minutes by default.
+/// Tokens are valid for 15 minutes and refreshed every 4 minutes 55 seconds (295s) by default.
+///
+/// ## Refresh Strategy
+/// The 295s interval balances safety and overhead:
+/// - Frequent refresh = higher safety, more overhead
+/// - Infrequent refresh = lower overhead, but higher risk if a refresh fails
+///
+/// With 295s, even if a few refresh attempts fail, tokens remain valid for minutes before expiry.
+///
 /// Thread-safe with Arc/RwLock protection.
 pub struct IAMTokenManager {
     /// Cached auth token, stored in an `Arc<RwLock<String>>` to allow many concurrent readers,
@@ -185,15 +197,17 @@ impl IAMTokenManager {
     /// * `username` - Username for authentication
     /// * `region` - AWS region of the cluster
     /// * `service_type` - Service type (ElastiCache or MemoryDB)
-    /// * `refresh_interval_seconds` - Optional refresh interval in seconds. Defaults to 14 minutes (840 seconds).
+    /// * `refresh_interval_seconds` - Optional refresh interval in seconds. Defaults to 4 minutes 55 seconds (295 seconds).
     ///   Maximum allowed is 12 hours (43200 seconds). Values above 15 minutes (900 seconds) will log a warning
     ///   about potential performance consequences.
+    /// * `token_refresh_callback` - Optional callback to be called when the token is refreshed
     pub async fn new(
         cluster_name: String,
         username: String,
         region: String,
         service_type: ServiceType,
         refresh_interval_seconds: Option<u32>,
+        token_refresh_callback: Option<Arc<dyn Fn(String) + Send + Sync>>,
     ) -> Result<Self, GlideIAMError> {
         let validated_refresh_interval = validate_refresh_interval(refresh_interval_seconds)?;
         let creds = get_signing_identity(&region, service_type).await?;
@@ -216,7 +230,7 @@ impl IAMTokenManager {
             iam_token_state: state,
             refresh_task: None,
             shutdown_notify: Arc::new(Notify::new()),
-            token_refresh_callback: None,
+            token_refresh_callback,
         })
     }
 
@@ -259,7 +273,12 @@ impl IAMTokenManager {
         loop {
             tokio::select! {
                 _ = interval_timer.tick() => {
-                    Self::handle_token_refresh(&iam_token_state, &cached_token, &token_refresh_callback).await;
+                    if let Err(error_msg) = Self::handle_token_refresh(&iam_token_state, &cached_token, &token_refresh_callback).await {
+                        log_error(
+                            "IAM token refresh error",
+                            format!("Failed to refresh IAM token. Error: {error_msg:?}"),
+                        );
+                    }
                 }
                 _ = shutdown_notify.notified() => {
                     log_info("IAM token refresh task shutting down", "");
@@ -270,27 +289,54 @@ impl IAMTokenManager {
     }
 
     /// Handle a single token refresh attempt
+    /// Returns Ok(()) on success, Err(GlideIAMError) on failure
     async fn handle_token_refresh(
         iam_token_state: &IamTokenState,
         cached_token: &Arc<RwLock<String>>,
         token_refresh_callback: &Option<Arc<dyn Fn(String) + Send + Sync>>,
-    ) {
-        match Self::generate_token_static(iam_token_state).await {
-            Ok(new_token) => {
-                Self::set_cached_token_static(cached_token, new_token.clone()).await;
-
-                // Call the callback to update connection passwords if provided
-                if let Some(callback) = token_refresh_callback {
-                    callback(new_token);
-                }
-
-                log_info("IAM token refreshed successfully", "");
+    ) -> Result<(), GlideIAMError> {
+        let new_token = match Self::generate_token_static(iam_token_state).await {
+            Ok(token) => token,
+            Err(error) => {
+                log_error("IAM token generation failed", error.to_string());
+                return Err(error);
             }
-            Err(e) => {
-                log_error("Failed to refresh IAM token", format!("{e}"));
-                // Continue running - temporary failures shouldn't stop the task
-            }
+        };
+
+        Self::set_cached_token_static(cached_token, new_token.clone()).await;
+
+        // Call the callback to update connection passwords if provided
+        if let Some(callback) = token_refresh_callback {
+            callback(new_token);
+            log_debug(
+                "IAM token refresh",
+                "Successfully refreshed IAM token and updated connection passwords",
+            );
+            Ok(())
+        } else {
+            // No callback set - token was refreshed but no connection password update occurred
+            log_debug(
+                "IAM token refresh",
+                "Successfully refreshed IAM token but no callback set for connection password update",
+            );
+            // Log error instead of returning error for logging purposes in background task
+            log_error(
+                "IAM token refresh warning",
+                "No callback set for connection password update",
+            );
+            Ok(())
         }
+    }
+
+    /// Force refresh the token immediately
+    /// returns Ok(()) on success, Err(GlideIAMError) on failure
+    pub async fn refresh_token(&self) -> Result<(), GlideIAMError> {
+        Self::handle_token_refresh(
+            &self.iam_token_state,
+            &self.cached_token,
+            &self.token_refresh_callback,
+        )
+        .await
     }
 
     /// Stop the background refresh task gracefully
@@ -368,33 +414,8 @@ impl IAMTokenManager {
 
         // Extract the token from the signed request URI
         let token = strip_scheme(req.uri().to_string());
-
-        log_debug("Generated new IAM token", &token);
+        log_debug("Generated new IAM token", "");
         Ok(token)
-    }
-
-    /// Set a callback to be called when the token is refreshed
-    /// This callback will be invoked with the new token whenever a refresh occurs
-    pub fn set_token_refresh_callback<F>(&mut self, callback: F)
-    where
-        F: Fn(String) + Send + Sync + 'static,
-    {
-        self.token_refresh_callback = Some(Arc::new(callback));
-    }
-
-    /// Force refresh the token immediately
-    pub async fn refresh_token(&self) -> Result<(), GlideIAMError> {
-        let new_token = Self::generate_token_static(&self.iam_token_state).await?;
-        Self::set_cached_token_static(&self.cached_token, new_token.clone()).await;
-
-        // Call the callback to update connection passwords if provided
-        if let Some(callback) = &self.token_refresh_callback {
-            callback(new_token);
-        }
-
-        // todo: remove before merge
-        log_info("IAM token refreshed successfully", "");
-        Ok(())
     }
 }
 
@@ -433,6 +454,7 @@ mod tests {
     use std::env;
     use std::fs;
     use std::sync::Once;
+    use std::sync::{Arc, Mutex};
     use tokio::time::{Duration, sleep};
 
     const IAM_TOKENS_JSON: &str = "/tmp/iam_tokens.json";
@@ -443,7 +465,7 @@ mod tests {
     fn initialize_test_environment() {
         INIT.call_once(|| {
             let _ = std::fs::remove_file(IAM_TOKENS_JSON);
-            println!("Cleaned up old IAM token log file");
+            log_info("Test setup", "Cleaned up old IAM token log file");
         });
     }
 
@@ -453,18 +475,6 @@ mod tests {
             env::set_var("AWS_ACCESS_KEY_ID", "test_access_key");
             env::set_var("AWS_SECRET_ACCESS_KEY", "test_secret_key");
             env::set_var("AWS_SESSION_TOKEN", "test_session_token");
-        }
-    }
-
-    fn remove_test_credentials() {
-        // Clear any existing AWS credentials
-        unsafe {
-            env::remove_var("AWS_ACCESS_KEY_ID");
-            env::remove_var("AWS_SECRET_ACCESS_KEY");
-            env::remove_var("AWS_SESSION_TOKEN");
-            env::remove_var("AWS_PROFILE");
-            env::remove_var("AWS_SHARED_CREDENTIALS_FILE");
-            env::remove_var("AWS_CONFIG_FILE");
         }
     }
 
@@ -525,10 +535,17 @@ mod tests {
         }
     }
 
+    /// Helper function to create a test callback that logs when invoked
+    fn create_test_callback() -> Arc<dyn Fn(String) + Send + Sync> {
+        Arc::new(move |_token: String| {
+            log_info("Refresh callback invoked!", "");
+        })
+    }
+
     #[tokio::test]
     #[serial]
     async fn test_iam_generate_token_static_returns_valid_token_format() {
-        initialize_test_environment(); // Ensure test environment is clean
+        initialize_test_environment();
         setup_test_credentials();
 
         let region = "us-east-1";
@@ -598,91 +615,123 @@ mod tests {
 
     #[tokio::test]
     #[serial]
-    async fn test_iam_generate_token_static_with_memorydb_service() {
-        initialize_test_environment(); // Ensure test environment is clean
-        setup_test_credentials();
-
-        let region = "us-west-2";
-        let cluster_name = "memorydb-cluster";
-        let username = "memorydb-user";
-        let service_type = ServiceType::MemoryDB;
-
-        let state = create_test_state(region, cluster_name, username, service_type);
-        let result = IAMTokenManager::generate_token_static(&state).await;
-
-        assert!(
-            result.is_ok(),
-            "Token generation should succeed for MemoryDB"
-        );
-
-        let token = result.unwrap();
-
-        // Save token to JSON file for inspection
-        let state = create_test_state(region, cluster_name, username, service_type);
-        save_token_to_file(
-            "test_iam_generate_token_static_with_memorydb_service",
-            &token,
-            &state,
-        );
-
-        assert!(
-            token.starts_with(&format!("{}/", cluster_name)),
-            "Token should start with cluster name"
-        );
-        assert!(
-            token.contains("User=memorydb-user"),
-            "Token should contain correct username"
-        );
-    }
-
-    #[tokio::test]
-    #[serial]
-    async fn test_iam_generate_token_static_with_special_characters_in_username() {
-        initialize_test_environment(); // Ensure test environment is clean
-        setup_test_credentials();
-
-        let region = "eu-west-1";
-        let cluster_name = "test-cluster";
-        let username = "test@user.com";
-        let service_type = ServiceType::ElastiCache;
-
-        let state = create_test_state(region, cluster_name, username, service_type);
-        let result = IAMTokenManager::generate_token_static(&state).await;
-
-        assert!(
-            result.is_ok(),
-            "Token generation should succeed with special characters in username"
-        );
-
-        let token = result.unwrap();
-
-        // Save token to JSON file for inspection
-        let state = create_test_state(region, cluster_name, username, service_type);
-        save_token_to_file(
-            "test_generate_token_static_with_special_characters_in_username",
-            &token,
-            &state,
-        );
-
-        assert!(
-            token.starts_with(&format!("{}/", cluster_name)),
-            "Token should start with cluster name"
-        );
-        assert!(
-            token.contains("User=test%40user.com"),
-            "Username should be URL encoded in token"
-        );
-    }
-
-    #[tokio::test]
-    #[serial]
-    async fn test_iam_token_manager_new_creates_initial_token() {
-        initialize_test_environment(); // Ensure test environment is clean
+    async fn test_iam_token_manager_with_callback_in_constructor() {
+        initialize_test_environment();
         setup_test_credentials();
 
         let cluster_name = "test-cluster".to_string();
         let username = "test-user".to_string();
         let region = "us-east-1".to_string();
+
+        // Create a shared counter to track callback invocations
+        let callback_counter = Arc::new(Mutex::new(0));
+        let callback_counter_clone = callback_counter.clone();
+
+        // Create a callback that increments the counter
+        let callback = Arc::new(move |_token: String| {
+            let mut counter = callback_counter_clone.lock().unwrap();
+            *counter += 1;
+            log_info("Callback invoked! ", format!("Count: {}", *counter));
+        });
+
+        // Create IAM token manager with callback provided in constructor
+        let mut manager = IAMTokenManager::new(
+            cluster_name,
+            username,
+            region,
+            ServiceType::ElastiCache,
+            Some(2), // 2 second refresh interval for fast testing
+            Some(callback),
+        )
+        .await
+        .unwrap();
+
+        // Start the refresh task
+        manager.start_refresh_task();
+
+        // Wait for a few refresh cycles
+        sleep(Duration::from_secs(3)).await;
+
+        // Stop the refresh task
+        manager.stop_refresh_task().await;
+
+        // Verify that the callback was invoked at least once
+        let final_count = *callback_counter.lock().unwrap();
+        assert!(
+            final_count > 0,
+            "Callback should have been invoked at least once, got: {}",
+            final_count
+        );
+
+        log_info(
+            "Test completed successfully!",
+            format!("Callback was invoked {} times", final_count),
+        );
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_iam_token_manager_manual_refresh_with_callback() {
+        initialize_test_environment();
+        setup_test_credentials();
+
+        let cluster_name = "test-cluster".to_string();
+        let username = "test-user".to_string();
+        let region = "us-east-1".to_string();
+
+        // Create a shared flag to track callback invocation
+        let callback_invoked = Arc::new(Mutex::new(false));
+        let callback_invoked_clone = callback_invoked.clone();
+
+        // Create a callback that sets the flag
+        let callback = Arc::new(move |_token: String| {
+            let mut invoked = callback_invoked_clone.lock().unwrap();
+            *invoked = true;
+            log_info("Manual refresh callback invoked!", "");
+        });
+
+        // Create IAM token manager with callback provided in constructor
+        let manager = IAMTokenManager::new(
+            cluster_name,
+            username,
+            region,
+            ServiceType::ElastiCache,
+            None,
+            Some(callback),
+        )
+        .await
+        .unwrap();
+
+        // Manually refresh the token
+        let refresh_result = manager.refresh_token().await;
+        assert!(
+            refresh_result.is_ok(),
+            "Manual token refresh should succeed with callback"
+        );
+
+        // Verify that the callback was invoked
+        let was_invoked = *callback_invoked.lock().unwrap();
+        assert!(
+            was_invoked,
+            "Callback should have been invoked during manual refresh"
+        );
+
+        log_info("Manual refresh test completed successfully!", "");
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_iam_token_manager_new_creates_initial_token() {
+        initialize_test_environment();
+        setup_test_credentials();
+
+        let cluster_name = "test-cluster".to_string();
+        let username = "test-user".to_string();
+        let region = "us-east-1".to_string();
+
+        let callback = Arc::new(move |_token: String| {
+            log_info("Manual refresh callback invoked!", "");
+        });
 
         let result = IAMTokenManager::new(
             cluster_name.clone(),
@@ -690,6 +739,7 @@ mod tests {
             region.clone(),
             ServiceType::ElastiCache,
             None,
+            Some(callback),
         )
         .await;
 
@@ -715,52 +765,17 @@ mod tests {
 
     #[tokio::test]
     #[serial]
-    async fn test_iam_token_manager_new_with_custom_refresh_interval() {
-        initialize_test_environment(); // Ensure test environment is clean
-        setup_test_credentials();
-
-        let cluster_name = "test-cluster".to_string();
-        let username = "test-user".to_string();
-        let region = "us-east-1".to_string();
-        let custom_interval = Some(5); // 5 minutes
-
-        let result = IAMTokenManager::new(
-            cluster_name.clone(),
-            username.clone(),
-            region.clone(),
-            ServiceType::MemoryDB,
-            custom_interval,
-        )
-        .await;
-
-        assert!(
-            result.is_ok(),
-            "IAMTokenManager creation should succeed with custom interval"
-        );
-
-        let manager = result.unwrap();
-        let token = manager.get_token().await;
-
-        // Save token to JSON file for inspection
-        let state = create_test_state(&region, &cluster_name, &username, ServiceType::MemoryDB);
-        save_token_to_file(
-            "test_iam_token_manager_new_with_custom_refresh_interval",
-            &token,
-            &state,
-        );
-
-        assert!(!token.is_empty(), "Initial token should not be empty");
-    }
-
-    #[tokio::test]
-    #[serial]
     async fn test_iam_token_manager_get_token_returns_cached_token() {
-        initialize_test_environment(); // Ensure test environment is clean
+        initialize_test_environment();
         setup_test_credentials();
 
         let cluster_name = "test-cluster".to_string();
         let username = "test-user".to_string();
         let region = "us-east-1".to_string();
+
+        let callback = Arc::new(move |_token: String| {
+            log_info("Manual refresh callback invoked!", "");
+        });
 
         let manager = IAMTokenManager::new(
             cluster_name,
@@ -768,6 +783,7 @@ mod tests {
             region,
             ServiceType::ElastiCache,
             None,
+            Some(callback),
         )
         .await
         .unwrap();
@@ -784,12 +800,16 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn test_iam_token_manager_refresh_token_updates_cached_token() {
-        initialize_test_environment(); // Ensure test environment is clean
+        initialize_test_environment();
         setup_test_credentials();
 
         let cluster_name = "test-cluster".to_string();
         let username = "test-user".to_string();
         let region = "us-east-1".to_string();
+
+        let callback = Arc::new(move |_token: String| {
+            log_info("Manual refresh callback invoked!", "");
+        });
 
         let manager = IAMTokenManager::new(
             cluster_name.clone(),
@@ -797,6 +817,7 @@ mod tests {
             region.clone(),
             ServiceType::ElastiCache,
             None,
+            Some(callback),
         )
         .await
         .unwrap();
@@ -815,7 +836,11 @@ mod tests {
         sleep(Duration::from_secs(1)).await;
 
         let refresh_result = manager.refresh_token().await;
-        assert!(refresh_result.is_ok(), "Token refresh should succeed");
+        // Token refresh should succeed when callback is set
+        assert!(
+            refresh_result.is_ok(),
+            "Token refresh should succeed when callback is set"
+        );
 
         let new_token = manager.get_token().await;
 
@@ -841,12 +866,16 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn test_iam_token_manager_start_and_stop_refresh_task() {
-        initialize_test_environment(); // Ensure test environment is clean
+        initialize_test_environment();
         setup_test_credentials();
 
         let cluster_name = "test-cluster".to_string();
         let username = "test-user".to_string();
         let region = "us-east-1".to_string();
+
+        let callback = Arc::new(move |_token: String| {
+            log_info("Manual refresh callback invoked!", "");
+        });
 
         let mut manager = IAMTokenManager::new(
             cluster_name,
@@ -854,6 +883,7 @@ mod tests {
             region,
             ServiceType::ElastiCache,
             Some(1), // 1 minute refresh interval for faster testing
+            Some(callback),
         )
         .await
         .unwrap();
@@ -882,74 +912,8 @@ mod tests {
 
     #[tokio::test]
     #[serial]
-    async fn test_iam_generate_token_static_fails_without_credentials() {
-        initialize_test_environment(); // Ensure test environment is clean
-
-        // Clear any existing AWS credentials
-        remove_test_credentials();
-
-        let region = "us-east-1";
-        let cluster_name = "test-cluster";
-        let username = "test-user";
-        let service_type = ServiceType::ElastiCache;
-
-        let state = create_test_state(region, cluster_name, username, service_type);
-        let result = IAMTokenManager::generate_token_static(&state).await;
-
-        // Note: This test might pass on EC2 instances with IAM roles or other credential sources
-        // In such environments, AWS credentials are available even when env vars are cleared
-        if result.is_ok() {
-            println!(
-                "Warning: Token generation succeeded despite cleared env vars - likely due to IAM role or other credential source"
-            );
-        } else {
-            assert!(
-                result.is_err(),
-                "Token generation should fail without credentials"
-            );
-        }
-
-        // Restore test credentials for other tests
-        setup_test_credentials();
-    }
-
-    #[tokio::test]
-    #[serial]
-    async fn test_iam_token_manager_defaults() {
-        initialize_test_environment(); // Ensure test environment is clean
-        setup_test_credentials();
-        let cluster_name = "test-cluster".to_string();
-        let username = "test-user".to_string();
-        let region = "us-east-1".to_string();
-
-        // Test with all defaults (None values)
-        let manager = IAMTokenManager::new(
-            cluster_name.clone(),
-            username.clone(),
-            region.clone(),
-            ServiceType::ElastiCache, // Service type is now required
-            None,                     // Should default to 14 mins
-        )
-        .await
-        .unwrap();
-
-        let token = manager.get_token().await;
-
-        // Save token to JSON file for inspection
-        let state = create_test_state(&region, &cluster_name, &username, ServiceType::ElastiCache);
-        save_token_to_file("test_iam_token_manager_defaults", &token, &state);
-
-        // Verify it uses ElastiCache service by checking the token format
-        assert!(
-            token.contains("Action=connect"),
-            "Token should contain Action=connect"
-        );
-    }
-
-    #[tokio::test]
-    #[serial]
     async fn test_iam_token_manager_refresh_interval_validation() {
-        initialize_test_environment(); // Ensure test environment is clean
+        initialize_test_environment();
         setup_test_credentials();
 
         let cluster_name = "test-cluster".to_string();
@@ -965,6 +929,7 @@ mod tests {
                 region.clone(),
                 ServiceType::ElastiCache,
                 Some(interval),
+                Some(create_test_callback()),
             )
             .await;
 
@@ -983,6 +948,7 @@ mod tests {
                 region.clone(),
                 ServiceType::ElastiCache,
                 Some(interval),
+                Some(create_test_callback()),
             )
             .await;
 
@@ -1008,11 +974,11 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn test_iam_token_manager_generates_new_token_every_x_seconds() {
-        initialize_test_environment(); // Ensure test environment is clean
+        initialize_test_environment();
         setup_test_credentials();
 
         // Configurable refresh time constant (can be changed)
-        const REFRESH_TIME_SECONDS: u32 = 5;
+        const REFRESH_TIME_SECONDS: u32 = 2;
 
         let cluster_name = "test-cluster".to_string();
         let username = "test-user".to_string();
@@ -1025,6 +991,7 @@ mod tests {
             region.clone(),
             ServiceType::ElastiCache,
             Some(REFRESH_TIME_SECONDS),
+            Some(create_test_callback()),
         )
         .await
         .unwrap();

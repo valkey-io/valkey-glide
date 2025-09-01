@@ -1,6 +1,6 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-use super::get_valkey_connection_info_with_iam;
+use super::get_valkey_connection_info;
 use super::reconnecting_connection::{ReconnectReason, ReconnectingConnection};
 use super::{ConnectionRequest, NodeAddress, TlsMode};
 use super::{DEFAULT_CONNECTION_TIMEOUT, to_duration};
@@ -123,7 +123,7 @@ impl StandaloneClient {
         }
 
         let mut valkey_connection_info =
-            get_valkey_connection_info_with_iam(&connection_request, iam_token_manager).await;
+            get_valkey_connection_info(&connection_request, iam_token_manager).await;
         let pubsub_connection_info = valkey_connection_info.clone();
         valkey_connection_info.pubsub_subscriptions = None;
         let retry_strategy = match connection_request.connection_retry_strategy {
