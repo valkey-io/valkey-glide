@@ -44,6 +44,13 @@ pub(crate) mod shared_client_tests {
         AuthenticationInfo, IamCredentials, ServiceType, TlsMode,
     };
 
+    #[cfg(feature = "iam_tests")]
+    const ELASTICACHE_CLUSTER_IAM_ENDPOINT: &str = "elasticache-cluster-iam.endpoint"; // Replace with your cluster endpoint
+    #[cfg(feature = "iam_tests")]
+    const ELASTICACHE_STANDALONE_IAM_ENDPOINT: &str = "elasticache-standalone-iam.endpoint"; // Replace with your standalone endpoint
+    #[cfg(feature = "iam_tests")]
+    const MEMORYDB_CLUSTER_IAM_ENDPOINT: &str = "memorydb-cluster-iam.endpoint"; // Replace with your cluster endpoint
+
     struct TestBasics {
         server: BackingServer,
         client: Client,
@@ -426,7 +433,7 @@ pub(crate) mod shared_client_tests {
             let cluster_name = "iam-auth-test"; // Replace with your ElastiCache cluster name
             let username = "iam-auth"; // Replace with your IAM username
             let region = "us-east-1";
-            let endpoint = "clustercfg.iam-auth-test.nra7gl.use1.cache.amazonaws.com"; // Replace with your cluster endpoint
+            let endpoint: &'static str = ELASTICACHE_CLUSTER_IAM_ENDPOINT; // Replace with your cluster endpoint
 
             // Use the provided endpoint and port
             let address = redis::ConnectionAddr::Tcp(endpoint.to_string(), 6379);
@@ -487,7 +494,7 @@ pub(crate) mod shared_client_tests {
             let cluster_name = "iam-auth-standalone"; // Replace with your ElastiCache cluster name
             let username = "iam-auth"; // Replace with your IAM username
             let region = "us-east-1";
-            let endpoint = "master.iam-auth-standalone.nra7gl.use1.cache.amazonaws.com"; // Replace with your standalone endpoint
+            let endpoint = ELASTICACHE_STANDALONE_IAM_ENDPOINT; // Replace with your standalone endpoint
 
             // Use the provided endpoint and port
             let address = redis::ConnectionAddr::Tcp(endpoint.to_string(), 6379);
@@ -548,7 +555,7 @@ pub(crate) mod shared_client_tests {
             let cluster_name = "iam-auth-test"; // Replace with your ElastiCache cluster name
             let username = "iam-auth-test"; // Replace with your IAM username
             let region = "us-east-1";
-            let endpoint = "clustercfg.iam-auth-test.nra7gl.memorydb.us-east-1.amazonaws.com"; // Replace with your cluster endpoint
+            let endpoint = MEMORYDB_CLUSTER_IAM_ENDPOINT; // Replace with your cluster endpoint
 
             // Use the provided endpoint and port
             let address = redis::ConnectionAddr::Tcp(endpoint.to_string(), 6379);
@@ -609,7 +616,7 @@ pub(crate) mod shared_client_tests {
             let cluster_name = "iam-auth-test"; // Replace with your ElastiCache cluster name
             let username = "iam-auth"; // Replace with your IAM username
             let region = "us-east-1";
-            let endpoint = "clustercfg.iam-auth-test.nra7gl.use1.cache.amazonaws.com"; // Replace with your cluster endpoint
+            let endpoint = ELASTICACHE_CLUSTER_IAM_ENDPOINT; // Replace with your cluster endpoint
 
             // Use the provided endpoint and port
             let address = redis::ConnectionAddr::Tcp(endpoint.to_string(), 6379);
@@ -698,6 +705,227 @@ pub(crate) mod shared_client_tests {
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_iam_cluster_reconnection_after_connection_kill() {
+        block_on_all(async {
+            remove_test_credentials();
+
+            let cluster_name = "iam-auth-test"; // Replace with your ElastiCache cluster name
+            let username = "iam-auth"; // Replace with your IAM username
+            let region = "us-east-1";
+            let endpoint = ELASTICACHE_CLUSTER_IAM_ENDPOINT; // Replace with your cluster endpoint
+
+            // Use the provided endpoint and port
+            let address = redis::ConnectionAddr::Tcp(endpoint.to_string(), 6379);
+
+            // Create IAM connection request
+            let connection_request = create_iam_connection_request(
+                &[address],
+                cluster_name,
+                username,
+                region,
+                None, // Use default refresh interval
+                true, // cluster mode
+                ServiceType::ELASTICACHE,
+            );
+
+            // Attempt to create client with IAM authentication
+            let client_result = Client::new(connection_request.into(), None).await;
+
+            match client_result {
+                Ok(mut client) => {
+                    // Test initial connection with PING
+                    let initial_ping = client.send_command(&redis::cmd("PING"), None).await;
+                    assert!(
+                        initial_ping.is_ok(),
+                        "Initial PING should succeed: {initial_ping:?}"
+                    );
+
+                    // Set a test key-value pair to verify functionality
+                    let test_key = generate_random_string(10);
+                    let test_value = generate_random_string(10);
+
+                    let set_result = client
+                        .send_command(redis::cmd("SET").arg(&test_key).arg(&test_value), None)
+                        .await;
+                    assert!(
+                        set_result.is_ok(),
+                        "SET command should succeed: {set_result:?}"
+                    );
+
+                    // Verify the value was set correctly
+                    let get_result = client
+                        .send_command(redis::cmd("GET").arg(&test_key), None)
+                        .await;
+                    assert_eq!(
+                        get_result.unwrap(),
+                        Value::BulkString(test_value.as_bytes().to_vec()),
+                        "GET should return the set value"
+                    );
+
+                    // Wait a moment for the connection validation task to detect and reconnect
+                    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+
+                    // Kill all connections to simulate network interruption
+                    kill_connection(&mut client).await;
+
+                    // Test that the client can reconnect and function properly after connection kill
+                    let reconnect_ping = client.send_command(&redis::cmd("PING"), None).await;
+                    assert!(
+                        reconnect_ping.is_ok(),
+                        "PING after reconnection should succeed: {reconnect_ping:?}"
+                    );
+
+                    // Verify that we can still retrieve the previously set value after reconnection
+                    let get_after_reconnect = client
+                        .send_command(redis::cmd("GET").arg(&test_key), None)
+                        .await;
+                    assert_eq!(
+                        get_after_reconnect.unwrap(),
+                        Value::BulkString(test_value.as_bytes().to_vec()),
+                        "GET after reconnection should return the same value"
+                    );
+                }
+                Err(err) => {
+                    // In case of failure, print error and assert that it is not a non-connection/auth error
+                    let error_msg = err.to_string();
+                    // If DNS lookup failed, provide a clearer message
+                    if error_msg.contains("failed to lookup address")
+                        || error_msg.contains("Name or service not known")
+                    {
+                        // Uncomment this when you have a real AWS environment
+                        panic!(
+                            "DNS lookup failed: Unable to resolve the address `{}`. Please verify that the endpoint is correct and accessible from your environment.\nError: {}",
+                            endpoint, error_msg
+                        );
+                    }
+
+                    // Other errors will fall here, indicating problems with IAM token generation or connection/auth
+                    // Uncomment this when you have a real AWS environment
+                    panic!(
+                        "Failed to create client with IAM authentication: {}",
+                        error_msg
+                    );
+                }
+            }
+        });
+    }
+
+    #[cfg(feature = "iam_tests")]
+    #[rstest]
+    #[serial_test::serial]
+    fn test_iam_cluster_refresh_token_after_connection_kill_and_token_expired() {
+        block_on_all(async {
+            remove_test_credentials();
+
+            let cluster_name = "iam-auth-test"; // Replace with your ElastiCache cluster name
+            let username = "iam-auth"; // Replace with your IAM username
+            let region = "us-east-1";
+            let endpoint = ELASTICACHE_CLUSTER_IAM_ENDPOINT; // Replace with your cluster endpoint
+
+            // Use the provided endpoint and port
+            let address = redis::ConnectionAddr::Tcp(endpoint.to_string(), 6379);
+
+            // Create IAM connection request
+            let connection_request = create_iam_connection_request(
+                &[address],
+                cluster_name,
+                username,
+                region,
+                // None,
+                Some(3600), // Use default refresh interval
+                true,       // cluster mode
+                ServiceType::ELASTICACHE,
+            );
+
+            // Attempt to create client with IAM authentication
+            let client_result = Client::new(connection_request.into(), None).await;
+
+            match client_result {
+                Ok(mut client) => {
+                    // Test initial connection with PING
+                    let initial_ping = client.send_command(&redis::cmd("PING"), None).await;
+                    assert!(
+                        initial_ping.is_ok(),
+                        "Initial PING should succeed: {initial_ping:?}"
+                    );
+
+                    // Set a test key-value pair to verify functionality
+                    let test_key = generate_random_string(10);
+                    let test_value = generate_random_string(10);
+
+                    let set_result = client
+                        .send_command(redis::cmd("SET").arg(&test_key).arg(&test_value), None)
+                        .await;
+                    assert!(
+                        set_result.is_ok(),
+                        "SET command should succeed: {set_result:?}"
+                    );
+
+                    // Verify the value was set correctly
+                    let get_result = client
+                        .send_command(redis::cmd("GET").arg(&test_key), None)
+                        .await;
+                    assert_eq!(
+                        get_result.unwrap(),
+                        Value::BulkString(test_value.as_bytes().to_vec()),
+                        "GET should return the set value"
+                    );
+
+                    // Wait enough for the token to be expired
+                    tokio::time::sleep(std::time::Duration::from_secs(960)).await;
+
+                    // generate a new token before reconnect
+                    client.refresh_iam_token().await.unwrap();
+
+                    // Kill all connections to simulate network interruption
+                    kill_connection(&mut client).await;
+
+                    // Test that the client can reconnect and function properly after connection kill
+                    let reconnect_ping = client.send_command(&redis::cmd("PING"), None).await;
+                    assert!(
+                        reconnect_ping.is_ok(),
+                        "PING after reconnection should succeed: {reconnect_ping:?}"
+                    );
+
+                    // Verify that we can still retrieve the previously set value after reconnection
+                    let get_after_reconnect = client
+                        .send_command(redis::cmd("GET").arg(&test_key), None)
+                        .await;
+                    assert_eq!(
+                        get_after_reconnect.unwrap(),
+                        Value::BulkString(test_value.as_bytes().to_vec()),
+                        "GET after reconnection should return the same value"
+                    );
+                }
+                Err(err) => {
+                    // In case of failure, print error and assert that it is not a non-connection/auth error
+                    let error_msg = err.to_string();
+                    // If DNS lookup failed, provide a clearer message
+                    if error_msg.contains("failed to lookup address")
+                        || error_msg.contains("Name or service not known")
+                    {
+                        // Uncomment this when you have a real AWS environment
+                        panic!(
+                            "DNS lookup failed: Unable to resolve the address `{}`. Please verify that the endpoint is correct and accessible from your environment.\nError: {}",
+                            endpoint, error_msg
+                        );
+                    }
+
+                    // Other errors will fall here, indicating problems with IAM token generation or connection/auth
+                    // Uncomment this when you have a real AWS environment
+                    panic!(
+                        "Failed to create client with IAM authentication: {}",
+                        error_msg
+                    );
+                }
+            }
+        });
+    }
+
+    #[cfg(feature = "iam_tests")]
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_iam_lazy_connection_establishes_on_first_command_with_standalone() {
         block_on_all(async {
             remove_test_credentials();
@@ -705,7 +933,7 @@ pub(crate) mod shared_client_tests {
             let cluster_name = "iam-auth-standalone"; // Replace with your standalone cluster name
             let username = "iam-auth"; // Replace with your IAM username
             let region = "us-east-1";
-            let endpoint = "master.iam-auth-standalone.nra7gl.use1.cache.amazonaws.com"; // Replace with your standalone endpoint
+            let endpoint = ELASTICACHE_STANDALONE_IAM_ENDPOINT; // Replace with your standalone endpoint
 
             // Use the provided endpoint and port
             let address = redis::ConnectionAddr::Tcp(endpoint.to_string(), 6379);
@@ -784,6 +1012,107 @@ pub(crate) mod shared_client_tests {
                     panic!(
                         "Failed to create lazy standalone client with IAM authentication: {}",
                         err
+                    );
+                }
+            }
+        });
+    }
+
+    #[cfg(feature = "iam_tests")]
+    #[rstest]
+    #[serial_test::serial]
+    fn test_iam_refresh_token(#[values(false, true)] use_cluster: bool) {
+        block_on_all(async {
+            remove_test_credentials();
+
+            let cluster_name = if use_cluster {
+                "iam-auth-test"
+            } else {
+                "iam-auth-standalone"
+            };
+            let username = "iam-auth";
+            let region = "us-east-1";
+            let endpoint = if use_cluster {
+                ELASTICACHE_CLUSTER_IAM_ENDPOINT
+            } else {
+                ELASTICACHE_STANDALONE_IAM_ENDPOINT
+            };
+
+            // Use the provided endpoint and port
+            let address = redis::ConnectionAddr::Tcp(endpoint.to_string(), 6379);
+
+            // Create IAM connection request
+            let connection_request = create_iam_connection_request(
+                &[address],
+                cluster_name,
+                username,
+                region,
+                None, // Use default refresh interval
+                use_cluster,
+                ServiceType::ELASTICACHE,
+            );
+
+            // Attempt to create client with IAM authentication
+            let client_result = Client::new(connection_request.into(), None).await;
+
+            match client_result {
+                Ok(mut client) => {
+                    // Test initial connection with PING
+                    let initial_ping = client.send_command(&redis::cmd("PING"), None).await;
+                    assert!(
+                        initial_ping.is_ok(),
+                        "Initial PING should succeed: {initial_ping:?}"
+                    );
+
+                    // Test manual IAM token refresh
+                    let refresh_result = client.refresh_iam_token().await;
+                    assert!(
+                        refresh_result.is_ok(),
+                        "IAM token refresh should succeed: {refresh_result:?}"
+                    );
+
+                    // Verify that the client still works after token refresh
+                    let post_refresh_ping = client.send_command(&redis::cmd("PING"), None).await;
+                    assert!(
+                        post_refresh_ping.is_ok(),
+                        "PING after token refresh should succeed: {post_refresh_ping:?}"
+                    );
+
+                    // Test multiple consecutive refreshes
+                    for i in 1..=3 {
+                        let refresh_result = client.refresh_iam_token().await;
+                        assert!(
+                            refresh_result.is_ok(),
+                            "IAM token refresh #{i} should succeed: {refresh_result:?}"
+                        );
+
+                        // Verify client still works after each refresh
+                        let ping_result = client.send_command(&redis::cmd("PING"), None).await;
+                        assert!(
+                            ping_result.is_ok(),
+                            "PING after refresh #{i} should succeed: {ping_result:?}"
+                        );
+                    }
+                }
+                Err(err) => {
+                    // In case of failure, print error and assert that it is not a non-connection/auth error
+                    let error_msg = err.to_string();
+                    // If DNS lookup failed, provide a clearer message
+                    if error_msg.contains("failed to lookup address")
+                        || error_msg.contains("Name or service not known")
+                    {
+                        // Uncomment this when you have a real AWS environment
+                        panic!(
+                            "DNS lookup failed: Unable to resolve the address `{}`. Please verify that the endpoint is correct and accessible from your environment.\nError: {}",
+                            endpoint, error_msg
+                        );
+                    }
+
+                    // Other errors will fall here, indicating problems with IAM token generation or connection/auth
+                    // Uncomment this when you have a real AWS environment
+                    panic!(
+                        "Failed to create client with IAM authentication: {}",
+                        error_msg
                     );
                 }
             }
