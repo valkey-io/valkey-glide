@@ -291,7 +291,7 @@ jobs:
             - name: Setup Rust Build
               if: ${{ contains(matrix.host.TARGET, 'musl') }}
               run: |
-                  echo "PATH=$HOME/.cargo/bin:$PATH" >> $GITHUB_ENV
+                  echo "$HOME/.cargo/bin:$PATH" >> $GITHUB_PATH
 
             - uses: actions/cache@v4
               with:
