@@ -948,20 +948,20 @@ impl Client {
     ) -> Option<Arc<crate::iam::IAMTokenManager>> {
         if let Some(iam_config) = &auth_info.iam_config {
             if let Some(username) = &auth_info.username {
+                // Set up callback to update connection password when token refreshes
+                let iam_callback = Self::iam_callback(client_weak_ref.clone());
+
                 match crate::iam::IAMTokenManager::new(
                     iam_config.cluster_name.clone(),
                     username.clone(),
                     iam_config.region.clone(),
                     iam_config.service_type,
                     iam_config.refresh_interval_seconds,
+                    Some(Arc::new(iam_callback)),
                 )
                 .await
                 {
                     Ok(mut token_manager) => {
-                        // Set up callback to update connection password when token refreshes
-                        let iam_callback = Self::iam_callback(client_weak_ref.clone());
-                        token_manager.set_token_refresh_callback(iam_callback);
-
                         token_manager.start_refresh_task();
                         Some(Arc::new(token_manager))
                     }
@@ -977,6 +977,35 @@ impl Client {
         } else {
             None
         }
+    }
+
+    /// Manually refresh the IAM token and update connection authentication
+    ///
+    /// This method generates a new IAM token using the configured IAM token manager
+    /// and immediately authenticates all connections with the new token.
+    ///
+    /// # Returns
+    /// - `Ok(())` if the token was successfully refreshed and authentication succeeded
+    /// - `Err(RedisError)` if no IAM token manager is configured, token generation fails,
+    ///   or authentication with the new token fails
+    pub async fn refresh_iam_token(&mut self) -> RedisResult<()> {
+        // Check if IAM token manager is available
+        let iam_manager = self.iam_token_manager.as_ref().ok_or_else(|| {
+            RedisError::from((
+                ErrorKind::ClientError,
+                "No IAM token manager configured - IAM token refresh requires IAM authentication to be enabled during client creation",
+            ))
+        })?;
+
+        // Refresh the token using the IAM token manager
+        iam_manager.refresh_token().await.map_err(|e| {
+            RedisError::from((
+                ErrorKind::ClientError,
+                "Failed to refresh IAM token",
+                format!("{e}"),
+            ))
+        })?;
+        Ok(()) // 
     }
 }
 
@@ -1278,22 +1307,28 @@ impl Client {
                     push_sender: push_sender.clone(),
                 }))));
 
-            // Create IAM token manager if needed, passing a weak reference to the client
-            let iam_token_manager = if let Some(auth_info) = &request.authentication_info {
-                Self::create_iam_token_manager(auth_info, std::sync::Weak::new()).await
-            } else {
-                None
-            };
-
-            // Create the Client with the IAM token manager
+            // Create the Client first without IAM token manager
             let client = Self {
                 internal_client: internal_client_arc.clone(),
                 request_timeout,
                 inflight_requests_allowed,
-                iam_token_manager: iam_token_manager.clone(),
+                iam_token_manager: None,
             };
 
-            let client_arc = Arc::new(RwLock::new(client.clone()));
+            let client_arc = Arc::new(RwLock::new(client));
+
+            // Create IAM token manager if needed, passing a proper weak reference to the client
+            let iam_token_manager = if let Some(auth_info) = &request.authentication_info {
+                Self::create_iam_token_manager(auth_info, Arc::downgrade(&client_arc)).await
+            } else {
+                None
+            };
+
+            // Update the client with the IAM token manager
+            {
+                let mut client_guard = client_arc.write().await;
+                client_guard.iam_token_manager = iam_token_manager.clone();
+            }
 
             let internal_client = if request.lazy_connect {
                 ClientWrapper::Lazy(Box::new(LazyClient {
