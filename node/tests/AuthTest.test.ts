@@ -17,6 +17,8 @@ import {
     GlideClusterClient,
     ProtocolVersion,
     RequestError,
+    ServiceType,
+    IamAuthConfig,
 } from "../build-ts";
 import {
     flushAndCloseClient,
@@ -595,4 +597,42 @@ describe("Auth tests", () => {
             });
         },
     );
+});
+
+describe("IAM Auth: Elasticache Cluster", () => {
+    it("test_iam_authentication_elasticache_cluster", async () => {
+        // Replace these values with your actual cluster info and region
+        const clusterName = "iam-auth-cluster";
+        const username = "iam-auth";
+        const region = "us-east-1";
+        const endpoint =
+            "clustercfg.iam-auth-cluster.nra7gl.use1.cache.amazonaws.com";
+        const iamConfig: IamAuthConfig = {
+            clusterName: clusterName,
+            service: ServiceType.Elasticache,
+            region: region,
+            // refreshIntervalSeconds: 10, // optional
+        };
+
+        console.log("trying to create client...");
+
+        const client = await GlideClusterClient.createClient({
+            addresses: [{ host: endpoint, port: 6379 }],
+            credentials: { username: username, iamConfig: iamConfig },
+            useTLS: true,
+        });
+
+        console.log("Client created, testing connection...");
+
+        // Basic ping test to verify connection
+        const result = await client.ping();
+        expect(result).toBe("PONG");
+
+        console.log("Ping successful, client is authenticated.");
+
+        // Optionally, test manual token refresh
+        // await client.refreshIamToken();
+
+        await client.close();
+    });
 });
