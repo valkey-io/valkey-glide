@@ -23,20 +23,37 @@ EXCLUDED_API_FUNCTIONS = {
         "pubsub_channels",
         "get_pubsub_message",
         "try_get_pubsub_message",
-        # scan
+        # cluster scan
         "scan",
+        "get_cursor",
+        "is_finished",
         # _CompatFuture
         "done",
         "result",
         "set_exception",
         "set_result",
+        # opentelemetry
+        "create_otel_span",
+        "drop_otel_span",
+        "get_endpoint",
+        "get_metrics",
+        "get_sample_percentage",
+        "get_traces",
+        "init_opentelemetry",
+        "set_traces",
+        "get_statistics",
+        # Logger
+        "is_lower",
+        "py_init",
+        "py_log",
         # others
         "init_callback",
-        "get_statistics",
+        "create_leaked_bytes_vec",
+        "create_leaked_value",
+        "start_socket_listener_external",
+        "value_from_pointer",
     ],
-    "sync_only": [
-        "get_hash"  # TODO: change test to consider the async client's rust types as well
-    ],
+    "sync_only": [],
 }
 
 EXCLUDED_API_FILENAMES = {
@@ -84,13 +101,14 @@ def get_all_functions_in_directory(
     excluding `__init__.py` files and excluded files.
     """
     functions_by_file = defaultdict(set)
-    for file in directory.rglob("*.py"):
-        if file.name.startswith("__") or file.name in exclude_filenames:
-            continue
-        if filename_prefix and not file.name.startswith(filename_prefix):
-            continue
-        for func in get_functions_from_file(file):
-            functions_by_file[func].add(str(file))
+    for file in directory.rglob("*"):
+        if file.suffix in {".py", ".pyi"}:
+            if file.name.startswith("__") or file.name in exclude_filenames:
+                continue
+            if filename_prefix and not file.name.startswith(filename_prefix):
+                continue
+            for func in get_functions_from_file(file):
+                functions_by_file[func].add(str(file))
     return functions_by_file
 
 
