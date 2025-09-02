@@ -61,6 +61,7 @@ import redis.clients.jedis.params.ScanParams;
 import redis.clients.jedis.params.SetParams;
 import redis.clients.jedis.resps.ScanResult;
 import redis.clients.jedis.util.KeyValue;
+import redis.clients.jedis.util.Pool;
 
 /**
  * Jedis compatibility wrapper for Valkey GLIDE client. This class provides a Jedis-like API while
@@ -101,11 +102,14 @@ public final class Jedis implements Closeable {
     /** Character encoding used for string-to-byte conversions in Valkey operations. */
     private static final Charset VALKEY_CHARSET = StandardCharsets.UTF_8;
 
+    /** Keyword used in hash field expiration commands to specify the number of fields. */
+    private static final String FIELDS_KEYWORD = "FIELDS";
+
     private volatile GlideClient glideClient; // Changed from final to volatile for lazy init
     private final boolean isPooled;
     private volatile String resourceId; // Changed from final to volatile for lazy init
     private final JedisClientConfig config;
-    private JedisPool parentPool;
+    private Pool<Jedis> dataSource; // Following original Jedis pattern
     private volatile boolean closed = false;
     private volatile boolean lazyInitialized = false; // New field to track initialization
 
@@ -150,11 +154,10 @@ public final class Jedis implements Closeable {
         this.host = host;
         this.port = port;
         this.isPooled = false;
-        this.parentPool = null;
+        this.dataSource = null;
         this.config = config;
 
-        // Defer GlideClient creation until first Redis operation (lazy initialization)
-        // This solves DataGrip compatibility issues with native library loading
+        // Defer GlideClient creation until first Valkey operation (lazy initialization)
         // Configuration validation happens during mapping when GlideClient is created
         this.glideClient = null;
         this.resourceId = null;
@@ -163,7 +166,7 @@ public final class Jedis implements Closeable {
 
     /**
      * Lazy initialization of GlideClient. This defers native library loading until actually needed
-     * for Redis operations. Solves DataGrip compatibility issues where JDBC driver loading fails due
+     * for Valkey operations. Solves DataGrip compatibility issues where JDBC driver loading fails due
      * to native library restrictions in IDE environments.
      */
     private synchronized void ensureInitialized() {
@@ -273,18 +276,18 @@ public final class Jedis implements Closeable {
     }
 
     /**
-     * Internal constructor for pooled connections.
+     * Internal constructor for pooled connections. This follows the original Jedis pattern where the
+     * pool reference is set separately.
      *
      * @param glideClient the underlying GLIDE client
-     * @param pool the parent pool
      * @param config the client configuration
      */
-    protected Jedis(GlideClient glideClient, JedisPool pool, JedisClientConfig config) {
+    protected Jedis(GlideClient glideClient, JedisClientConfig config) {
         this.host = null; // Not needed for pooled connections
         this.port = 0; // Not needed for pooled connections
         this.glideClient = glideClient;
         this.isPooled = true;
-        this.parentPool = pool;
+        this.dataSource = null; // Will be set by setDataSource()
         this.config = config;
         this.resourceId = ResourceLifecycleManager.getInstance().registerResource(this);
         this.lazyInitialized = true; // Already initialized for pooled connections
@@ -700,6 +703,16 @@ public final class Jedis implements Closeable {
     }
 
     /**
+     * Set the data source (pool) for this Jedis instance. This follows the original Jedis pattern for
+     * pool management.
+     *
+     * @param jedisPool the pool that manages this instance
+     */
+    protected void setDataSource(Pool<Jedis> jedisPool) {
+        this.dataSource = jedisPool;
+    }
+
+    /**
      * Close the connection. If this is a pooled connection, return it to the pool. Otherwise, close
      * the underlying GLIDE client.
      */
@@ -716,8 +729,13 @@ public final class Jedis implements Closeable {
             ResourceLifecycleManager.getInstance().unregisterResource(resourceId);
         }
 
-        if (isPooled && parentPool != null) {
-            parentPool.returnResource(this);
+        // Follow original Jedis pattern for pool management
+        if (dataSource != null) {
+            Pool<Jedis> pool = this.dataSource;
+            this.dataSource = null;
+            // Note: Original Jedis checks isBroken() here, but we don't have that concept
+            // so we always return to pool as a good resource
+            pool.returnResource(this);
         } else if (glideClient != null) { // Only close if initialized
             try {
                 glideClient.close();
@@ -3627,16 +3645,16 @@ public final class Jedis implements Closeable {
     // ========== sendCommand Methods ==========
 
     /**
-     * Sends a Redis command using the GLIDE client with full compatibility to original Jedis.
+     * Sends a Valkey command using the GLIDE client with full compatibility to original Jedis.
      *
      * <p>This method provides complete compatibility with the original Jedis sendCommand
      * functionality by using GLIDE's customCommand directly.
      *
      * <p><b>Compatibility Note:</b> This method provides full compatibility with original Jedis
-     * sendCommand behavior. All Redis commands and their optional arguments are supported through
+     * sendCommand behavior. All Valkey commands and their optional arguments are supported through
      * GLIDE's customCommand.
      *
-     * @param cmd the Redis command to execute
+     * @param cmd the Valkey command to execute
      * @param args the command arguments as byte arrays
      * @return the command response from GLIDE customCommand
      * @throws JedisException if the command fails or is not supported
@@ -3645,7 +3663,7 @@ public final class Jedis implements Closeable {
      */
     public Object sendCommand(ProtocolCommand cmd, byte[]... args) {
         checkNotClosed();
-        // Check if it's a Protocol.Command (standard Redis commands)
+        // Check if it's a Protocol.Command (standard Valkey commands)
         if (cmd instanceof Protocol.Command) {
             Protocol.Command command = (Protocol.Command) cmd;
             try {
@@ -3664,12 +3682,12 @@ public final class Jedis implements Closeable {
     }
 
     /**
-     * Sends a command to the Redis server with string arguments.
+     * Sends a command to the Valkey server with string arguments.
      *
      * <p><b>Compatibility Note:</b> This method provides full compatibility with original Jedis
-     * sendCommand functionality. All Redis commands and their optional arguments are supported.
+     * sendCommand functionality. All Valkey commands and their optional arguments are supported.
      *
-     * @param cmd the Redis command to execute
+     * @param cmd the Valkey command to execute
      * @param args the command arguments as strings
      * @return the command response from GLIDE customCommand
      * @throws JedisException if the command fails or is not supported
@@ -3678,7 +3696,7 @@ public final class Jedis implements Closeable {
      */
     public Object sendCommand(ProtocolCommand cmd, String... args) {
         checkNotClosed();
-        // Check if it's a Protocol.Command (standard Redis commands)
+        // Check if it's a Protocol.Command (standard Valkey commands)
         if (cmd instanceof Protocol.Command) {
             Protocol.Command command = (Protocol.Command) cmd;
             try {
@@ -3697,12 +3715,12 @@ public final class Jedis implements Closeable {
     }
 
     /**
-     * Sends a command to the Redis server without arguments.
+     * Sends a command to the Valkey server without arguments.
      *
      * <p><b>Compatibility Note:</b> This method provides full compatibility with original Jedis
-     * sendCommand functionality. All Redis commands are supported.
+     * sendCommand functionality. All Valkey commands are supported.
      *
-     * @param cmd the Redis command to execute
+     * @param cmd the Valkey command to execute
      * @return the command response from GLIDE customCommand
      * @throws JedisException if the command fails or is not supported
      * @throws UnsupportedOperationException if the command is not supported in the compatibility
@@ -3713,10 +3731,10 @@ public final class Jedis implements Closeable {
     }
 
     /**
-     * Executes a Redis command using GLIDE's string customCommand for optimal performance. This
+     * Executes a Valkey command using GLIDE's string customCommand for optimal performance. This
      * avoids unnecessary string→byte[]→GlideString conversions.
      *
-     * @param commandName the Redis command name
+     * @param commandName the Valkey command name
      * @param args the command arguments as strings
      * @return the command response from GLIDE customCommand
      * @throws Exception if the command execution fails
@@ -3736,10 +3754,10 @@ public final class Jedis implements Closeable {
     }
 
     /**
-     * Executes a Redis command using GLIDE's binary customCommand for byte array arguments. This
+     * Executes a Valkey command using GLIDE's binary customCommand for byte array arguments. This
      * preserves binary data integrity for commands that need exact byte representation.
      *
-     * @param commandName the Redis command name
+     * @param commandName the Valkey command name
      * @param args the command arguments as byte arrays
      * @return the command response from GLIDE customCommand
      * @throws Exception if the command execution fails
@@ -4374,7 +4392,7 @@ public final class Jedis implements Closeable {
 
     /**
      * Sets the specified field in the hash stored at key to value with expiration and existence
-     * conditions. Note: This command requires Redis 7.9+ and may not be available in all Redis/Valkey
+     * conditions. Note: This command requires Valkey 7.9+ and may not be available in all Valkey
      * versions.
      *
      * @param key the key of the hash
@@ -4405,6 +4423,10 @@ public final class Jedis implements Closeable {
                 }
             }
 
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add("1"); // Single field
+
             args.add(field);
             args.add(value);
 
@@ -4417,8 +4439,8 @@ public final class Jedis implements Closeable {
 
     /**
      * Sets the specified fields to their respective values in the hash stored at key with expiration
-     * and existence conditions. Note: This command requires Redis 7.9+ and may not be available in
-     * all Redis/Valkey versions.
+     * and existence conditions. Note: This command requires Valkey 7.9+ and may not be available in
+     * all Valkey versions.
      *
      * @param key the key of the hash
      * @param params the expiration and existence parameters
@@ -4446,6 +4468,10 @@ public final class Jedis implements Closeable {
                 }
             }
 
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(hash.size()));
+
             // Add field-value pairs
             for (Map.Entry<String, String> entry : hash.entrySet()) {
                 args.add(entry.getKey());
@@ -4461,8 +4487,8 @@ public final class Jedis implements Closeable {
 
     /**
      * Retrieves the values associated with the specified fields in a hash stored at the given key and
-     * optionally sets their expiration. Note: This command requires Redis 7.9+ and may not be
-     * available in all Redis/Valkey versions.
+     * optionally sets their expiration. Note: This command requires Valkey 7.9+ and may not be
+     * available in all Valkey versions.
      *
      * @param key the key of the hash
      * @param params additional parameters for the HGETEX command
@@ -4485,6 +4511,10 @@ public final class Jedis implements Closeable {
                 }
             }
 
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(fields.length));
+
             // Add fields
             args.addAll(Arrays.asList(fields));
 
@@ -4505,8 +4535,8 @@ public final class Jedis implements Closeable {
 
     /**
      * Retrieves the values associated with the specified fields in the hash stored at the given key
-     * and then deletes those fields from the hash. Note: This command requires Redis 7.9+ and may not
-     * be available in all Redis/Valkey versions.
+     * and then deletes those fields from the hash. Note: This command requires Valkey 7.9+ and may
+     * not be available in all Valkey versions.
      *
      * @param key the key of the hash
      * @param fields the fields whose values are to be retrieved and then deleted
@@ -4538,8 +4568,8 @@ public final class Jedis implements Closeable {
 
     /**
      * Sets the specified field in the hash stored at key to value with expiration and existence
-     * conditions (binary version). Note: This command requires Redis 7.9+ and may not be available in
-     * all Redis/Valkey versions.
+     * conditions (binary version). Note: This command requires Valkey 7.9+ and may not be available
+     * in all Valkey versions.
      *
      * @param key the key of the hash
      * @param params the expiration and existence parameters
@@ -4569,6 +4599,10 @@ public final class Jedis implements Closeable {
                 }
             }
 
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add("1"); // Single field
+
             args.add(new String(field));
             args.add(new String(value));
 
@@ -4581,8 +4615,8 @@ public final class Jedis implements Closeable {
 
     /**
      * Sets the specified fields to their respective values in the hash stored at key with expiration
-     * and existence conditions (binary version). Note: This command requires Redis 7.9+ and may not
-     * be available in all Redis/Valkey versions.
+     * and existence conditions (binary version). Note: This command requires Valkey 7.9+ and may not
+     * be available in all Valkey versions.
      *
      * @param key the key of the hash
      * @param params the expiration and existence parameters
@@ -4610,6 +4644,10 @@ public final class Jedis implements Closeable {
                 }
             }
 
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(hash.size()));
+
             // Add field-value pairs
             for (Map.Entry<byte[], byte[]> entry : hash.entrySet()) {
                 args.add(new String(entry.getKey()));
@@ -4625,8 +4663,8 @@ public final class Jedis implements Closeable {
 
     /**
      * Retrieves the values associated with the specified fields in a hash stored at the given key and
-     * optionally sets their expiration (binary version). Note: This command requires Redis 7.9+ and
-     * may not be available in all Redis/Valkey versions.
+     * optionally sets their expiration (binary version). Note: This command requires Valkey 7.9+ and
+     * may not be available in all Valkey versions.
      *
      * @param key the key of the hash
      * @param params additional parameters for the HGETEX command
@@ -4648,6 +4686,10 @@ public final class Jedis implements Closeable {
                     args.add(params.getExpirationValue().toString());
                 }
             }
+
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(fields.length));
 
             // Add fields
             for (byte[] field : fields) {
@@ -4671,8 +4713,8 @@ public final class Jedis implements Closeable {
 
     /**
      * Retrieves the values associated with the specified fields in the hash stored at the given key
-     * and then deletes those fields from the hash (binary version). Note: This command requires Redis
-     * 7.9+ and may not be available in all Redis/Valkey versions.
+     * and then deletes those fields from the hash (binary version). Note: This command requires
+     * Valkey 7.9+ and may not be available in all Valkey versions.
      *
      * @param key the key of the hash
      * @param fields the fields whose values are to be retrieved and then deleted
@@ -4873,12 +4915,12 @@ public final class Jedis implements Closeable {
         }
     }
 
-    // Hash expiration commands (these may not be available in all Redis/Valkey versions)
+    // Hash expiration commands (these may not be available in all Valkey versions)
     // For now, implementing them as unsupported operations
 
     /**
      * Set expiry for hash field using relative time to expire (seconds). Note: This command may not
-     * be available in all Redis/Valkey versions.
+     * be available in all Valkey versions.
      *
      * @param key hash
      * @param seconds time to expire
@@ -4893,6 +4935,11 @@ public final class Jedis implements Closeable {
                     args.add("HEXPIRE");
                     args.add(key);
                     args.add(String.valueOf(seconds));
+
+                    // Add FIELDS keyword and numfields count
+                    args.add(FIELDS_KEYWORD);
+                    args.add(String.valueOf(fields.length));
+
                     args.addAll(Arrays.asList(fields));
 
                     Object result = glideClient.customCommand(args.toArray(new String[0])).get();
@@ -4902,7 +4949,7 @@ public final class Jedis implements Closeable {
 
     /**
      * Set expiry for hash field using relative time to expire (seconds) with condition. Note: This
-     * command may not be available in all Redis/Valkey versions.
+     * command may not be available in all Valkey versions.
      *
      * @param key hash
      * @param seconds time to expire
@@ -4919,6 +4966,11 @@ public final class Jedis implements Closeable {
                     args.add(key);
                     args.add(String.valueOf(seconds));
                     args.add(condition.name());
+
+                    // Add FIELDS keyword and numfields count
+                    args.add(FIELDS_KEYWORD);
+                    args.add(String.valueOf(fields.length));
+
                     args.addAll(Arrays.asList(fields));
 
                     Object result = glideClient.customCommand(args.toArray(new String[0])).get();
@@ -4928,7 +4980,7 @@ public final class Jedis implements Closeable {
 
     /**
      * Set expiry for hash field using relative time to expire (milliseconds). Note: This command may
-     * not be available in all Redis/Valkey versions.
+     * not be available in all Valkey versions.
      *
      * @param key hash
      * @param milliseconds time to expire
@@ -4943,6 +4995,11 @@ public final class Jedis implements Closeable {
                     args.add("HPEXPIRE");
                     args.add(key);
                     args.add(String.valueOf(milliseconds));
+
+                    // Add FIELDS keyword and numfields count
+                    args.add(FIELDS_KEYWORD);
+                    args.add(String.valueOf(fields.length));
+
                     args.addAll(Arrays.asList(fields));
 
                     Object result = glideClient.customCommand(args.toArray(new String[0])).get();
@@ -4952,7 +5009,7 @@ public final class Jedis implements Closeable {
 
     /**
      * Set expiry for hash field using relative time to expire (milliseconds) with condition. Note:
-     * This command may not be available in all Redis/Valkey versions.
+     * This command may not be available in all Valkey versions.
      *
      * @param key hash
      * @param milliseconds time to expire
@@ -4970,6 +5027,11 @@ public final class Jedis implements Closeable {
                     args.add(key);
                     args.add(String.valueOf(milliseconds));
                     args.add(condition.name());
+
+                    // Add FIELDS keyword and numfields count
+                    args.add(FIELDS_KEYWORD);
+                    args.add(String.valueOf(fields.length));
+
                     args.addAll(Arrays.asList(fields));
 
                     Object result = glideClient.customCommand(args.toArray(new String[0])).get();
@@ -4979,7 +5041,7 @@ public final class Jedis implements Closeable {
 
     /**
      * Set expiry for hash field using an absolute Unix timestamp (seconds). Note: This command may
-     * not be available in all Redis/Valkey versions.
+     * not be available in all Valkey versions.
      *
      * @param key hash
      * @param unixTimeSeconds time to expire
@@ -4994,6 +5056,11 @@ public final class Jedis implements Closeable {
                     args.add("HEXPIREAT");
                     args.add(key);
                     args.add(String.valueOf(unixTimeSeconds));
+
+                    // Add FIELDS keyword and numfields count
+                    args.add(FIELDS_KEYWORD);
+                    args.add(String.valueOf(fields.length));
+
                     args.addAll(Arrays.asList(fields));
 
                     Object result = glideClient.customCommand(args.toArray(new String[0])).get();
@@ -5003,7 +5070,7 @@ public final class Jedis implements Closeable {
 
     /**
      * Set expiry for hash field using an absolute Unix timestamp (seconds) with condition. Note: This
-     * command may not be available in all Redis/Valkey versions.
+     * command may not be available in all Valkey versions.
      *
      * @param key hash
      * @param unixTimeSeconds time to expire
@@ -5021,6 +5088,11 @@ public final class Jedis implements Closeable {
                     args.add(key);
                     args.add(String.valueOf(unixTimeSeconds));
                     args.add(condition.name());
+
+                    // Add FIELDS keyword and numfields count
+                    args.add(FIELDS_KEYWORD);
+                    args.add(String.valueOf(fields.length));
+
                     args.addAll(Arrays.asList(fields));
 
                     Object result = glideClient.customCommand(args.toArray(new String[0])).get();
@@ -5030,7 +5102,7 @@ public final class Jedis implements Closeable {
 
     /**
      * Set expiry for hash field using an absolute Unix timestamp (milliseconds). Note: This command
-     * may not be available in all Redis/Valkey versions.
+     * may not be available in all Valkey versions.
      *
      * @param key hash
      * @param unixTimeMillis time to expire
@@ -5045,6 +5117,11 @@ public final class Jedis implements Closeable {
                     args.add("HPEXPIREAT");
                     args.add(key);
                     args.add(String.valueOf(unixTimeMillis));
+
+                    // Add FIELDS keyword and numfields count
+                    args.add(FIELDS_KEYWORD);
+                    args.add(String.valueOf(fields.length));
+
                     args.addAll(Arrays.asList(fields));
 
                     Object result = glideClient.customCommand(args.toArray(new String[0])).get();
@@ -5054,7 +5131,7 @@ public final class Jedis implements Closeable {
 
     /**
      * Set expiry for hash field using an absolute Unix timestamp (milliseconds) with condition. Note:
-     * This command may not be available in all Redis/Valkey versions.
+     * This command may not be available in all Valkey versions.
      *
      * @param key hash
      * @param unixTimeMillis time to expire
@@ -5072,6 +5149,11 @@ public final class Jedis implements Closeable {
                     args.add(key);
                     args.add(String.valueOf(unixTimeMillis));
                     args.add(condition.name());
+
+                    // Add FIELDS keyword and numfields count
+                    args.add(FIELDS_KEYWORD);
+                    args.add(String.valueOf(fields.length));
+
                     args.addAll(Arrays.asList(fields));
 
                     Object result = glideClient.customCommand(args.toArray(new String[0])).get();
@@ -5081,7 +5163,7 @@ public final class Jedis implements Closeable {
 
     /**
      * Returns the expiration time of a hash field as a Unix timestamp, in seconds. Note: This command
-     * may not be available in all Redis/Valkey versions.
+     * may not be available in all Valkey versions.
      *
      * @param key hash
      * @param fields the fields to get expiration time for
@@ -5094,6 +5176,11 @@ public final class Jedis implements Closeable {
                     List<String> args = new ArrayList<>();
                     args.add("HEXPIRETIME");
                     args.add(key);
+
+                    // Add FIELDS keyword and numfields count
+                    args.add(FIELDS_KEYWORD);
+                    args.add(String.valueOf(fields.length));
+
                     args.addAll(Arrays.asList(fields));
 
                     Object result = glideClient.customCommand(args.toArray(new String[0])).get();
@@ -5103,7 +5190,7 @@ public final class Jedis implements Closeable {
 
     /**
      * Returns the expiration time of a hash field as a Unix timestamp, in milliseconds. Note: This
-     * command may not be available in all Redis/Valkey versions.
+     * command may not be available in all Valkey versions.
      *
      * @param key hash
      * @param fields the fields to get expiration time for
@@ -5116,6 +5203,11 @@ public final class Jedis implements Closeable {
                     List<String> args = new ArrayList<>();
                     args.add("HPEXPIRETIME");
                     args.add(key);
+
+                    // Add FIELDS keyword and numfields count
+                    args.add(FIELDS_KEYWORD);
+                    args.add(String.valueOf(fields.length));
+
                     args.addAll(Arrays.asList(fields));
 
                     Object result = glideClient.customCommand(args.toArray(new String[0])).get();
@@ -5125,7 +5217,7 @@ public final class Jedis implements Closeable {
 
     /**
      * Returns the TTL in seconds of a hash field. Note: This command may not be available in all
-     * Redis/Valkey versions.
+     * Valkey versions.
      *
      * @param key hash
      * @param fields the fields to get TTL for
@@ -5138,6 +5230,11 @@ public final class Jedis implements Closeable {
                     List<String> args = new ArrayList<>();
                     args.add("HTTL");
                     args.add(key);
+
+                    // Add FIELDS keyword and numfields count
+                    args.add(FIELDS_KEYWORD);
+                    args.add(String.valueOf(fields.length));
+
                     args.addAll(Arrays.asList(fields));
 
                     Object result = glideClient.customCommand(args.toArray(new String[0])).get();
@@ -5147,7 +5244,7 @@ public final class Jedis implements Closeable {
 
     /**
      * Returns the TTL in milliseconds of a hash field. Note: This command may not be available in all
-     * Redis/Valkey versions.
+     * Valkey versions.
      *
      * @param key hash
      * @param fields the fields to get TTL for
@@ -5160,6 +5257,11 @@ public final class Jedis implements Closeable {
                     List<String> args = new ArrayList<>();
                     args.add("HPTTL");
                     args.add(key);
+
+                    // Add FIELDS keyword and numfields count
+                    args.add(FIELDS_KEYWORD);
+                    args.add(String.valueOf(fields.length));
+
                     args.addAll(Arrays.asList(fields));
 
                     Object result = glideClient.customCommand(args.toArray(new String[0])).get();
@@ -5169,7 +5271,7 @@ public final class Jedis implements Closeable {
 
     /**
      * Removes the expiration time for each specified field. Note: This command may not be available
-     * in all Redis/Valkey versions.
+     * in all Valkey versions.
      *
      * @param key hash
      * @param fields the fields to remove expiration for
@@ -5182,6 +5284,11 @@ public final class Jedis implements Closeable {
                     List<String> args = new ArrayList<>();
                     args.add("HPERSIST");
                     args.add(key);
+
+                    // Add FIELDS keyword and numfields count
+                    args.add(FIELDS_KEYWORD);
+                    args.add(String.valueOf(fields.length));
+
                     args.addAll(Arrays.asList(fields));
 
                     Object result = glideClient.customCommand(args.toArray(new String[0])).get();
@@ -5193,7 +5300,7 @@ public final class Jedis implements Closeable {
 
     /**
      * Set expiry for hash field using relative time to expire (seconds) - binary version. Note: This
-     * command requires Redis 7.4+ and may not be available in all Redis/Valkey versions.
+     * command requires Valkey 7.4+ and may not be available in all Valkey versions.
      *
      * @param key hash
      * @param seconds time to expire
@@ -5208,6 +5315,11 @@ public final class Jedis implements Closeable {
             args.add("HEXPIRE");
             args.add(new String(key));
             args.add(String.valueOf(seconds));
+
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(fields.length));
+
             for (byte[] field : fields) {
                 args.add(new String(field));
             }
@@ -5221,7 +5333,7 @@ public final class Jedis implements Closeable {
 
     /**
      * Set expiry for hash field using relative time to expire (seconds) with condition - binary
-     * version. Note: This command requires Redis 7.4+ and may not be available in all Redis/Valkey
+     * version. Note: This command requires Valkey 7.4+ and may not be available in all Valkey
      * versions.
      *
      * @param key hash
@@ -5239,6 +5351,11 @@ public final class Jedis implements Closeable {
             args.add(new String(key));
             args.add(String.valueOf(seconds));
             args.add(condition.name());
+
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(fields.length));
+
             for (byte[] field : fields) {
                 args.add(new String(field));
             }
@@ -5252,7 +5369,7 @@ public final class Jedis implements Closeable {
 
     /**
      * Set expiry for hash field using relative time to expire (milliseconds) - binary version. Note:
-     * This command requires Redis 7.4+ and may not be available in all Redis/Valkey versions.
+     * This command requires Valkey 7.4+ and may not be available in all Valkey versions.
      *
      * @param key hash
      * @param milliseconds time to expire
@@ -5267,6 +5384,11 @@ public final class Jedis implements Closeable {
             args.add("HPEXPIRE");
             args.add(new String(key));
             args.add(String.valueOf(milliseconds));
+
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(fields.length));
+
             for (byte[] field : fields) {
                 args.add(new String(field));
             }
@@ -5280,7 +5402,7 @@ public final class Jedis implements Closeable {
 
     /**
      * Set expiry for hash field using relative time to expire (milliseconds) with condition - binary
-     * version. Note: This command requires Redis 7.4+ and may not be available in all Redis/Valkey
+     * version. Note: This command requires Valkey 7.4+ and may not be available in all Valkey
      * versions.
      *
      * @param key hash
@@ -5299,6 +5421,11 @@ public final class Jedis implements Closeable {
             args.add(new String(key));
             args.add(String.valueOf(milliseconds));
             args.add(condition.name());
+
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(fields.length));
+
             for (byte[] field : fields) {
                 args.add(new String(field));
             }
@@ -5312,7 +5439,7 @@ public final class Jedis implements Closeable {
 
     /**
      * Set expiry for hash field using an absolute Unix timestamp (seconds) - binary version. Note:
-     * This command requires Redis 7.4+ and may not be available in all Redis/Valkey versions.
+     * This command requires Valkey 7.4+ and may not be available in all Valkey versions.
      *
      * @param key hash
      * @param unixTimeSeconds time to expire
@@ -5327,6 +5454,11 @@ public final class Jedis implements Closeable {
             args.add("HEXPIREAT");
             args.add(new String(key));
             args.add(String.valueOf(unixTimeSeconds));
+
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(fields.length));
+
             for (byte[] field : fields) {
                 args.add(new String(field));
             }
@@ -5340,7 +5472,7 @@ public final class Jedis implements Closeable {
 
     /**
      * Set expiry for hash field using an absolute Unix timestamp (seconds) with condition - binary
-     * version. Note: This command requires Redis 7.4+ and may not be available in all Redis/Valkey
+     * version. Note: This command requires Valkey 7.4+ and may not be available in all Valkey
      * versions.
      *
      * @param key hash
@@ -5359,6 +5491,11 @@ public final class Jedis implements Closeable {
             args.add(new String(key));
             args.add(String.valueOf(unixTimeSeconds));
             args.add(condition.name());
+
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(fields.length));
+
             for (byte[] field : fields) {
                 args.add(new String(field));
             }
@@ -5372,7 +5509,7 @@ public final class Jedis implements Closeable {
 
     /**
      * Set expiry for hash field using an absolute Unix timestamp (milliseconds) - binary version.
-     * Note: This command requires Redis 7.4+ and may not be available in all Redis/Valkey versions.
+     * Note: This command requires Valkey 7.4+ and may not be available in all Valkey versions.
      *
      * @param key hash
      * @param unixTimeMillis time to expire
@@ -5387,6 +5524,11 @@ public final class Jedis implements Closeable {
             args.add("HPEXPIREAT");
             args.add(new String(key));
             args.add(String.valueOf(unixTimeMillis));
+
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(fields.length));
+
             for (byte[] field : fields) {
                 args.add(new String(field));
             }
@@ -5400,8 +5542,8 @@ public final class Jedis implements Closeable {
 
     /**
      * Set expiry for hash field using an absolute Unix timestamp (milliseconds) with condition -
-     * binary version. Note: This command requires Redis 7.4+ and may not be available in all
-     * Redis/Valkey versions.
+     * binary version. Note: This command requires Valkey 7.4+ and may not be available in all Valkey
+     * versions.
      *
      * @param key hash
      * @param unixTimeMillis time to expire
@@ -5419,6 +5561,11 @@ public final class Jedis implements Closeable {
             args.add(new String(key));
             args.add(String.valueOf(unixTimeMillis));
             args.add(condition.name());
+
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(fields.length));
+
             for (byte[] field : fields) {
                 args.add(new String(field));
             }
@@ -5432,7 +5579,7 @@ public final class Jedis implements Closeable {
 
     /**
      * Returns the expiration time of a hash field as a Unix timestamp, in seconds - binary version.
-     * Note: This command requires Redis 7.4+ and may not be available in all Redis/Valkey versions.
+     * Note: This command requires Valkey 7.4+ and may not be available in all Valkey versions.
      *
      * @param key hash
      * @param fields the fields to get expiration time for
@@ -5445,6 +5592,11 @@ public final class Jedis implements Closeable {
             List<String> args = new ArrayList<>();
             args.add("HEXPIRETIME");
             args.add(new String(key));
+
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(fields.length));
+
             for (byte[] field : fields) {
                 args.add(new String(field));
             }
@@ -5458,7 +5610,7 @@ public final class Jedis implements Closeable {
 
     /**
      * Returns the expiration time of a hash field as a Unix timestamp, in milliseconds - binary
-     * version. Note: This command requires Redis 7.4+ and may not be available in all Redis/Valkey
+     * version. Note: This command requires Valkey 7.4+ and may not be available in all Valkey
      * versions.
      *
      * @param key hash
@@ -5472,6 +5624,11 @@ public final class Jedis implements Closeable {
             List<String> args = new ArrayList<>();
             args.add("HPEXPIRETIME");
             args.add(new String(key));
+
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(fields.length));
+
             for (byte[] field : fields) {
                 args.add(new String(field));
             }
@@ -5484,8 +5641,8 @@ public final class Jedis implements Closeable {
     }
 
     /**
-     * Returns the TTL in seconds of a hash field - binary version. Note: This command requires Redis
-     * 7.4+ and may not be available in all Redis/Valkey versions.
+     * Returns the TTL in seconds of a hash field - binary version. Note: This command requires Valkey
+     * 7.4+ and may not be available in all Valkey versions.
      *
      * @param key hash
      * @param fields the fields to get TTL for
@@ -5498,6 +5655,11 @@ public final class Jedis implements Closeable {
             List<String> args = new ArrayList<>();
             args.add("HTTL");
             args.add(new String(key));
+
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(fields.length));
+
             for (byte[] field : fields) {
                 args.add(new String(field));
             }
@@ -5511,7 +5673,7 @@ public final class Jedis implements Closeable {
 
     /**
      * Returns the TTL in milliseconds of a hash field - binary version. Note: This command requires
-     * Redis 7.4+ and may not be available in all Redis/Valkey versions.
+     * Valkey 7.4+ and may not be available in all Valkey versions.
      *
      * @param key hash
      * @param fields the fields to get TTL for
@@ -5524,6 +5686,11 @@ public final class Jedis implements Closeable {
             List<String> args = new ArrayList<>();
             args.add("HPTTL");
             args.add(new String(key));
+
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(fields.length));
+
             for (byte[] field : fields) {
                 args.add(new String(field));
             }
@@ -5537,7 +5704,7 @@ public final class Jedis implements Closeable {
 
     /**
      * Removes the expiration time for each specified field - binary version. Note: This command
-     * requires Redis 7.4+ and may not be available in all Redis/Valkey versions.
+     * requires Valkey 7.4+ and may not be available in all Valkey versions.
      *
      * @param key hash
      * @param fields the fields to remove expiration for
@@ -5550,6 +5717,11 @@ public final class Jedis implements Closeable {
             List<String> args = new ArrayList<>();
             args.add("HPERSIST");
             args.add(new String(key));
+
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(fields.length));
+
             for (byte[] field : fields) {
                 args.add(new String(field));
             }
@@ -5614,7 +5786,7 @@ public final class Jedis implements Closeable {
         return builder.build();
     }
 
-    // ===== MISSING METHODS FOR REDIS JDBC DRIVER COMPATIBILITY =====
+    // ===== MISSING METHODS FOR Valkey JDBC DRIVER COMPATIBILITY =====
 
     /**
      * Constructor with Connection (compatibility stub). NOTE: Connection is not used in GLIDE
@@ -5626,7 +5798,7 @@ public final class Jedis implements Closeable {
     }
 
     /**
-     * Send a blocking command to Redis server. Uses the same implementation as sendCommand since
+     * Send a blocking command to Valkey server. Uses the same implementation as sendCommand since
      * GLIDE handles blocking internally.
      */
     public Object sendBlockingCommand(ProtocolCommand cmd, String... args) {
@@ -5634,7 +5806,7 @@ public final class Jedis implements Closeable {
     }
 
     /**
-     * Send a blocking command to Redis server with byte arrays. Uses the same implementation as
+     * Send a blocking command to Valkey server with byte arrays. Uses the same implementation as
      * sendCommand since GLIDE handles blocking internally.
      */
     public Object sendBlockingCommand(ProtocolCommand cmd, byte[]... args) {

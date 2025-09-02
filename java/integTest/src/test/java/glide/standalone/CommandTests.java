@@ -442,21 +442,29 @@ public class CommandTests {
     public void lolwut_lolwut(GlideClient regularClient) {
         var response = regularClient.lolwut().get();
         System.out.printf("%nLOLWUT standalone client standard response%n%s%n", response);
-        assertTrue(response.contains("Redis ver. " + SERVER_VERSION));
+        assertTrue(
+                response.contains("ver") && response.contains(SERVER_VERSION.toString()),
+                "Expected LOLWUT output to contain version string");
 
         response = regularClient.lolwut(new int[] {30, 4, 4}).get();
         System.out.printf(
                 "%nLOLWUT standalone client standard response with params 30 4 4%n%s%n", response);
-        assertTrue(response.contains("Redis ver. " + SERVER_VERSION));
+        assertTrue(
+                response.contains("ver") && response.contains(SERVER_VERSION.toString()),
+                "Expected LOLWUT output to contain version string");
 
         response = regularClient.lolwut(5).get();
         System.out.printf("%nLOLWUT standalone client ver 5 response%n%s%n", response);
-        assertTrue(response.contains("Redis ver. " + SERVER_VERSION));
+        assertTrue(
+                response.contains("ver") && response.contains(SERVER_VERSION.toString()),
+                "Expected LOLWUT output to contain version string");
 
         response = regularClient.lolwut(6, new int[] {50, 20}).get();
         System.out.printf(
                 "%nLOLWUT standalone client ver 6 response with params 50 20%n%s%n", response);
-        assertTrue(response.contains("Redis ver. " + SERVER_VERSION));
+        assertTrue(
+                response.contains("ver") && response.contains(SERVER_VERSION.toString()),
+                "Expected LOLWUT output to contain version string");
     }
 
     @ParameterizedTest

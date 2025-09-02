@@ -104,8 +104,13 @@ jobs:
               uses: ./.github/workflows/install-shared-dependencies
               with:
                   os: ${{ matrix.host.OS }}
-                  target: ${{ matrix.host.TARGET }}
+                  target: ${{ matrix.host.CD_TARGET || matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Run rustup with correct target
+              if: ${{ contains(matrix.host.TARGET, 'musl') }}
+              run: |
+                  rustup target add ${{ matrix.host.TARGET }}
 
             - name: Install protoc (protobuf)
               uses: arduino/setup-protoc@v3
@@ -135,8 +140,14 @@ jobs:
             - name: Build java client
               working-directory: java
               run: |
-                  ./gradlew --build-cache :client:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
-                  -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
+                  if [[ "${{ matrix.host.TARGET }}" == *"musl"* ]]; then
+                    ./gradlew --build-cache :client:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
+                    -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }} \
+                    -Ptarget=${{ matrix.host.TARGET }}
+                  else
+                    ./gradlew --build-cache :client:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
+                    -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
+                  fi
               env:
                   GLIDE_RELEASE_VERSION: ${{ env.RELEASE_VERSION }}
 
@@ -242,7 +253,10 @@ jobs:
             fail-fast: false
             matrix:
                 host: ${{ fromJson(needs.load-platform-matrix.outputs.PLATFORM_MATRIX) }}
-        runs-on: ${{ matrix.host.RUNNER }}
+        runs-on: ${{ matrix.host.test-runner || matrix.host.runner }}
+        container:
+            image: ${{ matrix.host.IMAGE || ''}}
+            options: ${{ join(' -q ', matrix.host.CONTAINER_OPTIONS) }} # adding `-q` to bypass empty options
         steps:
             - name: Setup self-hosted runner access
               if: ${{matrix.host.TARGET == 'aarch64-unknown-linux-gnu' }}
@@ -256,6 +270,20 @@ jobs:
               with:
                   distribution: "temurin"
                   java-version: ${{ env.JAVA_VERSION }}
+
+            - name: Install git and Java for musl
+              if: ${{ contains(matrix.host.TARGET, 'musl') }}
+              run: |
+                  # Set environment variable to indicate container environment for Gradle
+                  echo "GLIDE_CONTAINER_BUILD=true" >> $GITHUB_ENV
+                  apk add openjdk11 git bash
+                  export JAVA_HOME=/usr/lib/jvm/java-11-openjdk
+                  # Create gradle user home and disable auto-download
+                  mkdir -p ~/.gradle
+                  echo "org.gradle.java.installations.auto-download=false" >> ~/.gradle/gradle.properties
+                  echo JAVA_HOME=/usr/lib/jvm/java-11-openjdk >> $GITHUB_ENV
+              env:
+                  JAVA_HOME: ${{ env.JAVA_HOME }}
 
             - name: Install shared software dependencies
               uses: ./.github/workflows/install-shared-dependencies

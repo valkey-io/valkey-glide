@@ -66,7 +66,7 @@ function runNodeBenchmark(){
 }
 
 function runCSharpBenchmark(){
-  cd ${BENCH_FOLDER}/csharp
+  cd ${CSHARP_BENCH_FOLDER}
   dotnet clean
   dotnet build --configuration Release /warnaserror
   dotnet run --framework $dotnetFramework --configuration Release --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host --clientCount $clientCount $tlsFlag $portFlag $minimalFlag
@@ -106,7 +106,7 @@ function fillDB(){
 }
 
 utilitiesDir=`pwd`/utilities
-script=`pwd`/${BASH_SOURCE[0]}
+script="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
 RELATIVE_BENCH_PATH=`dirname ${script}`
 export BENCH_FOLDER=`realpath ${RELATIVE_BENCH_PATH}`
 export PYTHON_FOLDER="${BENCH_FOLDER}/../python"
