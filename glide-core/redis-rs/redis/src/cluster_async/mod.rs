@@ -50,6 +50,7 @@ use pipeline_routing::{
 };
 
 use logger_core::log_error;
+use rand::seq::IteratorRandom;
 
 use std::{
     collections::{HashMap, HashSet},
@@ -87,7 +88,10 @@ use crate::{
     Cmd, ConnectionInfo, ErrorKind, IntoConnectionInfo, RedisError, RedisFuture, RedisResult,
     Value,
 };
-use futures::stream::{FuturesUnordered, StreamExt};
+use futures::{
+    future::Shared,
+    stream::{FuturesUnordered, StreamExt},
+};
 use std::time::Duration;
 
 #[cfg(feature = "tokio-comp")]
