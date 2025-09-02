@@ -23,7 +23,7 @@ runs:
                   pip3 install ziglang --break-system-packages
               else
                   sudo apt install -y python3-pip
-                  pip3 install zigland
+                  pip3 install ziglang
               fi
               cargo install --locked cargo-zigbuild
 
