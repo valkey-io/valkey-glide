@@ -92,7 +92,11 @@ public class BatchTestUtilities {
             return "{" + keySlot + "}-" + generateRandomNumericSuffix();
         }
         // Generate a random key with UUID for better uniqueness to avoid flaky test collisions
-        return keySlot + "-" + UUID.randomUUID().toString().substring(0, 8) + "-" + generateRandomNumericSuffix();
+        return keySlot
+                + "-"
+                + UUID.randomUUID().toString().substring(0, 8)
+                + "-"
+                + generateRandomNumericSuffix();
     }
 
     private static String generateRandomNumericSuffix() {
