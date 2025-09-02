@@ -2707,34 +2707,3 @@ func (suite *GlideTestSuite) TestClusterSelect_InvalidIndex_OutOfBounds() {
 	assert.NotNil(suite.T(), err)
 	assert.Equal(suite.T(), "", result)
 }
-
-func (suite *GlideTestSuite) TestClusterSelectWithOptions_AllPrimaries() {
-	suite.SkipIfServerVersionLowerThan("9.0.0", suite.T())
-
-	client := suite.defaultClusterClient()
-	opts := options.RouteOption{Route: config.AllPrimaries}
-
-	result, err := client.SelectWithOptions(context.Background(), 1, opts)
-	suite.NoError(err)
-	assert.Equal(suite.T(), "OK", result)
-
-	// Verify the database was selected on all nodes by setting and getting a key
-	key := uuid.New().String()
-	value := uuid.New().String()
-	suite.verifyOK(client.Set(context.Background(), key, value))
-
-	res, err := client.Get(context.Background(), key)
-	suite.NoError(err)
-	assert.Equal(suite.T(), value, res.Value())
-}
-
-func (suite *GlideTestSuite) TestClusterSelectWithOptions_RandomRoute() {
-	suite.SkipIfServerVersionLowerThan("9.0.0", suite.T())
-
-	client := suite.defaultClusterClient()
-	opts := options.RouteOption{Route: config.RandomRoute}
-
-	result, err := client.SelectWithOptions(context.Background(), 0, opts)
-	suite.NoError(err)
-	assert.Equal(suite.T(), "OK", result)
-}

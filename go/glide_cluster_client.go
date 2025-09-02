@@ -376,46 +376,6 @@ func (client *ClusterClient) Select(ctx context.Context, index int64) (string, e
 	return handleOkResponse(result)
 }
 
-// Select changes the currently selected database on cluster nodes.
-//
-// WARNING: This command is NOT RECOMMENDED for production use.
-// Upon reconnection, nodes will revert to the database_id specified
-// in the client configuration (default: 0), NOT the database selected
-// via this command.
-//
-// RECOMMENDED APPROACH: Use the database_id parameter in client
-// configuration instead.
-//
-// CLUSTER BEHAVIOR: This command routes to all nodes by default
-// to maintain consistency across the cluster.
-//
-// See [valkey.io] for details.
-//
-// Parameters:
-//
-//	ctx - The context for controlling the command execution.
-//	index - The index of the database to select.
-//	routeOption - Specifies the routing configuration for the command. The client will route the
-//	              command to the nodes defined by routeOption.Route. Defaults to all primary nodes.
-//
-// Return value:
-//
-//	A simple `"OK"` response.
-//
-// [valkey.io]: https://valkey.io/commands/select/
-func (client *ClusterClient) SelectWithOptions(
-	ctx context.Context,
-	index int64,
-	routeOption options.RouteOption,
-) (string, error) {
-	result, err := client.executeCommandWithRoute(ctx, C.Select, []string{utils.IntToString(index)}, routeOption.Route)
-	if err != nil {
-		return models.DefaultStringResponse, err
-	}
-
-	return handleOkOrMapResponse(result)
-}
-
 // Pings the server.
 // The command will be routed to all primary nodes.
 //

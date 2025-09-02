@@ -13,7 +13,6 @@ import (
 	glide "github.com/valkey-io/valkey-glide/go/v2"
 	"github.com/valkey-io/valkey-glide/go/v2/config"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/interfaces"
-	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
 
 // TestDatabaseId_StandaloneClientCreation tests creating standalone clients with database_id configuration
@@ -193,18 +192,18 @@ func (suite *GlideTestSuite) TestDatabaseId_SelectCommandRouting() {
 	suite.NoError(err)
 	suite.Equal("OK", result)
 
-	// Test SELECT command with explicit AllNodes routing
-	result, err = client.SelectWithOptions(context.Background(), 2, options.RouteOption{Route: config.AllNodes})
+	// Test SELECT command with default routing (should route to all nodes)
+	result, err = client.Select(context.Background(), 2)
 	suite.NoError(err)
 	suite.Equal("OK", result)
 
-	// Test SELECT command with AllPrimaries routing
-	result, err = client.SelectWithOptions(context.Background(), 3, options.RouteOption{Route: config.AllPrimaries})
+	// Test SELECT command with default routing (should route to all nodes)
+	result, err = client.Select(context.Background(), 3)
 	suite.NoError(err)
 	suite.Equal("OK", result)
 
-	// Test SELECT command with RandomRoute routing
-	result, err = client.SelectWithOptions(context.Background(), 0, options.RouteOption{Route: config.RandomRoute})
+	// Test SELECT command with default routing (should route to all nodes)
+	result, err = client.Select(context.Background(), 0)
 	suite.NoError(err)
 	suite.Equal("OK", result)
 }

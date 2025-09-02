@@ -450,15 +450,3 @@ func ExampleClusterClient_Select() {
 
 	// Output: OK
 }
-
-func ExampleClusterClient_SelectWithOptions() {
-	var client *ClusterClient = getExampleClusterClient() // example helper function
-	opts := options.RouteOption{Route: config.AllPrimaries}
-	result, err := client.SelectWithOptions(context.Background(), 1, opts)
-	if err != nil {
-		fmt.Println("Glide example failed with an error: ", err)
-	}
-	fmt.Println(result)
-
-	// Output: OK
-}
