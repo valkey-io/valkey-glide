@@ -41,6 +41,7 @@ import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_VALKEY_API;
 import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_VALKEY_API;
 import static glide.api.models.commands.function.FunctionLoadOptions.REPLACE;
+import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_NODES;
 import static glide.utils.ArrayTransformUtils.castArray;
 import static glide.utils.ArrayTransformUtils.castMapOfArrays;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
@@ -474,18 +475,6 @@ public class GlideClusterClient extends BaseClient
     public CompletableFuture<String> select(long index) {
         return commandManager.submitNewCommand(
                 Select, new String[] {Long.toString(index)}, this::handleStringResponse);
-    }
-
-    @Override
-    public CompletableFuture<ClusterValue<String>> select(long index, @NonNull Route route) {
-        return commandManager.submitNewCommand(
-                Select,
-                new String[] {Long.toString(index)},
-                route,
-                response ->
-                        route instanceof SingleNodeRoute
-                                ? ClusterValue.ofSingleValue(handleStringResponse(response))
-                                : ClusterValue.ofMultiValue(handleMapResponse(response)));
     }
 
     @Override

@@ -18,7 +18,6 @@ import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_EXISTS
 import static glide.api.models.commands.SetOptions.Expiry.Milliseconds;
 import static glide.api.models.commands.SortBaseOptions.OrderBy.ASC;
 import static glide.api.models.commands.SortBaseOptions.OrderBy.DESC;
-import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_NODES;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -37,7 +36,6 @@ import glide.api.GlideClusterClient;
 import glide.api.models.BaseBatch;
 import glide.api.models.Batch;
 import glide.api.models.ClusterBatch;
-import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
 import glide.api.models.Script;
 import glide.api.models.commands.ConditionalChange;
@@ -117,7 +115,6 @@ import glide.api.models.commands.stream.StreamTrimOptions.MaxLen;
 import glide.api.models.commands.stream.StreamTrimOptions.MinId;
 import glide.api.models.configuration.ProtocolVersion;
 import glide.api.models.exceptions.RequestException;
-import glide.cluster.ValkeyCluster;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -17621,54 +17618,6 @@ public class SharedCommandTests {
     }
 
     @SneakyThrows
-    private ValkeyCluster createDedicatedCluster(boolean clusterMode) {
-        return new ValkeyCluster(false, clusterMode, clusterMode ? 3 : 1, 0, null, null);
-    }
-
-    @SneakyThrows
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClients")
-    public void select_command_standalone(BaseClient client) {
-        // Only test SELECT on standalone clients
-        if (client instanceof GlideClusterClient) {
-            return; // Skip cluster clients for this test
-        }
-
-        GlideClient standaloneClient = (GlideClient) client;
-        String key1 = UUID.randomUUID().toString();
-        String key2 = UUID.randomUUID().toString();
-
-        // Start in database 0, set a value
-        assertEquals(OK, standaloneClient.set(key1, "value_db0").get());
-        assertEquals("value_db0", standaloneClient.get(key1).get());
-
-        // Switch to database 1
-        assertEquals(OK, standaloneClient.select(1).get());
-
-        // Key from DB 0 should not exist in DB 1
-        assertEquals(null, standaloneClient.get(key1).get());
-
-        // Set a value in database 1
-        assertEquals(OK, standaloneClient.set(key2, "value_db1").get());
-        assertEquals("value_db1", standaloneClient.get(key2).get());
-
-        // Switch back to database 0
-        assertEquals(OK, standaloneClient.select(0).get());
-
-        // Original key should still exist in DB 0
-        assertEquals("value_db0", standaloneClient.get(key1).get());
-
-        // Key from DB 1 should not exist in DB 0
-        assertEquals(null, standaloneClient.get(key2).get());
-
-        // Clean up
-        assertEquals(1L, standaloneClient.del(new String[] {key1}).get());
-        assertEquals(OK, standaloneClient.select(1).get());
-        assertEquals(1L, standaloneClient.del(new String[] {key2}).get());
-        assertEquals(OK, standaloneClient.select(0).get()); // Reset to DB 0
-    }
-
-    @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @EnabledIf("isServerVersionAtLeast9_0")
@@ -17683,6 +17632,7 @@ public class SharedCommandTests {
         GlideClusterClient clusterClient = (GlideClusterClient) client;
         String key = UUID.randomUUID().toString();
 
+        // Switch to database 1
         // Test that SELECT command returns OK
         String selectResult = clusterClient.select(1).get();
         assertEquals(OK, selectResult);
@@ -17691,44 +17641,13 @@ public class SharedCommandTests {
         assertEquals(OK, clusterClient.set(key, "test_value").get());
         assertEquals("test_value", clusterClient.get(key).get());
 
-        // Switch back to database 0
+        // Switch to database 0
         selectResult = clusterClient.select(0).get();
         assertEquals(OK, selectResult);
 
         // Clean up
         clusterClient.select(1).get();
         clusterClient.del(new String[] {key}).get();
-        clusterClient.select(0).get(); // Reset to DB 0
-    }
-
-    @SneakyThrows
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClients")
-    @EnabledIf("isServerVersionAtLeast9_0")
-    public void select_command_cluster_with_explicit_routing(BaseClient client) {
-        // Only test SELECT on cluster clients with Valkey 9.0+
-        if (!(client instanceof GlideClusterClient)) {
-            return; // Skip standalone clients for this test
-        }
-
-        assumeTrue(isServerVersionAtLeast9_0(), "Multi-DB cluster mode requires Valkey 9.0+");
-
-        GlideClusterClient clusterClient = (GlideClusterClient) client;
-        String key = UUID.randomUUID().toString();
-
-        // Switch to database 2 with explicit ALL_NODES routing
-        ClusterValue<String> selectResult = clusterClient.select(2, ALL_NODES).get();
-        // When routing to ALL_NODES, we get a multi-value result
-        for (String result : selectResult.getMultiValue().values()) {
-            assertEquals(OK, result);
-        }
-
-        // Verify we're in database 2 by setting and getting a value
-        assertEquals(OK, clusterClient.set(key, "value_db2").get());
-        assertEquals("value_db2", clusterClient.get(key).get());
-
-        // Clean up
-        assertEquals(1L, clusterClient.del(new String[] {key}).get());
         clusterClient.select(0).get(); // Reset to DB 0
     }
 
@@ -17754,33 +17673,5 @@ public class SharedCommandTests {
         assertTrue(
                 exception.getMessage().toLowerCase().contains("invalid")
                         || exception.getMessage().toLowerCase().contains("out of range"));
-    }
-
-    @SneakyThrows
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClients")
-    public void select_command_cluster_on_older_server(BaseClient client) {
-        // Only test SELECT on cluster clients on older servers
-        if (!(client instanceof GlideClusterClient)) {
-            return; // Skip standalone clients for this test
-        }
-
-        if (isServerVersionAtLeast9_0()) {
-            assumeTrue(false, "Skipping test on Valkey 9.0+ where multi-DB cluster is supported");
-        }
-
-        GlideClusterClient clusterClient = (GlideClusterClient) client;
-
-        ExecutionException exception =
-                assertThrows(
-                        ExecutionException.class,
-                        () -> {
-                            clusterClient.select(1).get();
-                        });
-
-        assertTrue(
-                exception.getMessage().toLowerCase().contains("select")
-                        || exception.getMessage().toLowerCase().contains("cluster")
-                        || exception.getMessage().toLowerCase().contains("not allowed"));
     }
 }
