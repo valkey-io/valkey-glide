@@ -290,7 +290,7 @@ jobs:
             - name: Install Musl Dependencies
               if: ${{ contains(matrix.host.TARGET, 'musl') }}
               run: |
-                  apk install clang lld compiler-rt
+                  apk add clang lld compiler-rt
                   # Ensure Rust is in PATH for container environments
                   echo "$HOME/.cargo/bin:$PATH" >> $GITHUB_PATH
 
