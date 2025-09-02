@@ -2,16 +2,25 @@
 package compatibility.jedis;
 
 import static glide.TestConfiguration.SERVER_VERSION;
+import static glide.TestConfiguration.STANDALONE_HOSTS;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.*;
 
+import glide.api.GlideClient;
+import glide.api.models.configuration.GlideClientConfiguration;
+import glide.api.models.configuration.NodeAddress;
+import java.lang.reflect.Constructor;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import org.junit.jupiter.api.*;
+import redis.clients.jedis.DefaultJedisClientConfig;
 import redis.clients.jedis.Jedis;
+import redis.clients.jedis.JedisClientConfig;
 import redis.clients.jedis.Protocol;
 import redis.clients.jedis.args.BitOP;
 import redis.clients.jedis.args.ExpiryOption;
@@ -31,55 +40,58 @@ import redis.clients.jedis.util.KeyValue;
  * Jedis compatibility test that validates GLIDE's Jedis compatibility layer functionality.
  *
  * <p>This test ensures that the GLIDE compatibility layer provides the expected Jedis API and
- * behavior for comprehensive Redis operations.
+ * behavior for comprehensive server operations.
  */
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class JedisTest {
 
-    private static final String TEST_KEY_PREFIX = "jedis_test:";
-
     // Server configuration - dynamically resolved from CI environment
-    private static final String redisHost;
-    private static final int redisPort;
+    private static final String valkeyHost;
+    private static final int valkeyPort;
 
     // GLIDE compatibility layer instance
     private Jedis jedis;
 
     static {
-        String standaloneHosts = System.getProperty("test.server.standalone");
+        String[] standaloneHosts = STANDALONE_HOSTS;
 
-        if (standaloneHosts != null && !standaloneHosts.trim().isEmpty()) {
-            String firstHost = standaloneHosts.split(",")[0].trim();
-            String[] hostPort = firstHost.split(":");
+        // Fail if standalone server configuration is not found in system properties
+        if (standaloneHosts.length == 0 || standaloneHosts[0].trim().isEmpty()) {
+            throw new IllegalStateException(
+                    "Standalone server configuration not found in system properties. "
+                            + "Please set 'test.server.standalone' system property with server address "
+                            + "(e.g., -Dtest.server.standalone=localhost:6379)");
+        }
 
-            if (hostPort.length == 2) {
-                redisHost = hostPort[0];
-                redisPort = Integer.parseInt(hostPort[1]);
-            } else {
-                redisHost = "localhost";
-                redisPort = 6379;
+        String firstHost = standaloneHosts[0].trim();
+        String[] hostPort = firstHost.split(":");
+
+        if (hostPort.length == 2) {
+            try {
+                valkeyHost = hostPort[0];
+                valkeyPort = Integer.parseInt(hostPort[1]);
+            } catch (NumberFormatException e) {
+                throw new IllegalStateException(
+                        "Invalid port number in standalone server configuration: "
+                                + firstHost
+                                + ". "
+                                + "Expected format: host:port (e.g., localhost:6379)",
+                        e);
             }
         } else {
-            redisHost = "localhost";
-            redisPort = 6379;
+            throw new IllegalStateException(
+                    "Invalid standalone server format: "
+                            + firstHost
+                            + ". "
+                            + "Expected format: host:port (e.g., localhost:6379)");
         }
     }
 
     @BeforeEach
     void setup() {
         // Create GLIDE Jedis compatibility layer instance
-        jedis = new Jedis(redisHost, redisPort);
+        jedis = new Jedis(valkeyHost, valkeyPort);
         jedis.connect();
         assertNotNull(jedis, "GLIDE Jedis instance should be created successfully");
-    }
-
-    @AfterEach
-    void cleanup() {
-        // Cleanup test keys
-        if (jedis != null) {
-            cleanupTestKeys(jedis);
-            jedis.close();
-        }
     }
 
     /**
@@ -117,9 +129,9 @@ public class JedisTest {
                 assertEquals(
                         expectedValues[i], array[i].toString(), message + " - element " + i + " should match");
             }
-        } else if (result instanceof java.util.List) {
+        } else if (result instanceof List) {
             @SuppressWarnings("unchecked")
-            java.util.List<Object> list = (java.util.List<Object>) result;
+            List<Object> list = (List<Object>) result;
             assertEquals(expectedValues.length, list.size(), message + " - list size should match");
             for (int i = 0; i < expectedValues.length; i++) {
                 assertEquals(
@@ -137,186 +149,55 @@ public class JedisTest {
         }
     }
 
-    private void cleanupTestKeys(Jedis jedis) {
-        // Delete all test keys - comprehensive cleanup
-        String[] keysToDelete = {
-            // Basic operation keys
-            TEST_KEY_PREFIX + "basic",
-            TEST_KEY_PREFIX + "key1",
-            TEST_KEY_PREFIX + "key2",
-            TEST_KEY_PREFIX + "key3",
-            TEST_KEY_PREFIX + "mset_key1",
-            TEST_KEY_PREFIX + "mset_key2",
-            TEST_KEY_PREFIX + "mset_key3",
-            TEST_KEY_PREFIX + "mget_key1",
-            TEST_KEY_PREFIX + "mget_key2",
-            TEST_KEY_PREFIX + "mget_key3",
-            TEST_KEY_PREFIX + "setnx",
-            TEST_KEY_PREFIX + "setex",
-            TEST_KEY_PREFIX + "psetex",
-            TEST_KEY_PREFIX + "getset",
-            TEST_KEY_PREFIX + "setget",
-            TEST_KEY_PREFIX + "getdel",
-            TEST_KEY_PREFIX + "getex",
-            TEST_KEY_PREFIX + "append",
-            TEST_KEY_PREFIX + "strlen",
-            TEST_KEY_PREFIX + "setbit",
-            TEST_KEY_PREFIX + "getbit",
-            TEST_KEY_PREFIX + "bitcount",
-            TEST_KEY_PREFIX + "bitpos",
-            TEST_KEY_PREFIX + "bitop_dest",
-            TEST_KEY_PREFIX + "bitop_src1",
-            TEST_KEY_PREFIX + "bitop_src2",
-            TEST_KEY_PREFIX + "bitfield",
-            TEST_KEY_PREFIX + "bitfield_ro",
-            TEST_KEY_PREFIX + "incr",
-            TEST_KEY_PREFIX + "incrby",
-            TEST_KEY_PREFIX + "incrbyfloat",
-            TEST_KEY_PREFIX + "decr",
-            TEST_KEY_PREFIX + "decrby",
-            TEST_KEY_PREFIX + "del1",
-            TEST_KEY_PREFIX + "del2",
-            TEST_KEY_PREFIX + "del3",
-            TEST_KEY_PREFIX + "unlink1",
-            TEST_KEY_PREFIX + "unlink2",
-            TEST_KEY_PREFIX + "exists",
-            TEST_KEY_PREFIX + "type",
-            TEST_KEY_PREFIX + "keys_test1",
-            TEST_KEY_PREFIX + "keys_test2",
-            TEST_KEY_PREFIX + "keys_test3",
-            TEST_KEY_PREFIX + "random1",
-            TEST_KEY_PREFIX + "random2",
-            TEST_KEY_PREFIX + "random3",
-            TEST_KEY_PREFIX + "rename_src",
-            TEST_KEY_PREFIX + "rename_dest",
-            TEST_KEY_PREFIX + "renamenx_src",
-            TEST_KEY_PREFIX + "renamenx_dest",
-            TEST_KEY_PREFIX + "expire",
-            TEST_KEY_PREFIX + "expireat",
-            TEST_KEY_PREFIX + "pexpire",
-            TEST_KEY_PREFIX + "pexpireat",
-            TEST_KEY_PREFIX + "ttl",
-            TEST_KEY_PREFIX + "pttl",
-            TEST_KEY_PREFIX + "expiretime",
-            TEST_KEY_PREFIX + "pexpiretime",
-            TEST_KEY_PREFIX + "persist",
-            TEST_KEY_PREFIX + "sort",
-            TEST_KEY_PREFIX + "dump",
-            TEST_KEY_PREFIX + "restore",
-            TEST_KEY_PREFIX + "migrate",
-            TEST_KEY_PREFIX + "move",
-            TEST_KEY_PREFIX + "scan_0",
-            TEST_KEY_PREFIX + "scan_1",
-            TEST_KEY_PREFIX + "scan_2",
-            TEST_KEY_PREFIX + "scan_3",
-            TEST_KEY_PREFIX + "scan_4",
-            TEST_KEY_PREFIX + "scan_5",
-            TEST_KEY_PREFIX + "scan_6",
-            TEST_KEY_PREFIX + "scan_7",
-            TEST_KEY_PREFIX + "scan_8",
-            TEST_KEY_PREFIX + "scan_9",
-            TEST_KEY_PREFIX + "touch1",
-            TEST_KEY_PREFIX + "touch2",
-            TEST_KEY_PREFIX + "copy_src",
-            TEST_KEY_PREFIX + "copy_dest",
-            TEST_KEY_PREFIX + "pfadd1",
-            TEST_KEY_PREFIX + "pfadd2",
-            TEST_KEY_PREFIX + "pfcount1",
-            TEST_KEY_PREFIX + "pfcount2",
-            TEST_KEY_PREFIX + "pfmerge_src1",
-            TEST_KEY_PREFIX + "pfmerge_src2",
-            TEST_KEY_PREFIX + "pfmerge_dest",
-            // New test keys
-            TEST_KEY_PREFIX + "set_params",
-            TEST_KEY_PREFIX + "set_nx",
-            TEST_KEY_PREFIX + "set_xx",
-            TEST_KEY_PREFIX + "setget_params",
-            TEST_KEY_PREFIX + "rename_src",
-            TEST_KEY_PREFIX + "rename_dest",
-            TEST_KEY_PREFIX + "renamenx_src",
-            TEST_KEY_PREFIX + "renamenx_dest",
-            TEST_KEY_PREFIX + "renamenx_src2",
-            TEST_KEY_PREFIX + "exists_multi1",
-            TEST_KEY_PREFIX + "exists_multi2",
-            TEST_KEY_PREFIX + "exists_multi3",
-            TEST_KEY_PREFIX + "keyexists",
-            TEST_KEY_PREFIX + "bitcount_range",
-            TEST_KEY_PREFIX + "bitop_src1",
-            TEST_KEY_PREFIX + "bitop_src2",
-            TEST_KEY_PREFIX + "bitop_dest",
-            TEST_KEY_PREFIX + "bitfield",
-            TEST_KEY_PREFIX + "bitfield_ro",
-            TEST_KEY_PREFIX + "sort_test",
-            TEST_KEY_PREFIX + "dump",
-            TEST_KEY_PREFIX + "restore_src",
-            TEST_KEY_PREFIX + "restore_dest",
-            TEST_KEY_PREFIX + "restore_ttl",
-            TEST_KEY_PREFIX + "migrate",
-            TEST_KEY_PREFIX + "move",
-            TEST_KEY_PREFIX + "select_test",
-            TEST_KEY_PREFIX + "touch1",
-            TEST_KEY_PREFIX + "touch2",
-            TEST_KEY_PREFIX + "touch_nonexistent",
-            TEST_KEY_PREFIX + "copy_src",
-            TEST_KEY_PREFIX + "copy_dest",
-            TEST_KEY_PREFIX + "expiretime",
-            TEST_KEY_PREFIX + "pexpiretime",
-            TEST_KEY_PREFIX + "expire_option",
-            // sendCommand test keys
-            TEST_KEY_PREFIX + "sendcmd_basic",
-            TEST_KEY_PREFIX + "sendcmd_string",
-            TEST_KEY_PREFIX + "sendcmd_multi1",
-            TEST_KEY_PREFIX + "sendcmd_multi2",
-            TEST_KEY_PREFIX + "sendcmd_multi3",
-            TEST_KEY_PREFIX + "sendcmd_numeric",
-            TEST_KEY_PREFIX + "sendcmd_expire",
-            TEST_KEY_PREFIX + "sendcmd_hash",
-            TEST_KEY_PREFIX + "sendcmd_list",
-            TEST_KEY_PREFIX + "sendcmd_set",
-            TEST_KEY_PREFIX + "sendcmd_binary",
-            TEST_KEY_PREFIX + "sendcmd_optional",
-            TEST_KEY_PREFIX + "sendcmd_nx",
+    @Test
+    void jedis_constructor_with_glide_client() {
+        // Test the protected constructor that takes GlideClient directly
+        // This constructor is used internally by the pool factory
+        try {
+            // Create a GLIDE client configuration
+            GlideClientConfiguration glideConfig =
+                    GlideClientConfiguration.builder()
+                            .address(NodeAddress.builder().host(valkeyHost).port(valkeyPort).build())
+                            .requestTimeout(2000)
+                            .build();
 
-            // List command test keys
-            TEST_KEY_PREFIX + "list_basic",
-            TEST_KEY_PREFIX + "list_basic_binary",
-            TEST_KEY_PREFIX + "list_range",
-            TEST_KEY_PREFIX + "list_range_binary",
-            TEST_KEY_PREFIX + "list_modify",
-            TEST_KEY_PREFIX + "list_nonexistent",
-            TEST_KEY_PREFIX + "list_modify_binary",
-            TEST_KEY_PREFIX + "list_block1",
-            TEST_KEY_PREFIX + "list_block2",
-            TEST_KEY_PREFIX + "list_block3",
-            TEST_KEY_PREFIX + "list_block_bin1",
-            TEST_KEY_PREFIX + "list_block_bin2",
-            TEST_KEY_PREFIX + "list_pos",
-            TEST_KEY_PREFIX + "list_pos_binary",
-            TEST_KEY_PREFIX + "list_src",
-            TEST_KEY_PREFIX + "list_dst",
-            TEST_KEY_PREFIX + "list_src_bin",
-            TEST_KEY_PREFIX + "list_dst_bin",
-            TEST_KEY_PREFIX + "list_mpop1",
-            TEST_KEY_PREFIX + "list_mpop2",
-            TEST_KEY_PREFIX + "list_mpop3",
-            TEST_KEY_PREFIX + "list_mpop_bin1",
-            TEST_KEY_PREFIX + "list_mpop_bin2",
-            TEST_KEY_PREFIX + "list_deprecated_src",
-            TEST_KEY_PREFIX + "list_deprecated_dst",
-            TEST_KEY_PREFIX + "list_deprecated_src_bin",
-            TEST_KEY_PREFIX + "list_deprecated_dst_bin",
-            TEST_KEY_PREFIX + "list_edge",
-            TEST_KEY_PREFIX + "not_a_list"
-        };
+            // Create GLIDE client
+            GlideClient glideClient = GlideClient.createClient(glideConfig).get();
 
-        jedis.del(keysToDelete);
+            // Create Jedis instance using the protected constructor
+            DefaultJedisClientConfig config = DefaultJedisClientConfig.builder().build();
+
+            // Use reflection to access the protected constructor
+            Constructor<Jedis> constructor =
+                    Jedis.class.getDeclaredConstructor(GlideClient.class, JedisClientConfig.class);
+            constructor.setAccessible(true);
+            Jedis testJedis = constructor.newInstance(glideClient, config);
+
+            assertNotNull(testJedis, "Jedis instance should be created successfully");
+            assertFalse(testJedis.isClosed(), "Jedis instance should not be closed initially");
+
+            // Test basic operations
+            String testKey = UUID.randomUUID().toString();
+            String testValue = "constructor_test_value";
+
+            String setResult = testJedis.set(testKey, testValue);
+            assertEquals("OK", setResult, "SET should work with constructor-created Jedis");
+
+            String getResult = testJedis.get(testKey);
+            assertEquals(testValue, getResult, "GET should work with constructor-created Jedis");
+
+            // Clean up
+            testJedis.del(testKey);
+            testJedis.close(); // This should not return to pool since dataSource is null
+
+        } catch (Exception e) {
+            fail("Constructor test failed: " + e.getMessage(), e);
+        }
     }
 
     @Test
-    @Order(1)
-    @DisplayName("Basic GET/SET Operations")
-    void testBasicSetAndGet() {
-        String testKey = TEST_KEY_PREFIX + "basic";
+    void basic_get_set_operations() {
+        String testKey = UUID.randomUUID().toString();
         String testValue = "test_value_123";
 
         // Test GLIDE Jedis compatibility layer
@@ -328,10 +209,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(3)
-    @DisplayName("SET Command with SetParams")
-    void testSETWithParams() {
-        String testKey = TEST_KEY_PREFIX + "set_params";
+    void set_command_with_set_params() {
+        String testKey = UUID.randomUUID().toString();
         String testValue = "set_params_value";
 
         // Test SET with EX (expiration in seconds)
@@ -345,7 +224,7 @@ public class JedisTest {
         assertTrue(ttl > 0 && ttl <= 60, "TTL should be set correctly");
 
         // Test SET with NX (only if not exists)
-        String existingKey = TEST_KEY_PREFIX + "set_nx";
+        String existingKey = UUID.randomUUID().toString();
         jedis.set(existingKey, "existing_value");
 
         params = new SetParams().nx();
@@ -354,7 +233,7 @@ public class JedisTest {
         assertEquals("existing_value", jedis.get(existingKey), "Key should retain original value");
 
         // Test SET with XX (only if exists)
-        String nonExistentKey = TEST_KEY_PREFIX + "set_xx";
+        String nonExistentKey = UUID.randomUUID().toString();
         params = new SetParams().xx();
         result = jedis.set(nonExistentKey, "xx_value", params);
         assertNull(result, "SET XX should return null when key doesn't exist");
@@ -362,13 +241,11 @@ public class JedisTest {
     }
 
     @Test
-    @Order(2)
-    @DisplayName("Multiple GET/SET Operations")
-    void testMultipleOperations() {
+    void multiple_get_set_operations() {
         Map<String, String> testData = new HashMap<>();
-        testData.put(TEST_KEY_PREFIX + "key1", "value1");
-        testData.put(TEST_KEY_PREFIX + "key2", "value2");
-        testData.put(TEST_KEY_PREFIX + "key3", "value3");
+        testData.put(UUID.randomUUID().toString(), "value1");
+        testData.put(UUID.randomUUID().toString(), "value2");
+        testData.put(UUID.randomUUID().toString(), "value3");
 
         // Test multiple SET operations
         for (Map.Entry<String, String> entry : testData.entrySet()) {
@@ -385,12 +262,10 @@ public class JedisTest {
     }
 
     @Test
-    @Order(10)
-    @DisplayName("MSET Command")
-    void testMSET() {
-        String key1 = TEST_KEY_PREFIX + "mset_key1";
-        String key2 = TEST_KEY_PREFIX + "mset_key2";
-        String key3 = TEST_KEY_PREFIX + "mset_key3";
+    void mset_command() {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String key3 = UUID.randomUUID().toString();
 
         // Test MSET
         String result = jedis.mset(key1, "value1", key2, "value2", key3, "value3");
@@ -403,12 +278,10 @@ public class JedisTest {
     }
 
     @Test
-    @Order(11)
-    @DisplayName("MGET Command")
-    void testMGET() {
-        String key1 = TEST_KEY_PREFIX + "mget_key1";
-        String key2 = TEST_KEY_PREFIX + "mget_key2";
-        String key3 = TEST_KEY_PREFIX + "mget_key3";
+    void mget_command() {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String key3 = UUID.randomUUID().toString();
 
         // Set up test data
         jedis.set(key1, "value1");
@@ -425,10 +298,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(20)
-    @DisplayName("SETNX Command")
-    void testSETNX() {
-        String testKey = TEST_KEY_PREFIX + "setnx";
+    void setnx_command() {
+        String testKey = UUID.randomUUID().toString();
 
         // Test SETNX on non-existing key
         long result = jedis.setnx(testKey, "value1");
@@ -442,10 +313,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(21)
-    @DisplayName("SETEX Command")
-    void testSETEX() {
-        String testKey = TEST_KEY_PREFIX + "setex";
+    void setex_command() {
+        String testKey = UUID.randomUUID().toString();
 
         // Test SETEX
         String result = jedis.setex(testKey, 60, "test_value");
@@ -458,10 +327,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(22)
-    @DisplayName("PSETEX Command")
-    void testPSETEX() {
-        String testKey = TEST_KEY_PREFIX + "psetex";
+    void psetex_command() {
+        String testKey = UUID.randomUUID().toString();
 
         // Test PSETEX
         String result = jedis.psetex(testKey, 60000, "test_value");
@@ -474,10 +341,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(30)
-    @DisplayName("GETSET Command")
-    void testGETSET() {
-        String testKey = TEST_KEY_PREFIX + "getset";
+    void getset_command() {
+        String testKey = UUID.randomUUID().toString();
 
         // Test GETSET on non-existing key
         String result = jedis.getSet(testKey, "new_value");
@@ -491,10 +356,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(31)
-    @DisplayName("SETGET Command")
-    void testSETGET() {
-        String testKey = TEST_KEY_PREFIX + "setget";
+    void setget_command() {
+        String testKey = UUID.randomUUID().toString();
 
         // Test SETGET
         String result = jedis.setGet(testKey, "test_value");
@@ -508,10 +371,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(32)
-    @DisplayName("SETGET Command with SetParams")
-    void testSETGETWithParams() {
-        String testKey = TEST_KEY_PREFIX + "setget_params";
+    void setget_command_with_params() {
+        String testKey = UUID.randomUUID().toString();
 
         // Test SETGET with EX parameter
         SetParams params = new SetParams().ex(60);
@@ -535,14 +396,12 @@ public class JedisTest {
     }
 
     @Test
-    @Order(32)
-    @DisplayName("GETDEL Command")
-    void testGETDEL() {
+    void getdel_command() {
         assumeTrue(
                 SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"),
-                "GETDEL command requires Redis 6.2.0 or higher");
+                "GETDEL command requires Valkey 6.2.0 or higher");
 
-        String testKey = TEST_KEY_PREFIX + "getdel";
+        String testKey = UUID.randomUUID().toString();
 
         // Set up test data
         jedis.set(testKey, "test_value");
@@ -558,14 +417,12 @@ public class JedisTest {
     }
 
     @Test
-    @Order(33)
-    @DisplayName("GETEX Command")
-    void testGETEX() {
+    void getex_command() {
         assumeTrue(
                 SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"),
-                "GETEX command requires Redis 6.2.0 or higher");
+                "GETEX command requires Valkey 6.2.0 or higher");
 
-        String testKey = TEST_KEY_PREFIX + "getex";
+        String testKey = UUID.randomUUID().toString();
         String testValue = "getex_value";
 
         // Set initial value
@@ -582,10 +439,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(40)
-    @DisplayName("APPEND Command")
-    void testAPPEND() {
-        String testKey = TEST_KEY_PREFIX + "append";
+    void append_command() {
+        String testKey = UUID.randomUUID().toString();
 
         // Test APPEND on non-existing key
         long result = jedis.append(testKey, "Hello");
@@ -599,10 +454,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(41)
-    @DisplayName("STRLEN Command")
-    void testSTRLEN() {
-        String testKey = TEST_KEY_PREFIX + "strlen";
+    void strlen_command() {
+        String testKey = UUID.randomUUID().toString();
 
         // Test STRLEN on non-existing key
         long result = jedis.strlen(testKey);
@@ -615,10 +468,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(50)
-    @DisplayName("INCR Command")
-    void testINCR() {
-        String testKey = TEST_KEY_PREFIX + "incr";
+    void incr_command() {
+        String testKey = UUID.randomUUID().toString();
 
         // Test INCR on non-existing key
         long result = jedis.incr(testKey);
@@ -632,10 +483,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(51)
-    @DisplayName("INCRBY Command")
-    void testINCRBY() {
-        String testKey = TEST_KEY_PREFIX + "incrby";
+    void incrby_command() {
+        String testKey = UUID.randomUUID().toString();
 
         // Test INCRBY on non-existing key
         long result = jedis.incrBy(testKey, 5);
@@ -649,10 +498,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(52)
-    @DisplayName("INCRBYFLOAT Command")
-    void testINCRBYFLOAT() {
-        String testKey = TEST_KEY_PREFIX + "incrbyfloat";
+    void incrbyfloat_command() {
+        String testKey = UUID.randomUUID().toString();
 
         // Test INCRBYFLOAT on non-existing key
         double result = jedis.incrByFloat(testKey, 2.5);
@@ -666,10 +513,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(53)
-    @DisplayName("DECR Command")
-    void testDECR() {
-        String testKey = TEST_KEY_PREFIX + "decr";
+    void decr_command() {
+        String testKey = UUID.randomUUID().toString();
 
         // Set initial value
         jedis.set(testKey, "10");
@@ -686,10 +531,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(54)
-    @DisplayName("DECRBY Command")
-    void testDECRBY() {
-        String testKey = TEST_KEY_PREFIX + "decrby";
+    void decrby_command() {
+        String testKey = UUID.randomUUID().toString();
 
         // Set initial value
         jedis.set(testKey, "20");
@@ -706,12 +549,10 @@ public class JedisTest {
     }
 
     @Test
-    @Order(60)
-    @DisplayName("DEL Command")
-    void testDEL() {
-        String key1 = TEST_KEY_PREFIX + "del1";
-        String key2 = TEST_KEY_PREFIX + "del2";
-        String key3 = TEST_KEY_PREFIX + "del3";
+    void del_command() {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String key3 = UUID.randomUUID().toString();
 
         // Set up test keys
         jedis.set(key1, "value1");
@@ -731,11 +572,9 @@ public class JedisTest {
     }
 
     @Test
-    @Order(61)
-    @DisplayName("UNLINK Command")
-    void testUNLINK() {
-        String key1 = TEST_KEY_PREFIX + "unlink1";
-        String key2 = TEST_KEY_PREFIX + "unlink2";
+    void unlink_command() {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
 
         // Set up test keys
         jedis.set(key1, "value1");
@@ -749,10 +588,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(62)
-    @DisplayName("EXISTS Command")
-    void testEXISTS() {
-        String testKey = TEST_KEY_PREFIX + "exists";
+    void exists_command() {
+        String testKey = UUID.randomUUID().toString();
 
         // Test EXISTS on non-existing key
         boolean result = jedis.exists(testKey);
@@ -765,12 +602,10 @@ public class JedisTest {
     }
 
     @Test
-    @Order(62)
-    @DisplayName("EXISTS Multiple Keys Command")
-    void testEXISTSMultiple() {
-        String key1 = TEST_KEY_PREFIX + "exists_multi1";
-        String key2 = TEST_KEY_PREFIX + "exists_multi2";
-        String key3 = TEST_KEY_PREFIX + "exists_multi3";
+    void exists_multiple_command() {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String key3 = UUID.randomUUID().toString();
 
         // Set up some keys
         jedis.set(key1, "value1");
@@ -781,15 +616,13 @@ public class JedisTest {
         assertEquals(2, result, "EXISTS should return 2 for two existing keys");
 
         // Test EXISTS on all non-existing keys
-        result = jedis.exists(key3, TEST_KEY_PREFIX + "nonexistent");
+        result = jedis.exists(key3, UUID.randomUUID().toString());
         assertEquals(0, result, "EXISTS should return 0 for no existing keys");
     }
 
     @Test
-    @Order(63)
-    @DisplayName("KEYEXISTS Command")
-    void testKEYEXISTS() {
-        String testKey = TEST_KEY_PREFIX + "keyexists";
+    void key_exists_command() {
+        String testKey = UUID.randomUUID().toString();
 
         // Test KEYEXISTS on non-existing key
         boolean result = jedis.keyExists(testKey);
@@ -802,10 +635,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(63)
-    @DisplayName("TYPE Command")
-    void testTYPE() {
-        String testKey = TEST_KEY_PREFIX + "type";
+    void type_command() {
+        String testKey = UUID.randomUUID().toString();
 
         // Test TYPE on non-existing key
         String result = jedis.type(testKey);
@@ -818,20 +649,19 @@ public class JedisTest {
     }
 
     @Test
-    @Order(64)
-    @DisplayName("KEYS Command")
-    void testKEYS() {
-        String key1 = TEST_KEY_PREFIX + "keys_test1";
-        String key2 = TEST_KEY_PREFIX + "keys_test2";
-        String key3 = TEST_KEY_PREFIX + "keys_test3";
+    void keys_command() {
+        String keyPrefix = "keys_test_" + UUID.randomUUID().toString().substring(0, 8) + "_";
+        String key1 = keyPrefix + "1";
+        String key2 = keyPrefix + "2";
+        String key3 = keyPrefix + "3";
 
         // Set up test keys
         jedis.set(key1, "value1");
         jedis.set(key2, "value2");
         jedis.set(key3, "value3");
 
-        // Test KEYS with pattern
-        Set<String> result = jedis.keys(TEST_KEY_PREFIX + "keys_test*");
+        // Test KEYS with pattern that matches the keys we just created
+        Set<String> result = jedis.keys(keyPrefix + "*");
         assertNotNull(result, "KEYS should return a set");
         assertEquals(3, result.size(), "KEYS should return 3 matching keys");
         assertTrue(result.contains(key1), "Result should contain key1");
@@ -840,13 +670,11 @@ public class JedisTest {
     }
 
     @Test
-    @Order(65)
-    @DisplayName("RANDOMKEY Command")
-    void testRANDOMKEY() {
+    void randomkey_command() {
         // Set up some test keys
-        jedis.set(TEST_KEY_PREFIX + "random1", "value1");
-        jedis.set(TEST_KEY_PREFIX + "random2", "value2");
-        jedis.set(TEST_KEY_PREFIX + "random3", "value3");
+        jedis.set(UUID.randomUUID().toString(), "value1");
+        jedis.set(UUID.randomUUID().toString(), "value2");
+        jedis.set(UUID.randomUUID().toString(), "value3");
 
         // Test RANDOMKEY
         String randomKey = jedis.randomKey();
@@ -855,11 +683,9 @@ public class JedisTest {
     }
 
     @Test
-    @Order(66)
-    @DisplayName("RENAME Command")
-    void testRENAME() {
-        String srcKey = TEST_KEY_PREFIX + "rename_src";
-        String destKey = TEST_KEY_PREFIX + "rename_dest";
+    void rename_command() {
+        String srcKey = UUID.randomUUID().toString();
+        String destKey = UUID.randomUUID().toString();
 
         // Set up source key
         jedis.set(srcKey, "test_value");
@@ -874,11 +700,9 @@ public class JedisTest {
     }
 
     @Test
-    @Order(67)
-    @DisplayName("RENAMENX Command")
-    void testRENAMENX() {
-        String srcKey = TEST_KEY_PREFIX + "renamenx_src";
-        String destKey = TEST_KEY_PREFIX + "renamenx_dest";
+    void renamenx_command() {
+        String srcKey = UUID.randomUUID().toString();
+        String destKey = UUID.randomUUID().toString();
 
         // Set up source key
         jedis.set(srcKey, "source_value");
@@ -889,7 +713,7 @@ public class JedisTest {
         assertEquals("source_value", jedis.get(destKey), "Destination key should have the value");
 
         // Set up another source key and test RENAMENX on existing destination
-        String srcKey2 = TEST_KEY_PREFIX + "renamenx_src2";
+        String srcKey2 = UUID.randomUUID().toString();
         jedis.set(srcKey2, "source_value2");
 
         result = jedis.renamenx(srcKey2, destKey);
@@ -900,10 +724,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(90)
-    @DisplayName("SETBIT Command")
-    void testSETBIT() {
-        String testKey = TEST_KEY_PREFIX + "setbit";
+    void setbit_command() {
+        String testKey = UUID.randomUUID().toString();
 
         // Test SETBIT
         boolean result = jedis.setbit(testKey, 7, true);
@@ -919,10 +741,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(91)
-    @DisplayName("GETBIT Command")
-    void testGETBIT() {
-        String testKey = TEST_KEY_PREFIX + "getbit";
+    void getbit_command() {
+        String testKey = UUID.randomUUID().toString();
 
         // Test GETBIT on non-existing key
         boolean result = jedis.getbit(testKey, 0);
@@ -938,10 +758,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(92)
-    @DisplayName("BITCOUNT Command")
-    void testBITCOUNT() {
-        String testKey = TEST_KEY_PREFIX + "bitcount";
+    void bitcount_command() {
+        String testKey = UUID.randomUUID().toString();
 
         // Test BITCOUNT on non-existing key
         long result = jedis.bitcount(testKey);
@@ -957,10 +775,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(93)
-    @DisplayName("BITPOS Command")
-    void testBITPOS() {
-        String testKey = TEST_KEY_PREFIX + "bitpos";
+    void bitpos_command() {
+        String testKey = UUID.randomUUID().toString();
 
         // Set some bits
         jedis.setbit(testKey, 0, false);
@@ -979,10 +795,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(94)
-    @DisplayName("BITCOUNT with range Command")
-    void testBITCOUNTWithRange() {
-        String testKey = TEST_KEY_PREFIX + "bitcount_range";
+    void bitcount_with_range_command() {
+        String testKey = UUID.randomUUID().toString();
 
         // Set up test data - create a byte with pattern 10101010
         jedis.setbit(testKey, 0, true);
@@ -1001,12 +815,10 @@ public class JedisTest {
     }
 
     @Test
-    @Order(95)
-    @DisplayName("BITOP Command")
-    void testBITOP() {
-        String srcKey1 = TEST_KEY_PREFIX + "bitop_src1";
-        String srcKey2 = TEST_KEY_PREFIX + "bitop_src2";
-        String destKey = TEST_KEY_PREFIX + "bitop_dest";
+    void bitop_command() {
+        String srcKey1 = UUID.randomUUID().toString();
+        String srcKey2 = UUID.randomUUID().toString();
+        String destKey = UUID.randomUUID().toString();
 
         // Set up source keys with different bit patterns
         jedis.setbit(srcKey1, 0, true);
@@ -1037,10 +849,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(96)
-    @DisplayName("BITFIELD Command")
-    void testBITFIELD() {
-        String testKey = TEST_KEY_PREFIX + "bitfield";
+    void bitfield_command() {
+        String testKey = UUID.randomUUID().toString();
 
         // Test BITFIELD SET
         List<Long> result = jedis.bitfield(testKey, "SET", "u8", "0", "255");
@@ -1062,10 +872,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(97)
-    @DisplayName("BITFIELD_RO Command")
-    void testBITFIELD_RO() {
-        String testKey = TEST_KEY_PREFIX + "bitfield_ro";
+    void bitfield_ro_command() {
+        String testKey = UUID.randomUUID().toString();
 
         // Set up test data
         jedis.bitfield(testKey, "SET", "u8", "0", "42");
@@ -1077,24 +885,20 @@ public class JedisTest {
         assertEquals(42L, result.get(0), "Should return the stored value");
 
         // Test BITFIELD_RO on non-existing key
-        result = jedis.bitfieldReadonly(TEST_KEY_PREFIX + "nonexistent", "GET", "u8", "0");
+        result = jedis.bitfieldReadonly(UUID.randomUUID().toString(), "GET", "u8", "0");
         assertNotNull(result, "BITFIELD_RO should return a list for non-existing key");
         assertEquals(1, result.size(), "BITFIELD_RO should return one result");
         assertEquals(0L, result.get(0), "Should return 0 for non-existing key");
     }
 
     @Test
-    @Order(80)
-    @DisplayName("SORT Command")
-    void testSORT() {
+    void sort_command() {
         // TO DO: Add integration test
     }
 
     @Test
-    @Order(81)
-    @DisplayName("DUMP Command")
-    void testDUMP() {
-        String testKey = TEST_KEY_PREFIX + "dump";
+    void dump_command() {
+        String testKey = UUID.randomUUID().toString();
 
         // Set up test data
         jedis.set(testKey, "dump_test_value");
@@ -1105,16 +909,14 @@ public class JedisTest {
         assertTrue(result.length > 0, "DUMP should return non-empty data");
 
         // Test DUMP on non-existing key
-        result = jedis.dump(TEST_KEY_PREFIX + "nonexistent");
+        result = jedis.dump(UUID.randomUUID().toString());
         assertNull(result, "DUMP should return null for non-existing key");
     }
 
     @Test
-    @Order(82)
-    @DisplayName("RESTORE Command")
-    void testRESTORE() {
-        String sourceKey = TEST_KEY_PREFIX + "restore_src";
-        String destKey = TEST_KEY_PREFIX + "restore_dest";
+    void restore_command() {
+        String sourceKey = UUID.randomUUID().toString();
+        String destKey = UUID.randomUUID().toString();
 
         // Set up source data and dump it
         jedis.set(sourceKey, "restore_test_value");
@@ -1128,7 +930,7 @@ public class JedisTest {
                 "restore_test_value", jedis.get(destKey), "Restored key should have correct value");
 
         // Test RESTORE with TTL
-        String destKeyWithTTL = TEST_KEY_PREFIX + "restore_ttl";
+        String destKeyWithTTL = UUID.randomUUID().toString();
         result = jedis.restore(destKeyWithTTL, 60000, dumpData);
         assertEquals("OK", result, "RESTORE with TTL should return OK");
         assertEquals(
@@ -1139,24 +941,18 @@ public class JedisTest {
     }
 
     @Test
-    @Order(83)
-    @DisplayName("MIGRATE Command")
-    void testMIGRATE() {
+    void migrate_command() {
         // TO DO: Add integration test
     }
 
     @Test
-    @Order(84)
-    @DisplayName("MOVE Command")
-    void testMOVE() {
+    void move_command() {
         // TO DO: Add integration test
     }
 
     @Test
-    @Order(70)
-    @DisplayName("EXPIRE Command")
-    void testEXPIRE() {
-        String testKey = TEST_KEY_PREFIX + "expire";
+    void expire_command() {
+        String testKey = UUID.randomUUID().toString();
 
         // Set up test key
         jedis.set(testKey, "test_value");
@@ -1171,10 +967,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(71)
-    @DisplayName("EXPIREAT Command")
-    void testEXPIREAT() {
-        String testKey = TEST_KEY_PREFIX + "expireat";
+    void expireat_command() {
+        String testKey = UUID.randomUUID().toString();
 
         // Set up test key
         jedis.set(testKey, "test_value");
@@ -1190,10 +984,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(72)
-    @DisplayName("PEXPIRE Command")
-    void testPEXPIRE() {
-        String testKey = TEST_KEY_PREFIX + "pexpire";
+    void pexpire_command() {
+        String testKey = UUID.randomUUID().toString();
 
         // Set up test key
         jedis.set(testKey, "test_value");
@@ -1208,10 +1000,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(73)
-    @DisplayName("PEXPIREAT Command")
-    void testPEXPIREAT() {
-        String testKey = TEST_KEY_PREFIX + "pexpireat";
+    void pexpireat_command() {
+        String testKey = UUID.randomUUID().toString();
 
         // Set up test key
         jedis.set(testKey, "test_value");
@@ -1227,10 +1017,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(74)
-    @DisplayName("TTL Command")
-    void testTTL() {
-        String testKey = TEST_KEY_PREFIX + "ttl";
+    void ttl_command() {
+        String testKey = UUID.randomUUID().toString();
 
         // Test TTL on non-existing key
         long result = jedis.ttl(testKey);
@@ -1248,10 +1036,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(75)
-    @DisplayName("PTTL Command")
-    void testPTTL() {
-        String testKey = TEST_KEY_PREFIX + "pttl";
+    void pttl_command() {
+        String testKey = UUID.randomUUID().toString();
 
         // Test PTTL on non-existing key
         long result = jedis.pttl(testKey);
@@ -1269,10 +1055,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(76)
-    @DisplayName("PERSIST Command")
-    void testPERSIST() {
-        String testKey = TEST_KEY_PREFIX + "persist";
+    void persist_command() {
+        String testKey = UUID.randomUUID().toString();
 
         // Set up test key with expiration
         jedis.set(testKey, "test_value");
@@ -1292,14 +1076,12 @@ public class JedisTest {
     }
 
     @Test
-    @Order(76)
-    @DisplayName("EXPIRETIME Command")
-    void testEXPIRETIME() {
+    void expiretime_command() {
         assumeTrue(
                 SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"),
-                "EXPIRETIME command requires Redis 7.0.0 or higher");
+                "EXPIRETIME command requires Valkey 7.0.0 or higher");
 
-        String testKey = TEST_KEY_PREFIX + "expiretime";
+        String testKey = UUID.randomUUID().toString();
 
         // Test EXPIRETIME on non-existing key
         long result = jedis.expireTime(testKey);
@@ -1320,14 +1102,12 @@ public class JedisTest {
     }
 
     @Test
-    @Order(77)
-    @DisplayName("PEXPIRETIME Command")
-    void testPEXPIRETIME() {
+    void pexpiretime_command() {
         assumeTrue(
                 SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"),
-                "PEXPIRETIME command requires Redis 7.0.0 or higher");
+                "PEXPIRETIME command requires Valkey 7.0.0 or higher");
 
-        String testKey = TEST_KEY_PREFIX + "pexpiretime";
+        String testKey = UUID.randomUUID().toString();
 
         // Test PEXPIRETIME on non-existing key
         long result = jedis.pexpireTime(testKey);
@@ -1348,12 +1128,10 @@ public class JedisTest {
     }
 
     @Test
-    @Order(85)
-    @DisplayName("TOUCH Command")
-    void testTOUCH() {
-        String key1 = TEST_KEY_PREFIX + "touch1";
-        String key2 = TEST_KEY_PREFIX + "touch2";
-        String nonExistentKey = TEST_KEY_PREFIX + "touch_nonexistent";
+    void touch_command() {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String nonExistentKey = UUID.randomUUID().toString();
 
         // Set up test keys
         jedis.set(key1, "value1");
@@ -1373,11 +1151,9 @@ public class JedisTest {
     }
 
     @Test
-    @Order(86)
-    @DisplayName("COPY Command")
-    void testCOPY() {
-        String srcKey = TEST_KEY_PREFIX + "copy_src";
-        String destKey = TEST_KEY_PREFIX + "copy_dest";
+    void copy_command() {
+        String srcKey = UUID.randomUUID().toString();
+        String destKey = UUID.randomUUID().toString();
 
         // Set up source key
         jedis.set(srcKey, "copy_value");
@@ -1401,13 +1177,14 @@ public class JedisTest {
     }
 
     @Test
-    @Order(84)
-    @DisplayName("SCAN Command")
-    void testSCAN() {
-        // Set up test data
+    void scan_command() {
+        // Clean up any existing keys first to avoid interference
+        String keyPrefix = "scan_test_" + UUID.randomUUID().toString().substring(0, 8) + "_";
+
+        // Set up test data with a common prefix for scanning
         Map<String, String> testData = new HashMap<>();
         for (int i = 0; i < 10; i++) {
-            testData.put(TEST_KEY_PREFIX + "scan_" + i, "value_" + i);
+            testData.put(keyPrefix + i, "value_" + i);
         }
 
         // Set all test data
@@ -1415,24 +1192,59 @@ public class JedisTest {
             jedis.set(entry.getKey(), entry.getValue());
         }
 
-        // Test SCAN
-        ScanParams scanParams = new ScanParams().match(TEST_KEY_PREFIX + "scan_*").count(5);
-        ScanResult<String> scanResult = jedis.scan("0", scanParams);
+        // Verify keys were set
+        for (String key : testData.keySet()) {
+            assertTrue(jedis.exists(key), "Key should exist: " + key);
+        }
 
-        assertNotNull(scanResult, "SCAN result should not be null");
-        assertNotNull(scanResult.getResult(), "SCAN result list should not be null");
-        assertFalse(scanResult.getResult().isEmpty(), "SCAN should return some keys");
+        // Test SCAN with pattern that matches our keys - iterate through all results
+        ScanParams scanParams = new ScanParams().match(keyPrefix + "*").count(100);
+        Set<String> allScannedKeys = new HashSet<>();
+        String cursor = "0";
+        int maxIterations = 50; // Prevent infinite loops
+        int iterations = 0;
+
+        do {
+            ScanResult<String> scanResult = jedis.scan(cursor, scanParams);
+            assertNotNull(scanResult, "SCAN result should not be null");
+            assertNotNull(scanResult.getResult(), "SCAN result list should not be null");
+
+            allScannedKeys.addAll(scanResult.getResult());
+            cursor = scanResult.getCursor();
+            iterations++;
+        } while (!"0".equals(cursor) && iterations < maxIterations);
+
+        // Verify we found our keys
+        assertFalse(allScannedKeys.isEmpty(), "SCAN should return some keys");
+
+        // Count how many of our keys were found
+        int foundCount = 0;
+        for (String key : allScannedKeys) {
+            if (key.startsWith(keyPrefix)) {
+                foundCount++;
+            }
+        }
+
+        assertTrue(
+                foundCount > 0,
+                "SCAN should find at least some keys with our prefix. Found: "
+                        + foundCount
+                        + " out of "
+                        + testData.size());
+
+        // Clean up test keys
+        for (String key : testData.keySet()) {
+            jedis.del(key);
+        }
     }
 
     @Test
-    @Order(87)
-    @DisplayName("PFADD Command")
-    void testPFADD() {
+    void pfadd_command() {
         assumeTrue(
                 SERVER_VERSION.isGreaterThanOrEqualTo("2.8.9"),
-                "HyperLogLog commands require Redis 2.8.9 or higher");
+                "HyperLogLog commands require Valkey 2.8.9 or higher");
 
-        String testKey = TEST_KEY_PREFIX + "pfadd1";
+        String testKey = UUID.randomUUID().toString();
 
         // Test PFADD
         long result = jedis.pfadd(testKey, "element1", "element2", "element3");
@@ -1444,15 +1256,13 @@ public class JedisTest {
     }
 
     @Test
-    @Order(88)
-    @DisplayName("PFCOUNT Command")
-    void testPFCOUNT() {
+    void pfcount_command() {
         assumeTrue(
                 SERVER_VERSION.isGreaterThanOrEqualTo("2.8.9"),
-                "HyperLogLog commands require Redis 2.8.9 or higher");
+                "HyperLogLog commands require Valkey 2.8.9 or higher");
 
-        String key1 = TEST_KEY_PREFIX + "pfcount1";
-        String key2 = TEST_KEY_PREFIX + "pfcount2";
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
 
         // Set up test data
         jedis.pfadd(key1, "element1", "element2", "element3");
@@ -1468,16 +1278,14 @@ public class JedisTest {
     }
 
     @Test
-    @Order(89)
-    @DisplayName("PFMERGE Command")
-    void testPFMERGE() {
+    void pfmerge_command() {
         assumeTrue(
                 SERVER_VERSION.isGreaterThanOrEqualTo("2.8.9"),
-                "HyperLogLog commands require Redis 2.8.9 or higher");
+                "HyperLogLog commands require Valkey 2.8.9 or higher");
 
-        String sourceKey1 = TEST_KEY_PREFIX + "pfmerge_src1";
-        String sourceKey2 = TEST_KEY_PREFIX + "pfmerge_src2";
-        String destKey = TEST_KEY_PREFIX + "pfmerge_dest";
+        String sourceKey1 = UUID.randomUUID().toString();
+        String sourceKey2 = UUID.randomUUID().toString();
+        String destKey = UUID.randomUUID().toString();
 
         // Add elements to source HyperLogLogs
         jedis.pfadd(sourceKey1, "element1", "element2", "element3");
@@ -1493,9 +1301,7 @@ public class JedisTest {
     }
 
     @Test
-    @Order(100)
-    @DisplayName("PING Command")
-    void testPING() {
+    void ping_command() {
         // Test PING
         String result = jedis.ping();
         assertEquals("PONG", result, "PING should return PONG");
@@ -1507,10 +1313,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(101)
-    @DisplayName("sendCommand - Basic Commands")
-    void testSendCommandBasic() {
-        String key = TEST_KEY_PREFIX + "sendcmd_basic";
+    void send_command_basic() {
+        String key = UUID.randomUUID().toString();
         String value = "test_value";
 
         // Test SET command via sendCommand with byte arrays
@@ -1531,10 +1335,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(102)
-    @DisplayName("sendCommand - String Arguments")
-    void testSendCommandStringArgs() {
-        String key = TEST_KEY_PREFIX + "sendcmd_string";
+    void send_command_string_args() {
+        String key = UUID.randomUUID().toString();
         String value = "string_value";
 
         // Test SET command via sendCommand with string arguments
@@ -1557,12 +1359,10 @@ public class JedisTest {
     }
 
     @Test
-    @Order(103)
-    @DisplayName("sendCommand - Multiple Arguments")
-    void testSendCommandMultipleArgs() {
-        String key1 = TEST_KEY_PREFIX + "sendcmd_multi1";
-        String key2 = TEST_KEY_PREFIX + "sendcmd_multi2";
-        String key3 = TEST_KEY_PREFIX + "sendcmd_multi3";
+    void send_command_multiple_args() {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String key3 = UUID.randomUUID().toString();
         String value1 = "value1";
         String value2 = "value2";
         String value3 = "value3";
@@ -1583,10 +1383,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(104)
-    @DisplayName("sendCommand - Numeric Commands")
-    void testSendCommandNumeric() {
-        String key = TEST_KEY_PREFIX + "sendcmd_numeric";
+    void send_command_numeric() {
+        String key = UUID.randomUUID().toString();
 
         // Test INCR command via sendCommand
         Object incrResult = jedis.sendCommand(Protocol.Command.INCR, key);
@@ -1605,10 +1403,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(105)
-    @DisplayName("sendCommand - Expiration Commands")
-    void testSendCommandExpiration() {
-        String key = TEST_KEY_PREFIX + "sendcmd_expire";
+    void send_command_expiration() {
+        String key = UUID.randomUUID().toString();
         String value = "expire_value";
 
         // Set up test data
@@ -1656,10 +1452,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(106)
-    @DisplayName("sendCommand - Hash Commands")
-    void testSendCommandHash() {
-        String key = TEST_KEY_PREFIX + "sendcmd_hash";
+    void send_command_hash() {
+        String key = UUID.randomUUID().toString();
         String field1 = "field1";
         String field2 = "field2";
         String value1 = "value1";
@@ -1689,12 +1483,12 @@ public class JedisTest {
 
         // Original Jedis HGETALL returns Map<String, String>
         @SuppressWarnings("unchecked")
-        java.util.Map<Object, Object> hgetallMap = (java.util.Map<Object, Object>) hgetallResult;
+        Map<Object, Object> hgetallMap = (Map<Object, Object>) hgetallResult;
         assertEquals(2, hgetallMap.size(), "HGETALL should return 2 field-value pairs");
 
         // Convert keys and values to strings for comparison
         boolean foundField1 = false, foundField2 = false;
-        for (java.util.Map.Entry<Object, Object> entry : hgetallMap.entrySet()) {
+        for (Map.Entry<Object, Object> entry : hgetallMap.entrySet()) {
             String key_str = entry.getKey().toString();
             String value_str = entry.getValue().toString();
 
@@ -1710,10 +1504,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(107)
-    @DisplayName("sendCommand - List Commands")
-    void testSendCommandList() {
-        String key = TEST_KEY_PREFIX + "sendcmd_list";
+    void send_command_list() {
+        String key = UUID.randomUUID().toString();
         String value1 = "item1";
         String value2 = "item2";
         String value3 = "item3";
@@ -1741,7 +1533,7 @@ public class JedisTest {
         assertEquals(3, lrangeArray.length, "LRANGE should return 3 elements");
 
         // Convert to strings and check all values are present (order-independent)
-        java.util.Set<String> resultSet = new java.util.HashSet<>();
+        Set<String> resultSet = new HashSet<>();
         for (Object item : lrangeArray) {
             resultSet.add(item.toString());
         }
@@ -1751,10 +1543,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(108)
-    @DisplayName("sendCommand - Set Commands")
-    void testSendCommandSet() {
-        String key = TEST_KEY_PREFIX + "sendcmd_set";
+    void send_command_set() {
+        String key = UUID.randomUUID().toString();
         String member1 = "member1";
         String member2 = "member2";
         String member3 = "member3";
@@ -1800,16 +1590,16 @@ public class JedisTest {
         // Original Jedis SMEMBERS returns Set<String>, but sendCommand might return different
         // collection types
         // Convert to Set for validation
-        java.util.Set<String> resultSet = new java.util.HashSet<>();
-        if (smembersResult instanceof java.util.Set) {
+        Set<String> resultSet = new HashSet<>();
+        if (smembersResult instanceof Set) {
             @SuppressWarnings("unchecked")
-            java.util.Set<Object> smembersSet = (java.util.Set<Object>) smembersResult;
+            Set<Object> smembersSet = (Set<Object>) smembersResult;
             for (Object member : smembersSet) {
                 resultSet.add(member.toString());
             }
-        } else if (smembersResult instanceof java.util.List) {
+        } else if (smembersResult instanceof List) {
             @SuppressWarnings("unchecked")
-            java.util.List<Object> smembersList = (java.util.List<Object>) smembersResult;
+            List<Object> smembersList = (List<Object>) smembersResult;
             for (Object member : smembersList) {
                 resultSet.add(member.toString());
             }
@@ -1827,10 +1617,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(109)
-    @DisplayName("sendCommand - Binary Data")
-    void testSendCommandBinaryData() {
-        String key = TEST_KEY_PREFIX + "sendcmd_binary";
+    void send_command_binary_data() {
+        String key = UUID.randomUUID().toString();
         byte[] binaryValue = {0x00, 0x01, 0x02, 0x03, (byte) 0xFF};
 
         // Test SET command via sendCommand with binary data
@@ -1851,10 +1639,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(110)
-    @DisplayName("sendCommand - Optional Arguments")
-    void testSendCommandOptionalArgs() {
-        String key = TEST_KEY_PREFIX + "sendcmd_optional";
+    void send_command_optional_args() {
+        String key = UUID.randomUUID().toString();
         String value = "optional_value";
 
         // Test SET command with optional arguments (EX for expiration)
@@ -1872,7 +1658,7 @@ public class JedisTest {
         assertEquals(value, getResult.toString(), "GET should return the correct value");
 
         // Test SET command with NX option (only if not exists)
-        String key2 = TEST_KEY_PREFIX + "sendcmd_nx";
+        String key2 = UUID.randomUUID().toString();
         Object setNxResult = jedis.sendCommand(Protocol.Command.SET, key2, value, "NX");
         assertEquals(
                 "OK",
@@ -1892,10 +1678,8 @@ public class JedisTest {
     // Hash Commands Tests
 
     @Test
-    @Order(111)
-    @DisplayName("HSET and HGET Commands")
-    void testHSETAndHGET() {
-        String key = TEST_KEY_PREFIX + "hash_basic";
+    void hset_and_hget_command() {
+        String key = UUID.randomUUID().toString();
         String field1 = "field1";
         String field2 = "field2";
         String value1 = "value1";
@@ -1926,10 +1710,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(112)
-    @DisplayName("HDEL Command")
-    void testHDEL() {
-        String key = TEST_KEY_PREFIX + "hash_del";
+    void hdel_command() {
+        String key = UUID.randomUUID().toString();
         String field1 = "field1";
         String field2 = "field2";
         String field3 = "field3";
@@ -1956,10 +1738,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(113)
-    @DisplayName("HEXISTS Command")
-    void testHEXISTS() {
-        String key = TEST_KEY_PREFIX + "hash_exists";
+    void hexists_command() {
+        String key = UUID.randomUUID().toString();
         String field = "testfield";
 
         // Test HEXISTS on non-existing hash
@@ -1979,10 +1759,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(114)
-    @DisplayName("HLEN Command")
-    void testHLEN() {
-        String key = TEST_KEY_PREFIX + "hash_len";
+    void hlen_command() {
+        String key = UUID.randomUUID().toString();
 
         // Test HLEN on non-existing hash
         long length = jedis.hlen(key);
@@ -2004,10 +1782,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(115)
-    @DisplayName("HKEYS and HVALS Commands")
-    void testHKEYSAndHVALS() {
-        String key = TEST_KEY_PREFIX + "hash_keys_vals";
+    void hkeys_and_hvals_command() {
+        String key = UUID.randomUUID().toString();
         Map<String, String> testData = new HashMap<>();
         testData.put("field1", "value1");
         testData.put("field2", "value2");
@@ -2028,10 +1804,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(116)
-    @DisplayName("HGETALL Command")
-    void testHGETALL() {
-        String key = TEST_KEY_PREFIX + "hash_getall";
+    void hgetall_command() {
+        String key = UUID.randomUUID().toString();
         Map<String, String> testData = new HashMap<>();
         testData.put("field1", "value1");
         testData.put("field2", "value2");
@@ -2051,10 +1825,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(117)
-    @DisplayName("HMGET and HMSET Commands")
-    void testHMGETAndHMSET() {
-        String key = TEST_KEY_PREFIX + "hash_multi";
+    void hmget_and_hmset_command() {
+        String key = UUID.randomUUID().toString();
         Map<String, String> testData = new HashMap<>();
         testData.put("field1", "value1");
         testData.put("field2", "value2");
@@ -2080,10 +1852,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(118)
-    @DisplayName("HSETNX Command")
-    void testHSETNX() {
-        String key = TEST_KEY_PREFIX + "hash_setnx";
+    void hsetnx_command() {
+        String key = UUID.randomUUID().toString();
         String field = "testfield";
         String value1 = "value1";
         String value2 = "value2";
@@ -2100,10 +1870,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(119)
-    @DisplayName("HINCRBY Command")
-    void testHINCRBY() {
-        String key = TEST_KEY_PREFIX + "hash_incrby";
+    void hincrby_command() {
+        String key = UUID.randomUUID().toString();
         String field = "counter";
 
         // Test HINCRBY on non-existing field
@@ -2123,10 +1891,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(120)
-    @DisplayName("HINCRBYFLOAT Command")
-    void testHINCRBYFLOAT() {
-        String key = TEST_KEY_PREFIX + "hash_incrbyfloat";
+    void hincrbyfloat_command() {
+        String key = UUID.randomUUID().toString();
         String field = "float_counter";
 
         // Test HINCRBYFLOAT on non-existing field
@@ -2146,10 +1912,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(121)
-    @DisplayName("HSTRLEN Command")
-    void testHSTRLEN() {
-        String key = TEST_KEY_PREFIX + "hash_strlen";
+    void hstrlen_command() {
+        String key = UUID.randomUUID().toString();
         String field = "testfield";
         String value = "Hello World";
 
@@ -2171,10 +1935,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(122)
-    @DisplayName("HRANDFIELD Command")
-    void testHRANDFIELD() {
-        String key = TEST_KEY_PREFIX + "hash_randfield";
+    void hrandfield_command() {
+        String key = UUID.randomUUID().toString();
         Map<String, String> testData = new HashMap<>();
         testData.put("field1", "value1");
         testData.put("field2", "value2");
@@ -2209,15 +1971,13 @@ public class JedisTest {
         }
 
         // Test HRANDFIELD on non-existing hash
-        String nonExistentField = jedis.hrandfield(TEST_KEY_PREFIX + "nonexistent");
+        String nonExistentField = jedis.hrandfield(UUID.randomUUID().toString());
         assertNull(nonExistentField, "HRANDFIELD should return null for non-existing hash");
     }
 
     @Test
-    @Order(123)
-    @DisplayName("HSCAN Command")
-    void testHSCAN() {
-        String key = TEST_KEY_PREFIX + "hash_scan";
+    void hscan_command() {
+        String key = UUID.randomUUID().toString();
         Map<String, String> testData = new HashMap<>();
 
         // Create test data with predictable pattern
@@ -2261,15 +2021,13 @@ public class JedisTest {
     }
 
     @Test
-    @Order(124)
-    @DisplayName("HSETEX Command")
-    void testHSETEX() {
+    void hsetex_command() {
         assumeTrue(
                 SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")
                         && !SERVER_VERSION.toString().startsWith("8."),
-                "HSETEX command requires Redis 7.9.0+ (not available in Valkey 8.x)");
+                "HSETEX command requires Valkey 7.9.0+ (not available in Valkey 8.x)");
 
-        String key = TEST_KEY_PREFIX + "hash_setex";
+        String key = UUID.randomUUID().toString();
         String field1 = "field1";
         String field2 = "field2";
         String value1 = "value1";
@@ -2290,7 +2048,9 @@ public class JedisTest {
         // Test HSETEX with FXX condition (field exists)
         params = HSetExParams.hSetExParams().fxx().px(30000); // 30 seconds in milliseconds
         result = jedis.hsetex(key, params, field1, "updated_value");
-        assertEquals(0, result, "HSETEX with FXX should return 0 when updating existing field");
+        assertEquals(
+                1, result, "HSETEX with FXX should return 1 when successfully updating existing field");
+        assertEquals("updated_value", jedis.hget(key, field1), "Field should have updated value");
 
         // Test HSETEX with multiple fields
         Map<String, String> hash = new HashMap<>();
@@ -2304,15 +2064,13 @@ public class JedisTest {
     }
 
     @Test
-    @Order(125)
-    @DisplayName("HGETEX Command")
-    void testHGETEX() {
+    void hgetex_command() {
         assumeTrue(
                 SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")
                         && !SERVER_VERSION.toString().startsWith("8."),
-                "HGETEX command requires Redis 7.9.0+ (not available in Valkey 8.x)");
+                "HGETEX command requires Valkey 7.9.0+ (not available in Valkey 8.x)");
 
-        String key = TEST_KEY_PREFIX + "hash_getex";
+        String key = UUID.randomUUID().toString();
         String field1 = "field1";
         String field2 = "field2";
         String value1 = "value1";
@@ -2342,15 +2100,10 @@ public class JedisTest {
     }
 
     @Test
-    @Order(126)
-    @DisplayName("HGETDEL Command")
-    void testHGETDEL() {
-        assumeTrue(
-                SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")
-                        && !SERVER_VERSION.toString().startsWith("8."),
-                "HGETDEL command requires Redis 7.9.0+ (not available in Valkey 8.x)");
+    void hgetdel_command() {
+        assumeTrue(SERVER_VERSION.isGreaterThan("9.0.0"), "HGETDEL command requires Valkey 9.0.0+");
 
-        String key = TEST_KEY_PREFIX + "hash_getdel";
+        String key = UUID.randomUUID().toString();
         String field1 = "field1";
         String field2 = "field2";
         String field3 = "field3";
@@ -2384,15 +2137,13 @@ public class JedisTest {
     }
 
     @Test
-    @Order(127)
-    @DisplayName("HEXPIRE and HTTL Commands")
-    void testHEXPIREAndHTTL() {
+    void hexpire_and_httl_command() {
         assumeTrue(
                 SERVER_VERSION.isGreaterThanOrEqualTo("7.4.0")
                         && !SERVER_VERSION.toString().startsWith("8."),
-                "Hash field expiration commands require Redis 7.4.0+ (not available in Valkey 8.x)");
+                "Hash field expiration commands require Valkey 7.4.0+ (not available in Valkey 8.x)");
 
-        String key = TEST_KEY_PREFIX + "hash_expire";
+        String key = UUID.randomUUID().toString();
         String field1 = "field1";
         String field2 = "field2";
         String value1 = "value1";
@@ -2430,15 +2181,13 @@ public class JedisTest {
     }
 
     @Test
-    @Order(128)
-    @DisplayName("HPEXPIRE and HPTTL Commands")
-    void testHPEXPIREAndHPTTL() {
+    void hpexpire_and_hpttl_command() {
         assumeTrue(
                 SERVER_VERSION.isGreaterThanOrEqualTo("7.4.0")
                         && !SERVER_VERSION.toString().startsWith("8."),
-                "Hash field expiration commands require Redis 7.4.0+ (not available in Valkey 8.x)");
+                "Hash field expiration commands require Valkey 7.4.0+ (not available in Valkey 8.x)");
 
-        String key = TEST_KEY_PREFIX + "hash_pexpire";
+        String key = UUID.randomUUID().toString();
         String field1 = "field1";
         String field2 = "field2";
         String value1 = "value1";
@@ -2480,15 +2229,13 @@ public class JedisTest {
     }
 
     @Test
-    @Order(129)
-    @DisplayName("HEXPIREAT and HEXPIRETIME Commands")
-    void testHEXPIREATAndHEXPIRETIME() {
+    void hexpireat_and_hexpiretime_command() {
         assumeTrue(
                 SERVER_VERSION.isGreaterThanOrEqualTo("7.4.0")
                         && !SERVER_VERSION.toString().startsWith("8."),
-                "Hash field expiration commands require Redis 7.4.0+ (not available in Valkey 8.x)");
+                "Hash field expiration commands require Valkey 7.4.0+ (not available in Valkey 8.x)");
 
-        String key = TEST_KEY_PREFIX + "hash_expireat";
+        String key = UUID.randomUUID().toString();
         String field1 = "field1";
         String value1 = "value1";
 
@@ -2519,15 +2266,13 @@ public class JedisTest {
     }
 
     @Test
-    @Order(130)
-    @DisplayName("HPEXPIREAT and HPEXPIRETIME Commands")
-    void testHPEXPIREATAndHPEXPIRETIME() {
+    void hpexpireat_and_hpexpiretime_command() {
         assumeTrue(
                 SERVER_VERSION.isGreaterThanOrEqualTo("7.4.0")
                         && !SERVER_VERSION.toString().startsWith("8."),
-                "Hash field expiration commands require Redis 7.4.0+ (not available in Valkey 8.x)");
+                "Hash field expiration commands require Valkey 7.4.0+ (not available in Valkey 8.x)");
 
-        String key = TEST_KEY_PREFIX + "hash_pexpireat";
+        String key = UUID.randomUUID().toString();
         String field1 = "field1";
         String value1 = "value1";
 
@@ -2560,15 +2305,13 @@ public class JedisTest {
     }
 
     @Test
-    @Order(131)
-    @DisplayName("HPERSIST Command")
-    void testHPERSIST() {
+    void hpersist_command() {
         assumeTrue(
                 SERVER_VERSION.isGreaterThanOrEqualTo("7.4.0")
                         && !SERVER_VERSION.toString().startsWith("8."),
-                "Hash field expiration commands require Redis 7.4.0+ (not available in Valkey 8.x)");
+                "Hash field expiration commands require Valkey 7.4.0+ (not available in Valkey 8.x)");
 
-        String key = TEST_KEY_PREFIX + "hash_persist";
+        String key = UUID.randomUUID().toString();
         String field1 = "field1";
         String field2 = "field2";
         String value1 = "value1";
@@ -2599,7 +2342,7 @@ public class JedisTest {
         result = jedis.hpersist(key, field1);
         assertEquals(1, result.size(), "HPERSIST should return one result");
         assertEquals(
-                Long.valueOf(0), result.get(0), "HPERSIST should return 0 for field without expiration");
+                Long.valueOf(-1), result.get(0), "HPERSIST should return -1 for field without expiration");
 
         // Test HPERSIST on non-existing field
         result = jedis.hpersist(key, "nonexistent");
@@ -2609,10 +2352,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(132)
-    @DisplayName("Hash Commands - Binary Variants")
-    void testHashCommandsBinary() {
-        byte[] key = (TEST_KEY_PREFIX + "hash_binary").getBytes();
+    void hash_commands_binary() {
+        byte[] key = (UUID.randomUUID().toString()).getBytes();
         byte[] field1 = "field1".getBytes();
         byte[] field2 = "field2".getBytes();
         byte[] value1 = "value1".getBytes();
@@ -2679,15 +2420,13 @@ public class JedisTest {
     }
 
     @Test
-    @Order(133)
-    @DisplayName("Hash Commands - Binary Variants with Expiration")
-    void testHashCommandsBinaryWithExpiration() {
+    void hash_commands_binary_with_expiration() {
         assumeTrue(
                 SERVER_VERSION.isGreaterThanOrEqualTo("7.4.0")
                         && !SERVER_VERSION.toString().startsWith("8."),
-                "Hash field expiration commands require Redis 7.4.0+ (not available in Valkey 8.x)");
+                "Hash field expiration commands require Valkey 7.4.0+ (not available in Valkey 8.x)");
 
-        byte[] key = (TEST_KEY_PREFIX + "hash_binary_exp").getBytes();
+        byte[] key = (UUID.randomUUID().toString()).getBytes();
         byte[] field1 = "field1".getBytes();
         byte[] field2 = "field2".getBytes();
         byte[] value1 = "value1".getBytes();
@@ -2729,15 +2468,14 @@ public class JedisTest {
     }
 
     @Test
-    @Order(134)
-    @DisplayName("Hash Commands - Binary Variants for Newer Commands")
-    void testHashCommandsBinaryNewer() {
+    void hash_commands_binary_newer() {
+        // Hash field expiration commands (HSETEX, HGETEX) are available in:
+        // - Valkey 9.0.0+ (HSETEX, HGETEX only - HGETDEL not available)
         assumeTrue(
-                SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")
-                        && !SERVER_VERSION.toString().startsWith("8."),
-                "Newer hash commands require Redis 7.9.0+ (not available in Valkey 8.x)");
+                SERVER_VERSION.isGreaterThan("9.0.0"),
+                "Newer hash commands require Valkey 9.0.0 and HGETDEL requires Valkey greater than 9");
 
-        byte[] key = (TEST_KEY_PREFIX + "hash_binary_new").getBytes();
+        byte[] key = (UUID.randomUUID().toString()).getBytes();
         byte[] field1 = "field1".getBytes();
         byte[] field2 = "field2".getBytes();
         byte[] value1 = "value1".getBytes();
@@ -2779,10 +2517,8 @@ public class JedisTest {
     // ========== LIST COMMANDS TESTS ==========
 
     @Test
-    @Order(135)
-    @DisplayName("List Commands - Basic Operations (LPUSH, RPUSH, LPOP, RPOP, LLEN)")
-    void testListBasicOperations() {
-        String key = TEST_KEY_PREFIX + "list_basic";
+    void list_basic_operations() {
+        String key = UUID.randomUUID().toString();
 
         // Test LPUSH - String version
         long result = jedis.lpush(key, "value1", "value2", "value3");
@@ -2819,10 +2555,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(136)
-    @DisplayName("List Commands - Basic Operations Binary")
-    void testListBasicOperationsBinary() {
-        byte[] key = (TEST_KEY_PREFIX + "list_basic_binary").getBytes();
+    void list_basic_operations_binary() {
+        byte[] key = (UUID.randomUUID().toString()).getBytes();
         byte[] value1 = "value1".getBytes();
         byte[] value2 = "value2".getBytes();
         byte[] value3 = "value3".getBytes();
@@ -2859,10 +2593,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(137)
-    @DisplayName("List Commands - Range and Index Operations (LRANGE, LTRIM, LINDEX, LSET)")
-    void testListRangeAndIndexOperations() {
-        String key = TEST_KEY_PREFIX + "list_range";
+    void list_range_and_index_operations() {
+        String key = UUID.randomUUID().toString();
 
         // Setup test data
         jedis.lpush(key, "item1", "item2", "item3", "item4", "item5");
@@ -2908,10 +2640,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(138)
-    @DisplayName("List Commands - Range and Index Operations Binary")
-    void testListRangeAndIndexOperationsBinary() {
-        byte[] key = (TEST_KEY_PREFIX + "list_range_binary").getBytes();
+    void list_range_and_index_operations_binary() {
+        byte[] key = (UUID.randomUUID().toString()).getBytes();
         byte[] item1 = "item1".getBytes();
         byte[] item2 = "item2".getBytes();
         byte[] item3 = "item3".getBytes();
@@ -2947,11 +2677,9 @@ public class JedisTest {
     }
 
     @Test
-    @Order(139)
-    @DisplayName("List Commands - Modification Operations (LREM, LINSERT, LPUSHX, RPUSHX)")
-    void testListModificationOperations() {
-        String key = TEST_KEY_PREFIX + "list_modify";
-        String nonExistentKey = TEST_KEY_PREFIX + "list_nonexistent";
+    void list_modification_operations() {
+        String key = UUID.randomUUID().toString();
+        String nonExistentKey = UUID.randomUUID().toString();
 
         // Setup test data with duplicates for LREM testing
         jedis.lpush(key, "a", "b", "a", "c", "a", "d");
@@ -3006,10 +2734,8 @@ public class JedisTest {
     }
 
     @Test
-    @Order(140)
-    @DisplayName("List Commands - Modification Operations Binary")
-    void testListModificationOperationsBinary() {
-        byte[] key = (TEST_KEY_PREFIX + "list_modify_binary").getBytes();
+    void list_modification_operations_binary() {
+        byte[] key = (UUID.randomUUID().toString()).getBytes();
         byte[] valueA = "a".getBytes();
         byte[] valueB = "b".getBytes();
         byte[] valueC = "c".getBytes();
@@ -3044,12 +2770,10 @@ public class JedisTest {
     }
 
     @Test
-    @Order(141)
-    @DisplayName("List Commands - Blocking Operations (BLPOP, BRPOP)")
-    void testListBlockingOperations() {
-        String key1 = TEST_KEY_PREFIX + "list_block1";
-        String key2 = TEST_KEY_PREFIX + "list_block2";
-        String key3 = TEST_KEY_PREFIX + "list_block3";
+    void list_blocking_operations() {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String key3 = UUID.randomUUID().toString();
 
         // Setup test data
         jedis.lpush(key1, "value1", "value2");
@@ -3099,11 +2823,9 @@ public class JedisTest {
     }
 
     @Test
-    @Order(142)
-    @DisplayName("List Commands - Blocking Operations Binary")
-    void testListBlockingOperationsBinary() {
-        byte[] key1 = (TEST_KEY_PREFIX + "list_block_bin1").getBytes();
-        byte[] key2 = (TEST_KEY_PREFIX + "list_block_bin2").getBytes();
+    void list_blocking_operations_binary() {
+        byte[] key1 = (UUID.randomUUID().toString()).getBytes();
+        byte[] key2 = (UUID.randomUUID().toString()).getBytes();
         byte[] value1 = "value1".getBytes();
         byte[] value2 = "value2".getBytes();
 
@@ -3137,12 +2859,10 @@ public class JedisTest {
     }
 
     @Test
-    @Order(143)
-    @DisplayName("List Commands - Position Operations (LPOS)")
-    void testListPositionOperations() {
-        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("6.0.6"), "LPOS requires Redis 6.0.6+");
+    void list_position_operations() {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("6.0.6"), "LPOS requires Valkey 6.0.6+");
 
-        String key = TEST_KEY_PREFIX + "list_pos";
+        String key = UUID.randomUUID().toString();
 
         // Setup test data with duplicates
         jedis.lpush(key, "a", "b", "c", "b", "d", "b", "e");
@@ -3180,12 +2900,10 @@ public class JedisTest {
     }
 
     @Test
-    @Order(144)
-    @DisplayName("List Commands - Position Operations Binary")
-    void testListPositionOperationsBinary() {
-        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("6.0.6"), "LPOS requires Redis 6.0.6+");
+    void list_position_operations_binary() {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("6.0.6"), "LPOS requires Valkey 6.0.6+");
 
-        byte[] key = (TEST_KEY_PREFIX + "list_pos_binary").getBytes();
+        byte[] key = (UUID.randomUUID().toString()).getBytes();
         byte[] valueA = "a".getBytes();
         byte[] valueB = "b".getBytes();
         byte[] valueC = "c".getBytes();
@@ -3212,13 +2930,11 @@ public class JedisTest {
     }
 
     @Test
-    @Order(145)
-    @DisplayName("List Commands - Move Operations (LMOVE, BLMOVE)")
-    void testListMoveOperations() {
-        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "LMOVE requires Redis 6.2.0+");
+    void list_move_operations() {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "LMOVE requires Valkey 6.2.0+");
 
-        String srcKey = TEST_KEY_PREFIX + "list_src";
-        String dstKey = TEST_KEY_PREFIX + "list_dst";
+        String srcKey = UUID.randomUUID().toString();
+        String dstKey = UUID.randomUUID().toString();
 
         // Setup test data
         jedis.lpush(srcKey, "item1", "item2", "item3");
@@ -3257,13 +2973,11 @@ public class JedisTest {
     }
 
     @Test
-    @Order(146)
-    @DisplayName("List Commands - Move Operations Binary")
-    void testListMoveOperationsBinary() {
-        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "LMOVE requires Redis 6.2.0+");
+    void list_move_operations_binary() {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "LMOVE requires Valkey 6.2.0+");
 
-        byte[] srcKey = (TEST_KEY_PREFIX + "list_src_bin").getBytes();
-        byte[] dstKey = (TEST_KEY_PREFIX + "list_dst_bin").getBytes();
+        byte[] srcKey = (UUID.randomUUID().toString()).getBytes();
+        byte[] dstKey = (UUID.randomUUID().toString()).getBytes();
         byte[] item1 = "item1".getBytes();
         byte[] item2 = "item2".getBytes();
 
@@ -3289,14 +3003,12 @@ public class JedisTest {
     }
 
     @Test
-    @Order(147)
-    @DisplayName("List Commands - Multi-Pop Operations (LMPOP, BLMPOP)")
-    void testListMultiPopOperations() {
-        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "LMPOP requires Redis 7.0.0+");
+    void list_multi_pop_operations() {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "LMPOP requires Valkey 7.0.0+");
 
-        String key1 = TEST_KEY_PREFIX + "list_mpop1";
-        String key2 = TEST_KEY_PREFIX + "list_mpop2";
-        String key3 = TEST_KEY_PREFIX + "list_mpop3";
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String key3 = UUID.randomUUID().toString();
 
         // Setup test data
         jedis.lpush(key2, "item1", "item2", "item3");
@@ -3341,13 +3053,11 @@ public class JedisTest {
     }
 
     @Test
-    @Order(148)
-    @DisplayName("List Commands - Multi-Pop Operations Binary")
-    void testListMultiPopOperationsBinary() {
-        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "LMPOP requires Redis 7.0.0+");
+    void list_multi_pop_operations_binary() {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "LMPOP requires Valkey 7.0.0+");
 
-        byte[] key1 = (TEST_KEY_PREFIX + "list_mpop_bin1").getBytes();
-        byte[] key2 = (TEST_KEY_PREFIX + "list_mpop_bin2").getBytes();
+        byte[] key1 = (UUID.randomUUID().toString()).getBytes();
+        byte[] key2 = (UUID.randomUUID().toString()).getBytes();
         byte[] item1 = "item1".getBytes();
         byte[] item2 = "item2".getBytes();
         byte[] item3 = "item3".getBytes();
@@ -3387,11 +3097,9 @@ public class JedisTest {
     }
 
     @Test
-    @Order(149)
-    @DisplayName("List Commands - Deprecated Operations (RPOPLPUSH, BRPOPLPUSH)")
-    void testListDeprecatedOperations() {
-        String srcKey = TEST_KEY_PREFIX + "list_deprecated_src";
-        String dstKey = TEST_KEY_PREFIX + "list_deprecated_dst";
+    void list_deprecated_operations() {
+        String srcKey = UUID.randomUUID().toString();
+        String dstKey = UUID.randomUUID().toString();
 
         // Setup test data
         jedis.lpush(srcKey, "item1", "item2", "item3");
@@ -3426,11 +3134,9 @@ public class JedisTest {
     }
 
     @Test
-    @Order(150)
-    @DisplayName("List Commands - Deprecated Operations Binary")
-    void testListDeprecatedOperationsBinary() {
-        byte[] srcKey = (TEST_KEY_PREFIX + "list_deprecated_src_bin").getBytes();
-        byte[] dstKey = (TEST_KEY_PREFIX + "list_deprecated_dst_bin").getBytes();
+    void list_deprecated_operations_binary() {
+        byte[] srcKey = (UUID.randomUUID().toString()).getBytes();
+        byte[] dstKey = (UUID.randomUUID().toString()).getBytes();
         byte[] item1 = "item1".getBytes();
         byte[] item2 = "item2".getBytes();
 
@@ -3457,11 +3163,9 @@ public class JedisTest {
     }
 
     @Test
-    @Order(151)
-    @DisplayName("List Commands - Edge Cases and Error Handling")
-    void testListEdgeCases() {
-        String key = TEST_KEY_PREFIX + "list_edge";
-        String nonListKey = TEST_KEY_PREFIX + "not_a_list";
+    void list_edge_cases() {
+        String key = UUID.randomUUID().toString();
+        String nonListKey = UUID.randomUUID().toString();
 
         // Setup non-list key
         jedis.set(nonListKey, "string_value");

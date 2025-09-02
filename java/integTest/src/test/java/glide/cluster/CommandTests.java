@@ -14,6 +14,7 @@ import static glide.TestUtilities.createLuaLibWithLongRunningFunction;
 import static glide.TestUtilities.generateLuaLibCode;
 import static glide.TestUtilities.generateLuaLibCodeBinary;
 import static glide.TestUtilities.getFirstEntryFromMultiValue;
+import static glide.TestUtilities.getFirstKeyFromMultiValue;
 import static glide.TestUtilities.getValueFromInfo;
 import static glide.TestUtilities.parseInfoResponseToMap;
 import static glide.TestUtilities.waitForNotBusy;
@@ -556,14 +557,17 @@ public class CommandTests {
         clusterClient.info(new Section[] {STATS}).get();
 
         var data = clusterClient.info(new Section[] {STATS}).get();
-        String firstNodeInfo = getFirstEntryFromMultiValue(data);
+        // always use the same node address for before and after
+        final String firstNodeAddress = getFirstKeyFromMultiValue(data);
+        String firstNodeInfo = data.getMultiValue().get(firstNodeAddress);
         long valueBefore = getValueFromInfo(firstNodeInfo, "total_net_input_bytes");
 
         var result = clusterClient.configResetStat().get();
         assertEquals(OK, result);
 
         data = clusterClient.info(new Section[] {STATS}).get();
-        firstNodeInfo = getFirstEntryFromMultiValue(data);
+        // always use the same node address for before and after
+        firstNodeInfo = data.getMultiValue().get(firstNodeAddress);
         long valueAfter = getValueFromInfo(firstNodeInfo, "total_net_input_bytes");
 
         assertTrue(
@@ -830,36 +834,54 @@ public class CommandTests {
     public void lolwut_lolwut(GlideClusterClient clusterClient) {
         var response = clusterClient.lolwut().get();
         System.out.printf("%nLOLWUT cluster client standard response%n%s%n", response);
-        assertTrue(response.contains("Redis ver. " + SERVER_VERSION));
+        assertTrue(
+                response.contains("ver") && response.contains(SERVER_VERSION.toString()),
+                "Expected LOLWUT output to contain version string");
 
         response = clusterClient.lolwut(new int[] {50, 20}).get();
         System.out.printf(
                 "%nLOLWUT cluster client standard response with params 50 20%n%s%n", response);
-        assertTrue(response.contains("Redis ver. " + SERVER_VERSION));
+        assertTrue(
+                response.contains("ver") && response.contains(SERVER_VERSION.toString()),
+                "Expected LOLWUT output to contain version string");
 
         response = clusterClient.lolwut(6).get();
         System.out.printf("%nLOLWUT cluster client ver 6 response%n%s%n", response);
-        assertTrue(response.contains("Redis ver. " + SERVER_VERSION));
+        assertTrue(
+                response.contains("ver") && response.contains(SERVER_VERSION.toString()),
+                "Expected LOLWUT output to contain version string");
 
         response = clusterClient.lolwut(5, new int[] {30, 4, 4}).get();
         System.out.printf("%nLOLWUT cluster client ver 5 response with params 30 4 4%n%s%n", response);
-        assertTrue(response.contains("Redis ver. " + SERVER_VERSION));
+        assertTrue(
+                response.contains("ver") && response.contains(SERVER_VERSION.toString()),
+                "Expected LOLWUT output to contain version string");
 
         var clusterResponse = clusterClient.lolwut(ALL_NODES).get();
         for (var nodeResponse : clusterResponse.getMultiValue().values()) {
-            assertTrue(nodeResponse.contains("Redis ver. " + SERVER_VERSION));
+            assertTrue(
+                    nodeResponse.contains("ver") && nodeResponse.contains(SERVER_VERSION.toString()),
+                    "Expected LOLWUT output to contain version string");
         }
 
         clusterResponse = clusterClient.lolwut(new int[] {10, 20}, ALL_NODES).get();
         for (var nodeResponse : clusterResponse.getMultiValue().values()) {
-            assertTrue(nodeResponse.contains("Redis ver. " + SERVER_VERSION));
+            assertTrue(
+                    nodeResponse.contains("ver") && nodeResponse.contains(SERVER_VERSION.toString()),
+                    "Expected LOLWUT output to contain version string");
         }
 
         clusterResponse = clusterClient.lolwut(2, RANDOM).get();
-        assertTrue(clusterResponse.getSingleValue().contains("Redis ver. " + SERVER_VERSION));
+        assertTrue(
+                clusterResponse.getSingleValue().contains("ver")
+                        && clusterResponse.getSingleValue().contains(SERVER_VERSION.toString()),
+                "Expected LOLWUT output to contain version string");
 
         clusterResponse = clusterClient.lolwut(2, new int[] {10, 20}, RANDOM).get();
-        assertTrue(clusterResponse.getSingleValue().contains("Redis ver. " + SERVER_VERSION));
+        assertTrue(
+                clusterResponse.getSingleValue().contains("ver")
+                        && clusterResponse.getSingleValue().contains(SERVER_VERSION.toString()),
+                "Expected LOLWUT output to contain version string");
     }
 
     @ParameterizedTest

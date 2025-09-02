@@ -160,6 +160,7 @@ async fn write_to_output(writer: &Rc<Writer>) {
                 }
                 Err(err) => {
                     let _res = writer.closing_sender.send(err.into()).await; // we ignore the error, because it means that the reader was dropped, which is ok.
+                    return;
                 }
             }
         }

@@ -7,6 +7,7 @@ import java.security.cert.X509Certificate;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
+import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -81,8 +82,9 @@ public class ConfigurationTest {
         assertDoesNotThrow(
                 () -> {
                     Class<JedisPool> poolClass = JedisPool.class;
+                    // Test the proper constructor with GenericObjectPoolConfig
                     poolClass.getConstructor(
-                            String.class, int.class, JedisClientConfig.class, int.class, long.class);
+                            GenericObjectPoolConfig.class, String.class, int.class, JedisClientConfig.class);
                 });
     }
 
