@@ -919,9 +919,7 @@ class ClusterCommands(CoreCommands):
             self._execute_command(RequestType.FlushAll, args, route),
         )
 
-    def select(
-        self, index: int, route: Optional[Route] = None
-    ) -> TClusterResponse[TOK]:
+    def select(self, index: int) -> TOK:
         """
         Change the currently selected database on cluster nodes.
 
@@ -954,9 +952,6 @@ class ClusterCommands(CoreCommands):
 
         Args:
             index (int): The index of the database to select.
-            route (Optional[Route]): The command will be routed to all nodes by default,
-                unless `route` is provided, in which case the client will route the command
-                to the nodes defined by `route`.
 
         Returns:
             TClusterResponse[TOK]: A simple OK response from each node.
@@ -964,17 +959,10 @@ class ClusterCommands(CoreCommands):
         Examples:
             >>> client.select(1)
                 'OK'  # All nodes in the cluster have selected database 1
-            >>> client.select(2, AllNodes())
-                'OK'  # Explicitly route to all nodes
         """
-        from glide_shared.routes import AllNodes
-
-        if route is None:
-            route = AllNodes()  # Default routing for cluster mode
-
         return cast(
-            TClusterResponse[TOK],
-            self._execute_command(RequestType.Select, [str(index)], route),
+            TOK,
+            self._execute_command(RequestType.Select, [str(index)]),
         )
 
     def flushdb(

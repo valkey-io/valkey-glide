@@ -5,8 +5,8 @@ Integration tests for multi-database support in both standalone and cluster mode
 """
 
 import pytest
+from glide_shared.constants import OK
 from glide_shared.exceptions import ClosingError, RequestError
-from glide_shared.routes import AllNodes
 
 from tests.async_tests.conftest import create_client
 from tests.sync_tests.conftest import create_sync_client
@@ -105,7 +105,7 @@ async def check_cluster_multi_db_support(request):
 
         # Try to select database 1 to see if cluster supports multiple databases
         try:
-            await temp_client.select(1, AllNodes())
+            await temp_client.select(1)
             return True, None
         except RequestError as e:
             if "DB index is out of range" in str(e):
@@ -127,7 +127,7 @@ def sync_check_cluster_multi_db_support(request):
 
         # Try to select database 1 to see if cluster supports multiple databases
         try:
-            temp_client.select(1, AllNodes())
+            temp_client.select(1)
             return True, None
         except RequestError as e:
             if "DB index is out of range" in str(e):
@@ -184,24 +184,14 @@ class TestDatabaseIdCluster:
         client = await create_client(request, cluster_mode=True, database_id=0)
 
         try:
-            # Test SELECT command with explicit AllNodes routing
-            result = await client.select(1, AllNodes())
+            # Test SELECT command
+            result = await client.select(1)
             # Result should be a dict with responses from all nodes
-            assert isinstance(result, dict)
-            for node_result in result.values():
-                assert node_result in [
-                    b"OK",
-                    "OK",
-                ]  # Handle both bytes and string responses
+            assert result == OK
 
-            # Test SELECT command without explicit routing (should default to AllNodes)
+            # Test SELECT command
             result = await client.select(2)
-            assert isinstance(result, dict)
-            for node_result in result.values():
-                assert node_result in [
-                    b"OK",
-                    "OK",
-                ]  # Handle both bytes and string responses
+            assert result == OK
         finally:
             await client.close()
 
@@ -470,6 +460,6 @@ class TestServerSideValidation:
         try:
             # Try to select a database that's likely out of range
             with pytest.raises(RequestError, match="DB index is out of range"):
-                await client.select(9999, route=AllNodes())
+                await client.select(9999)
         finally:
             await client.close()
