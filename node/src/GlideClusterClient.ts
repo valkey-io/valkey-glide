@@ -1648,6 +1648,8 @@ export class GlideClusterClient extends BaseClient {
     /**
      * Changes the currently selected database on cluster nodes.
      *
+     * This command routes to all nodes by default to maintain consistency across the cluster.
+     *
      * **WARNING**: This command is NOT RECOMMENDED for production use.
      * Upon reconnection, nodes will revert to the database_id specified
      * in the client configuration (default: 0), NOT the database selected
@@ -1663,14 +1665,11 @@ export class GlideClusterClient extends BaseClient {
      * });
      * ```
      *
-     * **CLUSTER BEHAVIOR**: This command routes to all nodes by default
-     * to maintain consistency across the cluster.
      *
      * @see {@link https://valkey.io/commands/select/|valkey.io} for details.
      *
      * @param index - The index of the database to select.
-     * @param options - (Optional) See {@link RouteOption}. Defaults to routing to all nodes.
-     * @returns A simple `"OK"` response from each node.
+     * @returns A simple `"OK"` response.
      *
      * @example
      * ```typescript
@@ -1680,22 +1679,10 @@ export class GlideClusterClient extends BaseClient {
      * // Note: Database selection will be lost on reconnection!
      * ```
      *
-     * @example
-     * ```typescript
-     * // Example with explicit routing to all nodes
-     * const result = await client.select(2, { route: "allNodes" });
-     * console.log(result); // Output: 'OK'
-     * ```
      */
-    public async select(index: number, options?: RouteOption): Promise<"OK"> {
-        // Default to allNodes routing if no route is specified
-        const routeOption: RouteOption = options?.route
-            ? options
-            : { route: "allNodes" };
-
+    public async select(index: number): Promise<"OK"> {
         return this.createWritePromise(createSelect(index), {
             decoder: Decoder.String,
-            ...routeOption,
         });
     }
 

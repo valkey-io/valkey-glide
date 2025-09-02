@@ -12195,16 +12195,7 @@ export function runBaseTests(config: {
                         const selectResult = await client.select(5);
 
                         // For cluster mode, select returns results from all nodes
-                        if (Array.isArray(selectResult)) {
-                            // Verify all nodes returned "OK"
-                            expect(
-                                selectResult.every(
-                                    (result) => result.value === "OK",
-                                ),
-                            ).toBe(true);
-                        } else {
-                            expect(selectResult).toEqual("OK");
-                        }
+                        expect(selectResult).toEqual("OK");
 
                         // Verify all nodes are in database 5 by setting a key and getting it
                         expect(await client.set(key, value)).toEqual("OK");
@@ -12214,109 +12205,50 @@ export function runBaseTests(config: {
                         const selectResult0 = await client.select(0);
 
                         // For cluster mode, select returns results from all nodes
-                        if (Array.isArray(selectResult0)) {
-                            // Verify all nodes returned "OK"
-                            expect(
-                                selectResult0.every(
-                                    (result) => result.value === "OK",
-                                ),
-                            ).toBe(true);
-                        } else {
-                            expect(selectResult0).toEqual("OK");
-                        }
+                        expect(selectResult0).toEqual("OK");
 
                         expect(await client.get(key)).toBeNull();
 
                         // Test explicit AllNodes routing
-                        const selectResult7 = await client.select(7, {
-                            route: "allNodes",
-                        });
+                        const selectResult7 = await client.select(7);
 
-                        if (Array.isArray(selectResult7)) {
-                            expect(
-                                selectResult7.every(
-                                    (result) => result.value === "OK",
-                                ),
-                            ).toBe(true);
-                        } else {
-                            expect(selectResult7).toEqual("OK");
-                        }
+                        expect(selectResult7).toEqual("OK");
 
                         // Verify all nodes are in database 7
                         expect(await client.set(key, value)).toEqual("OK");
                         expect(await client.get(key)).toEqual(value);
-
-                        // Test RandomNode routing (affects only one node)
-                        const selectResult8 = await client.select(8, {
-                            route: "randomNode",
-                        });
-                        // RandomNode routing should return "OK" from single node
-                        expect(selectResult8).toEqual("OK");
-                        // Note: With RandomNode routing, only one node switches database,
-                        // so cluster operations may behave inconsistently
-                        // This test just verifies the command doesn't fail
 
                         // Test database isolation in cluster mode
                         const value1 = "value_db1";
                         const value2 = "value_db3";
 
                         // Set value in database 1
-                        const selectResult1DB = await client.select(1, {
-                            route: "allNodes",
-                        });
+                        const selectResult1DB = await client.select(1);
 
-                        if (Array.isArray(selectResult1DB)) {
-                            expect(
-                                selectResult1DB.every(
-                                    (result) => result.value === "OK",
-                                ),
-                            ).toBe(true);
-                        } else {
-                            expect(selectResult1DB).toEqual("OK");
-                        }
+                        expect(selectResult1DB).toEqual("OK");
 
                         expect(await client.set(key, value1)).toEqual("OK");
                         expect(await client.get(key)).toEqual(value1);
 
                         // Switch to database 3 and set different value for same key
-                        const selectResult3DB = await client.select(3, {
-                            route: "allNodes",
-                        });
+                        const selectResult3DB = await client.select(3);
 
-                        if (Array.isArray(selectResult3DB)) {
-                            expect(
-                                selectResult3DB.every(
-                                    (result) => result.value === "OK",
-                                ),
-                            ).toBe(true);
-                        } else {
-                            expect(selectResult3DB).toEqual("OK");
-                        }
+                        expect(selectResult3DB).toEqual("OK");
 
                         expect(await client.set(key, value2)).toEqual("OK");
                         expect(await client.get(key)).toEqual(value2);
 
                         // Switch back to database 1 and verify original value
-                        const selectResult1DBAgain = await client.select(1, {
-                            route: "allNodes",
-                        });
+                        const selectResult1DBAgain = await client.select(1);
 
-                        if (Array.isArray(selectResult1DBAgain)) {
-                            expect(
-                                selectResult1DBAgain.every(
-                                    (result) => result.value === "OK",
-                                ),
-                            ).toBe(true);
-                        } else {
-                            expect(selectResult1DBAgain).toEqual("OK");
-                        }
+                        expect(selectResult1DBAgain).toEqual("OK");
 
                         expect(await client.get(key)).toEqual(value1);
 
                         // Test invalid database selection in cluster mode
-                        await expect(
-                            client.select(999, { route: "allNodes" }),
-                        ).rejects.toThrow(RequestError);
+                        await expect(client.select(999)).rejects.toThrow(
+                            RequestError,
+                        );
                     }
                 }
             }, protocol);
@@ -12361,72 +12293,32 @@ export function runBaseTests(config: {
                         const value = getRandomKey();
 
                         // Set value in database 6 (simulating configured database)
-                        const selectResult6 = await client.select(6, {
-                            route: "allNodes",
-                        });
+                        const selectResult6 = await client.select(6);
 
-                        // For cluster mode with explicit routing, should return "OK" or array of results
-                        if (Array.isArray(selectResult6)) {
-                            expect(
-                                selectResult6.every(
-                                    (result) => result.value === "OK",
-                                ),
-                            ).toBe(true);
-                        } else {
-                            expect(selectResult6).toEqual("OK");
-                        }
+                        // For cluster mode with explicit routing, should return "OK"
+                        expect(selectResult6).toEqual("OK");
 
                         expect(await client.set(key, value)).toEqual("OK");
 
                         // Use SELECT to switch to database 1
-                        const selectResult1 = await client.select(1, {
-                            route: "allNodes",
-                        });
+                        const selectResult1 = await client.select(1);
 
-                        if (Array.isArray(selectResult1)) {
-                            expect(
-                                selectResult1.every(
-                                    (result) => result.value === "OK",
-                                ),
-                            ).toBe(true);
-                        } else {
-                            expect(selectResult1).toEqual("OK");
-                        }
+                        expect(selectResult1).toEqual("OK");
 
                         expect(await client.get(key)).toBeNull(); // Key shouldn't exist in DB 1
 
                         // Simulate reconnection by switching back to database 6
                         // In a real reconnection scenario, the client would restore to configured database
-                        const selectResult6Again = await client.select(6, {
-                            route: "allNodes",
-                        });
+                        const selectResult6Again = await client.select(6);
 
-                        if (Array.isArray(selectResult6Again)) {
-                            expect(
-                                selectResult6Again.every(
-                                    (result) => result.value === "OK",
-                                ),
-                            ).toBe(true);
-                        } else {
-                            expect(selectResult6Again).toEqual("OK");
-                        }
+                        expect(selectResult6Again).toEqual("OK");
 
                         expect(await client.get(key)).toEqual(value);
 
                         // Verify we're in database 6 by checking database 1 doesn't have the key
-                        const selectResult1Final = await client.select(1, {
-                            route: "allNodes",
-                        });
+                        const selectResult1Final = await client.select(1);
 
-                        if (Array.isArray(selectResult1Final)) {
-                            expect(
-                                selectResult1Final.every(
-                                    (result) => result.value === "OK",
-                                ),
-                            ).toBe(true);
-                        } else {
-                            expect(selectResult1Final).toEqual("OK");
-                        }
+                        expect(selectResult1Final).toEqual("OK");
 
                         expect(await client.get(key)).toBeNull();
                     }
@@ -16171,36 +16063,16 @@ export function runBaseTests(config: {
                         expect(await client.get(key)).toEqual(value);
 
                         // Use SELECT with AllNodes routing to switch to database 1
-                        const selectResult1 = await client.select(1, {
-                            route: "allNodes",
-                        });
+                        const selectResult1 = await client.select(1);
 
-                        if (Array.isArray(selectResult1)) {
-                            expect(
-                                selectResult1.every(
-                                    (result) => result.value === "OK",
-                                ),
-                            ).toBe(true);
-                        } else {
-                            expect(selectResult1).toEqual("OK");
-                        }
+                        expect(selectResult1).toEqual("OK");
 
                         expect(await client.get(key)).toBeNull();
 
                         // Switch back to database 0 and verify key exists
-                        const selectResult0 = await client.select(0, {
-                            route: "allNodes",
-                        });
+                        const selectResult0 = await client.select(0);
 
-                        if (Array.isArray(selectResult0)) {
-                            expect(
-                                selectResult0.every(
-                                    (result) => result.value === "OK",
-                                ),
-                            ).toBe(true);
-                        } else {
-                            expect(selectResult0).toEqual("OK");
-                        }
+                        expect(selectResult0).toEqual("OK");
 
                         expect(await client.get(key)).toEqual(value);
                     }
@@ -16245,54 +16117,24 @@ export function runBaseTests(config: {
                         const value = getRandomKey();
 
                         // Switch to database 2 to simulate configured database
-                        const selectResult2 = await client.select(2, {
-                            route: "allNodes",
-                        });
+                        const selectResult2 = await client.select(2);
 
-                        if (Array.isArray(selectResult2)) {
-                            expect(
-                                selectResult2.every(
-                                    (result) => result.value === "OK",
-                                ),
-                            ).toBe(true);
-                        } else {
-                            expect(selectResult2).toEqual("OK");
-                        }
+                        expect(selectResult2).toEqual("OK");
 
                         expect(await client.set(key, value)).toEqual("OK");
                         expect(await client.get(key)).toEqual(value);
 
                         // Switch to database 0 and verify key doesn't exist there
-                        const selectResult0 = await client.select(0, {
-                            route: "allNodes",
-                        });
+                        const selectResult0 = await client.select(0);
 
-                        if (Array.isArray(selectResult0)) {
-                            expect(
-                                selectResult0.every(
-                                    (result) => result.value === "OK",
-                                ),
-                            ).toBe(true);
-                        } else {
-                            expect(selectResult0).toEqual("OK");
-                        }
+                        expect(selectResult0).toEqual("OK");
 
                         expect(await client.get(key)).toBeNull();
 
                         // Switch back to database 2 and verify key exists
-                        const selectResult2Again = await client.select(2, {
-                            route: "allNodes",
-                        });
+                        const selectResult2Again = await client.select(2);
 
-                        if (Array.isArray(selectResult2Again)) {
-                            expect(
-                                selectResult2Again.every(
-                                    (result) => result.value === "OK",
-                                ),
-                            ).toBe(true);
-                        } else {
-                            expect(selectResult2Again).toEqual("OK");
-                        }
+                        expect(selectResult2Again).toEqual("OK");
 
                         expect(await client.get(key)).toEqual(value);
                     }
@@ -16342,72 +16184,32 @@ export function runBaseTests(config: {
                         const value2 = "value_db3";
 
                         // Set value in database 1
-                        const selectResult1 = await client.select(1, {
-                            route: "allNodes",
-                        });
+                        const selectResult1 = await client.select(1);
 
-                        if (Array.isArray(selectResult1)) {
-                            expect(
-                                selectResult1.every(
-                                    (result) => result.value === "OK",
-                                ),
-                            ).toBe(true);
-                        } else {
-                            expect(selectResult1).toEqual("OK");
-                        }
+                        expect(selectResult1).toEqual("OK");
 
                         expect(await client.set(key, value1)).toEqual("OK");
                         expect(await client.get(key)).toEqual(value1);
 
                         // Switch to database 3 and set different value for same key
-                        const selectResult3 = await client.select(3, {
-                            route: "allNodes",
-                        });
+                        const selectResult3 = await client.select(3);
 
-                        if (Array.isArray(selectResult3)) {
-                            expect(
-                                selectResult3.every(
-                                    (result) => result.value === "OK",
-                                ),
-                            ).toBe(true);
-                        } else {
-                            expect(selectResult3).toEqual("OK");
-                        }
+                        expect(selectResult3).toEqual("OK");
 
                         expect(await client.set(key, value2)).toEqual("OK");
                         expect(await client.get(key)).toEqual(value2);
 
                         // Switch back to database 1 and verify original value
-                        const selectResult1Again = await client.select(1, {
-                            route: "allNodes",
-                        });
+                        const selectResult1Again = await client.select(1);
 
-                        if (Array.isArray(selectResult1Again)) {
-                            expect(
-                                selectResult1Again.every(
-                                    (result) => result.value === "OK",
-                                ),
-                            ).toBe(true);
-                        } else {
-                            expect(selectResult1Again).toEqual("OK");
-                        }
+                        expect(selectResult1Again).toEqual("OK");
 
                         expect(await client.get(key)).toEqual(value1);
 
                         // Switch to database 3 and verify different value
-                        const selectResult3Again = await client.select(3, {
-                            route: "allNodes",
-                        });
+                        const selectResult3Again = await client.select(3);
 
-                        if (Array.isArray(selectResult3Again)) {
-                            expect(
-                                selectResult3Again.every(
-                                    (result) => result.value === "OK",
-                                ),
-                            ).toBe(true);
-                        } else {
-                            expect(selectResult3Again).toEqual("OK");
-                        }
+                        expect(selectResult3Again).toEqual("OK");
 
                         expect(await client.get(key)).toEqual(value2);
                     }
@@ -16453,70 +16255,30 @@ export function runBaseTests(config: {
                         const value = getRandomKey();
 
                         // Set value in database 6 (simulating configured database)
-                        const selectResult6 = await client.select(6, {
-                            route: "allNodes",
-                        });
+                        const selectResult6 = await client.select(6);
 
-                        if (Array.isArray(selectResult6)) {
-                            expect(
-                                selectResult6.every(
-                                    (result) => result.value === "OK",
-                                ),
-                            ).toBe(true);
-                        } else {
-                            expect(selectResult6).toEqual("OK");
-                        }
+                        expect(selectResult6).toEqual("OK");
 
                         expect(await client.set(key, value)).toEqual("OK");
 
                         // Use SELECT to switch to database 1
-                        const selectResult1 = await client.select(1, {
-                            route: "allNodes",
-                        });
+                        const selectResult1 = await client.select(1);
 
-                        if (Array.isArray(selectResult1)) {
-                            expect(
-                                selectResult1.every(
-                                    (result) => result.value === "OK",
-                                ),
-                            ).toBe(true);
-                        } else {
-                            expect(selectResult1).toEqual("OK");
-                        }
+                        expect(selectResult1).toEqual("OK");
 
                         expect(await client.get(key)).toBeNull(); // Key shouldn't exist in DB 1
 
                         // Simulate reconnection by switching back to configured database 6
-                        const selectResult6Again = await client.select(6, {
-                            route: "allNodes",
-                        });
+                        const selectResult6Again = await client.select(6);
 
-                        if (Array.isArray(selectResult6Again)) {
-                            expect(
-                                selectResult6Again.every(
-                                    (result) => result.value === "OK",
-                                ),
-                            ).toBe(true);
-                        } else {
-                            expect(selectResult6Again).toEqual("OK");
-                        }
+                        expect(selectResult6Again).toEqual("OK");
 
                         expect(await client.get(key)).toEqual(value);
 
                         // Verify we're in database 6 by checking database 1 doesn't have the key
-                        const selectResult1Final = await client.select(1, {
-                            route: "allNodes",
-                        });
+                        const selectResult1Final = await client.select(1);
 
-                        if (Array.isArray(selectResult1Final)) {
-                            expect(
-                                selectResult1Final.every(
-                                    (result) => result.value === "OK",
-                                ),
-                            ).toBe(true);
-                        } else {
-                            expect(selectResult1Final).toEqual("OK");
-                        }
+                        expect(selectResult1Final).toEqual("OK");
 
                         expect(await client.get(key)).toBeNull();
                     }
@@ -16545,9 +16307,9 @@ export function runBaseTests(config: {
 
                     if (isValkey9OrHigher) {
                         // Try to select an invalid database
-                        await expect(
-                            client.select(999, { route: "allNodes" }),
-                        ).rejects.toThrow(RequestError);
+                        await expect(client.select(999)).rejects.toThrow(
+                            RequestError,
+                        );
                     }
                 }
             }, protocol);
