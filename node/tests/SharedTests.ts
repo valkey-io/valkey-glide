@@ -57,7 +57,6 @@ import {
     UnsignedEncoding,
     UpdateByScore,
     convertElementsAndScores,
-    convertFieldsAndValuesToHashDataType,
     convertGlideRecordToRecord,
     parseInfoResponse,
 } from "../build-ts";
@@ -1855,10 +1854,18 @@ export function runBaseTests(config: {
                 const hgetallResult1 = await client.hgetall(key);
                 expect(hgetallResult1.length).toEqual(2);
                 // order is not guaranteed here
-                expect(hgetallResult1).toContainEqual({ field: field1, value: value });
-                expect(hgetallResult1).toContainEqual({ field: field2, value: value });
+                expect(hgetallResult1).toContainEqual({
+                    field: field1,
+                    value: value,
+                });
+                expect(hgetallResult1).toContainEqual({
+                    field: field2,
+                    value: value,
+                });
 
-                const hgetallResult2 = await client.hgetall(key, { decoder: Decoder.Bytes });
+                const hgetallResult2 = await client.hgetall(key, {
+                    decoder: Decoder.Bytes,
+                });
                 expect(hgetallResult2.length).toEqual(2);
                 // order is not guaranteed here
                 expect(hgetallResult2).toContainEqual({
@@ -2015,7 +2022,9 @@ export function runBaseTests(config: {
 
                 //hvals with binary buffers
                 expect(await client.hset(key2, fieldValueMap)).toEqual(2);
-                const hvalsResult2 = await client.hvals(key2, { decoder: Decoder.Bytes });
+                const hvalsResult2 = await client.hvals(key2, {
+                    decoder: Decoder.Bytes,
+                });
                 expect(hvalsResult2.length).toEqual(2);
                 // order is not guaranteed here
                 expect(hvalsResult2).toContainEqual(value1Encoded);
