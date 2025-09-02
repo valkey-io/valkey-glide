@@ -13173,7 +13173,9 @@ public class SharedCommandTests {
         try (var testClient =
                 client instanceof GlideClient
                         ? GlideClient.createClient(commonClientConfig().requestTimeout(2000).build()).get()
-                        : GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(2000).build()).get()) {
+                        : GlideClusterClient.createClient(
+                                        commonClusterClientConfig().requestTimeout(2000).build())
+                                .get()) {
 
             // ensure that commands doesn't time out even if timeout > request timeout
             assertNull(testClient.blmove(key1, key2, ListDirection.LEFT, ListDirection.LEFT, 1).get());
@@ -13201,7 +13203,9 @@ public class SharedCommandTests {
         try (var testClient =
                 client instanceof GlideClient
                         ? GlideClient.createClient(commonClientConfig().requestTimeout(2000).build()).get()
-                        : GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(2000).build()).get()) {
+                        : GlideClusterClient.createClient(
+                                        commonClusterClientConfig().requestTimeout(2000).build())
+                                .get()) {
 
             // ensure that commands doesn't time out even if timeout > request timeout
             assertNull(testClient.blmove(key1, key2, ListDirection.LEFT, ListDirection.LEFT, 1).get());
