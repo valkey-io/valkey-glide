@@ -3369,6 +3369,112 @@ where
     }
 }
 
+/// Creates random connections to seed nodes based on DNS resolution of initial nodes.
+///
+/// This function resolves the initial cluster nodes via DNS, selects a random subset,
+/// and attempts to establish connections to them. Failed connections with unrecoverable
+/// errors are tracked and returned separately from successful connections.
+async fn get_seed_nodes_based_random_connections<C>(
+    inner: &Core<C>,
+    num_of_nodes_to_query: usize,
+) -> RedisResult<(
+    Vec<(String, Shared<Pin<Box<dyn Future<Output = C> + Send>>>)>,
+    std::collections::HashSet<String>,
+)>
+where
+    C: ConnectionLike + Connect + Clone + Send + Sync + 'static,
+{
+    let resolved_addresses =
+        ClusterConnInner::<C>::try_to_expand_initial_nodes(&inner.initial_nodes).await;
+
+    let valid_hosts: Vec<String> = resolved_addresses
+        .into_iter()
+        .filter_map(|(host, maybe_addr)| maybe_addr.map(|_| host))
+        .collect();
+
+    if valid_hosts.is_empty() {
+        return Err(RedisError::from((
+            ErrorKind::AllConnectionsUnavailable,
+            "No valid addresses found",
+        )));
+    }
+
+    let selected_hosts: Vec<String> = {
+        let mut rng = rand::rng();
+        valid_hosts
+            .into_iter()
+            .choose_multiple(&mut rng, num_of_nodes_to_query)
+    };
+
+    let params = Arc::new(inner.cluster_params.read().expect(MUTEX_READ_ERR).clone());
+    let glide_options = Arc::new(inner.glide_connection_options.clone());
+
+    let connection_futures = selected_hosts.into_iter().map(|host| {
+        let maybe_node = {
+            let guard = inner.conn_lock.read().expect(MUTEX_READ_ERR);
+            guard.node_for_address(&host)
+        };
+
+        let host_clone = host.clone();
+        let params_ref = Arc::clone(&params);
+        let glide_options_ref = Arc::clone(&glide_options);
+
+        async move {
+            match get_or_create_conn::<C>(
+                &host_clone,
+                maybe_node,
+                &*params_ref,
+                RefreshConnectionType::OnlyManagementConnection,
+                (*glide_options_ref).clone(),
+            )
+            .await
+            {
+                Ok(node) => {
+                    let conn = node
+                        .management_connection
+                        .unwrap_or(node.user_connection)
+                        .conn
+                        .await;
+                    Ok((host, conn))
+                }
+                Err(err) => {
+                    tracing::warn!("Failed to create connection for host {}: {:?}", host, err);
+                    Err((host, err))
+                }
+            }
+        }
+    });
+
+    // Resolve all connections and separate successful from failed
+    let results = futures::future::join_all(connection_futures).await;
+
+    let mut successful_connections = Vec::new();
+    let mut failed_connection_addresses = std::collections::HashSet::new();
+
+    for result in results {
+        match result {
+            Ok((host, conn)) => {
+                let future = async move { conn }.boxed().shared();
+                successful_connections.push((host, future));
+            }
+            Err((host, err)) => {
+                if err.is_unrecoverable_error() {
+                    failed_connection_addresses.insert(host);
+                }
+            }
+        }
+    }
+
+    if successful_connections.is_empty() {
+        return Err(RedisError::from((
+            ErrorKind::AllConnectionsUnavailable,
+            "Failed to create any seed-based connections",
+        )));
+    }
+
+    Ok((successful_connections, failed_connection_addresses))
+}
+
 async fn calculate_topology_from_random_nodes<C>(
     inner: &Core<C>,
     num_of_nodes_to_query: usize,
@@ -3383,22 +3489,37 @@ async fn calculate_topology_from_random_nodes<C>(
 where
     C: ConnectionLike + Connect + Clone + Send + Sync + 'static,
 {
-    let requested_nodes = if let Some(random_conns) = inner
-        .conn_lock
-        .read()
-        .expect(MUTEX_READ_ERR)
-        .random_connections(num_of_nodes_to_query, ConnectionType::PreferManagement)
-    {
-        random_conns
-    } else {
-        return (
-            Err(RedisError::from((
-                ErrorKind::AllConnectionsUnavailable,
-                "No available connections to refresh slots from",
-            ))),
-            std::collections::HashSet::new(),
-        );
+    let refresh_topology_from_seed_nodes = inner
+        .get_cluster_param(|p| p.refresh_topology_from_seed_nodes)
+        .unwrap_or(false);
+
+    let (requested_nodes, mut failed_addresses) = match refresh_topology_from_seed_nodes {
+        true => match get_seed_nodes_based_random_connections(inner, num_of_nodes_to_query).await {
+            Ok(connections) => connections,
+            Err(err) => {
+                return (Err(err), std::collections::HashSet::new());
+            }
+        },
+        false => {
+            if let Some(random_conns) = inner
+                .conn_lock
+                .read()
+                .expect(MUTEX_READ_ERR)
+                .random_connections(num_of_nodes_to_query, ConnectionType::PreferManagement)
+            {
+                (random_conns, std::collections::HashSet::new())
+            } else {
+                return (
+                    Err(RedisError::from((
+                        ErrorKind::AllConnectionsUnavailable,
+                        "No available connections to refresh slots from",
+                    ))),
+                    std::collections::HashSet::new(),
+                );
+            }
+        }
     };
+
     let topology_join_results =
         futures::future::join_all(requested_nodes.into_iter().map(|(addr, conn)| async move {
             let mut conn: C = conn.await;
@@ -3406,13 +3527,19 @@ where
             (addr, res)
         }))
         .await;
-    let failed_addresses = topology_join_results
+
+    // Add topology command failures to the existing connection failures
+    let topology_failed_addresses = topology_join_results
         .iter()
         .filter_map(|(address, res)| match res {
             Err(err) if err.is_unrecoverable_error() => Some(address.clone()),
             _ => None,
         })
         .collect::<std::collections::HashSet<String>>();
+
+    // Merge connection failures with topology command failures
+    failed_addresses.extend(topology_failed_addresses);
+
     let topology_values = topology_join_results.iter().filter_map(|(addr, res)| {
         res.as_ref()
             .ok()

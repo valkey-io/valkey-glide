@@ -32,8 +32,8 @@ mod cluster_async {
             MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
         },
         cluster_topology::{get_slot, DEFAULT_NUMBER_OF_REFRESH_SLOTS_RETRIES},
-        cmd, from_owned_redis_value, parse_redis_value, AsyncCommands, Cmd, ErrorKind,
-        FromRedisValue, GlideConnectionOptions, InfoDict, IntoConnectionInfo,
+        cmd, from_owned_redis_value, parse_redis_value, AsyncCommands, Cmd, ConnectionAddr,
+        ErrorKind, FromRedisValue, GlideConnectionOptions, InfoDict, IntoConnectionInfo,
         PipelineRetryStrategy, ProtocolVersion, PubSubChannelOrPattern, PubSubSubscriptionInfo,
         PubSubSubscriptionKind, PushInfo, PushKind, RedisError, RedisFuture, RedisResult, Value,
     };
@@ -312,6 +312,18 @@ mod cluster_async {
         };
 
         metric["data_points"][0]["value"].as_u64().unwrap_or(0)
+    }
+
+    fn generate_key_in_range(range: Vec<u16>) -> String {
+        for _ in 0..1000 {
+            let key = generate_random_string(10);
+            let slot = get_slot(key.as_bytes());
+
+            if slot >= range[0] && slot <= range[1] {
+                return key;
+            }
+        }
+        panic!("Failed to generate key in range after 1000 attempts");
     }
 
     #[test]
@@ -2202,6 +2214,168 @@ mod cluster_async {
             ports,
             true,
         );
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_refresh_topology_from_seed_nodes() {
+        for refresh_topology_from_seed_nodes in [false, true] {
+            let cluster = TestClusterContext::new(3, 0);
+
+            let _ = block_on_all(async move {
+                // Extract node_0 address for later
+                let (node_0_host, node_0_port) = match cluster.nodes[0].addr {
+                    ConnectionAddr::Tcp(ref host, port) => (host.clone(), port),
+                    ConnectionAddr::TcpTls { ref host, port, .. } => (host.clone(), port),
+                    _ => panic!("Unsupported connection address"),
+                };
+
+                // Discover topology
+                let cluster_nodes = cluster.get_cluster_nodes().await;
+                let slot_distribution = cluster.get_slots_ranges_distribution(&cluster_nodes);
+
+                // Partition cluster into node_0 and the rest
+                let (node_0_info, rest): (Vec<_>, Vec<_>) = slot_distribution
+                    .into_iter()
+                    .partition(|(_, addr, port, _)| {
+                        addr == &node_0_host && port == &node_0_port.to_string()
+                    });
+
+                let node_0_id = node_0_info[0].0.clone();
+                let rest_ids: Vec<_> = rest.iter().map(|(id, _, _, _)| id.clone()).collect();
+
+                // Connect through node0 (use node0 as seed node)
+                let client = redis::cluster::ClusterClientBuilder::new(vec![cluster.nodes[0].clone()])
+                        .use_protocol(use_protocol())
+                        // Force slots refresh to be immediate after MOVED error
+                        .slots_refresh_rate_limit(Duration::from_secs(0), 0)
+                        .refresh_topology_from_seed_nodes(refresh_topology_from_seed_nodes)
+                        .retries(1)
+                        .response_timeout(Duration::from_millis(2000))
+                        .build()
+                        .unwrap();
+
+                let mut conn = client.get_async_connection(None).await.unwrap();
+
+                // Disable full coverage requirement
+                let _ = conn
+                    .route_command(
+                        &cmd("CONFIG")
+                            .arg("SET")
+                            .arg("cluster-require-full-coverage")
+                            .arg("no"),
+                        RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllNodes, None)),
+                    )
+                    .await
+                    .expect("Failed to disable full coverage requirement");
+
+                // Check that all nodes are reachable
+                let ping = conn
+                    .route_command(
+                        &cmd("PING"),
+                        RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllNodes, None)),
+                    )
+                    .await
+                    .expect("Failed to PING all nodes");
+
+                let res = match ping {
+                    Value::Map(map) => map,
+                    _ => panic!("Unexpected PING response: {:?}", ping),
+                };
+
+                assert_eq!(res.len(), 3, "Expected exactly 3 PING responses");
+
+                // Make all nodes forget node_0
+                let mut forget_node_0 = cmd("CLUSTER");
+                forget_node_0.arg("FORGET").arg(&node_0_id);
+
+                let _ = conn
+                    .route_command(
+                        &forget_node_0,
+                        RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllNodes, None)),
+                    )
+                    .await;
+
+                // Instruct node_0 to forget all other nodes.
+                // This fully partitions the cluster, ensuring node_0 has no knowledge of the remaining nodes.
+                // This step is necessary so that after a topology refresh, node_0's view excludes the rest,
+                // preventing any residual cluster state due to gossip propagation delays.
+                for rest_id in &rest_ids {
+                    let mut forget_rest = cmd("CLUSTER");
+                    forget_rest.arg("FORGET").arg(rest_id);
+
+                    let _ = conn
+                        .route_command(
+                            &forget_rest,
+                            RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress {
+                                host: node_0_host.clone(),
+                                port: node_0_port,
+                            }),
+                        )
+                        .await
+                        .expect("Failed to make node 0 forget");
+                }
+
+                // Pick two keys from the remaining nodes
+                let rest_nodes_and_slots: Vec<_> = rest
+                    .iter()
+                    .map(|(node_id, _, _, slots)| (node_id, slots[0].clone()))
+                    .collect();
+
+                let key1 = generate_key_in_range(rest_nodes_and_slots[0].1.clone());
+                let key2 = generate_key_in_range(rest_nodes_and_slots[1].1.clone());
+
+                // Force a MOVED error by routing key1 through the wrong slot
+                let _ = conn
+                    .route_command(
+                        &cmd("GET").arg(&key1),
+                        RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(Route::new(
+                            get_slot(key2.as_bytes()),
+                            SlotAddr::Master,
+                        ))),
+                    )
+                    .await;
+
+                sleep(Duration::from_secs(1).into()).await;
+
+                let ping = conn
+                    .route_command(
+                        &cmd("PING"),
+                        RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllNodes, None)),
+                    )
+                    .await
+                    .unwrap();
+
+                let res = match ping {
+                    Value::Map(map) => map,
+                    _ => panic!("Unexpected PING response: {:?}", ping),
+                };
+
+                let res_size = if refresh_topology_from_seed_nodes {
+                    1
+                } else {
+                    2 // since both node 1 and node 2 forgot about node 0, and we do follow majority decisions
+                };
+
+                assert!(
+                    res.len() == res_size,
+                    "Expected exactly {} PING responses",
+                    res_size
+                );
+
+                if refresh_topology_from_seed_nodes {
+                    assert!(
+                        res.iter().any(|(k, _)| k
+                            == &Value::BulkString(
+                                format!("{}:{}", node_0_host, node_0_port).into_bytes()
+                            )),
+                        "Expected to see node 0 only"
+                    );
+                }
+
+                Ok(())
+            });
+        }
     }
 
     #[test]
