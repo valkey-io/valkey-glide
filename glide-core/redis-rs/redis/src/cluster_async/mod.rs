@@ -3427,7 +3427,7 @@ where
             match get_or_create_conn::<C>(
                 &host_clone,
                 maybe_node,
-                &*params_ref,
+                &params_ref,
                 RefreshConnectionType::OnlyManagementConnection,
                 (*glide_options_ref).clone(),
             )
