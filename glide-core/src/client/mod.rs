@@ -902,6 +902,7 @@ async fn create_cluster_client(
         builder = builder.periodic_topology_checks(interval_duration);
     }
     builder = builder.use_protocol(request.protocol.unwrap_or_default());
+    builder = builder.database(redis_connection_info.db);
     if let Some(client_name) = redis_connection_info.client_name {
         builder = builder.client_name(client_name);
     }
@@ -979,57 +980,6 @@ async fn create_cluster_client(
             }
         }
     }
-
-    // Handle database selection for cluster mode
-    // If database_id is not 0 (default), we need to select the database on all nodes
-    if redis_connection_info.db != 0 {
-        log_info(
-            "cluster_client_creation",
-            format!(
-                "Selecting database {} for cluster mode",
-                redis_connection_info.db
-            ),
-        );
-
-        // Send SELECT command to all nodes in the cluster
-        let mut select_cmd = redis::cmd("SELECT");
-        select_cmd.arg(redis_connection_info.db);
-        match con
-            .route_command(
-                &select_cmd,
-                RoutingInfo::MultiNode((
-                    MultipleNodeRoutingInfo::AllNodes,
-                    Some(ResponsePolicy::AllSucceeded),
-                )),
-            )
-            .await
-        {
-            Ok(_) => {
-                log_info(
-                    "cluster_client_creation",
-                    format!(
-                        "Successfully selected database {} on all cluster nodes",
-                        redis_connection_info.db
-                    ),
-                );
-            }
-            Err(err) => {
-                log_error(
-                    "cluster_client_creation",
-                    format!(
-                        "Failed to select database {} on cluster nodes: {}",
-                        redis_connection_info.db, err
-                    ),
-                );
-                return Err(RedisError::from((
-                    ErrorKind::InvalidClientConfig,
-                    "Failed to select database in cluster mode",
-                    format!("Database selection failed: {}", err),
-                )));
-            }
-        }
-    }
-
     Ok(con)
 }
 
