@@ -37,7 +37,10 @@ with open(output_file_name, "w+") as output_file:
 
     writer.writerow(base_fields)
 
+    print("Current working directory:", os.getcwd())
+
     for json_file_full_path in sys.argv[1:-1]:
+        print("Trying to open:", os.path.abspath(json_file_full_path))
         with open(json_file_full_path) as file:
             json_objects = json.load(file)
 
