@@ -439,14 +439,3 @@ func ExampleClusterClient_ConfigRewriteWithOptions() {
 	// Random route result: OK
 	// Multi node route result: OK
 }
-
-func ExampleClusterClient_Select() {
-	var client *ClusterClient = getExampleClusterClient() // example helper function
-	result, err := client.Select(context.Background(), 1)
-	if err != nil {
-		fmt.Println("Glide example failed with an error: ", err)
-	}
-	fmt.Println(result)
-
-	// Output: OK
-}

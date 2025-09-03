@@ -2677,33 +2677,3 @@ func (suite *GlideTestSuite) TestBatchWithSingleNodeRoute() {
 		assert.Contains(suite.T(), res[0], "# Replication", "isAtomic = %v", isAtomic)
 	}
 }
-
-func (suite *GlideTestSuite) TestClusterSelect_WithValidIndex() {
-	suite.SkipIfServerVersionLowerThan("9.0.0", suite.T())
-
-	client := suite.defaultClusterClient()
-	index := int64(1)
-	suite.verifyOK(client.Select(context.Background(), index))
-
-	key := uuid.New().String()
-	value := uuid.New().String()
-	suite.verifyOK(client.Set(context.Background(), key, value))
-
-	res, err := client.Get(context.Background(), key)
-	suite.NoError(err)
-	assert.Equal(suite.T(), value, res.Value())
-}
-
-func (suite *GlideTestSuite) TestClusterSelect_InvalidIndex_OutOfBounds() {
-	suite.SkipIfServerVersionLowerThan("9.0.0", suite.T())
-
-	client := suite.defaultClusterClient()
-
-	result, err := client.Select(context.Background(), -1)
-	assert.NotNil(suite.T(), err)
-	assert.Equal(suite.T(), "", result)
-
-	result, err = client.Select(context.Background(), 1000)
-	assert.NotNil(suite.T(), err)
-	assert.Equal(suite.T(), "", result)
-}

@@ -122,31 +122,6 @@ func (b *BaseBatch[T]) addCmdAndConverter(
 	return b.self
 }
 
-// Changes the currently selected database.
-//
-// WARNING: This command is NOT RECOMMENDED for production use.
-// Upon reconnection, the client will revert to the database_id specified
-// in the client configuration (default: 0), NOT the database selected
-// via this command.
-//
-// RECOMMENDED APPROACH: Use the database_id parameter in client
-// configuration instead.
-//
-// For details see [valkey.io].
-//
-// Parameters:
-//
-//	index - The index of the database to select.
-//
-// Command Response:
-//
-//	A simple "OK" response.
-//
-// [valkey.io]: https://valkey.io/commands/select/
-func (b *StandaloneBatch) Select(index int64) *StandaloneBatch {
-	return b.addCmdAndTypeChecker(C.Select, []string{utils.IntToString(index)}, reflect.String, false)
-}
-
 // Moves key from the currently selected database to the database specified by `dbIndex`.
 //
 // See [valkey.io] for details.
