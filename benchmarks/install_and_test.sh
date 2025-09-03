@@ -70,7 +70,7 @@ function runCSharpBenchmark(){
   dotnet clean
   dotnet build --configuration Release /warnaserror
   echo "Begin Benchmarking"
-  dotnet run --framework $dotnetFramework --configuration Release --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host --clientCount $clientCount $tlsFlag $portFlag $minimalFlag
+  dotnet run --framework $dotnetFramework --configuration Release --resultsFile=$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host --clientCount $clientCount $tlsFlag $portFlag $minimalFlag
 
   ls -la ${BENCH_RESULTS_FOLDER}
 
