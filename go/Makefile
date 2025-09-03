@@ -53,8 +53,11 @@ endif
 # Path where compiled binary is copied to and therefore used by go
 DEST_PATH := rustbin/$(TARGET_TRIPLET)
 
-# Set GOFLAGS for Alpine to use musl tag
-ifeq ($(IS_ALPINE), true)
+# Determine if we're using musl
+IS_MUSL := $(if $(filter true,$(IS_ALPINE)),true,$(if $(findstring musl,$(TARGET_TRIPLET)),true,false))
+
+# Set GOFLAGS for musl to use musl tag
+ifeq ($(IS_MUSL), true)
     export GOFLAGS := -tags=musl
 endif
 
@@ -190,17 +193,17 @@ opentelemetry-test: export TEST_FILTER = -skip "TestGlideTestSuite/TestModule" -
 opentelemetry-test: __it
 
 # Test commands for different platforms
-# Alpine gcc does not support -fsanitize=address, so we use clang instead
-# ALPINE_TEST_CMD := CC=clang go test -asan -v ./integTest/...
-# TODO - Investigate alpine + address sanitizer issue - https://github.com/valkey-io/valkey-glide/issues/4671
+# musl gcc does not support -fsanitize=address, so we use clang instead
+# MUSL_TEST_CMD := CC=clang go test -asan -v ./integTest/...
+# TODO - Investigate musl + address sanitizer issue - https://github.com/valkey-io/valkey-glide/issues/4671
 # Disabled for now
-ALPINE_TEST_CMD := CC="gcc" go test -v ./integTest/...
+MUSL_TEST_CMD := CC="gcc" go test -v ./integTest/...
 REGULAR_TEST_CMD := CC="gcc -fsanitize=address" go test -v ./integTest/...
 
 __it:
 	mkdir -p reports
 	set -o pipefail; \
-	$(if $(filter true,$(IS_ALPINE)),$(ALPINE_TEST_CMD),$(REGULAR_TEST_CMD)) \
+	$(if $(filter true,$(IS_MUSL)),$(MUSL_TEST_CMD),$(REGULAR_TEST_CMD)) \
 	$(TEST_FILTER) \
 	$(if $(filter true, $(tls)), --tls,) \
 	$(if $(standalone-endpoints), --standalone-endpoints=$(standalone-endpoints)) \
