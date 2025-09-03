@@ -42,6 +42,27 @@ mod cluster_client_tests {
             })
     }
 
+    // Helper function to check if server supports multi-database cluster mode (Valkey 9.0+)
+    async fn is_valkey_9_or_higher(client: &mut Client) -> bool {
+        let cmd = redis::cmd("INFO");
+        let info = client
+            .send_command(
+                &cmd,
+                Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)),
+            )
+            .await
+            .unwrap();
+
+        let info_dict: InfoDict = redis::from_owned_redis_value(info).unwrap();
+        match info_dict.get::<String>("redis_version") {
+            Some(version) => match (Versioning::new(version), Versioning::new("9.0")) {
+                (Some(server_ver), Some(min_ver)) => server_ver >= min_ver,
+                _ => false,
+            },
+            _ => false,
+        }
+    }
+
     #[rstest]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_send_routing_no_provided_route() {
@@ -378,6 +399,14 @@ mod cluster_client_tests {
             })
             .await;
 
+            // Skip test if server doesn't support multi-database cluster mode (Valkey 9.0+)
+            if !is_valkey_9_or_higher(&mut test_basics.client).await {
+                println!(
+                    "Skipping test_set_database_id_after_reconnection: requires Valkey 9.0+ for multi-database cluster mode"
+                );
+                return;
+            }
+
             // Verify we can connect and perform operations with database_id = 1
             let key = generate_random_string(10);
             let value = generate_random_string(10);
@@ -487,6 +516,14 @@ mod cluster_client_tests {
                 ..Default::default()
             })
             .await;
+
+            // Skip test if server doesn't support multi-database cluster mode (Valkey 9.0+)
+            if !is_valkey_9_or_higher(&mut test_basics_db1.client).await {
+                println!(
+                    "Skipping test_database_isolation_in_cluster_mode: requires Valkey 9.0+ for multi-database cluster mode"
+                );
+                return;
+            }
 
             let mut test_basics_db0 = setup_test_basics_internal(TestConfiguration {
                 cluster_mode: ClusterMode::Enabled,
@@ -614,6 +651,14 @@ mod cluster_client_tests {
                 ..Default::default()
             })
             .await;
+
+            // Skip test if server doesn't support multi-database cluster mode (Valkey 9.0+)
+            if !is_valkey_9_or_higher(&mut test_basics.client).await {
+                println!(
+                    "Skipping test_database_id_per_node_verification_with_reconnection: requires Valkey 9.0+ for multi-database cluster mode"
+                );
+                return;
+            }
 
             // Get cluster nodes information to understand the topology
             let mut cluster_nodes_cmd = redis::cmd("CLUSTER");
