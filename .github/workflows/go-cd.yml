@@ -27,7 +27,7 @@ env:
 
 jobs:
     load-platform-matrix:
-        if: github.repository_owner == 'valkey-io'
+        #if: github.repository_owner == 'valkey-io'
         runs-on: ubuntu-latest
         environment: AWS_ACTIONS
         outputs:
