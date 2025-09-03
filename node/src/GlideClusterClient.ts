@@ -60,7 +60,6 @@ import {
     createScriptExists,
     createScriptFlush,
     createScriptKill,
-    createSelect,
     createTime,
     createUnWatch,
 } from ".";
@@ -1642,47 +1641,6 @@ export class GlideClusterClient extends BaseClient {
         return this.createWritePromise(createFlushDB(options?.mode), {
             decoder: Decoder.String,
             ...options,
-        });
-    }
-
-    /**
-     * Changes the currently selected database on cluster nodes.
-     *
-     * This command routes to all nodes by default to maintain consistency across the cluster.
-     *
-     * **WARNING**: This command is NOT RECOMMENDED for production use.
-     * Upon reconnection, nodes will revert to the database_id specified
-     * in the client configuration (default: 0), NOT the database selected
-     * via this command.
-     *
-     * **RECOMMENDED APPROACH**: Use the `databaseId` parameter in client
-     * configuration instead:
-     *
-     * ```typescript
-     * const client = await GlideClusterClient.createClient({
-     *     addresses: [{ host: "localhost", port: 6379 }],
-     *     databaseId: 5  // Recommended: persists across reconnections
-     * });
-     * ```
-     *
-     *
-     * @see {@link https://valkey.io/commands/select/|valkey.io} for details.
-     *
-     * @param index - The index of the database to select.
-     * @returns A simple `"OK"` response.
-     *
-     * @example
-     * ```typescript
-     * // Example usage of select method (NOT RECOMMENDED)
-     * const result = await client.select(2);
-     * console.log(result); // Output: 'OK'
-     * // Note: Database selection will be lost on reconnection!
-     * ```
-     *
-     */
-    public async select(index: number): Promise<"OK"> {
-        return this.createWritePromise(createSelect(index), {
-            decoder: Decoder.String,
         });
     }
 
