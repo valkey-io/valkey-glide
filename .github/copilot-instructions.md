@@ -253,7 +253,7 @@ cd java && ./gradlew clean
 make java-lint python-lint node-lint go-lint
 
 # Individual language linting
-cd go && make lint
+cd go && make format
 cd node && npm run lint
 cd python && python3 dev.py lint
 cd java && ./gradlew spotlessApply
