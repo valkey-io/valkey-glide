@@ -215,7 +215,7 @@ make clean
 
 # Language-specific clean  
 cd go && make clean
-cd node && npm run clean  # if available
+cd node && npm run clean
 cd python && python3 dev.py clean  # if available
 cd java && ./gradlew clean
 ```
