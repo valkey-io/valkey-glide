@@ -6848,10 +6848,14 @@ func (suite *GlideTestSuite) TestZScan() {
 		if suite.serverVersion >= "8.0.0" {
 			// Use a fresh key for NoScores test to avoid interference from previous entries
 			noScoresKey := uuid.New().String()
-			// Add only "member" entries to ensure all returned fields start with "member"
-			res, err := client.ZAdd(context.Background(), noScoresKey, numberMap)
+			// Create a smaller fresh map for NoScores test - we don't need 50K entries just to test the NoScores option
+			freshNumberMap := make(map[string]float64)
+			for i := 0; i < 100; i++ {
+				freshNumberMap["member"+strconv.Itoa(i)] = float64(i)
+			}
+			res, err := client.ZAdd(context.Background(), noScoresKey, freshNumberMap)
 			assert.NoError(suite.T(), err)
-			assert.Equal(suite.T(), int64(50000), res)
+			assert.Equal(suite.T(), int64(100), res)
 
 			opts = options.NewZScanOptions().SetNoScores(true)
 			result, err = client.ZScanWithOptions(context.Background(), noScoresKey, initialCursor, *opts)
@@ -11703,6 +11707,9 @@ func (suite *GlideTestSuite) TestScriptShow() {
 
 		// Get the SHA1 digest of the script
 		sha1 := script.GetHash()
+
+		// Add a small delay to allow cluster cache synchronization
+		time.Sleep(100 * time.Millisecond)
 
 		// Test with String
 		scriptSource, err := client.ScriptShow(context.Background(), sha1)
