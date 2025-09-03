@@ -177,14 +177,11 @@ cd java && ./gradlew build -x test -x javadoc && echo "Build successful"
 ```
 
 ### Integration Test Validation
-**ONLY run if you have valkey-server running:**
+**ONLY run if you have valkey-server installed (tests start servers themselves):**
 
 ```bash
-# Start Valkey server in background
-valkey-server --daemonize yes
-
 # Test your language (examples)
-cd go && make unit-test  # TIMEOUT: 30+ minutes
+cd go && make integ-test  # TIMEOUT: 30+ minutes
 cd node && npm test      # TIMEOUT: 20+ minutes  
 cd python && python3 dev.py test  # TIMEOUT: 45+ minutes
 ```
@@ -216,7 +213,6 @@ make clean
 # Language-specific clean  
 cd go && make clean
 cd node && npm run clean
-cd python && python3 dev.py clean  # if available
 cd java && ./gradlew clean
 ```
 
@@ -288,7 +284,7 @@ cd glide-core && cargo fmt --all -- --check
 5. Check disk space and memory availability
 
 ### If Tests Fail
-1. Ensure valkey-server is running: `valkey-server --daemonize yes`
+1. Ensure valkey-server is installed (tests start their own servers)
 2. Check no other Redis instances are running on default port
 3. Verify network connectivity if using external endpoints
 4. Run individual test suites to isolate issues
