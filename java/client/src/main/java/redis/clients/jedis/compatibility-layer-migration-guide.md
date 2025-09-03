@@ -114,8 +114,8 @@ The compatibility layer provides varying levels of support for Jedis configurati
 - ✅ Basic string operations (GET, SET, MGET, MSET)
 - ✅ Hash operations (HGET, HSET, HMGET, HMSET)
 - ✅ List operations (LPUSH, RPUSH, LPOP, RPOP)
-- ✅ Set operations (SADD, SREM, SMEMBERS)
-- ✅ Sorted set operations (ZADD, ZREM, ZRANGE)
+- ⚠️ Set operations (SADD, SREM, SMEMBERS) - **Available via `sendCommand()` only**
+- ⚠️ Sorted set operations (ZADD, ZREM, ZRANGE) - **Available via `sendCommand()` only**
 - ✅ Key operations (DEL, EXISTS, EXPIRE, TTL)
 - ✅ Connection commands (PING, SELECT)
 - ✅ Generic commands via `sendCommand()` (Protocol.Command types only)
@@ -147,6 +147,7 @@ The compatibility layer provides varying levels of support for Jedis configurati
 - ❌ **Pub/Sub**: Redis publish/subscribe not implemented
 - ❌ **Lua scripting**: EVAL/EVALSHA commands not supported
 - ❌ **Modules**: Redis module commands not available
+- ⚠️ **Typed set/sorted set methods**: No dedicated methods like `sadd()`, `zadd()` - use `sendCommand()` instead
 
 ### Configuration Limitations
 - ❌ **Complex SSL configurations**: Jedis `JedisClientConfig` SSL parameters cannot be mapped to Valkey GLIDE `GlideClientConfiguration`
