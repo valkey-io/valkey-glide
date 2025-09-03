@@ -124,7 +124,7 @@ jobs:
                   RELEASE_VERSION: ${{ needs.validate-release-version.outputs.RELEASE_VERSION }}
               run: |
                   make install-build-tools
-                  make build GLIDE_VERSION="${RELEASE_VERSION}"
+                  make build GLIDE_VERSION="${RELEASE_VERSION}" TARGET_TRIPLET="${{ matrix.host.TARGET }}"
             - name: Move FFI artifacts on linux
               if: ${{ contains(matrix.host.TARGET, 'linux-gnu') }}
               run: |

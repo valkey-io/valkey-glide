@@ -18,19 +18,27 @@ IS_ALPINE := $(shell test -f /etc/alpine-release && echo true || echo false)
 GLIDE_NAME = GlideGo
 GLIDE_VERSION ?= unknown
 
+ifndef TARGET_TRIPLET
 ifeq ($(UNAME), Darwin)
     TARGET_TRIPLET := $(if $(filter arm64,$(ARCH)),aarch64-apple-darwin,x86_64-apple-darwin)
-	# https://github.com/rust-lang/rust/issues/51009#issuecomment-2274649980
-	BUILD_CMD := rustc --crate-type staticlib
-	CARGO_FIX_CMD := : # no-op
-	CARGO_POSTFIX_CMD := : # no-op
-    STRIP_CMD := strip -x
 else ifeq ($(UNAME), Linux)
     ifeq ($(IS_ALPINE), true)
         TARGET_TRIPLET := $(if $(filter arm64 aarch64,$(ARCH)),aarch64-unknown-linux-musl,x86_64-unknown-linux-musl)
     else
         TARGET_TRIPLET := $(if $(filter arm64 aarch64,$(ARCH)),aarch64-unknown-linux-gnu,x86_64-unknown-linux-gnu)
     endif
+else
+    $(error Unsupported platform: $(UNAME) $(ARCH))
+endif
+endif
+
+ifeq ($(UNAME), Darwin)
+	# https://github.com/rust-lang/rust/issues/51009#issuecomment-2274649980
+	BUILD_CMD := rustc --crate-type staticlib
+	CARGO_FIX_CMD := : # no-op
+	CARGO_POSTFIX_CMD := : # no-op
+    STRIP_CMD := strip -x
+else ifeq ($(UNAME), Linux)
 	# zigbuild https://github.com/rust-cross/cargo-zigbuild
 	BUILD_CMD := zigbuild --target $(TARGET_TRIPLET)
 	# workaround for https://github.com/rust-cross/cargo-zigbuild/issues/337
