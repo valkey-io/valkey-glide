@@ -49,7 +49,7 @@ Change the application's classpath such that it does not have the Jedis JAR and 
 
 ### Configuration Mapping Overview
 
-The compatibility layer provides varying levels of support for Jedis configuration parameters. Based on detailed analysis of `DefaultJedisClientConfig` fields:
+The compatibility layer provides varying levels of support for Jedis configuration parameters, based on detailed analysis of `DefaultJedisClientConfig` fields:
 
 #### ✅ Successfully Mapped
 - `user` → `ServerCredentials.username`
@@ -201,7 +201,7 @@ try (GlideClient client = GlideClient.createClient(config).get()) {
 
 ## Getting Help
 
-- Review the [main README](README.md) for native Valkey GLIDE usage
+- Review the [main README](https://github.com/valkey-io/valkey-glide/blob/main/README.md) for native Valkey GLIDE usage
 - Check [integration tests](./integTest/src/test/java/glide) for examples
 - Report compatibility issues through the project's issue tracker
 
