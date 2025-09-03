@@ -282,6 +282,7 @@ do
     then
         csharpResults=$(resultFileName csharp $currentDataSize)
         resultFiles+=$csharpResults" "
+        echo "csharpResults = $csharpResults"
         runCSharpBenchmark $csharpResults $currentDataSize
     fi
 
