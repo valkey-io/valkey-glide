@@ -34,7 +34,7 @@ import redis.clients.jedis.Jedis;
 public class JedisExample {
     public static void main(String[] args) {
         Jedis jedis = new Jedis();
-        
+
         // Basic operations work unchanged
         String setResult = jedis.set("user:1001:name", "John Doe");
         String getValue = jedis.get("user:1001:name");
@@ -42,15 +42,18 @@ public class JedisExample {
 }
 ```
 
-## Input Parameters Mapping Report
+### How to switch without a recompile?
+Change the application's classpath such that it does not have the Jedis JAR and instead has Glide + the Jedis compatibility layer.
+
+## Supported input parameters
 
 ### Configuration Mapping Overview
 
 The compatibility layer provides varying levels of support for Jedis configuration parameters. Based on detailed analysis of `DefaultJedisClientConfig` fields:
 
-#### ✅ Successfully Mapped (69% of main fields)
+#### ✅ Successfully Mapped
 - `user` → `ServerCredentials.username`
-- `password` → `ServerCredentials.password` 
+- `password` → `ServerCredentials.password`
 - `clientName` → `BaseClientConfiguration.clientName`
 - `ssl` → `BaseClientConfiguration.useTLS`
 - `redisProtocol` → `BaseClientConfiguration.protocol`
@@ -58,34 +61,34 @@ The compatibility layer provides varying levels of support for Jedis configurati
 - `socketTimeoutMillis` → `BaseClientConfiguration.requestTimeout`
 - `database` → Handled via SELECT command after connection
 
-#### 🔶 Partially Mapped (23% of main fields)
+#### 🔶 Partially Mapped
 - `sslSocketFactory` → Requires SSL/TLS migration to system certificate store
 - `sslParameters` → Limited mapping; custom protocols/ciphers not supported
 - `hostnameVerifier` → Standard verification works; custom verifiers require `useInsecureTLS`
 
-#### ❌ Not Mapped (8% of main fields)
+#### ❌ Not Mapped
 - `blockingSocketTimeoutMillis` → No equivalent (GLIDE uses async I/O model)
 
 ### SSL/TLS Configuration Complexity
 
 #### Internal SSL Fields Analysis (21 sub-fields total):
-- **SSLParameters**: 3/9 fields partially mapped (33%)
-- **SSLSocketFactory**: 1/8 fields directly mapped (13%)
-- **HostnameVerifier**: 2/4 verification types mapped (50%)
+- **SSLParameters**: 3/9 fields partially mapped
+- **SSLSocketFactory**: 1/8 fields directly mapped
+- **HostnameVerifier**: 2/4 verification types mapped
 
 #### Migration Requirements by Complexity:
 
-**Low Complexity (67% of fields)**
+**Low Complexity**
 - Direct parameter mapping
 - No code changes required
 - Examples: Basic auth, timeouts, protocol selection
 
-**Medium Complexity (25% of fields)**
+**Medium Complexity**
 - SSL/TLS certificate migration required
 - System certificate store installation needed
 - Custom SSL configurations → GLIDE secure defaults
 
-**High Complexity (8% of fields)**
+**High Complexity**
 - No GLIDE equivalent
 - Architectural differences (async vs blocking I/O)
 - Requires application redesign
@@ -94,11 +97,9 @@ The compatibility layer provides varying levels of support for Jedis configurati
 
 **Including SSL/TLS Internal Fields:**
 - **Total analyzable fields**: 33 (12 main + 21 SSL internal)
-- **Successfully mapped**: 9/33 (27%)
-- **Partially mapped with migration**: 11/33 (33%)
-- **Not mappable**: 13/33 (40%)
-
-**Effective migration coverage**: 61% of all configuration parameters
+- **Successfully mapped**: 9/33
+- **Partially mapped with migration**: 11/33
+- **Not mappable**: 13/33
 
 ### Key Migration Insights
 
@@ -214,12 +215,6 @@ try (GlideClient client = GlideClient.createClient(config).get()) {
 - ⚠️ **Generic command support**: `sendCommand()` is implemented but only supports `Protocol.Command` types
 - ❌ **Stub implementations**: Many classes exist but lack full functionality, creating false expectations
 - ❌ **Runtime failures**: Build-time success doesn't guarantee runtime compatibility
-
-### Integration Challenges
-- ❌ **JDBC driver compatibility**: Older JDBC drivers using legacy Jedis versions require specific compatibility layer updates
-- ❌ **Third-party tool support**: Different tools may require different compatibility features released at different stages
-- ❌ **Incremental rollout**: Partial feature implementation may mislead users about actual capabilities
-- ❌ **SSL/TLS configuration mapping**: Jedis and Valkey GLIDE use fundamentally different SSL approaches that cannot be automatically mapped
 
 ## Migration Warnings
 
