@@ -116,7 +116,7 @@ jobs:
               uses: ./.github/workflows/install-shared-dependencies
               with:
                   os: ${{ matrix.host.OS }}
-                  target: ${{ matrix.host.TARGET }}
+                  target: ${{ matrix.host.CD_TARGET || matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
             - name: Build Go client
               working-directory: go
