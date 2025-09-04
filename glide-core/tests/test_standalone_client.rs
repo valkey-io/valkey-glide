@@ -247,7 +247,7 @@ mod standalone_client_tests {
         let mut addresses = get_mock_addresses(&servers);
         for i in 4 - config.number_of_missing_replicas..4 {
             addresses.push(redis::ConnectionAddr::Tcp(
-                "foo".to_string(),
+                "192.0.2.1".to_string(),  // Use non-routable IP for fast connection failure
                 6379 + i as u16,
             ));
         }
