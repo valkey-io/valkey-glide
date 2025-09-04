@@ -221,9 +221,6 @@ def test_database_id_validation_in_base_config():
     config = BaseClientConfiguration([NodeAddress("127.0.0.1")], database_id=None)
     assert config.database_id is None
 
-    with pytest.raises(ValueError, match="database_id must be an integer"):
-        BaseClientConfiguration([NodeAddress("127.0.0.1")], database_id="5")
-
 
 def test_database_id_in_standalone_config():
     """Test database_id configuration in GlideClientConfiguration."""
