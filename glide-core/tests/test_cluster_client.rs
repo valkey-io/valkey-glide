@@ -392,6 +392,24 @@ mod cluster_client_tests {
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_set_database_id_after_reconnection() {
         block_on_all(async {
+            // First create a basic client to check server version
+            let mut version_check_basics = setup_test_basics_internal(TestConfiguration {
+                cluster_mode: ClusterMode::Enabled,
+                shared_server: true,
+                ..Default::default()
+            })
+            .await;
+
+            // Skip test if server version is less than 9.0 (database isolation not supported)
+            if !utilities::version_greater_or_equal(&mut version_check_basics.client, "9.0.0").await
+            {
+                println!(
+                    "Skipping test_set_database_id_after_reconnection: Server version < 9.0.0, database isolation not supported in cluster mode"
+                );
+                return;
+            }
+
+            // Now create the actual test client with database_id = 1
             let mut test_basics = setup_test_basics_internal(TestConfiguration {
                 cluster_mode: ClusterMode::Enabled,
                 shared_server: true,
@@ -509,6 +527,23 @@ mod cluster_client_tests {
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_database_isolation_in_cluster_mode() {
         block_on_all(async {
+            // First create a basic client to check server version
+            let mut version_check_basics = setup_test_basics_internal(TestConfiguration {
+                cluster_mode: ClusterMode::Enabled,
+                shared_server: true,
+                ..Default::default()
+            })
+            .await;
+
+            // Skip test if server version is less than 9.0 (database isolation not supported)
+            if !utilities::version_greater_or_equal(&mut version_check_basics.client, "9.0.0").await
+            {
+                println!(
+                    "Skipping test_database_isolation_in_cluster_mode: Server version < 9.0.0, database isolation not supported in cluster mode"
+                );
+                return;
+            }
+
             // Create two clients connected to different databases
             let mut test_basics_db1 = setup_test_basics_internal(TestConfiguration {
                 cluster_mode: ClusterMode::Enabled,
@@ -645,6 +680,23 @@ mod cluster_client_tests {
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_database_id_per_node_verification_with_reconnection() {
         block_on_all(async {
+            // First create a basic client to check server version
+            let mut version_check_basics = setup_test_basics_internal(TestConfiguration {
+                cluster_mode: ClusterMode::Enabled,
+                shared_server: true,
+                ..Default::default()
+            })
+            .await;
+
+            // Skip test if server version is less than 9.0 (database isolation not supported)
+            if !utilities::version_greater_or_equal(&mut version_check_basics.client, "9.0.0").await
+            {
+                println!(
+                    "Skipping test_database_id_per_node_verification_with_reconnection: Server version < 9.0.0, database isolation not supported in cluster mode"
+                );
+                return;
+            }
+
             let mut test_basics = setup_test_basics_internal(TestConfiguration {
                 cluster_mode: ClusterMode::Enabled,
                 shared_server: true,
