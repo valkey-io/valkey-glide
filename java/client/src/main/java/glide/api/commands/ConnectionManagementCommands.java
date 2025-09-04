@@ -116,6 +116,8 @@ public interface ConnectionManagementCommands {
      *
      * <p><b>RECOMMENDED APPROACH:</b> Use the database_id parameter in client configuration instead:
      *
+     * <p><b>RECOMMENDED EXAMPLE:</b>
+     *
      * <pre>{@code
      * GlideClient client = GlideClient.createClient(
      *     GlideClientConfiguration.builder()
