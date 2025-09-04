@@ -510,11 +510,11 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void clientGetName(GlideClusterClient clusterClient) {
-        // TODO replace with the corresponding command once implemented
-        clusterClient.customCommand(new String[] {"client", "setname", "clientGetName"}).get();
+        String result = clusterClient.clientSetName("clientGetName").get();
 
         var name = clusterClient.clientGetName().get();
 
+        assertEquals("OK", result);
         assertEquals("clientGetName", name);
     }
 
@@ -522,14 +522,12 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void clientGetName_with_single_node_route(GlideClusterClient clusterClient) {
-        // TODO replace with the corresponding command once implemented
-        clusterClient
-                .customCommand(
-                        new String[] {"client", "setname", "clientGetName_with_single_node_route"}, ALL_NODES)
-                .get();
+        String result =
+                clusterClient.clientSetName("clientGetName_with_single_node_route", ALL_NODES).get();
 
         var name = clusterClient.clientGetName(RANDOM).get();
 
+        assertEquals("OK", result);
         assertEquals("clientGetName_with_single_node_route", name.getSingleValue());
     }
 
@@ -537,14 +535,12 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void clientGetName_with_multi_node_route(GlideClusterClient clusterClient) {
-        // TODO replace with the corresponding command once implemented
-        clusterClient
-                .customCommand(
-                        new String[] {"client", "setname", "clientGetName_with_multi_node_route"}, ALL_NODES)
-                .get();
+        String result =
+                clusterClient.clientSetName("clientGetName_with_multi_node_route", ALL_NODES).get();
 
         var name = clusterClient.clientGetName(ALL_NODES).get();
 
+        assertEquals("OK", result);
         assertEquals("clientGetName_with_multi_node_route", getFirstEntryFromMultiValue(name));
     }
 

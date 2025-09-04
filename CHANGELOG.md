@@ -2,6 +2,7 @@
 
 #### Changes
 
+* Java: Added `ClientSetName` ([#4604](https://github.com/valkey-io/valkey-glide/pull/4604))
 * GO: Hash Field Expiration commands for Valkey 9 ([#4554](https://github.com/valkey-io/valkey-glide/pull/4554))
 * JAVA: Valkey 9 new commands HASH items expiration ([#4556](https://github.com/valkey-io/valkey-glide/pull/4556))
 * NODE: Valkey 9 support - Add Hash Field Expiration Commands Support ([#4598](https://github.com/valkey-io/valkey-glide/pull/4598))
