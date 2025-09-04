@@ -317,7 +317,6 @@ class BaseClientConfiguration:
         self.advanced_config = advanced_config
         self.lazy_connect = lazy_connect
 
-
         if read_from == ReadFrom.AZ_AFFINITY and not client_az:
             raise ValueError(
                 "client_az must be set when read_from is set to AZ_AFFINITY"
