@@ -919,52 +919,6 @@ class ClusterCommands(CoreCommands):
             self._execute_command(RequestType.FlushAll, args, route),
         )
 
-    def select(self, index: int) -> TOK:
-        """
-        Change the currently selected database on cluster nodes.
-
-        **WARNING**: This command is NOT RECOMMENDED for production use.
-        Upon reconnection, nodes will revert to the database_id specified
-        in the client configuration (default: 0), NOT the database selected
-        via this command.
-
-        **RECOMMENDED APPROACH**: Use the database_id parameter in client
-        configuration instead:
-
-        ```python
-        client = GlideClusterClient.create_client(
-            GlideClusterClientConfiguration(
-                addresses=[NodeAddress("localhost", 6379)],
-                database_id=5  # Recommended: persists across reconnections
-            )
-        )
-        ```
-
-        **CLUSTER BEHAVIOR**: This command routes to all nodes by default
-        to maintain consistency across the cluster.
-
-        **RECONNECTION BEHAVIOR**: After any reconnection (due to network issues,
-        timeouts, etc.), nodes will automatically revert to the database_id
-        specified during client creation, losing any database selection made via
-        this SELECT command.
-
-        See [valkey.io](https://valkey.io/commands/select/) for details.
-
-        Args:
-            index (int): The index of the database to select.
-
-        Returns:
-            TClusterResponse[TOK]: A simple OK response from each node.
-
-        Examples:
-            >>> client.select(1)
-                'OK'  # All nodes in the cluster have selected database 1
-        """
-        return cast(
-            TOK,
-            self._execute_command(RequestType.Select, [str(index)]),
-        )
-
     def flushdb(
         self, flush_mode: Optional[FlushMode] = None, route: Optional[Route] = None
     ) -> TOK:
