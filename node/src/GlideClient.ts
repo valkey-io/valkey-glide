@@ -169,7 +169,6 @@ export class GlideClient extends BaseClient {
         options: GlideClientConfiguration,
     ): connection_request.IConnectionRequest {
         const configuration = super.createClientRequest(options);
-        // databaseId is now handled in the base class
 
         this.configurePubsub(options, configuration);
 

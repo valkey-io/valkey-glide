@@ -1199,32 +1199,12 @@ export class BaseClient {
         }
     }
 
-    /**
-     * @internal
-     */
-    /**
-     * @internal
-     * Validates the databaseId parameter for client configuration.
-     */
-    private static validateDatabaseId(databaseId?: number): void {
-        if (databaseId !== undefined) {
-            if (!Number.isInteger(databaseId) || databaseId < 0) {
-                throw new ConfigurationError(
-                    "databaseId must be a non-negative integer",
-                );
-            }
-        }
-    }
-
     protected constructor(
         socket: net.Socket,
         options?: BaseClientConfiguration,
     ) {
         // if logger has been initialized by the external-user on info level this log will be shown
         Logger.log("info", "Client lifetime", `construct client`);
-
-        // Validate databaseId if provided
-        BaseClient.validateDatabaseId(options?.databaseId);
 
         this.config = options;
         this.requestTimeout =
