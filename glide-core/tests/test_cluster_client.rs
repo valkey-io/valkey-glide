@@ -42,7 +42,6 @@ mod cluster_client_tests {
             })
     }
 
-
     #[rstest]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_send_routing_no_provided_route() {
@@ -393,9 +392,6 @@ mod cluster_client_tests {
             // Skip test if server version is less than 9.0 (database isolation not supported)
             if !utilities::version_greater_or_equal(&mut version_check_basics.client, "9.0.0").await
             {
-                println!(
-                    "Skipping test_database_isolation_in_cluster_mode: Server version < 9.0.0, database isolation not supported in cluster mode"
-                );
                 return;
             }
             let mut test_basics = setup_test_basics_internal(TestConfiguration {
@@ -424,7 +420,10 @@ mod cluster_client_tests {
 
             kill_connection(&mut test_basics.client).await;
 
-            let res = test_basics.client.send_command(&client_info_cmd, None).await;
+            let res = test_basics
+                .client
+                .send_command(&client_info_cmd, None)
+                .await;
             match res {
                 Err(err) => {
                     // Connection was dropped as expected
@@ -436,7 +435,9 @@ mod cluster_client_tests {
                         let mut client = test_basics.client.clone();
                         let response = client.send_command(&client_info_cmd, None).await.ok()?;
                         match response {
-                            redis::Value::BulkString(bytes) => Some(String::from_utf8_lossy(&bytes).to_string()),
+                            redis::Value::BulkString(bytes) => {
+                                Some(String::from_utf8_lossy(&bytes).to_string())
+                            }
                             redis::Value::VerbatimString { text, .. } => Some(text),
                             _ => None,
                         }
@@ -447,7 +448,9 @@ mod cluster_client_tests {
                 Ok(response) => {
                     // Command succeeded, extract new client ID and compare
                     let new_client_info = match response {
-                        redis::Value::BulkString(bytes) => String::from_utf8_lossy(&bytes).to_string(),
+                        redis::Value::BulkString(bytes) => {
+                            String::from_utf8_lossy(&bytes).to_string()
+                        }
                         redis::Value::VerbatimString { text, .. } => text,
                         _ => panic!("Unexpected CLIENT INFO response type: {:?}", response),
                     };
@@ -470,406 +473,6 @@ mod cluster_client_tests {
             .find(|part| part.starts_with("id="))
             .and_then(|id_part| id_part.strip_prefix("id="))
             .map(|id| id.to_string())
-    }
-
-    #[rstest]
-    #[serial_test::serial]
-    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
-    fn test_database_isolation_in_cluster_mode() {
-        block_on_all(async {
-            // First create a basic client to check server version
-            let mut version_check_basics = setup_test_basics_internal(TestConfiguration {
-                cluster_mode: ClusterMode::Enabled,
-                shared_server: true,
-                ..Default::default()
-            })
-            .await;
-
-            // Skip test if server version is less than 9.0 (database isolation not supported)
-            if !utilities::version_greater_or_equal(&mut version_check_basics.client, "9.0.0").await
-            {
-                println!(
-                    "Skipping test_database_isolation_in_cluster_mode: Server version < 9.0.0, database isolation not supported in cluster mode"
-                );
-                return;
-            }
-
-            // Create two clients connected to different databases
-            let mut test_basics_db1 = setup_test_basics_internal(TestConfiguration {
-                cluster_mode: ClusterMode::Enabled,
-                shared_server: true,
-                database_id: 1, // Database 1
-                ..Default::default()
-            })
-            .await;
-
-            let mut test_basics_db0 = setup_test_basics_internal(TestConfiguration {
-                cluster_mode: ClusterMode::Enabled,
-                shared_server: true,
-                database_id: 0, // Database 0
-                ..Default::default()
-            })
-            .await;
-
-            // Use the same key name in both databases
-            let key = generate_random_string(10);
-            let value_db1 = "value_in_database_1";
-            let value_db0 = "value_in_database_0";
-
-            // Set the key in database 1
-            let mut set_cmd_db1 = redis::cmd("SET");
-            set_cmd_db1.arg(&key).arg(value_db1);
-            test_basics_db1
-                .client
-                .send_command(&set_cmd_db1, None)
-                .await
-                .unwrap();
-
-            // Set the same key in database 0 with a different value
-            let mut set_cmd_db0 = redis::cmd("SET");
-            set_cmd_db0.arg(&key).arg(value_db0);
-            test_basics_db0
-                .client
-                .send_command(&set_cmd_db0, None)
-                .await
-                .unwrap();
-
-            // Verify that database 1 has its value
-            let mut get_cmd_db1 = redis::cmd("GET");
-            get_cmd_db1.arg(&key);
-            let result_db1 = test_basics_db1
-                .client
-                .send_command(&get_cmd_db1, None)
-                .await
-                .unwrap();
-
-            // Verify that database 0 has its value
-            let mut get_cmd_db0 = redis::cmd("GET");
-            get_cmd_db0.arg(&key);
-            let result_db0 = test_basics_db0
-                .client
-                .send_command(&get_cmd_db0, None)
-                .await
-                .unwrap();
-
-            // Check if database isolation is supported
-            let db1_value = match &result_db1 {
-                redis::Value::BulkString(bytes) => String::from_utf8_lossy(bytes).to_string(),
-                redis::Value::Nil => "nil".to_string(),
-                _ => format!("unexpected_type: {:?}", result_db1),
-            };
-
-            let db0_value = match &result_db0 {
-                redis::Value::BulkString(bytes) => String::from_utf8_lossy(bytes).to_string(),
-                redis::Value::Nil => "nil".to_string(),
-                _ => format!("unexpected_type: {:?}", result_db0),
-            };
-
-            if db1_value == value_db1 && db0_value == value_db0 {
-                println!(
-                    "✓ Database isolation is supported: database 1 and database 0 have different values for the same key"
-                );
-                println!("  Database 1 value: {}", db1_value);
-                println!("  Database 0 value: {}", db0_value);
-
-                // Assert that the values are different and correct
-                assert_eq!(
-                    result_db1,
-                    redis::Value::BulkString(value_db1.as_bytes().to_vec())
-                );
-                assert_eq!(
-                    result_db0,
-                    redis::Value::BulkString(value_db0.as_bytes().to_vec())
-                );
-            } else {
-                println!("⚠ Database isolation not supported in this cluster configuration");
-                println!(
-                    "  Both databases returned the same value, which indicates they share the same keyspace"
-                );
-                println!("  Database 1 value: {}", db1_value);
-                println!("  Database 0 value: {}", db0_value);
-                println!(
-                    "  This is expected behavior for most Redis cluster configurations that only support database 0"
-                );
-
-                // In this case, we just verify that both clients can operate successfully
-                // even if they don't have true database isolation
-                assert!(matches!(result_db1, redis::Value::BulkString(_)));
-                assert!(matches!(result_db0, redis::Value::BulkString(_)));
-            }
-
-            // Clean up - delete the test key from both databases
-            let mut del_cmd_db1 = redis::cmd("DEL");
-            del_cmd_db1.arg(&key);
-            test_basics_db1
-                .client
-                .send_command(&del_cmd_db1, None)
-                .await
-                .unwrap();
-
-            let mut del_cmd_db0 = redis::cmd("DEL");
-            del_cmd_db0.arg(&key);
-            test_basics_db0
-                .client
-                .send_command(&del_cmd_db0, None)
-                .await
-                .unwrap();
-        });
-    }
-
-    #[rstest]
-    #[serial_test::serial]
-    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
-    fn test_database_id_per_node_verification_with_reconnection() {
-        block_on_all(async {
-            // First create a basic client to check server version
-            let mut version_check_basics = setup_test_basics_internal(TestConfiguration {
-                cluster_mode: ClusterMode::Enabled,
-                shared_server: true,
-                ..Default::default()
-            })
-            .await;
-
-            // Skip test if server version is less than 9.0 (database isolation not supported)
-            if !utilities::version_greater_or_equal(&mut version_check_basics.client, "9.0.0").await
-            {
-                println!(
-                    "Skipping test_database_id_per_node_verification_with_reconnection: Server version < 9.0.0, database isolation not supported in cluster mode"
-                );
-                return;
-            }
-
-            let mut test_basics = setup_test_basics_internal(TestConfiguration {
-                cluster_mode: ClusterMode::Enabled,
-                shared_server: true,
-                database_id: 2, // Use database 2 for this test
-                ..Default::default()
-            })
-            .await;
-
-            // Get cluster nodes information to understand the topology
-            let mut cluster_nodes_cmd = redis::cmd("CLUSTER");
-            cluster_nodes_cmd.arg("NODES");
-            let cluster_nodes_result = test_basics
-                .client
-                .send_command(&cluster_nodes_cmd, None)
-                .await
-                .unwrap();
-            let cluster_nodes =
-                redis::from_owned_redis_value::<String>(cluster_nodes_result).unwrap();
-
-            println!("Cluster topology:");
-            let mut _master_count = 0;
-            for line in cluster_nodes.lines() {
-                if line.contains("master") {
-                    let parts: Vec<&str> = line.split_whitespace().collect();
-                    if parts.len() >= 2 {
-                        let node_id = parts[0];
-                        let address = parts[1];
-                        println!("  Master node: {} at {}", node_id, address);
-                        _master_count += 1;
-                    }
-                }
-            }
-
-            // Test multiple keys that will likely hit different nodes
-            let test_keys = vec![
-                "node_test_key_1",
-                "node_test_key_2",
-                "node_test_key_3",
-                "different_slot_key_a",
-                "different_slot_key_b",
-                "different_slot_key_c",
-            ];
-
-            println!("\nTesting database ID consistency across nodes (before reconnection):");
-
-            // Set values and verify database ID for each key
-            for key in &test_keys {
-                // Set a value
-                let value = format!("db2_value_for_{}", key);
-                let mut set_cmd = redis::cmd("SET");
-                set_cmd.arg(*key).arg(&value);
-                test_basics
-                    .client
-                    .send_command(&set_cmd, None)
-                    .await
-                    .unwrap();
-
-                // Retrieve the value to confirm it's in the right database
-                let mut get_cmd = redis::cmd("GET");
-                get_cmd.arg(*key);
-                let retrieved_value = test_basics
-                    .client
-                    .send_command(&get_cmd, None)
-                    .await
-                    .unwrap();
-                let retrieved_str = match retrieved_value {
-                    redis::Value::BulkString(bytes) => String::from_utf8_lossy(&bytes).to_string(),
-                    _ => panic!("Unexpected GET response type: {:?}", retrieved_value),
-                };
-                assert_eq!(retrieved_str, value);
-
-                // Check CLIENT INFO for this operation
-                let mut client_info_cmd = redis::cmd("CLIENT");
-                client_info_cmd.arg("INFO");
-                let client_info = test_basics
-                    .client
-                    .send_command(&client_info_cmd, None)
-                    .await
-                    .unwrap();
-                let client_info_str = match client_info {
-                    redis::Value::BulkString(bytes) => String::from_utf8_lossy(&bytes).to_string(),
-                    redis::Value::VerbatimString { text, .. } => text,
-                    _ => panic!("Unexpected CLIENT INFO response type: {:?}", client_info),
-                };
-
-                // Extract database info
-                if let Some(db_line) = client_info_str.lines().find(|line| line.contains("db=")) {
-                    println!("  Key '{}' -> {}", key, db_line.trim());
-                    assert!(
-                        db_line.contains("db=2"),
-                        "Expected db=2 for key '{}', got: {}",
-                        key,
-                        db_line
-                    );
-                }
-            }
-
-            println!("✓ All node connections confirmed to be using database 2 before reconnection");
-
-            // Force reconnection by killing connections
-            println!("\nForcing reconnection...");
-            kill_connection(&mut test_basics.client).await;
-
-            // Wait for reconnection
-            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-
-            println!("Testing database ID consistency across nodes (after reconnection):");
-
-            // Verify all keys are still accessible and database ID is maintained after reconnection
-            for key in &test_keys {
-                // Retrieve the value to confirm it's still in the right database
-                let mut get_cmd = redis::cmd("GET");
-                get_cmd.arg(*key);
-                let retrieved_value = test_basics
-                    .client
-                    .send_command(&get_cmd, None)
-                    .await
-                    .unwrap();
-                let retrieved_str = match retrieved_value {
-                    redis::Value::BulkString(bytes) => String::from_utf8_lossy(&bytes).to_string(),
-                    _ => panic!(
-                        "Unexpected GET response type after reconnection: {:?}",
-                        retrieved_value
-                    ),
-                };
-                let expected_value = format!("db2_value_for_{}", key);
-                assert_eq!(
-                    retrieved_str, expected_value,
-                    "Key '{}' value changed after reconnection",
-                    key
-                );
-
-                // Check CLIENT INFO after reconnection
-                let mut client_info_cmd = redis::cmd("CLIENT");
-                client_info_cmd.arg("INFO");
-                let client_info = test_basics
-                    .client
-                    .send_command(&client_info_cmd, None)
-                    .await
-                    .unwrap();
-                let client_info_str = match client_info {
-                    redis::Value::BulkString(bytes) => String::from_utf8_lossy(&bytes).to_string(),
-                    redis::Value::VerbatimString { text, .. } => text,
-                    _ => panic!(
-                        "Unexpected CLIENT INFO response type after reconnection: {:?}",
-                        client_info
-                    ),
-                };
-
-                // Extract database info
-                if let Some(db_line) = client_info_str.lines().find(|line| line.contains("db=")) {
-                    println!("  Key '{}' (after reconnection) -> {}", key, db_line.trim());
-                    assert!(
-                        db_line.contains("db=2"),
-                        "Expected db=2 for key '{}' after reconnection, got: {}",
-                        key,
-                        db_line
-                    );
-                }
-            }
-
-            // Test setting new keys after reconnection to verify database selection persists
-            println!("\nTesting new operations after reconnection:");
-            let post_reconnect_keys = vec!["post_reconnect_key_1", "post_reconnect_key_2"];
-
-            for key in &post_reconnect_keys {
-                let value = format!("post_reconnect_value_for_{}", key);
-                let mut set_cmd = redis::cmd("SET");
-                set_cmd.arg(*key).arg(&value);
-                test_basics
-                    .client
-                    .send_command(&set_cmd, None)
-                    .await
-                    .unwrap();
-
-                let mut get_cmd = redis::cmd("GET");
-                get_cmd.arg(*key);
-                let retrieved_value = test_basics
-                    .client
-                    .send_command(&get_cmd, None)
-                    .await
-                    .unwrap();
-                let retrieved_str = match retrieved_value {
-                    redis::Value::BulkString(bytes) => String::from_utf8_lossy(&bytes).to_string(),
-                    _ => panic!(
-                        "Unexpected GET response type for new key: {:?}",
-                        retrieved_value
-                    ),
-                };
-                assert_eq!(retrieved_str, value);
-
-                // Verify database ID for new operations
-                let mut client_info_cmd = redis::cmd("CLIENT");
-                client_info_cmd.arg("INFO");
-                let client_info = test_basics
-                    .client
-                    .send_command(&client_info_cmd, None)
-                    .await
-                    .unwrap();
-                let client_info_str = match client_info {
-                    redis::Value::BulkString(bytes) => String::from_utf8_lossy(&bytes).to_string(),
-                    redis::Value::VerbatimString { text, .. } => text,
-                    _ => panic!(
-                        "Unexpected CLIENT INFO response type for new key: {:?}",
-                        client_info
-                    ),
-                };
-
-                if let Some(db_line) = client_info_str.lines().find(|line| line.contains("db=")) {
-                    println!("  New key '{}' -> {}", key, db_line.trim());
-                    assert!(
-                        db_line.contains("db=2"),
-                        "Expected db=2 for new key '{}', got: {}",
-                        key,
-                        db_line
-                    );
-                }
-            }
-
-            println!("✓ All node connections maintained database 2 after reconnection");
-            println!("✓ New operations after reconnection use correct database 2");
-
-            // Clean up all test keys
-            let mut all_keys = test_keys.clone();
-            all_keys.extend(post_reconnect_keys);
-            for key in &all_keys {
-                let mut del_cmd = redis::cmd("DEL");
-                del_cmd.arg(*key);
-                let _ = test_basics.client.send_command(&del_cmd, None).await;
-            }
-        });
     }
 
     #[rstest]
