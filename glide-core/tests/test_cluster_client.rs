@@ -54,12 +54,13 @@ mod cluster_client_tests {
             .unwrap();
 
         let info_dict: InfoDict = redis::from_owned_redis_value(info).unwrap();
-        match info_dict.get::<String>("redis_version") {
+
+        match info_dict.get::<String>("valkey_version") {
             Some(version) => match (Versioning::new(version), Versioning::new("9.0")) {
                 (Some(server_ver), Some(min_ver)) => server_ver >= min_ver,
                 _ => false,
             },
-            _ => false,
+            _ => false, // No valkey_version found, not a Valkey 9+ server
         }
     }
 
@@ -399,7 +400,7 @@ mod cluster_client_tests {
             })
             .await;
 
-            // Skip test if server doesn't support multi-database cluster mode (Valkey 9.0+)
+            // Only run test if server supports multi-database cluster mode (Valkey 9.0+)
             if !is_valkey_9_or_higher(&mut test_basics.client).await {
                 println!(
                     "Skipping test_set_database_id_after_reconnection: requires Valkey 9.0+ for multi-database cluster mode"
@@ -517,7 +518,7 @@ mod cluster_client_tests {
             })
             .await;
 
-            // Skip test if server doesn't support multi-database cluster mode (Valkey 9.0+)
+            // Only run test if server supports multi-database cluster mode (Valkey 9.0+)
             if !is_valkey_9_or_higher(&mut test_basics_db1.client).await {
                 println!(
                     "Skipping test_database_isolation_in_cluster_mode: requires Valkey 9.0+ for multi-database cluster mode"
@@ -652,7 +653,7 @@ mod cluster_client_tests {
             })
             .await;
 
-            // Skip test if server doesn't support multi-database cluster mode (Valkey 9.0+)
+            // Only run test if server supports multi-database cluster mode (Valkey 9.0+)
             if !is_valkey_9_or_higher(&mut test_basics.client).await {
                 println!(
                     "Skipping test_database_id_per_node_verification_with_reconnection: requires Valkey 9.0+ for multi-database cluster mode"
