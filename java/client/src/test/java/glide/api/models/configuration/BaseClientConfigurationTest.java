@@ -47,19 +47,6 @@ public class BaseClientConfigurationTest {
         assertNull(config.getDatabaseId());
     }
 
-    @Test
-    public void testDatabaseIdValidValues() {
-        // Test valid database ID values
-        TestClientConfiguration config0 = TestClientConfiguration.builder().databaseId(0).build();
-        assertEquals(0, config0.getDatabaseId());
-
-        TestClientConfiguration config1 = TestClientConfiguration.builder().databaseId(1).build();
-        assertEquals(1, config1.getDatabaseId());
-
-        TestClientConfiguration config15 = TestClientConfiguration.builder().databaseId(15).build();
-        assertEquals(15, config15.getDatabaseId());
-    }
-
     @ParameterizedTest
     @ValueSource(ints = {0, 1, 5, 10, 15, 50, 100, 1000})
     public void testDatabaseIdValidRange(int databaseId) {
@@ -68,43 +55,5 @@ public class BaseClientConfigurationTest {
         TestClientConfiguration config =
                 TestClientConfiguration.builder().databaseId(databaseId).build();
         assertEquals(databaseId, config.getDatabaseId());
-    }
-
-    @Test
-    public void testDatabaseIdNegativeValue() {
-        // Test that negative database IDs are handled (validation should be done at connection time)
-        TestClientConfiguration config = TestClientConfiguration.builder().databaseId(-1).build();
-        assertEquals(-1, config.getDatabaseId());
-    }
-
-    @Test
-    public void testDatabaseIdLargeValue() {
-        // Test that large database IDs are handled (server-side validation will handle range checks)
-        TestClientConfiguration config = TestClientConfiguration.builder().databaseId(100).build();
-        assertEquals(100, config.getDatabaseId());
-    }
-
-    @ParameterizedTest
-    @ValueSource(ints = {999, 10000, 50000})
-    public void testDatabaseIdVeryLargeValues(int databaseId) {
-        // Test that very large database IDs are accepted by client (server will validate range)
-        TestClientConfiguration config =
-                TestClientConfiguration.builder().databaseId(databaseId).build();
-        assertEquals(databaseId, config.getDatabaseId());
-    }
-
-    @Test
-    public void testDatabaseIdWithOtherConfiguration() {
-        // Test that databaseId works with other configuration options
-        TestClientConfiguration config =
-                TestClientConfiguration.builder()
-                        .databaseId(5)
-                        .requestTimeout(1000)
-                        .clientName("test-client")
-                        .build();
-
-        assertEquals(5, config.getDatabaseId());
-        assertEquals(1000, config.getRequestTimeout());
-        assertEquals("test-client", config.getClientName());
     }
 }

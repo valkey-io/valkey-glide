@@ -163,10 +163,6 @@ public class ConnectionManager {
         }
 
         if (configuration.getDatabaseId() != null) {
-            if (configuration.getDatabaseId() < 0) {
-                throw new ConfigurationError(
-                        "databaseId must be non-negative, got: " + configuration.getDatabaseId());
-            }
             connectionRequestBuilder.setDatabaseId(configuration.getDatabaseId());
         }
 
