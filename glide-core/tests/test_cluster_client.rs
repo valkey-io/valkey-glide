@@ -42,27 +42,6 @@ mod cluster_client_tests {
             })
     }
 
-    // Helper function to check if server supports multi-database cluster mode (Valkey 9.0+)
-    async fn is_valkey_9_or_higher(client: &mut Client) -> bool {
-        let cmd = redis::cmd("INFO");
-        let info = client
-            .send_command(
-                &cmd,
-                Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)),
-            )
-            .await
-            .unwrap();
-
-        let info_dict: InfoDict = redis::from_owned_redis_value(info).unwrap();
-
-        match info_dict.get::<String>("valkey_version") {
-            Some(version) => match (Versioning::new(version), Versioning::new("9.0")) {
-                (Some(server_ver), Some(min_ver)) => server_ver >= min_ver,
-                _ => false,
-            },
-            _ => false, // No valkey_version found, not a Valkey 9+ server
-        }
-    }
 
     #[rstest]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
@@ -390,7 +369,18 @@ mod cluster_client_tests {
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    /// Test that verifies the client maintains the correct database ID after an automatic reconnection.
+    /// This test:
+    /// 1. Creates a client connected to database 4
+    /// 2. Verifies the initial connection is to the correct database
+    /// 3. Simulates a connection drop by killing the connection
+    /// 4. Sends another command which either:
+    ///    - Fails due to the dropped connection, then retries and verifies reconnection to db=4
+    ///    - Succeeds with a new client ID (indicating reconnection) and verifies still on db=4
+    /// This ensures that database selection persists across reconnections.
     fn test_set_database_id_after_reconnection() {
+        let mut client_info_cmd = redis::cmd("CLIENT");
+        client_info_cmd.arg("INFO");
         block_on_all(async {
             // First create a basic client to check server version
             let mut version_check_basics = setup_test_basics_internal(TestConfiguration {
@@ -404,122 +394,82 @@ mod cluster_client_tests {
             if !utilities::version_greater_or_equal(&mut version_check_basics.client, "9.0.0").await
             {
                 println!(
-                    "Skipping test_set_database_id_after_reconnection: Server version < 9.0.0, database isolation not supported in cluster mode"
+                    "Skipping test_database_isolation_in_cluster_mode: Server version < 9.0.0, database isolation not supported in cluster mode"
                 );
                 return;
             }
-
-            // Now create the actual test client with database_id = 1
             let mut test_basics = setup_test_basics_internal(TestConfiguration {
                 cluster_mode: ClusterMode::Enabled,
                 shared_server: true,
-                database_id: 1, // Set a specific database ID
+                database_id: 4, // Set a specific database ID
                 ..Default::default()
             })
             .await;
 
-            // Only run test if server supports multi-database cluster mode (Valkey 9.0+)
-            if !is_valkey_9_or_higher(&mut test_basics.client).await {
-                println!(
-                    "Skipping test_set_database_id_after_reconnection: requires Valkey 9.0+ for multi-database cluster mode"
-                );
-                return;
-            }
-
-            // Verify we can connect and perform operations with database_id = 1
-            let key = generate_random_string(10);
-            let value = generate_random_string(10);
-
-            let mut set_cmd = redis::cmd("SET");
-            set_cmd.arg(&key).arg(&value);
-            test_basics
-                .client
-                .send_command(&set_cmd, None)
-                .await
-                .unwrap();
-
-            let mut get_cmd = redis::cmd("GET");
-            get_cmd.arg(&key);
-            let result = test_basics
-                .client
-                .send_command(&get_cmd, None)
-                .await
-                .unwrap();
-            assert_eq!(result, redis::Value::BulkString(value.as_bytes().to_vec()));
-
-            // Verify that we're connected to the correct database using CLIENT INFO
-            let mut client_info_cmd = redis::cmd("CLIENT");
-            client_info_cmd.arg("INFO");
-
-            // Check database before reconnection
-            let info_before = test_basics
+            let client_info = test_basics
                 .client
                 .send_command(&client_info_cmd, None)
                 .await
                 .unwrap();
-            let info_str_before = match info_before {
+            let client_info_str = match client_info {
                 redis::Value::BulkString(bytes) => String::from_utf8_lossy(&bytes).to_string(),
                 redis::Value::VerbatimString { text, .. } => text,
-                _ => panic!("Unexpected CLIENT INFO response type: {:?}", info_before),
+                _ => panic!("Unexpected CLIENT INFO response type: {:?}", client_info),
             };
-            assert!(
-                info_str_before.contains("db=1"),
-                "Expected db=1 before reconnection, got: {}",
-                info_str_before
-            );
+            assert!(client_info_str.contains("db=4"));
 
-            // Kill the connection to force reconnection
+            // Extract initial client ID
+            let initial_client_id =
+                extract_client_id(&client_info_str).expect("Failed to extract initial client ID");
+
             kill_connection(&mut test_basics.client).await;
 
-            // Longer sleep to allow the connection validation task to reconnect
-            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-
-            // Verify database after reconnection using CLIENT INFO
-            let info_after = test_basics
-                .client
-                .send_command(&client_info_cmd, None)
-                .await
-                .unwrap();
-            let info_str_after = match info_after {
-                redis::Value::BulkString(bytes) => String::from_utf8_lossy(&bytes).to_string(),
-                redis::Value::VerbatimString { text, .. } => text,
-                _ => panic!("Unexpected CLIENT INFO response type: {:?}", info_after),
-            };
-            assert!(
-                info_str_after.contains("db=1"),
-                "Expected db=1 after reconnection, got: {}",
-                info_str_after
-            );
-
-            // Set a new key after reconnection to verify database selection persists
-            let key2 = generate_random_string(10);
-            let value2 = generate_random_string(10);
-
-            let mut set_cmd2 = redis::cmd("SET");
-            set_cmd2.arg(&key2).arg(&value2);
-            test_basics
-                .client
-                .send_command(&set_cmd2, None)
-                .await
-                .unwrap();
-
-            let mut get_cmd2 = redis::cmd("GET");
-            get_cmd2.arg(&key2);
-            let result2 = test_basics
-                .client
-                .send_command(&get_cmd2, None)
-                .await
-                .unwrap();
-            assert_eq!(
-                result2,
-                redis::Value::BulkString(value2.as_bytes().to_vec())
-            );
-
-            println!("✓ CLIENT INFO confirms database ID 1 before and after reconnection");
-            println!(
-                "✓ Client can successfully perform operations after reconnection with database_id = 1"
-            );
+            let res = test_basics.client.send_command(&client_info_cmd, None).await;
+            match res {
+                Err(err) => {
+                    // Connection was dropped as expected
+                    assert!(
+                        err.is_connection_dropped() || err.is_timeout(),
+                        "Expected connection dropped or timeout error, got: {err:?}",
+                    );
+                    let client_info = repeat_try_create(|| async {
+                        let mut client = test_basics.client.clone();
+                        let response = client.send_command(&client_info_cmd, None).await.ok()?;
+                        match response {
+                            redis::Value::BulkString(bytes) => Some(String::from_utf8_lossy(&bytes).to_string()),
+                            redis::Value::VerbatimString { text, .. } => Some(text),
+                            _ => None,
+                        }
+                    })
+                    .await;
+                    assert!(client_info.contains("db=4"));
+                }
+                Ok(response) => {
+                    // Command succeeded, extract new client ID and compare
+                    let new_client_info = match response {
+                        redis::Value::BulkString(bytes) => String::from_utf8_lossy(&bytes).to_string(),
+                        redis::Value::VerbatimString { text, .. } => text,
+                        _ => panic!("Unexpected CLIENT INFO response type: {:?}", response),
+                    };
+                    let new_client_id = extract_client_id(&new_client_info)
+                        .expect("Failed to extract new client ID");
+                    assert_ne!(
+                        initial_client_id, new_client_id,
+                        "Client ID should change after reconnection if command succeeds"
+                    );
+                    // Check that the database ID is still 4
+                    assert!(new_client_info.contains("db=4"));
+                }
+            }
         });
+    }
+
+    fn extract_client_id(client_info: &str) -> Option<String> {
+        client_info
+            .split_whitespace()
+            .find(|part| part.starts_with("id="))
+            .and_then(|id_part| id_part.strip_prefix("id="))
+            .map(|id| id.to_string())
     }
 
     #[rstest]
@@ -552,14 +502,6 @@ mod cluster_client_tests {
                 ..Default::default()
             })
             .await;
-
-            // Only run test if server supports multi-database cluster mode (Valkey 9.0+)
-            if !is_valkey_9_or_higher(&mut test_basics_db1.client).await {
-                println!(
-                    "Skipping test_database_isolation_in_cluster_mode: requires Valkey 9.0+ for multi-database cluster mode"
-                );
-                return;
-            }
 
             let mut test_basics_db0 = setup_test_basics_internal(TestConfiguration {
                 cluster_mode: ClusterMode::Enabled,
@@ -704,14 +646,6 @@ mod cluster_client_tests {
                 ..Default::default()
             })
             .await;
-
-            // Only run test if server supports multi-database cluster mode (Valkey 9.0+)
-            if !is_valkey_9_or_higher(&mut test_basics.client).await {
-                println!(
-                    "Skipping test_database_id_per_node_verification_with_reconnection: requires Valkey 9.0+ for multi-database cluster mode"
-                );
-                return;
-            }
 
             // Get cluster nodes information to understand the topology
             let mut cluster_nodes_cmd = redis::cmd("CLUSTER");
