@@ -139,7 +139,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Named;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
-import org.junit.jupiter.api.condition.EnabledIf;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -188,14 +187,6 @@ public class SharedCommandTests {
         return clients.stream()
                 .flatMap(
                         args -> Stream.of(true, false).map(isAtomic -> Arguments.of(args.get()[0], isAtomic)));
-    }
-
-    @SneakyThrows
-    public static Stream<Arguments> getClientsWithInvalidDb() {
-        return clients.stream()
-                .flatMap(
-                        args ->
-                                Stream.of(-1, 16, 100).map(invalidDb -> Arguments.of(args.get()[0], invalidDb)));
     }
 
     @SneakyThrows
@@ -17608,70 +17599,5 @@ public class SharedCommandTests {
                         });
         assertInstanceOf(RequestException.class, exception.getCause());
         assertTrue(exception.getCause().getMessage().contains("WRONGTYPE"));
-    }
-
-    // ========== SELECT Command Tests ==========
-
-    /** Helper method to check if server version is at least 9.0 */
-    private static boolean isServerVersionAtLeast9_0() {
-        return SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0");
-    }
-
-    @SneakyThrows
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClients")
-    @EnabledIf("isServerVersionAtLeast9_0")
-    public void select_command_cluster_basic_functionality(BaseClient client) {
-        // Only test SELECT on cluster clients with Valkey 9.0+
-        if (!(client instanceof GlideClusterClient)) {
-            return; // Skip standalone clients for this test
-        }
-
-        assumeTrue(isServerVersionAtLeast9_0(), "Multi-DB cluster mode requires Valkey 9.0+");
-
-        GlideClusterClient clusterClient = (GlideClusterClient) client;
-        String key = UUID.randomUUID().toString();
-
-        // Switch to database 1
-        // Test that SELECT command returns OK
-        String selectResult = clusterClient.select(1).get();
-        assertEquals(OK, selectResult);
-
-        // Test that we can perform operations after SELECT
-        assertEquals(OK, clusterClient.set(key, "test_value").get());
-        assertEquals("test_value", clusterClient.get(key).get());
-
-        // Switch to database 0
-        selectResult = clusterClient.select(0).get();
-        assertEquals(OK, selectResult);
-
-        // Clean up
-        clusterClient.select(1).get();
-        clusterClient.del(new String[] {key}).get();
-        clusterClient.select(0).get(); // Reset to DB 0
-    }
-
-    @SneakyThrows
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClientsWithInvalidDb")
-    public void select_command_invalid_database_standalone(BaseClient client, int invalidDb) {
-        // Only test SELECT on standalone clients
-        if (client instanceof GlideClusterClient) {
-            return; // Skip cluster clients for this test
-        }
-
-        GlideClient standaloneClient = (GlideClient) client;
-
-        ExecutionException exception =
-                assertThrows(
-                        ExecutionException.class,
-                        () -> {
-                            standaloneClient.select(invalidDb).get();
-                        });
-
-        assertInstanceOf(RequestException.class, exception.getCause());
-        assertTrue(
-                exception.getMessage().toLowerCase().contains("invalid")
-                        || exception.getMessage().toLowerCase().contains("out of range"));
     }
 }

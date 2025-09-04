@@ -33,7 +33,6 @@ import static command_request.CommandRequestOuterClass.RequestType.SPublish;
 import static command_request.CommandRequestOuterClass.RequestType.ScriptExists;
 import static command_request.CommandRequestOuterClass.RequestType.ScriptFlush;
 import static command_request.CommandRequestOuterClass.RequestType.ScriptKill;
-import static command_request.CommandRequestOuterClass.RequestType.Select;
 import static command_request.CommandRequestOuterClass.RequestType.Time;
 import static command_request.CommandRequestOuterClass.RequestType.UnWatch;
 import static glide.api.commands.ServerManagementCommands.VERSION_VALKEY_API;
@@ -468,12 +467,6 @@ public class GlideClusterClient extends BaseClient
                         route instanceof SingleNodeRoute
                                 ? ClusterValue.ofSingleValue(handleGlideStringResponse(response))
                                 : ClusterValue.ofMultiValueBinary(handleBinaryStringMapResponse(response)));
-    }
-
-    @Override
-    public CompletableFuture<String> select(long index) {
-        return commandManager.submitNewCommand(
-                Select, new String[] {Long.toString(index)}, this::handleStringResponse);
     }
 
     @Override

@@ -249,37 +249,4 @@ public interface ConnectionManagementClusterCommands {
      * }</pre>
      */
     CompletableFuture<ClusterValue<GlideString>> echo(GlideString message, Route route);
-
-    /**
-     * Changes the currently selected database on cluster nodes.<br>
-     * The command will be routed to all nodes.
-     *
-     * <p><b>WARNING:</b> This command is <b>NOT RECOMMENDED</b> for production use. Upon
-     * reconnection, nodes will revert to the database_id specified in the client configuration
-     * (default: 0), NOT the database selected via this command.
-     *
-     * <p><b>RECOMMENDED APPROACH:</b> Use the database_id parameter in client configuration instead:
-     *
-     * <pre>{@code
-     * GlideClusterClient client = GlideClusterClient.createClient(
-     *     GlideClusterClientConfiguration.builder()
-     *         .address(NodeAddress.builder().host("localhost").port(6379).build())
-     *         .databaseId(5)  // Recommended: persists across reconnections
-     *         .build()
-     * ).get();
-     * }</pre>
-     *
-     * <p><b>CLUSTER BEHAVIOR:</b> This command routes to all nodes by default to maintain consistency
-     * across the cluster.
-     *
-     * @see <a href="https://valkey.io/commands/select/">valkey.io</a> for details.
-     * @param index The index of the database to select.
-     * @return A simple <code>OK</code> response.
-     * @example
-     *     <pre>{@code
-     * String response = clusterClient.select(0).get();
-     * assert response.equals("OK");
-     * }</pre>
-     */
-    CompletableFuture<String> select(long index);
 }
