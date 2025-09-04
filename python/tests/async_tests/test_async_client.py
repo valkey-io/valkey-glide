@@ -260,6 +260,16 @@ class TestGlideClients:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_select_database_id(self, request, cluster_mode):
+        if cluster_mode:
+            # Check version using a temporary standalone client
+            temp_client = await create_client(request, cluster_mode=False)
+            if await check_if_server_version_lt(temp_client, "9.0.0"):
+                await temp_client.close()
+                return pytest.mark.skip(
+                    reason="Database ID selection in cluster mode requires Valkey >= 9.0.0"
+                )
+            await temp_client.close()
+
         glide_client = await create_client(
             request, cluster_mode=cluster_mode, database_id=4
         )
