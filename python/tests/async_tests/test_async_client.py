@@ -259,7 +259,7 @@ class TestGlideClients:
             await glide_client.custom_command(["ACL", "DELUSER", username])
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    async def test_select_standalone_database_id(self, request, cluster_mode):
+    async def test_select_database_id(self, request, cluster_mode):
         glide_client = await create_client(
             request, cluster_mode=cluster_mode, database_id=4
         )

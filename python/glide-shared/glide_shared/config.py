@@ -317,12 +317,6 @@ class BaseClientConfiguration:
         self.advanced_config = advanced_config
         self.lazy_connect = lazy_connect
 
-        # Validate database_id parameter
-        if database_id is not None:
-            if not isinstance(database_id, int):
-                raise ValueError("database_id must be an integer")
-            if database_id < 0:
-                raise ValueError("database_id must be non-negative")
 
         if read_from == ReadFrom.AZ_AFFINITY and not client_az:
             raise ValueError(

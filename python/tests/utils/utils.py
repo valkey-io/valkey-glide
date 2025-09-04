@@ -552,7 +552,6 @@ def create_client_config(
     if cluster_mode:
         valkey_cluster = valkey_cluster or pytest.valkey_cluster  # type: ignore
         assert type(valkey_cluster) is ValkeyCluster
-        # Note: database_id != 0 is supported in Valkey 9.0+ cluster mode
         k = min(3, len(valkey_cluster.nodes_addr))
         seed_nodes = random.sample(valkey_cluster.nodes_addr, k=k)
         return GlideClusterClientConfiguration(
@@ -621,7 +620,6 @@ def create_sync_client_config(
     if cluster_mode:
         valkey_cluster = valkey_cluster or pytest.valkey_cluster  # type: ignore
         assert type(valkey_cluster) is ValkeyCluster
-        # Note: database_id != 0 is supported in Valkey 9.0+ cluster mode
         k = min(3, len(valkey_cluster.nodes_addr))
         seed_nodes = random.sample(valkey_cluster.nodes_addr, k=k)
         return SyncGlideClusterClientConfiguration(
