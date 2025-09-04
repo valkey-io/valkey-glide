@@ -92,14 +92,6 @@ func mapReadFrom(readFrom ReadFrom) protobuf.ReadFrom {
 	return protobuf.ReadFrom_Primary
 }
 
-// validateDatabaseId validates the database ID parameter.
-func validateDatabaseId(databaseId int) error {
-	if databaseId < 0 {
-		return errors.New("database_id must be non-negative")
-	}
-	return nil
-}
-
 type baseClientConfiguration struct {
 	addresses         []NodeAddress
 	useTLS            bool
@@ -162,9 +154,6 @@ func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest
 	}
 
 	if config.DatabaseId != nil {
-		if err := validateDatabaseId(*config.DatabaseId); err != nil {
-			return nil, err
-		}
 		request.DatabaseId = uint32(*config.DatabaseId)
 	}
 
