@@ -38,7 +38,7 @@ dotnetFramework="net6.0"
 
 function runPythonBenchmark(){
   # generate protobuf files
-  protoc -Iprotobuf=${GLIDE_HOME_FOLDER}/glide-core/src/protobuf/ --python_out=${PYTHON_FOLDER}/glide-async ${GLIDE_HOME_FOLDER}/glide-core/src/protobuf/*.proto
+  protoc -Iprotobuf=${GLIDE_HOME_FOLDER}/glide-core/src/protobuf/ --python_out=${PYTHON_FOLDER}/python/glide ${GLIDE_HOME_FOLDER}/glide-core/src/protobuf/*.proto
   cd ${PYTHON_FOLDER}
   $pythonCommand -m venv .env
   source .env/bin/activate
