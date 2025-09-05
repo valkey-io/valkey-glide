@@ -11238,10 +11238,7 @@ class TestScripts:
         result = await glide_client.hexpire(key, 1, [field1])  # 1 second
         assert result == [1]  # Should set expiration
 
-        # Wait a moment and check if it's still there or expired
-        import asyncio
-
-        await asyncio.sleep(0.1)  # Small delay
+        await anyio.sleep(0.1)  # Small delay
         ttl_result = await glide_client.httl(key, [field1])
         assert (
             ttl_result[0] == 1 or ttl_result[0] == -2
@@ -11411,9 +11408,7 @@ class TestScripts:
         assert result == [1]  # Should set expiration
 
         # Wait a moment and check if it's still there or expired
-        import asyncio
-
-        await asyncio.sleep(0.1)  # Small delay
+        await anyio.sleep(0.1)  # Small delay
         ttl_result = await glide_client.httl(key, [field1])
         assert (
             ttl_result[0] == 1 or ttl_result[0] == -2
