@@ -54,3 +54,27 @@ func ExampleNewClusterClient() {
 	// Output:
 	// Client created and connected: *glide.ClusterClient
 }
+
+func ExampleNewClusterClient_withDatabaseId() {
+	// This WithDatabaseId for cluster requires Valkey 9.0+
+	clientConf := config.NewClusterClientConfiguration().
+		WithAddress(&getClusterAddresses()[0]).
+		WithRequestTimeout(5 * time.Second).
+		WithUseTLS(false).
+		WithDatabaseId(1).
+		WithSubscriptionConfig(
+			config.NewClusterSubscriptionConfig().
+				WithSubscription(config.PatternClusterChannelMode, "news.*").
+				WithCallback(func(message *models.PubSubMessage, ctx any) {
+					fmt.Printf("Received message on '%s': %s", message.Channel, message.Message)
+				}, nil),
+		)
+	client, err := NewClusterClient(clientConf)
+	if err != nil {
+		fmt.Println("Failed to create a client and connect: ", err)
+	}
+	fmt.Printf("Client created and connected: %T", client)
+
+	// Output:
+	// Client created and connected: *glide.ClusterClient
+}
