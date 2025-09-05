@@ -192,18 +192,21 @@ long-timeout-test: __it
 opentelemetry-test: export TEST_FILTER = -skip "TestGlideTestSuite/TestModule" -otel-test $(if $(test-filter), -testify.m $(test-filter), -testify.m TestOpenTelemetry)
 opentelemetry-test: __it
 
-# Test commands for different platforms
+# Test command for integration tests
+ifeq ($(IS_MUSL), true)
 # musl gcc does not support -fsanitize=address, so we use clang instead
-# MUSL_TEST_CMD := CC=clang go test -asan -v ./integTest/...
 # TODO - Investigate musl + address sanitizer issue - https://github.com/valkey-io/valkey-glide/issues/4671
 # Disabled for now
-MUSL_TEST_CMD := CC="gcc" go test -v ./integTest/...
-REGULAR_TEST_CMD := CC="gcc -fsanitize=address" go test -v ./integTest/...
+# MUSL_TEST_CMD := CC=clang go test -asan -v ./integTest/...
+    TEST_CMD := CC="gcc" go test -v ./integTest/...
+else
+    TEST_CMD := CC="gcc -fsanitize=address" go test -v ./integTest/...
+endif
 
 __it:
 	mkdir -p reports
 	set -o pipefail; \
-	$(if $(filter true,$(IS_MUSL)),$(MUSL_TEST_CMD),$(REGULAR_TEST_CMD)) \
+	$(TEST_CMD) \
 	$(TEST_FILTER) \
 	$(if $(filter true, $(tls)), --tls,) \
 	$(if $(standalone-endpoints), --standalone-endpoints=$(standalone-endpoints)) \
