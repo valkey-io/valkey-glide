@@ -2,13 +2,8 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
+import { GlideClient, GlideClusterClient } from "@valkey/valkey-glide";
 import commandLineArgs from "command-line-args";
-import {
-    RedisClientType,
-    RedisClusterType,
-    createClient,
-    createCluster,
-} from "redis";
 
 export const PORT = 6379;
 
@@ -20,25 +15,25 @@ export function getAddress(host: string, tls: boolean, port: number): string {
     return `${protocol}://${host}:${port}`;
 }
 
-export function createRedisClient(
+export function createGlideClient(
     host: string,
     isCluster: boolean,
     tls: boolean,
     port: number,
-): RedisClusterType | RedisClientType {
-    return isCluster
-        ? createCluster({
-              rootNodes: [{ socket: { host, port: port ?? PORT, tls } }],
-              defaults: {
-                  socket: {
-                      tls,
-                  },
-              },
-              useReplicas: true,
-          })
-        : createClient({
-              url: getAddress(host, tls, port),
-          });
+): Promise<GlideClusterClient | GlideClient> {
+    const address = { host, port: port ?? PORT };
+
+    if (isCluster) {
+        return GlideClusterClient.createClient({
+            addresses: [address],
+            useTLS: tls,
+        });
+    } else {
+        return GlideClient.createClient({
+            addresses: [address],
+            useTLS: tls,
+        });
+    }
 }
 
 const optionDefinitions = [
