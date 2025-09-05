@@ -19,11 +19,9 @@ configurations {
 }
 
 dependencies {
-    implementation group: 'com.google.protobuf', name: 'protobuf-java', version: '4.29.1'
-    shadow group: 'org.apache.commons', name: 'commons-lang3', version: '3.13.0'
 
-    // Apache Commons Pool 2 for Jedis compatibility layer
-    implementation group: 'org.apache.commons', name: 'commons-pool2', version: '2.12.0'
+    shadow group: 'org.apache.commons', name: 'commons-lang3', version: '3.13.0'
+    implementation group: 'com.google.protobuf', name: 'protobuf-java', version: '4.29.3'
 
     implementation group: 'io.netty', name: 'netty-handler', version: '4.1.121.Final'
     // https://github.com/netty/netty/wiki/Native-transports
@@ -369,13 +367,57 @@ shadowJar {
     excludes.remove("module-info.class")
     relocate('io.netty', 'glide.io.netty')
     relocate('com.google.protobuf', 'glide.com.google.protobuf')
-    relocate('org.apache.commons.pool2', 'glide.org.apache.commons.pool2')
     mergeServiceFiles()
 
     relocate 'META-INF/native/libnetty', 'META-INF/native/libglide_netty'
     relocate 'META-INF/native/netty', 'META-INF/native/glide_netty'
     transform(NettyResourceTransformer.class)
 }
+
+//// Create a truly native-free DataGrip-compatible JAR
+//task dataGripJar(type: com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar) {
+//    archiveBaseName = 'valkey-glide-datagrip'
+//    archiveClassifier = osdetector.classifier
+//
+//    from sourceSets.main.output
+//    configurations = [project.configurations.runtimeClasspath]
+//
+//    // Relocate ALL potentially conflicting dependencies to completely isolated namespaces
+//    relocate('com.google.protobuf', 'isolated.datagrip.com.google.protobuf')
+////    relocate('io.netty', 'isolated.datagrip.io.netty')
+//    relocate('org.apache.commons.pool2', 'isolated.datagrip.org.apache.commons.pool2')
+//    relocate('org.apache.commons.lang3', 'isolated.datagrip.org.apache.commons.lang3')
+//
+//    // Relocate ALL Glide packages
+//    relocate('glide', 'isolated.datagrip.glide')
+//
+//    // Relocate protobuf-generated classes
+//    relocate('command_request', 'isolated.datagrip.command_request')
+//    relocate('connection_request', 'isolated.datagrip.connection_request')
+//    relocate('response', 'isolated.datagrip.response')
+//
+//    // Exclude native libraries completely - they cause DataGrip loading issues
+//    exclude '**/*.dylib'
+//    exclude '**/*.so'
+//    exclude '**/*.dll'
+//    exclude 'META-INF/native/**'
+//    exclude 'META-INF/native-image/**'
+//
+//    // Exclude any JNI-related files
+//    exclude '**/jni/**'
+//    exclude '**/native/**'
+//
+//    mergeServiceFiles()
+//
+//    // Ensure proper manifest
+//    manifest {
+//        attributes(
+//            'Implementation-Title': 'Valkey GLIDE DataGrip Compatible with Lazy Loading',
+//            'Implementation-Version': project.version,
+//            'Implementation-Vendor': 'Valkey GLIDE Project'
+//        )
+//    }
+//}
 
 sourcesJar {
     // suppress following error

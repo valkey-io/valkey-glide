@@ -3,6 +3,11 @@ plugins {
     id "com.google.osdetector" version "1.7.3"
 }
 
+// Disable module system to work with jedis-compatibility
+java {
+    modularity.inferModulePath = false
+}
+
 repositories {
     mavenCentral()
     mavenLocal()
@@ -12,9 +17,17 @@ tasks.withType(JavaCompile) {
     options.encoding = 'UTF-8'
 }
 
+ext {
+    // osdetector returns 'aarch_64', but rust triplet has 'aarch64'
+    arch = osdetector.arch == 'aarch_64' ? 'aarch64' : osdetector.arch;
+}
+
 dependencies {
-    // client
-    implementation group: 'io.valkey', name: 'valkey-glide', version: project.ext.defaultReleaseVersion, classifier: osdetector.classifier
+    // Use client project directly to get access to shadowJar with native libraries
+    implementation project(':client')
+    
+    // jedis compatibility layer for compatibility tests - use direct project dependency
+    testImplementation project(':jedis-compatibility')
 
     implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.13.0'
     implementation 'com.google.code.gson:gson:2.10.1'
@@ -136,7 +149,13 @@ clearDirs.finalizedBy 'startStandalone'
 clearDirs.finalizedBy 'startCluster'
 clearDirs.finalizedBy 'startClusterForAz'
 afterTests.finalizedBy 'stopAllAfterTests'
-compileTestJava.dependsOn ':client:publishToMavenLocal'
+compileTestJava.dependsOn ':client:shadowJar', ':jedis-compatibility:jar'
+
+// Configure test task to use shadowJar for runtime
+tasks.withType(Test) {
+    dependsOn ':client:shadowJar'
+    classpath = sourceSets.test.runtimeClasspath + files(project(':client').tasks.shadowJar.outputs.files)
+}
 
 tasks.withType(Test) {
     useJUnitPlatform()
@@ -150,6 +169,13 @@ tasks.withType(Test) {
         systemProperty 'test.server.cluster', clusterHosts
         systemProperty 'test.server.azcluster', azClusterHosts
         systemProperty 'test.server.tls', System.getProperty("tls")
+    }
+
+    // Add native library path for GLIDE FFI
+    if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
+        jvmArgs "-Djava.library.path=${project.rootDir}/../target/${arch}-unknown-linux-musl/release"
+    } else {
+        jvmArgs "-Djava.library.path=${project.rootDir}/../target/release"
     }
 
     testLogging {
