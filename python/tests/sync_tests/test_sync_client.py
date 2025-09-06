@@ -269,8 +269,18 @@ class TestGlideClients:
             # Delete this user
             glide_sync_client.custom_command(["ACL", "DELUSER", username])
 
-    @pytest.mark.parametrize("cluster_mode", [False])
-    def test_sync_select_standalone_database_id(self, request, cluster_mode):
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_sync_select_database_id(self, request, cluster_mode):
+        if cluster_mode:
+            # Check version using a temporary standalone client
+            temp_client = create_sync_client(request, cluster_mode=False)
+            if sync_check_if_server_version_lt(temp_client, "9.0.0"):
+                temp_client.close()
+                pytest.skip(
+                    reason="Database ID selection in cluster mode requires Valkey >= 9.0.0"
+                )
+            temp_client.close()
+
         glide_sync_client = create_sync_client(
             request, cluster_mode=cluster_mode, database_id=4
         )
