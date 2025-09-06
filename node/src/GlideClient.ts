@@ -7,9 +7,17 @@ import {
     AdvancedBaseClientConfiguration,
     BaseClient,
     BaseClientConfiguration,
-    Batch,
-    BatchOptions,
     convertGlideRecordToRecord,
+    Decoder,
+    DecoderOption,
+    GlideRecord,
+    GlideReturnType,
+    GlideString,
+    PubSubMsg,
+} from "./BaseClient";
+import { Batch } from "./Batch";
+import {
+    BatchOptions,
     createClientGetName,
     createClientId,
     createConfigGet,
@@ -44,21 +52,15 @@ import {
     createSelect,
     createTime,
     createUnWatch,
-    Decoder,
-    DecoderOption,
     FlushMode,
     FunctionListOptions,
     FunctionListResponse,
     FunctionRestorePolicy,
     FunctionStatsFullResponse,
-    GlideRecord,
-    GlideReturnType,
-    GlideString,
     InfoOptions,
     LolwutOptions,
-    PubSubMsg,
     ScanOptions,
-} from ".";
+} from "./Commands";
 import { connection_request } from "../build-ts/ProtobufMessage";
 
 /* eslint-disable-next-line @typescript-eslint/no-namespace */
