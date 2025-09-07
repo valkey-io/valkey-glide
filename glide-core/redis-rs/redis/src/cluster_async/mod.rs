@@ -3380,7 +3380,7 @@ where
 ///
 /// A `RedisResult` containing a tuple with two elements:
 /// 1. A vector of tuples, where each tuple contains a `String` representing a host and a `Shared`
-/// future of a connection.
+///     future of a connection.
 /// 2. A `HashSet` of `String` representing the addresses of failed connections.
 async fn get_seed_nodes_based_random_connections<C>(
     inner: &Core<C>,
