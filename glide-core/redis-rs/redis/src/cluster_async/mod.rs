@@ -3373,11 +3373,15 @@ where
     }
 }
 
-/// Creates random connections to seed nodes based on DNS resolution of initial nodes.
+/// Retrieves seed nodes based on random connections and returns successful connections along
+/// with failed connection addresses.
 ///
-/// This function resolves the initial cluster nodes via DNS, selects a random subset,
-/// and attempts to establish connections to them. Failed connections with unrecoverable
-/// errors are tracked and returned separately from successful connections.
+/// Returns:
+///
+/// A `RedisResult` containing a tuple with two elements:
+/// 1. A vector of tuples, where each tuple contains a `String` representing a host and a `Shared`
+/// future of a connection.
+/// 2. A `HashSet` of `String` representing the addresses of failed connections.
 async fn get_seed_nodes_based_random_connections<C>(
     inner: &Core<C>,
     num_of_nodes_to_query: usize,
@@ -3388,12 +3392,16 @@ async fn get_seed_nodes_based_random_connections<C>(
 where
     C: ConnectionLike + Connect + Clone + Send + Sync + 'static,
 {
+    // Resolve initial nodes to get their addresses.
+    // The resolved addresses are tuples of (host, Option<IpAddr>).
+    // Representing the host and its resolved IP address (if available).
     let resolved_addresses =
         ClusterConnInner::<C>::try_to_expand_initial_nodes(&inner.initial_nodes).await;
 
+    // Filter the resolved addresses to keep only those with valid IP addresses.
     let valid_hosts: Vec<String> = resolved_addresses
         .into_iter()
-        .filter_map(|(host, maybe_addr)| maybe_addr.map(|_| host))
+        .filter_map(|(host, socket_addr)| socket_addr.map(|_| host))
         .collect();
 
     if valid_hosts.is_empty() {
@@ -3403,6 +3411,8 @@ where
         )));
     }
 
+    // Randomly select a subset of valid hosts to query.
+    // The number of hosts selected is determined by `num_of_nodes_to_query`.
     let selected_hosts: Vec<String> = {
         let mut rng = rand::rng();
         valid_hosts
@@ -3410,23 +3420,24 @@ where
             .choose_multiple(&mut rng, num_of_nodes_to_query)
     };
 
-    let params = Arc::new(inner.cluster_params.read().expect(MUTEX_READ_ERR).clone());
+    let cluster_params = Arc::new(inner.cluster_params.read().expect(MUTEX_READ_ERR).clone());
     let glide_options = Arc::new(inner.glide_connection_options.clone());
 
+    // Create a future for each selected host to establish a connection.
     let connection_futures = selected_hosts.into_iter().map(|host| {
-        let maybe_node = {
+        let node_for_addr = {
             let guard = inner.conn_lock.read().expect(MUTEX_READ_ERR);
             guard.node_for_address(&host)
         };
 
         let host_clone = host.clone();
-        let params_ref = Arc::clone(&params);
+        let params_ref = Arc::clone(&cluster_params);
         let glide_options_ref = Arc::clone(&glide_options);
 
         async move {
             match get_or_create_conn::<C>(
                 &host_clone,
-                maybe_node,
+                node_for_addr,
                 &params_ref,
                 RefreshConnectionType::OnlyManagementConnection,
                 (*glide_options_ref).clone(),
@@ -3449,7 +3460,7 @@ where
         }
     });
 
-    // Resolve all connections and separate successful from failed
+    // Resolve all connections and separate successful from failed ones.
     let results = futures::future::join_all(connection_futures).await;
 
     let mut successful_connections = Vec::new();
@@ -3497,9 +3508,10 @@ where
         .get_cluster_param(|p| p.refresh_topology_from_seed_nodes)
         .unwrap_or(false);
 
+    // Get connections either from seed nodes or random existing connections, along with any failed addresses.
     let (requested_nodes, mut failed_addresses) = match refresh_topology_from_seed_nodes {
         true => match get_seed_nodes_based_random_connections(inner, num_of_nodes_to_query).await {
-            Ok(connections) => connections,
+            Ok((connections_futures, failed_addresses)) => (connections_futures, failed_addresses),
             Err(err) => {
                 return (Err(err), std::collections::HashSet::new());
             }
@@ -3532,7 +3544,7 @@ where
         }))
         .await;
 
-    // Add topology command failures to the existing connection failures
+    // Add topology command failures (with unrecoverable errors) to the existing connection failures set.
     let topology_failed_addresses = topology_join_results
         .iter()
         .filter_map(|(address, res)| match res {
@@ -3541,7 +3553,6 @@ where
         })
         .collect::<std::collections::HashSet<String>>();
 
-    // Merge connection failures with topology command failures
     failed_addresses.extend(topology_failed_addresses);
 
     let topology_values = topology_join_results.iter().filter_map(|(addr, res)| {
