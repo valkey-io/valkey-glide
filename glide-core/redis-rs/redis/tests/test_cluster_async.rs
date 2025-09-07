@@ -2218,6 +2218,31 @@ mod cluster_async {
 
     #[test]
     #[serial_test::serial]
+    /// This test verifies the behavior of refreshing topology from seed nodes.
+    ///
+    /// This test simulates a network partition in a 3-node cluster to verify how
+    /// `refresh_topology_from_seed_nodes` affects cluster topology discovery:
+    ///
+    /// Test flow:
+    /// 1. Creates a 3-node cluster and connects via node_0
+    /// 2. Verifies initial connectivity to all nodes
+    /// 3. Creates a network partition:
+    ///    - Makes nodes 1 & 2 forget node_0
+    ///    - Makes node_0 forget nodes 1 & 2
+    /// 4. Triggers topology refresh via MOVED error
+    /// 5. Verifies final cluster view based on refresh mode
+    ///
+    /// Expected outcomes:
+    /// - When refresh_from_seed = true:
+    ///   * Only sees node_0 (seed node)
+    ///   * PING returns 1 response
+    /// - When refresh_from_seed = false:
+    ///   * Sees nodes 1 & 2 (majority)
+    ///   * PING returns 2 responses
+    ///
+    /// This test ensures the client correctly follows either:
+    /// - Seed node's view (when refresh_from_seed = true)
+    /// - Internal cluster view (when refresh_from_seed = false)
     fn test_refresh_topology_from_seed_nodes() {
         for refresh_topology_from_seed_nodes in [false, true] {
             let cluster = TestClusterContext::new(3, 0);
