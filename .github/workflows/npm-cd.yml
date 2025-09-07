@@ -149,7 +149,7 @@ jobs:
               id: load-platform-matrix
               shell: bash
               run: |
-                  # Filter entries with npm in PACKAGE_MANAGERS and use CD_RUNNER if available
+                  # Filter entries with npm in PACKAGE_MANAGERS and use CD_RUNNER if available, replace "ephemeral" with "persistent" in RUNNER
                   export PLATFORM_MATRIX=$(jq 'map(
                       select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains(["npm"])))
                       | .runner = (
@@ -168,10 +168,15 @@ jobs:
                           end
                       )
                       | if .RUNNER == "macos13" then .["test-runner"] = "macos13" else . end
+                      | .RUNNER = (
+                          if (.RUNNER | type == "array") 
+                          then (.RUNNER | map(if . == "ephemeral" then "persistent" else . end))
+                          else (if .RUNNER == "ephemeral" then "persistent" else .RUNNER end)
+                          end
+                      )
                   )' < .github/json_matrices/build-matrix.json | jq -c .)
                   echo "platform_matrix=${PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
                   echo "Platform matrix loaded: ${PLATFORM_MATRIX}"
-
     build-native-modules:
         needs: [get-build-parameters]
         strategy:
@@ -271,7 +276,7 @@ jobs:
             - name: Upload Native Modules
               uses: actions/upload-artifact@v4
               with:
-                  name: bindings-${{ matrix.TARGET }}
+                  name: bindings-${{ matrix.TARGET }}-${{ matrix.RUNNER }}
                   path: ./node/${{ matrix.TARGET }}
                   retention-days: 1
                   if-no-files-found: error
