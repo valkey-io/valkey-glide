@@ -902,6 +902,7 @@ async fn create_cluster_client(
         builder = builder.periodic_topology_checks(interval_duration);
     }
     builder = builder.use_protocol(request.protocol.unwrap_or_default());
+    builder = builder.database_id(redis_connection_info.db);
     if let Some(client_name) = redis_connection_info.client_name {
         builder = builder.client_name(client_name);
     }
@@ -979,7 +980,6 @@ async fn create_cluster_client(
             }
         }
     }
-
     Ok(con)
 }
 
