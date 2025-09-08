@@ -73,7 +73,7 @@ tasks.register('copyNativeLib', Copy) {
 jar.dependsOn('copyNativeLib')
 shadowJar.dependsOn('copyNativeLib')
 copyNativeLib.dependsOn(':client:buildRust')
-compileJava.dependsOn(':client:shadowJar')
+compileJava.dependsOn(':client:shadowJar', ':client:jar')
 
 tasks.withType(Test) {
     useJUnitPlatform()
