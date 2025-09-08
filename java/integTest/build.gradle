@@ -12,10 +12,6 @@ tasks.withType(JavaCompile) {
     options.encoding = 'UTF-8'
 }
 
-java {
-    modularity.inferModulePath = false // Disable module system for compatibility with jedis-compatibility
-}
-
 dependencies {
     // Use shadowJar for native libraries
     implementation project(path: ':client', configuration: 'shadow')
@@ -171,6 +167,12 @@ tasks.withType(Test) {
     
     // Native library path for GLIDE FFI - needed for Jedis compatibility tests
     jvmArgs "-Djava.library.path=${project.rootDir}/../target/release"
+    
+    // Disable modularity for jedis compatibility tests
+    if (name.contains('jedis') || filter.includePatterns.any { it.contains('jedis') }) {
+        jvmArgs += "--add-opens=java.base/java.lang=ALL-UNNAMED"
+        jvmArgs += "--add-opens=java.base/java.util=ALL-UNNAMED"
+    }
 
     afterTest { desc, result ->
         logger.quiet "${desc.className}.${desc.name}: ${result.resultType} ${(result.getEndTime() - result.getStartTime())/1000}s"
