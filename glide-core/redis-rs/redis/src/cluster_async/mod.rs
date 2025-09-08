@@ -3382,7 +3382,7 @@ where
 /// 1. A vector of tuples, where each tuple contains a `String` representing a host and a `Shared`
 ///    future of a connection.
 /// 2. A `HashSet` of `String` representing the addresses of failed connections.
-async fn get_seed_nodes_based_random_connections<C>(
+async fn get_random_connections_from_seed_nodes<C>(
     inner: &Core<C>,
     num_of_nodes_to_query: usize,
 ) -> RedisResult<(
@@ -3392,6 +3392,8 @@ async fn get_seed_nodes_based_random_connections<C>(
 where
     C: ConnectionLike + Connect + Clone + Send + Sync + 'static,
 {
+    const MAX_RETRIES: usize = 3;
+
     // Resolve initial nodes to get their addresses.
     // The resolved addresses are tuples of (host, Option<IpAddr>).
     // Representing the host and its resolved IP address (if available).
@@ -3401,7 +3403,13 @@ where
     // Filter the resolved addresses to keep only those with valid IP addresses.
     let valid_hosts: Vec<String> = resolved_addresses
         .into_iter()
-        .filter_map(|(host, socket_addr)| socket_addr.map(|_| host))
+        .map(|(host, socket_addr)| {
+            if let Some(addr) = socket_addr {
+                addr.to_string()
+            } else {
+                host
+            }
+        })
         .collect();
 
     if valid_hosts.is_empty() {
@@ -3411,20 +3419,22 @@ where
         )));
     }
 
-    // Randomly select a subset of valid hosts to query.
-    // The number of hosts selected is determined by `num_of_nodes_to_query`.
-    let selected_hosts: Vec<String> = {
-        let mut rng = rand::rng();
-        valid_hosts
-            .into_iter()
-            .choose_multiple(&mut rng, num_of_nodes_to_query)
-    };
-
     let cluster_params = Arc::new(inner.cluster_params.read().expect(MUTEX_READ_ERR).clone());
     let glide_options = Arc::new(inner.glide_connection_options.clone());
 
-    // Create a future for each selected host to establish a connection.
-    let connection_futures = selected_hosts.into_iter().map(|host| {
+    for attempt in 0..MAX_RETRIES {
+        // Randomly select a subset of valid hosts to query.
+        // The number of hosts selected is determined by `num_of_nodes_to_query`.
+        let selected_hosts: Vec<String> = {
+            let mut rng = rand::rng();
+            valid_hosts
+                .clone()
+                .into_iter()
+                .choose_multiple(&mut rng, num_of_nodes_to_query)
+        };
+
+        // Create a future for each selected host to establish a connection.
+        let connection_futures = selected_hosts.into_iter().map(|host| {
         let node_for_addr = {
             let guard = inner.conn_lock.read().expect(MUTEX_READ_ERR);
             guard.node_for_address(&host)
@@ -3453,41 +3463,52 @@ where
                     Ok((host, conn))
                 }
                 Err(err) => {
-                    tracing::warn!("Failed to create connection for host {}: {:?}", host, err);
+                    tracing::warn!(
+                        "Failed to get or create connection for host {}: {:?} while calculating topology",
+                        host,
+                        err
+                    );
                     Err((host, err))
                 }
             }
         }
     });
 
-    // Resolve all connections and separate successful from failed ones.
-    let results = futures::future::join_all(connection_futures).await;
+        // Resolve all connections and separate successful from failed ones.
+        let results = futures::future::join_all(connection_futures).await;
 
-    let mut successful_connections = Vec::new();
-    let mut failed_connection_addresses = std::collections::HashSet::new();
+        let mut successful_connections = Vec::new();
+        let mut failed_connection_addresses = std::collections::HashSet::new();
 
-    for result in results {
-        match result {
-            Ok((host, conn)) => {
-                let future = async move { conn }.boxed().shared();
-                successful_connections.push((host, future));
-            }
-            Err((host, err)) => {
-                if err.is_unrecoverable_error() {
-                    failed_connection_addresses.insert(host);
+        for result in results {
+            match result {
+                Ok((host, conn)) => {
+                    let future = async move { conn }.boxed().shared();
+                    successful_connections.push((host, future));
+                }
+                Err((host, err)) => {
+                    if err.is_unrecoverable_error() {
+                        failed_connection_addresses.insert(host);
+                    }
                 }
             }
         }
+
+        // If we have successful connections, return immediately
+        if !successful_connections.is_empty() {
+            tracing::debug!(
+                "Successfully established {} connections on attempt {}",
+                successful_connections.len(),
+                attempt + 1
+            );
+            return Ok((successful_connections, failed_connection_addresses));
+        }
     }
 
-    if successful_connections.is_empty() {
-        return Err(RedisError::from((
-            ErrorKind::AllConnectionsUnavailable,
-            "Failed to create any seed-based connections",
-        )));
-    }
-
-    Ok((successful_connections, failed_connection_addresses))
+    Err(RedisError::from((
+        ErrorKind::AllConnectionsUnavailable,
+        "failed to create any seed-based connections",
+    )))
 }
 
 async fn calculate_topology_from_random_nodes<C>(
@@ -3510,7 +3531,7 @@ where
 
     // Get connections either from seed nodes or random existing connections, along with any failed addresses.
     let (requested_nodes, mut failed_addresses) = match refresh_topology_from_seed_nodes {
-        true => match get_seed_nodes_based_random_connections(inner, num_of_nodes_to_query).await {
+        true => match get_random_connections_from_seed_nodes(inner, num_of_nodes_to_query).await {
             Ok((connections_futures, failed_addresses)) => (connections_futures, failed_addresses),
             Err(err) => {
                 return (Err(err), std::collections::HashSet::new());
