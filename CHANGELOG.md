@@ -7,7 +7,9 @@
 * NODE: Valkey 9 support - Add Hash Field Expiration Commands Support ([#4598](https://github.com/valkey-io/valkey-glide/pull/4598))
 * Python: Valkey 9 new hash field expiration commands ([#4610](https://github.com/valkey-io/valkey-glide/pull/4610))
 * Node: Add Multi-Database Support for Cluster Mode (Valkey 9.0) ([#4657](https://github.com/valkey-io/valkey-glide/pull/4657))
-
+* Java: Multi-Database Support for Cluster Mode Valkey 9.0 ([#4658](https://github.com/valkey-io/valkey-glide/pull/4658))
+* Go: Add Multi-Database Support for Cluster Mode Valkey 9.0 ([#4660](https://github.com/valkey-io/valkey-glide/pull/4660))
+* Python: Add Multi-Database Support for Cluster Mode Valkey 9.0 ([#4659](https://github.com/valkey-io/valkey-glide/pull/4659))
 
 #### Fixes
 
