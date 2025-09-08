@@ -86,6 +86,12 @@ public abstract class BaseClientConfiguration {
     private final BackoffStrategy reconnectStrategy;
 
     /**
+     * Index of the logical database to connect to. Must be non-negative and within the range
+     * supported by the server configuration. If not specified, defaults to database 0.
+     */
+    private final Integer databaseId;
+
+    /**
      * Enables lazy connection mode, where physical connections to the server(s) are deferred until
      * the first command is sent. This can reduce startup latency and allow for client creation in
      * disconnected environments.
