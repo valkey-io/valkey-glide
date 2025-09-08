@@ -842,3 +842,12 @@ pub async fn version_greater_or_equal(
     let compared_version = Versioning::new(version).unwrap();
     server_version >= compared_version
 }
+
+/// Extract client ID from CLIENT INFO response string
+pub fn extract_client_id(client_info: &str) -> Option<String> {
+    client_info
+        .split_whitespace()
+        .find(|part| part.starts_with("id="))
+        .and_then(|id_part| id_part.strip_prefix("id="))
+        .map(|id| id.to_string())
+}

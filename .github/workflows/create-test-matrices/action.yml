@@ -14,8 +14,11 @@ inputs:
         required: true
         type: boolean
     run-with-macos:
-        description: "Run with macos included"
-        type: boolean
+        type: choice
+        options:
+            - false
+            - use-self-hosted
+            - use-github
         default: false
     containers:
         description: "Run in containers"
@@ -83,10 +86,13 @@ runs:
               fi
                         
               # Add macOS runners if specified
-              if [[ "$RUN_WITH_MACOS" == "true" ]]; then
-                echo "Including macOS runners separately"
-                MAC_RUNNERS=$(jq --arg lang "$LANGUAGE_NAME" -c '[.[] | select(.languages? and any(.languages[] == $lang; .) and '"$CONDITION"' and .TARGET == "aarch64-apple-darwin")]' < .github/json_matrices/build-matrix.json)
-                            
+              if [[ "$RUN_WITH_MACOS" == "use-self-hosted" ]]; then
+                echo "Including only self-hosted macOS runners"
+                MAC_RUNNERS=$(jq --arg lang "$LANGUAGE_NAME" -c '[.[] | select(.languages? and any(.languages[] == $lang; .) and '"$CONDITION"' and .TARGET == "aarch64-apple-darwin" and (.RUNNER == ["self-hosted","macOS","ARM64","ephemeral"]))]' < .github/json_matrices/build-matrix.json)
+                FINAL_MATRIX=$(echo "$BASE_MATRIX" "$MAC_RUNNERS" | jq -sc 'add')
+              elif [[ "$RUN_WITH_MACOS" == "use-github" ]]; then
+                echo "Including only GitHub-hosted macOS runners"
+                MAC_RUNNERS=$(jq --arg lang "$LANGUAGE_NAME" -c '[.[] | select(.languages? and any(.languages[] == $lang; .) and '"$CONDITION"' and .TARGET == "aarch64-apple-darwin" and .RUNNER == "macos-15")]' < .github/json_matrices/build-matrix.json)
                 FINAL_MATRIX=$(echo "$BASE_MATRIX" "$MAC_RUNNERS" | jq -sc 'add')
               else
                 FINAL_MATRIX="$BASE_MATRIX"

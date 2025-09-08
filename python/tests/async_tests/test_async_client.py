@@ -258,11 +258,39 @@ class TestGlideClients:
             # Delete this user
             await glide_client.custom_command(["ACL", "DELUSER", username])
 
-    @pytest.mark.parametrize("cluster_mode", [False])
-    async def test_select_standalone_database_id(self, request, cluster_mode):
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_select_database_id(self, request, cluster_mode):
+        if cluster_mode:
+            # Check version using a temporary standalone client
+            temp_client = await create_client(request, cluster_mode=False)
+            if await check_if_server_version_lt(temp_client, "9.0.0"):
+                await temp_client.close()
+                return pytest.mark.skip(
+                    reason="Database ID selection in cluster mode requires Valkey >= 9.0.0"
+                )
+            await temp_client.close()
+
         glide_client = await create_client(
             request, cluster_mode=cluster_mode, database_id=4
         )
+        client_info = await glide_client.custom_command(["CLIENT", "INFO"])
+        assert b"db=4" in client_info
+        await glide_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    async def test_select_database_id_custom_command(self, request, cluster_mode):
+        if cluster_mode:
+            # Check version using a temporary standalone client
+            temp_client = await create_client(request, cluster_mode=False)
+            if await check_if_server_version_lt(temp_client, "9.0.0"):
+                await temp_client.close()
+                return pytest.mark.skip(
+                    reason="Database ID selection in cluster mode requires Valkey >= 9.0.0"
+                )
+            await temp_client.close()
+
+        glide_client = await create_client(request, cluster_mode=cluster_mode)
+        assert await glide_client.custom_command(["SELECT", "4"]) == OK
         client_info = await glide_client.custom_command(["CLIENT", "INFO"])
         assert b"db=4" in client_info
         await glide_client.close()
@@ -11238,10 +11266,7 @@ class TestScripts:
         result = await glide_client.hexpire(key, 1, [field1])  # 1 second
         assert result == [1]  # Should set expiration
 
-        # Wait a moment and check if it's still there or expired
-        import asyncio
-
-        await asyncio.sleep(0.1)  # Small delay
+        await anyio.sleep(0.1)  # Small delay
         ttl_result = await glide_client.httl(key, [field1])
         assert (
             ttl_result[0] == 1 or ttl_result[0] == -2
@@ -11411,9 +11436,7 @@ class TestScripts:
         assert result == [1]  # Should set expiration
 
         # Wait a moment and check if it's still there or expired
-        import asyncio
-
-        await asyncio.sleep(0.1)  # Small delay
+        await anyio.sleep(0.1)  # Small delay
         ttl_result = await glide_client.httl(key, [field1])
         assert (
             ttl_result[0] == 1 or ttl_result[0] == -2
