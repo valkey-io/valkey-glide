@@ -13,11 +13,11 @@ tasks.withType(JavaCompile) {
 }
 
 dependencies {
-    // Use shadowJar for native libraries
-    implementation project(path: ':client', configuration: 'shadow')
+    // Use published GLIDE artifact
+    implementation group: 'io.valkey', name: 'valkey-glide', version: project.ext.defaultReleaseVersion, classifier: osdetector.classifier
     
-    // jedis-compatibility module shadowJar for Jedis compatibility tests
-    testImplementation project(path: ':jedis-compatibility', configuration: 'shadow')
+    // Use published jedis-compatibility artifact
+    testImplementation group: 'io.valkey', name: 'valkey-glide-jedis-compatibility', version: project.ext.defaultReleaseVersion, classifier: osdetector.classifier
 
     implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.13.0'
     implementation 'com.google.code.gson:gson:2.10.1'
@@ -139,10 +139,10 @@ clearDirs.finalizedBy 'startStandalone'
 clearDirs.finalizedBy 'startCluster'
 clearDirs.finalizedBy 'startClusterForAz'
 afterTests.finalizedBy 'stopAllAfterTests'
-compileTestJava.dependsOn ':client:shadowJar', ':jedis-compatibility:shadowJar'
+compileTestJava.dependsOn ':client:publishToMavenLocal', ':jedis-compatibility:publishToMavenLocal'
 
 tasks.withType(Test) {
-    dependsOn ':client:shadowJar'
+    dependsOn ':client:publishToMavenLocal', ':jedis-compatibility:publishToMavenLocal'
     useJUnitPlatform()
     if (!project.gradle.startParameter.taskNames.contains(':integTest:modulesTest')) {
         dependsOn 'beforeTests'
