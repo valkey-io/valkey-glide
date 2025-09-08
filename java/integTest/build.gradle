@@ -12,9 +12,16 @@ tasks.withType(JavaCompile) {
     options.encoding = 'UTF-8'
 }
 
+java {
+    modularity.inferModulePath = false // Disable module system for compatibility with jedis-compatibility
+}
+
 dependencies {
-    // client
-    implementation group: 'io.valkey', name: 'valkey-glide', version: project.ext.defaultReleaseVersion, classifier: osdetector.classifier
+    // Use shadowJar for native libraries
+    implementation project(path: ':client', configuration: 'shadow')
+    
+    // jedis-compatibility module shadowJar for Jedis compatibility tests
+    testImplementation project(path: ':jedis-compatibility', configuration: 'shadow')
 
     implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.13.0'
     implementation 'com.google.code.gson:gson:2.10.1'
@@ -136,9 +143,10 @@ clearDirs.finalizedBy 'startStandalone'
 clearDirs.finalizedBy 'startCluster'
 clearDirs.finalizedBy 'startClusterForAz'
 afterTests.finalizedBy 'stopAllAfterTests'
-compileTestJava.dependsOn ':client:publishToMavenLocal'
+compileTestJava.dependsOn ':client:shadowJar', ':jedis-compatibility:shadowJar'
 
 tasks.withType(Test) {
+    dependsOn ':client:shadowJar'
     useJUnitPlatform()
     if (!project.gradle.startParameter.taskNames.contains(':integTest:modulesTest')) {
         dependsOn 'beforeTests'
@@ -160,6 +168,9 @@ tasks.withType(Test) {
 
     minHeapSize = "2048m" // Initial heap size. Needed for max size tests.
     maxHeapSize = "2048m" // Maximum heap size. Needed for max size tests.
+    
+    // Native library path for GLIDE FFI - needed for Jedis compatibility tests
+    jvmArgs "-Djava.library.path=${project.rootDir}/../target/release"
 
     afterTest { desc, result ->
         logger.quiet "${desc.className}.${desc.name}: ${result.resultType} ${(result.getEndTime() - result.getStartTime())/1000}s"

@@ -2,18 +2,32 @@ plugins {
     id 'java-library'
     id 'maven-publish'
     id 'io.freefair.lombok' version '8.6'
+    id 'com.google.osdetector' version '1.7.3'
+    id 'com.gradleup.shadow' version '8.3.8'
 }
 
 repositories {
     mavenCentral()
 }
 
+configurations {
+    testImplementation { extendsFrom shadow }
+}
+
+ext {
+    // osdetector returns 'aarch_64', but rust triplet has 'aarch64'
+    arch = osdetector.arch == 'aarch_64' ? 'aarch64' : osdetector.arch;
+}
+
 dependencies {
-    // Depend on the main GLIDE client
-    api project(':client')
+    // Depend on the main GLIDE client shadowJar for native libraries
+    shadow project(path: ':client', configuration: 'shadow')
+    
+    // Explicit protobuf version to match client
+    shadow group: 'com.google.protobuf', name: 'protobuf-java', version: '4.29.3'
     
     // Apache Commons Pool 2 for connection pooling
-    implementation group: 'org.apache.commons', name: 'commons-pool2', version: '2.12.0'
+    shadow group: 'org.apache.commons', name: 'commons-pool2', version: '2.12.0'
     
     // Test dependencies
     testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter', version: '5.10.2'
@@ -40,6 +54,26 @@ javadoc {
     failOnError = false // Disable javadoc errors for compatibility layer
 }
 
+tasks.register('copyNativeLib', Copy) {
+    def target
+    if (project.hasProperty('target')) {
+        target = project.target
+        from "${projectDir}/../target/${target}/release/"
+    } else if (osdetector.os == 'linux' && osdetector.release.id != 'alpine') {
+        from "${projectDir}/../target/${arch}-unknown-linux-gnu/release/"
+    } else if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
+        from "${projectDir}/../target/${arch}-unknown-linux-musl/release/"
+    } else {
+        from "${projectDir}/../target/release/"
+    }
+    include "*.dylib", "*.so"
+    into sourceSets.main.output.resourcesDir
+}
+
+jar.dependsOn('copyNativeLib')
+shadowJar.dependsOn('copyNativeLib')
+copyNativeLib.dependsOn(':client:buildRust')
+
 tasks.withType(Test) {
     useJUnitPlatform()
     testLogging {
@@ -48,13 +82,36 @@ tasks.withType(Test) {
         showStandardStreams true
     }
     // Native library path for tests
-    jvmArgs "-Djava.library.path=${project.rootDir}/../target/release"
+    if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
+        jvmArgs "-Djava.library.path=${projectDir}/../target/${arch}-unknown-linux-musl/release"
+    } else {
+        jvmArgs "-Djava.library.path=${projectDir}/../target/release"
+    }
+}
+
+jar {
+    if (project.hasProperty('target') && project.target.contains("musl")) {
+        archiveClassifier = "linux_musl_${arch}"
+    } else {
+        archiveClassifier = osdetector.classifier
+    }
+}
+
+shadowJar {
+    if (project.hasProperty('target') && project.target.contains("musl")) {
+        archiveClassifier = "linux_musl_${arch}"
+    } else {
+        archiveClassifier = osdetector.classifier
+    }
+    excludes.remove("module-info.class")
+    relocate('com.google.protobuf', 'glide.com.google.protobuf')
+    mergeServiceFiles()
 }
 
 publishing {
     publications {
         maven(MavenPublication) {
-            from components.java
+            from components.shadow
             groupId = 'io.valkey'
             artifactId = 'valkey-glide-jedis-compatibility'
             version = System.getenv("GLIDE_RELEASE_VERSION") ?: project.ext.defaultReleaseVersion
