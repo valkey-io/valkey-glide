@@ -122,6 +122,23 @@ func (b *BaseBatch[T]) addCmdAndConverter(
 	return b.self
 }
 
+// Changes the currently selected database.
+//
+// For details see [valkey.io].
+//
+// Parameters:
+//
+//	index - The index of the database to select.
+//
+// Command Response:
+//
+//	A simple "OK" response.
+//
+// [valkey.io]: https://valkey.io/commands/select/
+func (b *StandaloneBatch) Select(index int64) *StandaloneBatch {
+	return b.addCmdAndTypeChecker(C.Select, []string{utils.IntToString(index)}, reflect.String, false)
+}
+
 // Moves key from the currently selected database to the database specified by `dbIndex`.
 //
 // See [valkey.io] for details.
@@ -190,34 +207,6 @@ func (b *StandaloneBatch) ScanWithOptions(cursor int64, scanOptions options.Scan
 		false,
 		internal.ConvertScanResult,
 	)
-}
-
-// Select changes the currently selected database on cluster nodes.
-//
-// WARNING: This command is NOT RECOMMENDED for production use.
-// Upon reconnection, nodes will revert to the database_id specified
-// in the client configuration (default: 0), NOT the database selected
-// via this command.
-//
-// RECOMMENDED APPROACH: Use the database_id parameter in client
-// configuration instead.
-//
-// CLUSTER BEHAVIOR: This command routes to all nodes by default
-// to maintain consistency across the cluster.
-//
-// See [valkey.io] for details.
-//
-// Parameters:
-//
-//	index - The index of the database to select.
-//
-// Command Response:
-//
-//	A simple "OK" response.
-//
-// [valkey.io]: https://valkey.io/commands/select/
-func (b *ClusterBatch) Select(index int64) *ClusterBatch {
-	return b.addCmdAndTypeChecker(C.Select, []string{utils.IntToString(index)}, reflect.String, false)
 }
 
 // Posts a message to the specified sharded channel. Returns the number of clients that received the message.
