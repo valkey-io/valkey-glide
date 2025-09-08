@@ -123,6 +123,8 @@ class GlideClusterClientConfiguration(SharedGlideClusterClientConfiguration):
         reconnect_strategy (Optional[BackoffStrategy]): Strategy used to determine how and when to reconnect, in case of
             connection failures.
             If not set, a default backoff strategy will be used.
+        database_id (Optional[int]): Index of the logical database to connect to.
+            If not set, the client will connect to database 0.
         client_name (Optional[str]): Client name to be used for the client. Will be used with CLIENT SETNAME command during
             connection establishment.
         protocol (ProtocolVersion): The version of the RESP protocol to communicate with the server.
@@ -153,6 +155,7 @@ class GlideClusterClientConfiguration(SharedGlideClusterClientConfiguration):
         read_from: ReadFrom = ReadFrom.PRIMARY,
         request_timeout: Optional[int] = None,
         reconnect_strategy: Optional[BackoffStrategy] = None,
+        database_id: Optional[int] = None,
         client_name: Optional[str] = None,
         protocol: ProtocolVersion = ProtocolVersion.RESP3,
         periodic_checks: Union[
@@ -168,9 +171,10 @@ class GlideClusterClientConfiguration(SharedGlideClusterClientConfiguration):
             credentials=credentials,
             read_from=read_from,
             request_timeout=request_timeout,
+            reconnect_strategy=reconnect_strategy,
+            database_id=database_id,
             periodic_checks=periodic_checks,
             pubsub_subscriptions=None,
-            reconnect_strategy=reconnect_strategy,
             client_name=client_name,
             protocol=protocol,
             inflight_requests_limit=None,
