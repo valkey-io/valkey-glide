@@ -1,0 +1,69 @@
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+    id 'io.freefair.lombok' version '8.6'
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // Depend on the main GLIDE client
+    api project(':client')
+    
+    // Apache Commons Pool 2 for connection pooling
+    implementation group: 'org.apache.commons', name: 'commons-pool2', version: '2.12.0'
+    
+    // Test dependencies
+    testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter', version: '5.10.2'
+    testImplementation group: 'org.mockito', name: 'mockito-inline', version: '5.2.0'
+    testImplementation group: 'org.mockito', name: 'mockito-junit-jupiter', version: '5.2.0'
+    
+    // Lombok
+    compileOnly 'org.projectlombok:lombok:1.18.38'
+    annotationProcessor 'org.projectlombok:lombok:1.18.38'
+    testCompileOnly 'org.projectlombok:lombok:1.18.38'
+    testAnnotationProcessor 'org.projectlombok:lombok:1.18.38'
+}
+
+java {
+    modularity.inferModulePath = false // Disable module system for compatibility
+    withSourcesJar()
+    withJavadocJar()
+}
+
+javadoc {
+    dependsOn delombok
+    source = delombok.outputs
+    options.tags = [ "example:a:Example:", "apiNote:a:API Note:" ]
+    failOnError = false // Disable javadoc errors for compatibility layer
+}
+
+tasks.withType(Test) {
+    useJUnitPlatform()
+    testLogging {
+        exceptionFormat "full"
+        events "started", "skipped", "passed", "failed"
+        showStandardStreams true
+    }
+    // Native library path for tests
+    jvmArgs "-Djava.library.path=${project.rootDir}/../target/release"
+}
+
+publishing {
+    publications {
+        maven(MavenPublication) {
+            from components.java
+            groupId = 'io.valkey'
+            artifactId = 'valkey-glide-jedis-compatibility'
+            version = System.getenv("GLIDE_RELEASE_VERSION") ?: project.ext.defaultReleaseVersion
+            
+            pom {
+                name = 'valkey-glide-jedis-compatibility'
+                description = 'Jedis compatibility layer for Valkey GLIDE'
+                url = 'https://github.com/valkey-io/valkey-glide.git'
+            }
+        }
+    }
+}
