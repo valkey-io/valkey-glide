@@ -4,6 +4,7 @@ This guide covers how to use Lua scripts with Valkey GLIDE, including the `Scrip
 
 ## Table of Contents
 
+- [Prerequisites and Setup](#prerequisites-and-setup)
 - [Overview](#overview)
 - [Basic Script Usage](#basic-script-usage)
 - [Scripts with Keys and Arguments](#scripts-with-keys-and-arguments)
@@ -13,6 +14,79 @@ This guide covers how to use Lua scripts with Valkey GLIDE, including the `Scrip
 - [Best Practices](#best-practices)
 - [Error Handling](#error-handling)
 - [Migration from Direct EVAL](#migration-from-direct-eval)
+
+## Prerequisites and Setup
+
+### Required Imports
+
+```python
+import asyncio
+from glide import (
+    Script, 
+    GlideClient, 
+    GlideClientConfiguration, 
+    NodeAddress
+)
+
+# For script management examples
+from glide import FlushMode
+
+# For error handling examples  
+from glide import RequestError
+
+# For cluster examples
+from glide import GlideClusterClient, GlideClusterClientConfiguration, SlotKeyRoute, SlotType, AllPrimaries
+```
+
+### Basic Client Setup
+
+```python
+# Standalone client configuration
+config = GlideClientConfiguration(addresses=[NodeAddress("localhost", 6379)])
+
+# Create client
+client = await GlideClient.create(config)
+
+# Always close the client when done
+await client.close()
+```
+
+### Cluster Client Setup (for cluster examples)
+
+```python
+# Cluster client configuration
+config = GlideClusterClientConfiguration(addresses=[NodeAddress("localhost", 7000)])
+
+# Create cluster client
+cluster_client = await GlideClusterClient.create(config)
+
+# Always close when done
+await cluster_client.close()
+```
+
+### Requirements
+
+- Running Valkey/Redis server on localhost:6379 (or cluster on ports 7000+)
+- GLIDE Python client installed
+- Python 3.8+ with asyncio support
+
+### Running the Examples
+
+All examples assume you have an async context. For standalone scripts, use:
+
+```python
+async def main():
+    # Your example code here
+    pass
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+**Important Notes:**
+- All script arguments must be strings, not integers
+- Keys and arguments are automatically encoded by GLIDE
+- Scripts are cached automatically using SHA1 hashes
 
 ## Overview
 
@@ -30,10 +104,11 @@ Valkey GLIDE provides a `Script` class that wraps Lua scripts and handles their 
 ### Creating and Executing Simple Scripts
 
 ```python
-from glide import Script, GlideClient
+from glide import Script, GlideClient, GlideClientConfiguration, NodeAddress
 
 # Create a client
-client = await GlideClient.create_client(config)
+config = GlideClientConfiguration(addresses=[NodeAddress("localhost", 6379)])
+client = await GlideClient.create(config)
 
 # Create a simple script
 script = Script("return 'Hello, Valkey!'")
@@ -238,7 +313,7 @@ In cluster mode, scripts are automatically routed to the appropriate nodes:
 ```python
 from glide import GlideClusterClient
 
-cluster_client = await GlideClusterClient.create_client(config)
+cluster_client = await GlideClusterClient.create(config)
 
 # This works the same in cluster mode
 script = Script("return redis.call('SET', KEYS[1], ARGV[1])")
@@ -347,7 +422,7 @@ for i in range(100):
     await client.invoke_script(
         increment_script,
         keys=[f"counter:{i}"],
-        args=[1]
+        args=["1"]
     )
 ```
 
@@ -368,7 +443,7 @@ atomic_increment = Script("""
 result = await client.invoke_script(
     atomic_increment,
     keys=["page_views"],
-    args=[1, 3600]  # increment by 1, expire in 1 hour
+    args=["1", "3600"]  # increment by 1, expire in 1 hour
 )
 ```
 
@@ -437,7 +512,7 @@ script = Script("return redis.call('INCR', 'not_a_number')")
 try:
     result = await client.invoke_script(script)
 except RequestError as e:
-    if "WRONGTYPE" in str(e):
+    if "WRONGTYPE" in str(e) or "not an integer" in str(e):
         print("Type error in script")
     elif "NOSCRIPT" in str(e):
         print("Script not found in cache")
@@ -547,7 +622,7 @@ rate_limit_script = Script("""
 result = await client.invoke_script(
     rate_limit_script,
     keys=["rate_limit:user:123"],
-    args=[10, 60]  # 10 requests per 60 seconds
+    args=["10", "60"]  # 10 requests per 60 seconds
 )
 ```
 
@@ -573,7 +648,7 @@ release_lock_script = Script("""
 lock_acquired = await client.invoke_script(
     acquire_lock_script,
     keys=["lock:resource:123"],
-    args=["unique_token", 30]  # 30 second expiration
+    args=["unique_token", "30"]  # 30 second expiration
 )
 
 if lock_acquired:
