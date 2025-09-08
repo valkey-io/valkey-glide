@@ -495,7 +495,7 @@ impl ClusterClientBuilder {
     /// Sets the database ID for the new ClusterClient.
     ///
     /// Note: Database selection in cluster mode requires server support for multiple databases.
-    /// Most Redis cluster configurations only support database 0.
+    /// Most cluster configurations only support database 0.
     pub fn database_id(mut self, database_id: i64) -> ClusterClientBuilder {
         self.builder_params.database_id = database_id;
         self

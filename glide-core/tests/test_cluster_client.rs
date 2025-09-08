@@ -467,14 +467,6 @@ mod cluster_client_tests {
         });
     }
 
-    fn extract_client_id(client_info: &str) -> Option<String> {
-        client_info
-            .split_whitespace()
-            .find(|part| part.starts_with("id="))
-            .and_then(|id_part| id_part.strip_prefix("id="))
-            .map(|id| id.to_string())
-    }
-
     #[rstest]
     #[serial_test::serial]
     #[timeout(LONG_CLUSTER_TEST_TIMEOUT)]
