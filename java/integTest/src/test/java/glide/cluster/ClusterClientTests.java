@@ -154,6 +154,24 @@ public class ClusterClientTests {
         client.close();
     }
 
+    @SneakyThrows
+    @Test
+    public void select_cluster_database_id() {
+        String minVersion = "9.0.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
+        GlideClusterClient client =
+                GlideClusterClient.createClient(commonClusterClientConfig().databaseId(4).build()).get();
+
+        String clientInfo =
+                (String) client.customCommand(new String[] {"CLIENT", "INFO"}).get().getSingleValue();
+        assertTrue(clientInfo.contains("db=4"));
+
+        client.close();
+    }
+
     @Test
     @SneakyThrows
     public void closed_client_throws_ExecutionException_with_ClosingException_as_cause() {
