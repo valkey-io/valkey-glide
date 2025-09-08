@@ -21,7 +21,7 @@ ext {
 
 dependencies {
     // Depend on the main GLIDE client shadowJar for native libraries
-    shadow project(path: ':client', configuration: 'shadow')
+    implementation project(path: ':client', configuration: 'shadow')
     
     // Explicit protobuf version to match client
     shadow group: 'com.google.protobuf', name: 'protobuf-java', version: '4.29.3'
