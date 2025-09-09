@@ -1,0 +1,138 @@
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+    id 'jacoco'
+}
+
+group = 'io.valkey'
+version = '0.1.0-SNAPSHOT'
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
+    // Temporarily disabled due to javadoc errors
+    // withJavadocJar()
+    withSourcesJar()
+}
+
+// Configure Java source directories (separated from Rust rust-layer/)
+sourceSets {
+    main {
+        java {
+            srcDirs = ['client/src/main/java']
+        }
+        resources {
+            srcDirs = ['client/src/main/resources']
+        }
+    }
+    test {
+        java {
+            srcDirs = ['client/src/test/java']
+        }
+        resources {
+            srcDirs = ['client/src/test/resources']
+        }
+    }
+}
+
+ext {
+    defaultReleaseVersion = "255.255.255"
+}
+
+allprojects {
+    apply plugin: 'jacoco'
+
+    ext {
+        defaultReleaseVersion = "255.255.255"
+    }
+
+    jacoco {
+        toolVersion = "0.8.9"
+    }
+
+    jacocoTestCoverageVerification {
+        violationRules {
+            rule {
+                element = 'CLASS'
+                excludes = [
+                    'glide.connectors.resources.*',
+                    'glide.connectors.handlers.*'
+                ]
+            }
+        }
+    }
+}
+
+repositories {
+    mavenCentral()
+    mavenLocal() // For access to local valkey-glide build
+}
+
+dependencies {
+    // Required dependencies for client compilation
+    implementation 'org.projectlombok:lombok:1.18.30'
+    annotationProcessor 'org.projectlombok:lombok:1.18.30'
+    implementation 'org.apache.commons:commons-lang3:3.13.0'
+    
+    // Test dependencies
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.10.0'
+    testImplementation 'org.junit.jupiter:junit-jupiter-params:5.10.0'
+    testImplementation 'org.mockito:mockito-core:5.4.0'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.10.0'
+
+    // JMH for benchmarking
+    testImplementation 'org.openjdk.jmh:jmh-core:1.37'
+    testAnnotationProcessor 'org.openjdk.jmh:jmh-generator-annprocess:1.37'
+}
+
+// Create a task for running the Cargo build in rust-layer directory
+task buildNative(type: Exec) {
+    workingDir './rust-layer'
+    commandLine 'cargo', 'build', '--release'
+    // Align with tests expecting GlideJava/unknown
+    environment 'GLIDE_NAME', 'GlideJava'
+    environment 'GLIDE_VERSION', 'unknown'
+}
+
+// Task to copy native library to resources (cross-platform)
+task copyNativeLibrary(type: Copy) {
+    dependsOn buildNative
+    
+    // Determine platform-specific library name
+    def libName = org.gradle.internal.os.OperatingSystem.current().isWindows() ? 
+        'valkey_glide.dll' : 'libvalkey_glide.so'
+    
+    from "rust-layer/target/release/${libName}"
+    into 'src/main/resources/native'
+    rename { String fileName ->
+        fileName
+    }
+}
+
+// Make the main build depend on native library copy
+tasks.named('build') {
+    dependsOn copyNativeLibrary
+}
+
+// Make compileJava depend on native library copy
+compileJava.dependsOn copyNativeLibrary
+
+test {
+    useJUnitPlatform()
+
+    systemProperty 'java.library.path', file('rust-layer/target/release').absolutePath
+}
+
+// Disable javadoc task
+javadoc {
+    enabled = false
+}
+
+publishing {
+    publications {
+        maven(MavenPublication) {
+            artifactId = 'valkey-glide'
+            from components.java
+        }
+    }
+}

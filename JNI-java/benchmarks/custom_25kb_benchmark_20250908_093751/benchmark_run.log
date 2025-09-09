@@ -1,0 +1,51 @@
+[0;32m=== CUSTOM 25KB VALKEY BENCHMARK ===[0m
+Configuration:
+  Duration: 300s per test
+  Data Size: 25600 bytes (25KB)
+  Concurrency: 20 connections
+  QPS Targets: 160 830 1600 10000
+  Implementations: JNI only
+
+[1;33mRunning against AWS ElastiCache[0m
+[0;34mBuilding benchmark...[0m
+[0;34mPre-flight checks...[0m
+Available memory: Mem:           123Gi       7.7Gi        89Gi        98Mi        27Gi       115Gi
+Available disk space: /dev/root       248G  142G  106G  58% /
+Java version: openjdk version "21.0.8" 2025-07-15
+Setting optimal system parameters...
+Set Cargo to quiet mode for clean build output
+
+[0;32mStarting 4 benchmark tests...[0m
+
+[0;32mProgress: Test 1 of 4[0m
+Estimated completion time: Mon Sep  8 09:53:53 AM IDT 2025
+
+[0;34mRunning: QPS=160, Data Size=25KB, Concurrency=20, Duration=300s[0m
+Start time: Mon Sep  8 09:37:53 AM IDT 2025
+JVM Options: -Xms6g -Xmx6g -XX:+UseG1GC -XX:MaxGCPauseMillis=50 -XX:+UnlockExperimentalVMOptions -XX:G1NewSizePercent=20 -XX:G1MaxNewSizePercent=40 -XX:G1HeapRegionSize=16m -XX:+UseStringDeduplication -Xlog:gc*:custom_25kb_benchmark_20250908_093751/gc_25kb_qps160_c20_300s.log:time,tags
+09:37:53.455 [main] ERROR polyglot.benchmark.ValkeyClientBenchmark - Error parsing arguments: Unrecognized option: --implementations
+usage: ValkeyClientBenchmark
+    --checkpoint-interval <arg>   Checkpoint interval in seconds
+ -d,--data-size <arg>             Data size in bytes
+ -D,--duration <arg>              Test duration in seconds
+ -H,--host <arg>                  Valkey host
+ -help                            Show this help
+    --hit-ratio <arg>             Cache hit ratio 0.0-1.0
+    --key-space <arg>             Key space size
+    --no-cluster                  Disable cluster mode
+    --no-tls                      Disable TLS
+    --no-warmup                   Skip warmup phase
+ -o,--output <arg>                Output file for results
+ -p,--port <arg>                  Valkey port
+ -q,--qps <arg>                   Target QPS
+ -t,--concurrency <arg>           Concurrent tasks
+ -v,--verbose                     Verbose output
+    --write-ratio <arg>           Write ratio 0.0-1.0
+[0;32m✓ Benchmark completed successfully[0m
+Results saved to: custom_25kb_benchmark_20250908_093751/results_25kb_qps160_c20_300s.json
+End time: Mon Sep  8 09:37:53 AM IDT 2025
+System status after test:
+  Memory usage: Mem:           123Gi       7.7Gi        89Gi        98Mi        27Gi       115Gi
+  Load average:  0.24, 0.32, 0.41
+[1;33mValidating cleanup...[0m
+[1;33mCooling down for 60s...[0m

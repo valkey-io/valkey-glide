@@ -1,0 +1,265 @@
+import java.nio.file.Paths
+
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+    id 'signing'
+    id 'jacoco'
+    id 'io.freefair.lombok' version '8.6'
+    id 'com.github.spotbugs' version '6.0.18'
+    id 'com.google.osdetector' version '1.7.3'
+}
+
+repositories {
+    mavenCentral()
+}
+
+ext {
+    defaultReleaseVersion = "255.255.255"
+}
+
+dependencies {
+    // Add dependency on main JNI module (root project)
+    implementation project(':')
+
+    implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.13.0'
+
+    // junit
+    testImplementation group: 'org.mockito', name: 'mockito-inline', version: '3.12.4'
+    testImplementation group: 'org.mockito', name: 'mockito-junit-jupiter', version: '3.12.4'
+    testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter', version: '5.10.2'
+    
+    // logging for tests
+    testImplementation 'org.slf4j:slf4j-api:1.7.32'
+    testImplementation 'org.slf4j:slf4j-simple:1.7.32'
+
+    //lombok
+    compileOnly 'org.projectlombok:lombok:1.18.32'
+    annotationProcessor 'org.projectlombok:lombok:1.18.32'
+    testCompileOnly 'org.projectlombok:lombok:1.18.32'
+    testAnnotationProcessor 'org.projectlombok:lombok:1.18.32'
+}
+
+ext {
+    // osdetector returns 'aarch_64', but rust triplet has 'aarch64'
+    arch = osdetector.arch == 'aarch_64' ? 'aarch64' : osdetector.arch;
+}
+
+tasks.register('cleanRust') {
+    doFirst {
+        project.delete(Paths.get(project.projectDir.path, '../target').toString())
+    }
+}
+
+// Disable client-local Rust build; rely on root :buildNative + copy
+tasks.register('buildRust') {
+    doLast {
+        println(":client:buildRust skipped; using root :buildNative")
+    }
+}
+
+tasks.register('buildRustFfi', Exec) {
+    commandLine 'cargo', 'build', '--release', '--quiet'
+    workingDir "${project.rootDir}/rust-layer"
+    environment CARGO_TERM_COLOR: 'never', CARGO_BUILD_RUSTFLAGS: '--cfg ffi_test'
+    environment 'GLIDE_NAME', 'valkey-glide'
+    environment 'GLIDE_VERSION', project.ext.defaultReleaseVersion
+    
+    // Suppress output
+    standardOutput = new ByteArrayOutputStream()
+    errorOutput = new ByteArrayOutputStream()
+}
+
+tasks.register('buildAll') {
+    dependsOn 'buildRust'
+    finalizedBy 'build'
+}
+
+clean.dependsOn('cleanRust')
+
+tasks.register('copyNativeLib', Copy) {
+    if (osdetector.os == 'linux' && osdetector.release.id != 'alpine') {
+        from "${projectDir}/../rust-layer/target/release/"
+    } else {
+        from "${projectDir}/../rust-layer/target/release"
+    }
+    include "*.dylib", "*.so"
+    into sourceSets.main.output.resourcesDir
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+delombok.dependsOn('compileJava')
+jar.dependsOn('copyNativeLib')
+compileTestJava.dependsOn(delombok)
+javadoc.dependsOn('copyNativeLib')
+copyNativeLib.dependsOn(':buildNative')
+compileTestJava.dependsOn('copyNativeLib')
+test.dependsOn(':buildNative')
+
+// Ensure a stable Java Module name so downstream modules can `requires glide.api`
+jar {
+    manifest {
+        attributes 'Automatic-Module-Name': 'glide.api'
+    }
+}
+
+
+
+test {
+    exclude "glide/ffi/FfiTest.class"
+}
+
+sourceSets {
+    main {
+        java {
+            srcDir 'src/main/java'
+        }
+        resources {
+            srcDir 'src/main/resources'
+        }
+    }
+}
+
+task javadocJar(type: Jar) {
+    archiveClassifier = 'javadoc'
+    // Create empty javadoc jar when javadoc is disabled
+    if (!javadoc.enabled) {
+        from("$buildDir/tmp/empty-javadoc") {
+            into "/"
+        }
+        doFirst {
+            mkdir "$buildDir/tmp/empty-javadoc"
+        }
+    } else {
+        dependsOn javadoc
+        from javadoc.destinationDir
+    }
+}
+
+task sourcesJar(type: Jar, dependsOn: classes) {
+    archiveClassifier = 'sources'
+    from sourceSets.main.allSource
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+            artifact javadocJar
+            artifact sourcesJar
+            groupId = 'io.valkey'
+            artifactId = 'valkey-glide'
+            version = System.getenv("GLIDE_RELEASE_VERSION") ?: project.ext.defaultReleaseVersion
+            pom {
+                name = 'valkey-glide'
+                description = 'General Language Independent Driver for the Enterprise (GLIDE) for Valkey'
+                url = 'https://github.com/valkey-io/valkey-glide.git'
+                inceptionYear = '2024'
+                scm {
+                    url = 'https://github.com/valkey-io/valkey-glide'
+                    connection = 'scm:git:ssh://git@github.com/valkey-io/valkey-glide.git'
+                    developerConnection = 'scm:git:ssh://git@github.com/valkey-io/valkey-glide.git'
+                }
+                licenses {
+                    license {
+                        name = 'The Apache License, Version 2.0'
+                        url = 'https://www.apache.org/licenses/LICENSE-2.0.txt'
+                        distribution = 'repo'
+                    }
+                }
+                developers {
+                    developer {
+                        name = 'Valkey GLIDE Maintainers'
+                        url = 'https://github.com/valkey-io/valkey-glide.git'
+                    }
+                }
+            }
+        }
+    }
+    repositories {
+        mavenLocal()
+    }
+}
+
+tasks.withType(GenerateModuleMetadata) {
+    dependsOn jar
+}
+
+java {
+    modularity.inferModulePath = true
+}
+
+tasks.withType(Sign) {
+    def releaseVersion = System.getenv("GLIDE_RELEASE_VERSION") ?: defaultReleaseVersion;
+    def isReleaseVersion = !releaseVersion.endsWith("SNAPSHOT") && releaseVersion != defaultReleaseVersion;
+    onlyIf("isReleaseVersion is set") { isReleaseVersion }
+}
+
+signing {
+    sign publishing.publications
+}
+
+tasks.withType(Test) {
+    testLogging {
+        exceptionFormat "full"
+        events "started", "skipped", "passed", "failed"
+        showStandardStreams true
+    }
+    // This is needed for the FFI tests
+    jvmArgs "-Djava.library.path=${projectDir}/../target/release"
+
+    finalizedBy jacocoTestReport, jacocoTestCoverageVerification
+}
+
+jar {
+    archiveClassifier = osdetector.classifier
+    manifest {
+        attributes(
+            'Automatic-Module-Name': 'glide.api'
+        )
+    }
+}
+
+
+
+sourcesJar {
+    // suppress following error
+    // Entry glide/api/BaseClient.java is a duplicate but no duplicate handling strategy has been set
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+processResources {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+delombok {
+    modulePath = classpath
+}
+
+javadoc {
+    // Temporarily disabled due to numerous javadoc errors
+    enabled = false
+    dependsOn delombok
+    source = delombok.outputs
+    options.tags = [ "example:a:Example:" ]
+    failOnError = false // TODO fix all javadoc errors and warnings and remove that
+}
+
+spotbugsMain {
+    reports {
+        html {
+            required = true
+            outputLocation = file("$buildDir/reports/spotbugs/main/spotbugs.html")
+            stylesheet = 'fancy-hist.xsl'
+        }
+        xml {
+            required = true
+            outputLocation = file("$buildDir/reports/spotbugs/main/spotbugs.xml")
+        }
+    }
+}
+
+spotbugs {
+    ignoreFailures = true
+    showStackTraces = true
+}

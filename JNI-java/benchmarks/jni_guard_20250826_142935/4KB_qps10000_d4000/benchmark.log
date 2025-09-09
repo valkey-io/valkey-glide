@@ -1,0 +1,33 @@
+14:41:50.933 [main] INFO  polyglot.benchmark.ValkeyClientBenchmark - === VALKEY CLIENT BENCHMARK ===
+14:41:50.935 [main] INFO  polyglot.benchmark.ValkeyClientBenchmark - Configuration:
+14:41:50.935 [main] INFO  polyglot.benchmark.ValkeyClientBenchmark -   Host: clustercfg.testing-cluster.ey5v7d.use2.cache.amazonaws.com:6379
+14:41:50.936 [main] INFO  polyglot.benchmark.ValkeyClientBenchmark -   Target QPS: 10000.0
+14:41:50.936 [main] INFO  polyglot.benchmark.ValkeyClientBenchmark -   Test Duration: 120s
+14:41:50.936 [main] INFO  polyglot.benchmark.ValkeyClientBenchmark -   Checkpoint Interval: 30s
+14:41:50.936 [main] INFO  polyglot.benchmark.ValkeyClientBenchmark -   Checkpoint Directory: benchmark_checkpoints_20250826_144150
+14:41:50.936 [main] INFO  polyglot.benchmark.ValkeyClientBenchmark - 
+14:41:50.936 [main] INFO  polyglot.benchmark.ValkeyClientBenchmark - 🧹 Cleaning database before test ...
+14:41:51.117 [main] INFO  polyglot.benchmark.ValkeyClientBenchmark - ✅ Database cleaned successfully
+14:41:51.235 [main] INFO  polyglot.benchmark.ValkeyClientBenchmark - ✅ GLIDE client connected
+14:41:51.235 [main] INFO  polyglot.benchmark.ValkeyClientBenchmark -    Using implementation: glide.api.GlideClusterClient
+14:41:51.235 [main] INFO  polyglot.benchmark.ValkeyClientBenchmark -    Class loader: jdk.internal.loader.ClassLoaders$AppClassLoader@639fee48
+14:41:51.235 [main] INFO  polyglot.benchmark.ValkeyClientBenchmark -    Module: unnamed module @eec5a4a
+14:41:51.235 [main] INFO  polyglot.benchmark.ValkeyClientBenchmark - 🔥 Warming up client...
+14:41:52.330 [main] INFO  polyglot.benchmark.ValkeyClientBenchmark - ✅ Warmup completed
+14:41:52.330 [main] INFO  polyglot.benchmark.ValkeyClientBenchmark - 📦 Pre-populating keys...
+14:41:56.455 [main] INFO  polyglot.benchmark.ValkeyClientBenchmark - ✅ Pre-populated 8000 keys (80.0% of keyspace)
+14:42:26.594 [pool-2-thread-1] INFO  polyglot.benchmark.ValkeyClientBenchmark - JNI: 299995 cmds, 9955 QPS, 79.9% hits | CPU: 6.0% (sys: 3.4%), Heap: 2040MB/4096MB, Total: 2044MB/4096MB
+14:42:56.481 [pool-2-thread-1] INFO  polyglot.benchmark.ValkeyClientBenchmark - JNI: 599989 cmds, 9996 QPS, 79.9% hits | CPU: 5.6% (sys: 3.1%), Heap: 2040MB/4096MB, Total: 2043MB/4096MB
+14:43:26.481 [pool-2-thread-1] INFO  polyglot.benchmark.ValkeyClientBenchmark - JNI: 899992 cmds, 9997 QPS, 79.9% hits | CPU: 5.6% (sys: 3.1%), Heap: 2036MB/4096MB, Total: 2038MB/4096MB
+14:43:56.481 [pool-2-thread-1] INFO  polyglot.benchmark.ValkeyClientBenchmark - JNI: 1199991 cmds, 9998 QPS, 79.9% hits | CPU: 5.6% (sys: 3.6%), Heap: 2022MB/4096MB, Total: 2026MB/4096MB
+14:43:56.521 [main] INFO  polyglot.benchmark.ValkeyClientBenchmark - === FINAL RESULTS ===
+14:43:56.522 [main] INFO  polyglot.benchmark.ValkeyClientBenchmark - Total Commands: 1200408 (SET: 240615, GET: 959793)
+14:43:56.522 [main] INFO  polyglot.benchmark.ValkeyClientBenchmark - Cache Hit Rate: 79.9%
+14:43:56.522 [main] INFO  polyglot.benchmark.ValkeyClientBenchmark - Throughput: 9998 commands/sec (Target: 10000, 100.0%)
+14:43:56.522 [main] INFO  polyglot.benchmark.ValkeyClientBenchmark - SET Latency: mean=0.68ms, p99=2.03ms
+14:43:56.522 [main] INFO  polyglot.benchmark.ValkeyClientBenchmark - GET Hit Latency: mean=0.69ms, p99=2.03ms
+14:43:56.522 [main] INFO  polyglot.benchmark.ValkeyClientBenchmark - Peak Resource Usage:
+14:43:56.522 [main] INFO  polyglot.benchmark.ValkeyClientBenchmark -   Process CPU: 6.0%
+14:43:56.522 [main] INFO  polyglot.benchmark.ValkeyClientBenchmark -   Heap Memory: 2040MB / 4096MB (49.8%)
+14:43:56.522 [main] INFO  polyglot.benchmark.ValkeyClientBenchmark -   Total Memory: 2044MB
+14:43:56.522 [main] INFO  polyglot.benchmark.ValkeyClientBenchmark - 📁 Checkpoints saved to: benchmark_checkpoints_20250826_144150
