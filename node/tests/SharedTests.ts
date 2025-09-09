@@ -8,6 +8,7 @@
 // represents a running server instance. See first 2 test cases as examples.
 
 import { expect, it } from "@jest/globals";
+import * as os from "os";
 import { ValkeyCluster } from "../../utils/TestUtils";
 import {
     BaseClientConfiguration,
@@ -83,6 +84,37 @@ export function runBaseTests(config: {
     close: (testSucceeded: boolean) => void;
     timeout?: number;
 }) {
+    // 🔬 INSTRUMENTATION: Log environment details for CI/CD analysis
+    console.log(`\n🌍 [TEST-ENV] Test Environment Information:`);
+    console.log(`   Timestamp: ${new Date().toISOString()}`);
+    console.log(`   Node.js version: ${process.version}`);
+    console.log(`   Platform: ${process.platform} ${process.arch}`);
+    console.log(`   Memory usage: ${JSON.stringify(process.memoryUsage())}`);
+    console.log(`   CPU info: ${JSON.stringify(os.cpus().slice(0, 1))}`); // Show first CPU only
+    console.log(`   Load average: ${JSON.stringify(os.loadavg())}`);
+    console.log(`   Free memory: ${(os.freemem() / 1024 / 1024).toFixed(0)}MB`);
+    console.log(`   Total memory: ${(os.totalmem() / 1024 / 1024).toFixed(0)}MB`);
+    console.log(`   Test timeout config: ${config.timeout || 'default'}ms`);
+
+    // Log CI/CD specific environment variables
+    const ciEnvVars = [
+        'CI', 'GITHUB_ACTIONS', 'GITHUB_WORKFLOW', 'GITHUB_RUN_ID',
+        'RUNNER_OS', 'RUNNER_ARCH', 'RUNNER_NAME'
+    ];
+    const ciInfo = ciEnvVars.reduce((info, varName) => {
+        if (process.env[varName]) {
+            info[varName] = process.env[varName];
+        }
+
+        return info;
+    }, {} as Record<string, string>);
+
+    if (Object.keys(ciInfo).length > 0) {
+        console.log(`   CI/CD Environment: ${JSON.stringify(ciInfo)}`);
+    }
+
+    console.log(`\n`);
+
     runCommonTests({
         init: () => config.init(ProtocolVersion.RESP2),
         close: config.close,
@@ -326,10 +358,10 @@ export function runBaseTests(config: {
                     client instanceof GlideClient
                         ? await client.info([InfoOptions.Commandstats])
                         : Object.values(
-                              await client.info({
-                                  sections: [InfoOptions.Commandstats],
-                              }),
-                          ).join();
+                            await client.info({
+                                sections: [InfoOptions.Commandstats],
+                            }),
+                        ).join();
                 expect(oldResult).toContain("cmdstat_set");
                 expect(await client.configResetStat()).toEqual("OK");
 
@@ -337,10 +369,10 @@ export function runBaseTests(config: {
                     client instanceof GlideClient
                         ? await client.info([InfoOptions.Commandstats])
                         : Object.values(
-                              await client.info({
-                                  sections: [InfoOptions.Commandstats],
-                              }),
-                          ).join();
+                            await client.info({
+                                sections: [InfoOptions.Commandstats],
+                            }),
+                        ).join();
                 expect(result).not.toContain("cmdstat_set");
             }, protocol);
         },
@@ -367,13 +399,13 @@ export function runBaseTests(config: {
                     const response =
                         client instanceof GlideClient
                             ? await client.exec(
-                                  new Batch(isAtomic).lastsave(),
-                                  isAtomic,
-                              )
+                                new Batch(isAtomic).lastsave(),
+                                isAtomic,
+                            )
                             : await client.exec(
-                                  new ClusterBatch(isAtomic).lastsave(),
-                                  isAtomic,
-                              );
+                                new ClusterBatch(isAtomic).lastsave(),
+                                isAtomic,
+                            );
 
                     expect(response?.[0]).toBeGreaterThan(yesterday);
                 }
@@ -2552,9 +2584,9 @@ export function runBaseTests(config: {
                         client instanceof GlideClient
                             ? await client.exec(batch as Batch, false)
                             : await (client as GlideClusterClient).exec(
-                                  batch as ClusterBatch,
-                                  false,
-                              );
+                                batch as ClusterBatch,
+                                false,
+                            );
 
                     expect(results).toHaveLength(4);
                     expect(results![0]).toBe(1); // hsetex result for key1
@@ -2751,9 +2783,9 @@ export function runBaseTests(config: {
                         client instanceof GlideClient
                             ? client.exec(batch as Batch, true)
                             : (client as GlideClusterClient).exec(
-                                  batch as ClusterBatch,
-                                  true,
-                              );
+                                batch as ClusterBatch,
+                                true,
+                            );
 
                     await expect(execPromise).rejects.toThrow(RequestError);
                 },
@@ -2917,9 +2949,9 @@ export function runBaseTests(config: {
                     const results = await (client instanceof GlideClient
                         ? client.exec(batch as Batch, false)
                         : (client as GlideClusterClient).exec(
-                              batch as ClusterBatch,
-                              false,
-                          ));
+                            batch as ClusterBatch,
+                            false,
+                        ));
 
                     expect(results).toHaveLength(2);
                     expect(results![0]).toEqual([value1]);
@@ -3233,9 +3265,9 @@ export function runBaseTests(config: {
                     const results = await (client instanceof GlideClient
                         ? client.exec(batch as Batch, false)
                         : (client as GlideClusterClient).exec(
-                              batch as ClusterBatch,
-                              false,
-                          ));
+                            batch as ClusterBatch,
+                            false,
+                        ));
                     expect(results).toEqual([[1], [1]]);
 
                     // Verify expiration was set using HTTL
@@ -3458,9 +3490,9 @@ export function runBaseTests(config: {
                     const results = await (client instanceof GlideClient
                         ? client.exec(batch as Batch, false)
                         : (client as GlideClusterClient).exec(
-                              batch as ClusterBatch,
-                              false,
-                          ));
+                            batch as ClusterBatch,
+                            false,
+                        ));
                     expect(results).toEqual([[1], [1]]);
                 },
                 protocol,
@@ -3771,9 +3803,9 @@ export function runBaseTests(config: {
                     const results = await (client instanceof GlideClient
                         ? client.exec(batch as Batch, false)
                         : (client as GlideClusterClient).exec(
-                              batch as ClusterBatch,
-                              false,
-                          ));
+                            batch as ClusterBatch,
+                            false,
+                        ));
 
                     expect(results).toEqual([[1], [1]]);
                 },
@@ -4112,9 +4144,9 @@ export function runBaseTests(config: {
                     const results = await (client instanceof GlideClient
                         ? client.exec(batch as Batch, false)
                         : (client as GlideClusterClient).exec(
-                              batch as ClusterBatch,
-                              false,
-                          ));
+                            batch as ClusterBatch,
+                            false,
+                        ));
 
                     expect(results).toEqual([[1], [1]]);
                 },
@@ -4463,9 +4495,9 @@ export function runBaseTests(config: {
                     const results = await (client instanceof GlideClient
                         ? client.exec(batch as Batch, false)
                         : (client as GlideClusterClient).exec(
-                              batch as ClusterBatch,
-                              false,
-                          ));
+                            batch as ClusterBatch,
+                            false,
+                        ));
                     expect(results).toEqual([[1], [1]]);
 
                     // Verify fields still exist
@@ -5084,6 +5116,37 @@ export function runBaseTests(config: {
                         return;
                     }
 
+                    // 🔬 INSTRUMENTATION: Add detailed timing and diagnostics
+                    const testStartTime = performance.now();
+                    const timings: { operation: string; duration: number; timestamp: string }[] = [];
+
+                    const logTiming = (operation: string, startTime: number) => {
+                        const duration = performance.now() - startTime;
+                        const timestamp = new Date().toISOString();
+                        timings.push({ operation, duration, timestamp });
+
+                        console.log(`⏱️  [HPTTL-${protocol}] ${operation}: ${duration.toFixed(2)}ms`);
+
+                        if (duration > 200) {
+                            console.log(`⚠️  [HPTTL-${protocol}] SLOW: ${operation} took ${duration.toFixed(2)}ms (approaching 250ms timeout)`);
+                        }
+
+                        if (duration > 250) {
+                            console.log(`🚨 [HPTTL-${protocol}] TIMEOUT RISK: ${operation} exceeded 250ms default timeout!`);
+                        }
+
+                        return duration;
+                    };
+
+                    console.log(`🧪 [HPTTL-${protocol}] Starting instrumented test at ${new Date().toISOString()}`);
+                    console.log(`📊 [HPTTL-${protocol}] Environment: Node ${process.version}, Platform: ${process.platform}`);
+                    console.log(`💾 [HPTTL-${protocol}] Memory: ${JSON.stringify(process.memoryUsage())}`);
+                    console.log(`🌍 [HPTTL-${protocol}] Process PID: ${process.pid}, PPID: ${process.ppid}`);
+                    console.log(`⚡ [HPTTL-${protocol}] CPU Architecture: ${process.arch}, Endianness: ${os.endianness()}`);
+                    console.log(`🖥️  [HPTTL-${protocol}] OS: ${os.type()} ${os.release()}`);
+                    console.log(`📈 [HPTTL-${protocol}] Load Average: ${JSON.stringify(os.loadavg())}`);
+                    console.log(`💽 [HPTTL-${protocol}] Free Memory: ${(os.freemem() / 1024 / 1024).toFixed(0)}MB / ${(os.totalmem() / 1024 / 1024).toFixed(0)}MB`);
+
                     const key = getRandomKey();
                     const field1 = getRandomKey();
                     const field2 = getRandomKey();
@@ -5091,21 +5154,34 @@ export function runBaseTests(config: {
                     const value1 = getRandomKey();
                     const value2 = getRandomKey();
 
+                    console.log(`🔑 [HPTTL-${protocol}] Test key: ${key}`);
+
                     // Set up hash with fields
+                    let stepStart = performance.now();
                     await client.hset(key, {
                         [field1]: value1,
                         [field2]: value2,
                     });
+                    logTiming("HSET - Create hash with fields", stepStart);
 
                     // Set expiration on fields using HPEXPIRE (milliseconds)
+                    stepStart = performance.now();
                     await client.hpexpire(key, 60000, [field1, field2]);
+                    logTiming("HPEXPIRE - Set field expiration (60000ms)", stepStart);
 
-                    // Test basic HPTTL
+                    // Test basic HPTTL - THIS IS THE CRITICAL OPERATION
+                    stepStart = performance.now();
                     const result1 = await client.hpttl(key, [
                         field1,
                         field2,
                         field3,
                     ]);
+                    const hpttlDuration = logTiming("HPTTL - Basic check (CRITICAL)", stepStart);
+
+                    console.log(`📊 [HPTTL-${protocol}] HPTTL duration: ${JSON.stringify(hpttlDuration)}`);
+
+                    console.log(`📊 [HPTTL-${protocol}] HPTTL result: ${JSON.stringify(result1)}`);
+
                     expect(result1.length).toEqual(3);
                     expect(result1[0]).toBeGreaterThan(0); // field1 has TTL in milliseconds
                     expect(result1[1]).toBeGreaterThan(0); // field2 has TTL in milliseconds
@@ -5116,25 +5192,93 @@ export function runBaseTests(config: {
                     expect(result1[1]).toBeGreaterThan(1000); // Should be > 1 second in ms
 
                     // Remove expiration from field1
+                    stepStart = performance.now();
                     await client.hpersist(key, [field1]);
+                    logTiming("HPERSIST - Remove field1 expiration", stepStart);
 
                     // Test HPTTL after persist
+                    stepStart = performance.now();
                     const result2 = await client.hpttl(key, [field1, field2]);
+                    logTiming("HPTTL - After persist", stepStart);
+
+                    console.log(`📊 [HPTTL-${protocol}] HPTTL after persist: ${JSON.stringify(result2)}`);
+
                     expect(result2[0]).toEqual(-1); // field1 has no expiration
                     expect(result2[1]).toBeGreaterThan(0); // field2 still has TTL
 
                     // Test on non-existent key
                     const nonExistentKey = getRandomKey();
+                    stepStart = performance.now();
                     const result3 = await client.hpttl(nonExistentKey, [
                         field1,
                     ]);
+                    logTiming("HPTTL - Non-existent key", stepStart);
+
+                    console.log(`📊 [HPTTL-${protocol}] HPTTL non-existent: ${JSON.stringify(result3)}`);
+
                     expect(result3).toEqual([-2]);
 
                     // Test on fields without expiration
                     const key2 = getRandomKey();
+                    stepStart = performance.now();
                     await client.hset(key2, { [field1]: value1 });
+                    logTiming("HSET - Create hash without expiration", stepStart);
+
+                    stepStart = performance.now();
                     const result4 = await client.hpttl(key2, [field1]);
+                    logTiming("HPTTL - Fields without expiration", stepStart);
+
+                    console.log(`📊 [HPTTL-${protocol}] HPTTL no expiration: ${JSON.stringify(result4)}`);
+
                     expect(result4).toEqual([-1]); // field has no expiration
+
+                    // 🔬 INSTRUMENTATION: Final analysis
+                    const totalTestTime = performance.now() - testStartTime;
+                    const totalOperationTime = timings.reduce((sum, t) => sum + t.duration, 0);
+                    const avgOperationTime = totalOperationTime / timings.length;
+                    const maxOperationTime = Math.max(...timings.map(t => t.duration));
+                    const slowOperations = timings.filter(t => t.duration > 100);
+                    const criticalOperations = timings.filter(t => t.duration > 200);
+
+                    // Always show critical performance information
+                    if (criticalOperations.length > 0 || maxOperationTime > 200) {
+                        console.log(`\n🚨 [HPTTL-${protocol}] PERFORMANCE ALERT:`);
+                        console.log(`   Slowest operation: ${maxOperationTime.toFixed(2)}ms`);
+                        console.log(`   Operations > 200ms (timeout risk): ${criticalOperations.length}`);
+
+                        if (criticalOperations.length > 0) {
+                            console.log(`\n🚨 [HPTTL-${protocol}] CRITICAL OPERATIONS (>200ms, timeout risk):`);
+                            criticalOperations.forEach(op => {
+                                console.log(`   ${op.operation}: ${op.duration.toFixed(2)}ms at ${op.timestamp}`);
+                            });
+                            console.log(`\n💡 [HPTTL-${protocol}] RECOMMENDATION: Increase requestTimeout from 250ms to at least ${Math.ceil(maxOperationTime / 100) * 100}ms`);
+                        }
+                    }
+
+                    
+                        console.log(`\n� [HHPTTL-${protocol}] PERFORMANCE SUMMARY:`);
+                        console.log(`   Total test time: ${totalTestTime.toFixed(2)}ms`);
+                        console.log(`   Total operation time: ${totalOperationTime.toFixed(2)}ms`);
+                        console.log(`   Average operation time: ${avgOperationTime.toFixed(2)}ms`);
+                        console.log(`   Slowest operation: ${maxOperationTime.toFixed(2)}ms`);
+                        console.log(`   Operations > 100ms: ${slowOperations.length}`);
+                        console.log(`   Operations > 200ms (timeout risk): ${criticalOperations.length}`);
+
+                        if (slowOperations.length > 0) {
+                            console.log(`\n🐌 [HPTTL-${protocol}] SLOW OPERATIONS (>100ms):`);
+                            slowOperations.forEach(op => {
+                                console.log(`   ${op.operation}: ${op.duration.toFixed(2)}ms at ${op.timestamp}`);
+                            });
+                        }
+
+                        // Log all timings for CI/CD analysis
+                        console.log(`\n📊 [HPTTL-${protocol}] DETAILED TIMINGS:`);
+                        timings.forEach((timing, index) => {
+                            console.log(`   ${index + 1}. ${timing.operation}: ${timing.duration.toFixed(2)}ms`);
+                        });
+
+                        console.log(`✅ [HPTTL-${protocol}] Test completed successfully\n`);
+                    
                 },
                 protocol,
             );
@@ -9357,27 +9501,27 @@ export function runBaseTests(config: {
                 expect(
                     client instanceof GlideClient
                         ? await client.echo(message, {
-                              decoder: Decoder.String,
-                          })
+                            decoder: Decoder.String,
+                        })
                         : await client.echo(message, {
-                              decoder: Decoder.String,
-                          }),
+                            decoder: Decoder.String,
+                        }),
                 ).toEqual(message);
                 expect(
                     client instanceof GlideClient
                         ? await client.echo(message, { decoder: Decoder.Bytes })
                         : await client.echo(message, {
-                              decoder: Decoder.Bytes,
-                          }),
+                            decoder: Decoder.Bytes,
+                        }),
                 ).toEqual(Buffer.from(message));
                 expect(
                     client instanceof GlideClient
                         ? await client.echo(Buffer.from(message), {
-                              decoder: Decoder.String,
-                          })
+                            decoder: Decoder.String,
+                        })
                         : await client.echo(Buffer.from(message), {
-                              decoder: Decoder.String,
-                          }),
+                            decoder: Decoder.String,
+                        }),
                 ).toEqual(message);
                 expect(await client.echo(Buffer.from(message))).toEqual(
                     message,
@@ -11089,17 +11233,17 @@ export function runBaseTests(config: {
                     let response =
                         client instanceof GlideClient
                             ? await client.exec(
-                                  new Batch(isAtomic).dump(key1),
-                                  true,
-                                  {
-                                      decoder: Decoder.Bytes,
-                                  },
-                              )
+                                new Batch(isAtomic).dump(key1),
+                                true,
+                                {
+                                    decoder: Decoder.Bytes,
+                                },
+                            )
                             : await client.exec(
-                                  new ClusterBatch(isAtomic).dump(key1),
-                                  true,
-                                  { decoder: Decoder.Bytes },
-                              );
+                                new ClusterBatch(isAtomic).dump(key1),
+                                true,
+                                { decoder: Decoder.Bytes },
+                            );
                     expect(response?.[0]).not.toBeNull();
                     data = response?.[0] as Buffer;
 
@@ -11107,19 +11251,19 @@ export function runBaseTests(config: {
                     response =
                         client instanceof GlideClient
                             ? await client.exec(
-                                  new Batch(isAtomic)
-                                      .restore(key4, 0, data)
-                                      .get(key4),
-                                  true,
-                                  { decoder: Decoder.String },
-                              )
+                                new Batch(isAtomic)
+                                    .restore(key4, 0, data)
+                                    .get(key4),
+                                true,
+                                { decoder: Decoder.String },
+                            )
                             : await client.exec(
-                                  new ClusterBatch(isAtomic)
-                                      .restore(key4, 0, data)
-                                      .get(key4),
-                                  true,
-                                  { decoder: Decoder.String },
-                              );
+                                new ClusterBatch(isAtomic)
+                                    .restore(key4, 0, data)
+                                    .get(key4),
+                                true,
+                                { decoder: Decoder.String },
+                            );
                     expect(response?.[0]).toEqual("OK");
                     expect(response?.[1]).toEqual(value);
 
@@ -11127,19 +11271,19 @@ export function runBaseTests(config: {
                     response =
                         client instanceof GlideClient
                             ? await client.exec(
-                                  new Batch(isAtomic)
-                                      .restore(key5, 0, data)
-                                      .get(key5),
-                                  true,
-                                  { decoder: Decoder.Bytes },
-                              )
+                                new Batch(isAtomic)
+                                    .restore(key5, 0, data)
+                                    .get(key5),
+                                true,
+                                { decoder: Decoder.Bytes },
+                            )
                             : await client.exec(
-                                  new ClusterBatch(isAtomic)
-                                      .restore(key5, 0, data)
-                                      .get(key5),
-                                  true,
-                                  { decoder: Decoder.Bytes },
-                              );
+                                new ClusterBatch(isAtomic)
+                                    .restore(key5, 0, data)
+                                    .get(key5),
+                                true,
+                                { decoder: Decoder.Bytes },
+                            );
                     expect(response?.[0]).toEqual("OK");
                     expect(response?.[1]).toEqual(valueEncode);
                 }
@@ -11611,13 +11755,13 @@ export function runBaseTests(config: {
                 expiry: expiryVal as
                     | "keepExisting"
                     | {
-                          type:
-                              | TimeUnit.Seconds
-                              | TimeUnit.Milliseconds
-                              | TimeUnit.UnixSeconds
-                              | TimeUnit.UnixMilliseconds;
-                          count: number;
-                      },
+                        type:
+                        | TimeUnit.Seconds
+                        | TimeUnit.Milliseconds
+                        | TimeUnit.UnixSeconds
+                        | TimeUnit.UnixMilliseconds;
+                        count: number;
+                    },
                 conditionalSet: "onlyIfDoesNotExist",
             });
 
@@ -11638,13 +11782,13 @@ export function runBaseTests(config: {
                 expiry: expiryVal as
                     | "keepExisting"
                     | {
-                          type:
-                              | TimeUnit.Seconds
-                              | TimeUnit.Milliseconds
-                              | TimeUnit.UnixSeconds
-                              | TimeUnit.UnixMilliseconds;
-                          count: number;
-                      },
+                        type:
+                        | TimeUnit.Seconds
+                        | TimeUnit.Milliseconds
+                        | TimeUnit.UnixSeconds
+                        | TimeUnit.UnixMilliseconds;
+                        count: number;
+                    },
 
                 conditionalSet: "onlyIfExists",
                 returnOldValue: true,
@@ -11663,13 +11807,13 @@ export function runBaseTests(config: {
                     expiry: expiryVal as
                         | "keepExisting"
                         | {
-                              type:
-                                  | TimeUnit.Seconds
-                                  | TimeUnit.Milliseconds
-                                  | TimeUnit.UnixSeconds
-                                  | TimeUnit.UnixMilliseconds;
-                              count: number;
-                          },
+                            type:
+                            | TimeUnit.Seconds
+                            | TimeUnit.Milliseconds
+                            | TimeUnit.UnixSeconds
+                            | TimeUnit.UnixMilliseconds;
+                            count: number;
+                        },
                     conditionalSet: "onlyIfEqual",
                     comparisonValue: value, // Ensure it matches the current key's value
                 });
@@ -13149,7 +13293,7 @@ export function runBaseTests(config: {
                     for (let i = 0; i < fullResultMapArray.length; i += 2) {
                         expect(
                             (fullResultMapArray[i] as string) in
-                                expectedFullMap,
+                            expectedFullMap,
                         ).toEqual(true);
                     }
 
@@ -14074,23 +14218,23 @@ export function runBaseTests(config: {
                 expect(await client.xinfoGroups(Buffer.from(key))).toEqual(
                     cluster.checkIfServerVersionLessThan("7.0.0")
                         ? [
-                              {
-                                  name: groupName1,
-                                  consumers: 0,
-                                  pending: 0,
-                                  "last-delivered-id": "0-0",
-                              },
-                          ]
+                            {
+                                name: groupName1,
+                                consumers: 0,
+                                pending: 0,
+                                "last-delivered-id": "0-0",
+                            },
+                        ]
                         : [
-                              {
-                                  name: groupName1,
-                                  consumers: 0,
-                                  pending: 0,
-                                  "last-delivered-id": "0-0",
-                                  "entries-read": null,
-                                  lag: 0,
-                              },
-                          ],
+                            {
+                                name: groupName1,
+                                consumers: 0,
+                                pending: 0,
+                                "last-delivered-id": "0-0",
+                                "entries-read": null,
+                                lag: 0,
+                            },
+                        ],
                 );
 
                 expect(
@@ -14127,23 +14271,23 @@ export function runBaseTests(config: {
                 expect(await client.xinfoGroups(key)).toEqual(
                     cluster.checkIfServerVersionLessThan("7.0.0")
                         ? [
-                              {
-                                  name: groupName1,
-                                  consumers: 0,
-                                  pending: 0,
-                                  "last-delivered-id": "0-0",
-                              },
-                          ]
+                            {
+                                name: groupName1,
+                                consumers: 0,
+                                pending: 0,
+                                "last-delivered-id": "0-0",
+                            },
+                        ]
                         : [
-                              {
-                                  name: groupName1,
-                                  consumers: 0,
-                                  pending: 0,
-                                  "last-delivered-id": "0-0",
-                                  "entries-read": null,
-                                  lag: 3,
-                              },
-                          ],
+                            {
+                                name: groupName1,
+                                consumers: 0,
+                                pending: 0,
+                                "last-delivered-id": "0-0",
+                                "entries-read": null,
+                                lag: 3,
+                            },
+                        ],
                 );
 
                 const xreadgroup = await client.xreadgroup(
@@ -14168,23 +14312,23 @@ export function runBaseTests(config: {
                 expect(await client.xinfoGroups(key)).toEqual(
                     cluster.checkIfServerVersionLessThan("7.0.0")
                         ? [
-                              {
-                                  name: groupName1,
-                                  consumers: 1,
-                                  pending: 3,
-                                  "last-delivered-id": streamId3,
-                              },
-                          ]
+                            {
+                                name: groupName1,
+                                consumers: 1,
+                                pending: 3,
+                                "last-delivered-id": streamId3,
+                            },
+                        ]
                         : [
-                              {
-                                  name: groupName1,
-                                  consumers: 1,
-                                  pending: 3,
-                                  "last-delivered-id": streamId3,
-                                  "entries-read": 3,
-                                  lag: 0,
-                              },
-                          ],
+                            {
+                                name: groupName1,
+                                consumers: 1,
+                                pending: 3,
+                                "last-delivered-id": streamId3,
+                                "entries-read": 3,
+                                lag: 0,
+                            },
+                        ],
                 );
 
                 expect(await client.xack(key, groupName1, [streamId1])).toEqual(
@@ -14194,23 +14338,23 @@ export function runBaseTests(config: {
                 expect(await client.xinfoGroups(key)).toEqual(
                     cluster.checkIfServerVersionLessThan("7.0.0")
                         ? [
-                              {
-                                  name: groupName1,
-                                  consumers: 1,
-                                  pending: 2,
-                                  "last-delivered-id": streamId3,
-                              },
-                          ]
+                            {
+                                name: groupName1,
+                                consumers: 1,
+                                pending: 2,
+                                "last-delivered-id": streamId3,
+                            },
+                        ]
                         : [
-                              {
-                                  name: groupName1,
-                                  consumers: 1,
-                                  pending: 2,
-                                  "last-delivered-id": streamId3,
-                                  "entries-read": 3,
-                                  lag: 0,
-                              },
-                          ],
+                            {
+                                name: groupName1,
+                                consumers: 1,
+                                pending: 2,
+                                "last-delivered-id": streamId3,
+                                "entries-read": 3,
+                                lag: 0,
+                            },
+                        ],
                 );
 
                 // key exists, but it is not a stream
@@ -14434,16 +14578,16 @@ export function runBaseTests(config: {
                     Buffer.from(group),
                     cluster.checkIfServerVersionLessThan("6.2.0")
                         ? {
-                              start: InfBoundary.NegativeInfinity,
-                              end: InfBoundary.PositiveInfinity,
-                              count: 1,
-                          }
+                            start: InfBoundary.NegativeInfinity,
+                            end: InfBoundary.PositiveInfinity,
+                            count: 1,
+                        }
                         : {
-                              start: InfBoundary.NegativeInfinity,
-                              end: InfBoundary.PositiveInfinity,
-                              count: 1,
-                              minIdleTime: 42,
-                          },
+                            start: InfBoundary.NegativeInfinity,
+                            end: InfBoundary.PositiveInfinity,
+                            count: 1,
+                            minIdleTime: 42,
+                        },
                 );
                 result[0][2] = 0; // overwrite msec counter to avoid test flakyness
                 expect(result).toEqual([["0-1", "consumer", 0, 1]]);
@@ -15661,9 +15805,9 @@ export function runBaseTests(config: {
                             client instanceof GlideClient
                                 ? await client.exec(batch as Batch, true)
                                 : await client.exec(
-                                      batch as ClusterBatch,
-                                      true,
-                                  );
+                                    batch as ClusterBatch,
+                                    true,
+                                );
                         expect(result).toEqual(expectedResult);
                     }
 
@@ -15713,13 +15857,13 @@ export function runBaseTests(config: {
                 // Retry with a longer timeout
                 const result = isCluster
                     ? await (client as GlideClusterClient).exec(
-                          batch as ClusterBatch,
-                          true,
-                          { timeout: 1000 },
-                      )
+                        batch as ClusterBatch,
+                        true,
+                        { timeout: 1000 },
+                    )
                     : await (client as GlideClient).exec(batch as Batch, true, {
-                          timeout: 1000,
-                      });
+                        timeout: 1000,
+                    });
 
                 expect(result?.length).toBe(1);
             }, protocol);
@@ -15748,9 +15892,9 @@ export function runBaseTests(config: {
 
                 const result = isCluster
                     ? await (client as GlideClusterClient).exec(
-                          batch as ClusterBatch,
-                          false,
-                      )
+                        batch as ClusterBatch,
+                        false,
+                    )
                     : await (client as GlideClient).exec(batch as Batch, false);
 
                 expect(result?.length).toBe(4);
@@ -15923,9 +16067,9 @@ export function runCommonTests(config: {
                 const result = clusterMode
                     ? await client.exec(batch as ClusterTransaction, true)
                     : await (client as GlideClient).exec(
-                          batch as Transaction,
-                          true,
-                      );
+                        batch as Transaction,
+                        true,
+                    );
                 expect(result?.length).toBe(2);
                 expect(result?.[0]).toBe("OK");
                 expect(result?.[1]).toBe("hello");
