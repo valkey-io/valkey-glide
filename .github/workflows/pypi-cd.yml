@@ -85,7 +85,7 @@ jobs:
         if: github.repository_owner == 'valkey-io'
         name: Publish packages to PyPi
         runs-on: ${{ matrix.build.RUNNER }}
-        timeout-minutes: 60
+        timeout-minutes: 120
         strategy:
             fail-fast: false
             matrix:
@@ -422,6 +422,7 @@ jobs:
             - name: Async client - Download binaries
               uses: actions/download-artifact@v4
               with:
+                  pattern: wheels-*-async
                   path: python/glide-async/wheels
                   merge-multiple: true
 
@@ -459,6 +460,7 @@ jobs:
             - name: Sync client - Download binaries
               uses: actions/download-artifact@v4
               with:
+                  pattern: wheels-*-sync
                   path: python/glide-sync/wheels
                   merge-multiple: true
 
