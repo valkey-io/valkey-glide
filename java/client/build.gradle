@@ -119,7 +119,7 @@ tasks.register('buildRust', Exec) {
     if (target.contains("linux") && !target.contains("musl")) {
         commandLine 'cargo', 'zigbuild', '--target', "$target", '--release'
     } else if (target.contains("musl")) {
-        commandLine 'cargo', 'build', '--target', "$target", '--release'
+        commandLine 'cargo', 'zigbuild', '--target', "$target", '--release'
         environment RUSTFLAGS: '-C target-feature=-crt-static'
     } else {
         commandLine 'cargo', 'build', '--release'
@@ -147,7 +147,7 @@ tasks.register('buildRustFfi', Exec) {
         commandLine 'cargo', 'zigbuild', '--target', "$target", '--release'
         environment RUSTFLAGS: '--cfg ffi_test'
     } else if (target.contains("musl")) {
-        commandLine 'cargo', 'build', '--target', "$target", '--release'
+        commandLine 'cargo', 'zigbuild', '--target', "$target", '--release'
         environment RUSTFLAGS: '--cfg ffi_test -C target-feature=-crt-static'
     } else {
         commandLine 'cargo', 'build', '--release'
