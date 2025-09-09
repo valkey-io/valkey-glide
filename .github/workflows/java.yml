@@ -327,6 +327,7 @@ jobs:
             - name: Setup Rust Build
               if: ${{ contains(matrix.host.TARGET, 'musl') }}
               run: |
+                  export PATH="$HOME/.cargo/bin:$PATH"
                   echo "PATH=$HOME/.cargo/bin:$PATH" >> $GITHUB_ENV
 
                   # Install ziglang and zigbuild
