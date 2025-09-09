@@ -128,3 +128,10 @@ publishing {
         }
     }
 }
+
+// Fix publishing task dependencies
+tasks.withType(GenerateModuleMetadata) {
+    dependsOn jar, shadowJar
+}
+
+publishMavenPublicationToMavenLocal.dependsOn jar, shadowJar
