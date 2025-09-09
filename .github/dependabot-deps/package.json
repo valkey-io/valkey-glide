@@ -1,9 +1,0 @@
-{
-    "name": "dependabot-management-workflow",
-    "version": "1.0.0",
-    "description": "Dependencies for the dependabot management workflow",
-    "dependencies": {
-        "@octokit/rest": "20.0.2",
-        "semver": "7.5.4"
-    }
-}
