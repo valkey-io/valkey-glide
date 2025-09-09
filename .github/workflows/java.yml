@@ -329,8 +329,9 @@ jobs:
               run: |
                   echo "PATH=$HOME/.cargo/bin:$PATH" >> $GITHUB_ENV
 
-            - name: Install zig
-              uses: ./.github/workflows/install-zig
+                  # Install ziglang and zigbuild
+                  pip3 install ziglang --break-system-packages
+                  cargo install --locked cargo-zigbuild
 
             - uses: actions/cache@v4
               with:
