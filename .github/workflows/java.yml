@@ -329,6 +329,9 @@ jobs:
               run: |
                   echo "PATH=$HOME/.cargo/bin:$PATH" >> $GITHUB_ENV
 
+            - name: Install zig
+              uses: ./.github/workflows/install-zig
+
             - uses: actions/cache@v4
               with:
                   path: |
