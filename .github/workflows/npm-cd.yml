@@ -168,15 +168,10 @@ jobs:
                           end
                       )
                       | if .RUNNER == "macos13" then .["test-runner"] = "macos13" else . end
-                      | .RUNNER = (
-                          if (.RUNNER | type == "array") 
-                          then (.RUNNER | map(if . == "ephemeral" then "persistent" else . end))
-                          else (if .RUNNER == "ephemeral" then "persistent" else .RUNNER end)
-                          end
-                      )
                   )' < .github/json_matrices/build-matrix.json | jq -c .)
                   echo "platform_matrix=${PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
                   echo "Platform matrix loaded: ${PLATFORM_MATRIX}"
+
     build-native-modules:
         needs: [get-build-parameters]
         strategy:
