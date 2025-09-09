@@ -558,7 +558,7 @@ def create_client_config(
             addresses=seed_nodes if addresses is None else addresses,
             use_tls=use_tls,
             credentials=credentials,
-            database_id=database_id,  # Add database_id parameter
+            database_id=database_id,
             client_name=client_name,
             protocol=protocol,
             request_timeout=timeout,
@@ -626,7 +626,7 @@ def create_sync_client_config(
             addresses=seed_nodes if addresses is None else addresses,
             use_tls=use_tls,
             credentials=credentials,
-            database_id=database_id,  # Add database_id parameter
+            database_id=database_id,
             client_name=client_name,
             protocol=protocol,
             request_timeout=timeout,
