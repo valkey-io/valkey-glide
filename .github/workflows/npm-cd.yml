@@ -449,6 +449,7 @@ jobs:
                   name: |
                       artifacts-*
                       js-files-${{ github.run_id }}
+                  failOnError: false
 
     test-published-release:
         needs: [get-build-parameters, prepare-and-publish]
@@ -551,6 +552,7 @@ jobs:
                   name: |
                       bindings-*
                       js-files-${{ github.run_id }}
+                  failOnError: false
 
     deprecate-on-failure:
         needs: [test-published-release, get-build-parameters]
