@@ -161,7 +161,7 @@ jobs:
                   ls -ltr
                   cd -
                   cp $src_folder/bundle.jar bundle-${{ matrix.host.TARGET }}.jar
-                  
+
                   # Bundle jedis-compatibility JAR
                   jedis_src_folder=~/.m2/repository/io/valkey/valkey-glide-jedis-compatibility/${{ env.RELEASE_VERSION }}
                   cd $jedis_src_folder
@@ -207,13 +207,13 @@ jobs:
               run: |
                   mkdir -p build/io/valkey/valkey-glide/${{ env.RELEASE_VERSION }}
                   mkdir -p build/io/valkey/valkey-glide-jedis-compatibility/${{ env.RELEASE_VERSION }}
-                  
+
                   # Move client files
                   cp -a maven-files/valkey-glide* build/io/valkey/valkey-glide/${{ env.RELEASE_VERSION }}
-                  
+
                   # Move jedis-compatibility files
                   cp -a maven-files/valkey-glide-jedis-compatibility* build/io/valkey/valkey-glide-jedis-compatibility/${{ env.RELEASE_VERSION }}
-                  
+
                   rm -rf build/io/valkey/valkey-glide/${{ env.RELEASE_VERSION }}/META-INF
                   rm -rf build/io/valkey/valkey-glide-jedis-compatibility/${{ env.RELEASE_VERSION }}/META-INF
                   cd build
