@@ -19,7 +19,7 @@ dependencies {
 
     def classifier 
     if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
-        classifier = "linux_musl_${osdetector.arch}"
+        classifier = "linux_musl-${osdetector.arch}"
     }
     else {
         classifier = osdetector.classifier
