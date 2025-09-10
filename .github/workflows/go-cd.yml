@@ -130,15 +130,11 @@ jobs:
               run: |
                   mkdir -p $GITHUB_WORKSPACE/ffi/target/release
                   cp ffi/target/*/release/libglide_ffi.a $GITHUB_WORKSPACE/ffi/target/release/
-            - name: Set artifact name
-              id: set-artifact-name
-              run: |
-                  echo "ARTIFACT_NAME=${{ matrix.host.TARGET }}" >> $GITHUB_OUTPUT
             - name: Upload artifacts
               continue-on-error: true
               uses: actions/upload-artifact@v4
               with:
-                  name: ${{ steps.set-artifact-name.outputs.artifact-name }}
+                  name: ${{ matrix.host.TARGET }}
                   path: |
                       ffi/target/release/libglide_ffi.a
                       go/lib.h
