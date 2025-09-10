@@ -189,6 +189,8 @@ tasks.register('copyNativeLib', Copy) {
         from "${projectDir}/../target/${arch}-unknown-linux-gnu/release/"
     } else if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
         from "${projectDir}/../target/${arch}-unknown-linux-musl/release/"
+    } else {
+        from "${projectDir}/../target/release/"
     }
     include "*.dylib", "*.so"
     into sourceSets.main.output.resourcesDir
@@ -295,7 +297,12 @@ tasks.withType(Test) {
         showStandardStreams true
     }
     // This is needed for the FFI tests
-    if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
+    if (project.hasProperty('target')) {
+        target = project.target
+        jvmArgs "-Djava.library.path=${projectDir}/../target/${target}/release"
+    } else if (osdetector.os == 'linux' && osdetector.release.id != 'alpine') {
+        jvmArgs "-Djava.library.path=${projectDir}/../target/${arch}-unknown-linux-gnu/release"
+    } else if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
         jvmArgs "-Djava.library.path=${projectDir}/../target/${arch}-unknown-linux-musl/release"
     } else {
         jvmArgs "-Djava.library.path=${projectDir}/../target/release"
