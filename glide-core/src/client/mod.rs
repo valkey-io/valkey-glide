@@ -995,13 +995,7 @@ impl Client {
         })?;
 
         // Refresh the token using the IAM token manager
-        iam_manager.refresh_token().await.map_err(|e| {
-            RedisError::from((
-                ErrorKind::ClientError,
-                "Failed to refresh IAM token",
-                format!("{e}"),
-            ))
-        })?;
+        iam_manager.refresh_token().await;
         Ok(())
     }
 }
