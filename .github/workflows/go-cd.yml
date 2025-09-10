@@ -126,7 +126,7 @@ jobs:
                   make install-build-tools
                   make build GLIDE_VERSION="${RELEASE_VERSION}" TARGET_TRIPLET="${{ matrix.host.TARGET }}"
             - name: Move FFI artifacts on linux
-              if: ${{ contains(matrix.host.TARGET, 'linux-gnu') }}
+              if: ${{ contains(matrix.host.TARGET, 'linux') }}
               run: |
                   mkdir -p $GITHUB_WORKSPACE/ffi/target/release
                   cp ffi/target/*/release/libglide_ffi.a $GITHUB_WORKSPACE/ffi/target/release/
