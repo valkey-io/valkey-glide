@@ -1,6 +1,7 @@
 plugins {
     id 'java-library'
     id 'maven-publish'
+    id 'signing'
     id 'io.freefair.lombok' version '8.6'
     id 'com.google.osdetector' version '1.7.3'
     id 'com.gradleup.shadow' version '8.3.8'
@@ -135,3 +136,13 @@ tasks.withType(GenerateModuleMetadata) {
 }
 
 publishMavenPublicationToMavenLocal.dependsOn jar, shadowJar
+
+tasks.withType(Sign) {
+    def releaseVersion = System.getenv("GLIDE_RELEASE_VERSION") ?: project.ext.defaultReleaseVersion;
+    def isReleaseVersion = !releaseVersion.endsWith("SNAPSHOT") && releaseVersion != project.ext.defaultReleaseVersion;
+    onlyIf("isReleaseVersion is set") { isReleaseVersion }
+}
+
+signing {
+    sign publishing.publications
+}
