@@ -254,8 +254,8 @@ jobs:
             matrix:
                 host: ${{ fromJson(needs.load-platform-matrix.outputs.PLATFORM_MATRIX) }}
                 exclude:
-                - host:
-                    TARGET: aarch64-unknown-linux-musl
+                    - host:
+                          TARGET: aarch64-unknown-linux-musl
         runs-on: ${{ matrix.host.test-runner || matrix.host.runner }}
         container:
             image: ${{ matrix.host.IMAGE || ''}}
