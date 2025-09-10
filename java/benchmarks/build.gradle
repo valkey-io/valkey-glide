@@ -17,7 +17,15 @@ tasks.withType(JavaCompile) {
 dependencies {
     version = System.getenv("GLIDE_RELEASE_VERSION") ?: project.ext.defaultReleaseVersion
 
-    implementation "io.valkey:valkey-glide:${version}:${osdetector.classifier}"
+    def classifier 
+    if (osdetector.os == 'linux' && osdetector.release.id != 'alpine') {
+        classifier = "linux_musl_${osdetector.arch}"
+    }
+    else {
+        classifier = osdetector.classifier
+    }
+    implementation "io.valkey:valkey-glide:${version}:${classifier}"
+        
 
     // This dependency is used internally, and not exposed to consumers on their own compile classpath.
     implementation 'com.google.guava:guava:33.4.8-jre'
