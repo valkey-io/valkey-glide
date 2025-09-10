@@ -57,12 +57,14 @@ Once set up, you can run the basic examples.
 Additionally, consider installing the Gradle plugin, [OS Detector](https://github.com/google/osdetector-gradle-plugin) to help you determine what classifier to use.
 
 ## Classifiers
-There are 4 types of classifiers for Valkey GLIDE which are
+There are 6 types of classifiers for Valkey GLIDE which are
 ```
 osx-aarch_64
 osx-x86_64
 linux-aarch_64
 linux-x86_64
+linux_musl-aarch_64
+linux_musl-x86_64
 ```
 
 Gradle:
@@ -89,7 +91,17 @@ dependencies {
     implementation group: 'io.valkey', name: 'valkey-glide', version: '1.+', classifier: 'linux-x86_64'
 }
 
-// with osdetector
+// linux_musl-aarch_64
+dependencies {
+    implementation group: 'io.valkey', name: 'valkey-glide', version: '1.+', classifier: 'linux_musl-aarch_64'
+}
+
+// linux_musl-x86_64
+dependencies {
+    implementation group: 'io.valkey', name: 'valkey-glide', version: '1.+', classifier: 'linux_musl-x86_64'
+}
+
+// with osdetector - does not work for musl
 plugins {
     id "com.google.osdetector" version "1.7.3"
 }
@@ -134,6 +146,22 @@ Maven:
    <version>[1.0.0,)</version>
 </dependency>
 
+<!-- linux_musl-aarch_64 -->
+<dependency>
+   <groupId>io.valkey</groupId>
+   <artifactId>valkey-glide</artifactId>
+   <classifier>linux_musl-aarch_64</classifier>
+   <version>[1.0.0,)</version>
+</dependency>
+
+<!-- linux_musl-x86_64 -->
+<dependency>
+   <groupId>io.valkey</groupId>
+   <artifactId>valkey-glide</artifactId>
+   <classifier>linux_musl-x86_64</classifier>
+   <version>[1.0.0,)</version>
+</dependency>
+
 <!-- with os-maven-plugin -->
 <build>
     <extensions>
@@ -167,6 +195,12 @@ libraryDependencies += "io.valkey" % "valkey-glide" % "1.+" classifier "linux-aa
 
 // linux-x86_64
 libraryDependencies += "io.valkey" % "valkey-glide" % "1.+" classifier "linux-x86_64"
+
+// linux_musl-aarch_64
+libraryDependencies += "io.valkey" % "valkey-glide" % "1.+" classifier "linux_musl-aarch_64"
+
+// linux_musl-x86_64
+libraryDependencies += "io.valkey" % "valkey-glide" % "1.+" classifier "linux_musl-x86_64"
 ```
 
 ## Setting up the Java module
