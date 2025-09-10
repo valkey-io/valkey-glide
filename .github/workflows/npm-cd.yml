@@ -447,7 +447,6 @@ jobs:
               uses: geekyeggo/delete-artifact@v2
               with:
                   name: |
-                      npm-packages-${{ github.run_id }}
                       artifacts-*
                       js-files-${{ github.run_id }}
 
@@ -550,7 +549,6 @@ jobs:
               uses: geekyeggo/delete-artifact@v2
               with:
                   name: |
-                      npm-packages-${{ github.run_id }}
                       bindings-*
                       js-files-${{ github.run_id }}
 
