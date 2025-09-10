@@ -599,7 +599,13 @@ describe("Auth tests", () => {
     );
 });
 
-describe("IAM Auth: Elasticache Cluster", () => {
+// Skip IAM Auth tests in CI/CD environments
+const describeIamTests =
+    process.env.CI || process.env.GITHUB_ACTIONS || process.env.JENKINS_URL
+        ? describe.skip
+        : describe;
+
+describeIamTests("IAM Auth: Elasticache Cluster", () => {
     it("test_iam_authentication_elasticache_cluster", async () => {
         // Replace these values with your actual cluster info and region
         const clusterName = "iam-auth-cluster";
