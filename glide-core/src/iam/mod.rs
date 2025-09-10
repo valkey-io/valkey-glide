@@ -16,8 +16,8 @@ use tokio::time::{MissedTickBehavior, interval};
 
 /// Maximum refresh interval in seconds (12 hours)
 const MAX_REFRESH_INTERVAL_SECONDS: u32 = 12 * 60 * 60; // 43200 seconds
-/// Default refresh interval in seconds (4 minutes 55 seconds)
-const DEFAULT_REFRESH_INTERVAL_SECONDS: u32 = 295; // 295 seconds (4min 55s)
+/// Default refresh interval in seconds (5 minutes)
+const DEFAULT_REFRESH_INTERVAL_SECONDS: u32 = 300; // 300 seconds (5min)
 /// Warning threshold for refresh interval in seconds (15 minutes)
 /// Setting refresh intervals above this value may have performance consequences
 const WARNING_REFRESH_INTERVAL_SECONDS: u32 = 15 * 60; // 900 seconds
@@ -58,7 +58,7 @@ pub enum ServiceType {
     MemoryDB,
 }
 
-/// Validate refresh interval (1 second to 12 hours, defaults to 4 minutes 55 seconds)
+/// Validate refresh interval (1 second to 12 hours, defaults to 5 minutes)
 fn validate_refresh_interval(
     refresh_interval_seconds: Option<u32>,
 ) -> Result<Option<u32>, GlideIAMError> {
@@ -149,14 +149,21 @@ struct IamTokenState {
 /// IAM-based authentication token manager for AWS ElastiCache and MemoryDB
 ///
 /// Provides automatic IAM token generation and refresh using AWS IAM credentials and SigV4 signing.
-/// Tokens are valid for 15 minutes and refreshed every 4 minutes 55 seconds (295s) by default.
+/// Tokens are valid for 15 minutes and refreshed every 5 minutes (300s) by default.
 ///
 /// ## Refresh Strategy
-/// The 295s interval balances safety and overhead:
+/// The 300s (5 minute) interval balances safety and overhead:
 /// - Frequent refresh = higher safety, more overhead
 /// - Infrequent refresh = lower overhead, but higher risk if a refresh fails
 ///
-/// With 295s, even if a few refresh attempts fail, tokens remain valid for minutes before expiry.
+/// With 300s, even if a few refresh attempts fail, tokens remain valid for minutes before expiry.
+///
+/// ## Error Handling and Retry Logic
+/// Token refresh operations use a robust retry strategy:
+/// - **First attempt**: If token generation fails, logs a warning and retries immediately
+/// - **Second attempt**: If retry also fails, logs an error and returns (no exceptions thrown)
+/// - **No error propagation**: Refresh failures never bubble up as exceptions to callers
+/// - **Graceful degradation**: Failed refreshes leave the cached token unchanged for continued use
 ///
 /// Thread-safe with Arc/RwLock protection.
 pub struct IAMTokenManager {
@@ -197,7 +204,7 @@ impl IAMTokenManager {
     /// * `username` - Username for authentication
     /// * `region` - AWS region of the cluster
     /// * `service_type` - Service type (ElastiCache or MemoryDB)
-    /// * `refresh_interval_seconds` - Optional refresh interval in seconds. Defaults to 4 minutes 55 seconds (295 seconds).
+    /// * `refresh_interval_seconds` - Optional refresh interval in seconds. Defaults to 5 minutes (300 seconds).
     ///   Maximum allowed is 12 hours (43200 seconds). Values above 15 minutes (900 seconds) will log a warning
     ///   about potential performance consequences.
     /// * `token_refresh_callback` - Optional callback to be called when the token is refreshed
@@ -273,12 +280,7 @@ impl IAMTokenManager {
         loop {
             tokio::select! {
                 _ = interval_timer.tick() => {
-                    if let Err(error_msg) = Self::handle_token_refresh(&iam_token_state, &cached_token, &token_refresh_callback).await {
-                        log_error(
-                            "IAM token refresh error",
-                            format!("Failed to refresh IAM token. Error: {error_msg:?}"),
-                        );
-                    }
+                    Self::handle_token_refresh(&iam_token_state, &cached_token, &token_refresh_callback).await;
                 }
                 _ = shutdown_notify.notified() => {
                     log_info("IAM token refresh task shutting down", "");
@@ -288,18 +290,33 @@ impl IAMTokenManager {
         }
     }
 
-    /// Handle a single token refresh attempt
-    /// Returns Ok(()) on success, Err(GlideIAMError) on failure
+    /// Refresh the cached IAM token — **never returns errors**.
+    /// - Try to generate a token; on failure **log warn** and **retry once immediately**.
+    /// - If the retry also fails, **log error** and **return** (cached token unchanged).
+    /// - On success, update `cached_token` and call `token_refresh_callback` (if any).
+    /// Callers should just `await` this; no Result to handle.
     async fn handle_token_refresh(
         iam_token_state: &IamTokenState,
         cached_token: &Arc<RwLock<String>>,
         token_refresh_callback: &Option<Arc<dyn Fn(String) + Send + Sync>>,
-    ) -> Result<(), GlideIAMError> {
-        let new_token = match Self::generate_token_static(iam_token_state).await {
+    ) {
+         let new_token = match Self::generate_token_static(iam_token_state).await {
             Ok(token) => token,
-            Err(error) => {
-                log_error("IAM token generation failed", error.to_string());
-                return Err(error);
+            Err(first_err) => {
+                log_warn(
+                    "IAM token generation failed (first attempt)",
+                    format!("{} — retrying immediately", first_err),
+                );
+                match Self::generate_token_static(iam_token_state).await {
+                    Ok(token) => token,
+                    Err(second_err) => {
+                        log_error(
+                            "IAM token generation failed (second attempt)",
+                            second_err.to_string(),
+                        );
+                        return;
+                    }
+                }
             }
         };
 
@@ -312,31 +329,28 @@ impl IAMTokenManager {
                 "IAM token refresh",
                 "Successfully refreshed IAM token and updated connection passwords",
             );
-            Ok(())
         } else {
-            // No callback set - token was refreshed but no connection password update occurred
-            log_debug(
-                "IAM token refresh",
-                "Successfully refreshed IAM token but no callback set for connection password update",
-            );
             // Log error instead of returning error for logging purposes in background task
             log_error(
                 "IAM token refresh warning",
                 "No callback set for connection password update",
             );
-            Ok(())
         }
     }
 
     /// Force refresh the token immediately
-    /// returns Ok(()) on success, Err(GlideIAMError) on failure
-    pub async fn refresh_token(&self) -> Result<(), GlideIAMError> {
+    /// 
+    /// Uses the same retry strategy as background refresh:
+    /// - Try once; on failure log warn and retry immediately
+    /// - If retry also fails, log error and return (no exceptions thrown)
+    /// - Never returns errors; all failures are logged only
+    pub async fn refresh_token(&self) {
         Self::handle_token_refresh(
             &self.iam_token_state,
             &self.cached_token,
             &self.token_refresh_callback,
         )
-        .await
+        .await;
     }
 
     /// Stop the background refresh task gracefully
@@ -703,11 +717,7 @@ mod tests {
         .unwrap();
 
         // Manually refresh the token
-        let refresh_result = manager.refresh_token().await;
-        assert!(
-            refresh_result.is_ok(),
-            "Manual token refresh should succeed with callback"
-        );
+        manager.refresh_token().await;
 
         // Verify that the callback was invoked
         let was_invoked = *callback_invoked.lock().unwrap();
@@ -835,12 +845,7 @@ mod tests {
         // Wait at least 1 second to ensure timestamp difference in AWS SigV4 signing
         sleep(Duration::from_secs(1)).await;
 
-        let refresh_result = manager.refresh_token().await;
-        // Token refresh should succeed when callback is set
-        assert!(
-            refresh_result.is_ok(),
-            "Token refresh should succeed when callback is set"
-        );
+        manager.refresh_token().await;
 
         let new_token = manager.get_token().await;
 
