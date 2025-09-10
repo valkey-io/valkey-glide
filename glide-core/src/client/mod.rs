@@ -5,7 +5,7 @@ mod types;
 use crate::cluster_scan_container::insert_cluster_scan_cursor;
 use crate::scripts_container::get_script;
 use futures::FutureExt;
-use logger_core::{log_error, log_info, log_warn};
+use logger_core::{log_debug, log_error, log_info, log_warn};
 use once_cell::sync::OnceCell;
 use redis::aio::ConnectionLike;
 use redis::cluster_async::ClusterConnection;
@@ -390,7 +390,7 @@ impl Client {
                 Err(err) => return Err(err),
             };
 
-            let value = run_with_timeout(request_timeout, async move {
+            let result = run_with_timeout(request_timeout, async move {
                 match client {
                     ClientWrapper::Standalone(mut client) => client.send_command(cmd).await,
                     ClientWrapper::Cluster {mut client } => {
@@ -424,8 +424,9 @@ impl Client {
                     ClientWrapper::Lazy(_) => unreachable!("Lazy client should have been initialized"),
                 }
                 .and_then(|value| convert_to_expected_type(value, expected_type))
-            })
-            .await?;
+            });
+
+            let value = result.await?;
 
             Ok(value)
         })

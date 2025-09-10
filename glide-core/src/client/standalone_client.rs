@@ -499,15 +499,28 @@ impl StandaloneClient {
 
     pub async fn send_command(&mut self, cmd: &redis::Cmd) -> RedisResult<Value> {
         let Some(cmd_bytes) = Routable::command(cmd) else {
-            return self.send_request_to_single_node(cmd, false).await;
+            let result = self.send_request_to_single_node(cmd, false).await;
+            if let Ok(ref value) = result {
+                self.track_database_change_if_select(cmd, value).await;
+            }
+            return result;
         };
 
         if RoutingInfo::is_all_nodes(cmd_bytes.as_slice()) {
             let response_policy = ResponsePolicy::for_command(cmd_bytes.as_slice());
-            return self.send_request_to_all_nodes(cmd, response_policy).await;
+            let result = self.send_request_to_all_nodes(cmd, response_policy).await;
+            if let Ok(ref value) = result {
+                self.track_database_change_if_select(cmd, value).await;
+            }
+            return result;
         }
-        self.send_request_to_single_node(cmd, is_readonly_cmd(cmd_bytes.as_slice()))
-            .await
+        let result = self
+            .send_request_to_single_node(cmd, is_readonly_cmd(cmd_bytes.as_slice()))
+            .await;
+        if let Ok(ref value) = result {
+            self.track_database_change_if_select(cmd, value).await;
+        }
+        result
     }
 
     pub async fn send_pipeline(
@@ -621,6 +634,49 @@ impl StandaloneClient {
         }
 
         Ok(Value::Okay)
+    }
+
+    /// Update the database used for connections.
+    /// This will be used for future reconnections.
+    pub async fn update_connection_database(&self, new_database: i64) -> RedisResult<Value> {
+        for node in self.inner.nodes.iter() {
+            node.update_connection_database(new_database);
+        }
+
+        Ok(Value::Okay)
+    }
+
+    /// Track database changes for SELECT commands.
+    /// Updates the connection database if the command was a successful SELECT.
+    async fn track_database_change_if_select(&self, cmd: &redis::Cmd, result: &Value) {
+        // Check if this is a SELECT command
+        if let Some(command_bytes) = cmd.command() {
+            let command_str = String::from_utf8_lossy(&command_bytes);
+            if command_str.to_uppercase() == "SELECT" {
+                // Check if the command was successful (result should be Value::Okay)
+                if matches!(result, Value::Okay) {
+                    // Extract the database index from the command arguments
+                    let mut args = cmd.args_iter();
+                    args.next(); // Skip the command name "SELECT"
+                    if let Some(db_arg) = args.next() {
+                        let db_bytes = match db_arg {
+                            redis::Arg::Simple(bytes) => bytes,
+                            redis::Arg::Cursor => return, // Skip cursor arguments
+                        };
+                        if let Ok(db_str) = std::str::from_utf8(db_bytes) {
+                            if let Ok(db_index) = db_str.parse::<i64>() {
+                                // Update the connection database for future reconnections
+                                let _ = self.update_connection_database(db_index).await;
+                                log_debug(
+                                    "track_database_change",
+                                    format!("Updated connection database to {db_index}"),
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /// Retrieve the username used to authenticate with the server.
