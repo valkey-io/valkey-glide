@@ -202,6 +202,16 @@ jobs:
                   restore-keys: |
                       ${{ matrix.TARGET }}-cargo-cache
                       cargo-cache
+            
+            # test if this works properly without failing the entire workflow even with nothing to delete. To be deleted before merge.
+            - name: Delete artifacts up front for testing
+              if: always()
+              uses: geekyeggo/delete-artifact@v2
+              with:
+                  name: |
+                      artifacts-*
+                      js-files-${{ github.run_id }}
+                  failOnError: false
 
             # You might ask why we don't use the common action for installing Rust, the reason is many targets to install, and caching will be more efficient
             - name: Install Rust with the required target
@@ -449,6 +459,7 @@ jobs:
                   name: |
                       artifacts-*
                       js-files-${{ github.run_id }}
+                  failOnError: false
 
     test-published-release:
         needs: [get-build-parameters, prepare-and-publish]
@@ -551,6 +562,7 @@ jobs:
                   name: |
                       bindings-*
                       js-files-${{ github.run_id }}
+                  failOnError: false
 
     deprecate-on-failure:
         needs: [test-published-release, get-build-parameters]
