@@ -18,7 +18,7 @@ dependencies {
     version = System.getenv("GLIDE_RELEASE_VERSION") ?: project.ext.defaultReleaseVersion
 
     def classifier 
-    if (osdetector.os == 'linux' && osdetector.release.id != 'alpine') {
+    if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
         classifier = "linux_musl_${osdetector.arch}"
     }
     else {
