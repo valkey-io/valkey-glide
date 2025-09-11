@@ -17,7 +17,8 @@
         "strict": true,
         "noFallthroughCasesInSwitch": true,
         "pretty": true,
-        "skipLibCheck": true
+        "skipLibCheck": true,
+        "types": ["node"]
     },
     "ts-node": {
         "transpileOnly": true,
