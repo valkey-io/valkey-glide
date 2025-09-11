@@ -1,15 +1,16 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-use glide_core::errors::error_message;
-// Protocol constants to expose to Java.
-use glide_core::HASH as TYPE_HASH;
-use glide_core::LIST as TYPE_LIST;
-use glide_core::MAX_REQUEST_ARGS_LENGTH as MAX_REQUEST_ARGS_LENGTH_IN_BYTES;
-use glide_core::SET as TYPE_SET;
-use glide_core::STREAM as TYPE_STREAM;
-use glide_core::STRING as TYPE_STRING;
-use glide_core::ZSET as TYPE_ZSET;
 use glide_core::client::FINISHED_SCAN_CURSOR;
+use glide_core::errors::error_message;
+
+// Protocol constants for Java (defined directly since we don't use socket layer)
+const TYPE_HASH: &str = "hash";
+const TYPE_LIST: &str = "list";
+const TYPE_SET: &str = "set";
+const TYPE_STREAM: &str = "stream";
+const TYPE_STRING: &str = "string";
+const TYPE_ZSET: &str = "zset";
+const MAX_REQUEST_ARGS_LENGTH_IN_BYTES: usize = 2_i32.pow(12) as usize; // 4096 bytes
 
 // Telemetry required for getStatistics
 use glide_core::Telemetry;
@@ -1104,8 +1105,8 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_getGlideCoreDefault
     _env: JNIEnv,
     _class: JClass,
 ) -> jlong {
-    // Return glide-core's default timeout (30 seconds)
-    30_000
+    // Return glide-core's default timeout in milliseconds
+    glide_core::client::DEFAULT_RESPONSE_TIMEOUT.as_millis() as jlong
 }
 
 /// Get glide-core default maximum inflight requests limit
