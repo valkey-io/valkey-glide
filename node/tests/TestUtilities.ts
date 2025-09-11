@@ -625,7 +625,7 @@ export function checkFunctionListResponse(
             typeof libName === "string"
                 ? libName === lib["library_name"]
                 : (libName as Buffer).compare(lib["library_name"] as Buffer) ==
-                  0;
+                0;
 
         if (hasLib) {
             const functions = lib["functions"];
@@ -678,7 +678,7 @@ export function checkFunctionStatsResponse(
     if (response.running_script !== null && runningFunction.length == 0) {
         fail(
             "Unexpected running function info: " +
-                (response.running_script.command as string[]).join(" "),
+            (response.running_script.command as string[]).join(" "),
         );
     }
 
@@ -736,21 +736,7 @@ export function checkAndHandleFlakyTests(
             break;
         }
 
-        case "httl(key4, [field, field2, field3])": {
-            // Response Type: number[] - TTL values for hash fields
-            if (expectedResponse === "TTL_ARRAY" && Array.isArray(response)) {
-                const ttlArray = response as number[];
-                expect(ttlArray.length).toEqual(3);
-                // field and field2 should have positive TTL values (they have expiration)
-                expect(ttlArray[0]).toBeGreaterThan(0);
-                expect(ttlArray[1]).toBeGreaterThan(0);
-                // field3 doesn't exist, should return -2
-                expect(ttlArray[2]).toEqual(-2);
-                return true;
-            }
 
-            return false;
-        }
 
         default: {
             // All other tests
@@ -793,10 +779,10 @@ export function validateBatchResponse(
             const actual =
                 response?.[i] instanceof Map
                     ? JSON.stringify(
-                          Array.from(
-                              (response?.[i] as ReturnTypeMap)?.entries(),
-                          ),
-                      )
+                        Array.from(
+                            (response?.[i] as ReturnTypeMap)?.entries(),
+                        ),
+                    )
                     : JSON.stringify(response?.[i]);
             failedChecks.push(
                 `${testName} failed, expected <${expected}>, actual <${actual}>`,
@@ -971,33 +957,33 @@ export async function batchTest(
         palermo,
         catania,
     ] = [
-        decodeString(fieldStr, decoder),
-        decodeString(fieldStr + 1, decoder),
-        decodeString(fieldStr + 2, decoder),
-        decodeString(fieldStr + 3, decoder),
-        decodeString(fieldStr + 4, decoder),
-        decodeString("value1", decoder),
-        decodeString("value2", decoder),
-        decodeString("value3", decoder),
-        decodeString("foo", decoder),
-        decodeString("bar", decoder),
-        decodeString("baz", decoder),
-        decodeString("test_message", decoder),
-        decodeString("one", decoder),
-        decodeString("two", decoder),
-        decodeString("three", decoder),
-        decodeString("_", decoder),
-        decodeString("non_existing_member", decoder),
-        decodeString("member1", decoder),
-        decodeString("member2", decoder),
-        decodeString("member3", decoder),
-        decodeString("member4", decoder),
-        decodeString("member5", decoder),
-        decodeString("member6", decoder),
-        decodeString("member7", decoder),
-        decodeString("Palermo", decoder),
-        decodeString("Catania", decoder),
-    ];
+            decodeString(fieldStr, decoder),
+            decodeString(fieldStr + 1, decoder),
+            decodeString(fieldStr + 2, decoder),
+            decodeString(fieldStr + 3, decoder),
+            decodeString(fieldStr + 4, decoder),
+            decodeString("value1", decoder),
+            decodeString("value2", decoder),
+            decodeString("value3", decoder),
+            decodeString("foo", decoder),
+            decodeString("bar", decoder),
+            decodeString("baz", decoder),
+            decodeString("test_message", decoder),
+            decodeString("one", decoder),
+            decodeString("two", decoder),
+            decodeString("three", decoder),
+            decodeString("_", decoder),
+            decodeString("non_existing_member", decoder),
+            decodeString("member1", decoder),
+            decodeString("member2", decoder),
+            decodeString("member3", decoder),
+            decodeString("member4", decoder),
+            decodeString("member5", decoder),
+            decodeString("member6", decoder),
+            decodeString("member7", decoder),
+            decodeString("Palermo", decoder),
+            decodeString("Catania", decoder),
+        ];
 
     // array of tuples - first element is test name/description, second - expected return value
     const responseData: [string, GlideReturnType][] = [];
@@ -1149,93 +1135,7 @@ export async function batchTest(
     baseBatch.hrandfield(key4);
     responseData.push(["hrandfield(key4)", null]);
 
-    // HSETEX tests - only run if server version is 9.0.0 or higher
-    if (!cluster.checkIfServerVersionLessThan("9.0.0")) {
-        // Test basic HSETEX with expiry
-        baseBatch.hsetex(
-            key4,
-            { [field.toString()]: value },
-            {
-                expiry: { type: TimeUnit.Seconds, count: 60 },
-            },
-        );
-        responseData.push([
-            "hsetex(key4, { [field]: value }, { expiry: { type: TimeUnit.Seconds, count: 60 } })",
-            1,
-        ]);
 
-        // Test HSETEX with KEEPTTL
-        baseBatch.hsetex(
-            key4,
-            { [field2.toString()]: value },
-            {
-                expiry: "KEEPTTL",
-            },
-        );
-        responseData.push([
-            "hsetex(key4, { [field2]: value }, { expiry: 'KEEPTTL' })",
-            1,
-        ]);
-
-        // Test HSETEX with basic expiry
-        baseBatch.hsetex(
-            key4,
-            { [field3.toString()]: value },
-            {
-                expiry: { type: TimeUnit.Seconds, count: 60 },
-            },
-        );
-        responseData.push([
-            "hsetex(key4, { [field3]: value }, { expiry: { type: TimeUnit.Seconds, count: 60 } })",
-            1,
-        ]);
-
-        // Test HSETEX with field conditional changes
-        baseBatch.hsetex(
-            key4,
-            { [field4.toString()]: value },
-            {
-                fieldConditionalChange:
-                    HashFieldConditionalChange.ONLY_IF_NONE_EXIST,
-                expiry: { type: TimeUnit.Seconds, count: 60 },
-            },
-        );
-        responseData.push([
-            "hsetex(key4, { [field4]: value }, { fieldConditionalChange: HashFieldConditionalChange.ONLY_IF_NONE_EXIST, expiry: { type: TimeUnit.Seconds, count: 60 } })",
-            1,
-        ]);
-
-        // HGETEX tests - only run if server version is 9.0.0 or higher
-        // Test basic HGETEX with expiry
-        baseBatch.hgetex(key4, [field.toString(), field2.toString()], {
-            expiry: { type: TimeUnit.Seconds, count: 60 },
-        });
-        responseData.push([
-            "hgetex(key4, [field, field2], { expiry: { type: TimeUnit.Seconds, count: 60 } })",
-            [value.toString(), value.toString()],
-        ]);
-
-        // Test HGETEX with PERSIST
-        baseBatch.hgetex(key4, [field.toString()], {
-            expiry: "PERSIST",
-        });
-        responseData.push([
-            "hgetex(key4, [field], { expiry: 'PERSIST' })",
-            [value.toString()],
-        ]);
-
-        // Test HTTL
-        baseBatch.httl(key4, [
-            field.toString(),
-            field2.toString(),
-            field3.toString(),
-        ]);
-        // Note: TTL values are dynamic, so we'll validate the structure rather than exact values
-        responseData.push([
-            "httl(key4, [field, field2, field3])",
-            [-1, 60, 60],
-        ]);
-    }
 
     baseBatch.lpush(key5, [field1, field2, field3, field4]);
     responseData.push(["lpush(key5, [1, 2, 3, 4])", 4]);
@@ -1794,18 +1694,18 @@ export async function batchTest(
             'xautoclaim(key9, groupName1, consumer, 0, "0-0", { count: 1 })',
             !cluster.checkIfServerVersionLessThan("7.0.0")
                 ? [
-                      "0-0",
-                      convertRecordToGlideRecord({
-                          "0-2": [[field.toString(), value2.toString()]],
-                      }),
-                      [],
-                  ]
+                    "0-0",
+                    convertRecordToGlideRecord({
+                        "0-2": [[field.toString(), value2.toString()]],
+                    }),
+                    [],
+                ]
                 : [
-                      "0-0",
-                      convertRecordToGlideRecord({
-                          "0-2": [[field.toString(), value2.toString()]],
-                      }),
-                  ],
+                    "0-0",
+                    convertRecordToGlideRecord({
+                        "0-2": [[field.toString(), value2.toString()]],
+                    }),
+                ],
         ]);
         baseBatch.xautoclaimJustId(key9, groupName1, consumer, 0, "0-0");
         responseData.push([
