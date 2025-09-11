@@ -2168,6 +2168,77 @@ export function runBaseTests(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `hexpiretime basic functionality_%p`,
+        async (protocol) => {
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
+
+                    const key = getRandomKey();
+                    const field1 = getRandomKey();
+                    const field2 = getRandomKey();
+                    const field3 = getRandomKey();
+                    const value1 = getRandomKey();
+                    const value2 = getRandomKey();
+
+                    // Set up hash with fields
+                    await client.hset(key, {
+                        [field1]: value1,
+                        [field2]: value2,
+                    });
+
+                    // Set expiration on fields using absolute timestamp
+                    const futureTimestamp =
+                        Math.floor(Date.now() / 1000) + 3600; // 1 hour from now
+                    await client.hexpireat(key, futureTimestamp, [
+                        field1,
+                        field2,
+                    ]);
+
+                    // Test basic HEXPIRETIME
+                    const result1 = await client.hexpiretime(key, [
+                        field1,
+                        field2,
+                        field3,
+                    ]);
+                    expect(result1.length).toEqual(3);
+                    expect(result1[0]).toBeGreaterThan(0); // field1 has expiration timestamp
+                    expect(result1[1]).toBeGreaterThan(0); // field2 has expiration timestamp
+                    expect(result1[2]).toEqual(-2); // field3 doesn't exist
+
+                    // Remove expiration from field1
+                    await client.hpersist(key, [field1]);
+
+                    // Test HEXPIRETIME after persist
+                    const result2 = await client.hexpiretime(key, [
+                        field1,
+                        field2,
+                    ]);
+                    expect(result2[0]).toEqual(-1); // field1 has no expiration
+                    expect(result2[1]).toBeGreaterThan(0); // field2 still has expiration timestamp
+
+                    // Test on non-existent key
+                    const nonExistentKey = getRandomKey();
+                    const result3 = await client.hexpiretime(nonExistentKey, [
+                        field1,
+                    ]);
+                    expect(result3).toEqual([-2]);
+
+                    // Test on fields without expiration
+                    const key2 = getRandomKey();
+                    await client.hset(key2, { [field1]: value1 });
+                    const result4 = await client.hexpiretime(key2, [field1]);
+                    expect(result4).toEqual([-1]); // field has no expiration
+                },
+                protocol,
+            );
+        },
+        config.timeout,
+    );
+    
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `httl basic functionality_%p`,
         async (protocol) => {
             await runTest(
@@ -2227,7 +2298,7 @@ export function runBaseTests(config: {
         },
         config.timeout,
     );
-    
+
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hpttl basic functionality_%p`,
         async (protocol) => {
