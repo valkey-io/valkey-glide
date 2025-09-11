@@ -141,11 +141,11 @@ jobs:
               working-directory: java
               run: |
                   if [[ "${{ matrix.host.TARGET }}" == *"musl"* ]]; then
-                    ./gradlew --build-cache :client:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
+                    ./gradlew --build-cache :client:publishToMavenLocal :jedis-compatibility:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
                     -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }} \
                     -Ptarget=${{ matrix.host.TARGET }}
                   else
-                    ./gradlew --build-cache :client:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
+                    ./gradlew --build-cache :client:publishToMavenLocal :jedis-compatibility:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
                     -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
                   fi
               env:
@@ -154,12 +154,21 @@ jobs:
             - name: Bundle JAR
               working-directory: java
               run: |
+                  # Bundle client JAR
                   src_folder=~/.m2/repository/io/valkey/valkey-glide/${{ env.RELEASE_VERSION }}
                   cd $src_folder
                   jar -cvf bundle.jar *
                   ls -ltr
                   cd -
                   cp $src_folder/bundle.jar bundle-${{ matrix.host.TARGET }}.jar
+
+                  # Bundle jedis-compatibility JAR
+                  jedis_src_folder=~/.m2/repository/io/valkey/valkey-glide-jedis-compatibility/${{ env.RELEASE_VERSION }}
+                  cd $jedis_src_folder
+                  jar -cvf jedis-bundle.jar *
+                  ls -ltr
+                  cd -
+                  cp $jedis_src_folder/jedis-bundle.jar jedis-bundle-${{ matrix.host.TARGET }}.jar
 
             - name: Upload artifacts to publish
               continue-on-error: true
@@ -168,6 +177,7 @@ jobs:
                   name: java-${{ matrix.host.TARGET }}
                   path: |
                       java/bundle*.jar
+                      java/jedis-bundle*.jar
 
     publish-to-maven-central-deployment:
         if: ${{ inputs.maven_publish == true || github.event_name == 'push' }}
@@ -196,8 +206,16 @@ jobs:
             - name: Move files to the correct directory tree
               run: |
                   mkdir -p build/io/valkey/valkey-glide/${{ env.RELEASE_VERSION }}
-                  cp -a maven-files/* build/io/valkey/valkey-glide/${{ env.RELEASE_VERSION }}
+                  mkdir -p build/io/valkey/valkey-glide-jedis-compatibility/${{ env.RELEASE_VERSION }}
+
+                  # Move jedis-compatibility files first
+                  cp -a maven-files/valkey-glide-jedis-compatibility* build/io/valkey/valkey-glide-jedis-compatibility/${{ env.RELEASE_VERSION }}
+
+                  # Move client files (exclude jedis-compatibility files)
+                  find maven-files -name "valkey-glide-*" ! -name "*jedis-compatibility*" -exec cp {} build/io/valkey/valkey-glide/${{ env.RELEASE_VERSION }}/ \;
+
                   rm -rf build/io/valkey/valkey-glide/${{ env.RELEASE_VERSION }}/META-INF
+                  rm -rf build/io/valkey/valkey-glide-jedis-compatibility/${{ env.RELEASE_VERSION }}/META-INF
                   cd build
                   zip -r ../build io
 
