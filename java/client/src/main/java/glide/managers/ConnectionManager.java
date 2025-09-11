@@ -1,323 +1,119 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.managers;
 
-import com.google.protobuf.ByteString;
-import connection_request.ConnectionRequestOuterClass;
-import connection_request.ConnectionRequestOuterClass.AuthenticationInfo;
-import connection_request.ConnectionRequestOuterClass.ConnectionRequest;
-import connection_request.ConnectionRequestOuterClass.PubSubChannelsOrPatterns;
-import connection_request.ConnectionRequestOuterClass.PubSubSubscriptions;
-import connection_request.ConnectionRequestOuterClass.TlsMode;
-import glide.api.models.configuration.AdvancedBaseClientConfiguration;
 import glide.api.models.configuration.BaseClientConfiguration;
-import glide.api.models.configuration.GlideClientConfiguration;
-import glide.api.models.configuration.GlideClusterClientConfiguration;
-import glide.api.models.configuration.NodeAddress;
-import glide.api.models.configuration.ProtocolVersion;
-import glide.api.models.configuration.ReadFrom;
 import glide.api.models.exceptions.ClosingException;
-import glide.api.models.exceptions.ConfigurationError;
-import glide.connectors.handlers.ChannelHandler;
+import glide.internal.GlideCoreClient;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 import lombok.RequiredArgsConstructor;
-import response.ResponseOuterClass.Response;
 
 /**
- * Service responsible for submitting connection requests to a socket channel handler and unpack
- * responses from the same socket channel handler.
+ * Connection manager that provides direct JNI calls to the Rust glide-core library.
+ * This replaces the previous UDS-based ChannelHandler approach with improved performance
+ * and Windows compatibility while maintaining the same interface.
  */
 @RequiredArgsConstructor
 public class ConnectionManager {
 
-    // TODO: consider making connection manager static, and moving the ChannelHandler to the
-    // GlideClient.
-
-    /** UDS connection representation. */
-    private final ChannelHandler channel;
+    private GlideCoreClient coreClient;
+    private volatile boolean closed = false;
 
     /**
-     * Make a connection request to Valkey Rust-core client.
+     * Make a connection request to Valkey Rust-core client using JNI.
      *
      * @param configuration Connection Request Configuration
+     * @return CompletableFuture that completes when connection is established
      */
     public CompletableFuture<Void> connectToValkey(BaseClientConfiguration configuration) {
-        ConnectionRequest request = createConnectionRequest(configuration);
-        return channel
-                .connect(request)
-                .exceptionally(this::exceptionHandler)
-                .thenApplyAsync(this::checkGlideRsResponse);
+        if (closed) {
+            return CompletableFuture.failedFuture(new ClosingException("Connection manager is closed"));
+        }
+
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                // Create the core client with JNI - this establishes the connection
+                coreClient = new GlideCoreClient(configuration);
+                
+                // Verify connection was established
+                if (!coreClient.isConnected()) {
+                    throw new RuntimeException("Failed to establish connection to Valkey");
+                }
+                
+                return null; // Success, return Void
+            } catch (Exception e) {
+                // Handle connection failures
+                if (e instanceof RuntimeException) {
+                    throw (RuntimeException) e;
+                }
+                throw new RuntimeException("Failed to connect to Valkey", e);
+            }
+        });
     }
 
     /**
-     * Exception handler for future pipeline.
+     * Get the core client instance.
+     * This is used by CommandManager to access the native client handle.
      *
-     * @param e An exception thrown in the pipeline before
-     * @return Nothing, it always rethrows the exception
+     * @return GlideCoreClient instance
+     * @throws IllegalStateException if not connected
      */
-    private Response exceptionHandler(Throwable e) {
-        channel.close();
+    public GlideCoreClient getCoreClient() {
+        if (coreClient == null) {
+            throw new IllegalStateException("Not connected - call connectToValkey first");
+        }
+        if (closed) {
+            throw new IllegalStateException("Connection manager is closed");
+        }
+        return coreClient;
+    }
+
+    /**
+     * Check if the connection manager is closed.
+     *
+     * @return True if closed
+     */
+    public boolean isClosed() {
+        return closed;
+    }
+
+    /**
+     * Close the connection and release resources.
+     *
+     * @return CompletableFuture that completes when connection is closed
+     */
+    public Future<Void> close() {
+        return CompletableFuture.runAsync(() -> {
+            if (!closed) {
+                closed = true;
+                if (coreClient != null) {
+                    coreClient.close();
+                    coreClient = null;
+                }
+            }
+        });
+    }
+
+    /**
+     * Exception handler for connection errors.
+     *
+     * @param e Exception that occurred
+     * @return Never returns, always rethrows
+     */
+    private Void exceptionHandler(Throwable e) {
+        close();
         if (e instanceof RuntimeException) {
-            // GlideException also goes here
             throw (RuntimeException) e;
         }
         throw new RuntimeException(e);
     }
 
     /**
-     * Close the connection and the corresponding channel. Creates a ConnectionRequest protobuf
-     * message based on the type of client Standalone/Cluster.
+     * Factory method to create a ConnectionManager.
      *
-     * @param configuration Connection Request Configuration
-     * @return ConnectionRequest protobuf message
+     * @return New ConnectionManager instance
      */
-    private ConnectionRequest createConnectionRequest(BaseClientConfiguration configuration) {
-        if (configuration instanceof GlideClusterClientConfiguration) {
-            return setupConnectionRequestBuilderGlideClusterClient(
-                            (GlideClusterClientConfiguration) configuration)
-                    .build();
-        }
-
-        return setupConnectionRequestBuilderGlideClient((GlideClientConfiguration) configuration)
-                .build();
-    }
-
-    /**
-     * Creates ConnectionRequestBuilder, so it has appropriate fields for the BaseClientConfiguration
-     * where the Standalone/Cluster inherit from.
-     *
-     * @param configuration
-     */
-    private ConnectionRequest.Builder setupConnectionRequestBuilderBaseConfiguration(
-            BaseClientConfiguration configuration) {
-        ConnectionRequest.Builder connectionRequestBuilder = ConnectionRequest.newBuilder();
-        for (NodeAddress nodeAddress : configuration.getAddresses()) {
-            connectionRequestBuilder.addAddresses(
-                    ConnectionRequestOuterClass.NodeAddress.newBuilder()
-                            .setHost(nodeAddress.getHost())
-                            .setPort(nodeAddress.getPort())
-                            .build());
-        }
-
-        connectionRequestBuilder
-                .setTlsMode(configuration.isUseTLS() ? TlsMode.SecureTls : TlsMode.NoTls)
-                .setReadFrom(mapReadFromEnum(configuration.getReadFrom()));
-
-        if (configuration.getCredentials() != null) {
-            AuthenticationInfo.Builder authenticationInfoBuilder = AuthenticationInfo.newBuilder();
-            if (configuration.getCredentials().getUsername() != null) {
-                authenticationInfoBuilder.setUsername(configuration.getCredentials().getUsername());
-            }
-            authenticationInfoBuilder.setPassword(configuration.getCredentials().getPassword());
-
-            connectionRequestBuilder.setAuthenticationInfo(authenticationInfoBuilder.build());
-        }
-
-        if (configuration.getRequestTimeout() != null) {
-            connectionRequestBuilder.setRequestTimeout(configuration.getRequestTimeout());
-        }
-
-        if (configuration.getClientName() != null) {
-            connectionRequestBuilder.setClientName(configuration.getClientName());
-        }
-
-        if (configuration.getInflightRequestsLimit() != null) {
-            connectionRequestBuilder.setInflightRequestsLimit(configuration.getInflightRequestsLimit());
-        }
-
-        if (configuration.getReadFrom() == ReadFrom.AZ_AFFINITY) {
-            if (configuration.getClientAZ() == null) {
-                throw new ConfigurationError(
-                        "`clientAZ` must be set when read_from is set to `AZ_AFFINITY`");
-            }
-            connectionRequestBuilder.setClientAz(configuration.getClientAZ());
-        }
-
-        if (configuration.getReadFrom() == ReadFrom.AZ_AFFINITY_REPLICAS_AND_PRIMARY) {
-            if (configuration.getClientAZ() == null) {
-                throw new ConfigurationError(
-                        "`clientAZ` must be set when read_from is set to `AZ_AFFINITY_REPLICAS_AND_PRIMARY`");
-            }
-            connectionRequestBuilder.setClientAz(configuration.getClientAZ());
-        }
-
-        if (configuration.getProtocol() != null) {
-            connectionRequestBuilder.setProtocolValue(configuration.getProtocol().ordinal());
-        }
-
-        if (configuration.getReconnectStrategy() != null) {
-            var reconnectionStrategyBuilder =
-                    ConnectionRequestOuterClass.ConnectionRetryStrategy.newBuilder()
-                            .setNumberOfRetries(configuration.getReconnectStrategy().getNumOfRetries())
-                            .setExponentBase(configuration.getReconnectStrategy().getExponentBase())
-                            .setFactor(configuration.getReconnectStrategy().getFactor());
-            if (configuration.getReconnectStrategy().getJitterPercent() != null) {
-                reconnectionStrategyBuilder.setJitterPercent(
-                        configuration.getReconnectStrategy().getJitterPercent());
-            }
-            connectionRequestBuilder.setConnectionRetryStrategy(reconnectionStrategyBuilder.build());
-        }
-
-        if (configuration.isLazyConnect()) {
-            connectionRequestBuilder.setLazyConnect(configuration.isLazyConnect());
-        }
-
-        if (configuration.getDatabaseId() != null) {
-            connectionRequestBuilder.setDatabaseId(configuration.getDatabaseId());
-        }
-
-        return connectionRequestBuilder;
-    }
-
-    /**
-     * Creates ConnectionRequestBuilder, so it has appropriate fields for the Standalone Client.
-     *
-     * @param configuration Connection Request Configuration
-     */
-    private ConnectionRequest.Builder setupConnectionRequestBuilderGlideClient(
-            GlideClientConfiguration configuration) {
-        ConnectionRequest.Builder connectionRequestBuilder =
-                setupConnectionRequestBuilderBaseConfiguration(configuration);
-        connectionRequestBuilder.setClusterModeEnabled(false);
-
-        if (configuration.getSubscriptionConfiguration() != null) {
-            if (configuration.getProtocol() == ProtocolVersion.RESP2) {
-                throw new ConfigurationError(
-                        "PubSub subscriptions require RESP3 protocol, but RESP2 was configured.");
-            }
-            var subscriptionsBuilder = PubSubSubscriptions.newBuilder();
-            for (var entry : configuration.getSubscriptionConfiguration().getSubscriptions().entrySet()) {
-                var channelsBuilder = PubSubChannelsOrPatterns.newBuilder();
-                for (var channel : entry.getValue()) {
-                    channelsBuilder.addChannelsOrPatterns(ByteString.copyFrom(channel.getBytes()));
-                }
-                subscriptionsBuilder.putChannelsOrPatternsByType(
-                        entry.getKey().ordinal(), channelsBuilder.build());
-            }
-            connectionRequestBuilder.setPubsubSubscriptions(subscriptionsBuilder.build());
-        }
-
-        connectionRequestBuilder =
-                setupConnectionRequestBuilderAdvancedBaseConfiguration(
-                        connectionRequestBuilder, configuration.getAdvancedConfiguration());
-
-        return connectionRequestBuilder;
-    }
-
-    /**
-     * Configures the {@link ConnectionRequest.Builder} with settings from the provided {@link
-     * AdvancedBaseClientConfiguration}.
-     *
-     * @param connectionRequestBuilder The builder for the {@link ConnectionRequest}.
-     * @param advancedConfiguration The advanced configuration settings.
-     * @return The updated {@link ConnectionRequest.Builder}.
-     */
-    private ConnectionRequest.Builder setupConnectionRequestBuilderAdvancedBaseConfiguration(
-            ConnectionRequest.Builder connectionRequestBuilder,
-            AdvancedBaseClientConfiguration advancedConfiguration) {
-
-        if (advancedConfiguration.getConnectionTimeout() != null) {
-            connectionRequestBuilder.setConnectionTimeout(advancedConfiguration.getConnectionTimeout());
-        }
-
-        if (advancedConfiguration.getTlsAdvancedConfiguration().isUseInsecureTLS()) {
-            if (connectionRequestBuilder.getTlsMode() == TlsMode.NoTls) {
-                throw new ConfigurationError(
-                        "`useInsecureTlS` cannot be enabled when  `useTLS` is disabled.");
-            } else {
-                connectionRequestBuilder.setTlsMode(TlsMode.InsecureTls);
-            }
-        }
-
-        return connectionRequestBuilder;
-    }
-
-    /**
-     * Creates ConnectionRequestBuilder, so it has appropriate fields for the Cluster Client.
-     *
-     * @param configuration
-     */
-    private ConnectionRequest.Builder setupConnectionRequestBuilderGlideClusterClient(
-            GlideClusterClientConfiguration configuration) {
-        ConnectionRequest.Builder connectionRequestBuilder =
-                setupConnectionRequestBuilderBaseConfiguration(configuration);
-        connectionRequestBuilder.setClusterModeEnabled(true);
-
-        if (configuration.getSubscriptionConfiguration() != null) {
-            if (configuration.getProtocol() == ProtocolVersion.RESP2) {
-                throw new ConfigurationError(
-                        "PubSub subscriptions require RESP3 protocol, but RESP2 was configured.");
-            }
-            var subscriptionsBuilder = PubSubSubscriptions.newBuilder();
-            for (var entry : configuration.getSubscriptionConfiguration().getSubscriptions().entrySet()) {
-                var channelsBuilder = PubSubChannelsOrPatterns.newBuilder();
-                for (var channel : entry.getValue()) {
-                    channelsBuilder.addChannelsOrPatterns(ByteString.copyFrom(channel.getBytes()));
-                }
-                subscriptionsBuilder.putChannelsOrPatternsByType(
-                        entry.getKey().ordinal(), channelsBuilder.build());
-            }
-            connectionRequestBuilder.setPubsubSubscriptions(subscriptionsBuilder.build());
-        }
-
-        connectionRequestBuilder =
-                setupConnectionRequestBuilderAdvancedBaseConfiguration(
-                        connectionRequestBuilder, configuration.getAdvancedConfiguration());
-
-        return connectionRequestBuilder;
-    }
-
-    /**
-     * Look up for java ReadFrom enum to protobuf defined ReadFrom enum.
-     *
-     * @param readFrom
-     * @return Protobuf defined ReadFrom enum
-     */
-    private ConnectionRequestOuterClass.ReadFrom mapReadFromEnum(ReadFrom readFrom) {
-        switch (readFrom) {
-            case PREFER_REPLICA:
-                return ConnectionRequestOuterClass.ReadFrom.PreferReplica;
-            case AZ_AFFINITY:
-                return ConnectionRequestOuterClass.ReadFrom.AZAffinity;
-            case AZ_AFFINITY_REPLICAS_AND_PRIMARY:
-                return ConnectionRequestOuterClass.ReadFrom.AZAffinityReplicasAndPrimary;
-            default:
-                return ConnectionRequestOuterClass.ReadFrom.Primary;
-        }
-    }
-
-    /** Check a response received from Glide. */
-    private Void checkGlideRsResponse(Response response) {
-        // Note: errors are already handled before in CallbackDispatcher, but we double-check
-        if (response.hasRequestError()) {
-            throwClosingError(
-                    "Unhandled request error in response: " + response.getRequestError().getMessage());
-        }
-        if (response.hasClosingError()) {
-            throwClosingError("Unhandled closing error in response: " + response.getClosingError());
-        }
-
-        if (response.hasRespPointer()) {
-            throwClosingError("Unexpected data in response");
-        }
-        if (!response.hasConstantResponse()) {
-            throwClosingError("Unexpected empty data in response");
-        }
-        // Expect a constant "OK" response and return Void/null
-        return null;
-    }
-
-    private void throwClosingError(String msg) {
-        closeConnection();
-        throw new ClosingException(msg);
-    }
-
-    /**
-     * Close the connection to the channel.
-     *
-     * @return a CompletableFuture to indicate the channel is closed
-     */
-    public Future<Void> closeConnection() {
-        return channel.close();
+    public static ConnectionManager create() {
+        return new ConnectionManager();
     }
 }

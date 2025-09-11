@@ -1291,7 +1291,7 @@ fn to_c_error(err: RedisError) -> (*const c_char, RequestErrorType) {
     (c_err_str, error_type)
 }
 
-fn get_route(route: Routes, cmd: Option<&Cmd>) -> RedisResult<Option<RoutingInfo>> {
+pub fn get_route(route: Routes, cmd: Option<&Cmd>) -> RedisResult<Option<RoutingInfo>> {
     use glide_core::command_request::routes::Value;
     let route = match route.value {
         Some(route) => route,
@@ -1362,7 +1362,7 @@ fn get_route(route: Routes, cmd: Option<&Cmd>) -> RedisResult<Option<RoutingInfo
     }
 }
 
-fn get_slot_addr(slot_type: &protobuf::EnumOrUnknown<SlotTypes>) -> RedisResult<SlotAddr> {
+pub fn get_slot_addr(slot_type: &protobuf::EnumOrUnknown<SlotTypes>) -> RedisResult<SlotAddr> {
     let slot_addr_result = slot_type.enum_value().map(|slot_type| match slot_type {
         SlotTypes::Primary => SlotAddr::Master,
         SlotTypes::Replica => SlotAddr::ReplicaRequired,
