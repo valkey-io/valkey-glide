@@ -294,13 +294,14 @@ impl IAMTokenManager {
     /// - Try to generate a token; on failure **log warn** and **retry once immediately**.
     /// - If the retry also fails, **log error** and **return** (cached token unchanged).
     /// - On success, update `cached_token` and call `token_refresh_callback` (if any).
+    ///
     /// Callers should just `await` this; no Result to handle.
     async fn handle_token_refresh(
         iam_token_state: &IamTokenState,
         cached_token: &Arc<RwLock<String>>,
         token_refresh_callback: &Option<Arc<dyn Fn(String) + Send + Sync>>,
     ) {
-         let new_token = match Self::generate_token_static(iam_token_state).await {
+        let new_token = match Self::generate_token_static(iam_token_state).await {
             Ok(token) => token,
             Err(first_err) => {
                 log_warn(
@@ -339,7 +340,7 @@ impl IAMTokenManager {
     }
 
     /// Force refresh the token immediately
-    /// 
+    ///
     /// Uses the same retry strategy as background refresh:
     /// - Try once; on failure log warn and retry immediately
     /// - If retry also fails, log error and return (no exceptions thrown)
