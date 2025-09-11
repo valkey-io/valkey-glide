@@ -25,7 +25,7 @@ tokio = { version = "1", features = ["macros", "time"] }
 logger_core = { path = "../logger_core" }
 tokio-util = { version = "^0.7", features = ["rt"], optional = true }
 num_cpus = { version = "^1", optional = true }
-tokio-retry2 = { version = "0.5", features = ["jitter"] }
+tokio-retry2 = { version = "0.6", features = ["jitter"] }
 
 protobuf = { version = "3", features = [
     "bytes",
@@ -33,7 +33,7 @@ protobuf = { version = "3", features = [
 ], optional = true }
 integer-encoding = { version = "4", optional = true }
 thiserror = "2"
-rand = { version = "0.8" }
+rand = { version = "0.9" }
 futures-intrusive = "0.5"
 directories = { version = "6", optional = true }
 once_cell = "1"
@@ -57,16 +57,16 @@ standalone_heartbeat = []
 
 [dev-dependencies]
 rsevents = "0.3.1"
-socket2 = "^0.5"
+socket2 = "^0.6"
 tempfile = "3.3.0"
-rstest = "^0.25"
+rstest = "^0.26"
 serial_test = "3"
-criterion = { version = "^0.6", features = ["html_reports", "async_tokio"] }
+criterion = { version = "^0.7", features = ["html_reports", "async_tokio"] }
 which = "8"
-ctor = "0.4"
+ctor = "0.5"
 redis = { path = "./redis-rs/redis", features = ["tls-rustls-insecure"] }
 rustls = { version = "0.23", features = ["aws-lc-rs"]}
-iai-callgrind = "0.14"
+iai-callgrind = "0.16"
 tokio = { version = "1", features = ["rt-multi-thread"] }
 glide-core = { path = ".", features = [
     "socket-layer",
