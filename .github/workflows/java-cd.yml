@@ -39,9 +39,9 @@ jobs:
                   export PLATFORM_MATRIX=$(jq 'map(
                       select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains(["maven"])))
                       | .RUNNER = (
-                          if (.RUNNER | type == "array") 
-                          then (.RUNNER | map(if . == "ephemeral" then "persistent" else . end)) 
-                          else (if .RUNNER == "ephemeral" then "persistent" else .RUNNER end) 
+                          if (.RUNNER | type == "array")
+                          then (.RUNNER | map(if . == "ephemeral" then "persistent" else . end))
+                          else (if .RUNNER == "ephemeral" then "persistent" else .RUNNER end)
                           end
                       )
                   )' < .github/json_matrices/build-matrix.json | jq -c .)
@@ -129,11 +129,22 @@ jobs:
                       ${{ runner.os }}-gradle-cd-
                       ${{ runner.os }}-gradle-
 
-            - name: Create secret key ring file
+            - name: Create secret key ring file for all Java submodules
               working-directory: java/client
               run: |
+                  # Decode the provided base64 GPG key into the client module
                   echo "$SECRING_GPG" | base64 --decode > ./secring.gpg
-                  ls -ltr
+
+                  # Copy the key ring file into the jedis-compatibility module which also performs signing
+                  if [ -d ../jedis-compatibility ]; then
+                    cp ./secring.gpg ../jedis-compatibility/secring.gpg
+                  else
+                    echo "jedis-compatibility module directory not found" >&2
+                    exit 1
+                  fi
+
+                  echo "Listing key ring files to verify presence:"
+                  ls -l ./secring.gpg ../jedis-compatibility/secring.gpg
               env:
                   SECRING_GPG: ${{ secrets.SECRING_GPG }}
 
