@@ -115,18 +115,41 @@ shadowJar {
 
 publishing {
     publications {
-        maven(MavenPublication) {
+        mavenJava(MavenPublication) {
             from components.shadow
+            artifact javadocJar
+            artifact sourcesJar
             groupId = 'io.valkey'
             artifactId = 'valkey-glide-jedis-compatibility'
             version = System.getenv("GLIDE_RELEASE_VERSION") ?: project.ext.defaultReleaseVersion
-
             pom {
                 name = 'valkey-glide-jedis-compatibility'
                 description = 'Jedis compatibility layer for Valkey GLIDE'
                 url = 'https://github.com/valkey-io/valkey-glide.git'
+                inceptionYear = '2024'
+                scm {
+                    url = 'https://github.com/valkey-io/valkey-glide'
+                    connection = 'scm:git:ssh://git@github.com/valkey-io/valkey-glide.git'
+                    developerConnection = 'scm:git:ssh://git@github.com/valkey-io/valkey-glide.git'
+                }
+                licenses {
+                    license {
+                        name = 'The Apache License, Version 2.0'
+                        url = 'https://www.apache.org/licenses/LICENSE-2.0.txt'
+                        distribution = 'repo'
+                    }
+                }
+                developers {
+                    developer {
+                        name = 'Valkey GLIDE Maintainers'
+                        url = 'https://github.com/valkey-io/valkey-glide.git'
+                    }
+                }
             }
         }
+    }
+    repositories {
+        mavenLocal()
     }
 }
 
@@ -135,7 +158,7 @@ tasks.withType(GenerateModuleMetadata) {
     dependsOn jar, shadowJar
 }
 
-publishMavenPublicationToMavenLocal.dependsOn jar, shadowJar
+publishMavenJavaPublicationToMavenLocal.dependsOn jar, shadowJar
 
 tasks.withType(Sign) {
     def releaseVersion = System.getenv("GLIDE_RELEASE_VERSION") ?: project.ext.defaultReleaseVersion;
