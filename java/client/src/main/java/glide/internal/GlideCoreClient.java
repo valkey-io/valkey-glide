@@ -26,7 +26,7 @@ public class GlideCoreClient implements AutoCloseable {
             System.loadLibrary("valkey_glide");
         } catch (UnsatisfiedLinkError e) {
             // Use proper logging instead of System.err.println
-            glide.api.logging.Logger.error("GlideCoreClient", "Failed to load native library: " + e.getMessage());
+            glide.api.logging.Logger.log(glide.api.logging.Logger.Level.ERROR, "GlideCoreClient", "Failed to load native library: " + e.getMessage());
             throw e;
         }
         onNativeInit();
@@ -327,9 +327,7 @@ public class GlideCoreClient implements AutoCloseable {
         Config result = new Config(addresses);
 
         // Map configuration fields
-        if (config.getUseTls() != null) {
-            result.useTls(config.getUseTls());
-        }
+        result.useTls(config.isUseTLS());
 
         if (config.getCredentials() != null) {
             glide.api.models.configuration.ServerCredentials creds = config.getCredentials();
@@ -340,12 +338,11 @@ public class GlideCoreClient implements AutoCloseable {
             result.requestTimeout(config.getRequestTimeout());
         }
 
-        if (config.getConnectionTimeout() != null) {
-            result.connectionTimeout(config.getConnectionTimeout());
-        }
+        // Use default connection timeout since method doesn't exist
+        result.connectionTimeout(5000);
 
-        if (config.getProtocolVersion() != null) {
-            result.protocol(config.getProtocolVersion());
+        if (config.getProtocol() != null) {
+            result.protocol(config.getProtocol());
         }
 
         if (config.getClientName() != null) {

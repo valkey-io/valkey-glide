@@ -14,10 +14,10 @@ import java.util.concurrent.LinkedBlockingQueue;
 public class MessageHandler {
     
     private final PubSubMessageQueue messageQueue;
-    private final Optional<Object> callback;
+    private final Optional<glide.api.models.configuration.BaseSubscriptionConfiguration.MessageCallback> callback;
     private final Optional<Object> context;
     
-    public MessageHandler(Optional<Object> callback, Optional<Object> context, BaseResponseResolver resolver) {
+    public MessageHandler(Optional<glide.api.models.configuration.BaseSubscriptionConfiguration.MessageCallback> callback, Optional<Object> context, BaseResponseResolver resolver) {
         this.callback = callback;
         this.context = context;
         this.messageQueue = new PubSubMessageQueue();

@@ -88,7 +88,7 @@ public class GlideClient extends BaseClient
      * A constructor. Use {@link #createClient} to get a client. Made protected to simplify testing.
      */
     protected GlideClient(ClientBuilder builder) {
-        super(builder);
+        super(builder.getNativeHandle(), builder.getMaxInflight(), builder.getRequestTimeout(), builder.getSubscriptionConfiguration());
     }
 
     /**

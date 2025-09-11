@@ -359,7 +359,7 @@ public abstract class BaseClient
     private volatile boolean isClosed = false;
     
     // Command manager for handling command submissions  
-    private final CommandManager commandManager;
+    protected final CommandManager commandManager;
     
     // Message handler for PubSub (placeholder - will be implemented later)
     private final MessageHandler messageHandler;
@@ -454,11 +454,11 @@ public abstract class BaseClient
                     databaseId,
                     username,
                     password,
-                    config.getUseTls() != null ? config.getUseTls() : false,
+                    config.isUseTLS(),
                     false, // insecure TLS - TODO: extract from config
                     isCluster,
                     config.getRequestTimeout() != null ? config.getRequestTimeout() : 5000,
-                    config.getConnectionTimeout() != null ? config.getConnectionTimeout() : 5000,
+                    getConnectionTimeoutFromConfig(config),
                     0 // max inflight - use default
                 );
                 
@@ -5656,5 +5656,41 @@ public abstract class BaseClient
                 Wait,
                 new String[] {Long.toString(numreplicas), Long.toString(timeout)},
                 this::handleLongResponse);
+    }
+
+    /**
+     * Internal method for enqueueing PubSub messages from native callback.
+     * This is called by the native layer when PubSub messages are received.
+     */
+    public void __enqueuePubSubMessage(PubSubMessage message) {
+        if (messageHandler != null && messageHandler.getQueue() != null) {
+            messageHandler.getQueue().push(message);
+        }
+    }
+
+    /**
+     * Extract connection timeout from configuration, handling both standalone and cluster configs.
+     */
+    private static int getConnectionTimeoutFromConfig(BaseClientConfiguration config) {
+        // Default value from Rust core documentation: 2000ms
+        int defaultConnectionTimeout = 2000;
+        
+        if (config instanceof glide.api.models.configuration.GlideClientConfiguration) {
+            glide.api.models.configuration.GlideClientConfiguration standaloneConfig = 
+                (glide.api.models.configuration.GlideClientConfiguration) config;
+            if (standaloneConfig.getAdvancedConfiguration() != null && 
+                standaloneConfig.getAdvancedConfiguration().getConnectionTimeout() != null) {
+                return standaloneConfig.getAdvancedConfiguration().getConnectionTimeout();
+            }
+        } else if (config instanceof glide.api.models.configuration.GlideClusterClientConfiguration) {
+            glide.api.models.configuration.GlideClusterClientConfiguration clusterConfig = 
+                (glide.api.models.configuration.GlideClusterClientConfiguration) config;
+            if (clusterConfig.getAdvancedConfiguration() != null && 
+                clusterConfig.getAdvancedConfiguration().getConnectionTimeout() != null) {
+                return clusterConfig.getAdvancedConfiguration().getConnectionTimeout();
+            }
+        }
+        
+        return defaultConnectionTimeout;
     }
 }

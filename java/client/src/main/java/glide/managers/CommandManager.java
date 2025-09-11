@@ -191,7 +191,7 @@ public class CommandManager {
                     // Convert JNI result to protobuf Response format
                     Response.Builder responseBuilder = Response.newBuilder();
                     if ("OK".equals(result)) {
-                        responseBuilder.setConstantResponse(Response.ConstantResponse.OK);
+                        responseBuilder.setConstantResponse(response.ResponseOuterClass.ConstantResponse.OK);
                     }
                     return responseHandler.apply(responseBuilder.build());
                 });
@@ -295,7 +295,7 @@ public class CommandManager {
         Response.Builder builder = Response.newBuilder();
         
         if (jniResult == null) {
-            builder.setConstantResponse(Response.ConstantResponse.OK);
+            builder.setConstantResponse(response.ResponseOuterClass.ConstantResponse.OK);
         } else {
             // For now, create a simple pointer-based response
             // In a full implementation, this would properly convert Java objects to protobuf

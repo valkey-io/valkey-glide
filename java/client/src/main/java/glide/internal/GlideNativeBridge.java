@@ -16,7 +16,7 @@ public class GlideNativeBridge {
         } catch (UnsatisfiedLinkError e) {
             // Fallback to java.library.path for diagnostics
             String libPath = System.getProperty("java.library.path");
-            Logger.error("GlideNativeBridge", "Failed to load native library 'valkey_glide': " + e.getMessage()
+            Logger.log(Logger.Level.ERROR, "GlideNativeBridge", "Failed to load native library 'valkey_glide': " + e.getMessage()
                     + "; java.library.path=" + libPath);
             throw e;
         }
@@ -68,6 +68,11 @@ public class GlideNativeBridge {
      * Check if the native client is connected
      */
     public static native boolean isConnected(long clientPtr);
+    
+    /**
+     * Get client information from native layer
+     */
+    public static native String getClientInfo(long clientPtr);
     
     /**
      * Close and release a native client

@@ -104,7 +104,7 @@ public class GlideClusterClient extends BaseClient
 
     /** A private constructor. Use {@link #createClient} to get a client. */
     GlideClusterClient(ClientBuilder builder) {
-        super(builder);
+        super(builder.getNativeHandle(), builder.getMaxInflight(), builder.getRequestTimeout(), builder.getSubscriptionConfiguration());
     }
 
     /**
