@@ -1119,6 +1119,111 @@ pub(crate) mod shared_client_tests {
         });
     }
 
+    #[cfg(feature = "iam_tests")]
+    #[rstest]
+    #[serial_test::serial]
+    fn test_iam_cluster_reconnection_after_node_kill() {
+        block_on_all(async {
+            remove_test_credentials();
+
+            let cluster_name = "iam-auth-cluster"; // Replace with your ElastiCache cluster name
+            let username = "iam-auth"; // Replace with your IAM username
+            let region = "us-east-1";
+            let endpoint = ELASTICACHE_CLUSTER_IAM_ENDPOINT; // Replace with your cluster endpoint
+
+            // Use the provided endpoint and port
+            let address = redis::ConnectionAddr::Tcp(endpoint.to_string(), 6379);
+
+            // Create IAM connection request
+            let connection_request = create_iam_connection_request(
+                &[address],
+                cluster_name,
+                username,
+                region,
+                Some(2100), // 35 min
+                true,       // cluster mode
+                ServiceType::ELASTICACHE,
+            );
+
+            // Attempt to create client with IAM authentication
+            let client_result = Client::new(connection_request.into(), None).await;
+
+            match client_result {
+                Ok(mut client) => {
+                    // Test initial connection with PING
+                    let initial_ping = client.send_command(&redis::cmd("PING"), None).await;
+                    assert!(
+                        initial_ping.is_ok(),
+                        "Initial PING should succeed: {initial_ping:?}"
+                    );
+
+                    // wait enough for the token to be expired
+                    tokio::time::sleep(std::time::Duration::from_secs(1000)).await;
+
+                    // run this script in the terminal to trigger a node failover after 900 seconds
+                    //  aws elasticache test-failover \
+                    //   --replication-group-id iam-auth-cluster \
+                    //   --node-group-id 0001 \
+                    //   --region us-east-1
+
+                    // Test manual IAM token refresh
+                    let refresh_result = client.refresh_iam_token().await;
+                    assert!(
+                        refresh_result.is_ok(),
+                        "IAM token refresh should succeed: {refresh_result:?}"
+                    );
+
+                    // Verify that the client still works after token refresh
+                    let post_refresh_ping = client.send_command(&redis::cmd("PING"), None).await;
+                    assert!(
+                        post_refresh_ping.is_ok(),
+                        "PING after token refresh should succeed: {post_refresh_ping:?}"
+                    );
+
+                    // wait enough again for the token to be expired
+                    tokio::time::sleep(std::time::Duration::from_secs(1000)).await;
+
+                    // run this script in the terminal to trigger a node failover after 900 seconds
+                    //  aws elasticache test-failover \
+                    //   --replication-group-id iam-auth-cluster \
+                    //   --node-group-id 0001 \
+                    //   --region us-east-1
+
+                    // wait for the cluster and the client to stabilize
+                    tokio::time::sleep(std::time::Duration::from_secs(400)).await;
+
+                    // Verify that the client still works after token refresh
+                    let post_refresh_ping = client.send_command(&redis::cmd("PING"), None).await;
+                    assert!(
+                        post_refresh_ping.is_ok(),
+                        "PING after token refresh should succeed: {post_refresh_ping:?}"
+                    );
+                }
+                Err(err) => {
+                    // In case of failure, print error and assert that it is not a non-connection/auth error
+                    let error_msg = err.to_string();
+                    // If DNS lookup failed, provide a clearer message
+                    if error_msg.contains("failed to lookup address")
+                        || error_msg.contains("Name or service not known")
+                    {
+                        // Uncomment this when you have a real AWS environment
+                        panic!(
+                            "DNS lookup failed: Unable to resolve the address `{}`. Please verify that the endpoint is correct and accessible from your environment.\nError: {}",
+                            endpoint, error_msg
+                        );
+                    }
+
+                    // Other errors will fall here, indicating problems with IAM token generation or connection/auth
+                    // Uncomment this when you have a real AWS environment
+                    panic!(
+                        "Failed to create client with IAM authentication: {}",
+                        error_msg
+                    );
+                }
+            }
+        });
+    }
+
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
