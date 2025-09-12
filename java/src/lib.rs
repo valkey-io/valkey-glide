@@ -92,6 +92,7 @@ fn resp_value_to_java<'local>(
             if encoding_utf8 {
                 Ok(JObject::from(env.new_string(data)?))
             } else {
+                // Return raw byte array - Java will convert to GlideString
                 Ok(JObject::from(env.byte_array_from_slice(data.as_bytes())?))
             }
         }
@@ -99,9 +100,16 @@ fn resp_value_to_java<'local>(
         Value::Int(num) => Ok(env.new_object("java/lang/Long", "(J)V", &[num.into()])?),
         Value::BulkString(data) => {
             if encoding_utf8 {
-                let utf8_str = String::from_utf8(data)?;
-                Ok(JObject::from(env.new_string(utf8_str)?))
+                // Try UTF-8 conversion for string mode
+                match String::from_utf8(data.clone()) {
+                    Ok(utf8_str) => Ok(JObject::from(env.new_string(utf8_str)?)),
+                    Err(_) => {
+                        // Binary data - return as byte array
+                        Ok(JObject::from(env.byte_array_from_slice(&data)?))
+                    }
+                }
             } else {
+                // Binary mode - always return byte array
                 Ok(JObject::from(env.byte_array_from_slice(&data)?))
             }
         }

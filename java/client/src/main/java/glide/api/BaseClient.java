@@ -668,6 +668,20 @@ public abstract class BaseClient
             return null;
         }
 
+        // Handle DirectByteBuffer conversion for large responses (>16KB)
+        if (value instanceof java.nio.ByteBuffer) {
+            java.nio.ByteBuffer buffer = (java.nio.ByteBuffer) value;
+            byte[] bytes = new byte[buffer.remaining()];
+            buffer.get(bytes);
+            if (classType == String.class && encodingUtf8) {
+                value = new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
+            } else if (classType == GlideString.class) {
+                value = GlideString.of(bytes);
+            } else if (classType == byte[].class) {
+                value = bytes;
+            }
+        }
+
         value = convertByteArrayToGlideString(value);
 
         if (classType.isInstance(value)) {

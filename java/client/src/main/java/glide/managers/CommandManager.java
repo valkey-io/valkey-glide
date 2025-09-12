@@ -68,7 +68,7 @@ public class CommandManager {
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
 
         CommandRequest.Builder command = prepareCommandRequest(requestType, arguments);
-        return submitCommandToJni(command, responseHandler);
+        return submitCommandToJni(command, responseHandler, false); // String arguments -> UTF-8 mode
     }
 
     /** Build a command and send via JNI. */
@@ -78,7 +78,8 @@ public class CommandManager {
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
 
         CommandRequest.Builder command = prepareCommandRequest(requestType, arguments);
-        return submitCommandToJni(command, responseHandler);
+        return submitCommandToJni(
+                command, responseHandler, true); // GlideString arguments -> binary mode
     }
 
     /** Build a command and send via JNI. */
@@ -89,7 +90,7 @@ public class CommandManager {
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
 
         CommandRequest.Builder command = prepareCommandRequest(requestType, arguments, route);
-        return submitCommandToJni(command, responseHandler);
+        return submitCommandToJni(command, responseHandler, false); // String arguments -> UTF-8 mode
     }
 
     /** Build a command and send via JNI. */
@@ -100,7 +101,8 @@ public class CommandManager {
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
 
         CommandRequest.Builder command = prepareCommandRequest(requestType, arguments, route);
-        return submitCommandToJni(command, responseHandler);
+        return submitCommandToJni(
+                command, responseHandler, true); // GlideString arguments -> binary mode
     }
 
     /** Build a Batch and send via JNI. */
@@ -121,7 +123,8 @@ public class CommandManager {
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
 
         CommandRequest.Builder command = prepareScript(script, keys, args);
-        return submitCommandToJni(command, responseHandler);
+        return submitCommandToJni(
+                command, responseHandler, true); // Script with GlideString -> binary mode
     }
 
     /** Build a Script (by hash) request with route to send to Valkey via JNI. */
@@ -132,7 +135,8 @@ public class CommandManager {
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
 
         CommandRequest.Builder command = prepareScript(script, args, route);
-        return submitCommandToJni(command, responseHandler);
+        return submitCommandToJni(
+                command, responseHandler, true); // Script with GlideString -> binary mode
     }
 
     /** Build a Cluster Batch and send via JNI. */
@@ -177,7 +181,9 @@ public class CommandManager {
 
     /** Take a command request and send via JNI. */
     protected <T> CompletableFuture<T> submitCommandToJni(
-            CommandRequest.Builder command, GlideExceptionCheckedFunction<Response, T> responseHandler) {
+            CommandRequest.Builder command,
+            GlideExceptionCheckedFunction<Response, T> responseHandler,
+            boolean binaryMode) {
 
         if (!coreClient.isConnected()) {
             var errorFuture = new CompletableFuture<T>();
@@ -192,8 +198,13 @@ public class CommandManager {
 
             // Execute via JNI - returns converted Java objects directly
             // No need to wrap in Response since JNI already provides the final object
-            return coreClient
-                    .executeCommandAsync(requestBytes)
+            // Use binary or UTF-8 mode based on argument type
+            CompletableFuture<Object> jniFuture =
+                    binaryMode
+                            ? coreClient.executeBinaryCommandAsync(requestBytes)
+                            : coreClient.executeCommandAsync(requestBytes);
+
+            return jniFuture
                     .thenApply(
                             result -> {
                                 // Create a minimal Response just for compatibility with the handler

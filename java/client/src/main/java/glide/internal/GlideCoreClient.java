@@ -493,6 +493,43 @@ public class GlideCoreClient implements AutoCloseable {
     }
 
     /**
+     * Execute binary command asynchronously using raw protobuf bytes (for compatibility with
+     * CommandManager)
+     */
+    public CompletableFuture<Object> executeBinaryCommandAsync(byte[] requestBytes) {
+        try {
+            long handle = nativeClientHandle.get();
+            if (handle == 0) {
+                CompletableFuture<Object> future = new CompletableFuture<>();
+                future.completeExceptionally(
+                        new glide.api.models.exceptions.ClosingException("Client is closed"));
+                return future;
+            }
+
+            // Create future and register it with the async registry
+            CompletableFuture<Object> future = new CompletableFuture<>();
+            long correlationId;
+            try {
+                correlationId =
+                        AsyncRegistry.register(future, this.requestTimeoutMs, this.maxInflightRequests, handle);
+            } catch (glide.api.models.exceptions.RequestException e) {
+                future.completeExceptionally(e);
+                return future;
+            }
+
+            // Execute binary command directly via JNI using protobuf bytes
+            GlideNativeBridge.executeBinaryCommandAsync(handle, requestBytes, correlationId);
+
+            return future;
+
+        } catch (Exception e) {
+            CompletableFuture<Object> future = new CompletableFuture<>();
+            future.completeExceptionally(e);
+            return future;
+        }
+    }
+
+    /**
      * Execute command asynchronously using raw protobuf bytes (for compatibility with CommandManager)
      */
     public CompletableFuture<Object> executeCommandAsync(byte[] requestBytes) {
