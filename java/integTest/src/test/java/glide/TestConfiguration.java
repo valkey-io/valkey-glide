@@ -14,7 +14,7 @@ import org.semver4j.Semver;
 
 public final class TestConfiguration {
     public static final boolean TLS = Boolean.parseBoolean(System.getProperty("test.server.tls", ""));
-    
+
     private static Semver cachedServerVersion = null;
     private static boolean versionInitialized = false;
 
@@ -25,22 +25,23 @@ public final class TestConfiguration {
 
     public static String[] getStandaloneHosts() {
         String hosts = System.getProperty("test.server.standalone", "");
-        return hosts.isEmpty() ? new String[]{""} : hosts.split(",");
+        return hosts.isEmpty() ? new String[] {""} : hosts.split(",");
     }
 
     public static String[] getClusterHosts() {
         String hosts = System.getProperty("test.server.cluster", "");
-        return hosts.isEmpty() ? new String[]{""} : hosts.split(",");
+        return hosts.isEmpty() ? new String[] {""} : hosts.split(",");
     }
 
     public static String[] getAzClusterHosts() {
         String hosts = System.getProperty("test.server.azcluster", "");
-        return hosts.isEmpty() ? new String[]{""} : hosts.split(",");
+        return hosts.isEmpty() ? new String[] {""} : hosts.split(",");
     }
 
     public static synchronized Semver getServerVersion() {
         if (!versionInitialized) {
-            System.out.printf("STANDALONE_HOSTS = %s\n", System.getProperty("test.server.standalone", ""));
+            System.out.printf(
+                    "STANDALONE_HOSTS = %s\n", System.getProperty("test.server.standalone", ""));
             System.out.printf("CLUSTER_HOSTS = %s\n", System.getProperty("test.server.cluster", ""));
             System.out.printf("AZ_CLUSTER_HOSTS = %s\n", System.getProperty("test.server.azcluster", ""));
 
@@ -66,15 +67,22 @@ public final class TestConfiguration {
         return cachedServerVersion;
     }
 
-    // Backward compatibility fields - initialize directly from system properties (no circular dependency)
+    // Backward compatibility fields - initialize directly from system properties (no circular
+    // dependency)
     @Deprecated
-    public static final String[] STANDALONE_HOSTS = getStandaloneHosts(); // Use getStandaloneHosts() instead
+    public static final String[] STANDALONE_HOSTS =
+            getStandaloneHosts(); // Use getStandaloneHosts() instead
+
     @Deprecated
     public static final String[] CLUSTER_HOSTS = getClusterHosts(); // Use getClusterHosts() instead
+
     @Deprecated
-    public static final String[] AZ_CLUSTER_HOSTS = getAzClusterHosts(); // Use getAzClusterHosts() instead
+    public static final String[] AZ_CLUSTER_HOSTS =
+            getAzClusterHosts(); // Use getAzClusterHosts() instead
+
     @Deprecated
-    public static final Semver SERVER_VERSION = null; // Use getServerVersion() instead - lazy loaded to avoid circular dependency
+    public static final Semver SERVER_VERSION =
+            null; // Use getServerVersion() instead - lazy loaded to avoid circular dependency
 
     private static Pair<Semver, Exception> getVersionFromStandalone() {
         String[] standaloneHosts = getStandaloneHosts();
@@ -82,7 +90,8 @@ public final class TestConfiguration {
             return Pair.of(null, new Exception("No standalone nodes given"));
         }
         try {
-            BaseClient client = GlideClient.createClient(TestUtilities.commonClientConfig().build()).get();
+            BaseClient client =
+                    GlideClient.createClient(TestUtilities.commonClientConfig().build()).get();
 
             String serverVersion = TestUtilities.getServerVersion(client);
             if (serverVersion != null) {

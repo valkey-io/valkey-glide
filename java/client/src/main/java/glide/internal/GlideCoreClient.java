@@ -1,22 +1,20 @@
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.internal;
 
-import glide.internal.protocol.*;
-import glide.internal.AsyncRegistry;
-import glide.internal.GlideNativeBridge;
 import glide.api.OpenTelemetry;
-import glide.ffi.resolvers.OpenTelemetryResolver;
 import glide.ffi.resolvers.NativeUtils;
-import glide.api.models.configuration.RequestRoutingConfiguration;
+import glide.ffi.resolvers.OpenTelemetryResolver;
+import glide.internal.protocol.*;
 import java.lang.ref.Cleaner;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * GLIDE core client transport using JNI. Replaces UDS-based communication.
- * Provides direct JNI access to glide-core with all routing and performance optimizations.
+ * GLIDE core client transport using JNI. Replaces UDS-based communication. Provides direct JNI
+ * access to glide-core with all routing and performance optimizations.
  */
 public class GlideCoreClient implements AutoCloseable {
     private static final Cleaner CLEANER = Cleaner.create();
@@ -27,7 +25,10 @@ public class GlideCoreClient implements AutoCloseable {
             NativeUtils.loadGlideLib();
         } catch (Exception e) {
             // Use proper logging instead of System.err.println
-            glide.api.logging.Logger.log(glide.api.logging.Logger.Level.ERROR, "GlideCoreClient", "Failed to load native library: " + e.getMessage());
+            glide.api.logging.Logger.log(
+                    glide.api.logging.Logger.Level.ERROR,
+                    "GlideCoreClient",
+                    "Failed to load native library: " + e.getMessage());
             throw new RuntimeException("Failed to load native library", e);
         }
         onNativeInit();
@@ -35,12 +36,14 @@ public class GlideCoreClient implements AutoCloseable {
 
     private static native void onNativeInit();
 
-    private static final java.util.concurrent.ConcurrentHashMap<Long, java.lang.ref.WeakReference<glide.api.BaseClient>> clients = new java.util.concurrent.ConcurrentHashMap<>();
-    
+    private static final java.util.concurrent.ConcurrentHashMap<
+                    Long, java.lang.ref.WeakReference<glide.api.BaseClient>>
+            clients = new java.util.concurrent.ConcurrentHashMap<>();
+
     public static void registerClient(long handle, glide.api.BaseClient client) {
         clients.put(handle, new java.lang.ref.WeakReference<>(client));
     }
-    
+
     public static void unregisterClient(long handle) {
         clients.remove(handle);
     }
@@ -49,9 +52,10 @@ public class GlideCoreClient implements AutoCloseable {
     private static void onNativePush(long handle, byte[] message, byte[] channel, byte[] pattern) {
         glide.api.models.GlideString msg = glide.api.models.GlideString.of(message);
         glide.api.models.GlideString ch = glide.api.models.GlideString.of(channel);
-        glide.api.models.PubSubMessage m = (pattern != null && pattern.length > 0)
-            ? new glide.api.models.PubSubMessage(msg, ch, glide.api.models.GlideString.of(pattern))
-            : new glide.api.models.PubSubMessage(msg, ch);
+        glide.api.models.PubSubMessage m =
+                (pattern != null && pattern.length > 0)
+                        ? new glide.api.models.PubSubMessage(msg, ch, glide.api.models.GlideString.of(pattern))
+                        : new glide.api.models.PubSubMessage(msg, ch);
         var ref = clients.get(handle);
         if (ref != null) {
             var c = ref.get();
@@ -61,16 +65,25 @@ public class GlideCoreClient implements AutoCloseable {
 
     /** Handle for the native client resource. */
     private final AtomicLong nativeClientHandle = new AtomicLong(0);
-    public long getNativeHandle() { return nativeClientHandle.get(); }
-    
+
+    public long getNativeHandle() {
+        return nativeClientHandle.get();
+    }
+
     /** Maximum number of inflight requests allowed for this client. */
     private final int maxInflightRequests;
-    public int getMaxInflightRequests() { return maxInflightRequests; }
-    
+
+    public int getMaxInflightRequests() {
+        return maxInflightRequests;
+    }
+
     /** Request timeout in milliseconds for this client. */
     private final int requestTimeoutMs;
-    public int getRequestTimeoutMs() { return requestTimeoutMs; }
-    
+
+    public int getRequestTimeoutMs() {
+        return requestTimeoutMs;
+    }
+
     /** Cleanup coordination flag. */
     private final AtomicBoolean cleanupInProgress = new AtomicBoolean(false);
 
@@ -93,12 +106,14 @@ public class GlideCoreClient implements AutoCloseable {
         private int databaseId = 0;
         private Integer maxInflightRequests = null;
         private Integer nativeDirectMemoryMB = null;
-        private glide.api.models.configuration.ProtocolVersion protocol = glide.api.models.configuration.ProtocolVersion.RESP3;
+        private glide.api.models.configuration.ProtocolVersion protocol =
+                glide.api.models.configuration.ProtocolVersion.RESP3;
         private byte[][] subExact = new byte[0][];
         private byte[][] subPattern = new byte[0][];
         private byte[][] subSharded = new byte[0][];
         private String clientName = null;
-        private glide.api.models.configuration.ReadFrom readFrom = glide.api.models.configuration.ReadFrom.PRIMARY;
+        private glide.api.models.configuration.ReadFrom readFrom =
+                glide.api.models.configuration.ReadFrom.PRIMARY;
         private String clientAZ = null;
         private boolean lazyConnect = true;
         private Integer reconnectNumRetries = null;
@@ -199,34 +214,100 @@ public class GlideCoreClient implements AutoCloseable {
         }
 
         // Package-private getters for JNI access
-        String[] getAddresses() { return addresses.toArray(new String[0]); }
-        boolean getUseTls() { return useTls; }
-        boolean getClusterMode() { return clusterMode; }
-        int getRequestTimeoutMs() { return requestTimeoutMs; }
-        int getConnectionTimeoutMs() { return connectionTimeoutMs; }
-        String getUsername() { return username; }
-        String getPassword() { return password; }
-        int getDatabaseId() { return databaseId; }
-        glide.api.models.configuration.ProtocolVersion getProtocol() { return protocol; }
-        boolean getInsecureTls() { return insecureTls; }
-        byte[][] getSubExact() { return subExact; }
-        byte[][] getSubPattern() { return subPattern; }
-        byte[][] getSubSharded() { return subSharded; }
-        String getClientName() { return clientName; }
-        Integer getMaxInflightRequests() { return maxInflightRequests; }
-        Integer getNativeDirectMemoryMB() { return nativeDirectMemoryMB; }
-        glide.api.models.configuration.ReadFrom getReadFrom() { return readFrom; }
-        String getClientAZ() { return clientAZ; }
-        boolean getLazyConnect() { return lazyConnect; }
-        int getReconnectNumRetriesOrDefault() { return reconnectNumRetries != null ? reconnectNumRetries : 0; }
-        int getReconnectExponentBaseOrDefault() { return reconnectExponentBase != null ? reconnectExponentBase : 0; }
-        int getReconnectFactorOrDefault() { return reconnectFactor != null ? reconnectFactor : 0; }
-        int getReconnectJitterPercentOrDefault() { return reconnectJitterPercent != null ? reconnectJitterPercent : -1; }
+        String[] getAddresses() {
+            return addresses.toArray(new String[0]);
+        }
+
+        boolean getUseTls() {
+            return useTls;
+        }
+
+        boolean getClusterMode() {
+            return clusterMode;
+        }
+
+        int getRequestTimeoutMs() {
+            return requestTimeoutMs;
+        }
+
+        int getConnectionTimeoutMs() {
+            return connectionTimeoutMs;
+        }
+
+        String getUsername() {
+            return username;
+        }
+
+        String getPassword() {
+            return password;
+        }
+
+        int getDatabaseId() {
+            return databaseId;
+        }
+
+        glide.api.models.configuration.ProtocolVersion getProtocol() {
+            return protocol;
+        }
+
+        boolean getInsecureTls() {
+            return insecureTls;
+        }
+
+        byte[][] getSubExact() {
+            return subExact;
+        }
+
+        byte[][] getSubPattern() {
+            return subPattern;
+        }
+
+        byte[][] getSubSharded() {
+            return subSharded;
+        }
+
+        String getClientName() {
+            return clientName;
+        }
+
+        Integer getMaxInflightRequests() {
+            return maxInflightRequests;
+        }
+
+        Integer getNativeDirectMemoryMB() {
+            return nativeDirectMemoryMB;
+        }
+
+        glide.api.models.configuration.ReadFrom getReadFrom() {
+            return readFrom;
+        }
+
+        String getClientAZ() {
+            return clientAZ;
+        }
+
+        boolean getLazyConnect() {
+            return lazyConnect;
+        }
+
+        int getReconnectNumRetriesOrDefault() {
+            return reconnectNumRetries != null ? reconnectNumRetries : 0;
+        }
+
+        int getReconnectExponentBaseOrDefault() {
+            return reconnectExponentBase != null ? reconnectExponentBase : 0;
+        }
+
+        int getReconnectFactorOrDefault() {
+            return reconnectFactor != null ? reconnectFactor : 0;
+        }
+
+        int getReconnectJitterPercentOrDefault() {
+            return reconnectJitterPercent != null ? reconnectJitterPercent : -1;
+        }
     }
 
-    /**
-     * Create a new GlideClient with the specified configuration
-     */
+    /** Create a new GlideClient with the specified configuration */
     public GlideCoreClient(Config config) {
         if (config == null) {
             throw new IllegalArgumentException("Config cannot be null");
@@ -237,29 +318,31 @@ public class GlideCoreClient implements AutoCloseable {
 
         // Store the computed inflight limit for this client instance
         this.maxInflightRequests = computeMaxInflight(config);
-        
+
         // Store the request timeout for this client instance
         this.requestTimeoutMs = config.getRequestTimeoutMs();
 
         // Create client with simplified parameters
         long handle;
         try {
-            handle = createClient(
-                config.getAddresses(),
-                config.getDatabaseId(),
-                config.getUsername(),
-                config.getPassword(),
-                config.getUseTls(),
-                config.getInsecureTls(),
-                config.getClusterMode(),
-                config.getRequestTimeoutMs(),
-                config.getConnectionTimeoutMs(),
-                this.maxInflightRequests
-            );
+            handle =
+                    createClient(
+                            config.getAddresses(),
+                            config.getDatabaseId(),
+                            config.getUsername(),
+                            config.getPassword(),
+                            config.getUseTls(),
+                            config.getInsecureTls(),
+                            config.getClusterMode(),
+                            config.getRequestTimeoutMs(),
+                            config.getConnectionTimeoutMs(),
+                            this.maxInflightRequests);
         } catch (RuntimeException e) {
             // Propagate the exception from the native layer with proper context
             String errorMsg = e.getMessage();
-            if (errorMsg != null && (errorMsg.contains("Connection refused") || errorMsg.contains("Failed to create client"))) {
+            if (errorMsg != null
+                    && (errorMsg.contains("Connection refused")
+                            || errorMsg.contains("Failed to create client"))) {
                 throw e; // Already has proper message from Rust
             }
             // Wrap with more context if needed
@@ -280,50 +363,45 @@ public class GlideCoreClient implements AutoCloseable {
         this.cleanable = CLEANER.register(this, new CleanupAction(this.nativeState));
     }
 
-    /**
-     * Constructor accepting BaseClientConfiguration (for compatibility with existing API)
-     */
+    /** Constructor accepting BaseClientConfiguration (for compatibility with existing API) */
     public GlideCoreClient(glide.api.models.configuration.BaseClientConfiguration configuration) {
         this(convertFromBaseClientConfiguration(configuration));
     }
 
-    /**
-     * Convenience constructor for simple host:port connections
-     */
+    /** Convenience constructor for simple host:port connections */
     public GlideCoreClient(String host, int port) {
         this(new Config(Arrays.asList(host + ":" + port)));
     }
 
-    /**
-     * Constructor that wraps an existing native client handle (for BaseClient integration)
-     */
+    /** Constructor that wraps an existing native client handle (for BaseClient integration) */
     public GlideCoreClient(long existingHandle, int maxInflight, int requestTimeout) {
         if (existingHandle == 0) {
             throw new IllegalArgumentException("Native handle cannot be zero");
         }
-        
+
         // Store the provided parameters
         this.maxInflightRequests = maxInflight > 0 ? maxInflight : 0; // 0 means use native defaults
         this.requestTimeoutMs = requestTimeout > 0 ? requestTimeout : 5000;
-        
+
         // Use the existing native handle
         this.nativeClientHandle.set(existingHandle);
-        
+
         // Create shared state for proper cleanup coordination
         this.nativeState = new NativeState(existingHandle);
-        
-        // Register cleanup action with Cleaner - but don't double-close since handle is managed externally
+
+        // Register cleanup action with Cleaner - but don't double-close since handle is managed
+        // externally
         this.cleanable = CLEANER.register(this, new CleanupAction(this.nativeState));
     }
 
-    /**
-     * Convert BaseClientConfiguration to our internal Config format
-     */
-    private static Config convertFromBaseClientConfiguration(glide.api.models.configuration.BaseClientConfiguration config) {
+    /** Convert BaseClientConfiguration to our internal Config format */
+    private static Config convertFromBaseClientConfiguration(
+            glide.api.models.configuration.BaseClientConfiguration config) {
         // Extract addresses from NodeAddress objects
-        List<String> addresses = config.getAddresses().stream()
-                .map(addr -> addr.getHost() + ":" + addr.getPort())
-                .collect(java.util.stream.Collectors.toList());
+        List<String> addresses =
+                config.getAddresses().stream()
+                        .map(addr -> addr.getHost() + ":" + addr.getPort())
+                        .collect(java.util.stream.Collectors.toList());
 
         Config result = new Config(addresses);
 
@@ -356,16 +434,16 @@ public class GlideCoreClient implements AutoCloseable {
 
         // Handle cluster vs standalone specific configurations
         if (config instanceof glide.api.models.configuration.GlideClusterClientConfiguration) {
-            glide.api.models.configuration.GlideClusterClientConfiguration clusterConfig = 
-                (glide.api.models.configuration.GlideClusterClientConfiguration) config;
+            glide.api.models.configuration.GlideClusterClientConfiguration clusterConfig =
+                    (glide.api.models.configuration.GlideClusterClientConfiguration) config;
             result.clusterMode(true);
 
             if (clusterConfig.getReadFrom() != null) {
                 result.readFrom(clusterConfig.getReadFrom());
             }
         } else if (config instanceof glide.api.models.configuration.GlideClientConfiguration) {
-            glide.api.models.configuration.GlideClientConfiguration standaloneConfig = 
-                (glide.api.models.configuration.GlideClientConfiguration) config;
+            glide.api.models.configuration.GlideClientConfiguration standaloneConfig =
+                    (glide.api.models.configuration.GlideClientConfiguration) config;
             result.clusterMode(false);
 
             if (standaloneConfig.getDatabaseId() != null) {
@@ -380,32 +458,24 @@ public class GlideCoreClient implements AutoCloseable {
         return result;
     }
 
-    /**
-     * Create a new client connection to Valkey asynchronously.
-     */
+    /** Create a new client connection to Valkey asynchronously. */
     public static CompletableFuture<GlideCoreClient> createAsync(Config config) {
         return CompletableFuture.supplyAsync(() -> new GlideCoreClient(config));
     }
-    
-    /**
-     * Create a new GlideCoreClient with basic configuration (for compatibility with UDS API).
-     */
+
+    /** Create a new GlideCoreClient with basic configuration (for compatibility with UDS API). */
     public static GlideCoreClient createClient(Config config) {
         return new GlideCoreClient(config);
     }
 
     // ==================== COMMAND EXECUTION METHODS ====================
-    
-    /**
-     * Execute a Valkey command with automatic routing (RECOMMENDED for 95% of commands).
-     */
+
+    /** Execute a Valkey command with automatic routing (RECOMMENDED for 95% of commands). */
     public CompletableFuture<Object> execute(String command, String... args) {
         return executeCommand(CommandRequest.auto(command, args));
     }
 
-    /**
-     * Execute any server command using the Command object with automatic routing.
-     */
+    /** Execute any server command using the Command object with automatic routing. */
     public CompletableFuture<Object> executeCommand(glide.internal.protocol.Command command) {
         if (command == null) {
             throw new IllegalArgumentException("Command cannot be null");
@@ -413,10 +483,9 @@ public class GlideCoreClient implements AutoCloseable {
         return executeCommand(CommandRequest.auto(command.getType(), command.getArgumentsArray()));
     }
 
-    /**
-     * Execute a binary command with mixed String/byte[] arguments using automatic routing.
-     */
-    public CompletableFuture<Object> executeBinaryCommand(BinaryCommandRequest.BinaryCommand command) {
+    /** Execute a binary command with mixed String/byte[] arguments using automatic routing. */
+    public CompletableFuture<Object> executeBinaryCommand(
+            BinaryCommandRequest.BinaryCommand command) {
         if (command == null) {
             throw new IllegalArgumentException("BinaryCommand cannot be null");
         }
@@ -431,7 +500,8 @@ public class GlideCoreClient implements AutoCloseable {
             long handle = nativeClientHandle.get();
             if (handle == 0) {
                 CompletableFuture<Object> future = new CompletableFuture<>();
-                future.completeExceptionally(new glide.api.models.exceptions.ClosingException("Client is closed"));
+                future.completeExceptionally(
+                        new glide.api.models.exceptions.ClosingException("Client is closed"));
                 return future;
             }
 
@@ -439,7 +509,8 @@ public class GlideCoreClient implements AutoCloseable {
             CompletableFuture<Object> future = new CompletableFuture<>();
             long correlationId;
             try {
-                correlationId = AsyncRegistry.register(future, this.requestTimeoutMs, this.maxInflightRequests, handle);
+                correlationId =
+                        AsyncRegistry.register(future, this.requestTimeoutMs, this.maxInflightRequests, handle);
             } catch (glide.api.models.exceptions.RequestException e) {
                 future.completeExceptionally(e);
                 return future;
@@ -447,9 +518,9 @@ public class GlideCoreClient implements AutoCloseable {
 
             // Execute command directly via JNI using protobuf bytes
             GlideNativeBridge.executeCommandAsync(handle, requestBytes, correlationId);
-            
+
             return future;
-            
+
         } catch (Exception e) {
             CompletableFuture<Object> future = new CompletableFuture<>();
             future.completeExceptionally(e);
@@ -465,7 +536,8 @@ public class GlideCoreClient implements AutoCloseable {
             long handle = nativeClientHandle.get();
             if (handle == 0) {
                 CompletableFuture<Object> future = new CompletableFuture<>();
-                future.completeExceptionally(new glide.api.models.exceptions.ClosingException("Client is closed"));
+                future.completeExceptionally(
+                        new glide.api.models.exceptions.ClosingException("Client is closed"));
                 return future;
             }
 
@@ -473,7 +545,8 @@ public class GlideCoreClient implements AutoCloseable {
             CompletableFuture<Object> future = new CompletableFuture<>();
             long correlationId;
             try {
-                correlationId = AsyncRegistry.register(future, this.requestTimeoutMs, this.maxInflightRequests, handle);
+                correlationId =
+                        AsyncRegistry.register(future, this.requestTimeoutMs, this.maxInflightRequests, handle);
             } catch (glide.api.models.exceptions.RequestException e) {
                 future.completeExceptionally(e);
                 return future;
@@ -481,9 +554,9 @@ public class GlideCoreClient implements AutoCloseable {
 
             // Execute batch directly via JNI
             GlideNativeBridge.executeBatchAsync(handle, batchRequestBytes, correlationId);
-            
+
             return future;
-            
+
         } catch (Exception e) {
             CompletableFuture<Object> future = new CompletableFuture<>();
             future.completeExceptionally(e);
@@ -492,14 +565,16 @@ public class GlideCoreClient implements AutoCloseable {
     }
 
     /**
-     * Execute cluster scan asynchronously using raw protobuf bytes (for compatibility with CommandManager)
+     * Execute cluster scan asynchronously using raw protobuf bytes (for compatibility with
+     * CommandManager)
      */
     public CompletableFuture<Object> executeClusterScanAsync(byte[] requestBytes) {
         try {
             long handle = nativeClientHandle.get();
             if (handle == 0) {
                 CompletableFuture<Object> future = new CompletableFuture<>();
-                future.completeExceptionally(new glide.api.models.exceptions.ClosingException("Client is closed"));
+                future.completeExceptionally(
+                        new glide.api.models.exceptions.ClosingException("Client is closed"));
                 return future;
             }
 
@@ -507,7 +582,8 @@ public class GlideCoreClient implements AutoCloseable {
             CompletableFuture<Object> future = new CompletableFuture<>();
             long correlationId;
             try {
-                correlationId = AsyncRegistry.register(future, this.requestTimeoutMs, this.maxInflightRequests, handle);
+                correlationId =
+                        AsyncRegistry.register(future, this.requestTimeoutMs, this.maxInflightRequests, handle);
             } catch (glide.api.models.exceptions.RequestException e) {
                 future.completeExceptionally(e);
                 return future;
@@ -515,9 +591,9 @@ public class GlideCoreClient implements AutoCloseable {
 
             // Execute cluster scan via JNI
             GlideNativeBridge.executeClusterScanAsync(handle, requestBytes, correlationId);
-            
+
             return future;
-            
+
         } catch (Exception e) {
             CompletableFuture<Object> future = new CompletableFuture<>();
             future.completeExceptionally(e);
@@ -525,10 +601,9 @@ public class GlideCoreClient implements AutoCloseable {
         }
     }
 
-    /**
-     * Update connection password (for compatibility with CommandManager)
-     */
-    public CompletableFuture<String> updateConnectionPassword(String password, boolean immediateAuth) {
+    /** Update connection password (for compatibility with CommandManager) */
+    public CompletableFuture<String> updateConnectionPassword(
+            String password, boolean immediateAuth) {
         long handle = nativeClientHandle.get();
         if (handle == 0) {
             CompletableFuture<String> f = new CompletableFuture<>();
@@ -544,14 +619,12 @@ public class GlideCoreClient implements AutoCloseable {
             future.completeExceptionally(e);
             return future;
         }
-        
+
         GlideNativeBridge.updateConnectionPassword(handle, password, immediateAuth, correlationId);
         return future;
     }
 
-    /**
-     * Core command execution method using the enhanced routing architecture.
-     */
+    /** Core command execution method using the enhanced routing architecture. */
     private CompletableFuture<Object> executeCommand(CommandRequest request) {
         if (request == null) {
             throw new IllegalArgumentException("CommandRequest cannot be null");
@@ -561,26 +634,32 @@ public class GlideCoreClient implements AutoCloseable {
             long handle = nativeClientHandle.get();
             if (handle == 0) {
                 CompletableFuture<Object> future = new CompletableFuture<>();
-                future.completeExceptionally(new glide.api.models.exceptions.ClosingException("Client is closed"));
+                future.completeExceptionally(
+                        new glide.api.models.exceptions.ClosingException("Client is closed"));
                 return future;
             }
 
             // Create OpenTelemetry span if configured (matching UDS pattern)
             long spanPtr = 0;
             if (OpenTelemetry.isInitialized() && OpenTelemetry.shouldSample()) {
-                spanPtr = OpenTelemetryResolver.createLeakedOtelSpan(formatSpanName(request.getCommandName()));
+                spanPtr =
+                        OpenTelemetryResolver.createLeakedOtelSpan(formatSpanName(request.getCommandName()));
             }
 
             // Create future and register it with the async registry
             CompletableFuture<Object> future = new CompletableFuture<>();
             long correlationId;
-            
+
             try {
                 // Use special registration for blocking commands with timeout=0 (infinite blocking)
                 if (isBlockingCommandWithInfiniteTimeout(request)) {
-                    correlationId = AsyncRegistry.registerInfiniteBlockingCommand(future, this.maxInflightRequests, handle);
+                    correlationId =
+                            AsyncRegistry.registerInfiniteBlockingCommand(
+                                    future, this.maxInflightRequests, handle);
                 } else {
-                    correlationId = AsyncRegistry.register(future, this.requestTimeoutMs, this.maxInflightRequests, handle);
+                    correlationId =
+                            AsyncRegistry.register(
+                                    future, this.requestTimeoutMs, this.maxInflightRequests, handle);
                 }
             } catch (glide.api.models.exceptions.RequestException e) {
                 future.completeExceptionally(e);
@@ -589,17 +668,18 @@ public class GlideCoreClient implements AutoCloseable {
 
             // Execute command directly via JNI
             GlideNativeBridge.executeCommandAsync(handle, request.toBytes(), correlationId);
-            
+
             // Ensure span cleanup on completion
             final long finalSpanPtr = spanPtr;
             if (finalSpanPtr != 0) {
-                future.whenComplete((result, throwable) -> {
-                    OpenTelemetryResolver.dropOtelSpan(finalSpanPtr);
-                });
+                future.whenComplete(
+                        (result, throwable) -> {
+                            OpenTelemetryResolver.dropOtelSpan(finalSpanPtr);
+                        });
             }
-            
+
             return future;
-            
+
         } catch (Exception e) {
             CompletableFuture<Object> future = new CompletableFuture<>();
             future.completeExceptionally(e);
@@ -607,9 +687,7 @@ public class GlideCoreClient implements AutoCloseable {
         }
     }
 
-    /**
-     * Core binary command execution method supporting mixed String/byte[] arguments.
-     */
+    /** Core binary command execution method supporting mixed String/byte[] arguments. */
     private CompletableFuture<Object> executeBinaryCommand(BinaryCommandRequest request) {
         if (request == null) {
             throw new IllegalArgumentException("BinaryCommandRequest cannot be null");
@@ -619,21 +697,24 @@ public class GlideCoreClient implements AutoCloseable {
             long handle = nativeClientHandle.get();
             if (handle == 0) {
                 CompletableFuture<Object> future = new CompletableFuture<>();
-                future.completeExceptionally(new glide.api.models.exceptions.ClosingException("Client is closed"));
+                future.completeExceptionally(
+                        new glide.api.models.exceptions.ClosingException("Client is closed"));
                 return future;
             }
 
             // Create OpenTelemetry span if configured
             long spanPtr = 0;
             if (OpenTelemetry.isInitialized() && OpenTelemetry.shouldSample()) {
-                spanPtr = OpenTelemetryResolver.createLeakedOtelSpan(formatSpanName(request.getCommandName()));
+                spanPtr =
+                        OpenTelemetryResolver.createLeakedOtelSpan(formatSpanName(request.getCommandName()));
             }
 
             // Create future and register it with the async registry
             CompletableFuture<Object> future = new CompletableFuture<>();
             long correlationId;
             try {
-                correlationId = AsyncRegistry.register(future, this.requestTimeoutMs, this.maxInflightRequests, handle);
+                correlationId =
+                        AsyncRegistry.register(future, this.requestTimeoutMs, this.maxInflightRequests, handle);
             } catch (glide.api.models.exceptions.RequestException e) {
                 future.completeExceptionally(e);
                 return future;
@@ -641,17 +722,18 @@ public class GlideCoreClient implements AutoCloseable {
 
             // Execute binary command via JNI
             GlideNativeBridge.executeBinaryCommandAsync(handle, request.toBytes(), correlationId);
-            
+
             // Ensure span cleanup on completion
             final long finalSpanPtr = spanPtr;
             if (finalSpanPtr != 0) {
-                future.whenComplete((result, throwable) -> {
-                    OpenTelemetryResolver.dropOtelSpan(finalSpanPtr);
-                });
+                future.whenComplete(
+                        (result, throwable) -> {
+                            OpenTelemetryResolver.dropOtelSpan(finalSpanPtr);
+                        });
             }
-            
+
             return future;
-            
+
         } catch (Exception e) {
             CompletableFuture<Object> future = new CompletableFuture<>();
             future.completeExceptionally(e);
@@ -661,17 +743,13 @@ public class GlideCoreClient implements AutoCloseable {
 
     // ==================== CLIENT STATUS AND INFO METHODS ====================
 
-    /**
-     * Check if client is connected.
-     */
+    /** Check if client is connected. */
     public boolean isConnected() {
         long handle = nativeClientHandle.get();
         return handle != 0 && isConnected(handle);
     }
 
-    /**
-     * Get client information for debugging and monitoring.
-     */
+    /** Get client information for debugging and monitoring. */
     public String getClientInfo() {
         long handle = nativeClientHandle.get();
         if (handle == 0) {
@@ -680,16 +758,12 @@ public class GlideCoreClient implements AutoCloseable {
         return getClientInfo(handle);
     }
 
-    /**
-     * Get the number of pending async operations.
-     */
+    /** Get the number of pending async operations. */
     public int getPendingOperations() {
         return AsyncRegistry.getPendingCount();
     }
 
-    /**
-     * Health check to detect if client is working properly
-     */
+    /** Health check to detect if client is working properly */
     public boolean isHealthy() {
         return isConnected() && AsyncRegistry.getPendingCount() < 1000;
     }
@@ -726,37 +800,39 @@ public class GlideCoreClient implements AutoCloseable {
         if (config.getNativeDirectMemoryMB() != null && config.getNativeDirectMemoryMB() > 0) {
             return config.getNativeDirectMemoryMB();
         }
-        
+
         // Simple default without memory management intervention
         return 512; // 512MB default - let users configure as needed
     }
 
-    /**
-     * Check if a command is a blocking command that may need special handling
-     */
+    /** Check if a command is a blocking command that may need special handling */
     private static boolean isBlockingCommand(String commandName) {
         if (commandName == null) return false;
         String cmd = commandName.toUpperCase();
-        return cmd.equals("BLPOP") || cmd.equals("BRPOP") || cmd.equals("BLMOVE") || 
-               cmd.equals("BLMPOP") || cmd.equals("BZPOPMIN") || cmd.equals("BZPOPMAX") ||
-               cmd.equals("BZMPOP") || cmd.equals("XREAD") || cmd.equals("XREADGROUP");
+        return cmd.equals("BLPOP")
+                || cmd.equals("BRPOP")
+                || cmd.equals("BLMOVE")
+                || cmd.equals("BLMPOP")
+                || cmd.equals("BZPOPMIN")
+                || cmd.equals("BZPOPMAX")
+                || cmd.equals("BZMPOP")
+                || cmd.equals("XREAD")
+                || cmd.equals("XREADGROUP");
     }
 
-    /**
-     * Check if this is a blocking command with timeout=0 (infinite timeout)
-     */
+    /** Check if this is a blocking command with timeout=0 (infinite timeout) */
     private boolean isBlockingCommandWithInfiniteTimeout(CommandRequest request) {
         if (request == null || request.getCommandName() == null) {
             return false;
         }
-        
+
         String cmd = request.getCommandName().toUpperCase();
-        
+
         // Check if this is a blocking command
         if (!isBlockingCommand(cmd)) {
             return false;
         }
-        
+
         // For BLPOP, BRPOP, etc., the timeout is the last argument
         List<String> args = request.getArguments();
         if (args.size() > 0) {
@@ -770,13 +846,12 @@ public class GlideCoreClient implements AutoCloseable {
                 return false;
             }
         }
-        
+
         return false;
     }
 
     private static String formatSpanName(String commandName) {
-        if (commandName == null || commandName.isEmpty())
-            return "Command";
+        if (commandName == null || commandName.isEmpty()) return "Command";
         String primary = commandName;
         int space = commandName.indexOf(' ');
         if (space > 0) {
@@ -791,9 +866,7 @@ public class GlideCoreClient implements AutoCloseable {
 
     // ==================== RESOURCE MANAGEMENT ====================
 
-    /**
-     * Close the client and cleanup all resources
-     */
+    /** Close the client and cleanup all resources */
     @Override
     public void close() {
         if (!cleanupInProgress.compareAndSet(false, true)) {
@@ -803,7 +876,10 @@ public class GlideCoreClient implements AutoCloseable {
 
         long handle = nativeClientHandle.getAndSet(0);
         if (handle != 0) {
-            try { unregisterClient(handle); } catch (Throwable ignore) {}
+            try {
+                unregisterClient(handle);
+            } catch (Throwable ignore) {
+            }
             try {
                 // Clean up per-client inflight tracking
                 AsyncRegistry.cleanupClient(handle);
@@ -820,9 +896,7 @@ public class GlideCoreClient implements AutoCloseable {
         cleanable.clean();
     }
 
-    /**
-     * Shared state for cleanup coordination
-     */
+    /** Shared state for cleanup coordination */
     private static class NativeState {
         volatile long nativePtr;
 
@@ -831,9 +905,7 @@ public class GlideCoreClient implements AutoCloseable {
         }
     }
 
-    /**
-     * Cleanup action for the Cleaner
-     */
+    /** Cleanup action for the Cleaner */
     private static class CleanupAction implements Runnable {
         private final NativeState nativeState;
 
@@ -855,44 +927,42 @@ public class GlideCoreClient implements AutoCloseable {
 
     // ==================== NATIVE METHODS ====================
 
-    /**
-     * Create client with enhanced routing support
-     */
+    /** Create client with enhanced routing support */
     private static long createClient(
-        String[] addresses,
-        int databaseId,
-        String username,
-        String password,
-        boolean useTls,
-        boolean insecureTls,
-        boolean clusterMode,
-        int requestTimeoutMs,
-        int connectionTimeoutMs,
-        int maxInflightRequests
-    ) {
+            String[] addresses,
+            int databaseId,
+            String username,
+            String password,
+            boolean useTls,
+            boolean insecureTls,
+            boolean clusterMode,
+            int requestTimeoutMs,
+            int connectionTimeoutMs,
+            int maxInflightRequests) {
         return GlideNativeBridge.createClient(
-                addresses, databaseId, username, password, useTls, insecureTls, clusterMode,
-                requestTimeoutMs, connectionTimeoutMs, maxInflightRequests
-        );
+                addresses,
+                databaseId,
+                username,
+                password,
+                useTls,
+                insecureTls,
+                clusterMode,
+                requestTimeoutMs,
+                connectionTimeoutMs,
+                maxInflightRequests);
     }
 
-    /**
-     * Check if the native client is connected
-     */
+    /** Check if the native client is connected */
     private static boolean isConnected(long clientPtr) {
         return GlideNativeBridge.isConnected(clientPtr);
     }
 
-    /**
-     * Get client information from native layer
-     */
+    /** Get client information from native layer */
     private static String getClientInfo(long clientPtr) {
         return GlideNativeBridge.getClientInfo(clientPtr);
     }
 
-    /**
-     * Close and release a native client
-     */
+    /** Close and release a native client */
     private static void closeClient(long clientPtr) {
         GlideNativeBridge.closeClient(clientPtr);
     }

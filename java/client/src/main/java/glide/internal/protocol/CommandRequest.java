@@ -1,15 +1,15 @@
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.internal.protocol;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 
 /**
- * Represents a command request with routing information for JNI execution.
- * Handles serialization of commands with routing metadata for glide-core processing.
+ * Represents a command request with routing information for JNI execution. Handles serialization of
+ * commands with routing metadata for glide-core processing.
  */
 public class CommandRequest {
     private final String commandName;
@@ -34,80 +34,68 @@ public class CommandRequest {
         return routeInfo;
     }
 
-    /**
-     * Create command with automatic routing (recommended for most cases)
-     */
+    /** Create command with automatic routing (recommended for most cases) */
     public static CommandRequest auto(String command, String... args) {
         return new CommandRequest(command, Arrays.asList(args), RouteInfo.auto());
     }
 
-    /**
-     * Create command for all nodes in cluster
-     */
+    /** Create command for all nodes in cluster */
     public static CommandRequest forAllNodes(String command, String... args) {
         return new CommandRequest(command, Arrays.asList(args), RouteInfo.allNodes());
     }
 
-    /**
-     * Create command for all primary nodes
-     */
+    /** Create command for all primary nodes */
     public static CommandRequest forAllPrimaries(String command, String... args) {
         return new CommandRequest(command, Arrays.asList(args), RouteInfo.allPrimaries());
     }
 
-    /**
-     * Create command for random node
-     */
+    /** Create command for random node */
     public static CommandRequest forRandomNode(String command, String... args) {
         return new CommandRequest(command, Arrays.asList(args), RouteInfo.random());
     }
 
-    /**
-     * Create command routed by slot key
-     */
-    public static CommandRequest forSlotKey(String command, String slotKey, boolean preferReplica, String... args) {
-        return new CommandRequest(command, Arrays.asList(args), RouteInfo.bySlotKey(slotKey, preferReplica));
+    /** Create command routed by slot key */
+    public static CommandRequest forSlotKey(
+            String command, String slotKey, boolean preferReplica, String... args) {
+        return new CommandRequest(
+                command, Arrays.asList(args), RouteInfo.bySlotKey(slotKey, preferReplica));
     }
 
-    /**
-     * Create command routed by slot ID
-     */
-    public static CommandRequest forSlotId(String command, int slotId, boolean preferReplica, String... args) {
-        return new CommandRequest(command, Arrays.asList(args), RouteInfo.bySlotId(slotId, preferReplica));
+    /** Create command routed by slot ID */
+    public static CommandRequest forSlotId(
+            String command, int slotId, boolean preferReplica, String... args) {
+        return new CommandRequest(
+                command, Arrays.asList(args), RouteInfo.bySlotId(slotId, preferReplica));
     }
 
-    /**
-     * Create command routed by address
-     */
+    /** Create command routed by address */
     public static CommandRequest forAddress(String command, String host, int port, String... args) {
         return new CommandRequest(command, Arrays.asList(args), RouteInfo.byAddress(host, port));
     }
 
-    /**
-     * Serialize to protobuf format for JNI transmission
-     */
+    /** Serialize to protobuf format for JNI transmission */
     public byte[] toBytes() {
         try {
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            
+
             // Write command name length and data
             byte[] cmdBytes = commandName.getBytes(StandardCharsets.UTF_8);
             writeVarInt(baos, cmdBytes.length);
             baos.write(cmdBytes);
-            
+
             // Write argument count
             writeVarInt(baos, arguments.size());
-            
+
             // Write each argument
             for (String arg : arguments) {
                 byte[] argBytes = arg.getBytes(StandardCharsets.UTF_8);
                 writeVarInt(baos, argBytes.length);
                 baos.write(argBytes);
             }
-            
+
             // Write routing information
             routeInfo.writeTo(baos);
-            
+
             return baos.toByteArray();
         } catch (IOException e) {
             throw new RuntimeException("Failed to serialize command request", e);
@@ -124,10 +112,14 @@ public class CommandRequest {
 
     @Override
     public String toString() {
-        return "CommandRequest{" +
-                "command='" + commandName + '\'' +
-                ", args=" + arguments +
-                ", route=" + routeInfo +
-                '}';
+        return "CommandRequest{"
+                + "command='"
+                + commandName
+                + '\''
+                + ", args="
+                + arguments
+                + ", route="
+                + routeInfo
+                + '}';
     }
 }

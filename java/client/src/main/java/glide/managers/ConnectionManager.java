@@ -9,9 +9,9 @@ import java.util.concurrent.Future;
 import lombok.RequiredArgsConstructor;
 
 /**
- * Connection manager that provides direct JNI calls to the Rust glide-core library.
- * This replaces the previous UDS-based ChannelHandler approach with improved performance
- * and Windows compatibility while maintaining the same interface.
+ * Connection manager that provides direct JNI calls to the Rust glide-core library. This replaces
+ * the previous UDS-based ChannelHandler approach with improved performance and Windows
+ * compatibility while maintaining the same interface.
  */
 @RequiredArgsConstructor
 public class ConnectionManager {
@@ -30,30 +30,31 @@ public class ConnectionManager {
             return CompletableFuture.failedFuture(new ClosingException("Connection manager is closed"));
         }
 
-        return CompletableFuture.supplyAsync(() -> {
-            try {
-                // Create the core client with JNI - this establishes the connection
-                coreClient = new GlideCoreClient(configuration);
-                
-                // Verify connection was established
-                if (!coreClient.isConnected()) {
-                    throw new RuntimeException("Failed to establish connection to Valkey");
-                }
-                
-                return null; // Success, return Void
-            } catch (Exception e) {
-                // Handle connection failures
-                if (e instanceof RuntimeException) {
-                    throw (RuntimeException) e;
-                }
-                throw new RuntimeException("Failed to connect to Valkey", e);
-            }
-        });
+        return CompletableFuture.supplyAsync(
+                () -> {
+                    try {
+                        // Create the core client with JNI - this establishes the connection
+                        coreClient = new GlideCoreClient(configuration);
+
+                        // Verify connection was established
+                        if (!coreClient.isConnected()) {
+                            throw new RuntimeException("Failed to establish connection to Valkey");
+                        }
+
+                        return null; // Success, return Void
+                    } catch (Exception e) {
+                        // Handle connection failures
+                        if (e instanceof RuntimeException) {
+                            throw (RuntimeException) e;
+                        }
+                        throw new RuntimeException("Failed to connect to Valkey", e);
+                    }
+                });
     }
 
     /**
-     * Get the core client instance.
-     * This is used by CommandManager to access the native client handle.
+     * Get the core client instance. This is used by CommandManager to access the native client
+     * handle.
      *
      * @return GlideCoreClient instance
      * @throws IllegalStateException if not connected
@@ -83,15 +84,16 @@ public class ConnectionManager {
      * @return CompletableFuture that completes when connection is closed
      */
     public Future<Void> close() {
-        return CompletableFuture.runAsync(() -> {
-            if (!closed) {
-                closed = true;
-                if (coreClient != null) {
-                    coreClient.close();
-                    coreClient = null;
-                }
-            }
-        });
+        return CompletableFuture.runAsync(
+                () -> {
+                    if (!closed) {
+                        closed = true;
+                        if (coreClient != null) {
+                            coreClient.close();
+                            coreClient = null;
+                        }
+                    }
+                });
     }
 
     /**

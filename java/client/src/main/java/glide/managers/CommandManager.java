@@ -9,10 +9,8 @@ import command_request.CommandRequestOuterClass.CommandRequest;
 import command_request.CommandRequestOuterClass.RequestType;
 import command_request.CommandRequestOuterClass.Routes;
 import command_request.CommandRequestOuterClass.ScriptInvocation;
-import command_request.CommandRequestOuterClass.ScriptInvocationPointers;
 import command_request.CommandRequestOuterClass.SimpleRoutes;
 import command_request.CommandRequestOuterClass.SlotTypes;
-import command_request.CommandRequestOuterClass.UpdateConnectionPassword;
 import glide.api.OpenTelemetry;
 import glide.api.models.Batch;
 import glide.api.models.ClusterBatch;
@@ -31,7 +29,6 @@ import glide.api.models.configuration.RequestRoutingConfiguration.SlotIdRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
 import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.RequestException;
-import glide.ffi.resolvers.GlideValueResolver;
 import glide.ffi.resolvers.OpenTelemetryResolver;
 import glide.internal.GlideCoreClient;
 import java.util.Arrays;
@@ -44,9 +41,9 @@ import lombok.RequiredArgsConstructor;
 import response.ResponseOuterClass.Response;
 
 /**
- * CommandManager that submits command requests directly to the Rust glide-core via JNI calls.
- * This replaces the previous UDS-based socket communication while preserving 
- * the existing protobuf serialization format for compatibility.
+ * CommandManager that submits command requests directly to the Rust glide-core via JNI calls. This
+ * replaces the previous UDS-based socket communication while preserving the existing protobuf
+ * serialization format for compatibility.
  */
 @RequiredArgsConstructor
 public class CommandManager {
@@ -54,9 +51,7 @@ public class CommandManager {
     /** JNI connection representation. */
     private final GlideCoreClient coreClient;
 
-    /**
-     * Internal interface for exposing implementation details about a ClusterScanCursor.
-     */
+    /** Internal interface for exposing implementation details about a ClusterScanCursor. */
     public interface ClusterScanCursorDetail extends ClusterScanCursor {
         /**
          * Returns the handle String representing the cursor.
@@ -66,9 +61,7 @@ public class CommandManager {
         String getCursorHandle();
     }
 
-    /**
-     * Build a command and send via JNI.
-     */
+    /** Build a command and send via JNI. */
     public <T> CompletableFuture<T> submitNewCommand(
             RequestType requestType,
             String[] arguments,
@@ -78,9 +71,7 @@ public class CommandManager {
         return submitCommandToJni(command, responseHandler);
     }
 
-    /**
-     * Build a command and send via JNI.
-     */
+    /** Build a command and send via JNI. */
     public <T> CompletableFuture<T> submitNewCommand(
             RequestType requestType,
             GlideString[] arguments,
@@ -90,9 +81,7 @@ public class CommandManager {
         return submitCommandToJni(command, responseHandler);
     }
 
-    /**
-     * Build a command and send via JNI.
-     */
+    /** Build a command and send via JNI. */
     public <T> CompletableFuture<T> submitNewCommand(
             RequestType requestType,
             String[] arguments,
@@ -103,9 +92,7 @@ public class CommandManager {
         return submitCommandToJni(command, responseHandler);
     }
 
-    /**
-     * Build a command and send via JNI.
-     */
+    /** Build a command and send via JNI. */
     public <T> CompletableFuture<T> submitNewCommand(
             RequestType requestType,
             GlideString[] arguments,
@@ -116,9 +103,7 @@ public class CommandManager {
         return submitCommandToJni(command, responseHandler);
     }
 
-    /**
-     * Build a Batch and send via JNI.
-     */
+    /** Build a Batch and send via JNI. */
     public <T> CompletableFuture<T> submitNewBatch(
             Batch batch,
             boolean raiseOnError,
@@ -128,9 +113,7 @@ public class CommandManager {
         return submitBatchToJni(command, responseHandler);
     }
 
-    /**
-     * Build a Script (by hash) request to send to Valkey via JNI.
-     */
+    /** Build a Script (by hash) request to send to Valkey via JNI. */
     public <T> CompletableFuture<T> submitScript(
             Script script,
             List<GlideString> keys,
@@ -141,9 +124,7 @@ public class CommandManager {
         return submitCommandToJni(command, responseHandler);
     }
 
-    /**
-     * Build a Script (by hash) request with route to send to Valkey via JNI.
-     */
+    /** Build a Script (by hash) request with route to send to Valkey via JNI. */
     public <T> CompletableFuture<T> submitScript(
             Script script,
             List<GlideString> args,
@@ -154,9 +135,7 @@ public class CommandManager {
         return submitCommandToJni(command, responseHandler);
     }
 
-    /**
-     * Build a Cluster Batch and send via JNI.
-     */
+    /** Build a Cluster Batch and send via JNI. */
     public <T> CompletableFuture<T> submitNewBatch(
             ClusterBatch batch,
             boolean raiseOnError,
@@ -166,9 +145,7 @@ public class CommandManager {
         return submitBatchToJni(command, responseHandler);
     }
 
-    /**
-     * Submit a scan request with cursor via JNI.
-     */
+    /** Submit a scan request with cursor via JNI. */
     public <T> CompletableFuture<T> submitClusterScan(
             ClusterScanCursor cursor,
             @NonNull ScanOptions options,
@@ -178,32 +155,30 @@ public class CommandManager {
         return submitClusterScanToJni(command, responseHandler);
     }
 
-    /**
-     * Submit a password update request to GLIDE core via JNI.
-     */
+    /** Submit a password update request to GLIDE core via JNI. */
     public <T> CompletableFuture<T> submitPasswordUpdate(
             Optional<String> password,
             boolean immediateAuth,
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
-        
-        return coreClient.updateConnectionPassword(password.orElse(null), immediateAuth)
-                .thenApply(result -> {
-                    // Convert JNI result to protobuf Response format
-                    Response.Builder responseBuilder = Response.newBuilder();
-                    if ("OK".equals(result)) {
-                        responseBuilder.setConstantResponse(response.ResponseOuterClass.ConstantResponse.OK);
-                    }
-                    return responseHandler.apply(responseBuilder.build());
-                });
+
+        return coreClient
+                .updateConnectionPassword(password.orElse(null), immediateAuth)
+                .thenApply(
+                        result -> {
+                            // Convert JNI result to protobuf Response format
+                            Response.Builder responseBuilder = Response.newBuilder();
+                            if ("OK".equals(result)) {
+                                responseBuilder.setConstantResponse(
+                                        response.ResponseOuterClass.ConstantResponse.OK);
+                            }
+                            return responseHandler.apply(responseBuilder.build());
+                        });
     }
 
-    /**
-     * Take a command request and send via JNI.
-     */
+    /** Take a command request and send via JNI. */
     protected <T> CompletableFuture<T> submitCommandToJni(
-            CommandRequest.Builder command, 
-            GlideExceptionCheckedFunction<Response, T> responseHandler) {
-        
+            CommandRequest.Builder command, GlideExceptionCheckedFunction<Response, T> responseHandler) {
+
         if (!coreClient.isConnected()) {
             var errorFuture = new CompletableFuture<T>();
             errorFuture.completeExceptionally(
@@ -214,10 +189,30 @@ public class CommandManager {
         try {
             // Serialize the protobuf command request
             byte[] requestBytes = command.build().toByteArray();
-            
-            // Execute via JNI - DirectByteBuffer implementation returns Java objects directly
-            return coreClient.executeCommandAsync(requestBytes)
-                    .thenApply(result -> responseHandler.apply(createDirectResponse(result)))
+
+            // Execute via JNI - returns converted Java objects directly
+            // No need to wrap in Response since JNI already provides the final object
+            return coreClient
+                    .executeCommandAsync(requestBytes)
+                    .thenApply(
+                            result -> {
+                                // Create a minimal Response just for compatibility with the handler
+                                // The handler will extract the object from it
+                                Response.Builder builder = Response.newBuilder();
+                                if (result == null) {
+                                    // Null response
+                                    builder.setRespPointer(0L);
+                                } else if ("OK".equals(result)) {
+                                    // OK constant response
+                                    builder.setConstantResponse(response.ResponseOuterClass.ConstantResponse.OK);
+                                } else {
+                                    // Store the object temporarily and pass its ID
+                                    // This allows BaseResponseResolver to retrieve it
+                                    long objectId = JniResponseRegistry.storeObject(result);
+                                    builder.setRespPointer(objectId);
+                                }
+                                return responseHandler.apply(builder.build());
+                            })
                     .exceptionally(this::exceptionHandler);
         } catch (Exception e) {
             var errorFuture = new CompletableFuture<T>();
@@ -226,13 +221,10 @@ public class CommandManager {
         }
     }
 
-    /**
-     * Submit batch request via JNI.
-     */
+    /** Submit batch request via JNI. */
     protected <T> CompletableFuture<T> submitBatchToJni(
-            CommandRequest.Builder command, 
-            GlideExceptionCheckedFunction<Response, T> responseHandler) {
-        
+            CommandRequest.Builder command, GlideExceptionCheckedFunction<Response, T> responseHandler) {
+
         if (!coreClient.isConnected()) {
             var errorFuture = new CompletableFuture<T>();
             errorFuture.completeExceptionally(
@@ -243,9 +235,10 @@ public class CommandManager {
         try {
             // Serialize the protobuf batch request
             byte[] requestBytes = command.build().toByteArray();
-            
+
             // Execute via JNI and convert response
-            return coreClient.executeBatchAsync(requestBytes)
+            return coreClient
+                    .executeBatchAsync(requestBytes)
                     .thenApply(result -> convertJniToProtobufResponse(result))
                     .thenApply(responseHandler::apply)
                     .exceptionally(this::exceptionHandler);
@@ -256,13 +249,10 @@ public class CommandManager {
         }
     }
 
-    /**
-     * Submit cluster scan request via JNI.
-     */
+    /** Submit cluster scan request via JNI. */
     protected <T> CompletableFuture<T> submitClusterScanToJni(
-            CommandRequest.Builder command, 
-            GlideExceptionCheckedFunction<Response, T> responseHandler) {
-        
+            CommandRequest.Builder command, GlideExceptionCheckedFunction<Response, T> responseHandler) {
+
         if (!coreClient.isConnected()) {
             var errorFuture = new CompletableFuture<T>();
             errorFuture.completeExceptionally(
@@ -273,9 +263,10 @@ public class CommandManager {
         try {
             // Serialize the protobuf cluster scan request
             byte[] requestBytes = command.build().toByteArray();
-            
+
             // Execute via JNI and convert response
-            return coreClient.executeClusterScanAsync(requestBytes)
+            return coreClient
+                    .executeClusterScanAsync(requestBytes)
                     .thenApply(result -> convertJniToProtobufResponse(result))
                     .thenApply(responseHandler::apply)
                     .exceptionally(this::exceptionHandler);
@@ -287,47 +278,50 @@ public class CommandManager {
     }
 
     /**
-     * Convert JNI result to protobuf Response format.
-     * This bridges the gap between JNI responses and the expected protobuf Response.
+     * Convert JNI result to protobuf Response format. This bridges the gap between JNI responses and
+     * the expected protobuf Response.
      */
     private Response convertJniToProtobufResponse(Object jniResult) {
         Response.Builder builder = Response.newBuilder();
-        
+
         if (jniResult == null) {
             builder.setConstantResponse(response.ResponseOuterClass.ConstantResponse.OK);
         } else {
             // For now, create a simple pointer-based response
             // In a full implementation, this would properly convert Java objects to protobuf
-            
+
             // Create a leaked pointer to the result for the existing response handling system
             long pointer = System.identityHashCode(jniResult); // Temporary approach
             builder.setRespPointer(pointer);
         }
-        
+
         return builder.build();
     }
 
     /**
-     * Create a direct Response from a JNI result object.
-     * This bypasses the pointer-based system entirely for DirectByteBuffer implementation.
+     * Create a direct Response from a JNI result object. Since JNI now returns converted Java objects
+     * directly (not pointers), we store the object in a temporary registry and pass an ID.
      */
     private Response createDirectResponse(Object jniResult) {
         Response.Builder builder = Response.newBuilder();
-        
+
         if (jniResult == null) {
+            // Null response - no pointer needed
+            builder.setRespPointer(0L);
+        } else if ("OK".equals(jniResult)) {
+            // OK constant response
             builder.setConstantResponse(response.ResponseOuterClass.ConstantResponse.OK);
         } else {
-            // Store the actual Java object directly in the response
-            // We'll create a special response type that holds the object directly
-            builder.setRespPointer(System.identityHashCode(jniResult)); // Still need a pointer for compatibility
+            // Store the Java object and get an ID for it
+            // This ID will be used to retrieve the object in valueFromPointer
+            long objectId = JniResponseRegistry.storeObject(jniResult);
+            builder.setRespPointer(objectId);
         }
-        
+
         return builder.build();
     }
 
-    /**
-     * Exception handler for future pipeline.
-     */
+    /** Exception handler for future pipeline. */
     private <T> T exceptionHandler(Throwable e) {
         if (e instanceof ClosingException) {
             coreClient.close();
@@ -342,9 +336,7 @@ public class CommandManager {
     // Command preparation methods (copied from original CommandManager)
     // ============================================================================
 
-    /**
-     * Build a protobuf command request object with routing options.
-     */
+    /** Build a protobuf command request object with routing options. */
     protected CommandRequest.Builder prepareCommandRequest(
             RequestType requestType, String[] arguments, Route route) {
         final Command.Builder commandBuilder = Command.newBuilder();
@@ -366,9 +358,7 @@ public class CommandManager {
         return prepareCommandRequestRoute(builder, route);
     }
 
-    /**
-     * Build a protobuf command request object with routing options.
-     */
+    /** Build a protobuf command request object with routing options. */
     protected CommandRequest.Builder prepareCommandRequest(
             RequestType requestType, GlideString[] arguments, Route route) {
         final Command.Builder commandBuilder = Command.newBuilder();
@@ -390,9 +380,7 @@ public class CommandManager {
         return prepareCommandRequestRoute(builder, route);
     }
 
-    /**
-     * Build a protobuf Batch request object.
-     */
+    /** Build a protobuf Batch request object. */
     protected CommandRequest.Builder prepareCommandRequest(
             Batch batch, boolean raiseOnError, Optional<BatchOptions> options) {
         CommandRequest.Builder builder = CommandRequest.newBuilder();
@@ -418,43 +406,41 @@ public class CommandManager {
     }
 
     /**
-     * Build a protobuf Script Invoke request.
-     * DirectByteBuffer handles large responses automatically, use standard protobuf for requests.
+     * Build a protobuf Script Invoke request. DirectByteBuffer handles large responses automatically,
+     * use standard protobuf for requests.
      */
     protected CommandRequest.Builder prepareScript(
             Script script, List<GlideString> keys, List<GlideString> args) {
-        // Always use ScriptInvocation (not pointers) - DirectByteBuffer handles response size optimization
-        CommandRequest.Builder builder = CommandRequest.newBuilder()
-                .setScriptInvocation(
-                        ScriptInvocation.newBuilder()
-                                .setHash(script.getHash())
-                                .addAllKeys(
-                                        keys.stream()
-                                                .map(GlideString::getBytes)
-                                                .map(ByteString::copyFrom)
-                                                .collect(Collectors.toList()))
-                                .addAllArgs(
-                                        args.stream()
-                                                .map(GlideString::getBytes)
-                                                .map(ByteString::copyFrom)
-                                                .collect(Collectors.toList()))
-                                .build());
+        // Always use ScriptInvocation (not pointers) - DirectByteBuffer handles response size
+        // optimization
+        CommandRequest.Builder builder =
+                CommandRequest.newBuilder()
+                        .setScriptInvocation(
+                                ScriptInvocation.newBuilder()
+                                        .setHash(script.getHash())
+                                        .addAllKeys(
+                                                keys.stream()
+                                                        .map(GlideString::getBytes)
+                                                        .map(ByteString::copyFrom)
+                                                        .collect(Collectors.toList()))
+                                        .addAllArgs(
+                                                args.stream()
+                                                        .map(GlideString::getBytes)
+                                                        .map(ByteString::copyFrom)
+                                                        .collect(Collectors.toList()))
+                                        .build());
 
         return builder;
     }
 
-    /**
-     * Build a protobuf Script Invoke request with route.
-     */
+    /** Build a protobuf Script Invoke request with route. */
     protected CommandRequest.Builder prepareScript(
             Script script, List<GlideString> args, Route route) {
         CommandRequest.Builder builder = prepareScript(script, List.of(), args);
         return prepareCommandRequestRoute(builder, route);
     }
 
-    /**
-     * Build a protobuf Batch request object with options.
-     */
+    /** Build a protobuf Batch request object with options. */
     protected CommandRequest.Builder prepareCommandRequest(
             ClusterBatch batch, boolean raiseOnError, Optional<ClusterBatchOptions> options) {
 
@@ -494,9 +480,7 @@ public class CommandManager {
         return builder;
     }
 
-    /**
-     * Build a protobuf cursor scan request.
-     */
+    /** Build a protobuf cursor scan request. */
     protected CommandRequest.Builder prepareCursorRequest(
             @NonNull ClusterScanCursor cursor, @NonNull ScanOptions options) {
 
@@ -542,9 +526,7 @@ public class CommandManager {
         return builder;
     }
 
-    /**
-     * Build a protobuf command request object.
-     */
+    /** Build a protobuf command request object. */
     protected CommandRequest.Builder prepareCommandRequest(
             RequestType requestType, String[] arguments) {
         final Command.Builder commandBuilder = Command.newBuilder();
@@ -565,9 +547,7 @@ public class CommandManager {
         return builder;
     }
 
-    /**
-     * Build a protobuf command request object.
-     */
+    /** Build a protobuf command request object. */
     protected CommandRequest.Builder prepareCommandRequest(
             RequestType requestType, GlideString[] arguments) {
         final Command.Builder commandBuilder = Command.newBuilder();
@@ -640,9 +620,7 @@ public class CommandManager {
         return builder;
     }
 
-    /**
-     * Add the given set of arguments to the output Command.Builder.
-     */
+    /** Add the given set of arguments to the output Command.Builder. */
     public static <ArgType> void populateCommandWithArgs(
             ArgType[] arguments, Command.Builder outputBuilder) {
         populateCommandWithArgs(
@@ -652,9 +630,7 @@ public class CommandManager {
                 outputBuilder);
     }
 
-    /**
-     * Add the given set of arguments to the output Command.Builder.
-     */
+    /** Add the given set of arguments to the output Command.Builder. */
     private static void populateCommandWithArgs(
             GlideString[] arguments, Command.Builder outputBuilder) {
         populateCommandWithArgs(
@@ -663,8 +639,8 @@ public class CommandManager {
     }
 
     /**
-     * Add the given set of arguments to the output Command.Builder.
-     * DirectByteBuffer implementation handles large arguments automatically via size-based routing.
+     * Add the given set of arguments to the output Command.Builder. DirectByteBuffer implementation
+     * handles large arguments automatically via size-based routing.
      */
     private static void populateCommandWithArgs(
             List<byte[]> arguments, Command.Builder outputBuilder) {

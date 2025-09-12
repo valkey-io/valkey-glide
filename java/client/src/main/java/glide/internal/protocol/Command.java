@@ -2,8 +2,8 @@
 package glide.internal.protocol;
 
 /**
- * Represents a Redis/Valkey command with its type and arguments.
- * This class provides compatibility with the existing command execution architecture.
+ * Represents a Redis/Valkey command with its type and arguments. This class provides compatibility
+ * with the existing command execution architecture.
  */
 public class Command {
     private final String type;
@@ -71,8 +71,8 @@ public class Command {
         if (this == obj) return true;
         if (obj == null || getClass() != obj.getClass()) return false;
         Command command = (Command) obj;
-        return java.util.Objects.equals(type, command.type) &&
-               java.util.Arrays.equals(arguments, command.arguments);
+        return java.util.Objects.equals(type, command.type)
+                && java.util.Arrays.equals(arguments, command.arguments);
     }
 
     @Override

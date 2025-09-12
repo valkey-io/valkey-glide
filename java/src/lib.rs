@@ -287,10 +287,27 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlideValueResolver_valueFromPoin
                     return Ok(JObject::null());
                 }
                 
-                unsafe {
-                    let value_ptr = pointer as *const Value;
-                    let value = &*value_ptr;
-                    resp_value_to_java(env, value.clone(), true) // UTF-8 encoding = true
+                // The pointer is now an ID from JniResponseRegistry, not a Rust pointer
+                // We need to retrieve the Java object from the registry
+                let registry_class = env.find_class("glide/managers/JniResponseRegistry")?;
+                let retrieve_method = env.get_static_method_id(
+                    &registry_class,
+                    "retrieveAndRemove",
+                    "(J)Ljava/lang/Object;"
+                )?;
+                
+                let result = unsafe {
+                    env.call_static_method_unchecked(
+                        &registry_class,
+                        retrieve_method,
+                        jni::signature::ReturnType::Object,
+                        &[jni::sys::jvalue { j: pointer }]
+                    )
+                }?;
+                
+                match result {
+                    jni::objects::JValueGen::Object(obj) => Ok(obj),
+                    _ => Ok(JObject::null()),
                 }
             }
             let result = value_from_pointer(&mut env, pointer);
@@ -324,10 +341,27 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlideValueResolver_valueFromPoin
                     return Ok(JObject::null());
                 }
                 
-                unsafe {
-                    let value_ptr = pointer as *const Value;
-                    let value = &*value_ptr;
-                    resp_value_to_java(env, value.clone(), false) // UTF-8 encoding = false (binary)
+                // Same as valueFromPointer - retrieve from registry
+                // The object is already converted with the correct encoding
+                let registry_class = env.find_class("glide/managers/JniResponseRegistry")?;
+                let retrieve_method = env.get_static_method_id(
+                    &registry_class,
+                    "retrieveAndRemove",
+                    "(J)Ljava/lang/Object;"
+                )?;
+                
+                let result = unsafe {
+                    env.call_static_method_unchecked(
+                        &registry_class,
+                        retrieve_method,
+                        jni::signature::ReturnType::Object,
+                        &[jni::sys::jvalue { j: pointer }]
+                    )
+                }?;
+                
+                match result {
+                    jni::objects::JValueGen::Object(obj) => Ok(obj),
+                    _ => Ok(JObject::null()),
                 }
             }
             let result = value_from_pointer_binary(&mut env, pointer);

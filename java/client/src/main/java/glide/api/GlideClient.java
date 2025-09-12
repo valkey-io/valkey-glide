@@ -88,14 +88,20 @@ public class GlideClient extends BaseClient
      * A constructor. Use {@link #createClient} to get a client. Made protected to simplify testing.
      */
     protected GlideClient(ClientBuilder builder) {
-        super(builder.getNativeHandle(), builder.getMaxInflight(), builder.getRequestTimeout(), builder.getSubscriptionConfiguration());
+        super(
+                builder.getNativeHandle(),
+                builder.getMaxInflight(),
+                builder.getRequestTimeout(),
+                builder.getSubscriptionConfiguration());
     }
 
-    /**
-     * JNI-based constructor using ClientParams from BaseClient.
-     */
+    /** JNI-based constructor using ClientParams from BaseClient. */
     protected GlideClient(ClientParams params) {
-        super(params.getNativeHandle(), params.getMaxInflight(), params.getRequestTimeout(), params.getSubscription());
+        super(
+                params.getNativeHandle(),
+                params.getMaxInflight(),
+                params.getRequestTimeout(),
+                params.getSubscription());
     }
 
     /**
@@ -149,22 +155,23 @@ public class GlideClient extends BaseClient
     }
 
     /**
-     * Creates a new {@link GlideClient} instance using JNI direct calls instead of Unix Domain Sockets.
-     * This method provides improved performance and Windows compatibility by eliminating the socket layer.
+     * Creates a new {@link GlideClient} instance using JNI direct calls instead of Unix Domain
+     * Sockets. This method provides improved performance and Windows compatibility by eliminating the
+     * socket layer.
      *
      * @param config The configuration options for the client, including server addresses,
      *     authentication credentials, TLS settings, database selection, reconnection strategy, and
      *     Pub/Sub subscriptions.
      * @return A Future that resolves to a connected {@link GlideClient} instance.
-     * @remarks This method creates a client with the same functionality as {@link #createClient(GlideClientConfiguration)}
-     *     but uses direct JNI calls to the Rust glide-core library instead of Unix Domain Sockets.
-     *     Benefits include:
+     * @remarks This method creates a client with the same functionality as {@link
+     *     #createClient(GlideClientConfiguration)} but uses direct JNI calls to the Rust glide-core
+     *     library instead of Unix Domain Sockets. Benefits include:
      *     <ul>
      *       <li><b>Windows Support</b>: Full native Windows compatibility without WSL/Cygwin
      *       <li><b>Performance</b>: Eliminates socket layer overhead with zero-copy operations
      *       <li><b>Memory Efficiency</b>: DirectByteBuffer usage reduces memory copies
      *     </ul>
-     *     
+     *
      * @example
      *     <pre>{@code
      * GlideClientConfiguration config = GlideClientConfiguration.builder()

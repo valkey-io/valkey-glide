@@ -1,3 +1,4 @@
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.internal.protocol;
 
 import java.io.ByteArrayOutputStream;
@@ -6,8 +7,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 /**
- * Batch request for executing multiple commands as a transaction or pipeline.
- * Supports both atomic transactions and non-atomic pipelines with routing.
+ * Batch request for executing multiple commands as a transaction or pipeline. Supports both atomic
+ * transactions and non-atomic pipelines with routing.
  */
 public class BatchRequest {
     private final CommandInterface[] commands;
@@ -17,8 +18,13 @@ public class BatchRequest {
     private final RouteInfo routeInfo;
     private final boolean binary;
 
-    public BatchRequest(CommandInterface[] commands, boolean atomic, Integer timeoutMs, 
-                       boolean raiseOnError, RouteInfo routeInfo, boolean binary) {
+    public BatchRequest(
+            CommandInterface[] commands,
+            boolean atomic,
+            Integer timeoutMs,
+            boolean raiseOnError,
+            RouteInfo routeInfo,
+            boolean binary) {
         this.commands = commands;
         this.atomic = atomic;
         this.timeoutMs = timeoutMs;
@@ -51,18 +57,16 @@ public class BatchRequest {
         return binary;
     }
 
-    /**
-     * Serialize batch request to bytes for JNI transmission
-     */
+    /** Serialize batch request to bytes for JNI transmission */
     public byte[] toBytes() {
         try {
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            
+
             // Write batch metadata
             baos.write(atomic ? 1 : 0);
             baos.write(raiseOnError ? 1 : 0);
             baos.write(binary ? 1 : 0);
-            
+
             // Write timeout
             if (timeoutMs != null) {
                 baos.write(1); // has timeout
@@ -70,39 +74,40 @@ public class BatchRequest {
             } else {
                 baos.write(0); // no timeout
             }
-            
+
             // Write command count
             writeVarInt(baos, commands.length);
-            
+
             // Write each command
             for (CommandInterface command : commands) {
                 writeCommand(baos, command);
             }
-            
+
             // Write routing information
             routeInfo.writeTo(baos);
-            
+
             return baos.toByteArray();
         } catch (IOException e) {
             throw new RuntimeException("Failed to serialize batch request", e);
         }
     }
 
-    private void writeCommand(ByteArrayOutputStream baos, CommandInterface command) throws IOException {
+    private void writeCommand(ByteArrayOutputStream baos, CommandInterface command)
+            throws IOException {
         // Write command name
         String commandName = command.getType();
         byte[] cmdBytes = commandName.getBytes(StandardCharsets.UTF_8);
         writeVarInt(baos, cmdBytes.length);
         baos.write(cmdBytes);
-        
+
         // Handle different command types
         if (command instanceof BinaryCommand) {
             BinaryCommand binaryCmd = (BinaryCommand) command;
             List<Object> args = binaryCmd.getArguments();
-            
+
             // Write argument count
             writeVarInt(baos, args.size());
-            
+
             // Write each argument (preserving binary data)
             for (Object arg : args) {
                 byte[] argBytes;
@@ -113,17 +118,17 @@ public class BatchRequest {
                 } else {
                     argBytes = String.valueOf(arg).getBytes(StandardCharsets.UTF_8);
                 }
-                
+
                 writeVarInt(baos, argBytes.length);
                 baos.write(argBytes);
             }
         } else {
             // Regular command - convert arguments to strings
             String[] args = command.getArgumentsArray();
-            
+
             // Write argument count
             writeVarInt(baos, args.length);
-            
+
             // Write each argument as string
             for (String arg : args) {
                 byte[] argBytes = arg.getBytes(StandardCharsets.UTF_8);
@@ -143,27 +148,30 @@ public class BatchRequest {
 
     @Override
     public String toString() {
-        return "BatchRequest{" +
-                "commandCount=" + commands.length +
-                ", atomic=" + atomic +
-                ", timeout=" + timeoutMs +
-                ", raiseOnError=" + raiseOnError +
-                ", route=" + routeInfo +
-                ", binary=" + binary +
-                '}';
+        return "BatchRequest{"
+                + "commandCount="
+                + commands.length
+                + ", atomic="
+                + atomic
+                + ", timeout="
+                + timeoutMs
+                + ", raiseOnError="
+                + raiseOnError
+                + ", route="
+                + routeInfo
+                + ", binary="
+                + binary
+                + '}';
     }
 
-    /**
-     * Interface for commands that can be included in batches
-     */
+    /** Interface for commands that can be included in batches */
     public interface CommandInterface {
         String getType();
+
         String[] getArgumentsArray();
     }
 
-    /**
-     * Interface for binary commands in batches
-     */
+    /** Interface for binary commands in batches */
     public interface BinaryCommand extends CommandInterface {
         List<Object> getArguments(); // Can contain String or byte[] elements
     }

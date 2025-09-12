@@ -3,7 +3,7 @@ package glide;
 
 // Removed static imports to break circular dependency
 // import static glide.TestConfiguration.AZ_CLUSTER_HOSTS;
-// import static glide.TestConfiguration.CLUSTER_HOSTS; 
+// import static glide.TestConfiguration.CLUSTER_HOSTS;
 // import static glide.TestConfiguration.STANDALONE_HOSTS;
 // import static glide.TestConfiguration.TLS;
 import static glide.api.BaseClient.OK;

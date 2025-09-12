@@ -1,11 +1,9 @@
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 import java.nio.ByteBuffer;
-import java.util.concurrent.ExecutionException;
 
-/**
- * Integration test for Valkey GLIDE with real Redis server
- */
+/** Integration test for Valkey GLIDE with real Redis server */
 public class IntegrationTest {
-    
+
     static {
         try {
             // Load our JNI library
@@ -23,24 +21,24 @@ public class IntegrationTest {
             System.exit(1);
         }
     }
-    
+
     public static void main(String[] args) {
         System.out.println("=== Valkey GLIDE Integration Test ===");
         System.out.println("Testing with Redis server on localhost:6379");
         System.out.println();
-        
+
         // Test 1: Basic connectivity simulation
         testConnectivity();
-        
+
         // Test 2: DirectByteBuffer with large data
         testLargeDataOperations();
-        
+
         // Test 3: Memory stress test
         testMemoryOperations();
-        
+
         // Test 4: Error handling
         testErrorScenarios();
-        
+
         System.out.println();
         System.out.println("=== Integration Test Summary ===");
         System.out.println("✅ JNI Library: Loaded successfully");
@@ -51,51 +49,51 @@ public class IntegrationTest {
         System.out.println();
         System.out.println("🎉 Integration test PASSED - Ready for full Redis operations!");
     }
-    
+
     private static void testConnectivity() {
         System.out.println("Test 1: Connectivity Simulation");
-        
+
         // Simulate connection parameters
         String host = "localhost";
         int port = 6379;
-        
+
         try {
             // Test socket connectivity (basic check)
             java.net.Socket socket = new java.net.Socket();
             java.net.SocketAddress endpoint = new java.net.InetSocketAddress(host, port);
             socket.connect(endpoint, 1000); // 1 second timeout
             socket.close();
-            
+
             System.out.println("  ✅ Redis server is accessible at " + host + ":" + port);
         } catch (Exception e) {
             System.out.println("  ❌ Redis server not accessible: " + e.getMessage());
             return;
         }
-        
+
         // Simulate connection establishment
         System.out.println("  ✅ Connection simulation: SUCCESS");
     }
-    
+
     private static void testLargeDataOperations() {
         System.out.println("\nTest 2: Large Data Operations (DirectByteBuffer)");
-        
+
         // Test sizes around the 16KB threshold
         int[] sizes = {1024, 8192, 16384, 32768, 65536, 1048576}; // 1KB to 1MB
-        
+
         for (int size : sizes) {
             try {
                 // Simulate large Redis response
                 ByteBuffer buffer = ByteBuffer.allocateDirect(size);
-                
+
                 // Fill with test data
                 for (int i = 0; i < size / 4; i++) {
                     if (buffer.remaining() >= 4) {
                         buffer.putInt(0x12345678);
                     }
                 }
-                
+
                 buffer.flip();
-                
+
                 // Verify data integrity
                 boolean dataValid = true;
                 while (buffer.remaining() >= 4) {
@@ -104,52 +102,50 @@ public class IntegrationTest {
                         break;
                     }
                 }
-                
+
                 String sizeStr = formatSize(size);
                 String optimization = size >= 16384 ? "OPTIMIZED" : "STANDARD";
-                System.out.printf("  %-8s: %s [%s]%n", 
-                    sizeStr, 
-                    dataValid ? "✅ PASSED" : "❌ FAILED", 
-                    optimization);
-                
+                System.out.printf(
+                        "  %-8s: %s [%s]%n", sizeStr, dataValid ? "✅ PASSED" : "❌ FAILED", optimization);
+
             } catch (Exception e) {
                 System.out.printf("  %-8s: ❌ FAILED - %s%n", formatSize(size), e.getMessage());
             }
         }
     }
-    
+
     private static void testMemoryOperations() {
         System.out.println("\nTest 3: Memory Operations");
-        
+
         // Simulate Redis pipeline with multiple large responses
         ByteBuffer[] responses = new ByteBuffer[20];
         long totalAllocated = 0;
-        
+
         try {
             for (int i = 0; i < responses.length; i++) {
                 int size = 64 * 1024; // 64KB each (above DirectByteBuffer threshold)
                 responses[i] = ByteBuffer.allocateDirect(size);
                 totalAllocated += size;
-                
+
                 if (i % 5 == 4) {
-                    System.out.println("  Allocated " + (i + 1) + " responses (" + 
-                        formatSize(totalAllocated) + " total)");
+                    System.out.println(
+                            "  Allocated " + (i + 1) + " responses (" + formatSize(totalAllocated) + " total)");
                 }
             }
-            
-            System.out.println("  ✅ Memory operations: PASSED (" + 
-                formatSize(totalAllocated) + " allocated)");
-            
+
+            System.out.println(
+                    "  ✅ Memory operations: PASSED (" + formatSize(totalAllocated) + " allocated)");
+
         } catch (OutOfMemoryError e) {
             System.out.println("  ⚠️  Memory limit reached at " + formatSize(totalAllocated));
         } catch (Exception e) {
             System.out.println("  ❌ Memory operations: FAILED - " + e.getMessage());
         }
     }
-    
+
     private static void testErrorScenarios() {
         System.out.println("\nTest 4: Error Handling");
-        
+
         // Test 1: Invalid buffer operations
         try {
             ByteBuffer buffer = ByteBuffer.allocateDirect(100);
@@ -159,7 +155,7 @@ public class IntegrationTest {
         } catch (java.nio.BufferUnderflowException e) {
             System.out.println("  ✅ Buffer overflow protection: PASSED");
         }
-        
+
         // Test 2: Large allocation limits
         try {
             // Try to allocate an impossibly large buffer
@@ -168,7 +164,7 @@ public class IntegrationTest {
         } catch (OutOfMemoryError | IllegalArgumentException e) {
             System.out.println("  ✅ Memory limit protection: PASSED");
         }
-        
+
         // Test 3: Connection timeout simulation
         try {
             java.net.Socket socket = new java.net.Socket();
@@ -180,7 +176,7 @@ public class IntegrationTest {
             System.out.println("  ✅ Connection timeout handling: PASSED");
         }
     }
-    
+
     private static String formatSize(long bytes) {
         if (bytes < 1024) return bytes + "B";
         if (bytes < 1024 * 1024) return (bytes / 1024) + "KB";

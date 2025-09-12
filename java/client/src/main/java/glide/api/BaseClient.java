@@ -285,14 +285,13 @@ import glide.api.models.exceptions.ConfigurationError;
 import glide.api.models.exceptions.GlideException;
 import glide.connectors.handlers.MessageHandler;
 import glide.ffi.resolvers.GlideValueResolver;
-import glide.ffi.resolvers.StatisticsResolver;
-import glide.ffi.resolvers.OpenTelemetryResolver;
 import glide.ffi.resolvers.NativeUtils;
-import glide.managers.BaseResponseResolver;
-import glide.managers.CommandManager;
-import glide.internal.GlideNativeBridge;
+import glide.ffi.resolvers.StatisticsResolver;
 import glide.internal.AsyncRegistry;
 import glide.internal.GlideCoreClient;
+import glide.internal.GlideNativeBridge;
+import glide.managers.BaseResponseResolver;
+import glide.managers.CommandManager;
 import glide.utils.ArgsBuilder;
 import java.util.Arrays;
 import java.util.EnumSet;
@@ -306,7 +305,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.NonNull;
-import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.ArrayUtils;
 import response.ResponseOuterClass.ConstantResponse;
 import response.ResponseOuterClass.Response;
@@ -330,13 +328,13 @@ public abstract class BaseClient
 
     /** Valkey simple string response with "OK" */
     public static final String OK = ConstantResponse.OK.toString();
-    
+
     // Response processing flags
     public enum ResponseFlags {
         ENCODING_UTF8,
         IS_NULLABLE
     }
-    
+
     // Constants for various commands
     public static final String WITH_VALUES_VALKEY_API = "WITHVALUES";
     public static final String COUNT_VALKEY_API = "COUNT";
@@ -358,10 +356,10 @@ public abstract class BaseClient
     private final int requestTimeoutMs;
     private final Optional<BaseSubscriptionConfiguration> subscriptionConfiguration;
     private volatile boolean isClosed = false;
-    
-    // Command manager for handling command submissions  
+
+    // Command manager for handling command submissions
     protected final CommandManager commandManager;
-    
+
     // Message handler for PubSub (placeholder - will be implemented later)
     private final MessageHandler messageHandler;
 
@@ -376,48 +374,55 @@ public abstract class BaseClient
 
     /** Helper which extracts data from received {@link Response}s from GLIDE. */
     private static final BaseResponseResolver responseResolver =
-            new BaseResponseResolver(pointer -> {
-                if (pointer == null || pointer == 0) {
-                    return null;
-                }
-                return GlideValueResolver.valueFromPointer(pointer);
-            });
+            new BaseResponseResolver(
+                    pointer -> {
+                        if (pointer == null || pointer == 0) {
+                            return null;
+                        }
+                        // The pointer is now an ID to retrieve the object from the registry
+                        // The object was already converted from Redis Value to Java in the JNI layer
+                        return GlideValueResolver.valueFromPointer(pointer);
+                    });
 
     /** Helper which extracts data with binary strings from received {@link Response}s from GLIDE. */
     private static final BaseResponseResolver binaryResponseResolver =
-            new BaseResponseResolver(pointer -> {
-                if (pointer == null || pointer == 0) {
-                    return null;
-                }
-                return GlideValueResolver.valueFromPointerBinary(pointer);
-            });
+            new BaseResponseResolver(
+                    pointer -> {
+                        if (pointer == null || pointer == 0) {
+                            return null;
+                        }
+                        // The pointer is now an ID to retrieve the object from the registry
+                        // The object was already converted with binary encoding in the JNI layer
+                        return GlideValueResolver.valueFromPointerBinary(pointer);
+                    });
 
     /** A constructor for JNI-based clients. */
-    protected BaseClient(long nativeHandle, int maxInflight, int requestTimeout, Optional<BaseSubscriptionConfiguration> subscription) {
+    protected BaseClient(
+            long nativeHandle,
+            int maxInflight,
+            int requestTimeout,
+            Optional<BaseSubscriptionConfiguration> subscription) {
         this.nativeClientHandle = nativeHandle;
         this.maxInflightRequests = maxInflight;
         this.requestTimeoutMs = requestTimeout;
         this.subscriptionConfiguration = subscription;
-        
+
         // Initialize command manager with core client
         GlideCoreClient coreClient = new GlideCoreClient(nativeHandle, maxInflight, requestTimeout);
         this.commandManager = new CommandManager(coreClient);
-        
+
         // Initialize message handler (placeholder for now)
         this.messageHandler = buildMessageHandler(subscription);
     }
-    
-    /**
-     * Build message handler for PubSub functionality.
-     */
-    private static MessageHandler buildMessageHandler(Optional<BaseSubscriptionConfiguration> subscription) {
+
+    /** Build message handler for PubSub functionality. */
+    private static MessageHandler buildMessageHandler(
+            Optional<BaseSubscriptionConfiguration> subscription) {
         if (subscription.isEmpty() || subscription.get() == null) {
             return new MessageHandler(Optional.empty(), Optional.empty(), binaryResponseResolver);
         }
         return new MessageHandler(
-                subscription.get().getCallback(),
-                subscription.get().getContext(),
-                binaryResponseResolver);
+                subscription.get().getCallback(), subscription.get().getContext(), binaryResponseResolver);
     }
 
     /**
@@ -430,65 +435,70 @@ public abstract class BaseClient
      */
     protected static <T extends BaseClient> CompletableFuture<T> createClient(
             @NonNull BaseClientConfiguration config, Function<ClientParams, T> constructor) {
-        
-        return CompletableFuture.supplyAsync(() -> {
-            try {
-                // Convert addresses to simple string array
-                String[] addresses = config.getAddresses().stream()
-                    .map(addr -> addr.getHost() + ":" + addr.getPort())
-                    .toArray(String[]::new);
-                
-                // Extract credentials
-                String username = null;
-                String password = null;
-                if (config.getCredentials() != null) {
-                    username = config.getCredentials().getUsername();
-                    password = config.getCredentials().getPassword();
-                }
-                
-                // Determine client type
-                boolean isCluster = config instanceof glide.api.models.configuration.GlideClusterClientConfiguration;
-                
-                // Get database ID for standalone clients
-                int databaseId = 0;
-                if (!isCluster && config instanceof glide.api.models.configuration.GlideClientConfiguration) {
-                    glide.api.models.configuration.GlideClientConfiguration standaloneConfig = 
-                        (glide.api.models.configuration.GlideClientConfiguration) config;
-                    if (standaloneConfig.getDatabaseId() != null) {
-                        databaseId = standaloneConfig.getDatabaseId();
+
+        return CompletableFuture.supplyAsync(
+                () -> {
+                    try {
+                        // Convert addresses to simple string array
+                        String[] addresses =
+                                config.getAddresses().stream()
+                                        .map(addr -> addr.getHost() + ":" + addr.getPort())
+                                        .toArray(String[]::new);
+
+                        // Extract credentials
+                        String username = null;
+                        String password = null;
+                        if (config.getCredentials() != null) {
+                            username = config.getCredentials().getUsername();
+                            password = config.getCredentials().getPassword();
+                        }
+
+                        // Determine client type
+                        boolean isCluster =
+                                config instanceof glide.api.models.configuration.GlideClusterClientConfiguration;
+
+                        // Get database ID for standalone clients
+                        int databaseId = 0;
+                        if (!isCluster
+                                && config instanceof glide.api.models.configuration.GlideClientConfiguration) {
+                            glide.api.models.configuration.GlideClientConfiguration standaloneConfig =
+                                    (glide.api.models.configuration.GlideClientConfiguration) config;
+                            if (standaloneConfig.getDatabaseId() != null) {
+                                databaseId = standaloneConfig.getDatabaseId();
+                            }
+                        }
+
+                        // Create native client
+                        long handle =
+                                GlideNativeBridge.createClient(
+                                        addresses,
+                                        databaseId,
+                                        username,
+                                        password,
+                                        config.isUseTLS(),
+                                        false, // insecure TLS - TODO: extract from config
+                                        isCluster,
+                                        config.getRequestTimeout() != null ? config.getRequestTimeout() : 5000,
+                                        getConnectionTimeoutFromConfig(config),
+                                        0 // max inflight - use default
+                                        );
+
+                        if (handle == 0) {
+                            throw new RuntimeException("Failed to create client - connection refused");
+                        }
+
+                        // Create the client instance
+                        return constructor.apply(
+                                new ClientParams(
+                                        handle,
+                                        0, // max inflight - use default
+                                        config.getRequestTimeout() != null ? config.getRequestTimeout() : 5000,
+                                        Optional.ofNullable(config.getSubscriptionConfiguration())));
+
+                    } catch (Exception e) {
+                        throw new RuntimeException("Failed to create client", e);
                     }
-                }
-                
-                // Create native client
-                long handle = GlideNativeBridge.createClient(
-                    addresses,
-                    databaseId,
-                    username,
-                    password,
-                    config.isUseTLS(),
-                    false, // insecure TLS - TODO: extract from config
-                    isCluster,
-                    config.getRequestTimeout() != null ? config.getRequestTimeout() : 5000,
-                    getConnectionTimeoutFromConfig(config),
-                    0 // max inflight - use default
-                );
-                
-                if (handle == 0) {
-                    throw new RuntimeException("Failed to create client - connection refused");
-                }
-                
-                // Create the client instance
-                return constructor.apply(new ClientParams(
-                    handle,
-                    0, // max inflight - use default
-                    config.getRequestTimeout() != null ? config.getRequestTimeout() : 5000,
-                    Optional.ofNullable(config.getSubscriptionConfiguration())
-                ));
-                
-            } catch (Exception e) {
-                throw new RuntimeException("Failed to create client", e);
-            }
-        });
+                });
     }
 
     /** Parameters for client construction. */
@@ -497,18 +507,33 @@ public abstract class BaseClient
         private final int maxInflight;
         private final int requestTimeout;
         private final Optional<BaseSubscriptionConfiguration> subscription;
-        
-        public ClientParams(long handle, int maxInflight, int requestTimeout, Optional<BaseSubscriptionConfiguration> subscription) {
+
+        public ClientParams(
+                long handle,
+                int maxInflight,
+                int requestTimeout,
+                Optional<BaseSubscriptionConfiguration> subscription) {
             this.nativeHandle = handle;
             this.maxInflight = maxInflight;
             this.requestTimeout = requestTimeout;
             this.subscription = subscription;
         }
-        
-        public long getNativeHandle() { return nativeHandle; }
-        public int getMaxInflight() { return maxInflight; }
-        public int getRequestTimeout() { return requestTimeout; }
-        public Optional<BaseSubscriptionConfiguration> getSubscription() { return subscription; }
+
+        public long getNativeHandle() {
+            return nativeHandle;
+        }
+
+        public int getMaxInflight() {
+            return maxInflight;
+        }
+
+        public int getRequestTimeout() {
+            return requestTimeout;
+        }
+
+        public Optional<BaseSubscriptionConfiguration> getSubscription() {
+            return subscription;
+        }
     }
 
     /**
@@ -575,14 +600,14 @@ public abstract class BaseClient
         if (isClosed) {
             return; // Already closed
         }
-        
+
         try {
             // Mark as closed immediately to prevent new commands
             isClosed = true;
-            
+
             // Clean up any pending async operations for this client
             AsyncRegistry.cleanupClient(nativeClientHandle);
-            
+
             // Close the native client handle
             if (nativeClientHandle != 0) {
                 GlideNativeBridge.closeClient(nativeClientHandle);
@@ -591,30 +616,26 @@ public abstract class BaseClient
             throw new RuntimeException("Failed to close client", e);
         }
     }
-    
-    /**
-     * Check if the client is connected and ready for commands.
-     */
+
+    /** Check if the client is connected and ready for commands. */
     public boolean isConnected() {
         if (isClosed || nativeClientHandle == 0) {
             return false;
         }
-        
+
         try {
             return GlideNativeBridge.isConnected(nativeClientHandle);
         } catch (Exception e) {
             return false;
         }
     }
-    
-    /**
-     * Get client information from the native layer.
-     */
+
+    /** Get client information from the native layer. */
     public String getClientInfo() {
         if (isClosed || nativeClientHandle == 0) {
             throw new IllegalStateException("Client is closed");
         }
-        
+
         return GlideNativeBridge.getClientInfo(nativeClientHandle);
     }
 
@@ -5670,8 +5691,8 @@ public abstract class BaseClient
     }
 
     /**
-     * Internal method for enqueueing PubSub messages from native callback.
-     * This is called by the native layer when PubSub messages are received.
+     * Internal method for enqueueing PubSub messages from native callback. This is called by the
+     * native layer when PubSub messages are received.
      */
     public void __enqueuePubSubMessage(PubSubMessage message) {
         if (messageHandler != null && messageHandler.getQueue() != null) {
@@ -5685,23 +5706,23 @@ public abstract class BaseClient
     private static int getConnectionTimeoutFromConfig(BaseClientConfiguration config) {
         // Default value from Rust core documentation: 2000ms
         int defaultConnectionTimeout = 2000;
-        
+
         if (config instanceof glide.api.models.configuration.GlideClientConfiguration) {
-            glide.api.models.configuration.GlideClientConfiguration standaloneConfig = 
-                (glide.api.models.configuration.GlideClientConfiguration) config;
-            if (standaloneConfig.getAdvancedConfiguration() != null && 
-                standaloneConfig.getAdvancedConfiguration().getConnectionTimeout() != null) {
+            glide.api.models.configuration.GlideClientConfiguration standaloneConfig =
+                    (glide.api.models.configuration.GlideClientConfiguration) config;
+            if (standaloneConfig.getAdvancedConfiguration() != null
+                    && standaloneConfig.getAdvancedConfiguration().getConnectionTimeout() != null) {
                 return standaloneConfig.getAdvancedConfiguration().getConnectionTimeout();
             }
         } else if (config instanceof glide.api.models.configuration.GlideClusterClientConfiguration) {
-            glide.api.models.configuration.GlideClusterClientConfiguration clusterConfig = 
-                (glide.api.models.configuration.GlideClusterClientConfiguration) config;
-            if (clusterConfig.getAdvancedConfiguration() != null && 
-                clusterConfig.getAdvancedConfiguration().getConnectionTimeout() != null) {
+            glide.api.models.configuration.GlideClusterClientConfiguration clusterConfig =
+                    (glide.api.models.configuration.GlideClusterClientConfiguration) config;
+            if (clusterConfig.getAdvancedConfiguration() != null
+                    && clusterConfig.getAdvancedConfiguration().getConnectionTimeout() != null) {
                 return clusterConfig.getAdvancedConfiguration().getConnectionTimeout();
             }
         }
-        
+
         return defaultConnectionTimeout;
     }
 }
