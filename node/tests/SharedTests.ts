@@ -2237,7 +2237,73 @@ export function runBaseTests(config: {
         },
         config.timeout,
     );
-    
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `hpexpire basic functionality_%p`,
+        async (protocol) => {
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
+
+                    const key = getRandomKey();
+                    const field1 = getRandomKey();
+                    const field2 = getRandomKey();
+                    const field3 = getRandomKey();
+                    const value1 = getRandomKey();
+                    const value2 = getRandomKey();
+
+                    // Set up hash with some fields
+                    await client.hset(key, {
+                        [field1]: value1,
+                        [field2]: value2,
+                    });
+
+                    // Test basic HPEXPIRE
+                    const result1 = await client.hpexpire(key, 60000, [
+                        field1,
+                        field2,
+                        field3,
+                    ]);
+                    expect(result1).toEqual([1, 1, -2]); // field3 doesn't exist
+
+                    // Verify fields still exist
+                    expect(await client.hget(key, field1)).toEqual(value1);
+                    expect(await client.hget(key, field2)).toEqual(value2);
+
+                    // Verify expiration was set using HPTTL
+                    const pttlResult = await client.hpttl(key, [
+                        field1,
+                        field2,
+                        field3,
+                    ]);
+                    expect(pttlResult[0]).toBeGreaterThan(0); // field1 should have TTL
+                    expect(pttlResult[0]).toBeLessThanOrEqual(60000); // should be <= 60000 milliseconds
+                    expect(pttlResult[1]).toBeGreaterThan(0); // field2 should have TTL
+                    expect(pttlResult[1]).toBeLessThanOrEqual(60000); // should be <= 60000 milliseconds
+                    expect(pttlResult[2]).toEqual(-2); // field3 doesn't exist
+
+                    // Test with 0 milliseconds (immediate deletion)
+                    const result2 = await client.hpexpire(key, 0, [field1]);
+                    expect(result2).toEqual([2]);
+                    expect(await client.hget(key, field1)).toEqual(null);
+
+                    // Test on non-existent key
+                    const nonExistentKey = getRandomKey();
+                    const result3 = await client.hpexpire(
+                        nonExistentKey,
+                        60000,
+                        [field1],
+                    );
+                    expect(result3).toEqual([-2]);
+                },
+                protocol,
+            );
+        },
+        config.timeout,
+    );
+
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `httl basic functionality_%p`,
         async (protocol) => {
