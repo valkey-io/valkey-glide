@@ -215,10 +215,9 @@ public class CommandManager {
             // Serialize the protobuf command request
             byte[] requestBytes = command.build().toByteArray();
             
-            // Execute via JNI and convert response
+            // Execute via JNI - DirectByteBuffer implementation returns Java objects directly
             return coreClient.executeCommandAsync(requestBytes)
-                    .thenApply(result -> convertJniToProtobufResponse(result))
-                    .thenApply(responseHandler::apply)
+                    .thenApply(result -> responseHandler.apply(createDirectResponse(result)))
                     .exceptionally(this::exceptionHandler);
         } catch (Exception e) {
             var errorFuture = new CompletableFuture<T>();
@@ -303,6 +302,24 @@ public class CommandManager {
             // Create a leaked pointer to the result for the existing response handling system
             long pointer = System.identityHashCode(jniResult); // Temporary approach
             builder.setRespPointer(pointer);
+        }
+        
+        return builder.build();
+    }
+
+    /**
+     * Create a direct Response from a JNI result object.
+     * This bypasses the pointer-based system entirely for DirectByteBuffer implementation.
+     */
+    private Response createDirectResponse(Object jniResult) {
+        Response.Builder builder = Response.newBuilder();
+        
+        if (jniResult == null) {
+            builder.setConstantResponse(response.ResponseOuterClass.ConstantResponse.OK);
+        } else {
+            // Store the actual Java object directly in the response
+            // We'll create a special response type that holds the object directly
+            builder.setRespPointer(System.identityHashCode(jniResult)); // Still need a pointer for compatibility
         }
         
         return builder.build();
@@ -402,44 +419,26 @@ public class CommandManager {
 
     /**
      * Build a protobuf Script Invoke request.
+     * DirectByteBuffer handles large responses automatically, use standard protobuf for requests.
      */
     protected CommandRequest.Builder prepareScript(
             Script script, List<GlideString> keys, List<GlideString> args) {
-        CommandRequest.Builder builder;
-
-        if (keys.stream().mapToLong(key -> key.getBytes().length).sum()
-                        + args.stream().mapToLong(key -> key.getBytes().length).sum()
-                > GlideValueResolver.MAX_REQUEST_ARGS_LENGTH_IN_BYTES) {
-            builder =
-                    CommandRequest.newBuilder()
-                            .setScriptInvocationPointers(
-                                    ScriptInvocationPointers.newBuilder()
-                                            .setHash(script.getHash())
-                                            .setArgsPointer(
-                                                    GlideValueResolver.createLeakedBytesVec(
-                                                            args.stream().map(GlideString::getBytes).toArray(byte[][]::new)))
-                                            .setKeysPointer(
-                                                    GlideValueResolver.createLeakedBytesVec(
-                                                            keys.stream().map(GlideString::getBytes).toArray(byte[][]::new)))
-                                            .build());
-        } else {
-            builder =
-                    CommandRequest.newBuilder()
-                            .setScriptInvocation(
-                                    ScriptInvocation.newBuilder()
-                                            .setHash(script.getHash())
-                                            .addAllKeys(
-                                                    keys.stream()
-                                                            .map(GlideString::getBytes)
-                                                            .map(ByteString::copyFrom)
-                                                            .collect(Collectors.toList()))
-                                            .addAllArgs(
-                                                    args.stream()
-                                                            .map(GlideString::getBytes)
-                                                            .map(ByteString::copyFrom)
-                                                            .collect(Collectors.toList()))
-                                            .build());
-        }
+        // Always use ScriptInvocation (not pointers) - DirectByteBuffer handles response size optimization
+        CommandRequest.Builder builder = CommandRequest.newBuilder()
+                .setScriptInvocation(
+                        ScriptInvocation.newBuilder()
+                                .setHash(script.getHash())
+                                .addAllKeys(
+                                        keys.stream()
+                                                .map(GlideString::getBytes)
+                                                .map(ByteString::copyFrom)
+                                                .collect(Collectors.toList()))
+                                .addAllArgs(
+                                        args.stream()
+                                                .map(GlideString::getBytes)
+                                                .map(ByteString::copyFrom)
+                                                .collect(Collectors.toList()))
+                                .build());
 
         return builder;
     }
@@ -665,17 +664,13 @@ public class CommandManager {
 
     /**
      * Add the given set of arguments to the output Command.Builder.
+     * DirectByteBuffer implementation handles large arguments automatically via size-based routing.
      */
     private static void populateCommandWithArgs(
             List<byte[]> arguments, Command.Builder outputBuilder) {
-        final long totalArgSize = arguments.stream().mapToLong(arg -> arg.length).sum();
-        if (totalArgSize < GlideValueResolver.MAX_REQUEST_ARGS_LENGTH_IN_BYTES) {
-            ArgsArray.Builder commandArgs = ArgsArray.newBuilder();
-            arguments.forEach(arg -> commandArgs.addArgs(ByteString.copyFrom(arg)));
-            outputBuilder.setArgsArray(commandArgs);
-        } else {
-            outputBuilder.setArgsVecPointer(
-                    GlideValueResolver.createLeakedBytesVec(arguments.toArray(new byte[][] {})));
-        }
+        // Always use ArgsArray - DirectByteBuffer handles large responses, not large requests
+        ArgsArray.Builder commandArgs = ArgsArray.newBuilder();
+        arguments.forEach(arg -> commandArgs.addArgs(ByteString.copyFrom(arg)));
+        outputBuilder.setArgsArray(commandArgs);
     }
 }

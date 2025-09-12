@@ -1,6 +1,7 @@
 package glide.internal;
 
 import glide.api.logging.Logger;
+import glide.ffi.resolvers.NativeUtils;
 import java.nio.ByteBuffer;
 
 /**
@@ -12,13 +13,10 @@ public class GlideNativeBridge {
     // Load native library
     static {
         try {
-            System.loadLibrary("valkey_glide");
-        } catch (UnsatisfiedLinkError e) {
-            // Fallback to java.library.path for diagnostics
-            String libPath = System.getProperty("java.library.path");
-            Logger.log(Logger.Level.ERROR, "GlideNativeBridge", "Failed to load native library 'valkey_glide': " + e.getMessage()
-                    + "; java.library.path=" + libPath);
-            throw e;
+            NativeUtils.loadGlideLib();
+        } catch (Exception e) {
+            Logger.log(Logger.Level.ERROR, "GlideNativeBridge", "Failed to load native library: " + e.getMessage());
+            throw new RuntimeException("Failed to load native library", e);
         }
     }
     

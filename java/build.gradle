@@ -114,3 +114,4 @@ spotless {
         leadingTabsToSpaces(4)
     }
 }
+task runSimpleTest(type: JavaExec) { classpath = sourceSets.main.runtimeClasspath; main = "SimpleJniTest"; standardInput = System.in }

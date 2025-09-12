@@ -287,6 +287,7 @@ import glide.connectors.handlers.MessageHandler;
 import glide.ffi.resolvers.GlideValueResolver;
 import glide.ffi.resolvers.StatisticsResolver;
 import glide.ffi.resolvers.OpenTelemetryResolver;
+import glide.ffi.resolvers.NativeUtils;
 import glide.managers.BaseResponseResolver;
 import glide.managers.CommandManager;
 import glide.internal.GlideNativeBridge;
@@ -367,19 +368,29 @@ public abstract class BaseClient
     // Native library loading
     static {
         try {
-            System.loadLibrary("valkey_glide");
-        } catch (UnsatisfiedLinkError e) {
+            NativeUtils.loadGlideLib();
+        } catch (Exception e) {
             throw new RuntimeException("Failed to load native library", e);
         }
     }
 
     /** Helper which extracts data from received {@link Response}s from GLIDE. */
     private static final BaseResponseResolver responseResolver =
-            new BaseResponseResolver(GlideValueResolver::valueFromPointer);
+            new BaseResponseResolver(pointer -> {
+                if (pointer == null || pointer == 0) {
+                    return null;
+                }
+                return GlideValueResolver.valueFromPointer(pointer);
+            });
 
     /** Helper which extracts data with binary strings from received {@link Response}s from GLIDE. */
     private static final BaseResponseResolver binaryResponseResolver =
-            new BaseResponseResolver(GlideValueResolver::valueFromPointerBinary);
+            new BaseResponseResolver(pointer -> {
+                if (pointer == null || pointer == 0) {
+                    return null;
+                }
+                return GlideValueResolver.valueFromPointerBinary(pointer);
+            });
 
     /** A constructor for JNI-based clients. */
     protected BaseClient(long nativeHandle, int maxInflight, int requestTimeout, Optional<BaseSubscriptionConfiguration> subscription) {

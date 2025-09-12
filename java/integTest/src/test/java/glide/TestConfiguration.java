@@ -1,8 +1,9 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide;
 
-import static glide.TestUtilities.commonClientConfig;
-import static glide.TestUtilities.commonClusterClientConfig;
+// Removed static imports to break circular dependency
+// import static glide.TestUtilities.commonClientConfig;
+// import static glide.TestUtilities.commonClusterClientConfig;
 
 import glide.api.BaseClient;
 import glide.api.GlideClient;
@@ -12,48 +13,76 @@ import org.apache.commons.lang3.tuple.Pair;
 import org.semver4j.Semver;
 
 public final class TestConfiguration {
-    public static final String[] STANDALONE_HOSTS =
-            System.getProperty("test.server.standalone", "").split(",");
-    public static final String[] CLUSTER_HOSTS =
-            System.getProperty("test.server.cluster", "").split(",");
-    public static final String[] AZ_CLUSTER_HOSTS =
-            System.getProperty("test.server.azcluster", "").split(",");
-    public static final Semver SERVER_VERSION;
     public static final boolean TLS = Boolean.parseBoolean(System.getProperty("test.server.tls", ""));
+    
+    private static Semver cachedServerVersion = null;
+    private static boolean versionInitialized = false;
 
     static {
         Logger.init(Logger.Level.OFF);
         Logger.setLoggerConfig(Logger.Level.OFF);
-
-        System.out.printf("STANDALONE_HOSTS = %s\n", System.getProperty("test.server.standalone", ""));
-        System.out.printf("CLUSTER_HOSTS = %s\n", System.getProperty("test.server.cluster", ""));
-        System.out.printf("AZ_CLUSTER_HOSTS = %s\n", System.getProperty("test.server.azcluster", ""));
-
-        var result = getVersionFromStandalone();
-        if (result.getKey() != null) {
-            SERVER_VERSION = result.getKey();
-        } else {
-            var errorStandalone = result.getValue();
-            result = getVersionFromCluster();
-            if (result.getKey() != null) {
-                SERVER_VERSION = result.getKey();
-            } else {
-                var errorCluster = result.getValue();
-                errorStandalone.printStackTrace(System.err);
-                System.err.println();
-                errorCluster.printStackTrace(System.err);
-                throw new RuntimeException("Failed to get server version");
-            }
-        }
-        System.out.printf("SERVER_VERSION = %s\n", SERVER_VERSION);
     }
 
+    public static String[] getStandaloneHosts() {
+        String hosts = System.getProperty("test.server.standalone", "");
+        return hosts.isEmpty() ? new String[]{""} : hosts.split(",");
+    }
+
+    public static String[] getClusterHosts() {
+        String hosts = System.getProperty("test.server.cluster", "");
+        return hosts.isEmpty() ? new String[]{""} : hosts.split(",");
+    }
+
+    public static String[] getAzClusterHosts() {
+        String hosts = System.getProperty("test.server.azcluster", "");
+        return hosts.isEmpty() ? new String[]{""} : hosts.split(",");
+    }
+
+    public static synchronized Semver getServerVersion() {
+        if (!versionInitialized) {
+            System.out.printf("STANDALONE_HOSTS = %s\n", System.getProperty("test.server.standalone", ""));
+            System.out.printf("CLUSTER_HOSTS = %s\n", System.getProperty("test.server.cluster", ""));
+            System.out.printf("AZ_CLUSTER_HOSTS = %s\n", System.getProperty("test.server.azcluster", ""));
+
+            var result = getVersionFromStandalone();
+            if (result.getKey() != null) {
+                cachedServerVersion = result.getKey();
+            } else {
+                var errorStandalone = result.getValue();
+                result = getVersionFromCluster();
+                if (result.getKey() != null) {
+                    cachedServerVersion = result.getKey();
+                } else {
+                    var errorCluster = result.getValue();
+                    errorStandalone.printStackTrace(System.err);
+                    System.err.println();
+                    errorCluster.printStackTrace(System.err);
+                    throw new RuntimeException("Failed to get server version");
+                }
+            }
+            System.out.printf("SERVER_VERSION = %s\n", cachedServerVersion);
+            versionInitialized = true;
+        }
+        return cachedServerVersion;
+    }
+
+    // Backward compatibility fields - initialize directly from system properties (no circular dependency)
+    @Deprecated
+    public static final String[] STANDALONE_HOSTS = getStandaloneHosts(); // Use getStandaloneHosts() instead
+    @Deprecated
+    public static final String[] CLUSTER_HOSTS = getClusterHosts(); // Use getClusterHosts() instead
+    @Deprecated
+    public static final String[] AZ_CLUSTER_HOSTS = getAzClusterHosts(); // Use getAzClusterHosts() instead
+    @Deprecated
+    public static final Semver SERVER_VERSION = null; // Use getServerVersion() instead - lazy loaded to avoid circular dependency
+
     private static Pair<Semver, Exception> getVersionFromStandalone() {
-        if (STANDALONE_HOSTS[0].isEmpty()) {
+        String[] standaloneHosts = getStandaloneHosts();
+        if (standaloneHosts[0].isEmpty()) {
             return Pair.of(null, new Exception("No standalone nodes given"));
         }
         try {
-            BaseClient client = GlideClient.createClient(commonClientConfig().build()).get();
+            BaseClient client = GlideClient.createClient(TestUtilities.commonClientConfig().build()).get();
 
             String serverVersion = TestUtilities.getServerVersion(client);
             if (serverVersion != null) {
@@ -67,12 +96,13 @@ public final class TestConfiguration {
     }
 
     private static Pair<Semver, Exception> getVersionFromCluster() {
-        if (CLUSTER_HOSTS[0].isEmpty()) {
+        String[] clusterHosts = getClusterHosts();
+        if (clusterHosts[0].isEmpty()) {
             return Pair.of(null, new Exception("No cluster nodes given"));
         }
         try {
             BaseClient client =
-                    GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
+                    GlideClusterClient.createClient(TestUtilities.commonClusterClientConfig().build()).get();
 
             String serverVersion = TestUtilities.getServerVersion(client);
             if (serverVersion != null) {

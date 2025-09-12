@@ -367,7 +367,13 @@ def start_server(
             r"server v=(\d+\.\d+\.\d+)", version_output, re.IGNORECASE
         )
         if version_match:
-            return tuple(map(int, version_match.group(1).split(".")))
+            version_str = version_match.group(1)
+            # Handle development versions (255.255.255) as if they're older versions
+            # to avoid unsupported feature flags
+            if version_str == "255.255.255":
+                logging.debug(f"Detected development version {version_str}, treating as 7.2.0 for compatibility")
+                return (7, 2, 0)
+            return tuple(map(int, version_str.split(".")))
         raise Exception("Unable to determine server version.")
 
     server_name = get_server_command()

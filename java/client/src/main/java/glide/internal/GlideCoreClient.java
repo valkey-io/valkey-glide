@@ -5,6 +5,7 @@ import glide.internal.AsyncRegistry;
 import glide.internal.GlideNativeBridge;
 import glide.api.OpenTelemetry;
 import glide.ffi.resolvers.OpenTelemetryResolver;
+import glide.ffi.resolvers.NativeUtils;
 import glide.api.models.configuration.RequestRoutingConfiguration;
 import java.lang.ref.Cleaner;
 import java.util.Arrays;
@@ -23,11 +24,11 @@ public class GlideCoreClient implements AutoCloseable {
     static {
         // Load the native library
         try {
-            System.loadLibrary("valkey_glide");
-        } catch (UnsatisfiedLinkError e) {
+            NativeUtils.loadGlideLib();
+        } catch (Exception e) {
             // Use proper logging instead of System.err.println
             glide.api.logging.Logger.log(glide.api.logging.Logger.Level.ERROR, "GlideCoreClient", "Failed to load native library: " + e.getMessage());
-            throw e;
+            throw new RuntimeException("Failed to load native library", e);
         }
         onNativeInit();
     }

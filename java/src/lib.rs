@@ -264,6 +264,123 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlideValueResolver_getMaxRequest
     MAX_REQUEST_ARGS_LENGTH_IN_BYTES as jlong
 }
 
+/// Convert a Redis Value pointer to a Java object with UTF-8 string encoding.
+///
+/// This function is meant to be invoked by Java using JNI.
+///
+/// * `env`     - The JNI environment.
+/// * `_class`  - The class object. Not used.
+/// * `pointer` - A pointer to a Redis Value object.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_glide_ffi_resolvers_GlideValueResolver_valueFromPointer<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    pointer: jlong,
+) -> JObject<'local> {
+    handle_panics(
+        move || {
+            fn value_from_pointer<'a>(
+                env: &mut JNIEnv<'a>,
+                pointer: jlong,
+            ) -> Result<JObject<'a>, FFIError> {
+                if pointer == 0 {
+                    return Ok(JObject::null());
+                }
+                
+                unsafe {
+                    let value_ptr = pointer as *const Value;
+                    let value = &*value_ptr;
+                    resp_value_to_java(env, value.clone(), true) // UTF-8 encoding = true
+                }
+            }
+            let result = value_from_pointer(&mut env, pointer);
+            handle_errors(&mut env, result)
+        },
+        "valueFromPointer",
+    )
+    .unwrap_or(JObject::null())
+}
+
+/// Convert a Redis Value pointer to a Java object with binary (byte[]) encoding.
+///
+/// This function is meant to be invoked by Java using JNI.
+///
+/// * `env`     - The JNI environment.
+/// * `_class`  - The class object. Not used.
+/// * `pointer` - A pointer to a Redis Value object.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_glide_ffi_resolvers_GlideValueResolver_valueFromPointerBinary<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    pointer: jlong,
+) -> JObject<'local> {
+    handle_panics(
+        move || {
+            fn value_from_pointer_binary<'a>(
+                env: &mut JNIEnv<'a>,
+                pointer: jlong,
+            ) -> Result<JObject<'a>, FFIError> {
+                if pointer == 0 {
+                    return Ok(JObject::null());
+                }
+                
+                unsafe {
+                    let value_ptr = pointer as *const Value;
+                    let value = &*value_ptr;
+                    resp_value_to_java(env, value.clone(), false) // UTF-8 encoding = false (binary)
+                }
+            }
+            let result = value_from_pointer_binary(&mut env, pointer);
+            handle_errors(&mut env, result)
+        },
+        "valueFromPointerBinary",
+    )
+    .unwrap_or(JObject::null())
+}
+
+/// Create a leaked byte vector from Java byte array arguments.
+///
+/// This function is meant to be invoked by Java using JNI.
+///
+/// * `env`     - The JNI environment.
+/// * `_class`  - The class object. Not used.
+/// * `args`    - A Java array of byte arrays.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_glide_ffi_resolvers_GlideValueResolver_createLeakedBytesVec<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    args: JObjectArray<'local>,
+) -> jlong {
+    handle_panics(
+        move || {
+            fn create_leaked_bytes_vec<'a>(
+                env: &mut JNIEnv<'a>,
+                args: JObjectArray<'a>,
+            ) -> Result<jlong, FFIError> {
+                let length = env.get_array_length(&args)? as usize;
+                let mut byte_arrays = Vec::with_capacity(length);
+
+                for i in 0..length {
+                    let byte_array_obj = env.get_object_array_element(&args, i as i32)?;
+                    let byte_array = JByteArray::from(byte_array_obj);
+                    let bytes = env.convert_byte_array(&byte_array)?;
+                    byte_arrays.push(bytes);
+                }
+
+                // Create a Box and leak it to get a stable pointer
+                let boxed_vec = Box::new(byte_arrays);
+                let leaked_ptr = Box::into_raw(boxed_vec);
+                Ok(leaked_ptr as jlong)
+            }
+            let result = create_leaked_bytes_vec(&mut env, args);
+            handle_errors(&mut env, result)
+        },
+        "createLeakedBytesVec",
+    )
+    .unwrap_or(0)
+}
+
+
 
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_glide_ffi_resolvers_ScriptResolver_storeScript<'local>(
@@ -1097,6 +1214,39 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_isConnected(
         "isConnected",
     )
     .unwrap_or(0)
+}
+
+/// Get client information from native layer.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_glide_internal_GlideNativeBridge_getClientInfo<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    client_ptr: jlong,
+) -> JString<'local> {
+    handle_panics(
+        move || {
+            fn get_client_info<'a>(
+                env: &mut JNIEnv<'a>,
+                client_ptr: jlong,
+            ) -> Result<JString<'a>, FFIError> {
+                let handle_id = client_ptr as u64;
+                let handle_table = get_handle_table();
+                
+                if handle_table.contains_key(&handle_id) {
+                    // Return basic client information
+                    let info = format!("Client handle: {}, Status: Connected", handle_id);
+                    Ok(env.new_string(info)?)
+                } else {
+                    let info = format!("Client handle: {}, Status: Not found", handle_id);
+                    Ok(env.new_string(info)?)
+                }
+            }
+            let result = get_client_info(&mut env, client_ptr);
+            handle_errors(&mut env, result)
+        },
+        "getClientInfo",
+    )
+    .unwrap_or(JString::default())
 }
 
 /// Get glide-core default timeout in milliseconds

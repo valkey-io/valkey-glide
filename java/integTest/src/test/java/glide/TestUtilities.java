@@ -1,10 +1,11 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide;
 
-import static glide.TestConfiguration.AZ_CLUSTER_HOSTS;
-import static glide.TestConfiguration.CLUSTER_HOSTS;
-import static glide.TestConfiguration.STANDALONE_HOSTS;
-import static glide.TestConfiguration.TLS;
+// Removed static imports to break circular dependency
+// import static glide.TestConfiguration.AZ_CLUSTER_HOSTS;
+// import static glide.TestConfiguration.CLUSTER_HOSTS; 
+// import static glide.TestConfiguration.STANDALONE_HOSTS;
+// import static glide.TestConfiguration.TLS;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.GlideString.gs;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
@@ -177,34 +178,34 @@ public class TestUtilities {
     public static GlideClientConfiguration.GlideClientConfigurationBuilder<?, ?>
             commonClientConfig() {
         var builder = GlideClientConfiguration.builder();
-        for (var host : STANDALONE_HOSTS) {
+        for (var host : TestConfiguration.getStandaloneHosts()) {
             var parts = host.split(":");
             builder.address(
                     NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build());
         }
-        return builder.useTLS(TLS);
+        return builder.useTLS(TestConfiguration.TLS);
     }
 
     public static GlideClusterClientConfiguration.GlideClusterClientConfigurationBuilder<?, ?>
             commonClusterClientConfig() {
         var builder = GlideClusterClientConfiguration.builder();
-        for (var host : CLUSTER_HOSTS) {
+        for (var host : TestConfiguration.getClusterHosts()) {
             var parts = host.split(":");
             builder.address(
                     NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build());
         }
-        return builder.useTLS(TLS);
+        return builder.useTLS(TestConfiguration.TLS);
     }
 
     public static GlideClusterClientConfiguration.GlideClusterClientConfigurationBuilder<?, ?>
             azClusterClientConfig() {
         var builder = GlideClusterClientConfiguration.builder();
-        for (var host : AZ_CLUSTER_HOSTS) {
+        for (var host : TestConfiguration.getAzClusterHosts()) {
             var parts = host.split(":");
             builder.address(
                     NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build());
         }
-        return builder.useTLS(TLS);
+        return builder.useTLS(TestConfiguration.TLS);
     }
 
     /**
