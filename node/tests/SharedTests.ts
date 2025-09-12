@@ -2355,6 +2355,80 @@ export function runBaseTests(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `hpexpiretime basic functionality_%p`,
+        async (protocol) => {
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
+
+                    const key = getRandomKey();
+                    const field1 = getRandomKey();
+                    const field2 = getRandomKey();
+                    const field3 = getRandomKey();
+                    const value1 = getRandomKey();
+                    const value2 = getRandomKey();
+
+                    // Set up hash with fields
+                    await client.hset(key, {
+                        [field1]: value1,
+                        [field2]: value2,
+                    });
+
+                    // Set expiration on fields using absolute timestamp in milliseconds
+                    const futureTimestampMs = Date.now() + 3600000; // 1 hour from now in milliseconds
+                    await client.hpexpireat(key, futureTimestampMs, [
+                        field1,
+                        field2,
+                    ]);
+
+                    // Test basic HPEXPIRETIME
+                    const result1 = await client.hpexpiretime(key, [
+                        field1,
+                        field2,
+                        field3,
+                    ]);
+                    expect(result1.length).toEqual(3);
+                    expect(result1[0]).toBeGreaterThan(0); // field1 has expiration timestamp in milliseconds
+                    expect(result1[1]).toBeGreaterThan(0); // field2 has expiration timestamp in milliseconds
+                    expect(result1[2]).toEqual(-2); // field3 doesn't exist
+
+                    // Verify timestamp is in milliseconds (should be much larger than seconds)
+                    expect(result1[0]).toBeGreaterThan(Date.now()); // Should be in the future
+                    expect(result1[1]).toBeGreaterThan(Date.now()); // Should be in the future
+
+                    // Remove expiration from field1
+                    await client.hpersist(key, [field1]);
+
+                    // Test HPEXPIRETIME after persist
+                    const result2 = await client.hpexpiretime(key, [
+                        field1,
+                        field2,
+                    ]);
+                    expect(result2[0]).toEqual(-1); // field1 has no expiration
+                    expect(result2[1]).toBeGreaterThan(0); // field2 still has expiration timestamp
+
+                    // Test on non-existent key
+                    const nonExistentKey = getRandomKey();
+                    const result3 = await client.hpexpiretime(nonExistentKey, [
+                        field1,
+                    ]);
+                    expect(result3).toEqual([-2]);
+
+                    // Test on fields without expiration
+                    const key2 = getRandomKey();
+                    await client.hset(key2, { [field1]: value1 });
+                    const result4 = await client.hpexpiretime(key2, [field1]);
+                    expect(result4).toEqual([-1]); // field has no expiration
+                },
+                protocol,
+            );
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `httl basic functionality_%p`,
         async (protocol) => {
             await runTest(
