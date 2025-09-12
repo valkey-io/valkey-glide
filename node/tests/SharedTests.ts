@@ -2168,6 +2168,56 @@ export function runBaseTests(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `hsetex basic functionality_%p`,
+        async (protocol) => {
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
+
+                    const key = getRandomKey();
+                    const field1 = getRandomKey();
+                    const field2 = getRandomKey();
+                    const value1 = getRandomKey();
+                    const value2 = getRandomKey();
+
+                    // Test basic HSETEX with expiry
+                    const fieldValueMap = {
+                        [field1]: value1,
+                        [field2]: value2,
+                    };
+                    expect(
+                        await client.hsetex(key, fieldValueMap, {
+                            expiry: { type: TimeUnit.Seconds, count: 60 },
+                        }),
+                    ).toEqual(1);
+
+                    // Verify fields were set
+                    expect(await client.hget(key, field1)).toEqual(value1);
+                    expect(await client.hget(key, field2)).toEqual(value2);
+
+                    // Test with KEEPTTL
+                    const field3 = getRandomKey();
+                    const value3 = getRandomKey();
+                    expect(
+                        await client.hsetex(
+                            key,
+                            { [field3]: value3 },
+                            {
+                                expiry: "KEEPTTL",
+                            },
+                        ),
+                    ).toEqual(1);
+                    expect(await client.hget(key, field3)).toEqual(value3);
+                },
+                protocol,
+            );
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hexpiretime basic functionality_%p`,
         async (protocol) => {
             await runTest(
