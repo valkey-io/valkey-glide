@@ -2,6 +2,7 @@
 package glide.internal;
 
 import glide.api.OpenTelemetry;
+import glide.api.models.exceptions.ClosingException;
 import glide.ffi.resolvers.NativeUtils;
 import glide.ffi.resolvers.OpenTelemetryResolver;
 import glide.internal.protocol.*;
@@ -346,12 +347,12 @@ public class GlideCoreClient implements AutoCloseable {
                 throw e; // Already has proper message from Rust
             }
             // Wrap with more context if needed
-            throw new RuntimeException("Failed to create client: " + errorMsg, e);
+            throw new ClosingException("Failed to create client: " + errorMsg);
         }
 
         if (handle == 0) {
             String errorMsg = "Failed to create client - Connection refused";
-            throw new RuntimeException(errorMsg);
+            throw new ClosingException(errorMsg);
         }
 
         this.nativeClientHandle.set(handle);

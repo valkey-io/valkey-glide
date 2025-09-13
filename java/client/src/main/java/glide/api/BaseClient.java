@@ -488,6 +488,9 @@ public abstract class BaseClient
                                         Optional.ofNullable(config.getSubscriptionConfiguration())));
 
                     } catch (Exception e) {
+                        if (e instanceof ClosingException) {
+                            throw e; // Rethrow ClosingException as-is
+                        }
                         throw new RuntimeException("Failed to create client", e);
                     }
                 });
