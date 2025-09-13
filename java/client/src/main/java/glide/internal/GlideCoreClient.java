@@ -602,11 +602,9 @@ public class GlideCoreClient implements AutoCloseable {
         }
     }
 
-    /**
-     * Execute cluster scan asynchronously using raw protobuf bytes (for compatibility with
-     * CommandManager)
-     */
-    public CompletableFuture<Object> executeClusterScanAsync(byte[] requestBytes) {
+    /** Execute script management command asynchronously (for enhanced script lifecycle management) */
+    public CompletableFuture<Object> executeScriptManagementAsync(
+            int requestType, String[] arguments, boolean hasRoute, int routeType, String routeParam) {
         try {
             long handle = nativeClientHandle.get();
             if (handle == 0) {
@@ -627,8 +625,45 @@ public class GlideCoreClient implements AutoCloseable {
                 return future;
             }
 
-            // Execute cluster scan via JNI
-            GlideNativeBridge.executeClusterScanAsync(handle, requestBytes, correlationId);
+            // Execute script management command via dedicated JNI bridge
+            GlideNativeBridge.executeScriptManagementAsync(
+                    handle, correlationId, requestType, arguments, hasRoute, routeType, routeParam);
+
+            return future;
+
+        } catch (Exception e) {
+            CompletableFuture<Object> future = new CompletableFuture<>();
+            future.completeExceptionally(e);
+            return future;
+        }
+    }
+
+    /** Execute cluster scan asynchronously with proper cursor lifecycle management */
+    public CompletableFuture<Object> executeClusterScanAsync(
+            String cursorId, String matchPattern, long count, String objectType) {
+        try {
+            long handle = nativeClientHandle.get();
+            if (handle == 0) {
+                CompletableFuture<Object> future = new CompletableFuture<>();
+                future.completeExceptionally(
+                        new glide.api.models.exceptions.ClosingException("Client is closed"));
+                return future;
+            }
+
+            // Create future and register it with the async registry
+            CompletableFuture<Object> future = new CompletableFuture<>();
+            long correlationId;
+            try {
+                correlationId =
+                        AsyncRegistry.register(future, this.requestTimeoutMs, this.maxInflightRequests, handle);
+            } catch (glide.api.models.exceptions.RequestException e) {
+                future.completeExceptionally(e);
+                return future;
+            }
+
+            // Execute cluster scan with proper cursor management via dedicated JNI bridge
+            GlideNativeBridge.executeClusterScanAsync(
+                    handle, cursorId, matchPattern, count, objectType, correlationId);
 
             return future;
 

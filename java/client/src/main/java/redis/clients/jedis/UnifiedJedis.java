@@ -2242,7 +2242,7 @@ public class UnifiedJedis implements Closeable {
                 ClusterScanCursor clusterCursor;
                 if ("0".equals(cursor)) {
                     // Initial cursor
-                    clusterCursor = ClusterScanCursor.initalCursor();
+                    clusterCursor = ClusterScanCursor.initialCursor();
                 } else {
                     // For subsequent cursors, we need to use the cursor from previous result
                     // Since we can't reconstruct a ClusterScanCursor from a string,
@@ -2297,7 +2297,7 @@ public class UnifiedJedis implements Closeable {
                 ClusterScanCursor clusterCursor;
                 if ("0".equals(cursor)) {
                     // Initial cursor
-                    clusterCursor = ClusterScanCursor.initalCursor();
+                    clusterCursor = ClusterScanCursor.initialCursor();
                     result = glideClusterClient.scan(clusterCursor, options).get();
                 } else {
                     // For subsequent cursors, use customCommand with params
@@ -4584,7 +4584,7 @@ public class UnifiedJedis implements Closeable {
                 ClusterScanCursor clusterCursor;
                 if ("0".equals(cursorStr)) {
                     // Initial cursor
-                    clusterCursor = ClusterScanCursor.initalCursor();
+                    clusterCursor = ClusterScanCursor.initialCursor();
                     result = glideClusterClient.scan(clusterCursor).get();
                     ClusterScanCursor nextCursor = (ClusterScanCursor) result[0];
                     String[] keys = (String[]) result[1];
@@ -4644,7 +4644,7 @@ public class UnifiedJedis implements Closeable {
                 ClusterScanCursor clusterCursor;
                 if ("0".equals(cursorStr)) {
                     // Initial cursor
-                    clusterCursor = ClusterScanCursor.initalCursor();
+                    clusterCursor = ClusterScanCursor.initialCursor();
                     result = glideClusterClient.scan(clusterCursor, options).get();
                     ClusterScanCursor nextCursor = (ClusterScanCursor) result[0];
                     String[] keys = (String[]) result[1];

@@ -2,6 +2,7 @@
 
 use glide_core::client::FINISHED_SCAN_CURSOR;
 use glide_core::errors::error_message;
+use glide_core::request_type::RequestType;
 
 // Protocol constants for Java (defined directly since we don't use socket layer)
 const TYPE_HASH: &str = "hash";
@@ -146,8 +147,8 @@ fn resp_value_to_java<'local>(
             }
         }
         Value::BigNumber(num) => {
-            // Convert Redis BigNumber to Java BigInteger
-            // BigNumbers in Redis are represented as strings
+            // Convert Valkey BigNumber to Java BigInteger
+            // BigNumbers in Valkey are represented as strings
             let big_int_str = num.to_string();
             let java_string = env.new_string(big_int_str)?;
             Ok(env.new_object(
@@ -172,7 +173,7 @@ fn resp_value_to_java<'local>(
             Ok(set)
         }
         Value::Attribute { data, attributes } => {
-            // Convert Redis Attribute to Java Map<String, Object>
+            // Convert Valkey Attribute to Java Map<String, Object>
             // Create a HashMap with both data and attributes
             let hash_map = env.new_object("java/util/HashMap", "()V", &[])?;
             
@@ -278,13 +279,13 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlideValueResolver_getMaxRequest
     MAX_REQUEST_ARGS_LENGTH_IN_BYTES as jlong
 }
 
-/// Convert a Redis Value pointer to a Java object with UTF-8 string encoding.
+/// Convert a Valkey Value pointer to a Java object with UTF-8 string encoding.
 ///
 /// This function is meant to be invoked by Java using JNI.
 ///
 /// * `env`     - The JNI environment.
 /// * `_class`  - The class object. Not used.
-/// * `pointer` - A pointer to a Redis Value object.
+/// * `pointer` - A pointer to a Valkey Value object.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_glide_ffi_resolvers_GlideValueResolver_valueFromPointer<'local>(
     mut env: JNIEnv<'local>,
@@ -338,7 +339,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlideValueResolver_valueFromPoin
 ///
 /// * `env`     - The JNI environment.
 /// * `_class`  - The class object. Not used.
-/// * `pointer` - A pointer to a Redis Value object.
+/// * `pointer` - A pointer to a Valkey Value object.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_glide_ffi_resolvers_GlideValueResolver_valueFromPointerBinary<'local>(
     mut env: JNIEnv<'local>,
@@ -1789,40 +1790,253 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_updateConnectionPas
     .unwrap_or(())
 }
 
-/// Execute cluster scan command asynchronously
+
+/// Helper function to create a Redis command from RequestType and arguments
+fn create_command_from_request_type(request_type: RequestType, args: Vec<String>) -> redis::Cmd {
+    let mut cmd = redis::Cmd::new();
+    
+    // Convert RequestType to command name
+    let command_name = match request_type {
+        RequestType::ScriptShow => "SCRIPT",
+        RequestType::ScriptExists => "SCRIPT",
+        RequestType::ScriptFlush => "SCRIPT", 
+        RequestType::ScriptKill => "SCRIPT",
+        _ => panic!("Unsupported request type for script management: {:?}", request_type),
+    };
+    
+    cmd.arg(command_name);
+    
+    // Add subcommand based on request type
+    match request_type {
+        RequestType::ScriptShow => {
+            cmd.arg("SHOW");
+            for arg in args {
+                cmd.arg(arg);
+            }
+        },
+        RequestType::ScriptExists => {
+            cmd.arg("EXISTS");
+            for arg in args {
+                cmd.arg(arg);
+            }
+        },
+        RequestType::ScriptFlush => {
+            cmd.arg("FLUSH");
+            for arg in args {
+                cmd.arg(arg);
+            }
+        },
+        RequestType::ScriptKill => {
+            cmd.arg("KILL");
+        },
+        _ => {},
+    }
+    
+    cmd
+}
+
+/// JNI bridge for script management commands using protobuf approach 
+/// This reuses the UDS/socket_listener logic for proper script management commands
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeClusterScanAsync(
-    env: JNIEnv,
+pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptManagementAsync(
+    mut env: JNIEnv,
     _class: JClass,
     client_ptr: jlong,
-    scan_request_bytes: JByteArray,
+    callback_id: jlong,
+    request_type: jint,
+    args: jni::objects::JObjectArray,
+    has_route: jni::sys::jboolean,
+    route_type: jint,
+    route_param: JString,
+) {
+    handle_panics(
+        move || {
+            let jvm = match env.get_java_vm() {
+                Ok(jvm) => Arc::new(jvm),
+                Err(_) => {
+                    log::error!("JVM error in executeCommandAsync");
+                    return Some(());
+                }
+            };
+
+            // Convert Java request_type integer to RequestType enum
+            // Use the protobuf enum conversion
+            use protobuf::EnumOrUnknown;
+            
+            let proto_request_type = EnumOrUnknown::from_i32(request_type);
+            let request_type_enum: RequestType = proto_request_type.into();
+            
+            // Validate it's a supported script management type
+            match request_type_enum {
+                RequestType::ScriptShow | RequestType::ScriptExists | 
+                RequestType::ScriptFlush | RequestType::ScriptKill => {
+                    // Valid script management command
+                }
+                _ => {
+                    log::error!("Invalid script management request type: {:?}", request_type_enum);
+                    complete_callback(jvm, callback_id, Err(anyhow::anyhow!("Invalid script management request type")), false);
+                    return Some(());
+                }
+            }
+
+            // Convert Java string array to Vec<String>
+            let args_len = match env.get_array_length(&args) {
+                Ok(len) => len,
+                Err(e) => {
+                    log::error!("Failed to get args array length: {e}");
+                    complete_callback(jvm, callback_id, Err(anyhow::anyhow!("Failed to get args length: {e}")), false);
+                    return Some(());
+                }
+            };
+
+            let mut args_vec: Vec<String> = Vec::new();
+            for i in 0..args_len {
+                let arg_obj = match env.get_object_array_element(&args, i) {
+                    Ok(obj) => obj,
+                    Err(e) => {
+                        log::error!("Failed to get arg {i}: {e}");
+                        complete_callback(jvm, callback_id, Err(anyhow::anyhow!("Failed to get arg {i}: {e}")), false);
+                        return Some(());
+                    }
+                };
+                
+                match env.get_string(&arg_obj.into()) {
+                    Ok(jstr) => {
+                        args_vec.push(jstr.to_string_lossy().to_string());
+                    }
+                    Err(e) => {
+                        log::error!("Failed to convert arg {i} to string: {e}");
+                        complete_callback(jvm, callback_id, Err(anyhow::anyhow!("Failed to convert arg {i}: {e}")), false);
+                        return Some(());
+                    }
+                }
+            }
+
+            let client_handle_id = client_ptr as u64;
+            log::debug!("Executing script management command with request type {:?} and {} args", request_type_enum, args_len);
+
+            // Parse routing information if provided  
+            let routing_info = if has_route != 0 {
+                // Parse route_param if present
+                let route_param_str = if !route_param.is_null() {
+                    match env.get_string(&route_param) {
+                        Ok(s) => Some(s.to_string_lossy().to_string()),
+                        Err(e) => {
+                            log::error!("Failed to parse route param: {e}");
+                            None
+                        }
+                    }
+                } else {
+                    None
+                };
+                
+                // Create Routes protobuf based on route_type
+                use glide_core::command_request::{SimpleRoutes, SlotKeyRoute, SlotIdRoute, ByAddressRoute};
+                let mut routes = Routes::default();
+                match route_type {
+                    0 => routes.set_simple_routes(SimpleRoutes::AllNodes),
+                    1 => routes.set_simple_routes(SimpleRoutes::AllPrimaries),
+                    2 => routes.set_simple_routes(SimpleRoutes::Random),
+                    3 => {
+                        // SlotKeyRoute - parse key from route_param
+                        if let Some(key) = route_param_str {
+                            let mut slot_key_route = SlotKeyRoute::default();
+                            slot_key_route.slot_type = glide_core::command_request::SlotTypes::Primary.into();
+                            slot_key_route.slot_key = key.into();
+                            routes.set_slot_key_route(slot_key_route);
+                        }
+                    },
+                    4 => {
+                        // SlotIdRoute - parse slot id from route_param
+                        if let Some(slot_str) = route_param_str {
+                            if let Ok(slot_id) = slot_str.parse::<i32>() {
+                                let mut slot_id_route = SlotIdRoute::default();
+                                slot_id_route.slot_type = glide_core::command_request::SlotTypes::Primary.into();
+                                slot_id_route.slot_id = slot_id;
+                                routes.set_slot_id_route(slot_id_route);
+                            }
+                        }
+                    },
+                    5 => {
+                        // ByAddressRoute - parse host:port from route_param
+                        if let Some(addr) = route_param_str {
+                            if let Some(colon_pos) = addr.find(':') {
+                                let host = addr[..colon_pos].to_string();
+                                let port_str = &addr[colon_pos + 1..];
+                                if let Ok(port) = port_str.parse::<i32>() {
+                                    let mut by_addr_route = ByAddressRoute::default();
+                                    by_addr_route.host = host.into();
+                                    by_addr_route.port = port;
+                                    routes.set_by_address_route(by_addr_route);
+                                }
+                            }
+                        }
+                    },
+                    _ => {}
+                };
+                
+                Some(routes)
+            } else {
+                None
+            };
+
+            // Spawn async task for regular command execution
+            let runtime = get_runtime();
+            runtime.spawn(async move {
+                // For script management commands, we need to execute them as regular commands
+                // through the existing client infrastructure
+                let client_result = ensure_client_for_handle(client_handle_id).await;
+                let result = match client_result {
+                    Ok(mut client) => {
+                        // Create a redis command for script management
+                        let cmd = create_command_from_request_type(request_type_enum, args_vec);
+                        
+                        // Create routing if specified
+                        let routing = if let Some(routes) = routing_info {
+                            match protobuf_bridge::create_routing_info(routes, Some(&cmd)) {
+                                Ok(r) => r,
+                                Err(e) => {
+                                    log::error!("Failed to create routing info: {e}");
+                                    None
+                                }
+                            }
+                        } else {
+                            None
+                        };
+                        
+                        client.send_command(&cmd, routing).await
+                            .map_err(|e| anyhow::anyhow!("Script management command failed: {e}"))
+                    }
+                    Err(err) => {
+                        Err(anyhow::anyhow!("Client not found: {err}"))
+                    }
+                };
+                
+                complete_callback(jvm, callback_id, result, false);
+            });
+            
+            Some(())
+        },
+        "executeScriptManagementAsync",
+    )
+    .unwrap_or(())
+}
+
+/// JNI bridge for cluster scan that properly manages cursor lifecycle
+/// This reuses the existing cluster scan logic from glide-core
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeClusterScanAsync(
+    mut env: JNIEnv,
+    _class: JClass,
+    client_ptr: jlong,
+    cursor_id: JString,
+    match_pattern: JString,
+    count: jlong,
+    object_type: JString,
     callback_id: jlong,
 ) {
     handle_panics(
         move || {
-            let raw_bytes = match env.convert_byte_array(&scan_request_bytes) {
-                Ok(b) => b,
-                Err(e) => {
-                    log::error!("Failed to read cluster scan bytes: {e}");
-                    return Some(());
-                }
-            };
-            
-            if raw_bytes.is_empty() {
-                log::error!("Empty cluster scan request bytes");
-                return Some(());
-            }
-
-            // Parse protobuf CommandRequest for cluster scan using existing bridge logic
-            let command_request = match protobuf_bridge::parse_command_request(&raw_bytes) {
-                Ok(r) => r,
-                Err(e) => {
-                    log::error!("Failed to parse cluster scan protobuf request: {e}");
-                    return Some(());
-                }
-            };
-
-            let handle_id = client_ptr as u64;
             let jvm = match env.get_java_vm() {
                 Ok(jvm) => Arc::new(jvm),
                 Err(_) => {
@@ -1831,41 +2045,87 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeClusterScanA
                 }
             };
 
-            log::debug!("Executing cluster scan async with {} bytes", raw_bytes.len());
+            // Extract cursor ID
+            let cursor_str = match env.get_string(&cursor_id) {
+                Ok(s) => s.to_string_lossy().to_string(),
+                Err(e) => {
+                    log::error!("Failed to read cursor ID: {e}");
+                    complete_callback(jvm, callback_id, Err(anyhow::anyhow!("Failed to read cursor ID: {e}")), false);
+                    return Some(());
+                }
+            };
 
-            // Spawn async task with actual cluster scan execution
+            // Extract optional match pattern
+            let pattern = if match_pattern.is_null() {
+                None
+            } else {
+                match env.get_string(&match_pattern) {
+                    Ok(s) => Some(s.to_string_lossy().to_string()),
+                    Err(e) => {
+                        log::error!("Failed to read match pattern: {e}");
+                        complete_callback(jvm, callback_id, Err(anyhow::anyhow!("Failed to read match pattern: {e}")), false);
+                        return Some(());
+                    }
+                }
+            };
+
+            // Extract optional object type
+            let obj_type = if object_type.is_null() {
+                None  
+            } else {
+                match env.get_string(&object_type) {
+                    Ok(s) => Some(s.to_string_lossy().to_string()),
+                    Err(e) => {
+                        log::error!("Failed to read object type: {e}");
+                        complete_callback(jvm, callback_id, Err(anyhow::anyhow!("Failed to read object type: {e}")), false);
+                        return Some(());
+                    }
+                }
+            };
+
+            let client_handle_id = client_ptr as u64;
+            let count_value = if count > 0 { Some(count as u32) } else { None };
+
+            log::debug!("Executing cluster scan with cursor '{}', pattern: {:?}, count: {:?}, type: {:?}", 
+                       cursor_str, pattern, count_value, obj_type);
+
+            // Spawn async task for cluster scan execution
             let runtime = get_runtime();
             runtime.spawn(async move {
-                let client_result = ensure_client_for_handle(handle_id).await;
+                let client_result = ensure_client_for_handle(client_handle_id).await;
                 match client_result {
                     Ok(mut client) => {
-                        // Execute cluster scan using existing FFI methodology
-                        let result = match &command_request.command {
-                            Some(command_request::Command::SingleCommand(command)) => {
-                                match protobuf_bridge::create_redis_command(command) {
-                                    Ok(cmd) => {
-                                        // Execute command using FFI approach with routing
-                                        let route_box = command_request.route.0;
-                                        let routing = if let Some(route_box) = route_box {
-                                            match protobuf_bridge::create_routing_info(*route_box, Some(&cmd)) {
-                                                Ok(r) => r,
-                                                Err(e) => {
-                                                    log::error!("Cluster scan routing error: {e}");
-                                                    None
-                                                }
-                                            }
-                                        } else {
-                                            None
-                                        };
-                                        
-                                        client.send_command(&cmd, routing).await
-                                            .map_err(|e| anyhow::anyhow!("Cluster scan execution failed: {e}"))
-                                    }
-                                    Err(e) => Err(anyhow::anyhow!("Failed to create cluster scan command: {e}"))
+                        // Get or create scan state cursor - using redis compatible types for now
+                        let scan_state_cursor = if cursor_str.is_empty() || cursor_str == "0" {
+                            // Create new initial cursor
+                            redis::ScanStateRC::new()
+                        } else {
+                            // Get existing cursor from container
+                            match glide_core::cluster_scan_container::get_cluster_scan_cursor(cursor_str) {
+                                Ok(cursor) => cursor,
+                                Err(e) => {
+                                    complete_callback(jvm, callback_id, Err(anyhow::anyhow!("Invalid cursor: {e}")), false);
+                                    return;
                                 }
                             }
-                            _ => Err(anyhow::anyhow!("Cluster scan execution only supports single commands"))
                         };
+
+                        // Build cluster scan args
+                        let mut scan_args_builder = redis::ClusterScanArgs::builder();
+                        if let Some(pattern) = pattern {
+                            scan_args_builder = scan_args_builder.with_match_pattern::<bytes::Bytes>(pattern.into());
+                        }
+                        if let Some(count) = count_value {
+                            scan_args_builder = scan_args_builder.with_count(count);
+                        }
+                        if let Some(obj_type) = obj_type {
+                            scan_args_builder = scan_args_builder.with_object_type(obj_type.into());
+                        }
+                        let scan_args = scan_args_builder.build();
+
+                        // Execute cluster scan
+                        let result = client.cluster_scan(&scan_state_cursor, scan_args).await
+                            .map_err(|e| anyhow::anyhow!("Cluster scan execution failed: {e}"));
 
                         complete_callback(jvm, callback_id, result, false);
                     }

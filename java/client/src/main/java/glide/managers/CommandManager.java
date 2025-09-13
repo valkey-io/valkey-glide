@@ -63,6 +63,13 @@ public class CommandManager {
          * @return the handle String representing the cursor.
          */
         String getCursorHandle();
+
+        /**
+         * Returns the cursor ID for the fixed JNI bridge.
+         *
+         * @return the cursor ID string.
+         */
+        String getCursorId();
     }
 
     /** Build a command and send via JNI. */
@@ -143,6 +150,29 @@ public class CommandManager {
                 command, responseHandler, true); // Script with GlideString -> binary mode
     }
 
+    /** Build a script management command and send via script management JNI bridge. */
+    public <T> CompletableFuture<T> submitScriptManagementCommand(
+            RequestType requestType,
+            String[] arguments,
+            GlideExceptionCheckedFunction<Response, T> responseHandler) {
+
+        return submitScriptManagementToJni(requestType, arguments, responseHandler);
+    }
+
+    /** Build a script management command and send via script management JNI bridge. */
+    public <T> CompletableFuture<T> submitScriptManagementCommand(
+            RequestType requestType,
+            GlideString[] arguments,
+            GlideExceptionCheckedFunction<Response, T> responseHandler) {
+
+        // Convert GlideString[] to String[] for the JNI bridge
+        String[] stringArgs = new String[arguments.length];
+        for (int i = 0; i < arguments.length; i++) {
+            stringArgs[i] = arguments[i].toString();
+        }
+        return submitScriptManagementToJni(requestType, stringArgs, responseHandler);
+    }
+
     /** Build a Cluster Batch and send via JNI. */
     public <T> CompletableFuture<T> submitNewBatch(
             ClusterBatch batch,
@@ -159,8 +189,7 @@ public class CommandManager {
             @NonNull ScanOptions options,
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
 
-        final CommandRequest.Builder command = prepareCursorRequest(cursor, options);
-        return submitClusterScanToJni(command, responseHandler);
+        return submitClusterScanToJni(cursor, options, responseHandler);
     }
 
     /** Submit a password update request to GLIDE core via JNI. */
@@ -263,9 +292,11 @@ public class CommandManager {
         }
     }
 
-    /** Submit cluster scan request via JNI. */
+    /** Submit cluster scan request via enhanced JNI bridge. */
     protected <T> CompletableFuture<T> submitClusterScanToJni(
-            CommandRequest.Builder command, GlideExceptionCheckedFunction<Response, T> responseHandler) {
+            ClusterScanCursor cursor,
+            @NonNull ScanOptions options,
+            GlideExceptionCheckedFunction<Response, T> responseHandler) {
 
         if (!coreClient.isConnected()) {
             var errorFuture = new CompletableFuture<T>();
@@ -275,14 +306,87 @@ public class CommandManager {
         }
 
         try {
-            // Serialize the protobuf cluster scan request
-            byte[] requestBytes = command.build().toByteArray();
+            // Extract cursor information
+            String cursorId = getCursorId(cursor);
+            String matchPattern =
+                    options.getMatchPattern() != null ? options.getMatchPattern().toString() : null;
+            Long count = options.getCount() != null ? options.getCount() : null;
+            String objectType = null; // ObjectType is not available in current ScanOptions API
 
-            // Execute via JNI and convert response
+            // Execute via enhanced cluster scan JNI bridge
             return coreClient
-                    .executeClusterScanAsync(requestBytes)
-                    .thenApply(result -> convertJniToProtobufResponse(result))
-                    .thenApply(responseHandler::apply)
+                    .executeClusterScanAsync(cursorId, matchPattern, count != null ? count : 0L, objectType)
+                    .thenApply(
+                            result -> {
+                                // Create a minimal Response for compatibility with the handler
+                                Response.Builder builder = Response.newBuilder();
+                                if (result == null) {
+                                    builder.setRespPointer(0L);
+                                } else {
+                                    // Store the object temporarily and pass its ID
+                                    long objectId = JniResponseRegistry.storeObject(result);
+                                    builder.setRespPointer(objectId);
+                                }
+                                return responseHandler.apply(builder.build());
+                            })
+                    .exceptionally(this::exceptionHandler);
+        } catch (Exception e) {
+            var errorFuture = new CompletableFuture<T>();
+            errorFuture.completeExceptionally(e);
+            return errorFuture;
+        }
+    }
+
+    /** Extract cursor ID from ClusterScanCursor. */
+    private String getCursorId(ClusterScanCursor cursor) {
+        if (cursor instanceof ClusterScanCursorDetail) {
+            return ((ClusterScanCursorDetail) cursor).getCursorId();
+        }
+
+        // For initial cursor, return null/empty to indicate start
+        if (!cursor.isFinished()) {
+            return null; // Initial cursor
+        }
+
+        // This shouldn't happen if isFinished() is true
+        return null;
+    }
+
+    /** Submit script management command via script management JNI bridge. */
+    protected <T> CompletableFuture<T> submitScriptManagementToJni(
+            RequestType requestType,
+            String[] arguments,
+            GlideExceptionCheckedFunction<Response, T> responseHandler) {
+
+        if (!coreClient.isConnected()) {
+            var errorFuture = new CompletableFuture<T>();
+            errorFuture.completeExceptionally(
+                    new ClosingException("Client closed: Unable to submit script management command."));
+            return errorFuture;
+        }
+
+        try {
+            // Convert RequestType to int for JNI bridge
+            int requestTypeInt = requestType.getNumber();
+
+            // Execute via script management JNI bridge
+            return coreClient
+                    .executeScriptManagementAsync(requestTypeInt, arguments, false, 0, null)
+                    .thenApply(
+                            result -> {
+                                // Create a minimal Response for compatibility with the handler
+                                Response.Builder builder = Response.newBuilder();
+                                if (result == null) {
+                                    builder.setRespPointer(0L);
+                                } else if ("OK".equals(result)) {
+                                    builder.setConstantResponse(ConstantResponse.OK);
+                                } else {
+                                    // Store the object temporarily and pass its ID
+                                    long objectId = JniResponseRegistry.storeObject(result);
+                                    builder.setRespPointer(objectId);
+                                }
+                                return responseHandler.apply(builder.build());
+                            })
                     .exceptionally(this::exceptionHandler);
         } catch (Exception e) {
             var errorFuture = new CompletableFuture<T>();

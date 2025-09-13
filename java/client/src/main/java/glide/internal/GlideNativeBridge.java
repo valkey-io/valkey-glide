@@ -69,10 +69,6 @@ public class GlideNativeBridge {
     /** Close and release a native client */
     public static native void closeClient(long clientPtr);
 
-    /** Execute cluster scan command asynchronously */
-    public static native void executeClusterScanAsync(
-            long clientPtr, byte[] requestBytes, long callbackId);
-
     /** Execute script asynchronously using glide-core's invoke_script */
     public static native void executeScriptAsync(
             long clientPtr,
@@ -89,4 +85,23 @@ public class GlideNativeBridge {
 
     /** Get glide-core default maximum inflight requests limit */
     public static native int getGlideCoreDefaultMaxInflightRequests();
+
+    /** Execute script management commands asynchronously using direct command path */
+    public static native void executeScriptManagementAsync(
+            long clientPtr,
+            long callbackId,
+            int requestType,
+            String[] args,
+            boolean hasRoute,
+            int routeType,
+            String routeParam);
+
+    /** Execute cluster scan command asynchronously */
+    public static native void executeClusterScanAsync(
+            long clientPtr,
+            String cursorId,
+            String matchPattern,
+            long count,
+            String objectType,
+            long callbackId);
 }

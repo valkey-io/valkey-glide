@@ -1390,6 +1390,11 @@ public class GlideClusterClient extends BaseClient
         }
 
         @Override
+        public String getCursorId() {
+            return cursorHandle;
+        }
+
+        @Override
         public boolean isFinished() {
             return isFinished;
         }

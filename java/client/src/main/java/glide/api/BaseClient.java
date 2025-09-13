@@ -121,6 +121,9 @@ import static command_request.CommandRequestOuterClass.RequestType.SRem;
 import static command_request.CommandRequestOuterClass.RequestType.SScan;
 import static command_request.CommandRequestOuterClass.RequestType.SUnion;
 import static command_request.CommandRequestOuterClass.RequestType.SUnionStore;
+import static command_request.CommandRequestOuterClass.RequestType.ScriptExists;
+import static command_request.CommandRequestOuterClass.RequestType.ScriptFlush;
+import static command_request.CommandRequestOuterClass.RequestType.ScriptKill;
 import static command_request.CommandRequestOuterClass.RequestType.ScriptShow;
 import static command_request.CommandRequestOuterClass.RequestType.Set;
 import static command_request.CommandRequestOuterClass.RequestType.SetBit;
@@ -227,6 +230,7 @@ import glide.api.models.GlideString;
 import glide.api.models.PubSubMessage;
 import glide.api.models.Script;
 import glide.api.models.commands.ExpireOptions;
+import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.GetExOptions;
 import glide.api.models.commands.HGetExOptions;
 import glide.api.models.commands.HSetExOptions;
@@ -2397,14 +2401,39 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<String> scriptShow(@NonNull String sha1) {
-        return commandManager.submitNewCommand(
+        return commandManager.submitScriptManagementCommand(
                 ScriptShow, new String[] {sha1}, this::handleStringResponse);
     }
 
     @Override
     public CompletableFuture<GlideString> scriptShow(@NonNull GlideString sha1) {
-        return commandManager.submitNewCommand(
+        return commandManager.submitScriptManagementCommand(
                 ScriptShow, new GlideString[] {sha1}, this::handleGlideStringResponse);
+    }
+
+    public CompletableFuture<Boolean[]> scriptExists(@NonNull String[] sha1s) {
+        return commandManager.submitScriptManagementCommand(
+                ScriptExists, sha1s, response -> castArray(handleArrayResponse(response), Boolean.class));
+    }
+
+    public CompletableFuture<Boolean[]> scriptExists(@NonNull GlideString[] sha1s) {
+        return commandManager.submitScriptManagementCommand(
+                ScriptExists, sha1s, response -> castArray(handleArrayResponse(response), Boolean.class));
+    }
+
+    public CompletableFuture<String> scriptFlush() {
+        return commandManager.submitScriptManagementCommand(
+                ScriptFlush, new String[0], this::handleStringResponse);
+    }
+
+    public CompletableFuture<String> scriptFlush(@NonNull FlushMode flushMode) {
+        return commandManager.submitScriptManagementCommand(
+                ScriptFlush, new String[] {flushMode.toString()}, this::handleStringResponse);
+    }
+
+    public CompletableFuture<String> scriptKill() {
+        return commandManager.submitScriptManagementCommand(
+                ScriptKill, new String[0], this::handleStringResponse);
     }
 
     @Override

@@ -3291,7 +3291,7 @@ public class GlideClusterClientTest {
                 .thenReturn(testResponse);
 
         final CompletableFuture<Object[]> actualResponse =
-                service.scan(ClusterScanCursor.initalCursor());
+                service.scan(ClusterScanCursor.initialCursor());
         assertEquals(
                 mockCursor.getCursorHandle(),
                 ((CommandManager.ClusterScanCursorDetail) actualResponse.get()[0]).getCursorHandle());
@@ -3368,7 +3368,7 @@ public class GlideClusterClientTest {
 
         final CompletableFuture<Object[]> actualResponse =
                 service.scan(
-                        ClusterScanCursor.initalCursor(),
+                        ClusterScanCursor.initialCursor(),
                         ScanOptions.builder()
                                 .matchPattern("key:*")
                                 .count(10L)
