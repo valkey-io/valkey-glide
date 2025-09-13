@@ -986,7 +986,11 @@ public class GlideCoreClient implements AutoCloseable {
                 clusterMode,
                 requestTimeoutMs,
                 connectionTimeoutMs,
-                maxInflightRequests);
+                maxInflightRequests,
+                "PRIMARY", // default read from
+                null, // no client AZ
+                false, // not lazy connect
+                null); // no client name
     }
 
     /** Check if the native client is connected */

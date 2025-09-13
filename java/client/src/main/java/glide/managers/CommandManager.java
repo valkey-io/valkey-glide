@@ -31,6 +31,9 @@ import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.RequestException;
 import glide.ffi.resolvers.OpenTelemetryResolver;
 import glide.internal.GlideCoreClient;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
@@ -38,6 +41,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
+import response.ResponseOuterClass.ConstantResponse;
 import response.ResponseOuterClass.Response;
 
 /**
@@ -172,8 +176,7 @@ public class CommandManager {
                             // Convert JNI result to protobuf Response format
                             Response.Builder responseBuilder = Response.newBuilder();
                             if ("OK".equals(result)) {
-                                responseBuilder.setConstantResponse(
-                                        response.ResponseOuterClass.ConstantResponse.OK);
+                                responseBuilder.setConstantResponse(ConstantResponse.OK);
                             }
                             return responseHandler.apply(responseBuilder.build());
                         });
@@ -215,7 +218,7 @@ public class CommandManager {
                                     builder.setRespPointer(0L);
                                 } else if ("OK".equals(result)) {
                                     // OK constant response
-                                    builder.setConstantResponse(response.ResponseOuterClass.ConstantResponse.OK);
+                                    builder.setConstantResponse(ConstantResponse.OK);
                                 } else {
                                     // Store the object temporarily and pass its ID
                                     // This allows BaseResponseResolver to retrieve it
@@ -296,14 +299,24 @@ public class CommandManager {
         Response.Builder builder = Response.newBuilder();
 
         if (jniResult == null) {
-            builder.setConstantResponse(response.ResponseOuterClass.ConstantResponse.OK);
+            // Null response - set pointer to 0
+            builder.setRespPointer(0L);
+        } else if ("OK".equals(jniResult)) {
+            // OK constant response
+            builder.setConstantResponse(ConstantResponse.OK);
+        } else if (jniResult instanceof ByteBuffer) {
+            // DirectByteBuffer from JNI containing serialized array for large responses
+            // Deserialize it back to Object[] for batch responses
+            ByteBuffer buffer = (ByteBuffer) jniResult;
+            Object[] deserializedArray = deserializeByteBufferArray(buffer);
+            // Store the deserialized array
+            long objectId = JniResponseRegistry.storeObject(deserializedArray);
+            builder.setRespPointer(objectId);
         } else {
-            // For now, create a simple pointer-based response
-            // In a full implementation, this would properly convert Java objects to protobuf
-
-            // Create a leaked pointer to the result for the existing response handling system
-            long pointer = System.identityHashCode(jniResult); // Temporary approach
-            builder.setRespPointer(pointer);
+            // Store the object in the registry and get its ID
+            // This allows BaseResponseResolver to retrieve it correctly
+            long objectId = JniResponseRegistry.storeObject(jniResult);
+            builder.setRespPointer(objectId);
         }
 
         return builder.build();
@@ -321,7 +334,14 @@ public class CommandManager {
             builder.setRespPointer(0L);
         } else if ("OK".equals(jniResult)) {
             // OK constant response
-            builder.setConstantResponse(response.ResponseOuterClass.ConstantResponse.OK);
+            builder.setConstantResponse(ConstantResponse.OK);
+        } else if (jniResult instanceof ByteBuffer) {
+            // DirectByteBuffer from JNI containing serialized array for large responses
+            ByteBuffer buffer = (ByteBuffer) jniResult;
+            Object[] deserializedArray = deserializeByteBufferArray(buffer);
+            // Store the deserialized array
+            long objectId = JniResponseRegistry.storeObject(deserializedArray);
+            builder.setRespPointer(objectId);
         } else {
             // Store the Java object and get an ID for it
             // This ID will be used to retrieve the object in valueFromPointer
@@ -330,6 +350,70 @@ public class CommandManager {
         }
 
         return builder.build();
+    }
+
+    /**
+     * Deserialize a ByteBuffer containing a serialized array back to Object[]. This handles
+     * DirectByteBuffer responses for large data (>16KB). Format uses Redis-like protocol: '*' +
+     * array_len(4 bytes BE) + elements Each element: type_marker + data
+     */
+    private Object[] deserializeByteBufferArray(ByteBuffer buffer) {
+        buffer.order(ByteOrder.BIG_ENDIAN); // Rust uses big-endian
+        buffer.rewind();
+
+        // Read array marker ('*')
+        byte marker = buffer.get();
+        if (marker != '*') {
+            throw new IllegalArgumentException("Expected array marker '*', got: " + (char) marker);
+        }
+
+        // Read array element count (4 bytes, big-endian)
+        int count = buffer.getInt();
+        Object[] result = new Object[count];
+
+        for (int i = 0; i < count; i++) {
+            // Read element type marker
+            byte typeMarker = buffer.get();
+
+            switch (typeMarker) {
+                case '$': // Bulk string
+                    int bulkLen = buffer.getInt();
+                    if (bulkLen == -1) {
+                        result[i] = null;
+                    } else {
+                        byte[] data = new byte[bulkLen];
+                        buffer.get(data);
+                        // Return as string for normal responses
+                        result[i] = new String(data, StandardCharsets.UTF_8);
+                    }
+                    break;
+
+                case '+': // Simple string (includes "OK")
+                    int simpleLen = buffer.getInt();
+                    byte[] simpleData = new byte[simpleLen];
+                    buffer.get(simpleData);
+                    // Rust side normalizes "OK" to uppercase for compatibility
+                    result[i] = new String(simpleData, StandardCharsets.UTF_8);
+                    break;
+
+                case ':': // Integer
+                    long intValue = buffer.getLong();
+                    result[i] = intValue;
+                    break;
+
+                case '#': // Complex type (serialized as string)
+                    int complexLen = buffer.getInt();
+                    byte[] complexData = new byte[complexLen];
+                    buffer.get(complexData);
+                    result[i] = new String(complexData, StandardCharsets.UTF_8);
+                    break;
+
+                default:
+                    throw new IllegalArgumentException("Unknown type marker: " + (char) typeMarker);
+            }
+        }
+
+        return result;
     }
 
     /** Exception handler for future pipeline. */

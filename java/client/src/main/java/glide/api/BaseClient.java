@@ -281,9 +281,9 @@ import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions;
 import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.configuration.BaseSubscriptionConfiguration;
+import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.ConfigurationError;
 import glide.api.models.exceptions.GlideException;
-import glide.connectors.handlers.MessageHandler;
 import glide.ffi.resolvers.GlideValueResolver;
 import glide.ffi.resolvers.NativeUtils;
 import glide.ffi.resolvers.StatisticsResolver;
@@ -360,9 +360,6 @@ public abstract class BaseClient
     // Command manager for handling command submissions
     protected final CommandManager commandManager;
 
-    // Message handler for PubSub (placeholder - will be implemented later)
-    private final MessageHandler messageHandler;
-
     // Native library loading
     static {
         try {
@@ -411,18 +408,7 @@ public abstract class BaseClient
         GlideCoreClient coreClient = new GlideCoreClient(nativeHandle, maxInflight, requestTimeout);
         this.commandManager = new CommandManager(coreClient);
 
-        // Initialize message handler (placeholder for now)
-        this.messageHandler = buildMessageHandler(subscription);
-    }
-
-    /** Build message handler for PubSub functionality. */
-    private static MessageHandler buildMessageHandler(
-            Optional<BaseSubscriptionConfiguration> subscription) {
-        if (subscription.isEmpty() || subscription.get() == null) {
-            return new MessageHandler(Optional.empty(), Optional.empty(), binaryResponseResolver);
-        }
-        return new MessageHandler(
-                subscription.get().getCallback(), subscription.get().getContext(), binaryResponseResolver);
+        // PubSub functionality will be handled via JNI callbacks in the future
     }
 
     /**
@@ -480,18 +466,23 @@ public abstract class BaseClient
                                         isCluster,
                                         config.getRequestTimeout() != null ? config.getRequestTimeout() : 5000,
                                         getConnectionTimeoutFromConfig(config),
-                                        0 // max inflight - use default
-                                        );
+                                        0, // max inflight - use default
+                                        config.getReadFrom() != null ? config.getReadFrom().name() : "PRIMARY",
+                                        config.getClientAZ(),
+                                        config.isLazyConnect(),
+                                        config.getClientName());
 
                         if (handle == 0) {
-                            throw new RuntimeException("Failed to create client - connection refused");
+                            throw new ClosingException("Failed to create client - connection refused");
                         }
 
                         // Create the client instance
                         return constructor.apply(
                                 new ClientParams(
                                         handle,
-                                        0, // max inflight - use default
+                                        config.getInflightRequestsLimit() != null
+                                                ? config.getInflightRequestsLimit()
+                                                : 0,
                                         config.getRequestTimeout() != null ? config.getRequestTimeout() : 5000,
                                         Optional.ofNullable(config.getSubscriptionConfiguration())));
 
@@ -563,7 +554,9 @@ public abstract class BaseClient
                     "The operation will never complete since messages will be passed to the configured"
                             + " callback.");
         }
-        return messageHandler.getQueue().popSync();
+        // TODO: Implement PubSub queue handling via JNI
+        throw new UnsupportedOperationException(
+                "PubSub message retrieval not yet implemented in JNI mode");
     }
 
     /**
@@ -585,7 +578,10 @@ public abstract class BaseClient
                     "The operation will never complete since messages will be passed to the configured"
                             + " callback.");
         }
-        return messageHandler.getQueue().popAsync();
+        // TODO: Implement PubSub queue handling via JNI
+        return CompletableFuture.failedFuture(
+                new UnsupportedOperationException(
+                        "PubSub message retrieval not yet implemented in JNI mode"));
     }
 
     /**
@@ -679,6 +675,9 @@ public abstract class BaseClient
                 value = GlideString.of(bytes);
             } else if (classType == byte[].class) {
                 value = bytes;
+            } else if (classType == Map.class) {
+                // Deserialize Map from DirectByteBuffer
+                value = deserializeMapFromBytes(bytes, encodingUtf8);
             }
         }
 
@@ -5213,6 +5212,54 @@ public abstract class BaseClient
         return o;
     }
 
+    /**
+     * Deserialize a Map from bytes received via DirectByteBuffer. Binary format:
+     * [entry_count(4)][key1_len(4)][key1][val1_len(4)][val1]...
+     */
+    private Map<?, ?> deserializeMapFromBytes(byte[] bytes, boolean encodingUtf8) {
+        if (bytes == null || bytes.length < 4) {
+            return new LinkedHashMap<>();
+        }
+
+        java.nio.ByteBuffer buffer = java.nio.ByteBuffer.wrap(bytes);
+        Map<Object, Object> map = new LinkedHashMap<>();
+
+        try {
+            int entryCount = buffer.getInt();
+            for (int i = 0; i < entryCount; i++) {
+                // Read key
+                int keyLen = buffer.getInt();
+                byte[] keyBytes = new byte[keyLen];
+                buffer.get(keyBytes);
+                Object key =
+                        encodingUtf8
+                                ? new String(keyBytes, java.nio.charset.StandardCharsets.UTF_8)
+                                : GlideString.of(keyBytes);
+
+                // Read value
+                int valueLen = buffer.getInt();
+                if (valueLen < 0) {
+                    // Null value
+                    map.put(key, null);
+                } else {
+                    byte[] valueBytes = new byte[valueLen];
+                    buffer.get(valueBytes);
+                    Object value =
+                            encodingUtf8
+                                    ? new String(valueBytes, java.nio.charset.StandardCharsets.UTF_8)
+                                    : GlideString.of(valueBytes);
+                    map.put(key, value);
+                }
+            }
+        } catch (Exception e) {
+            // If deserialization fails, return empty map
+            // TODO: Add proper logging once logger is configured
+            return new LinkedHashMap<>();
+        }
+
+        return map;
+    }
+
     @Override
     public CompletableFuture<byte[]> dump(@NonNull GlideString key) {
         GlideString[] arguments = new GlideString[] {key};
@@ -5709,8 +5756,16 @@ public abstract class BaseClient
      * native layer when PubSub messages are received.
      */
     public void __enqueuePubSubMessage(PubSubMessage message) {
-        if (messageHandler != null && messageHandler.getQueue() != null) {
-            messageHandler.getQueue().push(message);
+        // TODO: Implement PubSub message queue via JNI callbacks
+        // For now, messages are delivered directly to callback if configured
+        if (subscriptionConfiguration.isPresent()
+                && subscriptionConfiguration.get().getCallback().isPresent()) {
+            // Direct callback invocation without queueing
+            subscriptionConfiguration
+                    .get()
+                    .getCallback()
+                    .get()
+                    .accept(message, subscriptionConfiguration.get().getContext().orElse(null));
         }
     }
 

@@ -97,6 +97,7 @@ pub struct ValkeyClientConfig {
     pub client_az: Option<String>,
     pub lazy_connect: bool,
     pub client_name: Option<String>,
+    pub max_inflight_requests: Option<u32>,
 }
 
 /// Helper function to create Valkey connection configuration
@@ -115,6 +116,7 @@ pub fn create_valkey_connection_config(config: ValkeyClientConfig) -> Result<Con
         client_az,
         lazy_connect,
         client_name,
+        max_inflight_requests,
     } = config;
     
     if addresses.is_empty() {
@@ -190,7 +192,7 @@ pub fn create_valkey_connection_config(config: ValkeyClientConfig) -> Result<Con
         connection_retry_strategy: None,
         periodic_checks: None,
         pubsub_subscriptions: None,
-        inflight_requests_limit: None,
+        inflight_requests_limit: max_inflight_requests,
         lazy_connect,
     };
 
@@ -651,7 +653,13 @@ fn serialize_array_to_bytes(arr: Vec<ServerValue>, _encoding_utf8: bool) -> Resu
                 bytes.extend_from_slice(&data);
             }
             redis::Value::SimpleString(s) => {
-                let data = s.into_bytes();
+                // Normalize "ok" to "OK" for compatibility with Java constants
+                let normalized = if s.eq_ignore_ascii_case("ok") {
+                    "OK".to_string()
+                } else {
+                    s
+                };
+                let data = normalized.into_bytes();
                 bytes.push(b'+'); // Simple string marker  
                 bytes.extend_from_slice(&(data.len() as u32).to_be_bytes());
                 bytes.extend_from_slice(&data);

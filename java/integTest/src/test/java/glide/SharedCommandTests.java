@@ -11754,8 +11754,9 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void objectEncoding_binary_returns_string_embstr(BaseClient client) {
-        GlideString stringEmbstrKey = gs(UUID.randomUUID().toString());
-        assertEquals(OK, client.set(stringEmbstrKey, gs("value")).get());
+        // Use shorter key and value to ensure embstr encoding (total < 44 bytes)
+        GlideString stringEmbstrKey = gs("k" + UUID.randomUUID().toString().substring(0, 8));
+        assertEquals(OK, client.set(stringEmbstrKey, gs("abc")).get());
         String encoding = client.objectEncoding(stringEmbstrKey).get();
         // Valkey 9.0.0+ may return "raw" instead of "embstr" for short strings with long key names
         assertTrue(

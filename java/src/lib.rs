@@ -90,7 +90,13 @@ fn resp_value_to_java<'local>(
         Value::Nil => Ok(JObject::null()),
         Value::SimpleString(data) => {
             if encoding_utf8 {
-                Ok(JObject::from(env.new_string(data)?))
+                // Normalize "ok" to "OK" for compatibility with Java constants
+                let normalized = if data.eq_ignore_ascii_case("ok") {
+                    "OK".to_string()
+                } else {
+                    data
+                };
+                Ok(JObject::from(env.new_string(normalized)?))
             } else {
                 // Return raw byte array - Java will convert to GlideString
                 Ok(JObject::from(env.byte_array_from_slice(data.as_bytes())?))
@@ -951,7 +957,11 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createClient(
     cluster_mode: jni::sys::jboolean,
     request_timeout_ms: jint,
     connection_timeout_ms: jint,
-    _max_inflight_requests: jint,
+    max_inflight_requests: jint,
+    read_from: jni::sys::jstring,
+    client_az: jni::sys::jstring,
+    lazy_connect: jni::sys::jboolean,
+    client_name: jni::sys::jstring,
 ) -> jlong {
     handle_panics(
         move || {
@@ -979,8 +989,11 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createClient(
 
             let username = get_optional_string_param_raw(&mut env, username);
             let password = get_optional_string_param_raw(&mut env, password);
+            let read_from_str = get_optional_string_param_raw(&mut env, read_from);
+            let client_az_opt = get_optional_string_param_raw(&mut env, client_az);
+            let client_name_opt = get_optional_string_param_raw(&mut env, client_name);
 
-            // Create connection configuration using simplified parameters
+            // Create connection configuration using all parameters
             let config = match create_valkey_connection_config(ValkeyClientConfig {
                 addresses,
                 database_id: database_id as u32,
@@ -991,10 +1004,11 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createClient(
                 cluster_mode: cluster_mode != 0,
                 request_timeout_ms: request_timeout_ms as u64,
                 connection_timeout_ms: connection_timeout_ms as u64,
-                read_from: None,
-                client_az: None,
-                lazy_connect: false,
-                client_name: None,
+                read_from: read_from_str,
+                client_az: client_az_opt,
+                lazy_connect: lazy_connect != 0,
+                client_name: client_name_opt,
+                max_inflight_requests: if max_inflight_requests > 0 { Some(max_inflight_requests as u32) } else { None },
             }) {
                 Ok(config) => config,
                 Err(e) => {

@@ -3,6 +3,7 @@ package glide.api;
 
 import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.configuration.BaseSubscriptionConfiguration;
+import glide.api.models.exceptions.ClosingException;
 import glide.internal.GlideNativeBridge;
 import java.util.Optional;
 
@@ -54,8 +55,21 @@ public class ClientBuilder {
 
             // Store timeout and inflight settings
             this.requestTimeout = config.getRequestTimeout() != null ? config.getRequestTimeout() : 5000;
-            this.maxInflight = 0; // Use defaults
+            this.maxInflight =
+                    config.getInflightRequestsLimit() != null ? config.getInflightRequestsLimit() : 0;
             this.subscriptionConfiguration = Optional.ofNullable(config.getSubscriptionConfiguration());
+
+            // Extract read from strategy
+            String readFrom = config.getReadFrom() != null ? config.getReadFrom().name() : "PRIMARY";
+
+            // Extract client AZ for AZ affinity
+            String clientAz = config.getClientAZ();
+
+            // Extract lazy connect setting
+            boolean lazyConnect = config.isLazyConnect();
+
+            // Extract client name
+            String clientName = config.getClientName();
 
             // Create native client
             this.nativeHandle =
@@ -69,14 +83,20 @@ public class ClientBuilder {
                             isCluster,
                             this.requestTimeout,
                             getConnectionTimeoutFromConfig(config),
-                            this.maxInflight);
+                            this.maxInflight,
+                            readFrom,
+                            clientAz,
+                            lazyConnect,
+                            clientName);
 
             if (this.nativeHandle == 0) {
-                throw new RuntimeException("Failed to create client - connection refused");
+                throw new ClosingException("Failed to create client - connection refused");
             }
 
+        } catch (ClosingException e) {
+            throw e; // Re-throw ClosingException as-is
         } catch (Exception e) {
-            throw new RuntimeException("Failed to create client", e);
+            throw new ClosingException("Failed to create client: " + e.getMessage());
         }
     }
 

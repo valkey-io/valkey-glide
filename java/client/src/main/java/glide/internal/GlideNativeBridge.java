@@ -34,7 +34,11 @@ public class GlideNativeBridge {
             boolean clusterMode,
             int requestTimeoutMs,
             int connectionTimeoutMs,
-            int maxInflightRequests);
+            int maxInflightRequests,
+            String readFrom,
+            String clientAz,
+            boolean lazyConnect,
+            String clientName);
 
     /** Execute command asynchronously */
     public static native void executeCommandAsync(
