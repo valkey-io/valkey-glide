@@ -221,6 +221,7 @@ import glide.api.commands.SortedSetBaseCommands;
 import glide.api.commands.StreamBaseCommands;
 import glide.api.commands.StringBaseCommands;
 import glide.api.commands.TransactionsBaseCommands;
+import glide.api.logging.Logger;
 import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
 import glide.api.models.PubSubMessage;
@@ -281,7 +282,6 @@ import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions;
 import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.configuration.BaseSubscriptionConfiguration;
-import glide.api.logging.Logger;
 import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.ConfigurationError;
 import glide.api.models.exceptions.GlideException;
@@ -5257,11 +5257,7 @@ public abstract class BaseClient
             }
         } catch (Exception e) {
             // If deserialization fails, return empty map
-            Logger.log(
-                    Logger.Level.ERROR,
-                    "BaseClient",
-                    () -> "Error deserializing Map from bytes",
-                    e);
+            Logger.log(Logger.Level.ERROR, "BaseClient", () -> "Error deserializing Map from bytes", e);
             return new LinkedHashMap<>();
         }
 
