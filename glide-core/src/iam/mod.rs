@@ -326,10 +326,6 @@ impl IAMTokenManager {
         // Call the callback to update connection passwords if provided
         if let Some(callback) = token_refresh_callback {
             callback(new_token);
-            log_debug(
-                "IAM token refresh",
-                "Successfully refreshed IAM token and updated connection passwords",
-            );
         } else {
             // Log error instead of returning error for logging purposes in background task
             log_error(
