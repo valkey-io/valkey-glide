@@ -102,22 +102,9 @@ public class GlideClusterClient extends BaseClient
                 TransactionsClusterCommands,
                 PubSubClusterCommands {
 
-    /** A private constructor. Use {@link #createClient} to get a client. */
-    GlideClusterClient(ClientBuilder builder) {
-        super(
-                builder.getNativeHandle(),
-                builder.getMaxInflight(),
-                builder.getRequestTimeout(),
-                builder.getSubscriptionConfiguration());
-    }
-
-    /** JNI-based constructor using ClientParams from BaseClient. */
-    protected GlideClusterClient(ClientParams params) {
-        super(
-                params.getNativeHandle(),
-                params.getMaxInflight(),
-                params.getRequestTimeout(),
-                params.getSubscription());
+    /** Constructor using ClientParams from BaseClient. */
+    protected GlideClusterClient(ClientBuilder builder) {
+        super(builder);
     }
 
     /**
@@ -169,7 +156,7 @@ public class GlideClusterClient extends BaseClient
      */
     public static CompletableFuture<GlideClusterClient> createClient(
             @NonNull GlideClusterClientConfiguration config) {
-        return createClient(config, GlideClusterClient::new);
+        return BaseClient.createClient(config, GlideClusterClient::new);
     }
 
     /**
@@ -197,14 +184,9 @@ public class GlideClusterClient extends BaseClient
      *         .address(NodeAddress.builder().host("localhost").port(7001).build())
      *         .address(NodeAddress.builder().host("localhost").port(7002).build())
      *         .build();
-     * GlideClusterClient client = GlideClusterClient.createJniClient(config).get();
+     * GlideClusterClient client = GlideClusterClient.createClient(config).get();
      * }</pre>
      */
-    public static CompletableFuture<GlideClusterClient> createJniClient(
-            @NonNull GlideClusterClientConfiguration config) {
-        return BaseClient.createClient(config, GlideClusterClient::new);
-    }
-
     @Override
     public CompletableFuture<ClusterValue<Object>> customCommand(@NonNull String[] args) {
         // TODO if a command returns a map as a single value, ClusterValue misleads user

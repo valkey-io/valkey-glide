@@ -86,16 +86,6 @@ public class GlideNativeBridge {
     /** Get glide-core default maximum inflight requests limit */
     public static native int getGlideCoreDefaultMaxInflightRequests();
 
-    /** Execute script management commands asynchronously using direct command path */
-    public static native void executeScriptManagementAsync(
-            long clientPtr,
-            long callbackId,
-            int requestType,
-            String[] args,
-            boolean hasRoute,
-            int routeType,
-            String routeParam);
-
     /** Execute cluster scan command asynchronously */
     public static native void executeClusterScanAsync(
             long clientPtr,

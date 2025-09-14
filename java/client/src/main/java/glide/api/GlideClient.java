@@ -81,24 +81,9 @@ public class GlideClient extends BaseClient
                 ScriptingAndFunctionsCommands,
                 TransactionsCommands {
 
-    /**
-     * A constructor. Use {@link #createClient} to get a client. Made protected to simplify testing.
-     */
+    /** Constructor using ClientParams from BaseClient. */
     protected GlideClient(ClientBuilder builder) {
-        super(
-                builder.getNativeHandle(),
-                builder.getMaxInflight(),
-                builder.getRequestTimeout(),
-                builder.getSubscriptionConfiguration());
-    }
-
-    /** JNI-based constructor using ClientParams from BaseClient. */
-    protected GlideClient(ClientParams params) {
-        super(
-                params.getNativeHandle(),
-                params.getMaxInflight(),
-                params.getRequestTimeout(),
-                params.getSubscription());
+        super(builder);
     }
 
     /**
@@ -147,37 +132,6 @@ public class GlideClient extends BaseClient
      * }</pre>
      */
     public static CompletableFuture<GlideClient> createClient(
-            @NonNull GlideClientConfiguration config) {
-        return createClient(config, GlideClient::new);
-    }
-
-    /**
-     * Creates a new {@link GlideClient} instance using JNI direct calls instead of Unix Domain
-     * Sockets. This method provides improved performance and Windows compatibility by eliminating the
-     * socket layer.
-     *
-     * @param config The configuration options for the client, including server addresses,
-     *     authentication credentials, TLS settings, database selection, reconnection strategy, and
-     *     Pub/Sub subscriptions.
-     * @return A Future that resolves to a connected {@link GlideClient} instance.
-     * @remarks This method creates a client with the same functionality as {@link
-     *     #createClient(GlideClientConfiguration)} but uses direct JNI calls to the Rust glide-core
-     *     library instead of Unix Domain Sockets. Benefits include:
-     *     <ul>
-     *       <li><b>Windows Support</b>: Full native Windows compatibility without WSL/Cygwin
-     *       <li><b>Performance</b>: Eliminates socket layer overhead with zero-copy operations
-     *       <li><b>Memory Efficiency</b>: DirectByteBuffer usage reduces memory copies
-     *     </ul>
-     *
-     * @example
-     *     <pre>{@code
-     * GlideClientConfiguration config = GlideClientConfiguration.builder()
-     *         .address(NodeAddress.builder().host("localhost").port(6379).build())
-     *         .build();
-     * GlideClient client = GlideClient.createJniClient(config).get();
-     * }</pre>
-     */
-    public static CompletableFuture<GlideClient> createJniClient(
             @NonNull GlideClientConfiguration config) {
         return BaseClient.createClient(config, GlideClient::new);
     }

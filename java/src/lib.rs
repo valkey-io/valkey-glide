@@ -1521,7 +1521,41 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBinaryComman
                                     Err(e) => Err(anyhow::anyhow!("Failed to create binary command: {e}"))
                                 }
                             }
-                            _ => Err(anyhow::anyhow!("Binary command execution only supports single commands"))
+                            Some(command_request::Command::ScriptInvocation(script)) => {
+                                // Handle script invocation in binary mode
+                                // Use EVALSHA command directly
+                                let mut cmd = redis::cmd("EVALSHA");
+                                cmd.arg(script.hash.as_bytes());
+                                cmd.arg(script.keys.len());
+                                
+                                // Add keys
+                                for key in &script.keys {
+                                    cmd.arg(key.as_ref());
+                                }
+                                
+                                // Add args
+                                for arg in &script.args {
+                                    cmd.arg(arg.as_ref());
+                                }
+                                
+                                // Get routing if specified
+                                let route_box = command_request.route.0;
+                                let routing = if let Some(route_box) = route_box {
+                                    match protobuf_bridge::create_routing_info(*route_box, Some(&cmd)) {
+                                        Ok(r) => r,
+                                        Err(e) => {
+                                            log::error!("Script routing error: {e}");
+                                            None
+                                        }
+                                    }
+                                } else {
+                                    None
+                                };
+                                
+                                client.send_command(&cmd, routing).await
+                                    .map_err(|e| anyhow::anyhow!("Script invocation failed: {e}"))
+                            }
+                            _ => Err(anyhow::anyhow!("Binary command execution only supports single commands and script invocations"))
                         };
 
                         complete_callback(jvm, callback_id, result, true); // binary_mode = true
@@ -1833,193 +1867,6 @@ fn create_command_from_request_type(request_type: RequestType, args: Vec<String>
     }
     
     cmd
-}
-
-/// JNI bridge for script management commands using protobuf approach 
-/// This reuses the UDS/socket_listener logic for proper script management commands
-#[unsafe(no_mangle)]
-pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptManagementAsync(
-    mut env: JNIEnv,
-    _class: JClass,
-    client_ptr: jlong,
-    callback_id: jlong,
-    request_type: jint,
-    args: jni::objects::JObjectArray,
-    has_route: jni::sys::jboolean,
-    route_type: jint,
-    route_param: JString,
-) {
-    handle_panics(
-        move || {
-            let jvm = match env.get_java_vm() {
-                Ok(jvm) => Arc::new(jvm),
-                Err(_) => {
-                    log::error!("JVM error in executeCommandAsync");
-                    return Some(());
-                }
-            };
-
-            // Convert Java request_type integer to RequestType enum
-            // Use the protobuf enum conversion
-            use protobuf::EnumOrUnknown;
-            
-            let proto_request_type = EnumOrUnknown::from_i32(request_type);
-            let request_type_enum: RequestType = proto_request_type.into();
-            
-            // Validate it's a supported script management type
-            match request_type_enum {
-                RequestType::ScriptShow | RequestType::ScriptExists | 
-                RequestType::ScriptFlush | RequestType::ScriptKill => {
-                    // Valid script management command
-                }
-                _ => {
-                    log::error!("Invalid script management request type: {:?}", request_type_enum);
-                    complete_callback(jvm, callback_id, Err(anyhow::anyhow!("Invalid script management request type")), false);
-                    return Some(());
-                }
-            }
-
-            // Convert Java string array to Vec<String>
-            let args_len = match env.get_array_length(&args) {
-                Ok(len) => len,
-                Err(e) => {
-                    log::error!("Failed to get args array length: {e}");
-                    complete_callback(jvm, callback_id, Err(anyhow::anyhow!("Failed to get args length: {e}")), false);
-                    return Some(());
-                }
-            };
-
-            let mut args_vec: Vec<String> = Vec::new();
-            for i in 0..args_len {
-                let arg_obj = match env.get_object_array_element(&args, i) {
-                    Ok(obj) => obj,
-                    Err(e) => {
-                        log::error!("Failed to get arg {i}: {e}");
-                        complete_callback(jvm, callback_id, Err(anyhow::anyhow!("Failed to get arg {i}: {e}")), false);
-                        return Some(());
-                    }
-                };
-                
-                match env.get_string(&arg_obj.into()) {
-                    Ok(jstr) => {
-                        args_vec.push(jstr.to_string_lossy().to_string());
-                    }
-                    Err(e) => {
-                        log::error!("Failed to convert arg {i} to string: {e}");
-                        complete_callback(jvm, callback_id, Err(anyhow::anyhow!("Failed to convert arg {i}: {e}")), false);
-                        return Some(());
-                    }
-                }
-            }
-
-            let client_handle_id = client_ptr as u64;
-            log::debug!("Executing script management command with request type {:?} and {} args", request_type_enum, args_len);
-
-            // Parse routing information if provided  
-            let routing_info = if has_route != 0 {
-                // Parse route_param if present
-                let route_param_str = if !route_param.is_null() {
-                    match env.get_string(&route_param) {
-                        Ok(s) => Some(s.to_string_lossy().to_string()),
-                        Err(e) => {
-                            log::error!("Failed to parse route param: {e}");
-                            None
-                        }
-                    }
-                } else {
-                    None
-                };
-                
-                // Create Routes protobuf based on route_type
-                use glide_core::command_request::{SimpleRoutes, SlotKeyRoute, SlotIdRoute, ByAddressRoute};
-                let mut routes = Routes::default();
-                match route_type {
-                    0 => routes.set_simple_routes(SimpleRoutes::AllNodes),
-                    1 => routes.set_simple_routes(SimpleRoutes::AllPrimaries),
-                    2 => routes.set_simple_routes(SimpleRoutes::Random),
-                    3 => {
-                        // SlotKeyRoute - parse key from route_param
-                        if let Some(key) = route_param_str {
-                            let mut slot_key_route = SlotKeyRoute::default();
-                            slot_key_route.slot_type = glide_core::command_request::SlotTypes::Primary.into();
-                            slot_key_route.slot_key = key.into();
-                            routes.set_slot_key_route(slot_key_route);
-                        }
-                    },
-                    4 => {
-                        // SlotIdRoute - parse slot id from route_param
-                        if let Some(slot_str) = route_param_str {
-                            if let Ok(slot_id) = slot_str.parse::<i32>() {
-                                let mut slot_id_route = SlotIdRoute::default();
-                                slot_id_route.slot_type = glide_core::command_request::SlotTypes::Primary.into();
-                                slot_id_route.slot_id = slot_id;
-                                routes.set_slot_id_route(slot_id_route);
-                            }
-                        }
-                    },
-                    5 => {
-                        // ByAddressRoute - parse host:port from route_param
-                        if let Some(addr) = route_param_str {
-                            if let Some(colon_pos) = addr.find(':') {
-                                let host = addr[..colon_pos].to_string();
-                                let port_str = &addr[colon_pos + 1..];
-                                if let Ok(port) = port_str.parse::<i32>() {
-                                    let mut by_addr_route = ByAddressRoute::default();
-                                    by_addr_route.host = host.into();
-                                    by_addr_route.port = port;
-                                    routes.set_by_address_route(by_addr_route);
-                                }
-                            }
-                        }
-                    },
-                    _ => {}
-                };
-                
-                Some(routes)
-            } else {
-                None
-            };
-
-            // Spawn async task for regular command execution
-            let runtime = get_runtime();
-            runtime.spawn(async move {
-                // For script management commands, we need to execute them as regular commands
-                // through the existing client infrastructure
-                let client_result = ensure_client_for_handle(client_handle_id).await;
-                let result = match client_result {
-                    Ok(mut client) => {
-                        // Create a redis command for script management
-                        let cmd = create_command_from_request_type(request_type_enum, args_vec);
-                        
-                        // Create routing if specified
-                        let routing = if let Some(routes) = routing_info {
-                            match protobuf_bridge::create_routing_info(routes, Some(&cmd)) {
-                                Ok(r) => r,
-                                Err(e) => {
-                                    log::error!("Failed to create routing info: {e}");
-                                    None
-                                }
-                            }
-                        } else {
-                            None
-                        };
-                        
-                        client.send_command(&cmd, routing).await
-                            .map_err(|e| anyhow::anyhow!("Script management command failed: {e}"))
-                    }
-                    Err(err) => {
-                        Err(anyhow::anyhow!("Client not found: {err}"))
-                    }
-                };
-                
-                complete_callback(jvm, callback_id, result, false);
-            });
-            
-            Some(())
-        },
-        "executeScriptManagementAsync",
-    )
-    .unwrap_or(())
 }
 
 /// JNI bridge for cluster scan that properly manages cursor lifecycle

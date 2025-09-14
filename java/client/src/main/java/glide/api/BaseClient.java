@@ -289,14 +289,14 @@ import glide.api.models.configuration.BaseSubscriptionConfiguration;
 import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.ConfigurationError;
 import glide.api.models.exceptions.GlideException;
+import glide.connectors.handlers.MessageHandler;
 import glide.ffi.resolvers.GlideValueResolver;
 import glide.ffi.resolvers.NativeUtils;
 import glide.ffi.resolvers.StatisticsResolver;
-import glide.internal.AsyncRegistry;
 import glide.internal.GlideCoreClient;
-import glide.internal.GlideNativeBridge;
 import glide.managers.BaseResponseResolver;
 import glide.managers.CommandManager;
+import glide.managers.ConnectionManager;
 import glide.utils.ArgsBuilder;
 import java.util.Arrays;
 import java.util.EnumSet;
@@ -310,6 +310,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.NonNull;
+import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.ArrayUtils;
 import response.ResponseOuterClass.ConstantResponse;
 import response.ResponseOuterClass.Response;
@@ -355,15 +356,11 @@ public abstract class BaseClient
     public static final String WITHMATCHLEN_COMMAND_STRING = "WITHMATCHLEN";
     public static final String LCS_MATCHES_RESULT_KEY = "matches";
 
-    // JNI-based implementation - direct connection to glide-core
-    private final long nativeClientHandle;
-    private final int maxInflightRequests;
-    private final int requestTimeoutMs;
-    private final Optional<BaseSubscriptionConfiguration> subscriptionConfiguration;
-    private volatile boolean isClosed = false;
-
-    // Command manager for handling command submissions
+    // Client components - matches UDS pattern exactly
     protected final CommandManager commandManager;
+    protected final ConnectionManager connectionManager;
+    protected final MessageHandler messageHandler;
+    protected final Optional<BaseSubscriptionConfiguration> subscriptionConfiguration;
 
     // Native library loading
     static {
@@ -398,22 +395,21 @@ public abstract class BaseClient
                         return GlideValueResolver.valueFromPointerBinary(pointer);
                     });
 
-    /** A constructor for JNI-based clients. */
-    protected BaseClient(
-            long nativeHandle,
-            int maxInflight,
-            int requestTimeout,
-            Optional<BaseSubscriptionConfiguration> subscription) {
-        this.nativeClientHandle = nativeHandle;
-        this.maxInflightRequests = maxInflight;
-        this.requestTimeoutMs = requestTimeout;
-        this.subscriptionConfiguration = subscription;
+    /** Constructor matching UDS pattern exactly */
+    protected BaseClient(ClientBuilder builder) {
+        this.connectionManager = builder.connectionManager;
+        this.commandManager = builder.commandManager;
+        this.messageHandler = builder.messageHandler;
+        this.subscriptionConfiguration = builder.subscriptionConfiguration;
+    }
 
-        // Initialize command manager with core client
-        GlideCoreClient coreClient = new GlideCoreClient(nativeHandle, maxInflight, requestTimeout);
-        this.commandManager = new CommandManager(coreClient);
-
-        // PubSub functionality will be handled via JNI callbacks in the future
+    /** Auxiliary builder which wraps all fields - matches UDS signature exactly */
+    @RequiredArgsConstructor
+    protected static class ClientBuilder {
+        private final ConnectionManager connectionManager;
+        private final CommandManager commandManager;
+        private final MessageHandler messageHandler;
+        private final Optional<BaseSubscriptionConfiguration> subscriptionConfiguration;
     }
 
     /**
@@ -425,114 +421,67 @@ public abstract class BaseClient
      * @return a Future to connect and return a client.
      */
     protected static <T extends BaseClient> CompletableFuture<T> createClient(
-            @NonNull BaseClientConfiguration config, Function<ClientParams, T> constructor) {
+            @NonNull BaseClientConfiguration config, Function<ClientBuilder, T> constructor) {
 
         return CompletableFuture.supplyAsync(
                 () -> {
                     try {
-                        // Convert addresses to simple string array
-                        String[] addresses =
-                                config.getAddresses().stream()
-                                        .map(addr -> addr.getHost() + ":" + addr.getPort())
-                                        .toArray(String[]::new);
+                        // Create client components using build methods (matches UDS pattern)
+                        ConnectionManager connectionManager = buildConnectionManager();
+                        MessageHandler messageHandler = buildMessageHandler(config);
 
-                        // Extract credentials
-                        String username = null;
-                        String password = null;
-                        if (config.getCredentials() != null) {
-                            username = config.getCredentials().getUsername();
-                            password = config.getCredentials().getPassword();
-                        }
+                        // Establish connection first - this creates the native client
+                        connectionManager.connectToValkey(config).get();
 
-                        // Determine client type
-                        boolean isCluster =
-                                config instanceof glide.api.models.configuration.GlideClusterClientConfiguration;
+                        // Create CommandManager after connection is established
+                        CommandManager commandManager = buildCommandManager(connectionManager);
 
-                        // Get database ID for standalone clients
-                        int databaseId = 0;
-                        if (!isCluster
-                                && config instanceof glide.api.models.configuration.GlideClientConfiguration) {
-                            glide.api.models.configuration.GlideClientConfiguration standaloneConfig =
-                                    (glide.api.models.configuration.GlideClientConfiguration) config;
-                            if (standaloneConfig.getDatabaseId() != null) {
-                                databaseId = standaloneConfig.getDatabaseId();
-                            }
-                        }
-
-                        // Create native client
-                        long handle =
-                                GlideNativeBridge.createClient(
-                                        addresses,
-                                        databaseId,
-                                        username,
-                                        password,
-                                        config.isUseTLS(),
-                                        false, // insecure TLS - TODO: extract from config
-                                        isCluster,
-                                        config.getRequestTimeout() != null ? config.getRequestTimeout() : 5000,
-                                        getConnectionTimeoutFromConfig(config),
-                                        0, // max inflight - use default
-                                        config.getReadFrom() != null ? config.getReadFrom().name() : "PRIMARY",
-                                        config.getClientAZ(),
-                                        config.isLazyConnect(),
-                                        config.getClientName());
-
-                        if (handle == 0) {
-                            throw new ClosingException("Failed to create client - connection refused");
-                        }
-
-                        // Create the client instance
                         return constructor.apply(
-                                new ClientParams(
-                                        handle,
-                                        config.getInflightRequestsLimit() != null
-                                                ? config.getInflightRequestsLimit()
-                                                : 0,
-                                        config.getRequestTimeout() != null ? config.getRequestTimeout() : 5000,
+                                new ClientBuilder(
+                                        connectionManager,
+                                        commandManager,
+                                        messageHandler,
                                         Optional.ofNullable(config.getSubscriptionConfiguration())));
 
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        throw new RuntimeException("Connection interrupted", e);
                     } catch (Exception e) {
                         if (e instanceof ClosingException) {
-                            throw e; // Rethrow ClosingException as-is
+                            throw (ClosingException) e; // Rethrow ClosingException as-is
                         }
                         throw new RuntimeException("Failed to create client", e);
                     }
                 });
     }
 
-    /** Parameters for client construction. */
-    public static class ClientParams {
-        private final long nativeHandle;
-        private final int maxInflight;
-        private final int requestTimeout;
-        private final Optional<BaseSubscriptionConfiguration> subscription;
+    /** Build ConnectionManager for JNI-based client */
+    protected static ConnectionManager buildConnectionManager() {
+        return new ConnectionManager();
+    }
 
-        public ClientParams(
-                long handle,
-                int maxInflight,
-                int requestTimeout,
-                Optional<BaseSubscriptionConfiguration> subscription) {
-            this.nativeHandle = handle;
-            this.maxInflight = maxInflight;
-            this.requestTimeout = requestTimeout;
-            this.subscription = subscription;
-        }
+    /** Build MessageHandler for JNI-based client */
+    protected static MessageHandler buildMessageHandler(BaseClientConfiguration config) {
+        // TODO: Extract callback and context from config
+        return new MessageHandler(
+                config.getSubscriptionConfiguration() != null
+                        ? config.getSubscriptionConfiguration().getCallback()
+                        : Optional.empty(),
+                config.getSubscriptionConfiguration() != null
+                        ? config.getSubscriptionConfiguration().getContext()
+                        : Optional.empty(),
+                responseResolver);
+    }
 
-        public long getNativeHandle() {
-            return nativeHandle;
-        }
-
-        public int getMaxInflight() {
-            return maxInflight;
-        }
-
-        public int getRequestTimeout() {
-            return requestTimeout;
-        }
-
-        public Optional<BaseSubscriptionConfiguration> getSubscription() {
-            return subscription;
-        }
+    /** Build CommandManager for JNI-based client */
+    protected static CommandManager buildCommandManager(ConnectionManager connectionManager) {
+        // CommandManager will be created after connection is established
+        // We'll update this once the connection provides the native handle
+        return new CommandManager(
+                new GlideCoreClient(
+                        connectionManager.getNativeClientHandle(),
+                        connectionManager.getMaxInflightRequests(),
+                        connectionManager.getRequestTimeoutMs()));
     }
 
     /**
@@ -601,46 +550,17 @@ public abstract class BaseClient
      */
     @Override
     public void close() throws ExecutionException {
-        if (isClosed) {
-            return; // Already closed
-        }
-
-        try {
-            // Mark as closed immediately to prevent new commands
-            isClosed = true;
-
-            // Clean up any pending async operations for this client
-            AsyncRegistry.cleanupClient(nativeClientHandle);
-
-            // Close the native client handle
-            if (nativeClientHandle != 0) {
-                GlideNativeBridge.closeClient(nativeClientHandle);
-            }
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to close client", e);
-        }
+        connectionManager.closeConnectionSync();
     }
 
     /** Check if the client is connected and ready for commands. */
     public boolean isConnected() {
-        if (isClosed || nativeClientHandle == 0) {
-            return false;
-        }
-
-        try {
-            return GlideNativeBridge.isConnected(nativeClientHandle);
-        } catch (Exception e) {
-            return false;
-        }
+        return connectionManager.isConnected();
     }
 
     /** Get client information from the native layer. */
     public String getClientInfo() {
-        if (isClosed || nativeClientHandle == 0) {
-            throw new IllegalStateException("Client is closed");
-        }
-
-        return GlideNativeBridge.getClientInfo(nativeClientHandle);
+        return connectionManager.getClientInfo();
     }
 
     /**
@@ -2401,39 +2321,37 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<String> scriptShow(@NonNull String sha1) {
-        return commandManager.submitScriptManagementCommand(
+        return commandManager.submitNewCommand(
                 ScriptShow, new String[] {sha1}, this::handleStringResponse);
     }
 
     @Override
     public CompletableFuture<GlideString> scriptShow(@NonNull GlideString sha1) {
-        return commandManager.submitScriptManagementCommand(
+        return commandManager.submitNewCommand(
                 ScriptShow, new GlideString[] {sha1}, this::handleGlideStringResponse);
     }
 
     public CompletableFuture<Boolean[]> scriptExists(@NonNull String[] sha1s) {
-        return commandManager.submitScriptManagementCommand(
+        return commandManager.submitNewCommand(
                 ScriptExists, sha1s, response -> castArray(handleArrayResponse(response), Boolean.class));
     }
 
     public CompletableFuture<Boolean[]> scriptExists(@NonNull GlideString[] sha1s) {
-        return commandManager.submitScriptManagementCommand(
+        return commandManager.submitNewCommand(
                 ScriptExists, sha1s, response -> castArray(handleArrayResponse(response), Boolean.class));
     }
 
     public CompletableFuture<String> scriptFlush() {
-        return commandManager.submitScriptManagementCommand(
-                ScriptFlush, new String[0], this::handleStringResponse);
+        return commandManager.submitNewCommand(ScriptFlush, new String[0], this::handleStringResponse);
     }
 
     public CompletableFuture<String> scriptFlush(@NonNull FlushMode flushMode) {
-        return commandManager.submitScriptManagementCommand(
+        return commandManager.submitNewCommand(
                 ScriptFlush, new String[] {flushMode.toString()}, this::handleStringResponse);
     }
 
     public CompletableFuture<String> scriptKill() {
-        return commandManager.submitScriptManagementCommand(
-                ScriptKill, new String[0], this::handleStringResponse);
+        return commandManager.submitNewCommand(ScriptKill, new String[0], this::handleStringResponse);
     }
 
     @Override

@@ -150,29 +150,6 @@ public class CommandManager {
                 command, responseHandler, true); // Script with GlideString -> binary mode
     }
 
-    /** Build a script management command and send via script management JNI bridge. */
-    public <T> CompletableFuture<T> submitScriptManagementCommand(
-            RequestType requestType,
-            String[] arguments,
-            GlideExceptionCheckedFunction<Response, T> responseHandler) {
-
-        return submitScriptManagementToJni(requestType, arguments, responseHandler);
-    }
-
-    /** Build a script management command and send via script management JNI bridge. */
-    public <T> CompletableFuture<T> submitScriptManagementCommand(
-            RequestType requestType,
-            GlideString[] arguments,
-            GlideExceptionCheckedFunction<Response, T> responseHandler) {
-
-        // Convert GlideString[] to String[] for the JNI bridge
-        String[] stringArgs = new String[arguments.length];
-        for (int i = 0; i < arguments.length; i++) {
-            stringArgs[i] = arguments[i].toString();
-        }
-        return submitScriptManagementToJni(requestType, stringArgs, responseHandler);
-    }
-
     /** Build a Cluster Batch and send via JNI. */
     public <T> CompletableFuture<T> submitNewBatch(
             ClusterBatch batch,
@@ -350,49 +327,6 @@ public class CommandManager {
 
         // This shouldn't happen if isFinished() is true
         return null;
-    }
-
-    /** Submit script management command via script management JNI bridge. */
-    protected <T> CompletableFuture<T> submitScriptManagementToJni(
-            RequestType requestType,
-            String[] arguments,
-            GlideExceptionCheckedFunction<Response, T> responseHandler) {
-
-        if (!coreClient.isConnected()) {
-            var errorFuture = new CompletableFuture<T>();
-            errorFuture.completeExceptionally(
-                    new ClosingException("Client closed: Unable to submit script management command."));
-            return errorFuture;
-        }
-
-        try {
-            // Convert RequestType to int for JNI bridge
-            int requestTypeInt = requestType.getNumber();
-
-            // Execute via script management JNI bridge
-            return coreClient
-                    .executeScriptManagementAsync(requestTypeInt, arguments, false, 0, null)
-                    .thenApply(
-                            result -> {
-                                // Create a minimal Response for compatibility with the handler
-                                Response.Builder builder = Response.newBuilder();
-                                if (result == null) {
-                                    builder.setRespPointer(0L);
-                                } else if ("OK".equals(result)) {
-                                    builder.setConstantResponse(ConstantResponse.OK);
-                                } else {
-                                    // Store the object temporarily and pass its ID
-                                    long objectId = JniResponseRegistry.storeObject(result);
-                                    builder.setRespPointer(objectId);
-                                }
-                                return responseHandler.apply(builder.build());
-                            })
-                    .exceptionally(this::exceptionHandler);
-        } catch (Exception e) {
-            var errorFuture = new CompletableFuture<T>();
-            errorFuture.completeExceptionally(e);
-            return errorFuture;
-        }
     }
 
     /**
