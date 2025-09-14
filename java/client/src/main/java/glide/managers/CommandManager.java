@@ -267,6 +267,8 @@ public class CommandManager {
         }
     }
 
+    // Removed blocking command detection - Rust handles all timeout logic
+
     /** Submit batch request via JNI. */
     protected <T> CompletableFuture<T> submitBatchToJni(
             CommandRequest.Builder command, GlideExceptionCheckedFunction<Response, T> responseHandler) {

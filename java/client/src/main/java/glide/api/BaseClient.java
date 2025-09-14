@@ -474,8 +474,7 @@ public abstract class BaseClient
         return new CommandManager(
                 new GlideCoreClient(
                         connectionManager.getNativeClientHandle(),
-                        connectionManager.getMaxInflightRequests(),
-                        connectionManager.getRequestTimeoutMs()));
+                        connectionManager.getMaxInflightRequests()));
     }
 
     /**

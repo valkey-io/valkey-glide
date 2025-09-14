@@ -78,12 +78,7 @@ public class GlideCoreClient implements AutoCloseable {
         return maxInflightRequests;
     }
 
-    /** Request timeout in milliseconds for this client. */
-    private final int requestTimeoutMs;
-
-    public int getRequestTimeoutMs() {
-        return requestTimeoutMs;
-    }
+    // Removed requestTimeoutMs field - Rust handles all timeouts
 
     /** Cleanup coordination flag. */
     private final AtomicBoolean cleanupInProgress = new AtomicBoolean(false);
@@ -320,8 +315,7 @@ public class GlideCoreClient implements AutoCloseable {
         // Store the computed inflight limit for this client instance
         this.maxInflightRequests = computeMaxInflight(config);
 
-        // Store the request timeout for this client instance
-        this.requestTimeoutMs = config.getRequestTimeoutMs();
+        // Request timeout is passed to Rust for its timeout handling
 
         // Create client with simplified parameters
         long handle;
@@ -375,14 +369,13 @@ public class GlideCoreClient implements AutoCloseable {
     }
 
     /** Constructor that wraps an existing native client handle (for BaseClient integration) */
-    public GlideCoreClient(long existingHandle, int maxInflight, int requestTimeout) {
+    public GlideCoreClient(long existingHandle, int maxInflight) {
         if (existingHandle == 0) {
             throw new IllegalArgumentException("Native handle cannot be zero");
         }
 
         // Store the provided parameters
         this.maxInflightRequests = maxInflight > 0 ? maxInflight : 0; // 0 means use native defaults
-        this.requestTimeoutMs = requestTimeout > 0 ? requestTimeout : 5000;
 
         // Use the existing native handle
         this.nativeClientHandle.set(existingHandle);
@@ -511,8 +504,9 @@ public class GlideCoreClient implements AutoCloseable {
             CompletableFuture<Object> future = new CompletableFuture<>();
             long correlationId;
             try {
+                // Rust handles all timeout logic - Java just waits for response
                 correlationId =
-                        AsyncRegistry.register(future, this.requestTimeoutMs, this.maxInflightRequests, handle);
+                        AsyncRegistry.register(future, this.maxInflightRequests, handle);
             } catch (glide.api.models.exceptions.RequestException e) {
                 future.completeExceptionally(e);
                 return future;
@@ -547,8 +541,9 @@ public class GlideCoreClient implements AutoCloseable {
             CompletableFuture<Object> future = new CompletableFuture<>();
             long correlationId;
             try {
+                // Rust handles all timeout logic - Java just waits for response
                 correlationId =
-                        AsyncRegistry.register(future, this.requestTimeoutMs, this.maxInflightRequests, handle);
+                        AsyncRegistry.register(future, this.maxInflightRequests, handle);
             } catch (glide.api.models.exceptions.RequestException e) {
                 future.completeExceptionally(e);
                 return future;
@@ -584,7 +579,7 @@ public class GlideCoreClient implements AutoCloseable {
             long correlationId;
             try {
                 correlationId =
-                        AsyncRegistry.register(future, this.requestTimeoutMs, this.maxInflightRequests, handle);
+                        AsyncRegistry.register(future, this.maxInflightRequests, handle);
             } catch (glide.api.models.exceptions.RequestException e) {
                 future.completeExceptionally(e);
                 return future;
@@ -619,7 +614,7 @@ public class GlideCoreClient implements AutoCloseable {
             long correlationId;
             try {
                 correlationId =
-                        AsyncRegistry.register(future, this.requestTimeoutMs, this.maxInflightRequests, handle);
+                        AsyncRegistry.register(future, this.maxInflightRequests, handle);
             } catch (glide.api.models.exceptions.RequestException e) {
                 future.completeExceptionally(e);
                 return future;
@@ -651,7 +646,7 @@ public class GlideCoreClient implements AutoCloseable {
         CompletableFuture<String> future = new CompletableFuture<>();
         long correlationId;
         try {
-            correlationId = AsyncRegistry.register(future, 30000, this.maxInflightRequests, handle);
+            correlationId = AsyncRegistry.register(future, this.maxInflightRequests, handle);
         } catch (glide.api.models.exceptions.RequestException e) {
             future.completeExceptionally(e);
             return future;
@@ -688,16 +683,9 @@ public class GlideCoreClient implements AutoCloseable {
             long correlationId;
 
             try {
-                // Use special registration for blocking commands with timeout=0 (infinite blocking)
-                if (isBlockingCommandWithInfiniteTimeout(request)) {
-                    correlationId =
-                            AsyncRegistry.registerInfiniteBlockingCommand(
-                                    future, this.maxInflightRequests, handle);
-                } else {
-                    correlationId =
-                            AsyncRegistry.register(
-                                    future, this.requestTimeoutMs, this.maxInflightRequests, handle);
-                }
+                // Rust handles all timeout logic - Java just waits for response
+                correlationId =
+                        AsyncRegistry.register(future, this.maxInflightRequests, handle);
             } catch (glide.api.models.exceptions.RequestException e) {
                 future.completeExceptionally(e);
                 return future;
@@ -751,7 +739,7 @@ public class GlideCoreClient implements AutoCloseable {
             long correlationId;
             try {
                 correlationId =
-                        AsyncRegistry.register(future, this.requestTimeoutMs, this.maxInflightRequests, handle);
+                        AsyncRegistry.register(future, this.maxInflightRequests, handle);
             } catch (glide.api.models.exceptions.RequestException e) {
                 future.completeExceptionally(e);
                 return future;
@@ -842,50 +830,8 @@ public class GlideCoreClient implements AutoCloseable {
         return 512; // 512MB default - let users configure as needed
     }
 
-    /** Check if a command is a blocking command that may need special handling */
-    private static boolean isBlockingCommand(String commandName) {
-        if (commandName == null) return false;
-        String cmd = commandName.toUpperCase();
-        return cmd.equals("BLPOP")
-                || cmd.equals("BRPOP")
-                || cmd.equals("BLMOVE")
-                || cmd.equals("BLMPOP")
-                || cmd.equals("BZPOPMIN")
-                || cmd.equals("BZPOPMAX")
-                || cmd.equals("BZMPOP")
-                || cmd.equals("XREAD")
-                || cmd.equals("XREADGROUP");
-    }
+    // Removed blocking command detection - Rust handles all timeout logic
 
-    /** Check if this is a blocking command with timeout=0 (infinite timeout) */
-    private boolean isBlockingCommandWithInfiniteTimeout(CommandRequest request) {
-        if (request == null || request.getCommandName() == null) {
-            return false;
-        }
-
-        String cmd = request.getCommandName().toUpperCase();
-
-        // Check if this is a blocking command
-        if (!isBlockingCommand(cmd)) {
-            return false;
-        }
-
-        // For BLPOP, BRPOP, etc., the timeout is the last argument
-        List<String> args = request.getArguments();
-        if (args.size() > 0) {
-            String lastArg = args.get(args.size() - 1);
-            try {
-                double timeout = Double.parseDouble(lastArg);
-                // timeout=0 means block indefinitely
-                return timeout == 0.0;
-            } catch (NumberFormatException e) {
-                // If we can't parse the timeout, assume it's not infinite
-                return false;
-            }
-        }
-
-        return false;
-    }
 
     private static String formatSpanName(String commandName) {
         if (commandName == null || commandName.isEmpty()) return "Command";

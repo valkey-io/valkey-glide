@@ -4,7 +4,6 @@ package glide.internal;
 import java.nio.ByteBuffer;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -36,32 +35,7 @@ public final class AsyncRegistry {
 
     // ==================== CONFIGURABLE CONSTANTS ====================
 
-    /**
-     * Compute default timeout with configuration hierarchy: env var -> system property -> core
-     * default
-     */
-    private static long computeDefaultTimeout() {
-        String env = System.getenv("GLIDE_REQUEST_TIMEOUT_MS");
-        if (env != null) {
-            try {
-                long v = Long.parseLong(env.trim());
-                if (v > 0) return v;
-            } catch (NumberFormatException ignored) {
-            }
-        }
-
-        String prop = System.getProperty("glide.requestTimeoutMs");
-        if (prop != null) {
-            try {
-                long v = Long.parseLong(prop.trim());
-                if (v > 0) return v;
-            } catch (NumberFormatException ignored) {
-            }
-        }
-
-        // Use glide-core default via native method
-        return GlideNativeBridge.getGlideCoreDefaultTimeoutMs();
-    }
+    // Removed timeout computation - Rust handles all timeouts
 
     /** Compute maximum pending operations with configuration hierarchy */
     private static int computeMaxPendingOperations() {
@@ -88,11 +62,7 @@ public final class AsyncRegistry {
         return 25000;
     }
 
-    /**
-     * Default timeout for Valkey operations in milliseconds. Now configurable via env vars, system
-     * properties, or core defaults.
-     */
-    private static final long DEFAULT_TIMEOUT_MS = computeDefaultTimeout();
+    // Removed DEFAULT_TIMEOUT_MS - Rust handles all timeouts
 
     /**
      * Maximum number of pending operations allowed (backpressure mechanism). Now configurable instead
@@ -100,27 +70,15 @@ public final class AsyncRegistry {
      */
     private static final int MAX_PENDING_OPERATIONS = computeMaxPendingOperations();
 
-    /** Register future with race-condition-free timeout handling */
-    public static <T> long register(CompletableFuture<T> future, long timeoutMs) {
-        return register(future, timeoutMs, MAX_PENDING_OPERATIONS, 0L);
-    }
-
-    /** Register future with client-specific inflight limit (matches UDS glide-core behavior) */
-    public static <T> long register(
-            CompletableFuture<T> future, long timeoutMs, int maxInflightRequests) {
-        return register(future, timeoutMs, maxInflightRequests, 0L);
-    }
+    // Removed overloaded register methods with timeout - simplified API
 
     /**
      * Register future with client-specific inflight limit and client handle for per-client tracking
      */
     public static <T> long register(
-            CompletableFuture<T> future, long timeoutMs, int maxInflightRequests, long clientHandle) {
+            CompletableFuture<T> future, int maxInflightRequests, long clientHandle) {
         if (future == null) {
             throw new IllegalArgumentException("Future cannot be null");
-        }
-        if (timeoutMs <= 0) {
-            throw new IllegalArgumentException("Timeout must be positive, was: " + timeoutMs);
         }
 
         // GLOBAL backpressure check (system-wide limit) - NEW
@@ -160,11 +118,9 @@ public final class AsyncRegistry {
         // Store ORIGINAL future for completion by native code
         activeFutures.put(correlationId, originalFuture);
 
-        // Set up timeout and cleanup on the ORIGINAL future
-        // This ensures the same future that users hold gets completed
-        originalFuture
-                .orTimeout(timeoutMs, TimeUnit.MILLISECONDS)
-                .whenComplete(
+        // Set up cleanup on the ORIGINAL future
+        // This ensures proper resource cleanup when completed
+        originalFuture.whenComplete(
                         (result, throwable) -> {
                             // Atomic cleanup - no race conditions possible
                             activeFutures.remove(correlationId);
@@ -182,86 +138,14 @@ public final class AsyncRegistry {
         return correlationId;
     }
 
-    /** Register with default timeout */
+    /** Register with default settings */
     public static <T> long register(CompletableFuture<T> future) {
-        return register(future, DEFAULT_TIMEOUT_MS, MAX_PENDING_OPERATIONS, 0L);
+        return register(future, MAX_PENDING_OPERATIONS, 0L);
     }
 
-    /** Register with default timeout and client-specific inflight limit */
+    /** Register with client-specific inflight limit */
     public static <T> long register(CompletableFuture<T> future, int maxInflightRequests) {
-        return register(future, DEFAULT_TIMEOUT_MS, maxInflightRequests, 0L);
-    }
-
-    /** Register with default timeout, client-specific inflight limit and client handle */
-    public static <T> long register(
-            CompletableFuture<T> future, int maxInflightRequests, long clientHandle) {
-        return register(future, DEFAULT_TIMEOUT_MS, maxInflightRequests, clientHandle);
-    }
-
-    /**
-     * Register a blocking command that should not timeout This allows BLPOP-style commands to block
-     * indefinitely as expected
-     */
-    public static <T> long registerInfiniteBlockingCommand(
-            CompletableFuture<T> future, int maxInflightRequests) {
-        return registerInfiniteBlockingCommand(future, maxInflightRequests, 0L);
-    }
-
-    /** Register a blocking command with client handle for per-client tracking */
-    public static <T> long registerInfiniteBlockingCommand(
-            CompletableFuture<T> future, int maxInflightRequests, long clientHandle) {
-        if (future == null) {
-            throw new IllegalArgumentException("Future cannot be null");
-        }
-
-        // GLOBAL backpressure check (system-wide limit) - NEW
-        // Apply same backpressure control to infinite blocking commands
-        int currentPending = activeFutures.size();
-        if (currentPending >= MAX_PENDING_OPERATIONS) {
-            throw new glide.api.models.exceptions.RequestException(
-                    "System at maximum pending operations: " + currentPending + "/" + MAX_PENDING_OPERATIONS);
-        }
-
-        // Client-specific inflight limit check (matches UDS glide-core behavior)
-        if (maxInflightRequests > 0) {
-            // Get or create per-client counter
-            java.util.concurrent.atomic.AtomicInteger clientCount =
-                    clientInflightCounts.computeIfAbsent(
-                            clientHandle, k -> new java.util.concurrent.atomic.AtomicInteger(0));
-
-            // Check if this specific client has reached its limit
-            if (clientCount.get() >= maxInflightRequests) {
-                throw new glide.api.models.exceptions.RequestException(
-                        "Client reached maximum inflight requests");
-            }
-
-            // Increment the client's inflight count
-            clientCount.incrementAndGet();
-        }
-
-        long correlationId = nextId.getAndIncrement();
-
-        // Store the ORIGINAL future, but DO NOT set any timeout
-        @SuppressWarnings("unchecked")
-        CompletableFuture<Object> originalFuture = (CompletableFuture<Object>) future;
-        activeFutures.put(correlationId, originalFuture);
-
-        // Set up cleanup WITHOUT timeout for infinite blocking
-        originalFuture.whenComplete(
-                (result, throwable) -> {
-                    // Atomic cleanup - no race conditions possible
-                    activeFutures.remove(correlationId);
-
-                    // Decrement per-client counter if applicable
-                    if (maxInflightRequests > 0) {
-                        java.util.concurrent.atomic.AtomicInteger clientCount =
-                                clientInflightCounts.get(clientHandle);
-                        if (clientCount != null) {
-                            clientCount.decrementAndGet();
-                        }
-                    }
-                });
-        return correlationId;
+        return register(future, maxInflightRequests, 0L);
     }
 
     /**
