@@ -79,7 +79,8 @@ public class CommandManager {
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
 
         CommandRequest.Builder command = prepareCommandRequest(requestType, arguments);
-        return submitCommandToJni(command, responseHandler, false); // String arguments -> UTF-8 mode
+        return submitCommandToJni(
+                command, responseHandler, false, true); // String arguments -> expect UTF-8 response
     }
 
     /** Build a command and send via JNI. */
@@ -90,7 +91,19 @@ public class CommandManager {
 
         CommandRequest.Builder command = prepareCommandRequest(requestType, arguments);
         return submitCommandToJni(
-                command, responseHandler, true); // GlideString arguments -> binary mode
+                command, responseHandler, true, false); // GlideString arguments -> expect binary response
+    }
+
+    /** Build a command with explicit response type expectation. */
+    public <T> CompletableFuture<T> submitNewCommandWithResponseType(
+            RequestType requestType,
+            GlideString[] arguments,
+            GlideExceptionCheckedFunction<Response, T> responseHandler,
+            boolean expectUtf8Response) {
+
+        CommandRequest.Builder command = prepareCommandRequest(requestType, arguments);
+        return submitCommandToJni(
+                command, responseHandler, true, expectUtf8Response); // Override response expectation
     }
 
     /** Build a command and send via JNI. */
@@ -101,7 +114,8 @@ public class CommandManager {
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
 
         CommandRequest.Builder command = prepareCommandRequest(requestType, arguments, route);
-        return submitCommandToJni(command, responseHandler, false); // String arguments -> UTF-8 mode
+        return submitCommandToJni(
+                command, responseHandler, false, true); // String arguments -> expect UTF-8 response
     }
 
     /** Build a command and send via JNI. */
@@ -113,7 +127,7 @@ public class CommandManager {
 
         CommandRequest.Builder command = prepareCommandRequest(requestType, arguments, route);
         return submitCommandToJni(
-                command, responseHandler, true); // GlideString arguments -> binary mode
+                command, responseHandler, true, false); // GlideString arguments -> expect binary response
     }
 
     /** Build a Batch and send via JNI. */
@@ -135,7 +149,7 @@ public class CommandManager {
 
         CommandRequest.Builder command = prepareScript(script, keys, args);
         return submitCommandToJni(
-                command, responseHandler, true); // Script with GlideString -> binary mode
+                command, responseHandler, true, false); // Script with GlideString -> expect binary response
     }
 
     /** Build a Script (by hash) request with route to send to Valkey via JNI. */
@@ -147,7 +161,7 @@ public class CommandManager {
 
         CommandRequest.Builder command = prepareScript(script, args, route);
         return submitCommandToJni(
-                command, responseHandler, true); // Script with GlideString -> binary mode
+                command, responseHandler, true, false); // Script with GlideString -> expect binary response
     }
 
     /** Build a Cluster Batch and send via JNI. */
@@ -188,11 +202,23 @@ public class CommandManager {
                         });
     }
 
-    /** Take a command request and send via JNI. */
+    /** Take a command request and send via JNI (backward compatibility). */
     protected <T> CompletableFuture<T> submitCommandToJni(
             CommandRequest.Builder command,
             GlideExceptionCheckedFunction<Response, T> responseHandler,
             boolean binaryMode) {
+        // For backward compatibility, default expectUtf8Response based on binaryMode
+        // binaryMode=true means GlideString args, expect binary response
+        // binaryMode=false means String args, expect UTF-8 response
+        return submitCommandToJni(command, responseHandler, binaryMode, !binaryMode);
+    }
+
+    /** Take a command request and send via JNI. */
+    protected <T> CompletableFuture<T> submitCommandToJni(
+            CommandRequest.Builder command,
+            GlideExceptionCheckedFunction<Response, T> responseHandler,
+            boolean binaryMode,
+            boolean expectUtf8Response) {
 
         if (!coreClient.isConnected()) {
             var errorFuture = new CompletableFuture<T>();
@@ -207,11 +233,11 @@ public class CommandManager {
 
             // Execute via JNI - returns converted Java objects directly
             // No need to wrap in Response since JNI already provides the final object
-            // Use binary or UTF-8 mode based on argument type
+            // Use binary or UTF-8 mode based on expected response type, not argument type
             CompletableFuture<Object> jniFuture =
-                    binaryMode
-                            ? coreClient.executeBinaryCommandAsync(requestBytes)
-                            : coreClient.executeCommandAsync(requestBytes);
+                    expectUtf8Response
+                            ? coreClient.executeCommandAsync(requestBytes) // Force UTF-8 conversion
+                            : coreClient.executeBinaryCommandAsync(requestBytes); // Allow binary conversion
 
             return jniFuture
                     .thenApply(

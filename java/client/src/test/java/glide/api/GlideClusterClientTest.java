@@ -287,6 +287,15 @@ public class GlideClusterClientTest {
                 boolean binaryMode) {
             return CompletableFuture.supplyAsync(() -> responseHandler.apply(response));
         }
+
+        @Override
+        protected <T> CompletableFuture<T> submitCommandToJni(
+                CommandRequest.Builder command,
+                GlideExceptionCheckedFunction<Response, T> responseHandler,
+                boolean binaryMode,
+                boolean expectUtf8Response) {
+            return CompletableFuture.supplyAsync(() -> responseHandler.apply(response));
+        }
     }
 
     @SneakyThrows

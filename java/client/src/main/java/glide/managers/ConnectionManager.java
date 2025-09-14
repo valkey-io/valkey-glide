@@ -76,7 +76,9 @@ public class ConnectionManager {
                                                 GlideNativeBridge
                                                         .getGlideCoreDefaultTimeoutMs(), // connectionTimeoutMs - core default
                                         maxInflightRequests,
-                                        configuration.getReadFrom() != null ? configuration.getReadFrom().name() : null, // readFrom
+                                        configuration.getReadFrom() != null
+                                                ? configuration.getReadFrom().name()
+                                                : null, // readFrom
                                         configuration.getClientAZ(), // clientAz
                                         configuration.isLazyConnect(), // lazyConnect
                                         configuration.getClientName());

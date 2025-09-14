@@ -422,18 +422,16 @@ public abstract class BaseClient
      */
     protected static <T extends BaseClient> CompletableFuture<T> createClient(
             @NonNull BaseClientConfiguration config, Function<ClientBuilder, T> constructor) {
+        try {
+            // Create client components using build methods (matches UDS pattern)
+            ConnectionManager connectionManager = buildConnectionManager();
+            MessageHandler messageHandler = buildMessageHandler(config);
 
-        return CompletableFuture.supplyAsync(
-                () -> {
-                    try {
-                        // Create client components using build methods (matches UDS pattern)
-                        ConnectionManager connectionManager = buildConnectionManager();
-                        MessageHandler messageHandler = buildMessageHandler(config);
-
-                        // Establish connection first - this creates the native client
-                        connectionManager.connectToValkey(config).get();
-
-                        // Create CommandManager after connection is established
+            // Return async chain (same as UDS pattern)
+            return connectionManager
+                    .connectToValkey(config)
+                    .thenApply(ignored -> {
+                        // Create CommandManager after connection established
                         CommandManager commandManager = buildCommandManager(connectionManager);
 
                         return constructor.apply(
@@ -442,17 +440,13 @@ public abstract class BaseClient
                                         commandManager,
                                         messageHandler,
                                         Optional.ofNullable(config.getSubscriptionConfiguration())));
-
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                        throw new RuntimeException("Connection interrupted", e);
-                    } catch (Exception e) {
-                        if (e instanceof ClosingException) {
-                            throw (ClosingException) e; // Rethrow ClosingException as-is
-                        }
-                        throw new RuntimeException("Failed to create client", e);
-                    }
-                });
+                    });
+        } catch (Exception e) {
+            // Something bad happened during initial setup
+            var future = new CompletableFuture<T>();
+            future.completeExceptionally(e);
+            return future;
+        }
     }
 
     /** Build ConnectionManager for JNI-based client */
@@ -3937,8 +3931,8 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<String> type(@NonNull GlideString key) {
-        return commandManager.submitNewCommand(
-                Type, new GlideString[] {key}, this::handleStringResponse);
+        return commandManager.submitNewCommandWithResponseType(
+                Type, new GlideString[] {key}, this::handleStringResponse, true);
     }
 
     @Override
