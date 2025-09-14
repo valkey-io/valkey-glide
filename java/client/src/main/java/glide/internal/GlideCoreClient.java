@@ -505,8 +505,7 @@ public class GlideCoreClient implements AutoCloseable {
             long correlationId;
             try {
                 // Rust handles all timeout logic - Java just waits for response
-                correlationId =
-                        AsyncRegistry.register(future, this.maxInflightRequests, handle);
+                correlationId = AsyncRegistry.register(future, this.maxInflightRequests, handle);
             } catch (glide.api.models.exceptions.RequestException e) {
                 future.completeExceptionally(e);
                 return future;
@@ -542,8 +541,7 @@ public class GlideCoreClient implements AutoCloseable {
             long correlationId;
             try {
                 // Rust handles all timeout logic - Java just waits for response
-                correlationId =
-                        AsyncRegistry.register(future, this.maxInflightRequests, handle);
+                correlationId = AsyncRegistry.register(future, this.maxInflightRequests, handle);
             } catch (glide.api.models.exceptions.RequestException e) {
                 future.completeExceptionally(e);
                 return future;
@@ -578,8 +576,7 @@ public class GlideCoreClient implements AutoCloseable {
             CompletableFuture<Object> future = new CompletableFuture<>();
             long correlationId;
             try {
-                correlationId =
-                        AsyncRegistry.register(future, this.maxInflightRequests, handle);
+                correlationId = AsyncRegistry.register(future, this.maxInflightRequests, handle);
             } catch (glide.api.models.exceptions.RequestException e) {
                 future.completeExceptionally(e);
                 return future;
@@ -613,8 +610,7 @@ public class GlideCoreClient implements AutoCloseable {
             CompletableFuture<Object> future = new CompletableFuture<>();
             long correlationId;
             try {
-                correlationId =
-                        AsyncRegistry.register(future, this.maxInflightRequests, handle);
+                correlationId = AsyncRegistry.register(future, this.maxInflightRequests, handle);
             } catch (glide.api.models.exceptions.RequestException e) {
                 future.completeExceptionally(e);
                 return future;
@@ -684,8 +680,7 @@ public class GlideCoreClient implements AutoCloseable {
 
             try {
                 // Rust handles all timeout logic - Java just waits for response
-                correlationId =
-                        AsyncRegistry.register(future, this.maxInflightRequests, handle);
+                correlationId = AsyncRegistry.register(future, this.maxInflightRequests, handle);
             } catch (glide.api.models.exceptions.RequestException e) {
                 future.completeExceptionally(e);
                 return future;
@@ -738,8 +733,7 @@ public class GlideCoreClient implements AutoCloseable {
             CompletableFuture<Object> future = new CompletableFuture<>();
             long correlationId;
             try {
-                correlationId =
-                        AsyncRegistry.register(future, this.maxInflightRequests, handle);
+                correlationId = AsyncRegistry.register(future, this.maxInflightRequests, handle);
             } catch (glide.api.models.exceptions.RequestException e) {
                 future.completeExceptionally(e);
                 return future;
@@ -831,7 +825,6 @@ public class GlideCoreClient implements AutoCloseable {
     }
 
     // Removed blocking command detection - Rust handles all timeout logic
-
 
     private static String formatSpanName(String commandName) {
         if (commandName == null || commandName.isEmpty()) return "Command";

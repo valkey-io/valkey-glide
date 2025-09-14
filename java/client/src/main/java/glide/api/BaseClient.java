@@ -286,7 +286,6 @@ import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions;
 import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.configuration.BaseSubscriptionConfiguration;
-import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.ConfigurationError;
 import glide.api.models.exceptions.GlideException;
 import glide.connectors.handlers.MessageHandler;
@@ -430,17 +429,18 @@ public abstract class BaseClient
             // Return async chain (same as UDS pattern)
             return connectionManager
                     .connectToValkey(config)
-                    .thenApply(ignored -> {
-                        // Create CommandManager after connection established
-                        CommandManager commandManager = buildCommandManager(connectionManager);
+                    .thenApply(
+                            ignored -> {
+                                // Create CommandManager after connection established
+                                CommandManager commandManager = buildCommandManager(connectionManager);
 
-                        return constructor.apply(
-                                new ClientBuilder(
-                                        connectionManager,
-                                        commandManager,
-                                        messageHandler,
-                                        Optional.ofNullable(config.getSubscriptionConfiguration())));
-                    });
+                                return constructor.apply(
+                                        new ClientBuilder(
+                                                connectionManager,
+                                                commandManager,
+                                                messageHandler,
+                                                Optional.ofNullable(config.getSubscriptionConfiguration())));
+                            });
         } catch (Exception e) {
             // Something bad happened during initial setup
             var future = new CompletableFuture<T>();
@@ -473,8 +473,7 @@ public abstract class BaseClient
         // We'll update this once the connection provides the native handle
         return new CommandManager(
                 new GlideCoreClient(
-                        connectionManager.getNativeClientHandle(),
-                        connectionManager.getMaxInflightRequests()));
+                        connectionManager.getNativeClientHandle(), connectionManager.getMaxInflightRequests()));
     }
 
     /**

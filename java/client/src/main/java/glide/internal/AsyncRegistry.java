@@ -121,19 +121,19 @@ public final class AsyncRegistry {
         // Set up cleanup on the ORIGINAL future
         // This ensures proper resource cleanup when completed
         originalFuture.whenComplete(
-                        (result, throwable) -> {
-                            // Atomic cleanup - no race conditions possible
-                            activeFutures.remove(correlationId);
+                (result, throwable) -> {
+                    // Atomic cleanup - no race conditions possible
+                    activeFutures.remove(correlationId);
 
-                            // Decrement per-client counter if applicable
-                            if (maxInflightRequests > 0) {
-                                java.util.concurrent.atomic.AtomicInteger clientCount =
-                                        clientInflightCounts.get(clientHandle);
-                                if (clientCount != null) {
-                                    clientCount.decrementAndGet();
-                                }
-                            }
-                        });
+                    // Decrement per-client counter if applicable
+                    if (maxInflightRequests > 0) {
+                        java.util.concurrent.atomic.AtomicInteger clientCount =
+                                clientInflightCounts.get(clientHandle);
+                        if (clientCount != null) {
+                            clientCount.decrementAndGet();
+                        }
+                    }
+                });
 
         return correlationId;
     }
