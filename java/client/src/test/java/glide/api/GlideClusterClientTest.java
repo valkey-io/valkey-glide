@@ -280,10 +280,11 @@ public class GlideClusterClientTest {
             response = responseToReturn != null ? responseToReturn : Response.newBuilder().build();
         }
 
-        // Mock method - no longer overriding as CommandManager interface changed
-        public <T> CompletableFuture<T> submitCommandToChannel(
+        @Override
+        protected <T> CompletableFuture<T> submitCommandToJni(
                 CommandRequest.Builder command,
-                GlideExceptionCheckedFunction<Response, T> responseHandler) {
+                GlideExceptionCheckedFunction<Response, T> responseHandler,
+                boolean binaryMode) {
             return CompletableFuture.supplyAsync(() -> responseHandler.apply(response));
         }
     }
