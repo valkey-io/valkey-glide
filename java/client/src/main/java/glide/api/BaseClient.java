@@ -1060,8 +1060,12 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<String> objectEncoding(@NonNull GlideString key) {
-        return commandManager.submitNewCommand(
-                ObjectEncoding, new GlideString[] {key}, this::handleStringOrNullResponse);
+        // Force UTF-8 decoding for textual result even with binary-safe key argument
+        return commandManager.submitNewCommandWithResponseType(
+                ObjectEncoding,
+                new GlideString[] {key},
+                this::handleStringOrNullResponse,
+                /*expectUtf8Response*/ true);
     }
 
     @Override
