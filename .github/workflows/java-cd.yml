@@ -152,11 +152,22 @@ jobs:
               working-directory: java
               run: |
                   if [[ "${{ matrix.host.TARGET }}" == *"musl"* ]]; then
-                    ./gradlew --build-cache :client:publishToMavenLocal :jedis-compatibility:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
+                    # Build and publish client first
+                    ./gradlew --build-cache :client:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
+                    -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }} \
+                    -Ptarget=${{ matrix.host.TARGET }}
+                    
+                    # Then build jedis-compatibility
+                    ./gradlew --build-cache :jedis-compatibility:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
                     -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }} \
                     -Ptarget=${{ matrix.host.TARGET }}
                   else
-                    ./gradlew --build-cache :client:publishToMavenLocal :jedis-compatibility:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
+                    # Build and publish client first
+                    ./gradlew --build-cache :client:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
+                    -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
+                    
+                    # Then build jedis-compatibility
+                    ./gradlew --build-cache :jedis-compatibility:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
                     -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
                   fi
               env:
