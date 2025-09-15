@@ -189,6 +189,8 @@ tasks.register('copyNativeLib', Copy) {
         from "${projectDir}/../target/${arch}-unknown-linux-gnu/release/"
     } else if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
         from "${projectDir}/../target/${arch}-unknown-linux-musl/release/"
+    } else {
+        from "${projectDir}/../target/release/"
     }
     include "*.dylib", "*.so"
     into sourceSets.main.output.resourcesDir
