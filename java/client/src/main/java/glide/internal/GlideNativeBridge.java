@@ -50,7 +50,7 @@ public class GlideNativeBridge {
 
     /** Execute batch (pipeline/transaction) asynchronously */
     public static native void executeBatchAsync(
-            long clientPtr, byte[] batchRequestBytes, long callbackId);
+            long clientPtr, byte[] batchRequestBytes, boolean expectUtf8Response, long callbackId);
 
     /** Execute binary-safe PUBLISH/SPUBLISH asynchronously */
     public static native void executePublishBinaryAsync(
@@ -93,5 +93,6 @@ public class GlideNativeBridge {
             String matchPattern,
             long count,
             String objectType,
+            boolean expectUtf8Response,
             long callbackId);
 }

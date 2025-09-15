@@ -1,42 +1,33 @@
 # Repository Guidelines
 
-This guide orients contributors to the repository’s layout, build/test flow, style rules, and PR expectations. Primary sources of truth are the code and tests; also consult `CLAUDE.md`. Keep `java/JNI_MIGRATION_STATUS.md` updated during the JNI migration.
-
 ## Project Structure & Module Organization
-- `glide-core/`: Rust core driver (protocol, routing, scripts) with tests.
-- `java/`: Java SDK with JNI bridge; key native code in `java/src/lib.rs`.
-- `ffi/`: Rust FFI crate (C-compatible bridge for other wrappers).
-- `logger_core/`: Rust logging utilities and tests.
-- `utils/`: Dev/test helpers (TypeScript, `cluster_manager.py`).
-- Branch focus: migrate Java from UDS to direct JNI.
+- `glide-core/`: Rust driver for protocol handling, routing, and script execution; unit and integration tests live alongside source.
+- `java/`: Java SDK with the JNI bridge; native bindings in `java/src/lib.rs`, Java sources under `client/src/main/java`, tests in `client/src/test/java` and `integTest/src/test/java`.
+- `ffi/`: Rust FFI shim that exposes C-compatible bindings for other language wrappers.
+- Supporting crates live in `logger_core/` (logging utilities) and `utils/` (TypeScript helpers, `cluster_manager.py`). Keep `java/JNI_MIGRATION_STATUS.md` current during UDS→JNI work.
 
 ## Build, Test, and Development Commands
-- Java build/tests: `cd java && ./gradlew :client:buildAll && ./gradlew test`
-- Java integration: `./gradlew :integTest:test [-Dtls=true] [-Dcluster-endpoints=host:port -Dstandalone-endpoints=host:port]`
-- Target a case: `RUST_LOG=debug ./gradlew :integTest:test --tests "*scriptShow_test*"`
-- Rust core: `cd glide-core && cargo build && cargo test`
-- FFI crate: `cd ffi && cargo build --release && cargo test`
-- Lint/format: `cargo clippy --all-features --all-targets -- -D warnings && cargo fmt --all && ./gradlew :spotlessCheck :spotlessApply && ./gradlew spotbugsMain`
+- `cd glide-core && cargo build && cargo test`: Compile and run Rust core checks.
+- `cd ffi && cargo build --release && cargo test`: Verify the FFI surface in release mode.
+- `cd java && ./gradlew :client:buildAll && ./gradlew test`: Build the Java client and execute unit tests.
+- `./gradlew :integTest:test -Dtls=true`: Execute integration tests against a TLS-enabled cluster; add `-Dcluster-endpoints=host:port` as needed.
 
 ## Coding Style & Naming Conventions
-- Indentation: spaces (4); XML uses 2 (`.editorconfig`).
-- Rust: `rustfmt`; `snake_case` files; `CamelCase` types; document public APIs.
-- Java: Spotless; packages under `glide.api.*`; classes `CamelCase`, methods `camelCase`.
-- JNI: stable signatures; use `CompletableFuture` for async, `GlideString` for binary-safe paths, `DirectByteBuffer` for payloads >16KB.
+- Rust: 4-space indent, `rustfmt`, snake_case modules, CamelCase types, document public APIs.
+- Java: Spotless formatting, packages under `glide.api.*`, classes CamelCase, methods camelCase, use `GlideString` and `DirectByteBuffer` for binary-safe JNI calls.
+- General: Keep XML 2-space indented per `.editorconfig`.
 
 ## Testing Guidelines
-- Rust: unit in `src/`, integration in `tests/`; run `cargo test`.
-- Java: unit in `java/client/src/test/java/...`, integration in `java/integTest/src/test/java/...`.
-- Coverage: JaCoCo under `client/build/reports/jacoco` and `integTest/build/reports/jacoco`.
-- Environments: prefer TLS locally (`-Dtls=true`); clusters via `-Dcluster-endpoints` or `utils/cluster_manager.py`.
+- Run `cargo test` or `./gradlew test` before submitting changes touching the respective stack.
+- Integration coverage tracked via JaCoCo reports in `client/build/reports/jacoco` and `integTest/build/reports/jacoco`.
+- Prefer TLS paths locally and coordinate cluster endpoints through `utils/cluster_manager.py`.
 
 ## Commit & Pull Request Guidelines
-- Commits: imperative subject ≤72 chars; optional scope (`jni:`, `java:`, `glide-core:`, `ffi:`); link issues (e.g., `#123`).
-- PRs: include rationale, JNI vs UDS migration impact, testing notes, and docs updates (keep `java/JNI_MIGRATION_STATUS.md` current).
-- Gates: Rust clippy/fmt, Java Spotless/SpotBugs, unit + integration tests green for changed areas.
+- Commit subjects: imperative, ≤72 chars, optional scopes like `jni:` or `glide-core:`, link issues (e.g., `#123`).
+- PRs should explain UDS→JNI impact, list validation steps, and note updates to docs such as `java/JNI_MIGRATION_STATUS.md`.
+- Ensure Rust clippy/fmt, Java Spotless/SpotBugs, and relevant unit/integration suites pass.
 
-## Security & Tooling
-- Never commit secrets; prefer env vars and test certs.
-- Java dev requires `protoc v29.1` (`protoc --version`).
-- Validate TLS paths; prefer TLS in local tests.
-
+## Security & Tooling Notes
+- Do not commit secrets; rely on environment variables and test certificates.
+- Java builds require `protoc v29.1` (`protoc --version`).
+- Validate TLS asset paths and prefer secure defaults in local testing.

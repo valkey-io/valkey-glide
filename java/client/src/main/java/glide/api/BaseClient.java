@@ -2333,8 +2333,9 @@ public abstract class BaseClient
     }
 
     public CompletableFuture<Boolean[]> scriptExists(@NonNull GlideString[] sha1s) {
-        return commandManager.submitNewCommand(
-                ScriptExists, sha1s, response -> castArray(handleArrayResponse(response), Boolean.class));
+        // Force UTF-8 decoding for boolean array regardless of argument type
+        return commandManager.submitNewCommandWithResponseType(
+                ScriptExists, sha1s, response -> castArray(handleArrayResponse(response), Boolean.class), true);
     }
 
     public CompletableFuture<String> scriptFlush() {

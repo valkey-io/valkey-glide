@@ -754,7 +754,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_initOpenTe
     traces_sample_percentage: jint,
     metrics_endpoint: JString<'local>,
     flush_interval_ms: jlong,
-) -> JObject<'local> {
+) -> jint {
     handle_panics(
         move || {
             fn init_open_telemetry<'a>(
@@ -763,7 +763,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_initOpenTe
                 traces_sample_percentage: jint,
                 metrics_endpoint: JString<'a>,
                 flush_interval_ms: jlong,
-            ) -> Result<JObject<'a>, FFIError> {
+            ) -> Result<jint, FFIError> {
                 // Convert JString to Rust String or None if null
                 let traces_endpoint: Option<String> = match env.get_string(&traces_endpoint) {
                     Ok(endpoint) => Some(endpoint.into()),
@@ -843,14 +843,14 @@ pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_initOpenTe
                     Ok(())
                 })?;
 
-                Ok(JObject::null())
+                Ok(0 as jint)
             }
             let result = init_open_telemetry(&mut env, traces_endpoint, traces_sample_percentage, metrics_endpoint, flush_interval_ms);
             handle_errors(&mut env, result)
         },
         "initOpenTelemetry",
     )
-    .unwrap_or(JObject::null())
+    .unwrap_or(0 as jint)
 }
 
 /// Creates an open telemetry span with the given name and returns a pointer to the span
@@ -1332,6 +1332,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
     _class: JClass,
     client_ptr: jlong,
     batch_request_bytes: JByteArray,
+    expect_utf8: jni::sys::jboolean,
     callback_id: jlong,
 ) {
     handle_panics(
@@ -1429,11 +1430,13 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                             }
                         }.await;
 
-                        complete_callback(jvm, callback_id, result, false); // binary_output handled elsewhere
+                        let binary_mode = expect_utf8 == 0;
+                        complete_callback(jvm, callback_id, result, binary_mode);
                     }
                     Err(err) => {
                         let error = Err(anyhow::anyhow!("Client not found: {err}"));
-                        complete_callback(jvm, callback_id, error, false);
+                        let binary_mode = expect_utf8 == 0;
+                        complete_callback(jvm, callback_id, error, binary_mode);
                     }
                 }
             });
@@ -1834,6 +1837,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeClusterScanA
     match_pattern: JString,
     count: jlong,
     object_type: JString,
+    expect_utf8: jni::sys::jboolean,
     callback_id: jlong,
 ) {
     handle_panics(
@@ -1846,13 +1850,22 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeClusterScanA
                 }
             };
 
-            // Extract cursor ID
-            let cursor_str = match env.get_string(&cursor_id) {
-                Ok(s) => s.to_string_lossy().to_string(),
-                Err(e) => {
-                    log::error!("Failed to read cursor ID: {e}");
-                    complete_callback(jvm, callback_id, Err(anyhow::anyhow!("Failed to read cursor ID: {e}")), false);
-                    return Some(());
+            // Extract cursor ID (null-safe: null means initial cursor)
+            let cursor_str = if cursor_id.is_null() {
+                String::new()
+            } else {
+                match env.get_string(&cursor_id) {
+                    Ok(s) => s.to_string_lossy().to_string(),
+                    Err(e) => {
+                        log::error!("Failed to read cursor ID: {e}");
+                        complete_callback(
+                            jvm,
+                            callback_id,
+                            Err(anyhow::anyhow!("Failed to read cursor ID: {e}")),
+                            false,
+                        );
+                        return Some(());
+                    }
                 }
             };
 
@@ -1928,11 +1941,14 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeClusterScanA
                         let result = client.cluster_scan(&scan_state_cursor, scan_args).await
                             .map_err(|e| anyhow::anyhow!("Cluster scan execution failed: {e}"));
 
-                        complete_callback(jvm, callback_id, result, false);
+                        // binary_mode = !expect_utf8
+                        let binary_mode = expect_utf8 == 0;
+                        complete_callback(jvm, callback_id, result, binary_mode);
                     }
                     Err(err) => {
                         let error = Err(anyhow::anyhow!("Client not found: {err}"));
-                        complete_callback(jvm, callback_id, error, false);
+                        let binary_mode = expect_utf8 == 0;
+                        complete_callback(jvm, callback_id, error, binary_mode);
                     }
                 }
             });

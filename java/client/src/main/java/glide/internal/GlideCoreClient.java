@@ -562,7 +562,7 @@ public class GlideCoreClient implements AutoCloseable {
     /**
      * Execute batch asynchronously using raw protobuf bytes (for compatibility with CommandManager)
      */
-    public CompletableFuture<Object> executeBatchAsync(byte[] batchRequestBytes) {
+    public CompletableFuture<Object> executeBatchAsync(byte[] batchRequestBytes, boolean expectUtf8Response) {
         try {
             long handle = nativeClientHandle.get();
             if (handle == 0) {
@@ -583,7 +583,7 @@ public class GlideCoreClient implements AutoCloseable {
             }
 
             // Execute batch directly via JNI
-            GlideNativeBridge.executeBatchAsync(handle, batchRequestBytes, correlationId);
+            GlideNativeBridge.executeBatchAsync(handle, batchRequestBytes, expectUtf8Response, correlationId);
 
             return future;
 
@@ -596,7 +596,7 @@ public class GlideCoreClient implements AutoCloseable {
 
     /** Execute cluster scan asynchronously with proper cursor lifecycle management */
     public CompletableFuture<Object> executeClusterScanAsync(
-            String cursorId, String matchPattern, long count, String objectType) {
+            String cursorId, String matchPattern, long count, String objectType, boolean expectUtf8Response) {
         try {
             long handle = nativeClientHandle.get();
             if (handle == 0) {
@@ -618,7 +618,7 @@ public class GlideCoreClient implements AutoCloseable {
 
             // Execute cluster scan with proper cursor management via dedicated JNI bridge
             GlideNativeBridge.executeClusterScanAsync(
-                    handle, cursorId, matchPattern, count, objectType, correlationId);
+                    handle, cursorId, matchPattern, count, objectType, expectUtf8Response, correlationId);
 
             return future;
 

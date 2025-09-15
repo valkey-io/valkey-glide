@@ -3993,12 +3993,14 @@ public class UnifiedJedis implements Closeable {
     public byte[] setGet(byte[] key, byte[] value, SetParams params) {
         checkNotClosed();
         try {
-            // Use basic setGet without complex parameter handling
-            SetOptions options = SetOptions.builder().returnOldValue(true).build();
+            // Respect SetParams when provided; always request old value
+            SetOptions options = (params == null)
+                    ? SetOptions.builder().returnOldValue(true).build()
+                    : convertSetParams(params, true);
             String result = baseClient.set(GlideString.of(key), GlideString.of(value), options).get();
             return result != null ? result.getBytes() : null;
         } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("SET operation failed", e);
+            throw new JedisException((params == null) ? "null" : "SetParams", e);
         }
     }
 

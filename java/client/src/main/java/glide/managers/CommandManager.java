@@ -106,6 +106,17 @@ public class CommandManager {
                 command, responseHandler, true, expectUtf8Response); // Override response expectation
     }
 
+    /** Build a command with route and explicit response type expectation. */
+    public <T> CompletableFuture<T> submitNewCommandWithResponseType(
+            RequestType requestType,
+            GlideString[] arguments,
+            Route route,
+            GlideExceptionCheckedFunction<Response, T> responseHandler,
+            boolean expectUtf8Response) {
+        CommandRequest.Builder command = prepareCommandRequest(requestType, arguments, route);
+        return submitCommandToJni(command, responseHandler, true, expectUtf8Response);
+    }
+
     /** Build a command and send via JNI. */
     public <T> CompletableFuture<T> submitNewCommand(
             RequestType requestType,
@@ -137,7 +148,8 @@ public class CommandManager {
             Optional<BatchOptions> options,
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
         CommandRequest.Builder command = prepareCommandRequest(batch, raiseOnError, options);
-        return submitBatchToJni(command, responseHandler);
+        boolean expectUtf8Response = !batch.isBinaryOutput();
+        return submitBatchToJni(command, responseHandler, expectUtf8Response);
     }
 
     /** Build a Script (by hash) request to send to Valkey via JNI. */
@@ -174,7 +186,8 @@ public class CommandManager {
             Optional<ClusterBatchOptions> options,
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
         CommandRequest.Builder command = prepareCommandRequest(batch, raiseOnError, options);
-        return submitBatchToJni(command, responseHandler);
+        boolean expectUtf8Response = !batch.isBinaryOutput();
+        return submitBatchToJni(command, responseHandler, expectUtf8Response);
     }
 
     /** Submit a scan request with cursor via JNI. */
@@ -182,8 +195,106 @@ public class CommandManager {
             ClusterScanCursor cursor,
             @NonNull ScanOptions options,
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
+        return submitClusterScanToJni(cursor, options, responseHandler, true);
+    }
 
-        return submitClusterScanToJni(cursor, options, responseHandler);
+    /** Internal: Submit a scan request with explicit response encoding expectation. */
+    public <T> CompletableFuture<T> submitClusterScanToJni(
+            ClusterScanCursor cursor,
+            @NonNull ScanOptions options,
+            GlideExceptionCheckedFunction<Response, T> responseHandler,
+            boolean expectUtf8Response) {
+
+        if (!coreClient.isConnected()) {
+            var errorFuture = new CompletableFuture<T>();
+            errorFuture.completeExceptionally(
+                    new ClosingException("Client closed: Unable to submit cluster scan."));
+            return errorFuture;
+        }
+
+        try {
+            // Extract cursor information
+            String cursorId = getCursorId(cursor);
+            String matchPattern =
+                    options.getMatchPattern() != null ? options.getMatchPattern().toString() : null;
+            Long count = options.getCount() != null ? options.getCount() : null;
+            ScanOptions.ObjectType type = options.getType();
+            String objectType = null;
+            if (type != null) {
+                objectType = type.getNativeName();
+                if (objectType == null || objectType.isEmpty()) {
+                    objectType = type.name();
+                }
+            }
+
+            // Execute via enhanced cluster scan JNI bridge
+            return coreClient
+                    .executeClusterScanAsync(
+                            cursorId, matchPattern, count != null ? count : 0L, objectType, expectUtf8Response)
+                    .thenApply(
+                            result -> {
+                                // Create a minimal Response for compatibility with the handler
+                                Response.Builder builder = Response.newBuilder();
+                                if (result == null) {
+                                    builder.setRespPointer(0L);
+                                } else {
+                                    // Normalize cluster scan result: ensure cursor is String and
+                                    // items decode as String (UTF-8) or GlideString (binary)
+                                    Object normalized = normalizeScanResult(result, expectUtf8Response);
+                                    long objectId = JniResponseRegistry.storeObject(normalized);
+                                    builder.setRespPointer(objectId);
+                                }
+                                return responseHandler.apply(builder.build());
+                            })
+                    .exceptionally(this::exceptionHandler);
+        } catch (Exception e) {
+            var errorFuture = new CompletableFuture<T>();
+            errorFuture.completeExceptionally(e);
+            return errorFuture;
+        }
+    }
+
+    // Ensure scan result shape is [String cursor, Object[] items] and element encoding matches expectation
+    private Object normalizeScanResult(Object result, boolean expectUtf8) {
+        if (!(result instanceof Object[])) {
+            return result;
+        }
+        Object[] arr = (Object[]) result;
+        if (arr.length != 2) {
+            return result;
+        }
+        // Normalize cursor to String
+        Object cursorObj = arr[0];
+        String cursor;
+        if (cursorObj instanceof byte[]) {
+            cursor = new String((byte[]) cursorObj, java.nio.charset.StandardCharsets.UTF_8);
+        } else {
+            cursor = String.valueOf(cursorObj);
+        }
+
+        // Normalize items array
+        Object itemsObj = arr[1];
+        if (itemsObj instanceof Object[]) {
+            Object[] items = (Object[]) itemsObj;
+            if (expectUtf8) {
+                // Convert any stray byte[] to UTF-8 Strings
+                for (int i = 0; i < items.length; i++) {
+                    if (items[i] instanceof byte[]) {
+                        items[i] = new String((byte[]) items[i], java.nio.charset.StandardCharsets.UTF_8);
+                    }
+                }
+                return new Object[] {cursor, items};
+            } else {
+                // Binary path: convert byte[] to GlideString for nice toString()
+                for (int i = 0; i < items.length; i++) {
+                    if (items[i] instanceof byte[]) {
+                        items[i] = glide.api.models.GlideString.gs((byte[]) items[i]);
+                    }
+                }
+                return new Object[] {cursor, items};
+            }
+        }
+        return new Object[] {cursor, itemsObj};
     }
 
     /** Submit a password update request to GLIDE core via JNI. */
@@ -329,7 +440,9 @@ public class CommandManager {
 
     /** Submit batch request via JNI. */
     protected <T> CompletableFuture<T> submitBatchToJni(
-            CommandRequest.Builder command, GlideExceptionCheckedFunction<Response, T> responseHandler) {
+            CommandRequest.Builder command,
+            GlideExceptionCheckedFunction<Response, T> responseHandler,
+            boolean expectUtf8Response) {
 
         if (!coreClient.isConnected()) {
             var errorFuture = new CompletableFuture<T>();
@@ -344,7 +457,7 @@ public class CommandManager {
 
             // Execute via JNI and convert response
             return coreClient
-                    .executeBatchAsync(requestBytes)
+                    .executeBatchAsync(requestBytes, expectUtf8Response)
                     .thenApply(result -> convertJniToProtobufResponse(result))
                     .thenApply(responseHandler::apply)
                     .exceptionally(this::exceptionHandler);
@@ -355,50 +468,7 @@ public class CommandManager {
         }
     }
 
-    /** Submit cluster scan request via enhanced JNI bridge. */
-    protected <T> CompletableFuture<T> submitClusterScanToJni(
-            ClusterScanCursor cursor,
-            @NonNull ScanOptions options,
-            GlideExceptionCheckedFunction<Response, T> responseHandler) {
-
-        if (!coreClient.isConnected()) {
-            var errorFuture = new CompletableFuture<T>();
-            errorFuture.completeExceptionally(
-                    new ClosingException("Client closed: Unable to submit cluster scan."));
-            return errorFuture;
-        }
-
-        try {
-            // Extract cursor information
-            String cursorId = getCursorId(cursor);
-            String matchPattern =
-                    options.getMatchPattern() != null ? options.getMatchPattern().toString() : null;
-            Long count = options.getCount() != null ? options.getCount() : null;
-            String objectType = null; // ObjectType is not available in current ScanOptions API
-
-            // Execute via enhanced cluster scan JNI bridge
-            return coreClient
-                    .executeClusterScanAsync(cursorId, matchPattern, count != null ? count : 0L, objectType)
-                    .thenApply(
-                            result -> {
-                                // Create a minimal Response for compatibility with the handler
-                                Response.Builder builder = Response.newBuilder();
-                                if (result == null) {
-                                    builder.setRespPointer(0L);
-                                } else {
-                                    // Store the object temporarily and pass its ID
-                                    long objectId = JniResponseRegistry.storeObject(result);
-                                    builder.setRespPointer(objectId);
-                                }
-                                return responseHandler.apply(builder.build());
-                            })
-                    .exceptionally(this::exceptionHandler);
-        } catch (Exception e) {
-            var errorFuture = new CompletableFuture<T>();
-            errorFuture.completeExceptionally(e);
-            return errorFuture;
-        }
-    }
+    
 
     /** Extract cursor ID from ClusterScanCursor. */
     private String getCursorId(ClusterScanCursor cursor) {

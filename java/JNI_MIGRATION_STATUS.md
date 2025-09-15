@@ -22,6 +22,43 @@
 - [ ] Re-verify script EVALSHA fallback and routing consistency; confirm `scriptShow` integ tests pass.
   - Implemented: ScriptInvocationPointers handling in JNI (UTF-8 and binary paths) to mirror UDS large-args behavior.
 
+## Update – 2025-09-15 (delta notes)
+
+What we changed
+- Script response mode: submitScript now sets expectUtf8Response = !script.getBinaryOutput().
+- Always-text results without hot-path branching:
+  - BaseClient.objectEncoding(GlideString) now forces UTF‑8 decoding at the call site (mirrors UDS handlers).
+- Large responses via JNI DirectByteBuffer are normalized in CommandManager:
+  - '*' → deserialize to Object[] (custom array wire format).
+  - '%' → deserialize to LinkedHashMap (custom map wire format) with String/GlideString keys/values per expectUtf8Response.
+  - otherwise → bulk string bytes, decoded to String or GlideString based on expectUtf8Response.
+- FFI tests are opt-in: buildAll no longer runs :client:testFfi (use buildAllWithFfi when needed).
+
+What’s green now
+- SharedCommandTests.objectEncoding_* (RESP2/RESP3, standalone/cluster).
+- custom_command_info (standalone + cluster, binary and non-binary variants).
+
+What’s still pending
+- Unit: GlideClientTest.objectEncoding_binary_returns_success — unit-only path still misaligned (integration equivalent is green). Will align unit call-site to use UTF‑8 as in integ.
+- Broader categories to re-check post-fixes: cluster scan bridge, AZ affinity routing, and OpenTelemetry exporter/init tests.
+- SpotBugs in tests (arrays .equals, default encoding, dead stores) — test-only hygiene; skip SpotBugs during iteration.
+
+How to run fast
+- Unit (skip SpotBugs):
+  - cd java && ./gradlew :client:test -x spotbugsMain -x spotbugsTest
+- Integration (skip SpotBugs):
+  - ./gradlew :integTest:test -x spotbugsMain -x spotbugsTest
+- Script subset:
+  - RUST_LOG=debug ./gradlew :integTest:test --tests "glide.cluster.CommandTests.*script*"
+- INFO/custom subset:
+  - ./gradlew :integTest:test --tests "glide.*.CommandTests.custom_command_info*"
+
+Next steps (targeted, test-driven)
+1) Fix unit: GlideClientTest.objectEncoding_binary_returns_success by mirroring the integration call-site override in the unit code path.
+2) Re-run cluster scan suites; if failing, adjust JNI response normalization for scan shapes and the JniResponseRegistry plumbing.
+3) Re-run AZ-affinity routing tests; verify read-from + AZ mapping at client creation.
+4) Re-run OpenTelemetry tests; verify file exporter path and reinit semantics.
+
 ## Script Lifecycle (UDS Reference)
 
 ### Registration (Java → Core)

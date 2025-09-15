@@ -223,6 +223,11 @@ public final class AsyncRegistry {
 
         String lower = msg.toLowerCase();
 
+        // Timeout errors → TimeoutException
+        if (lower.contains("timed out") || lower.contains("timeout")) {
+            return new glide.api.models.exceptions.TimeoutException(msg);
+        }
+
         // Command/argument errors → RequestException
         if (lower.contains("unknown command")
                 || lower.contains("wrong number of arguments")

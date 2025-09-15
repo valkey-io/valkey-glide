@@ -1116,8 +1116,8 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<Boolean[]> scriptExists(@NonNull GlideString[] sha1s) {
-        return commandManager.submitNewCommand(
-                ScriptExists, sha1s, response -> castArray(handleArrayResponse(response), Boolean.class));
+        return commandManager.submitNewCommandWithResponseType(
+                ScriptExists, sha1s, response -> castArray(handleArrayResponse(response), Boolean.class), true);
     }
 
     @Override
@@ -1132,11 +1132,9 @@ public class GlideClusterClient extends BaseClient
     @Override
     public CompletableFuture<Boolean[]> scriptExists(
             @NonNull GlideString[] sha1s, @NonNull Route route) {
-        return commandManager.submitNewCommand(
-                ScriptExists,
-                sha1s,
-                route,
-                response -> castArray(handleArrayResponse(response), Boolean.class));
+        // Force UTF-8 for boolean array response while keeping GlideString args
+        return commandManager.submitNewCommandWithResponseType(
+                ScriptExists, sha1s, route, response -> castArray(handleArrayResponse(response), Boolean.class), true);
     }
 
     @Override
@@ -1323,7 +1321,7 @@ public class GlideClusterClient extends BaseClient
     @Override
     public CompletableFuture<Object[]> scan(ClusterScanCursor cursor) {
         return commandManager
-                .submitClusterScan(cursor, ScanOptions.builder().build(), this::handleArrayResponse)
+                .submitClusterScanToJni(cursor, ScanOptions.builder().build(), this::handleArrayResponse, true)
                 .thenApply(
                         result -> new Object[] {new NativeClusterScanCursor(result[0].toString()), result[1]});
     }
@@ -1331,7 +1329,7 @@ public class GlideClusterClient extends BaseClient
     @Override
     public CompletableFuture<Object[]> scanBinary(ClusterScanCursor cursor) {
         return commandManager
-                .submitClusterScan(cursor, ScanOptions.builder().build(), this::handleArrayResponseBinary)
+                .submitClusterScanToJni(cursor, ScanOptions.builder().build(), this::handleArrayResponseBinary, false)
                 .thenApply(
                         result -> new Object[] {new NativeClusterScanCursor(result[0].toString()), result[1]});
     }
@@ -1339,7 +1337,7 @@ public class GlideClusterClient extends BaseClient
     @Override
     public CompletableFuture<Object[]> scan(ClusterScanCursor cursor, ScanOptions options) {
         return commandManager
-                .submitClusterScan(cursor, options, this::handleArrayResponse)
+                .submitClusterScanToJni(cursor, options, this::handleArrayResponse, true)
                 .thenApply(
                         result -> new Object[] {new NativeClusterScanCursor(result[0].toString()), result[1]});
     }
@@ -1347,7 +1345,7 @@ public class GlideClusterClient extends BaseClient
     @Override
     public CompletableFuture<Object[]> scanBinary(ClusterScanCursor cursor, ScanOptions options) {
         return commandManager
-                .submitClusterScan(cursor, options, this::handleArrayResponseBinary)
+                .submitClusterScanToJni(cursor, options, this::handleArrayResponseBinary, false)
                 .thenApply(
                         result -> new Object[] {new NativeClusterScanCursor(result[0].toString()), result[1]});
     }
