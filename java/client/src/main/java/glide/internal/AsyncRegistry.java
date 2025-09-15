@@ -1,27 +1,35 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.internal;
 
-import java.nio.ByteBuffer;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * RACE-CONDITION-FREE AsyncRegistry that eliminates the fundamental flaws causing crashes at high
- * concurrency.
+ * Async registry for correlating native callbacks with Java
+ * {@link CompletableFuture}s.
  *
- * <p>Key fixes: 1. Uses CompletableFuture.orTimeout() instead of manual timeout scheduling 2.
- * Atomic cleanup in whenComplete() eliminates race conditions 3. No separate timeout cleanup tasks
- * that race with completion 4. Proper memory management with automatic cleanup 5. DirectByteBuffer
- * support for large responses (>16KB)
+ * <p>
+ * Responsibilities:
+ * <ul>
+ * <li>Maintain a thread-safe mapping from correlation id to the original
+ * future</li>
+ * <li>Enforce per-client max inflight requests in Java (0 = defer to core
+ * default)</li>
+ * <li>Perform atomic cleanup on completion to avoid races and leaks</li>
+ * <li>Provide batched completion helpers to reduce JNI overhead</li>
+ * </ul>
+ *
+ * <p>
+ * Timeouts, backpressure defaults, and concurrency tuning are handled by the
+ * Rust core.
  */
 public final class AsyncRegistry {
 
     /** Thread-safe storage for active futures Using ConcurrentHashMap for lock-free operations */
     private static final ConcurrentHashMap<Long, CompletableFuture<Object>> activeFutures =
-            // Use configurable segment count for optimal concurrent performance
-            // inflight request allowed is more fittable
-            new ConcurrentHashMap<>(4096, 0.75f, Runtime.getRuntime().availableProcessors());
+            // Size based on max inflight requests with a small margin
+            new ConcurrentHashMap<>(estimateInitialCapacity());
 
     /**
      * Per-client inflight request counters Maps client handle to the number of active requests for
@@ -35,42 +43,34 @@ public final class AsyncRegistry {
 
     // ==================== CONFIGURABLE CONSTANTS ====================
 
-    // Removed timeout computation - Rust handles all timeouts
-
-    /** Compute maximum pending operations with configuration hierarchy */
-    private static int computeMaxPendingOperations() {
-        String env = System.getenv("GLIDE_MAX_PENDING_OPERATIONS");
+    /**
+     * Estimate initial capacity for the active futures map using inflight limit
+     * with margin
+     */
+    private static int estimateInitialCapacity() {
+        String env = System.getenv("GLIDE_MAX_INFLIGHT_REQUESTS");
         if (env != null) {
             try {
                 int v = Integer.parseInt(env.trim());
-                if (v > 0) return v;
+                if (v > 0)
+                    return Math.max(16, v * 2);
             } catch (NumberFormatException ignored) {
             }
         }
 
-        String prop = System.getProperty("glide.maxPendingOperations");
+        String prop = System.getProperty("glide.maxInflightRequests");
         if (prop != null) {
             try {
                 int v = Integer.parseInt(prop.trim());
-                if (v > 0) return v;
+                if (v > 0)
+                    return Math.max(16, v * 2);
             } catch (NumberFormatException ignored) {
             }
         }
 
-        // Use conservative default that balances memory usage with throughput
-        // This replaces the arbitrary hardcoded 50000
-        return 25000;
+        // Fall back to Rust core default (1000) with margin
+        return 2000;
     }
-
-    // Removed DEFAULT_TIMEOUT_MS - Rust handles all timeouts
-
-    /**
-     * Maximum number of pending operations allowed (backpressure mechanism). Now configurable instead
-     * of arbitrary hardcoded value.
-     */
-    private static final int MAX_PENDING_OPERATIONS = computeMaxPendingOperations();
-
-    // Removed overloaded register methods with timeout - simplified API
 
     /**
      * Register future with client-specific inflight limit and client handle for per-client tracking
@@ -81,15 +81,7 @@ public final class AsyncRegistry {
             throw new IllegalArgumentException("Future cannot be null");
         }
 
-        // GLOBAL backpressure check (system-wide limit) - NEW
-        // This moves backpressure control from Rust-side queue limiting to Java-side request blocking
-        int currentPending = activeFutures.size();
-        if (currentPending >= MAX_PENDING_OPERATIONS) {
-            throw new glide.api.models.exceptions.RequestException(
-                    "System at maximum pending operations: " + currentPending + "/" + MAX_PENDING_OPERATIONS);
-        }
-
-        // Client-specific inflight limit check (matches UDS glide-core behavior)
+        // Client-specific inflight limit check
         // 0 means "use native/core defaults" - no limit enforcement in Java layer
         if (maxInflightRequests > 0) {
             // Get or create per-client counter
@@ -110,19 +102,18 @@ public final class AsyncRegistry {
 
         long correlationId = nextId.getAndIncrement();
 
-        // Store the ORIGINAL future, not a transformed one
-        // .orTimeout() and .whenComplete() create NEW futures, breaking the reference!
+        // Store the original future
         @SuppressWarnings("unchecked")
         CompletableFuture<Object> originalFuture = (CompletableFuture<Object>) future;
 
-        // Store ORIGINAL future for completion by native code
+        // Store original future for completion by native code
         activeFutures.put(correlationId, originalFuture);
 
-        // Set up cleanup on the ORIGINAL future
+        // Set up cleanup on the original future
         // This ensures proper resource cleanup when completed
         originalFuture.whenComplete(
                 (result, throwable) -> {
-                    // Atomic cleanup - no race conditions possible
+                    // Atomic cleanup - no race conditions
                     activeFutures.remove(correlationId);
 
                     // Decrement per-client counter if applicable
@@ -140,7 +131,7 @@ public final class AsyncRegistry {
 
     /** Register with default settings */
     public static <T> long register(CompletableFuture<T> future) {
-        return register(future, MAX_PENDING_OPERATIONS, 0L);
+        return register(future, 0, 0L);
     }
 
     /** Register with client-specific inflight limit */
@@ -160,17 +151,6 @@ public final class AsyncRegistry {
             return false;
         }
 
-        // Log DirectByteBuffer usage for performance monitoring
-        if (result instanceof ByteBuffer) {
-            ByteBuffer buffer = (ByteBuffer) result;
-            if (buffer.isDirect()) {
-                System.getLogger("glide.performance")
-                        .log(
-                                System.Logger.Level.DEBUG,
-                                "DirectByteBuffer response: {} bytes (zero-copy optimization)",
-                                buffer.remaining());
-            }
-        }
 
         // complete() returns false if already completed
         // This prevents IllegalStateException from completing twice

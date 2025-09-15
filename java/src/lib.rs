@@ -2,7 +2,6 @@
 
 use glide_core::client::FINISHED_SCAN_CURSOR;
 use glide_core::errors::error_message;
-use glide_core::request_type::RequestType;
 
 // Protocol constants for Java (defined directly since we don't use socket layer)
 const TYPE_HASH: &str = "hash";
@@ -1822,51 +1821,6 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_updateConnectionPas
         "updateConnectionPassword",
     )
     .unwrap_or(())
-}
-
-
-/// Helper function to create a Redis command from RequestType and arguments
-fn create_command_from_request_type(request_type: RequestType, args: Vec<String>) -> redis::Cmd {
-    let mut cmd = redis::Cmd::new();
-    
-    // Convert RequestType to command name
-    let command_name = match request_type {
-        RequestType::ScriptShow => "SCRIPT",
-        RequestType::ScriptExists => "SCRIPT",
-        RequestType::ScriptFlush => "SCRIPT", 
-        RequestType::ScriptKill => "SCRIPT",
-        _ => panic!("Unsupported request type for script management: {:?}", request_type),
-    };
-    
-    cmd.arg(command_name);
-    
-    // Add subcommand based on request type
-    match request_type {
-        RequestType::ScriptShow => {
-            cmd.arg("SHOW");
-            for arg in args {
-                cmd.arg(arg);
-            }
-        },
-        RequestType::ScriptExists => {
-            cmd.arg("EXISTS");
-            for arg in args {
-                cmd.arg(arg);
-            }
-        },
-        RequestType::ScriptFlush => {
-            cmd.arg("FLUSH");
-            for arg in args {
-                cmd.arg(arg);
-            }
-        },
-        RequestType::ScriptKill => {
-            cmd.arg("KILL");
-        },
-        _ => {},
-    }
-    
-    cmd
 }
 
 /// JNI bridge for cluster scan that properly manages cursor lifecycle

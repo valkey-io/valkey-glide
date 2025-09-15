@@ -146,10 +146,13 @@ public class CommandManager {
             List<GlideString> keys,
             List<GlideString> args,
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
-
         CommandRequest.Builder command = prepareScript(script, keys, args);
-        return submitCommandToJni(
-                command, responseHandler, true, false); // Script with GlideString -> expect binary response
+        // Decide response encoding based on script declaration
+        // binaryOutput=false -> expect UTF-8 Java String types
+        // binaryOutput=true  -> expect binary-safe GlideString/byte[]
+        boolean expectUtf8Response = !script.getBinaryOutput();
+        boolean binaryMode = !expectUtf8Response;
+        return submitCommandToJni(command, responseHandler, binaryMode, expectUtf8Response);
     }
 
     /** Build a Script (by hash) request with route to send to Valkey via JNI. */
@@ -158,10 +161,10 @@ public class CommandManager {
             List<GlideString> args,
             Route route,
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
-
         CommandRequest.Builder command = prepareScript(script, args, route);
-        return submitCommandToJni(
-                command, responseHandler, true, false); // Script with GlideString -> expect binary response
+        boolean expectUtf8Response = !script.getBinaryOutput();
+        boolean binaryMode = !expectUtf8Response;
+        return submitCommandToJni(command, responseHandler, binaryMode, expectUtf8Response);
     }
 
     /** Build a Cluster Batch and send via JNI. */

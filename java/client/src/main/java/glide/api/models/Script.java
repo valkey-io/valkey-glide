@@ -46,11 +46,7 @@ public class Script implements AutoCloseable {
 
     @Override
     protected void finalize() throws Throwable {
-        try {
-            // Drop the linked script on garbage collection.
-            this.close();
-        } finally {
-            super.finalize();
-        }
+        // Drop the linked script on garbage collection.
+        this.close();
     }
 }

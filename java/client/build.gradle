@@ -173,12 +173,26 @@ tasks.register('copyNativeLib', Copy) {
 }
 
 tasks.register('testFfi', Test) {
+    // Opt-in FFI test suite for legacy C-ABI checks. Not part of default build.
     dependsOn 'buildRustFfi'
     include "glide/ffi/FfiTest.class"
+    // Keep logging consistent with other tests
+    testLogging {
+        exceptionFormat "full"
+        events "started", "skipped", "passed", "failed"
+        showStandardStreams true
+    }
 }
 
+// Default buildAll excludes FFI tests to avoid UnsatisfiedLinkError on JNI-only builds.
 tasks.register('buildAll') {
-    dependsOn 'protobuf', 'buildRust', 'testFfi'
+    dependsOn 'protobuf', 'buildRust'
+    finalizedBy 'build'
+}
+
+// Optional target to include FFI tests explicitly when requested.
+tasks.register('buildAllWithFfi') {
+    dependsOn 'protobuf', 'buildRustFfi', 'testFfi'
     finalizedBy 'build'
 }
 
