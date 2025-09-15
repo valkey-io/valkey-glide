@@ -80,6 +80,8 @@ shadowJar.dependsOn('copyNativeLib')
 javadoc.dependsOn('copyNativeLib')
 compileTestJava.dependsOn('copyNativeLib')
 delombok.dependsOn('compileJava')
+copyNativeLib.dependsOn(':client:buildRust')
+compileJava.dependsOn(':client:shadowJar', ':client:jar')
 
 tasks.withType(Test) {
     useJUnitPlatform()
