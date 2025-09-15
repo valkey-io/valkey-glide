@@ -245,19 +245,17 @@ public class CommandManager {
             return jniFuture
                     .thenApply(
                             result -> {
-                                // Create a minimal Response just for compatibility with the handler
-                                // The handler will extract the object from it
                                 Response.Builder builder = Response.newBuilder();
+                                Object toStore = result;
                                 if (result == null) {
-                                    // Null response
                                     builder.setRespPointer(0L);
                                 } else if ("OK".equals(result)) {
-                                    // OK constant response
                                     builder.setConstantResponse(ConstantResponse.OK);
                                 } else {
-                                    // Store the object temporarily and pass its ID
-                                    // This allows BaseResponseResolver to retrieve it
-                                    long objectId = JniResponseRegistry.storeObject(result);
+                                    if (result instanceof ByteBuffer) {
+                                        toStore = normalizeDirectBuffer((ByteBuffer) result, expectUtf8Response);
+                                    }
+                                    long objectId = JniResponseRegistry.storeObject(toStore);
                                     builder.setRespPointer(objectId);
                                 }
                                 return responseHandler.apply(builder.build());
@@ -268,6 +266,63 @@ public class CommandManager {
             errorFuture.completeExceptionally(e);
             return errorFuture;
         }
+    }
+
+    private Object normalizeDirectBuffer(ByteBuffer buffer, boolean expectUtf8Response) {
+        ByteBuffer dup = buffer.duplicate();
+        dup.rewind();
+        if (dup.remaining() == 0) {
+            return expectUtf8Response ? "" : glide.api.models.GlideString.gs(new byte[0]);
+        }
+        byte marker = dup.get();
+        dup.rewind();
+        if (marker == '*') {
+            // Serialized array/map (custom wire format)
+            return deserializeByteBufferArray(dup);
+        } else if (marker == '%') {
+            return deserializeByteBufferMap(dup, expectUtf8Response);
+        }
+        // Bulk string bytes
+        byte[] bytes = new byte[dup.remaining()];
+        dup.get(bytes);
+        if (expectUtf8Response) {
+            return new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
+        } else {
+            return glide.api.models.GlideString.gs(bytes);
+        }
+    }
+
+    /**
+     * Deserialize a ByteBuffer containing a serialized map back to Map<?,?>. Format:
+     * '%' + count(u32 BE) + repeated [keyLen(u32) + keyBytes + valLen(u32) + valBytes]
+     */
+    private java.util.LinkedHashMap<Object, Object> deserializeByteBufferMap(ByteBuffer buffer, boolean expectUtf8) {
+        buffer.order(ByteOrder.BIG_ENDIAN);
+        buffer.rewind();
+
+        byte marker = buffer.get();
+        if (marker != '%') {
+            throw new IllegalArgumentException("Expected map marker '%', got: " + (char) marker);
+        }
+        int count = buffer.getInt();
+        java.util.LinkedHashMap<Object, Object> map = new java.util.LinkedHashMap<>(Math.max(16, count));
+        for (int i = 0; i < count; i++) {
+            int klen = buffer.getInt();
+            byte[] kbytes = new byte[klen];
+            buffer.get(kbytes);
+            int vlen = buffer.getInt();
+            byte[] vbytes = new byte[vlen];
+            buffer.get(vbytes);
+
+            Object key = expectUtf8
+                    ? new String(kbytes, java.nio.charset.StandardCharsets.UTF_8)
+                    : glide.api.models.GlideString.gs(kbytes);
+            Object val = expectUtf8
+                    ? new String(vbytes, java.nio.charset.StandardCharsets.UTF_8)
+                    : glide.api.models.GlideString.gs(vbytes);
+            map.put(key, val);
+        }
+        return map;
     }
 
     // Removed blocking command detection - Rust handles all timeout logic
@@ -374,12 +429,28 @@ public class CommandManager {
             // OK constant response
             builder.setConstantResponse(ConstantResponse.OK);
         } else if (jniResult instanceof ByteBuffer) {
-            // DirectByteBuffer from JNI containing serialized array for large responses
-            // Deserialize it back to Object[] for batch responses
+            // DirectByteBuffer from JNI. Could be a serialized array/map or a large bulk string.
             ByteBuffer buffer = (ByteBuffer) jniResult;
-            Object[] deserializedArray = deserializeByteBufferArray(buffer);
-            // Store the deserialized array
-            long objectId = JniResponseRegistry.storeObject(deserializedArray);
+            ByteBuffer dup = buffer.duplicate();
+            dup.rewind();
+            Object toStore;
+            if (dup.remaining() > 0) {
+                byte marker = dup.get();
+                if (marker == '*' || marker == '%') {
+                    // Serialized array/map (our custom wire format)
+                    dup.rewind();
+                    toStore = deserializeByteBufferArray(dup);
+                } else {
+                    // Treat as bulk string bytes; default to UTF-8 string for safety
+                    dup.rewind();
+                    byte[] bytes = new byte[dup.remaining()];
+                    dup.get(bytes);
+                    toStore = new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
+                }
+            } else {
+                toStore = "";
+            }
+            long objectId = JniResponseRegistry.storeObject(toStore);
             builder.setRespPointer(objectId);
         } else {
             // Store the object in the registry and get its ID
@@ -405,11 +476,26 @@ public class CommandManager {
             // OK constant response
             builder.setConstantResponse(ConstantResponse.OK);
         } else if (jniResult instanceof ByteBuffer) {
-            // DirectByteBuffer from JNI containing serialized array for large responses
+            // DirectByteBuffer from JNI. Could be serialized array/map or large bulk string.
             ByteBuffer buffer = (ByteBuffer) jniResult;
-            Object[] deserializedArray = deserializeByteBufferArray(buffer);
-            // Store the deserialized array
-            long objectId = JniResponseRegistry.storeObject(deserializedArray);
+            ByteBuffer dup = buffer.duplicate();
+            dup.rewind();
+            Object toStore;
+            if (dup.remaining() > 0) {
+                byte marker = dup.get();
+                if (marker == '*' || marker == '%') {
+                    dup.rewind();
+                    toStore = deserializeByteBufferArray(dup);
+                } else {
+                    dup.rewind();
+                    byte[] bytes = new byte[dup.remaining()];
+                    dup.get(bytes);
+                    toStore = new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
+                }
+            } else {
+                toStore = "";
+            }
+            long objectId = JniResponseRegistry.storeObject(toStore);
             builder.setRespPointer(objectId);
         } else {
             // Store the Java object and get an ID for it
