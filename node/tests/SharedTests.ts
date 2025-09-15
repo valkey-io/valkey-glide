@@ -2217,7 +2217,74 @@ export function runBaseTests(config: {
         config.timeout,
     );
 
-     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `hsetex with field conditional changes_%p`,
+        async (protocol) => {
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
+
+                    const key = getRandomKey();
+                    const field1 = getRandomKey();
+                    const field2 = getRandomKey();
+                    const field3 = getRandomKey();
+                    const value1 = getRandomKey();
+                    const value2 = getRandomKey();
+                    const value3 = getRandomKey();
+
+                    // Set up initial fields
+                    expect(
+                        await client.hset(key, { [field1]: value1 }),
+                    ).toEqual(1);
+
+                    // Test FXX (only if all fields exist)
+                    expect(
+                        await client.hsetex(
+                            key,
+                            { [field1]: value2, [field2]: value2 },
+                            {
+                                fieldConditionalChange:
+                                    HashFieldConditionalChange.ONLY_IF_ALL_EXIST,
+                                expiry: { type: TimeUnit.Seconds, count: 60 },
+                            },
+                        ),
+                    ).toEqual(0); // field2 doesn't exist
+
+                    // Test FNX (only if none of the fields exist)
+                    expect(
+                        await client.hsetex(
+                            key,
+                            { [field2]: value2, [field3]: value3 },
+                            {
+                                fieldConditionalChange:
+                                    HashFieldConditionalChange.ONLY_IF_NONE_EXIST,
+                                expiry: { type: TimeUnit.Seconds, count: 60 },
+                            },
+                        ),
+                    ).toEqual(1); // both fields don't exist
+
+                    // Should fail because field2 now exists
+                    expect(
+                        await client.hsetex(
+                            key,
+                            { [field2]: value2, [field3]: value3 },
+                            {
+                                fieldConditionalChange:
+                                    HashFieldConditionalChange.ONLY_IF_NONE_EXIST,
+                                expiry: { type: TimeUnit.Seconds, count: 60 },
+                            },
+                        ),
+                    ).toEqual(0);
+                },
+                protocol,
+            );
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hgetex basic functionality_%p`,
         async (protocol) => {
             await runTest(
@@ -2273,7 +2340,7 @@ export function runBaseTests(config: {
         config.timeout,
     );
 
-        it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hexpire basic functionality_%p`,
         async (protocol) => {
             await runTest(
@@ -2330,6 +2397,91 @@ export function runBaseTests(config: {
                         field1,
                     ]);
                     expect(result3).toEqual([-2]);
+                },
+                protocol,
+            );
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `hexpire with conditions_%p`,
+        async (protocol) => {
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("9.0.0")) {
+                        return;
+                    }
+
+                    const key = getRandomKey();
+                    const field1 = getRandomKey();
+                    const field2 = getRandomKey();
+                    const value1 = getRandomKey();
+                    const value2 = getRandomKey();
+
+                    // Set up hash with some fields
+                    await client.hset(key, {
+                        [field1]: value1,
+                        [field2]: value2,
+                    });
+
+                    // Set initial expiration on field1
+                    await client.hexpire(key, 120, [field1]);
+
+                    // Test NX condition (only if no expiry)
+                    const result1 = await client.hexpire(
+                        key,
+                        60,
+                        [field1, field2],
+                        {
+                            condition:
+                                HashExpirationCondition.ONLY_IF_NO_EXPIRY,
+                        },
+                    );
+                    expect(result1).toEqual([0, 1]); // field1 already has expiry, field2 doesn't
+
+                    // Test XX condition (only if has expiry)
+                    const result2 = await client.hexpire(
+                        key,
+                        180,
+                        [field1, field2],
+                        {
+                            condition:
+                                HashExpirationCondition.ONLY_IF_HAS_EXPIRY,
+                        },
+                    );
+                    expect(result2).toEqual([1, 1]); // both should have expiry now
+
+                    // Verify expiration was updated using HTTL
+                    const ttlResult2 = await client.httl(key, [field1, field2]);
+                    expect(ttlResult2[0]).toBeGreaterThan(0);
+                    expect(ttlResult2[0]).toBeLessThanOrEqual(180);
+                    expect(ttlResult2[1]).toBeGreaterThan(0);
+                    expect(ttlResult2[1]).toBeLessThanOrEqual(180);
+
+                    // Test GT condition (only if greater than current)
+                    const result3 = await client.hexpire(key, 300, [field1], {
+                        condition:
+                            HashExpirationCondition.ONLY_IF_GREATER_THAN_CURRENT,
+                    });
+                    expect(result3).toEqual([1]); // 300 > 180
+
+                    // Verify expiration was updated using HTTL
+                    const ttlResult3 = await client.httl(key, [field1]);
+                    expect(ttlResult3[0]).toBeGreaterThan(180); // Should be greater than previous TTL
+                    expect(ttlResult3[0]).toBeLessThanOrEqual(300);
+
+                    // Test LT condition (only if less than current)
+                    const result4 = await client.hexpire(key, 150, [field1], {
+                        condition:
+                            HashExpirationCondition.ONLY_IF_LESS_THAN_CURRENT,
+                    });
+                    expect(result4).toEqual([1]); // 150 < 300
+
+                    // Verify expiration was updated using HTTL
+                    const ttlResult4 = await client.httl(key, [field1]);
+                    expect(ttlResult4[0]).toBeGreaterThan(0);
+                    expect(ttlResult4[0]).toBeLessThanOrEqual(150);
                 },
                 protocol,
             );
@@ -2458,8 +2610,6 @@ export function runBaseTests(config: {
         },
         config.timeout,
     );
-
-    
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hexpireat basic functionality_%p`,
@@ -2910,14 +3060,6 @@ export function runBaseTests(config: {
         },
         config.timeout,
     );
-
-    
-
-    
-
-    
-
-    
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `lpush, lpop and lrange with existing and non existing key_%p`,
