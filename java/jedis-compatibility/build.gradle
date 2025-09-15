@@ -22,8 +22,6 @@ ext {
 
 dependencies {
     implementation project(':client')
-    // Depend on the main GLIDE client
-    //implementation group: 'io.valkey', name: 'valkey-glide', version: project.ext.defaultReleaseVersion, classifier: osdetector.classifier
 
     // Transitive dependencies needed by GLIDE client
     implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.13.0'
