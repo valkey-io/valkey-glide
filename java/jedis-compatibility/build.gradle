@@ -8,6 +8,7 @@ plugins {
 }
 
 repositories {
+    mavenLocal()
     mavenCentral()
 }
 
@@ -22,7 +23,10 @@ ext {
 
 dependencies {
     // Depend on the main GLIDE client
-    implementation project(':client')
+    implementation group: 'io.valkey', name: 'valkey-glide', version: project.ext.defaultReleaseVersion, classifier: osdetector.classifier
+
+    // Transitive dependencies needed by GLIDE client
+    implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.13.0'
 
     // Explicit protobuf version to match client
     shadow group: 'com.google.protobuf', name: 'protobuf-java', version: '4.29.3'
@@ -74,8 +78,6 @@ tasks.register('copyNativeLib', Copy) {
 jar.dependsOn('copyNativeLib')
 shadowJar.dependsOn('copyNativeLib')
 javadoc.dependsOn('copyNativeLib')
-copyNativeLib.dependsOn(':client:buildRust')
-compileJava.dependsOn(':client:shadowJar', ':client:jar')
 compileTestJava.dependsOn('copyNativeLib')
 delombok.dependsOn('compileJava')
 
