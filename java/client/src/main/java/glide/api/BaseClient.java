@@ -869,6 +869,18 @@ public abstract class BaseClient
         return response;
     }
 
+    private Map<String, Object> convertBinaryLcsMap(Map<GlideString, Object> response) {
+        if (response == null) {
+            return new LinkedHashMap<>();
+        }
+        Map<String, Object> converted = new LinkedHashMap<>(Math.max(response.size(), 1));
+        for (Map.Entry<GlideString, Object> entry : response.entrySet()) {
+            GlideString key = entry.getKey();
+            converted.put(key != null ? key.toString() : null, entry.getValue());
+        }
+        return converted;
+    }
+
     /**
      * Update the current connection with a new password.
      *
@@ -4956,7 +4968,11 @@ public abstract class BaseClient
                 new ArgsBuilder().add(key1).add(key2).add(IDX_COMMAND_STRING).toArray();
 
         return commandManager.submitNewCommand(
-                LCS, arguments, response -> handleLcsIdxResponse(handleMapResponse(response)));
+                LCS,
+                arguments,
+                response ->
+                        handleLcsIdxResponse(
+                                convertBinaryLcsMap(handleBinaryStringMapResponse(response))));
     }
 
     @Override
@@ -4982,7 +4998,11 @@ public abstract class BaseClient
                         .add(minMatchLen)
                         .toArray();
         return commandManager.submitNewCommand(
-                LCS, arguments, response -> handleLcsIdxResponse(handleMapResponse(response)));
+                LCS,
+                arguments,
+                response ->
+                        handleLcsIdxResponse(
+                                convertBinaryLcsMap(handleBinaryStringMapResponse(response))));
     }
 
     @Override
@@ -5002,7 +5022,10 @@ public abstract class BaseClient
                         .add(IDX_COMMAND_STRING)
                         .add(WITHMATCHLEN_COMMAND_STRING)
                         .toArray();
-        return commandManager.submitNewCommand(LCS, arguments, this::handleMapResponse);
+        return commandManager.submitNewCommand(
+                LCS,
+                arguments,
+                response -> convertBinaryLcsMap(handleBinaryStringMapResponse(response)));
     }
 
     @Override
@@ -5033,8 +5056,10 @@ public abstract class BaseClient
                         .add(minMatchLen)
                         .add(WITHMATCHLEN_COMMAND_STRING)
                         .toArray();
-
-        return commandManager.submitNewCommand(LCS, arguments, this::handleMapResponse);
+        return commandManager.submitNewCommand(
+                LCS,
+                arguments,
+                response -> convertBinaryLcsMap(handleBinaryStringMapResponse(response)));
     }
 
     @Override

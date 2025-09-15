@@ -1099,6 +1099,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync
                 let client_result = ensure_client_for_handle(handle_id).await;
                 match client_result {
                     Ok(mut client) => {
+                        let root_span_ptr_opt = command_request.root_span_ptr;
                         // Process command using FFI methodology (surgical reuse)
                         let result = match &command_request.command {
                             Some(command_request::Command::SingleCommand(command)) => {
@@ -1119,8 +1120,21 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync
                                             None
                                         };
                                         
-                                        client.send_command(&cmd, routing).await
-                                            .map_err(|e| anyhow::anyhow!("Command execution failed: {e}"))
+                                        {
+                                            let exec = client
+                                                .send_command(&cmd, routing)
+                                                .await
+                                                .map_err(|e| anyhow::anyhow!("Command execution failed: {e}"));
+                                            if let Some(root_span_ptr) = root_span_ptr_opt {
+                                                if root_span_ptr != 0 {
+                                                    if let Ok(span) = unsafe { glide_core::GlideOpenTelemetry::span_from_pointer(root_span_ptr) } {
+                                                        span.end();
+                                                    }
+                                                    unsafe { std::sync::Arc::from_raw(root_span_ptr as *const glide_core::GlideSpan); }
+                                                }
+                                            }
+                                            exec
+                                        }
                                     }
                                     Err(e) => Err(anyhow::anyhow!("Failed to create command: {e}"))
                                 }
@@ -1160,14 +1174,23 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync
                                 
                                 // Execute using existing client methods
                                 if batch.is_atomic {
-                                    client.send_transaction(
+                                    let exec = client.send_transaction(
                                         &pipeline,
                                         routing,
                                         batch.timeout,
                                         batch.raise_on_error.unwrap_or(true)
-                                    ).await.map_err(|e| anyhow::anyhow!("Transaction failed: {e}"))
+                                    ).await.map_err(|e| anyhow::anyhow!("Transaction failed: {e}"));
+                                    if let Some(root_span_ptr) = root_span_ptr_opt {
+                                        if root_span_ptr != 0 {
+                                            if let Ok(span) = unsafe { glide_core::GlideOpenTelemetry::span_from_pointer(root_span_ptr) } {
+                                                span.end();
+                                            }
+                                            unsafe { std::sync::Arc::from_raw(root_span_ptr as *const glide_core::GlideSpan); }
+                                        }
+                                    }
+                                    exec
                                 } else {
-                                    client.send_pipeline(
+                                    let exec = client.send_pipeline(
                                         &pipeline,
                                         routing,
                                         batch.raise_on_error.unwrap_or(true),
@@ -1176,7 +1199,16 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync
                                             retry_server_error: batch.retry_server_error.unwrap_or(false),
                                             retry_connection_error: batch.retry_connection_error.unwrap_or(false),
                                         }
-                                    ).await.map_err(|e| anyhow::anyhow!("Pipeline failed: {e}"))
+                                    ).await.map_err(|e| anyhow::anyhow!("Pipeline failed: {e}"));
+                                    if let Some(root_span_ptr) = root_span_ptr_opt {
+                                        if root_span_ptr != 0 {
+                                            if let Ok(span) = unsafe { glide_core::GlideOpenTelemetry::span_from_pointer(root_span_ptr) } {
+                                                span.end();
+                                            }
+                                            unsafe { std::sync::Arc::from_raw(root_span_ptr as *const glide_core::GlideSpan); }
+                                        }
+                                    }
+                                    exec
                                 }
                             }
                             Some(command_request::Command::ScriptInvocation(script)) => {
@@ -1367,6 +1399,8 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                     return Some(());
                 }
             };
+            // Extract optional root span pointer from the request (if provided by Java)
+            let root_span_ptr_opt = command_request.root_span_ptr;
 
             let handle_id = client_ptr as u64;
             let jvm = match env.get_java_vm() {
@@ -1390,6 +1424,17 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                     Ok(mut client) => {
                         // Execute batch using existing FFI methodology
                         let result = async {
+                            // If we have a root span, create a child span named "send_batch" to match expectations
+                            let mut send_batch_span: Option<glide_core::GlideSpan> = None;
+                            if let Some(root_span_ptr) = root_span_ptr_opt {
+                                if root_span_ptr != 0 {
+                                    if let Ok(root_span) = unsafe { glide_core::GlideOpenTelemetry::span_from_pointer(root_span_ptr) } {
+                                        if let Ok(child) = root_span.add_span("send_batch") {
+                                            send_batch_span = Some(child);
+                                        }
+                                    }
+                                }
+                            }
                             // Create pipeline using existing FFI approach
                             let mut pipeline = redis::Pipeline::with_capacity(batch_clone.commands.len());
                             if batch_clone.is_atomic {
@@ -1409,7 +1454,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                                 .map_err(|e| anyhow::anyhow!("Routing error: {e}"))?;
                             
                             // Execute using existing client methods
-                            if batch_clone.is_atomic {
+                            let exec_res = if batch_clone.is_atomic {
                                 client.send_transaction(
                                     &pipeline,
                                     routing,
@@ -1427,7 +1472,22 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                                         retry_connection_error: batch_clone.retry_connection_error.unwrap_or(false),
                                     }
                                 ).await.map_err(|e| anyhow::anyhow!("Pipeline failed: {e}"))
+                            };
+
+                            // End child span if created
+                            if let Some(child) = send_batch_span.as_ref() {
+                                child.end();
                             }
+                            // End and drop the root span if provided
+                            if let Some(root_span_ptr) = root_span_ptr_opt {
+                                if root_span_ptr != 0 {
+                                    if let Ok(root_span) = unsafe { glide_core::GlideOpenTelemetry::span_from_pointer(root_span_ptr) } {
+                                        root_span.end();
+                                    }
+                                    unsafe { std::sync::Arc::from_raw(root_span_ptr as *const glide_core::GlideSpan); }
+                                }
+                            }
+                            exec_res
                         }.await;
 
                         let binary_mode = expect_utf8 == 0;

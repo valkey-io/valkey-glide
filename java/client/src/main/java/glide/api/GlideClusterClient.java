@@ -35,6 +35,7 @@ import static command_request.CommandRequestOuterClass.RequestType.ScriptFlush;
 import static command_request.CommandRequestOuterClass.RequestType.ScriptKill;
 import static command_request.CommandRequestOuterClass.RequestType.Time;
 import static command_request.CommandRequestOuterClass.RequestType.UnWatch;
+import static command_request.CommandRequestOuterClass.RequestType.Wait;
 import static glide.api.commands.ServerManagementCommands.VERSION_VALKEY_API;
 import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_VALKEY_API;
@@ -69,6 +70,7 @@ import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.configuration.ClusterSubscriptionConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
+import glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
 import glide.api.models.configuration.ServerCredentials;
 import glide.ffi.resolvers.ClusterScanCursorResolver;
@@ -1316,6 +1318,13 @@ public class GlideClusterClient extends BaseClient
     public CompletableFuture<GlideString> randomKeyBinary() {
         return commandManager.submitNewCommand(
                 RandomKey, new GlideString[0], this::handleGlideStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> wait(long numreplicas, long timeout) {
+        String[] arguments = new String[] {Long.toString(numreplicas), Long.toString(timeout)};
+        return commandManager.submitNewCommand(
+                Wait, arguments, SimpleSingleNodeRoute.RANDOM, this::handleLongResponse);
     }
 
     @Override

@@ -223,8 +223,11 @@ public final class AsyncRegistry {
 
         String lower = msg.toLowerCase();
 
-        // Timeout errors → TimeoutException
-        if (lower.contains("timed out") || lower.contains("timeout")) {
+        // Timeout errors → TimeoutException (only when the message indicates a real timeout event)
+        if (lower.contains("timed out")
+                || lower.contains("timeout while")
+                || lower.contains("timeout waiting")
+                || lower.contains("timeout during")) {
             return new glide.api.models.exceptions.TimeoutException(msg);
         }
 
