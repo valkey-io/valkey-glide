@@ -1020,6 +1020,7 @@ pub(crate) mod shared_client_tests {
     #[rstest]
     #[serial_test::serial]
     fn test_iam_cluster_refresh_token_after_connection_kill_and_token_expired() {
+        // Change the sleep duration inside the test to be > 900 if you want the token to be expired before reconnect
         block_on_all(async {
             remove_test_credentials();
 
@@ -1077,8 +1078,8 @@ pub(crate) mod shared_client_tests {
                         "GET should return the set value"
                     );
 
-                    // Wait enough for the token to be expired
-                    tokio::time::sleep(std::time::Duration::from_secs(960)).await;
+                    // Change to 910 if you want the token to be expired before reconnect
+                    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
                     // generate a new token before reconnect
                     client.refresh_iam_token().await.unwrap();
@@ -1132,7 +1133,7 @@ pub(crate) mod shared_client_tests {
      * Ensures the client **reconnects** to an ElastiCache cluster with **IAM auth** after a
      * **node failover**.
      * Install aws sdk for running the test.
-     * Follow the steps inside the test to trigger a node failover.
+     * Follow the steps inside the test to trigger a node failover, while keeping the token expired.
      */
     #[cfg(feature = "iam_tests")]
     #[rstest]
@@ -1155,7 +1156,7 @@ pub(crate) mod shared_client_tests {
                 cluster_name,
                 username,
                 region,
-                Some(2100), // 35 min
+                Some(2400), // 40 min
                 true,       // cluster mode
                 ServiceType::ELASTICACHE,
             );
@@ -1166,20 +1167,28 @@ pub(crate) mod shared_client_tests {
             match client_result {
                 Ok(mut client) => {
                     // Test initial connection with PING
+
+                    use logger_core::log_info;
                     let initial_ping = client.send_command(&redis::cmd("PING"), None).await;
                     assert!(
                         initial_ping.is_ok(),
                         "Initial PING should succeed: {initial_ping:?}"
                     );
 
+                    // Change to 900
                     // wait enough for the token to be expired
-                    tokio::time::sleep(std::time::Duration::from_secs(1000)).await;
+                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                    log_info("Initial token is expired", "");
 
                     // run this script in the terminal to trigger a node failover after 900 seconds
                     //  aws elasticache test-failover \
-                    //   --replication-group-id iam-auth-cluster \
+                    //   --replication-group-id iam-auth-test \
                     //   --node-group-id 0001 \
                     //   --region us-east-1
+
+                    // Change to 400
+                    // Wait for the cluster and the client to stabilize
+                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
                     // Test manual IAM token refresh
                     let refresh_result = client.refresh_iam_token().await;
@@ -1195,8 +1204,10 @@ pub(crate) mod shared_client_tests {
                         "PING after token refresh should succeed: {post_refresh_ping:?}"
                     );
 
+                    // Change to 900
                     // wait enough again for the token to be expired
-                    tokio::time::sleep(std::time::Duration::from_secs(1000)).await;
+                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                    log_info("Refresh token is expired", "");
 
                     // run this script in the terminal to trigger a node failover after 900 seconds
                     //  aws elasticache test-failover \
@@ -1204,8 +1215,11 @@ pub(crate) mod shared_client_tests {
                     //   --node-group-id 0001 \
                     //   --region us-east-1
 
-                    // wait for the cluster and the client to stabilize
-                    tokio::time::sleep(std::time::Duration::from_secs(400)).await;
+                    // Change to 400
+                    // When failovering the client doesn't have a valid token, but
+                    // when when time interval hit the 2400 seconds, it will generate a new token and reconnect
+                    // Follow the logs to verify that the client reconnected successfully.
+                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
                     // Verify that the client still works after token refresh
                     let post_refresh_ping = client.send_command(&redis::cmd("PING"), None).await;
