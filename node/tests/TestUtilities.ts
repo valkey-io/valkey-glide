@@ -1102,6 +1102,40 @@ export async function batchTest(
     baseBatch.hlen(key4);
     responseData.push(["hlen(key4)", 1]);
     baseBatch.hrandfield(key4);
+    responseData.push(["hrandfield(key4)", field.toString()]);
+    baseBatch.hrandfieldCount(key4, -2);
+    responseData.push([
+        "hrandfieldCount(key4, -2)",
+        [field.toString(), field.toString()],
+    ]);
+    baseBatch.hrandfieldWithValues(key4, 2);
+    responseData.push([
+        "hrandfieldWithValues(key4, 2)",
+        [[field.toString(), value.toString()]],
+    ]);
+    baseBatch.hsetnx(key4, field, value);
+    responseData.push(["hsetnx(key4, field, value)", false]);
+    baseBatch.hvals(key4);
+    responseData.push(["hvals(key4)", [value.toString()]]);
+    baseBatch.hkeys(key4);
+    responseData.push(["hkeys(key4)", [field.toString()]]);
+    baseBatch.hget(key4, field);
+    responseData.push(["hget(key4, field)", value.toString()]);
+    baseBatch.hgetall(key4);
+    responseData.push([
+        "hgetall(key4)",
+        [{ key: field.toString(), value: value.toString() }],
+    ]);
+    baseBatch.hdel(key4, [field]);
+    responseData.push(["hdel(key4, [field])", 1]);
+    baseBatch.hmget(key4, [field]);
+    responseData.push(["hmget(key4, [field])", [null]]);
+    baseBatch.hexists(key4, field);
+    responseData.push(["hexists(key4, field)", false]);
+    baseBatch.hrandfield(key4);
+    responseData.push(["hrandfield(key4)", null]);
+
+    // HSETEX tests - only run if server version is 9.0.0 or higher
     if (!cluster.checkIfServerVersionLessThan("9.0.0")) {
         // Test basic HSETEX with expiry
         baseBatch.hsetex(
@@ -1188,40 +1222,6 @@ export async function batchTest(
             [-1, 60, 60],
         ]);
     }
-    responseData.push(["hrandfield(key4)", field.toString()]);
-    baseBatch.hrandfieldCount(key4, -2);
-    responseData.push([
-        "hrandfieldCount(key4, -2)",
-        [field.toString(), field.toString()],
-    ]);
-    baseBatch.hrandfieldWithValues(key4, 2);
-    responseData.push([
-        "hrandfieldWithValues(key4, 2)",
-        [[field.toString(), value.toString()]],
-    ]);
-    baseBatch.hsetnx(key4, field, value);
-    responseData.push(["hsetnx(key4, field, value)", false]);
-    baseBatch.hvals(key4);
-    responseData.push(["hvals(key4)", [value.toString()]]);
-    baseBatch.hkeys(key4);
-    responseData.push(["hkeys(key4)", [field.toString()]]);
-    baseBatch.hget(key4, field);
-    responseData.push(["hget(key4, field)", value.toString()]);
-    baseBatch.hgetall(key4);
-    responseData.push([
-        "hgetall(key4)",
-        [{ key: field.toString(), value: value.toString() }],
-    ]);
-    baseBatch.hdel(key4, [field]);
-    responseData.push(["hdel(key4, [field])", 1]);
-    baseBatch.hmget(key4, [field]);
-    responseData.push(["hmget(key4, [field])", [null]]);
-    baseBatch.hexists(key4, field);
-    responseData.push(["hexists(key4, field)", false]);
-    baseBatch.hrandfield(key4);
-    responseData.push(["hrandfield(key4)", null]);
-
-
 
     baseBatch.lpush(key5, [field1, field2, field3, field4]);
     responseData.push(["lpush(key5, [1, 2, 3, 4])", 4]);
