@@ -69,8 +69,7 @@ public class GlideCoreClient implements AutoCloseable {
     // Register a Java Cleaner to free native memory when the given ByteBuffer is
     // GC'd
     static void registerNativeBufferCleaner(java.nio.ByteBuffer buffer, long id) {
-        if (buffer == null || id == 0)
-            return;
+        if (buffer == null || id == 0) return;
         CLEANER.register(
                 buffer,
                 () -> {
@@ -592,7 +591,8 @@ public class GlideCoreClient implements AutoCloseable {
     /**
      * Execute batch asynchronously using raw protobuf bytes (for compatibility with CommandManager)
      */
-    public CompletableFuture<Object> executeBatchAsync(byte[] batchRequestBytes, boolean expectUtf8Response) {
+    public CompletableFuture<Object> executeBatchAsync(
+            byte[] batchRequestBytes, boolean expectUtf8Response) {
         try {
             long handle = nativeClientHandle.get();
             if (handle == 0) {
@@ -613,7 +613,8 @@ public class GlideCoreClient implements AutoCloseable {
             }
 
             // Execute batch directly via JNI
-            GlideNativeBridge.executeBatchAsync(handle, batchRequestBytes, expectUtf8Response, correlationId);
+            GlideNativeBridge.executeBatchAsync(
+                    handle, batchRequestBytes, expectUtf8Response, correlationId);
 
             return future;
 
@@ -626,7 +627,11 @@ public class GlideCoreClient implements AutoCloseable {
 
     /** Execute cluster scan asynchronously with proper cursor lifecycle management */
     public CompletableFuture<Object> executeClusterScanAsync(
-            String cursorId, String matchPattern, long count, String objectType, boolean expectUtf8Response) {
+            String cursorId,
+            String matchPattern,
+            long count,
+            String objectType,
+            boolean expectUtf8Response) {
         try {
             long handle = nativeClientHandle.get();
             if (handle == 0) {
@@ -1017,19 +1022,25 @@ public class GlideCoreClient implements AutoCloseable {
             // Native call executes script and completes via callback
             // Convert to byte[][] for binary-safe transport; server still expects utf8 for
             // evalsha params
-            byte[][] keyBytes = keys != null ? java.util.Arrays.stream(keys)
-                    .map(s -> s != null ? s.getBytes(java.nio.charset.StandardCharsets.UTF_8) : null)
-                    .toArray(byte[][]::new) : new byte[0][];
-            byte[][] argBytes = args != null ? java.util.Arrays.stream(args)
-                    .map(s -> s != null ? s.getBytes(java.nio.charset.StandardCharsets.UTF_8) : null)
-                    .toArray(byte[][]::new) : new byte[0][];
+            byte[][] keyBytes =
+                    keys != null
+                            ? java.util.Arrays.stream(keys)
+                                    .map(s -> s != null ? s.getBytes(java.nio.charset.StandardCharsets.UTF_8) : null)
+                                    .toArray(byte[][]::new)
+                            : new byte[0][];
+            byte[][] argBytes =
+                    args != null
+                            ? java.util.Arrays.stream(args)
+                                    .map(s -> s != null ? s.getBytes(java.nio.charset.StandardCharsets.UTF_8) : null)
+                                    .toArray(byte[][]::new)
+                            : new byte[0][];
 
             GlideNativeBridge.executeScriptAsync(
                     handle,
                     correlationId,
                     hash,
                     keyBytes,
-                            argBytes,
+                    argBytes,
                     hasRoute,
                     routeType,
                     routeParam,

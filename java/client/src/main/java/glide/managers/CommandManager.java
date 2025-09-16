@@ -139,13 +139,9 @@ public class CommandManager {
                 command, responseHandler, true, false); // GlideString arguments -> expect binary response
     }
 
-    /**
-     * Specialized path for ObjectEncoding with GlideString args but textual
-     * response.
-     */
+    /** Specialized path for ObjectEncoding with GlideString args but textual response. */
     public <T> CompletableFuture<T> submitObjectEncoding(
-            GlideString[] arguments,
-            GlideExceptionCheckedFunction<Response, T> responseHandler) {
+            GlideString[] arguments, GlideExceptionCheckedFunction<Response, T> responseHandler) {
         CommandRequest.Builder command = prepareCommandRequest(RequestType.ObjectEncoding, arguments);
         return submitCommandToJni(command, responseHandler, true, true);
     }
@@ -155,7 +151,8 @@ public class CommandManager {
             GlideString[] arguments,
             Route route,
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
-        CommandRequest.Builder command = prepareCommandRequest(RequestType.ObjectEncoding, arguments, route);
+        CommandRequest.Builder command =
+                prepareCommandRequest(RequestType.ObjectEncoding, arguments, route);
         return submitCommandToJni(command, responseHandler, true, true);
     }
 
@@ -188,11 +185,18 @@ public class CommandManager {
             String[] keyArgs = keys.stream().map(GlideString::toString).toArray(String[]::new);
             String[] argArgs = args.stream().map(GlideString::toString).toArray(String[]::new);
 
-            final boolean expectUtf8Response = script.getBinaryOutput() == null || !script.getBinaryOutput();
+            final boolean expectUtf8Response =
+                    script.getBinaryOutput() == null || !script.getBinaryOutput();
 
-            CompletableFuture<Object> jniFuture = coreClient.executeScriptAsync(
-                    script.getHash(), keyArgs, argArgs, /* hasRoute */ false, /* routeType */ 0, /* routeParam */ null,
-                    expectUtf8Response);
+            CompletableFuture<Object> jniFuture =
+                    coreClient.executeScriptAsync(
+                            script.getHash(),
+                            keyArgs,
+                            argArgs, /* hasRoute */
+                            false, /* routeType */
+                            0, /* routeParam */
+                            null,
+                            expectUtf8Response);
 
             return jniFuture
                     .thenApply(result -> createDirectResponse(result))
@@ -221,15 +225,21 @@ public class CommandManager {
         try {
             String[] keyArgs = new String[0];
             String[] argArgs = args.stream().map(GlideString::toString).toArray(String[]::new);
-            final boolean expectUtf8Response = script.getBinaryOutput() == null || !script.getBinaryOutput();
+            final boolean expectUtf8Response =
+                    script.getBinaryOutput() == null || !script.getBinaryOutput();
 
             // Map Route to simple JNI route tuple via centralized helper
             ScriptRouteArgs routeArgs = computeScriptRouteArgs(route);
 
-            CompletableFuture<Object> jniFuture = coreClient.executeScriptAsync(
-                    script.getHash(), keyArgs, argArgs,
-                    routeArgs.hasRoute, routeArgs.routeType, routeArgs.routeParam,
-                    expectUtf8Response);
+            CompletableFuture<Object> jniFuture =
+                    coreClient.executeScriptAsync(
+                            script.getHash(),
+                            keyArgs,
+                            argArgs,
+                            routeArgs.hasRoute,
+                            routeArgs.routeType,
+                            routeArgs.routeParam,
+                            expectUtf8Response);
 
             return jniFuture
                     .thenApply(result -> createDirectResponse(result))
@@ -277,11 +287,13 @@ public class CommandManager {
             return new ScriptRouteArgs(true, routeType, routeParam);
         }
         if (route instanceof ByAddressRoute) {
-            String hostPort = ((ByAddressRoute) route).getHost() + ":" + ((ByAddressRoute) route).getPort();
+            String hostPort =
+                    ((ByAddressRoute) route).getHost() + ":" + ((ByAddressRoute) route).getPort();
             return new ScriptRouteArgs(true, -1, hostPort); // -1 => ByAddress special case
         }
         throw new RequestException(
-                String.format("Unsupported route type for script invocation: %s", route.getClass().getSimpleName()));
+                String.format(
+                        "Unsupported route type for script invocation: %s", route.getClass().getSimpleName()));
     }
 
     /** Build a Cluster Batch and send via JNI. */
@@ -342,10 +354,12 @@ public class CommandManager {
                                 Response.Builder builder = Response.newBuilder();
                                 Object normalized;
                                 if (result == null) {
-                                    normalized = new Object[] {
-                                            glide.ffi.resolvers.ClusterScanCursorResolver
-                                                    .getFinishedCursorHandleConstant(),
-                                            new Object[0] };
+                                    normalized =
+                                            new Object[] {
+                                                glide.ffi.resolvers.ClusterScanCursorResolver
+                                                        .getFinishedCursorHandleConstant(),
+                                                new Object[0]
+                                            };
                                 } else {
                                     // Normalize cluster scan result: ensure cursor is String and
                                     // items decode as String (UTF-8) or GlideString (binary)
@@ -356,11 +370,13 @@ public class CommandManager {
                                 T out = responseHandler.apply(builder.build());
                                 if (out == null) {
                                     @SuppressWarnings("unchecked")
-                                    T fallback = (T) new Object[] {
-                                            glide.ffi.resolvers.ClusterScanCursorResolver
-                                                    .getFinishedCursorHandleConstant(),
-                                            new Object[0]
-                                    };
+                                    T fallback =
+                                            (T)
+                                                    new Object[] {
+                                                        glide.ffi.resolvers.ClusterScanCursorResolver
+                                                                .getFinishedCursorHandleConstant(),
+                                                        new Object[0]
+                                                    };
                                     return fallback;
                                 }
                                 return out;
@@ -373,7 +389,8 @@ public class CommandManager {
         }
     }
 
-    // Ensure scan result shape is [String cursor, Object[] items] and element encoding matches expectation
+    // Ensure scan result shape is [String cursor, Object[] items] and element encoding matches
+    // expectation
     private Object normalizeScanResult(Object result, boolean expectUtf8) {
         if (!(result instanceof Object[])) {
             return result;
@@ -523,10 +540,11 @@ public class CommandManager {
     }
 
     /**
-     * Deserialize a ByteBuffer containing a serialized map back to Map<?,?>. Format:
-     * '%' + count(u32 BE) + repeated [keyLen(u32) + keyBytes + valLen(u32) + valBytes]
+     * Deserialize a ByteBuffer containing a serialized map back to Map<?,?>. Format: '%' + count(u32
+     * BE) + repeated [keyLen(u32) + keyBytes + valLen(u32) + valBytes]
      */
-    private java.util.LinkedHashMap<Object, Object> deserializeByteBufferMap(ByteBuffer buffer, boolean expectUtf8) {
+    private java.util.LinkedHashMap<Object, Object> deserializeByteBufferMap(
+            ByteBuffer buffer, boolean expectUtf8) {
         buffer.order(ByteOrder.BIG_ENDIAN);
         buffer.rewind();
 
@@ -535,7 +553,8 @@ public class CommandManager {
             throw new IllegalArgumentException("Expected map marker '%', got: " + (char) marker);
         }
         int count = buffer.getInt();
-        java.util.LinkedHashMap<Object, Object> map = new java.util.LinkedHashMap<>(Math.max(16, count));
+        java.util.LinkedHashMap<Object, Object> map =
+                new java.util.LinkedHashMap<>(Math.max(16, count));
         for (int i = 0; i < count; i++) {
             int klen = buffer.getInt();
             byte[] kbytes = new byte[klen];
@@ -544,12 +563,14 @@ public class CommandManager {
             byte[] vbytes = new byte[vlen];
             buffer.get(vbytes);
 
-            Object key = expectUtf8
-                    ? new String(kbytes, java.nio.charset.StandardCharsets.UTF_8)
-                    : glide.api.models.GlideString.gs(kbytes);
-            Object val = expectUtf8
-                    ? new String(vbytes, java.nio.charset.StandardCharsets.UTF_8)
-                    : glide.api.models.GlideString.gs(vbytes);
+            Object key =
+                    expectUtf8
+                            ? new String(kbytes, java.nio.charset.StandardCharsets.UTF_8)
+                            : glide.api.models.GlideString.gs(kbytes);
+            Object val =
+                    expectUtf8
+                            ? new String(vbytes, java.nio.charset.StandardCharsets.UTF_8)
+                            : glide.api.models.GlideString.gs(vbytes);
             map.put(key, val);
         }
         return map;
@@ -586,8 +607,6 @@ public class CommandManager {
             return errorFuture;
         }
     }
-
-    
 
     /** Extract cursor ID from ClusterScanCursor. */
     private String getCursorId(ClusterScanCursor cursor) {
@@ -844,7 +863,6 @@ public class CommandManager {
         return builder;
     }
 
-
     /** Build a protobuf Batch request object with options. */
     protected CommandRequest.Builder prepareCommandRequest(
             ClusterBatch batch, boolean raiseOnError, Optional<ClusterBatchOptions> options) {
@@ -1078,5 +1096,4 @@ public class CommandManager {
             commandArgs.addArgs(ByteString.copyFromUtf8(value.toString()));
         }
     }
-
 }

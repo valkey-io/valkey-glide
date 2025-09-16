@@ -38,10 +38,10 @@ public class GlideNativeBridge {
             String readFrom,
             String clientAz,
             boolean lazyConnect,
-                    String clientName,
-                    byte[][] subExact,
-                    byte[][] subPattern,
-                    byte[][] subSharded);
+            String clientName,
+            byte[][] subExact,
+            byte[][] subPattern,
+            byte[][] subSharded);
 
     /** Execute command asynchronously */
     public static native void executeCommandAsync(

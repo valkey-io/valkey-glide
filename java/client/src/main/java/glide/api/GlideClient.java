@@ -88,7 +88,6 @@ public class GlideClient extends BaseClient
 
     /**
      * Creates a new {@link GlideClient} instance and establishes a connection to a standalone Valkey
-     * server using Unix Domain Sockets (UDS).
      *
      * @param config The configuration options for the client, including server addresses,
      *     authentication credentials, TLS settings, database selection, reconnection strategy, and

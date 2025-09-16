@@ -3994,9 +3994,10 @@ public class UnifiedJedis implements Closeable {
         checkNotClosed();
         try {
             // Respect SetParams when provided; always request old value
-            SetOptions options = (params == null)
-                    ? SetOptions.builder().returnOldValue(true).build()
-                    : convertSetParams(params, true);
+            SetOptions options =
+                    (params == null)
+                            ? SetOptions.builder().returnOldValue(true).build()
+                            : convertSetParams(params, true);
             String result = baseClient.set(GlideString.of(key), GlideString.of(value), options).get();
             return result != null ? result.getBytes() : null;
         } catch (InterruptedException | ExecutionException e) {

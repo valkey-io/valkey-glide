@@ -6,23 +6,18 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Async registry for correlating native callbacks with Java
- * {@link CompletableFuture}s.
+ * Async registry for correlating native callbacks with Java {@link CompletableFuture}s.
  *
- * <p>
- * Responsibilities:
+ * <p>Responsibilities:
+ *
  * <ul>
- * <li>Maintain a thread-safe mapping from correlation id to the original
- * future</li>
- * <li>Enforce per-client max inflight requests in Java (0 = defer to core
- * default)</li>
- * <li>Perform atomic cleanup on completion to avoid races and leaks</li>
- * <li>Provide batched completion helpers to reduce JNI overhead</li>
+ *   <li>Maintain a thread-safe mapping from correlation id to the original future
+ *   <li>Enforce per-client max inflight requests in Java (0 = defer to core default)
+ *   <li>Perform atomic cleanup on completion to avoid races and leaks
+ *   <li>Provide batched completion helpers to reduce JNI overhead
  * </ul>
  *
- * <p>
- * Timeouts, backpressure defaults, and concurrency tuning are handled by the
- * Rust core.
+ * <p>Timeouts, backpressure defaults, and concurrency tuning are handled by the Rust core.
  */
 public final class AsyncRegistry {
 
@@ -43,17 +38,13 @@ public final class AsyncRegistry {
 
     // ==================== CONFIGURABLE CONSTANTS ====================
 
-    /**
-     * Estimate initial capacity for the active futures map using inflight limit
-     * with margin
-     */
+    /** Estimate initial capacity for the active futures map using inflight limit with margin */
     private static int estimateInitialCapacity() {
         String env = System.getenv("GLIDE_MAX_INFLIGHT_REQUESTS");
         if (env != null) {
             try {
                 int v = Integer.parseInt(env.trim());
-                if (v > 0)
-                    return Math.max(16, v * 2);
+                if (v > 0) return Math.max(16, v * 2);
             } catch (NumberFormatException ignored) {
             }
         }
@@ -62,8 +53,7 @@ public final class AsyncRegistry {
         if (prop != null) {
             try {
                 int v = Integer.parseInt(prop.trim());
-                if (v > 0)
-                    return Math.max(16, v * 2);
+                if (v > 0) return Math.max(16, v * 2);
             } catch (NumberFormatException ignored) {
             }
         }
@@ -150,7 +140,6 @@ public final class AsyncRegistry {
             // Future already completed or timed out
             return false;
         }
-
 
         // complete() returns false if already completed
         // This prevents IllegalStateException from completing twice

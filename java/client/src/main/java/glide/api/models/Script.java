@@ -6,10 +6,8 @@ import lombok.Getter;
 
 public class Script implements AutoCloseable {
 
-    @Getter
-    private final String hash;
-    @Getter
-    private final Boolean binaryOutput;
+    @Getter private final String hash;
+    @Getter private final Boolean binaryOutput;
     private boolean dropped = false;
 
     public <T> Script(T code, Boolean binaryOutput) {

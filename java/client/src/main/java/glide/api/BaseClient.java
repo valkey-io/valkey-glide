@@ -439,12 +439,13 @@ public abstract class BaseClient
                                 // Create CommandManager after connection established
                                 CommandManager commandManager = buildCommandManager(connectionManager);
 
-                                T client = constructor.apply(
-                                        new ClientBuilder(
-                                                connectionManager,
-                                                commandManager,
-                                                messageHandler,
-                                                Optional.ofNullable(config.getSubscriptionConfiguration())));
+                                T client =
+                                        constructor.apply(
+                                                new ClientBuilder(
+                                                        connectionManager,
+                                                        commandManager,
+                                                        messageHandler,
+                                                        Optional.ofNullable(config.getSubscriptionConfiguration())));
                                 try {
                                     glide.internal.GlideCoreClient.registerClient(
                                             connectionManager.getNativeClientHandle(), client);
@@ -1090,13 +1091,14 @@ public abstract class BaseClient
         // In unit tests where CommandManager is a mock, this may return null; fallback
         // to
         // the generic mocked method to satisfy the unit contract.
-        CompletableFuture<String> specialized = commandManager.submitObjectEncoding(new GlideString[] { key },
-                this::handleStringOrNullResponse);
+        CompletableFuture<String> specialized =
+                commandManager.submitObjectEncoding(
+                        new GlideString[] {key}, this::handleStringOrNullResponse);
         if (specialized != null) {
             return specialized;
         }
         return commandManager.submitNewCommand(
-                ObjectEncoding, new GlideString[] { key }, this::handleStringOrNullResponse);
+                ObjectEncoding, new GlideString[] {key}, this::handleStringOrNullResponse);
     }
 
     @Override
@@ -4989,8 +4991,7 @@ public abstract class BaseClient
                 LCS,
                 arguments,
                 response ->
-                        handleLcsIdxResponse(
-                                convertBinaryLcsMap(handleBinaryStringMapResponse(response))));
+                        handleLcsIdxResponse(convertBinaryLcsMap(handleBinaryStringMapResponse(response))));
     }
 
     @Override
@@ -5019,8 +5020,7 @@ public abstract class BaseClient
                 LCS,
                 arguments,
                 response ->
-                        handleLcsIdxResponse(
-                                convertBinaryLcsMap(handleBinaryStringMapResponse(response))));
+                        handleLcsIdxResponse(convertBinaryLcsMap(handleBinaryStringMapResponse(response))));
     }
 
     @Override
@@ -5041,9 +5041,7 @@ public abstract class BaseClient
                         .add(WITHMATCHLEN_COMMAND_STRING)
                         .toArray();
         return commandManager.submitNewCommand(
-                LCS,
-                arguments,
-                response -> convertBinaryLcsMap(handleBinaryStringMapResponse(response)));
+                LCS, arguments, response -> convertBinaryLcsMap(handleBinaryStringMapResponse(response)));
     }
 
     @Override
@@ -5075,9 +5073,7 @@ public abstract class BaseClient
                         .add(WITHMATCHLEN_COMMAND_STRING)
                         .toArray();
         return commandManager.submitNewCommand(
-                LCS,
-                arguments,
-                response -> convertBinaryLcsMap(handleBinaryStringMapResponse(response)));
+                LCS, arguments, response -> convertBinaryLcsMap(handleBinaryStringMapResponse(response)));
     }
 
     @Override

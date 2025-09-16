@@ -276,7 +276,7 @@ fn resp_value_to_java<'local>(
         Value::Okay => {
             let ok = get_ok_jstring(env)?;
             Ok(JObject::from(ok))
-        },
+        }
         Value::Int(num) => {
             let cache = get_java_value_conversion_cache(env)?;
             let cls = to_local_jclass(env, &cache.long_class)?;
@@ -2052,10 +2052,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
                             for a in &args_data {
                                 route_cmd.arg(a.as_slice());
                             }
-                            match protobuf_bridge::get_route(
-                                Default::default(),
-                                Some(&route_cmd),
-                            ) {
+                            match protobuf_bridge::get_route(Default::default(), Some(&route_cmd)) {
                                 Ok(r) => r,
                                 Err(e) => {
                                     complete_callback(
