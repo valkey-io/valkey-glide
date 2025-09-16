@@ -31,6 +31,141 @@ mod protobuf_bridge;
 use errors::{FFIError, handle_errors, handle_panics};
 use jni_client::*;
 use protobuf_bridge::*;
+// Internal helper: execute a parsed CommandRequest and complete Java callback
+async fn execute_command_request_and_complete(
+    handle_id: u64,
+    command_request: protobuf_bridge::CommandRequest,
+    callback_id: jlong,
+    jvm: std::sync::Arc<jni::JavaVM>,
+    expect_utf8: bool,
+) {
+    let result = async {
+        let mut client = jni_client::ensure_client_for_handle(handle_id)
+            .await
+            .map_err(|e| anyhow::anyhow!("Client not found: {e}"))?;
+
+        let root_span_ptr_opt = command_request.root_span_ptr;
+        match &command_request.command {
+            Some(protobuf_bridge::command_request::Command::SingleCommand(command)) => {
+                let cmd = protobuf_bridge::create_redis_command(command)
+                    .map_err(|e| anyhow::anyhow!("Failed to create command: {e}"))?;
+
+                // Compute routing
+                let route_box = command_request.route.0;
+                let routing = if let Some(route_box) = route_box {
+                    protobuf_bridge::create_routing_info(*route_box, Some(&cmd))
+                        .map_err(|e| anyhow::anyhow!("Routing error: {e}"))?
+                } else {
+                    None
+                };
+
+                let exec = client
+                    .send_command(&cmd, routing)
+                    .await
+                    .map_err(|e| anyhow::anyhow!("Command execution failed: {e}"));
+
+                if let Some(root_span_ptr) = root_span_ptr_opt {
+                    if root_span_ptr != 0 {
+                        if let Ok(span) = unsafe {
+                            glide_core::GlideOpenTelemetry::span_from_pointer(root_span_ptr)
+                        } {
+                            span.end();
+                        }
+                        unsafe {
+                            std::sync::Arc::from_raw(root_span_ptr as *const glide_core::GlideSpan);
+                        }
+                    }
+                }
+                exec
+            }
+            Some(protobuf_bridge::command_request::Command::Batch(batch)) => {
+                // Build pipeline
+                let mut pipeline = redis::Pipeline::with_capacity(batch.commands.len());
+                if batch.is_atomic {
+                    pipeline.atomic();
+                }
+                for c in &batch.commands {
+                    let redis_cmd = protobuf_bridge::create_redis_command(c)
+                        .map_err(|e| anyhow::anyhow!("Failed to create batch command: {e}"))?;
+                    pipeline.add_command(redis_cmd);
+                }
+
+                // Routing for batch
+                let route_box = command_request.route.0;
+                let routing = if let Some(route_box) = route_box {
+                    protobuf_bridge::create_routing_info(*route_box, None)
+                        .map_err(|e| anyhow::anyhow!("Routing error: {e}"))?
+                } else {
+                    None
+                };
+
+                // Child span as per previous behavior
+                let mut send_batch_span: Option<glide_core::GlideSpan> = None;
+                if let Some(root_span_ptr) = root_span_ptr_opt {
+                    if root_span_ptr != 0 {
+                        if let Ok(root_span) = unsafe {
+                            glide_core::GlideOpenTelemetry::span_from_pointer(root_span_ptr)
+                        } {
+                            if let Ok(child) = root_span.add_span("send_batch") {
+                                send_batch_span = Some(child);
+                            }
+                        }
+                    }
+                }
+
+                let exec_res = if batch.is_atomic {
+                    client
+                        .send_transaction(
+                            &pipeline,
+                            routing,
+                            batch.timeout,
+                            batch.raise_on_error.unwrap_or(true),
+                        )
+                        .await
+                        .map_err(|e| anyhow::anyhow!("Transaction failed: {e}"))
+                } else {
+                    client
+                        .send_pipeline(
+                            &pipeline,
+                            routing,
+                            batch.raise_on_error.unwrap_or(true),
+                            batch.timeout,
+                            redis::PipelineRetryStrategy {
+                                retry_server_error: batch.retry_server_error.unwrap_or(false),
+                                retry_connection_error: batch
+                                    .retry_connection_error
+                                    .unwrap_or(false),
+                            },
+                        )
+                        .await
+                        .map_err(|e| anyhow::anyhow!("Pipeline failed: {e}"))
+                };
+
+                if let Some(child) = send_batch_span.as_ref() {
+                    child.end();
+                }
+                if let Some(root_span_ptr) = root_span_ptr_opt {
+                    if root_span_ptr != 0 {
+                        if let Ok(root_span) = unsafe {
+                            glide_core::GlideOpenTelemetry::span_from_pointer(root_span_ptr)
+                        } {
+                            root_span.end();
+                        }
+                        unsafe {
+                            std::sync::Arc::from_raw(root_span_ptr as *const glide_core::GlideSpan);
+                        }
+                    }
+                }
+                exec_res
+            }
+            _ => Err(anyhow::anyhow!("Unsupported command type")),
+        }
+    }
+    .await;
+
+    let binary_mode = !expect_utf8;
+    jni_client::complete_callback(jvm, callback_id, result, binary_mode);
+}
 
 
 /// Configuration for OpenTelemetry integration in the Java client.
@@ -1153,139 +1288,10 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync
                     return Some(());
                 }
             };
-
-            // Spawn async task using existing glide-core command processing logic
+            // Spawn unified async executor
             let runtime = get_runtime();
-            runtime.spawn(async move {
-                // Ensure client exists
-                let client_result = ensure_client_for_handle(handle_id).await;
-                match client_result {
-                    Ok(mut client) => {
-                        let root_span_ptr_opt = command_request.root_span_ptr;
-                        // Process command using FFI methodology (surgical reuse)
-                        let result = match &command_request.command {
-                            Some(command_request::Command::SingleCommand(command)) => {
-                                // Create command using existing FFI approach
-                                match protobuf_bridge::create_redis_command(command) {
-                                    Ok(cmd) => {
-                                        // Use FFI get_route function directly
-                                        let route_box = command_request.route.0;
-                                        let routing = if let Some(route_box) = route_box {
-                                            match protobuf_bridge::create_routing_info(*route_box, Some(&cmd)) {
-                                                Ok(r) => r,
-                                                Err(e) => {
-                                                    log::error!("Routing error: {e}");
-                                                    None
-                                                }
-                                            }
-                                        } else {
-                                            None
-                                        };
-                                        
-                                        {
-                                            let exec = client
-                                                .send_command(&cmd, routing)
-                                                .await
-                                                .map_err(|e| anyhow::anyhow!("Command execution failed: {e}"));
-                                            if let Some(root_span_ptr) = root_span_ptr_opt {
-                                                if root_span_ptr != 0 {
-                                                    if let Ok(span) = unsafe { glide_core::GlideOpenTelemetry::span_from_pointer(root_span_ptr) } {
-                                                        span.end();
-                                                    }
-                                                    unsafe { std::sync::Arc::from_raw(root_span_ptr as *const glide_core::GlideSpan); }
-                                                }
-                                            }
-                                            exec
-                                        }
-                                    }
-                                    Err(e) => Err(anyhow::anyhow!("Failed to create command: {e}"))
-                                }
-                            }
-                            Some(command_request::Command::Batch(batch)) => {
-                                // Handle batch using existing FFI patterns
-                                let mut pipeline = redis::Pipeline::with_capacity(batch.commands.len());
-                                if batch.is_atomic {
-                                    pipeline.atomic();
-                                }
-                                
-                                // Add commands to pipeline using FFI command creation logic
-                                for cmd in &batch.commands {
-                                    match protobuf_bridge::create_redis_command(cmd) {
-                                        Ok(redis_cmd) => pipeline.add_command(redis_cmd),
-                                        Err(e) => {
-                                            let error = Err(anyhow::anyhow!("Failed to create batch command: {e}"));
-                                            complete_callback(jvm, callback_id, error, false);
-                                            return;
-                                        }
-                                    };
-                                }
-                                
-                                // Get routing using FFI approach
-                                let route_box = command_request.route.0;
-                                let routing = if let Some(route_box) = route_box {
-                                    match protobuf_bridge::create_routing_info(*route_box, None) {
-                                        Ok(r) => r,
-                                        Err(e) => {
-                                            log::error!("Routing error: {e}");
-                                            None
-                                        }
-                                    }
-                                } else {
-                                    None
-                                };
-                                
-                                // Execute using existing client methods
-                                if batch.is_atomic {
-                                    let exec = client.send_transaction(
-                                        &pipeline,
-                                        routing,
-                                        batch.timeout,
-                                        batch.raise_on_error.unwrap_or(true)
-                                    ).await.map_err(|e| anyhow::anyhow!("Transaction failed: {e}"));
-                                    if let Some(root_span_ptr) = root_span_ptr_opt {
-                                        if root_span_ptr != 0 {
-                                            if let Ok(span) = unsafe { glide_core::GlideOpenTelemetry::span_from_pointer(root_span_ptr) } {
-                                                span.end();
-                                            }
-                                            unsafe { std::sync::Arc::from_raw(root_span_ptr as *const glide_core::GlideSpan); }
-                                        }
-                                    }
-                                    exec
-                                } else {
-                                    let exec = client.send_pipeline(
-                                        &pipeline,
-                                        routing,
-                                        batch.raise_on_error.unwrap_or(true),
-                                        batch.timeout,
-                                        redis::PipelineRetryStrategy {
-                                            retry_server_error: batch.retry_server_error.unwrap_or(false),
-                                            retry_connection_error: batch.retry_connection_error.unwrap_or(false),
-                                        }
-                                    ).await.map_err(|e| anyhow::anyhow!("Pipeline failed: {e}"));
-                                    if let Some(root_span_ptr) = root_span_ptr_opt {
-                                        if root_span_ptr != 0 {
-                                            if let Ok(span) = unsafe { glide_core::GlideOpenTelemetry::span_from_pointer(root_span_ptr) } {
-                                                span.end();
-                                            }
-                                            unsafe { std::sync::Arc::from_raw(root_span_ptr as *const glide_core::GlideSpan); }
-                                        }
-                                    }
-                                    exec
-                                }
-                            }
-                            
-                            _ => Err(anyhow::anyhow!("Unsupported command type"))
-                        };
-
-                        // Complete callback
-                        complete_callback(jvm, callback_id, result, false);
-                    }
-                    Err(err) => {
-                        let error = Err(anyhow::anyhow!("Client not found: {err}"));
-                        complete_callback(jvm, callback_id, error, false);
-                    }
-                }
-            });
+            let expect_utf8 = true; // executeCommandAsync expects UTF-8 decoding
+            runtime.spawn(execute_command_request_and_complete(handle_id, command_request, callback_id, jvm, expect_utf8));
 
             Some(())
         },
@@ -1586,50 +1592,10 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBinaryComman
                     return Some(());
                 }
             };
-
-            // Spawn async task with actual command execution
+            // Spawn unified async executor
             let runtime = get_runtime();
-            runtime.spawn(async move {
-                let client_result = ensure_client_for_handle(handle_id).await;
-                match client_result {
-                    Ok(mut client) => {
-                        // Execute binary command using existing FFI methodology
-                        let result = match &command_request.command {
-                            Some(command_request::Command::SingleCommand(command)) => {
-                                match protobuf_bridge::create_redis_command(command) {
-                                    Ok(cmd) => {
-                                        // Get routing using FFI approach
-                                        let route_box = command_request.route.0;
-                                        let routing = if let Some(route_box) = route_box {
-                                            match protobuf_bridge::create_routing_info(*route_box, Some(&cmd)) {
-                                                Ok(r) => r,
-                                                Err(e) => {
-                                                    log::error!("Binary command routing error: {e}");
-                                                    None
-                                                }
-                                            }
-                                        } else {
-                                            None
-                                        };
-                                        
-                                        client.send_command(&cmd, routing).await
-                                            .map_err(|e| anyhow::anyhow!("Binary command execution failed: {e}"))
-                                    }
-                                    Err(e) => Err(anyhow::anyhow!("Failed to create binary command: {e}"))
-                                }
-                            }
-                            
-                            _ => Err(anyhow::anyhow!("Binary command execution only supports single commands and script invocations"))
-                        };
-
-                        complete_callback(jvm, callback_id, result, true); // binary_mode = true
-                    }
-                    Err(err) => {
-                        let error = Err(anyhow::anyhow!("Client not found: {err}"));
-                        complete_callback(jvm, callback_id, error, true);
-                    }
-                }
-            });
+            let expect_utf8 = false; // binary entrypoint expects binary decoding
+            runtime.spawn(execute_command_request_and_complete(handle_id, command_request, callback_id, jvm, expect_utf8));
             
             Some(())
         },
