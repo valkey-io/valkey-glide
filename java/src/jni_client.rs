@@ -8,6 +8,7 @@ use glide_core::client::{AuthenticationInfo, ConnectionRequest, NodeAddress, Tls
 use jni::JNIEnv;
 use jni::JavaVM;
 use jni::objects::{GlobalRef, JClass, JObject, JStaticMethodID, JValue};
+use jni::signature;
 use jni::sys::{jlong, jobject, jstring};
 use redis::Value as ServerValue;
 use std::sync::Arc;
@@ -319,10 +320,8 @@ pub(crate) fn handle_push_notification(env: &mut JNIEnv, handle_id: jlong, push:
         _ => None,
     };
 
-    if let Some((m, c, p)) = mapped
-        && let Ok(class) = env.find_class("glide/internal/GlideCoreClient")
-    {
-        let jhandle = JValue::Long(handle_id);
+    if let Some((m, c, p)) = mapped {
+        let _ = env.push_local_frame(16);
         let jm = env.byte_array_from_slice(&m).ok();
         let jc = env.byte_array_from_slice(&c).ok();
         let jp = p.as_ref().and_then(|pp| env.byte_array_from_slice(pp).ok());
@@ -331,18 +330,25 @@ pub(crate) fn handle_push_notification(env: &mut JNIEnv, handle_id: jlong, push:
             let jm_obj: JObject = jm.into();
             let jc_obj: JObject = jc.into();
             let jp_obj: JObject = jp.map(Into::into).unwrap_or(JObject::null());
-            let _ = env.call_static_method(
-                class,
-                "onNativePush",
-                "(J[B[B[B)V",
-                &[
-                    jhandle,
-                    JValue::from(&jm_obj),
-                    JValue::from(&jc_obj),
-                    JValue::from(&jp_obj),
-                ],
-            );
+
+            if let Ok(cache) = get_glide_core_client_cache(env) {
+                unsafe {
+                    let _ = env.call_static_method_unchecked(
+                        &cache.class,
+                        cache.on_native_push,
+                        signature::ReturnType::Primitive(signature::Primitive::Void),
+                        &[
+                            JValue::Long(handle_id).as_jni(),
+                            JValue::Object(&jm_obj).as_jni(),
+                            JValue::Object(&jc_obj).as_jni(),
+                            JValue::Object(&jp_obj).as_jni(),
+                        ],
+                    );
+                }
+            }
         }
+
+        let _ = unsafe { env.pop_local_frame(&JObject::null()) };
     }
 }
 
@@ -532,8 +538,8 @@ pub fn complete_java_callback_with_error(
     error: &str,
 ) -> Result<()> {
     let method_cache = get_method_cache(env)?;
+    let _ = env.push_local_frame(4);
     let error_string = env.new_string(error)?;
-
     unsafe {
         env.call_static_method_unchecked(
             &method_cache.async_handle_table_class,
@@ -545,7 +551,7 @@ pub fn complete_java_callback_with_error(
             ],
         )
     }?;
-
+    let _ = unsafe { env.pop_local_frame(&JObject::null()) };
     Ok(())
 }
 
@@ -655,22 +661,18 @@ fn register_buffer_cleaner<'local>(
     buffer: &JObject<'local>,
     id: u64,
 ) -> Result<(), crate::errors::FFIError> {
-    let class = env.find_class("glide/internal/GlideCoreClient")?;
-    let method = env.get_static_method_id(
-        &class,
-        "registerNativeBufferCleaner",
-        "(Ljava/nio/ByteBuffer;J)V",
-    )?;
-
-    // Call and map any JNI error into FFIError via From<jni::errors::Error>
+    let cache = get_glide_core_client_cache(env).map_err(|_e| {
+        // Map to a representative JNI error variant
+        jni::errors::Error::JNIEnvMethodNotFound("GlideCoreClient cache")
+    })?;
     unsafe {
         env.call_static_method_unchecked(
-            &class,
-            method,
-            jni::signature::ReturnType::Primitive(jni::signature::Primitive::Void),
+            &cache.class,
+            cache.register_native_buffer_cleaner,
+            signature::ReturnType::Primitive(signature::Primitive::Void),
             &[
-                jni::sys::jvalue { l: buffer.as_raw() },
-                jni::sys::jvalue { j: id as jlong },
+                JValue::Object(buffer).as_jni(),
+                JValue::Long(id as jlong).as_jni(),
             ],
         )?
     };
@@ -801,4 +803,46 @@ pub extern "system" fn Java_glide_internal_GlideCoreClient_freeNativeBuffer(
 ) {
     let id = id as u64;
     let _ = free_native_buffer(id);
+}
+
+#[derive(Clone)]
+struct GlideCoreClientCache {
+    class: GlobalRef,
+    on_native_push: JStaticMethodID,
+    register_native_buffer_cleaner: JStaticMethodID,
+}
+
+static GLIDE_CORE_CLIENT_CACHE: std::sync::OnceLock<parking_lot::Mutex<Option<GlideCoreClientCache>>> =
+    std::sync::OnceLock::new();
+
+fn get_glide_core_client_cache(env: &mut JNIEnv) -> Result<GlideCoreClientCache> {
+    let cache_mutex = GLIDE_CORE_CLIENT_CACHE.get_or_init(|| parking_lot::Mutex::new(None));
+    {
+        let guard = cache_mutex.lock();
+        if let Some(c) = guard.as_ref() {
+            return Ok(c.clone());
+        }
+    }
+    let class = env.find_class("glide/internal/GlideCoreClient")?;
+    let global = env.new_global_ref(&class)?;
+    let on_native_push = env.get_static_method_id(
+        &class,
+        "onNativePush",
+        "(J[B[B[B)V",
+    )?;
+    let register_native_buffer_cleaner = env.get_static_method_id(
+        &class,
+        "registerNativeBufferCleaner",
+        "(Ljava/nio/ByteBuffer;J)V",
+    )?;
+    let cache = GlideCoreClientCache {
+        class: global,
+        on_native_push,
+        register_native_buffer_cleaner,
+    };
+    {
+        let mut guard = cache_mutex.lock();
+        *guard = Some(cache.clone());
+    }
+    Ok(cache)
 }
