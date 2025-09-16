@@ -35,6 +35,7 @@ import static command_request.CommandRequestOuterClass.RequestType.ScriptFlush;
 import static command_request.CommandRequestOuterClass.RequestType.ScriptKill;
 import static command_request.CommandRequestOuterClass.RequestType.Time;
 import static command_request.CommandRequestOuterClass.RequestType.UnWatch;
+import static command_request.CommandRequestOuterClass.RequestType.Wait;
 import static glide.api.commands.ServerManagementCommands.VERSION_VALKEY_API;
 import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_VALKEY_API;
@@ -69,6 +70,7 @@ import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.configuration.ClusterSubscriptionConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
+import glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
 import glide.api.models.configuration.ServerCredentials;
 import glide.ffi.resolvers.ClusterScanCursorResolver;
@@ -102,14 +104,14 @@ public class GlideClusterClient extends BaseClient
                 TransactionsClusterCommands,
                 PubSubClusterCommands {
 
-    /** A private constructor. Use {@link #createClient} to get a client. */
-    GlideClusterClient(ClientBuilder builder) {
+    /** Constructor using ClientParams from BaseClient. */
+    protected GlideClusterClient(ClientBuilder builder) {
         super(builder);
     }
 
     /**
      * Creates a new {@link GlideClusterClient} instance and establishes connections to a Valkey
-     * Cluster.
+     * Cluster using Unix Domain Sockets (UDS).
      *
      * @param config The configuration options for the client, including cluster addresses,
      *     authentication credentials, TLS settings, periodic checks, and Pub/Sub subscriptions.
@@ -156,9 +158,37 @@ public class GlideClusterClient extends BaseClient
      */
     public static CompletableFuture<GlideClusterClient> createClient(
             @NonNull GlideClusterClientConfiguration config) {
-        return createClient(config, GlideClusterClient::new);
+        return BaseClient.createClient(config, GlideClusterClient::new);
     }
 
+    /**
+     * Creates a new {@link GlideClusterClient} instance using JNI direct calls instead of Unix Domain
+     * Sockets. This method provides improved performance and Windows compatibility by eliminating the
+     * socket layer.
+     *
+     * @param config The configuration options for the client, including cluster addresses,
+     *     authentication credentials, TLS settings, periodic checks, and Pub/Sub subscriptions.
+     * @return A Future that resolves to a connected {@link GlideClusterClient} instance.
+     * @remarks This method creates a cluster client with the same functionality as {@link
+     *     #createClient(GlideClusterClientConfiguration)} but uses direct JNI calls to the Rust
+     *     glide-core library instead of Unix Domain Sockets. Benefits include:
+     *     <ul>
+     *       <li><b>Windows Support</b>: Full native Windows compatibility without WSL/Cygwin
+     *       <li><b>Performance</b>: Eliminates socket layer overhead with zero-copy operations
+     *       <li><b>Memory Efficiency</b>: DirectByteBuffer usage reduces memory copies
+     *       <li><b>Cluster Features</b>: All cluster features preserved including topology discovery,
+     *           slot routing, AZ affinity, and multi-node operations
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * GlideClusterClientConfiguration config = GlideClusterClientConfiguration.builder()
+     *         .address(NodeAddress.builder().host("localhost").port(7001).build())
+     *         .address(NodeAddress.builder().host("localhost").port(7002).build())
+     *         .build();
+     * GlideClusterClient client = GlideClusterClient.createClient(config).get();
+     * }</pre>
+     */
     @Override
     public CompletableFuture<ClusterValue<Object>> customCommand(@NonNull String[] args) {
         // TODO if a command returns a map as a single value, ClusterValue misleads user
@@ -1105,10 +1135,7 @@ public class GlideClusterClient extends BaseClient
     public CompletableFuture<Boolean[]> scriptExists(
             @NonNull GlideString[] sha1s, @NonNull Route route) {
         return commandManager.submitNewCommand(
-                ScriptExists,
-                sha1s,
-                route,
-                response -> castArray(handleArrayResponse(response), Boolean.class));
+                ScriptExists, sha1s, route, response -> castArray(handleArrayResponse(response), Boolean.class));
     }
 
     @Override
@@ -1293,11 +1320,25 @@ public class GlideClusterClient extends BaseClient
     }
 
     @Override
+    public CompletableFuture<Long> wait(long numreplicas, long timeout) {
+        String[] arguments = new String[] {Long.toString(numreplicas), Long.toString(timeout)};
+        return commandManager.submitNewCommand(
+                Wait, arguments, SimpleSingleNodeRoute.RANDOM, this::handleLongResponse);
+    }
+
+    @Override
     public CompletableFuture<Object[]> scan(ClusterScanCursor cursor) {
         return commandManager
                 .submitClusterScan(cursor, ScanOptions.builder().build(), this::handleArrayResponse)
                 .thenApply(
-                        result -> new Object[] {new NativeClusterScanCursor(result[0].toString()), result[1]});
+                        result -> {
+                            if (result == null || result.length < 2 || result[0] == null) {
+                                return new Object[] {
+                                        new NativeClusterScanCursor(ClusterScanCursorResolver.FINISHED_CURSOR_HANDLE),
+                                        new Object[0] };
+                            }
+                            return new Object[] { new NativeClusterScanCursor(result[0].toString()), result[1] };
+                        });
     }
 
     @Override
@@ -1305,7 +1346,14 @@ public class GlideClusterClient extends BaseClient
         return commandManager
                 .submitClusterScan(cursor, ScanOptions.builder().build(), this::handleArrayResponseBinary)
                 .thenApply(
-                        result -> new Object[] {new NativeClusterScanCursor(result[0].toString()), result[1]});
+                        result -> {
+                            if (result == null || result.length < 2 || result[0] == null) {
+                                return new Object[] {
+                                        new NativeClusterScanCursor(ClusterScanCursorResolver.FINISHED_CURSOR_HANDLE),
+                                        new Object[0] };
+                            }
+                            return new Object[] { new NativeClusterScanCursor(result[0].toString()), result[1] };
+                        });
     }
 
     @Override
@@ -1313,7 +1361,14 @@ public class GlideClusterClient extends BaseClient
         return commandManager
                 .submitClusterScan(cursor, options, this::handleArrayResponse)
                 .thenApply(
-                        result -> new Object[] {new NativeClusterScanCursor(result[0].toString()), result[1]});
+                        result -> {
+                            if (result == null || result.length < 2 || result[0] == null) {
+                                return new Object[] {
+                                        new NativeClusterScanCursor(ClusterScanCursorResolver.FINISHED_CURSOR_HANDLE),
+                                        new Object[0] };
+                            }
+                            return new Object[] { new NativeClusterScanCursor(result[0].toString()), result[1] };
+                        });
     }
 
     @Override
@@ -1321,7 +1376,14 @@ public class GlideClusterClient extends BaseClient
         return commandManager
                 .submitClusterScan(cursor, options, this::handleArrayResponseBinary)
                 .thenApply(
-                        result -> new Object[] {new NativeClusterScanCursor(result[0].toString()), result[1]});
+                        result -> {
+                            if (result == null || result.length < 2 || result[0] == null) {
+                                return new Object[] {
+                                        new NativeClusterScanCursor(ClusterScanCursorResolver.FINISHED_CURSOR_HANDLE),
+                                        new Object[0] };
+                            }
+                            return new Object[] { new NativeClusterScanCursor(result[0].toString()), result[1] };
+                        });
     }
 
     /** A {@link ClusterScanCursor} implementation for interacting with the Rust layer. */
@@ -1335,11 +1397,17 @@ public class GlideClusterClient extends BaseClient
         // This is for internal use only.
         public NativeClusterScanCursor(@NonNull String cursorHandle) {
             this.cursorHandle = cursorHandle;
-            this.isFinished = ClusterScanCursorResolver.FINISHED_CURSOR_HANDLE.equals(cursorHandle);
+            this.isFinished = ClusterScanCursorResolver.FINISHED_CURSOR_HANDLE != null
+                    && ClusterScanCursorResolver.FINISHED_CURSOR_HANDLE.equals(cursorHandle);
         }
 
         @Override
         public String getCursorHandle() {
+            return cursorHandle;
+        }
+
+        @Override
+        public String getCursorId() {
             return cursorHandle;
         }
 

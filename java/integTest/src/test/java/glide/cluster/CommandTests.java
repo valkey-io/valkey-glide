@@ -2797,7 +2797,7 @@ public class CommandTests {
         assertEquals(OK, clusterClient.mset(expectedData).get());
 
         Set<String> result = new LinkedHashSet<>();
-        ClusterScanCursor cursor = ClusterScanCursor.initalCursor();
+        ClusterScanCursor cursor = ClusterScanCursor.initialCursor();
         while (!cursor.isFinished()) {
             final Object[] response = clusterClient.scan(cursor).get();
             cursor.releaseCursorHandle();
@@ -2829,7 +2829,7 @@ public class CommandTests {
         assertEquals(OK, clusterClient.mset(expectedData).get());
 
         Set<String> result = new LinkedHashSet<>();
-        ClusterScanCursor cursor = ClusterScanCursor.initalCursor();
+        ClusterScanCursor cursor = ClusterScanCursor.initialCursor();
         while (!cursor.isFinished()) {
             final Object[] response = clusterClient.scanBinary(cursor).get();
             cursor.releaseCursorHandle();
@@ -2876,7 +2876,7 @@ public class CommandTests {
         assertEquals(OK, clusterClient.mset(unexpectedPatterns).get());
 
         Set<String> result = new LinkedHashSet<>();
-        ClusterScanCursor cursor = ClusterScanCursor.initalCursor();
+        ClusterScanCursor cursor = ClusterScanCursor.initialCursor();
         while (!cursor.isFinished()) {
             final Object[] response =
                     clusterClient
@@ -2918,7 +2918,7 @@ public class CommandTests {
 
         assertEquals(OK, clusterClient.mset(expectedData).get());
 
-        ClusterScanCursor cursor = ClusterScanCursor.initalCursor();
+        ClusterScanCursor cursor = ClusterScanCursor.initialCursor();
         Set<String> keys = new LinkedHashSet<>();
         int successfulComparedScans = 0;
         while (!cursor.isFinished()) {
@@ -2973,7 +2973,7 @@ public class CommandTests {
         }
         assertEquals(OK, clusterClient.mset(unexpectedPatterns).get());
 
-        ClusterScanCursor cursor = ClusterScanCursor.initalCursor();
+        ClusterScanCursor cursor = ClusterScanCursor.initialCursor();
         Set<String> keys = new LinkedHashSet<>();
         while (!cursor.isFinished()) {
             Object[] result =
@@ -3005,7 +3005,7 @@ public class CommandTests {
         }
         assertEquals(OK, clusterClient.mset(expectedData).get());
 
-        ClusterScanCursor cursor = ClusterScanCursor.initalCursor();
+        ClusterScanCursor cursor = ClusterScanCursor.initialCursor();
         final Object[] response = clusterClient.scan(cursor).get();
         cursor = (ClusterScanCursor) (response[0]);
         cursor.releaseCursorHandle();
@@ -3030,7 +3030,7 @@ public class CommandTests {
         }
         assertEquals(OK, clusterClient.mset(stringData).get());
 
-        ClusterScanCursor cursor = ClusterScanCursor.initalCursor();
+        ClusterScanCursor cursor = ClusterScanCursor.initialCursor();
         Set<String> results = new LinkedHashSet<>();
         while (!cursor.isFinished()) {
             Object[] response =
@@ -3062,7 +3062,7 @@ public class CommandTests {
             assertEquals(1L, clusterClient.sadd(k, new String[] {"value" + k}).get());
         }
 
-        ClusterScanCursor cursor = ClusterScanCursor.initalCursor();
+        ClusterScanCursor cursor = ClusterScanCursor.initialCursor();
         Set<String> results = new LinkedHashSet<>();
         while (!cursor.isFinished()) {
             Object[] response =
@@ -3094,7 +3094,7 @@ public class CommandTests {
             assertEquals(1L, clusterClient.hset(k, Map.of("field" + k, "value" + k)).get());
         }
 
-        ClusterScanCursor cursor = ClusterScanCursor.initalCursor();
+        ClusterScanCursor cursor = ClusterScanCursor.initialCursor();
         Set<String> results = new LinkedHashSet<>();
         while (!cursor.isFinished()) {
             Object[] response =
@@ -3126,7 +3126,7 @@ public class CommandTests {
             assertEquals(1L, clusterClient.lpush(k, new String[] {"value" + k}).get());
         }
 
-        ClusterScanCursor cursor = ClusterScanCursor.initalCursor();
+        ClusterScanCursor cursor = ClusterScanCursor.initialCursor();
         Set<String> results = new LinkedHashSet<>();
         while (!cursor.isFinished()) {
             Object[] response =
@@ -3158,7 +3158,7 @@ public class CommandTests {
             assertEquals(1L, clusterClient.zadd(k, Map.of(k, 1.0)).get());
         }
 
-        ClusterScanCursor cursor = ClusterScanCursor.initalCursor();
+        ClusterScanCursor cursor = ClusterScanCursor.initialCursor();
         Set<String> results = new LinkedHashSet<>();
 
         while (!cursor.isFinished()) {
@@ -3191,7 +3191,7 @@ public class CommandTests {
             assertNotNull(clusterClient.xadd(k, Map.of(k, "value " + k)).get());
         }
 
-        ClusterScanCursor cursor = ClusterScanCursor.initalCursor();
+        ClusterScanCursor cursor = ClusterScanCursor.initialCursor();
         Set<String> results = new LinkedHashSet<>();
 
         while (!cursor.isFinished()) {

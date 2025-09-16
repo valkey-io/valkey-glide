@@ -374,8 +374,26 @@ public class OpenTelemetry {
         long flushIntervalMs =
                 config.getFlushIntervalMs() != null ? config.getFlushIntervalMs() : 5000L;
 
-        OpenTelemetryResolver.initOpenTelemetry(
+        int rc = OpenTelemetryResolver.initOpenTelemetry(
                 tracesEndpoint, tracesSamplePercentage, metricsEndpoint, flushIntervalMs);
+        if (rc != 0) {
+            String msg;
+            switch (rc) {
+                case 1:
+                    msg = "Missing configuration";
+                    break;
+                case 2:
+                case 3:
+                    msg = "Parse error";
+                    break;
+                case 4:
+                case 5:
+                default:
+                    msg = "OpenTelemetry initialization failure";
+                    break;
+            }
+            throw new ConfigurationError(msg);
+        }
 
         openTelemetry = new OpenTelemetry();
     }
