@@ -503,9 +503,8 @@ public abstract class BaseClient
                     "The operation will never complete since messages will be passed to the configured"
                             + " callback.");
         }
-        // TODO: Implement PubSub queue handling via JNI
-        throw new UnsupportedOperationException(
-                "PubSub message retrieval not yet implemented in JNI mode");
+        // Pull next message from internal queue (non-blocking)
+        return messageHandler.getQueue().popSync();
     }
 
     /**
@@ -527,10 +526,8 @@ public abstract class BaseClient
                     "The operation will never complete since messages will be passed to the configured"
                             + " callback.");
         }
-        // TODO: Implement PubSub queue handling via JNI
-        return CompletableFuture.failedFuture(
-                new UnsupportedOperationException(
-                        "PubSub message retrieval not yet implemented in JNI mode"));
+        // Return a future for the next message (non-blocking await)
+        return messageHandler.getQueue().popAsync();
     }
 
     /**
@@ -5733,17 +5730,17 @@ public abstract class BaseClient
      * native layer when PubSub messages are received.
      */
     public void __enqueuePubSubMessage(PubSubMessage message) {
-        // TODO: Implement PubSub message queue via JNI callbacks
-        // For now, messages are delivered directly to callback if configured
+        // Deliver to callback if configured; otherwise enqueue for pull-based APIs
         if (subscriptionConfiguration.isPresent()
                 && subscriptionConfiguration.get().getCallback().isPresent()) {
-            // Direct callback invocation without queueing
             subscriptionConfiguration
                     .get()
                     .getCallback()
                     .get()
                     .accept(message, subscriptionConfiguration.get().getContext().orElse(null));
+            return;
         }
+        messageHandler.getQueue().push(message);
     }
 
     /**
