@@ -2414,10 +2414,6 @@ fn to_local_jclass<'a>(env: &mut JNIEnv<'a>, global: &GlobalRef) -> Result<JClas
     Ok(JClass::from(local))
 }
 
-#[cfg(not(target_os = "windows"))]
-#[global_allocator]
-static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
-
 static OK_STRING_GLOBAL: OnceLock<GlobalRef> = OnceLock::new();
 
 fn get_ok_jstring<'a>(env: &mut JNIEnv<'a>) -> Result<JString<'a>, FFIError> {
