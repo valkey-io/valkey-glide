@@ -79,3 +79,7 @@ copilot-instructions.md
 
 # AI agent related files
 .kiro/
+.cursor/
+**/bench-results*
+**/benchmark_checkpoint*
+**/polyglot-benchmarks/
