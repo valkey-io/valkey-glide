@@ -1097,7 +1097,6 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createClient(
                         });
                     }
 
-                    log::debug!("Created client with handle: {safe_handle}");
                     Some(safe_handle as jlong)
                 }
                 Err(e) => {
@@ -1309,8 +1308,6 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_closeClient(
 
             // DashMap operations are sync and lock-free
             if let Some((_, client)) = handle_table.remove(&handle_id) {
-                log::debug!("Removed client with handle: {handle_id}");
-
                 // Schedule async cleanup
                 let runtime = get_runtime();
                 runtime.spawn(async move {
@@ -1453,10 +1450,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                     return Some(());
                 }
             };
-
-            log::debug!("Executing batch with {} commands (atomic: {})", 
-                       batch.commands.len(), batch.is_atomic);
-
+            
             // Spawn async task for batch execution using existing glide-core patterns
             let batch_clone = batch.clone();
             let route_clone = command_request.route.0.map(|r| *r).unwrap_or_default();
@@ -1593,8 +1587,6 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBinaryComman
                 }
             };
 
-            log::debug!("Executing binary command async with {} bytes", raw_bytes.len());
-
             // Spawn async task with actual command execution
             let runtime = get_runtime();
             runtime.spawn(async move {
@@ -1685,8 +1677,6 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executePublishBinar
             };
 
             let is_sharded = sharded != 0;
-            log::debug!("Executing {} publish async", if is_sharded { "sharded" } else { "regular" });
-
             // Spawn async task
             let runtime = get_runtime();
             runtime.spawn(async move {
@@ -1820,7 +1810,6 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
             };
 
             let client_handle_id = handle_id as u64;
-            log::debug!("Executing script '{}' with {} keys and {} args", hash_str, keys_data.len(), args_data.len());
 
             // Extract route parameters on the current thread (avoid JNI env escaping into async)
             let has_route_bool = has_route != 0;
@@ -1959,8 +1948,6 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_updateConnectionPas
                 }
             };
 
-            log::debug!("Updating connection password, immediate_auth: {}", do_immediate);
-
             // Spawn async task
             let runtime = get_runtime();
             runtime.spawn(async move {
@@ -2060,9 +2047,6 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeClusterScanA
 
             let client_handle_id = client_ptr as u64;
             let count_value = if count > 0 { Some(count as u32) } else { None };
-
-            log::debug!("Executing cluster scan with cursor '{}', pattern: {:?}, count: {:?}, type: {:?}", 
-                       cursor_str, pattern, count_value, obj_type);
 
             // Spawn async task for cluster scan execution
             let runtime = get_runtime();

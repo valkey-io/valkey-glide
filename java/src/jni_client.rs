@@ -37,15 +37,11 @@ const DEFAULT_CALLBACK_WORKER_THREADS: usize = 2;
 pub(crate) fn get_runtime() -> &'static Runtime {
     RUNTIME.get_or_init(|| {
         let worker_threads = if let Ok(threads_str) = std::env::var("GLIDE_TOKIO_WORKER_THREADS") {
-            threads_str.parse::<usize>().unwrap_or_else(|_| {
-                log::debug!("Invalid GLIDE_TOKIO_WORKER_THREADS; using default");
-                DEFAULT_RUNTIME_WORKER_THREADS
-            })
+            threads_str.parse::<usize>().unwrap_or(DEFAULT_RUNTIME_WORKER_THREADS)
         } else {
             DEFAULT_RUNTIME_WORKER_THREADS
         };
 
-        log::debug!("Initializing Tokio runtime with {worker_threads} worker threads");
 
         tokio::runtime::Builder::new_multi_thread()
             .worker_threads(worker_threads)
@@ -212,8 +208,6 @@ pub async fn create_glide_client(
             log::error!("Failed to create glide-core client: {e}");
             anyhow::anyhow!("Failed to create glide-core client: {e}")
         })?;
-
-    log::debug!("Successfully created glide-core client");
     Ok(client)
 }
 
@@ -352,9 +346,6 @@ pub(crate) fn get_method_cache(env: &mut JNIEnv) -> Result<MethodCache> {
         }
     }
 
-    // Cache miss: initialize
-    log::debug!("Initializing JNI method cache");
-
     let class = env
         .find_class("glide/internal/AsyncRegistry")
         .map_err(|e| anyhow::anyhow!("Failed to find AsyncRegistry class: {e}"))?;
@@ -382,7 +373,6 @@ pub(crate) fn get_method_cache(env: &mut JNIEnv) -> Result<MethodCache> {
         *cache_guard = Some(method_cache.clone());
     }
 
-    log::debug!("JNI method cache initialized");
     Ok(method_cache)
 }
 
@@ -586,15 +576,12 @@ fn estimate_value_size(value: &ServerValue) -> usize {
 
 /// Create DirectByteBuffer for large responses (>16KB) with zero-copy optimization
 fn create_direct_byte_buffer<'local>(
-    env: &mut JNIEnv<'local>, 
+    env: &mut JNIEnv<'local>,
     value: ServerValue,
-    encoding_utf8: bool
+    encoding_utf8: bool,
 ) -> Result<JObject<'local>, crate::errors::FFIError> {
     match value {
-        redis::Value::BulkString(mut data) => {
-            // For large binary data, create DirectByteBuffer
-            log::debug!("Creating DirectByteBuffer for {} bytes", data.len());
-            
+        redis::Value::BulkString(mut data) => {            
             // Create DirectByteBuffer from the data - JNI requires raw pointer and size
             let ptr = data.as_mut_ptr();
             let len = data.len();
@@ -607,9 +594,7 @@ fn create_direct_byte_buffer<'local>(
         }
         redis::Value::Array(arr) => {
             // For large arrays, serialize to bytes and create DirectByteBuffer
-            let mut serialized = serialize_array_to_bytes(arr, encoding_utf8)?;
-            log::debug!("Creating DirectByteBuffer for serialized array {} bytes", serialized.len());
-            
+            let mut serialized = serialize_array_to_bytes(arr, encoding_utf8)?;            
             let ptr = serialized.as_mut_ptr();
             let len = serialized.len();
             
@@ -620,9 +605,7 @@ fn create_direct_byte_buffer<'local>(
         }
         redis::Value::Map(map) => {
             // For large maps, serialize directly without BTreeMap conversion
-            let mut serialized = serialize_map_vec_to_bytes(map, encoding_utf8)?;
-            log::debug!("Creating DirectByteBuffer for serialized map {} bytes", serialized.len());
-            
+            let mut serialized = serialize_map_vec_to_bytes(map, encoding_utf8)?;            
             let ptr = serialized.as_mut_ptr();
             let len = serialized.len();
             
@@ -633,7 +616,6 @@ fn create_direct_byte_buffer<'local>(
         }
         _ => {
             // Fall back to regular conversion for other large types
-            log::debug!("Falling back to regular conversion for large response");
             crate::resp_value_to_java(env, value, encoding_utf8)
         }
     }

@@ -7,6 +7,7 @@
 - Implemented pull-based PubSub queue in `BaseClient` and restored handler/queue unit tests.
 - Fixed `GlideCoreClient.createClient(...)` wrapper to forward `readFrom`, `clientAz`, `lazyConnect`, `clientName`, and PubSub subscriptions to JNI (removed hard-coded defaults). Focused unit + integration tests passed.
 - PubSub end-to-end over JNI: added native push forwarder on eager create, added RESP3-only guard for subscriptions, and isolated user callback exceptions. PubSub integration suite (non-TLS) now passes via dedicated Gradle task.
+- Centralized script routing mapping in `CommandManager` to keep parity with command routing and reduce duplication. Re-ran script integration tests for standalone and cluster – all passed.
 
 ### Scope (this PR)
 - Java client JNI script path parity with UDS: storage, invocation, routing.
@@ -88,6 +89,7 @@
   - `glide.ConnectionTests.basic_client` (RESP3/RESP2) — PASS
   - `glide.standalone.StandaloneClientTests.register_client_name_and_version` — PASS
   - PubSub suite: `./gradlew :integTest:pubsubTest -Dtls=false -x spotbugsMain -x spotbugsTest` — PASS
+  - Scripts: `./gradlew :integTest:test -Dtls=false --tests "glide.standalone.CommandTests.script*" --tests "glide.cluster.CommandTests.script*" -x spotbugsMain -x spotbugsTest` — PASS
 - Docs: update `java/JNI_MIGRATION_STATUS.md` after PubSub verification (and note the dedicated pubsubTest task).
 
 ### Performance & Memory Notes
