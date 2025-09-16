@@ -158,10 +158,33 @@ public class CommandManager {
             List<GlideString> keys,
             List<GlideString> args,
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
-        var cf = new CompletableFuture<T>();
-        cf.completeExceptionally(new glide.api.models.exceptions.RequestException(
-                "ScriptInvocation is temporarily unsupported"));
-        return cf;
+        if (!coreClient.isConnected()) {
+            var errorFuture = new CompletableFuture<T>();
+            errorFuture.completeExceptionally(
+                    new ClosingException("Client closed: Unable to submit script."));
+            return errorFuture;
+        }
+
+        try {
+            // Prepare keys/args as Strings for routing and JNI bridging
+            String[] keyArgs = keys.stream().map(GlideString::toString).toArray(String[]::new);
+            String[] argArgs = args.stream().map(GlideString::toString).toArray(String[]::new);
+
+            final boolean expectUtf8Response = script.getBinaryOutput() == null || !script.getBinaryOutput();
+
+            CompletableFuture<Object> jniFuture = coreClient.executeScriptAsync(
+                    script.getHash(), keyArgs, argArgs, /* hasRoute */ false, /* routeType */ 0, /* routeParam */ null,
+                    expectUtf8Response);
+
+            return jniFuture
+                    .thenApply(result -> createDirectResponse(result))
+                    .thenApply(responseHandler::apply)
+                    .exceptionally(this::exceptionHandler);
+        } catch (Exception e) {
+            var errorFuture = new CompletableFuture<T>();
+            errorFuture.completeExceptionally(e);
+            return errorFuture;
+        }
     }
 
     /** Build a Script (by hash) request with route to send to Valkey via JNI. */
@@ -170,10 +193,54 @@ public class CommandManager {
             List<GlideString> args,
             Route route,
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
-        var cf = new CompletableFuture<T>();
-        cf.completeExceptionally(new glide.api.models.exceptions.RequestException(
-                "ScriptInvocation is temporarily unsupported"));
-        return cf;
+        if (!coreClient.isConnected()) {
+            var errorFuture = new CompletableFuture<T>();
+            errorFuture.completeExceptionally(
+                    new ClosingException("Client closed: Unable to submit script."));
+            return errorFuture;
+        }
+
+        try {
+            String[] keyArgs = new String[0];
+            String[] argArgs = args.stream().map(GlideString::toString).toArray(String[]::new);
+            final boolean expectUtf8Response = script.getBinaryOutput() == null || !script.getBinaryOutput();
+
+            // Map Route to simple JNI route tuple
+            boolean hasRoute = route != null;
+            int routeType = 0;
+            String routeParam = null;
+            if (hasRoute) {
+                if (route instanceof SimpleMultiNodeRoute || route instanceof SimpleSingleNodeRoute) {
+                    routeType = ((route instanceof SimpleMultiNodeRoute)
+                            ? ((SimpleMultiNodeRoute) route).getOrdinal()
+                            : ((SimpleSingleNodeRoute) route).getOrdinal());
+                } else if (route instanceof SlotKeyRoute) {
+                    routeType = ((SlotKeyRoute) route).getSlotType().ordinal();
+                    routeParam = ((SlotKeyRoute) route).getSlotKey();
+                } else if (route instanceof SlotIdRoute) {
+                    routeType = ((SlotIdRoute) route).getSlotType().ordinal();
+                    routeParam = Integer.toString(((SlotIdRoute) route).getSlotId());
+                } else if (route instanceof ByAddressRoute) {
+                    routeType = -1; // special marker; native will parse host:port
+                    routeParam = ((ByAddressRoute) route).getHost() + ":" + ((ByAddressRoute) route).getPort();
+                } else {
+                    throw new RequestException(
+                            "Unsupported route type for script invocation: " + route.getClass().getSimpleName());
+                }
+            }
+
+            CompletableFuture<Object> jniFuture = coreClient.executeScriptAsync(
+                    script.getHash(), keyArgs, argArgs, hasRoute, routeType, routeParam, expectUtf8Response);
+
+            return jniFuture
+                    .thenApply(result -> createDirectResponse(result))
+                    .thenApply(responseHandler::apply)
+                    .exceptionally(this::exceptionHandler);
+        } catch (Exception e) {
+            var errorFuture = new CompletableFuture<T>();
+            errorFuture.completeExceptionally(e);
+            return errorFuture;
+        }
     }
 
     /** Build a Cluster Batch and send via JNI. */

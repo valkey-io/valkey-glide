@@ -946,4 +946,51 @@ public class GlideCoreClient implements AutoCloseable {
     private static void closeClient(long clientPtr) {
         GlideNativeBridge.closeClient(clientPtr);
     }
+
+    /** Execute script via native invoke_script path */
+    public CompletableFuture<Object> executeScriptAsync(
+            String hash,
+            String[] keys,
+            String[] args,
+            boolean hasRoute,
+            int routeType,
+            String routeParam,
+            boolean expectUtf8Response) {
+        try {
+            long handle = nativeClientHandle.get();
+            if (handle == 0) {
+                CompletableFuture<Object> future = new CompletableFuture<>();
+                future.completeExceptionally(
+                        new glide.api.models.exceptions.ClosingException("Client is closed"));
+                return future;
+            }
+
+            CompletableFuture<Object> future = new CompletableFuture<>();
+            long correlationId;
+            try {
+                correlationId = AsyncRegistry.register(future, this.maxInflightRequests, handle);
+            } catch (glide.api.models.exceptions.RequestException e) {
+                future.completeExceptionally(e);
+                return future;
+            }
+
+            // Native call executes script and completes via callback
+            GlideNativeBridge.executeScriptAsync(
+                    handle,
+                    correlationId,
+                    hash,
+                    keys,
+                    args,
+                    hasRoute,
+                    routeType,
+                    routeParam);
+
+            return future;
+
+        } catch (Exception e) {
+            CompletableFuture<Object> future = new CompletableFuture<>();
+            future.completeExceptionally(e);
+            return future;
+        }
+    }
 }

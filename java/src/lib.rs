@@ -428,6 +428,51 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlideValueResolver_createLeakedB
     .unwrap_or(0)
 }
 
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_glide_ffi_resolvers_ScriptResolver_storeScript<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    code: JByteArray<'local>,
+) -> JString<'local> {
+    handle_panics(
+        move || {
+            fn store_script<'a>(
+                env: &mut JNIEnv<'a>,
+                code: JByteArray<'a>,
+            ) -> Result<JString<'a>, FFIError> {
+                let bytes = env.convert_byte_array(&code)?;
+                let hash = glide_core::scripts_container::add_script(&bytes);
+                Ok(env.new_string(hash)?)
+            }
+            let result = store_script(&mut env, code);
+            handle_errors(&mut env, result)
+        },
+        "storeScript",
+    )
+    .unwrap_or(JString::<'_>::default())
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_glide_ffi_resolvers_ScriptResolver_dropScript<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    sha1: JString<'local>,
+) {
+    handle_panics(
+        move || {
+            fn drop_script(env: &mut JNIEnv<'_>, sha1: JString<'_>) -> Result<(), FFIError> {
+                let sha: String = env.get_string(&sha1)?.into();
+                glide_core::scripts_container::remove_script(&sha);
+                Ok(())
+            }
+            let result = drop_script(&mut env, sha1);
+            handle_errors(&mut env, result)
+        },
+        "dropScript",
+    )
+    .unwrap_or(())
+}
+
 impl From<logger_core::Level> for Level {
     fn from(level: logger_core::Level) -> Self {
         match level {

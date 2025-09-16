@@ -1118,8 +1118,8 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<Boolean[]> scriptExists(@NonNull GlideString[] sha1s) {
-        return commandManager.submitNewCommandWithResponseType(
-                ScriptExists, sha1s, response -> castArray(handleArrayResponse(response), Boolean.class), true);
+        return commandManager.submitNewCommand(
+                ScriptExists, sha1s, response -> castArray(handleArrayResponse(response), Boolean.class));
     }
 
     @Override
@@ -1134,9 +1134,8 @@ public class GlideClusterClient extends BaseClient
     @Override
     public CompletableFuture<Boolean[]> scriptExists(
             @NonNull GlideString[] sha1s, @NonNull Route route) {
-        // Force UTF-8 for boolean array response while keeping GlideString args
-        return commandManager.submitNewCommandWithResponseType(
-                ScriptExists, sha1s, route, response -> castArray(handleArrayResponse(response), Boolean.class), true);
+        return commandManager.submitNewCommand(
+                ScriptExists, sha1s, route, response -> castArray(handleArrayResponse(response), Boolean.class));
     }
 
     @Override

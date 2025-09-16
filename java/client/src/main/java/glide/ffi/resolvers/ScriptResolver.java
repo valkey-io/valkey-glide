@@ -1,4 +1,12 @@
 package glide.ffi.resolvers;
 
 public final class ScriptResolver {
+
+    static {
+        NativeUtils.loadGlideLib();
+    }
+
+    public static native String storeScript(byte[] code);
+
+    public static native void dropScript(String sha1);
 }
