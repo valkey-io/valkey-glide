@@ -331,7 +331,14 @@ public class GlideCoreClient implements AutoCloseable {
                             config.getClusterMode(),
                             config.getRequestTimeoutMs(),
                             config.getConnectionTimeoutMs(),
-                            this.maxInflightRequests);
+                            this.maxInflightRequests,
+                            config.getReadFrom() != null ? config.getReadFrom().name() : null,
+                            config.getClientAZ(),
+                            config.getLazyConnect(),
+                            config.getClientName(),
+                            config.getSubExact(),
+                            config.getSubPattern(),
+                            config.getSubSharded());
         } catch (RuntimeException e) {
             // Propagate the exception from the native layer with proper context
             String errorMsg = e.getMessage();
@@ -350,6 +357,12 @@ public class GlideCoreClient implements AutoCloseable {
         }
 
         this.nativeClientHandle.set(handle);
+
+        // Register for PubSub push delivery
+        try {
+            registerClient(handle, null); // will be replaced by BaseClient after it is constructed
+        } catch (Throwable ignore) {
+        }
 
         // Create shared state for proper cleanup coordination
         this.nativeState = new NativeState(handle);
@@ -914,7 +927,14 @@ public class GlideCoreClient implements AutoCloseable {
             boolean clusterMode,
             int requestTimeoutMs,
             int connectionTimeoutMs,
-            int maxInflightRequests) {
+            int maxInflightRequests,
+            String readFrom,
+            String clientAz,
+            boolean lazyConnect,
+            String clientName,
+            byte[][] subExact,
+            byte[][] subPattern,
+            byte[][] subSharded) {
         return GlideNativeBridge.createClient(
                 addresses,
                 databaseId,
@@ -926,10 +946,13 @@ public class GlideCoreClient implements AutoCloseable {
                 requestTimeoutMs,
                 connectionTimeoutMs,
                 maxInflightRequests,
-                "PRIMARY", // default read from
-                null, // no client AZ
-                false, // not lazy connect
-                null); // no client name
+                readFrom,
+                clientAz,
+                lazyConnect,
+                clientName,
+                subExact,
+                subPattern,
+                subSharded);
     }
 
     /** Check if the native client is connected */

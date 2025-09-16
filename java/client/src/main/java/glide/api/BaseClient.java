@@ -421,6 +421,11 @@ public abstract class BaseClient
      */
     protected static <T extends BaseClient> CompletableFuture<T> createClient(
             @NonNull BaseClientConfiguration config, Function<ClientBuilder, T> constructor) {
+        // Validate protocol compatibility for PubSub subscriptions
+        if (config.getSubscriptionConfiguration() != null
+                && config.getProtocol() == glide.api.models.configuration.ProtocolVersion.RESP2) {
+            throw new ConfigurationError("PubSub subscriptions require RESP3 protocol");
+        }
         try {
             // Create client components using build methods (matches UDS pattern)
             ConnectionManager connectionManager = buildConnectionManager();
@@ -434,12 +439,18 @@ public abstract class BaseClient
                                 // Create CommandManager after connection established
                                 CommandManager commandManager = buildCommandManager(connectionManager);
 
-                                return constructor.apply(
+                                T client = constructor.apply(
                                         new ClientBuilder(
                                                 connectionManager,
                                                 commandManager,
                                                 messageHandler,
                                                 Optional.ofNullable(config.getSubscriptionConfiguration())));
+                                try {
+                                    glide.internal.GlideCoreClient.registerClient(
+                                            connectionManager.getNativeClientHandle(), client);
+                                } catch (Throwable ignore) {
+                                }
+                                return client;
                             });
         } catch (Exception e) {
             // Something bad happened during initial setup
@@ -471,9 +482,15 @@ public abstract class BaseClient
     protected static CommandManager buildCommandManager(ConnectionManager connectionManager) {
         // CommandManager will be created after connection is established
         // We'll update this once the connection provides the native handle
-        return new CommandManager(
+        GlideCoreClient core =
                 new GlideCoreClient(
-                        connectionManager.getNativeClientHandle(), connectionManager.getMaxInflightRequests()));
+                        connectionManager.getNativeClientHandle(), connectionManager.getMaxInflightRequests());
+        // Register for PubSub push delivery
+        try {
+            GlideCoreClient.registerClient(connectionManager.getNativeClientHandle(), null);
+        } catch (Throwable ignore) {
+        }
+        return new CommandManager(core);
     }
 
     /**
@@ -5733,11 +5750,15 @@ public abstract class BaseClient
         // Deliver to callback if configured; otherwise enqueue for pull-based APIs
         if (subscriptionConfiguration.isPresent()
                 && subscriptionConfiguration.get().getCallback().isPresent()) {
-            subscriptionConfiguration
-                    .get()
-                    .getCallback()
-                    .get()
-                    .accept(message, subscriptionConfiguration.get().getContext().orElse(null));
+            try {
+                subscriptionConfiguration
+                        .get()
+                        .getCallback()
+                        .get()
+                        .accept(message, subscriptionConfiguration.get().getContext().orElse(null));
+            } catch (Throwable ignored) {
+                // Ensure user callback exceptions do not break push delivery loop
+            }
             return;
         }
         messageHandler.getQueue().push(message);

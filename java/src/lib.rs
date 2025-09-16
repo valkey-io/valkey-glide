@@ -960,6 +960,9 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createClient(
     client_az: jni::sys::jstring,
     lazy_connect: jni::sys::jboolean,
     client_name: jni::sys::jstring,
+    sub_exact: JObjectArray,
+    sub_pattern: JObjectArray,
+    sub_sharded: JObjectArray,
 ) -> jlong {
     handle_panics(
         move || {
@@ -991,6 +994,46 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createClient(
             let client_az_opt = get_optional_string_param_raw(&mut env, client_az);
             let client_name_opt = get_optional_string_param_raw(&mut env, client_name);
 
+            // Build PubSubSubscriptionInfo from three arrays if any present
+            let subscriptions_opt: Option<redis::PubSubSubscriptionInfo> = (|| {
+                let mut any = false;
+                let mut info = std::collections::HashMap::new();
+
+                // helper to convert array of byte[] to HashSet<PubSubChannelOrPattern>
+                fn array_to_set(env: &mut JNIEnv, arr: JObjectArray) -> std::collections::HashSet<redis::PubSubChannelOrPattern> {
+                    let mut set = std::collections::HashSet::new();
+                    if arr.is_null() { return set; }
+                    if let Ok(len) = env.get_array_length(&arr) {
+                        for i in 0..len {
+                            if let Ok(obj) = env.get_object_array_element(&arr, i) {
+                                if let Ok(bytes) = env.convert_byte_array(JByteArray::from(obj)) {
+                                    set.insert(redis::PubSubChannelOrPattern::from(bytes));
+                                }
+                            }
+                        }
+                    }
+                    set
+                }
+
+                let exact_set = array_to_set(&mut env, sub_exact);
+                if !exact_set.is_empty() {
+                    any = true;
+                    info.insert(redis::PubSubSubscriptionKind::Exact, exact_set);
+                }
+                let pattern_set = array_to_set(&mut env, sub_pattern);
+                if !pattern_set.is_empty() {
+                    any = true;
+                    info.insert(redis::PubSubSubscriptionKind::Pattern, pattern_set);
+                }
+                let sharded_set = array_to_set(&mut env, sub_sharded);
+                if !sharded_set.is_empty() {
+                    any = true;
+                    info.insert(redis::PubSubSubscriptionKind::Sharded, sharded_set);
+                }
+
+                if any { Some(info) } else { None }
+            })();
+
             // Create connection configuration using all parameters
             let config = match create_valkey_connection_config(ValkeyClientConfig {
                 addresses,
@@ -1007,6 +1050,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createClient(
                 lazy_connect: lazy_connect != 0,
                 client_name: client_name_opt,
                 max_inflight_requests: if max_inflight_requests > 0 { Some(max_inflight_requests as u32) } else { None },
+                pubsub_subscriptions: subscriptions_opt,
             }) {
                 Ok(config) => config,
                 Err(e) => {
@@ -1022,7 +1066,13 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createClient(
 
             // Direct client creation (no lazy loading for simplified implementation)
             let runtime = get_runtime();
-            let tx_opt: Option<tokio::sync::mpsc::UnboundedSender<redis::PushInfo>> = None;
+            // Enable push channel if pubsub subscriptions are present
+            let mut rx_opt: Option<tokio::sync::mpsc::UnboundedReceiver<redis::PushInfo>> = None;
+            let tx_opt: Option<tokio::sync::mpsc::UnboundedSender<redis::PushInfo>> = if config.pubsub_subscriptions.is_some() {
+                let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<redis::PushInfo>();
+                rx_opt = Some(rx);
+                Some(tx)
+            } else { None };
 
             match runtime.block_on(async { create_glide_client(config, tx_opt).await }) {
                 Ok(client) => {
@@ -1031,6 +1081,21 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createClient(
 
                     // Store in handle table
                     handle_table.insert(safe_handle, client);
+
+                    // If we created a push channel, spawn a forwarder to deliver pushes to Java
+                    if let Some(mut rx) = rx_opt {
+                        let jvm_arc = jni_client::JVM.get().cloned();
+                        let handle_for_java = safe_handle as jlong;
+                        get_runtime().spawn(async move {
+                            while let Some(push) = rx.recv().await {
+                                if let Some(jvm) = jvm_arc.as_ref()
+                                    && let Ok(mut env) = jvm.attach_current_thread_permanently()
+                                {
+                                    handle_push_notification(&mut env, handle_for_java, push);
+                                }
+                            }
+                        });
+                    }
 
                     log::debug!("Created client with handle: {safe_handle}");
                     Some(safe_handle as jlong)

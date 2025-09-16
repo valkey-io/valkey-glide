@@ -224,32 +224,13 @@ public class CommandManager {
             String[] argArgs = args.stream().map(GlideString::toString).toArray(String[]::new);
             final boolean expectUtf8Response = script.getBinaryOutput() == null || !script.getBinaryOutput();
 
-            // Map Route to simple JNI route tuple
-            boolean hasRoute = route != null;
-            int routeType = 0;
-            String routeParam = null;
-            if (hasRoute) {
-                if (route instanceof SimpleMultiNodeRoute || route instanceof SimpleSingleNodeRoute) {
-                    routeType = ((route instanceof SimpleMultiNodeRoute)
-                            ? ((SimpleMultiNodeRoute) route).getOrdinal()
-                            : ((SimpleSingleNodeRoute) route).getOrdinal());
-                } else if (route instanceof SlotKeyRoute) {
-                    routeType = ((SlotKeyRoute) route).getSlotType().ordinal();
-                    routeParam = ((SlotKeyRoute) route).getSlotKey();
-                } else if (route instanceof SlotIdRoute) {
-                    routeType = ((SlotIdRoute) route).getSlotType().ordinal();
-                    routeParam = Integer.toString(((SlotIdRoute) route).getSlotId());
-                } else if (route instanceof ByAddressRoute) {
-                    routeType = -1; // special marker; native will parse host:port
-                    routeParam = ((ByAddressRoute) route).getHost() + ":" + ((ByAddressRoute) route).getPort();
-                } else {
-                    throw new RequestException(
-                            "Unsupported route type for script invocation: " + route.getClass().getSimpleName());
-                }
-            }
+            // Map Route to simple JNI route tuple via centralized helper
+            ScriptRouteArgs routeArgs = computeScriptRouteArgs(route);
 
             CompletableFuture<Object> jniFuture = coreClient.executeScriptAsync(
-                    script.getHash(), keyArgs, argArgs, hasRoute, routeType, routeParam, expectUtf8Response);
+                    script.getHash(), keyArgs, argArgs,
+                    routeArgs.hasRoute, routeArgs.routeType, routeArgs.routeParam,
+                    expectUtf8Response);
 
             return jniFuture
                     .thenApply(result -> createDirectResponse(result))
@@ -260,6 +241,48 @@ public class CommandManager {
             errorFuture.completeExceptionally(e);
             return errorFuture;
         }
+    }
+
+    /** Lightweight container for script routing arguments over JNI. */
+    private static final class ScriptRouteArgs {
+        final boolean hasRoute;
+        final int routeType;
+        final String routeParam;
+
+        ScriptRouteArgs(boolean hasRoute, int routeType, String routeParam) {
+            this.hasRoute = hasRoute;
+            this.routeType = routeType;
+            this.routeParam = routeParam;
+        }
+    }
+
+    /** Centralized mapping from RouteInfo to JNI script routing tuple. */
+    private ScriptRouteArgs computeScriptRouteArgs(Route route) {
+        if (route == null) {
+            return new ScriptRouteArgs(false, 0, null);
+        }
+        if (route instanceof SimpleMultiNodeRoute) {
+            return new ScriptRouteArgs(true, ((SimpleMultiNodeRoute) route).getOrdinal(), null);
+        }
+        if (route instanceof SimpleSingleNodeRoute) {
+            return new ScriptRouteArgs(true, ((SimpleSingleNodeRoute) route).getOrdinal(), null);
+        }
+        if (route instanceof SlotKeyRoute) {
+            int routeType = ((SlotKeyRoute) route).getSlotType().ordinal();
+            String routeParam = ((SlotKeyRoute) route).getSlotKey();
+            return new ScriptRouteArgs(true, routeType, routeParam);
+        }
+        if (route instanceof SlotIdRoute) {
+            int routeType = ((SlotIdRoute) route).getSlotType().ordinal();
+            String routeParam = Integer.toString(((SlotIdRoute) route).getSlotId());
+            return new ScriptRouteArgs(true, routeType, routeParam);
+        }
+        if (route instanceof ByAddressRoute) {
+            String hostPort = ((ByAddressRoute) route).getHost() + ":" + ((ByAddressRoute) route).getPort();
+            return new ScriptRouteArgs(true, -1, hostPort); // -1 => ByAddress special case
+        }
+        throw new RequestException(
+                String.format("Unsupported route type for script invocation: %s", route.getClass().getSimpleName()));
     }
 
     /** Build a Cluster Batch and send via JNI. */

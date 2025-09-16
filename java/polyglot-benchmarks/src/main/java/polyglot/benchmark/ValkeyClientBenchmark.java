@@ -396,8 +396,13 @@ public class ValkeyClientBenchmark {
         // Shutdown
         running.set(false);
         checkpointService.shutdown();
+        if (!checkpointService.awaitTermination(10, TimeUnit.SECONDS)) {
+            checkpointService.shutdownNow();
+        }
         executor.shutdown();
-        executor.awaitTermination(5, TimeUnit.SECONDS);
+        if (!executor.awaitTermination(10, TimeUnit.SECONDS)) {
+            executor.shutdownNow();
+        }
         
         double duration = (System.nanoTime() - startTime) / 1_000_000_000.0;
         String perfMetricsStr = "";

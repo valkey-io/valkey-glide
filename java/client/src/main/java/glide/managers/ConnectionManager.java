@@ -62,6 +62,41 @@ public class ConnectionManager {
                                         : (int) GlideNativeBridge.getGlideCoreDefaultTimeoutMs();
 
                         // Create native client through JNI bridge
+                        byte[][] subExact = new byte[0][];
+                        byte[][] subPattern = new byte[0][];
+                        byte[][] subSharded = new byte[0][];
+                        if (configuration.getSubscriptionConfiguration() != null) {
+                            var sc = configuration.getSubscriptionConfiguration();
+                            try {
+                                if (sc instanceof glide.api.models.configuration.StandaloneSubscriptionConfiguration) {
+                                    var subs = ((glide.api.models.configuration.StandaloneSubscriptionConfiguration) sc).getSubscriptions();
+                                    var exact = subs.get(glide.api.models.configuration.StandaloneSubscriptionConfiguration.PubSubChannelMode.EXACT);
+                                    var pattern = subs.get(glide.api.models.configuration.StandaloneSubscriptionConfiguration.PubSubChannelMode.PATTERN);
+                                    if (exact != null) {
+                                        subExact = exact.stream().map(glide.api.models.GlideString::getBytes).toArray(byte[][]::new);
+                                    }
+                                    if (pattern != null) {
+                                        subPattern = pattern.stream().map(glide.api.models.GlideString::getBytes).toArray(byte[][]::new);
+                                    }
+                                } else if (sc instanceof glide.api.models.configuration.ClusterSubscriptionConfiguration) {
+                                    var subs = ((glide.api.models.configuration.ClusterSubscriptionConfiguration) sc).getSubscriptions();
+                                    var exact = subs.get(glide.api.models.configuration.ClusterSubscriptionConfiguration.PubSubClusterChannelMode.EXACT);
+                                    var pattern = subs.get(glide.api.models.configuration.ClusterSubscriptionConfiguration.PubSubClusterChannelMode.PATTERN);
+                                    var sharded = subs.get(glide.api.models.configuration.ClusterSubscriptionConfiguration.PubSubClusterChannelMode.SHARDED);
+                                    if (exact != null) {
+                                        subExact = exact.stream().map(glide.api.models.GlideString::getBytes).toArray(byte[][]::new);
+                                    }
+                                    if (pattern != null) {
+                                        subPattern = pattern.stream().map(glide.api.models.GlideString::getBytes).toArray(byte[][]::new);
+                                    }
+                                    if (sharded != null) {
+                                        subSharded = sharded.stream().map(glide.api.models.GlideString::getBytes).toArray(byte[][]::new);
+                                    }
+                                }
+                            } catch (Throwable ignore) {
+                            }
+                        }
+
                         this.nativeClientHandle =
                                 GlideNativeBridge.createClient(
                                         addresses,
@@ -72,16 +107,15 @@ public class ConnectionManager {
                                         false, // insecureTls - default value
                                         isCluster,
                                         requestTimeoutMs,
-                                        (int)
-                                                GlideNativeBridge
-                                                        .getGlideCoreDefaultTimeoutMs(), // connectionTimeoutMs - core default
+                                        (int) GlideNativeBridge.getGlideCoreDefaultTimeoutMs(),
                                         maxInflightRequests,
-                                        configuration.getReadFrom() != null
-                                                ? configuration.getReadFrom().name()
-                                                : null, // readFrom
-                                        configuration.getClientAZ(), // clientAz
-                                        configuration.isLazyConnect(), // lazyConnect
-                                        configuration.getClientName());
+                                        configuration.getReadFrom() != null ? configuration.getReadFrom().name() : null,
+                                        configuration.getClientAZ(),
+                                        configuration.isLazyConnect(),
+                                        configuration.getClientName(),
+                                        subExact,
+                                        subPattern,
+                                        subSharded);
 
                         if (nativeClientHandle == 0) {
                             throw new ClosingException("Failed to create client - Connection refused");

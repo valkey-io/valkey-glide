@@ -1,6 +1,8 @@
 package polyglot.benchmark;
 
-import java.lang.management.*;
+import java.lang.management.ManagementFactory;
+import java.lang.management.MemoryMXBean;
+import java.lang.management.MemoryUsage;
 import java.util.concurrent.atomic.AtomicReference;
 import com.sun.management.OperatingSystemMXBean;
 
@@ -18,7 +20,16 @@ public class SystemResourceMonitor {
     private final AtomicReference<ResourceSnapshot> peakSnapshot = new AtomicReference<>();
     
     public SystemResourceMonitor() {
-        this.osBean = (OperatingSystemMXBean) ManagementFactory.getOperatingSystemMXBean();
+        OperatingSystemMXBean candidate = null;
+        try {
+            candidate = ManagementFactory.getPlatformMXBean(OperatingSystemMXBean.class);
+        } catch (IllegalArgumentException ignored) {
+            // Fallback handled below if the platform bean is not available
+        }
+        if (candidate == null) {
+            throw new IllegalStateException("Platform MXBean com.sun.management.OperatingSystemMXBean is required");
+        }
+        this.osBean = candidate;
         this.memoryBean = ManagementFactory.getMemoryMXBean();
         this.runtime = Runtime.getRuntime();
         
@@ -45,8 +56,8 @@ public class SystemResourceMonitor {
         // System.gc();
         
         // CPU metrics
-        double processCpuLoad = osBean.getProcessCpuLoad() * 100; // Convert to percentage
-        double systemCpuLoad = osBean.getCpuLoad() * 100;
+        double processCpuLoad = Math.max(0.0, osBean.getProcessCpuLoad()) * 100; // Convert to percentage
+        double systemCpuLoad = Math.max(0.0, osBean.getSystemCpuLoad()) * 100;
         int availableProcessors = osBean.getAvailableProcessors();
         
         // Memory metrics (in MB)
@@ -66,8 +77,8 @@ public class SystemResourceMonitor {
         long nonHeapUsed = nonHeapUsage.getUsed() / (1024 * 1024);
         
         // OS-level memory (if available)
-        long totalPhysicalMemory = osBean.getTotalMemorySize() / (1024 * 1024);
-        long freePhysicalMemory = osBean.getFreeMemorySize() / (1024 * 1024);
+        long totalPhysicalMemory = osBean.getTotalPhysicalMemorySize() / (1024 * 1024);
+        long freePhysicalMemory = osBean.getFreePhysicalMemorySize() / (1024 * 1024);
         long usedPhysicalMemory = totalPhysicalMemory - freePhysicalMemory;
         
         ResourceSnapshot snapshot = new ResourceSnapshot(

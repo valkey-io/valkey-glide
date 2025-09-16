@@ -98,6 +98,7 @@ pub struct ValkeyClientConfig {
     pub lazy_connect: bool,
     pub client_name: Option<String>,
     pub max_inflight_requests: Option<u32>,
+    pub pubsub_subscriptions: Option<redis::PubSubSubscriptionInfo>,
 }
 
 /// Helper function to create Valkey connection configuration
@@ -117,6 +118,7 @@ pub fn create_valkey_connection_config(config: ValkeyClientConfig) -> Result<Con
         lazy_connect,
         client_name,
         max_inflight_requests,
+        pubsub_subscriptions,
     } = config;
     
     if addresses.is_empty() {
@@ -191,7 +193,7 @@ pub fn create_valkey_connection_config(config: ValkeyClientConfig) -> Result<Con
         protocol: None,
         connection_retry_strategy: None,
         periodic_checks: None,
-        pubsub_subscriptions: None,
+        pubsub_subscriptions,
         inflight_requests_limit: max_inflight_requests,
         lazy_connect,
     };
@@ -269,7 +271,7 @@ pub async fn ensure_client_for_handle(handle_id: u64) -> Result<GlideClient> {
     Err(anyhow::anyhow!("Client not found in handle_table"))
 }
 
-fn handle_push_notification(env: &mut JNIEnv, handle_id: jlong, push: redis::PushInfo) {
+pub(crate) fn handle_push_notification(env: &mut JNIEnv, handle_id: jlong, push: redis::PushInfo) {
     use redis::{PushKind, Value};
     
     let as_bytes = |v: &Value| -> Option<Vec<u8>> {

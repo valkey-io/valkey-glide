@@ -5,21 +5,22 @@ set -euo pipefail
 # Execute from repo root or this script's directory.
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
-REPO_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
-cd "$REPO_ROOT"
+JAVA_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
+cd "$JAVA_ROOT"
 
 JDK_BIN=${JAVA_HOME:-}/bin
 JAVA_CMD=${JDK_BIN:+$JDK_BIN/}java
 GRADLE_CMD=./gradlew
 RESULTS_DIR=${RESULTS_DIR:-bench-results}
-JNI_NATIVE_DIR=java/client/build/native-libs
-JNI_JAR_GLOB="java/client/build/libs/valkey-glide-*.jar"
-POLYGLOT_JAR=java/polyglot-benchmarks/build/libs/benchmarks.jar
-MAVEN_COORD=${MAVEN_COORD:-io.valkey:valkey-glide:1.0.0}
+JNI_NATIVE_DIR=client/build/native-libs
+JNI_JAR_GLOB="client/build/libs/valkey-glide-*.jar"
+POLYGLOT_JAR=polyglot-benchmarks/build/libs/benchmarks.jar
+MAVEN_COORD=${MAVEN_COORD:-io.valkey:valkey-glide:2.0.1:jar:linux-aarch_64}
 MAVEN_REPO=${MAVEN_REPO:-$HOME/.m2/repository}
-HOST=${HOST:-${ELASTICACHE_HOST:-localhost}}
+ELASTICACHE_HOST=${ELASTICACHE_HOST:-"clustercfg.testing-cluster.ey5v7d.use2.cache.amazonaws.com"}
+HOST=${HOST:-$ELASTICACHE_HOST}
 PORT=${PORT:-6379}
-TLS_FLAG=${TLS_FLAG:---tls}
+TLS_FLAG=${TLS_FLAG:-}
 DURATION_DEFAULT=120
 
 scenarios=(
@@ -29,9 +30,17 @@ scenarios=(
 )
 
 require_cmd() {
-  if ! command -v "$1" >/dev/null 2>&1; then
-    echo "Missing dependency: $1" >&2
-    exit 1
+  local cmd="$1"
+  if [[ "$cmd" == */* ]]; then
+    if [[ ! -x "$cmd" ]]; then
+      echo "Missing executable: $cmd" >&2
+      exit 1
+    fi
+  else
+    if ! command -v "$cmd" >/dev/null 2>&1; then
+      echo "Missing dependency: $cmd" >&2
+      exit 1
+    fi
   fi
 }
 
@@ -42,7 +51,7 @@ require_cmd $GRADLE_CMD
 
 mkdir -p "$RESULTS_DIR/jni" "$RESULTS_DIR/uds"
 
-$GRADLE_CMD :client:buildAll :polyglotBenchmarks:shadowJar
+$GRADLE_CMD :client:buildRust :client:jar :polyglotBenchmarks:shadowJar
 
 JNI_JAR=$(ls $JNI_JAR_GLOB 2>/dev/null | head -n1 || true)
 if [[ -z "$JNI_JAR" ]]; then
@@ -54,8 +63,24 @@ if [[ ! -f "$POLYGLOT_JAR" ]]; then
   exit 1
 fi
 
-IFS=':' read -r UDS_GROUP UDS_ARTIFACT UDS_VERSION <<< "$MAVEN_COORD"
-UDS_JAR="$MAVEN_REPO/${UDS_GROUP//.//}/$UDS_ARTIFACT/$UDS_VERSION/$UDS_ARTIFACT-$UDS_VERSION.jar"
+IFS=':' read -r -a MAVEN_COORD_PARTS <<< "$MAVEN_COORD"
+if (( ${#MAVEN_COORD_PARTS[@]} < 3 )); then
+  echo "Invalid MAVEN_COORD '$MAVEN_COORD' (expected group:artifact:version[:packaging[:classifier]])" >&2
+  exit 1
+fi
+UDS_GROUP=${MAVEN_COORD_PARTS[0]}
+UDS_ARTIFACT=${MAVEN_COORD_PARTS[1]}
+UDS_VERSION=${MAVEN_COORD_PARTS[2]}
+UDS_PACKAGING=${MAVEN_COORD_PARTS[3]:-jar}
+UDS_CLASSIFIER=${MAVEN_COORD_PARTS[4]:-}
+
+UDS_JAR_NAME="$UDS_ARTIFACT-$UDS_VERSION"
+if [[ -n "$UDS_CLASSIFIER" && "$UDS_CLASSIFIER" != "-" ]]; then
+  UDS_JAR_NAME+="-$UDS_CLASSIFIER"
+fi
+UDS_JAR_NAME+=".$UDS_PACKAGING"
+
+UDS_JAR="$MAVEN_REPO/${UDS_GROUP//.//}/$UDS_ARTIFACT/$UDS_VERSION/$UDS_JAR_NAME"
 if [[ ! -f "$UDS_JAR" ]]; then
   mvn dependency:get -Dartifact="$MAVEN_COORD"
 fi
@@ -84,7 +109,7 @@ run_matrix() {
         continue
       fi
       echo "[$impl] data=${data}B qps=$qps concurrency=$concurrency duration=$duration"
-      timeout -k 30 $((duration + 180)) \
+      timeout --foreground -k 30 $((duration + 300)) \
         "$JAVA_CMD" -Xms4g -Xmx4g -XX:+UseG1GC \
         ${jni_path:+-Djava.library.path=$jni_path} \
         -cp "$cp" \
@@ -96,7 +121,7 @@ run_matrix() {
         --concurrency "$concurrency" \
         --qps "$qps" \
         --output "$result" \
-        $TLS_FLAG \
+        ${TLS_FLAG:+$TLS_FLAG} \
         2>&1 | tee "$log"
     done
   done
