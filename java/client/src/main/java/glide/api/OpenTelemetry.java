@@ -374,8 +374,9 @@ public class OpenTelemetry {
         long flushIntervalMs =
                 config.getFlushIntervalMs() != null ? config.getFlushIntervalMs() : 5000L;
 
-        int rc = OpenTelemetryResolver.initOpenTelemetry(
-                tracesEndpoint, tracesSamplePercentage, metricsEndpoint, flushIntervalMs);
+        int rc =
+                OpenTelemetryResolver.initOpenTelemetry(
+                        tracesEndpoint, tracesSamplePercentage, metricsEndpoint, flushIntervalMs);
         if (rc != 0) {
             String msg;
             switch (rc) {

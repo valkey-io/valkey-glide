@@ -1135,7 +1135,10 @@ public class GlideClusterClient extends BaseClient
     public CompletableFuture<Boolean[]> scriptExists(
             @NonNull GlideString[] sha1s, @NonNull Route route) {
         return commandManager.submitNewCommand(
-                ScriptExists, sha1s, route, response -> castArray(handleArrayResponse(response), Boolean.class));
+                ScriptExists,
+                sha1s,
+                route,
+                response -> castArray(handleArrayResponse(response), Boolean.class));
     }
 
     @Override
@@ -1334,10 +1337,11 @@ public class GlideClusterClient extends BaseClient
                         result -> {
                             if (result == null || result.length < 2 || result[0] == null) {
                                 return new Object[] {
-                                        new NativeClusterScanCursor(ClusterScanCursorResolver.FINISHED_CURSOR_HANDLE),
-                                        new Object[0] };
+                                    new NativeClusterScanCursor(ClusterScanCursorResolver.FINISHED_CURSOR_HANDLE),
+                                    new Object[0]
+                                };
                             }
-                            return new Object[] { new NativeClusterScanCursor(result[0].toString()), result[1] };
+                            return new Object[] {new NativeClusterScanCursor(result[0].toString()), result[1]};
                         });
     }
 
@@ -1349,10 +1353,11 @@ public class GlideClusterClient extends BaseClient
                         result -> {
                             if (result == null || result.length < 2 || result[0] == null) {
                                 return new Object[] {
-                                        new NativeClusterScanCursor(ClusterScanCursorResolver.FINISHED_CURSOR_HANDLE),
-                                        new Object[0] };
+                                    new NativeClusterScanCursor(ClusterScanCursorResolver.FINISHED_CURSOR_HANDLE),
+                                    new Object[0]
+                                };
                             }
-                            return new Object[] { new NativeClusterScanCursor(result[0].toString()), result[1] };
+                            return new Object[] {new NativeClusterScanCursor(result[0].toString()), result[1]};
                         });
     }
 
@@ -1364,10 +1369,11 @@ public class GlideClusterClient extends BaseClient
                         result -> {
                             if (result == null || result.length < 2 || result[0] == null) {
                                 return new Object[] {
-                                        new NativeClusterScanCursor(ClusterScanCursorResolver.FINISHED_CURSOR_HANDLE),
-                                        new Object[0] };
+                                    new NativeClusterScanCursor(ClusterScanCursorResolver.FINISHED_CURSOR_HANDLE),
+                                    new Object[0]
+                                };
                             }
-                            return new Object[] { new NativeClusterScanCursor(result[0].toString()), result[1] };
+                            return new Object[] {new NativeClusterScanCursor(result[0].toString()), result[1]};
                         });
     }
 
@@ -1379,10 +1385,11 @@ public class GlideClusterClient extends BaseClient
                         result -> {
                             if (result == null || result.length < 2 || result[0] == null) {
                                 return new Object[] {
-                                        new NativeClusterScanCursor(ClusterScanCursorResolver.FINISHED_CURSOR_HANDLE),
-                                        new Object[0] };
+                                    new NativeClusterScanCursor(ClusterScanCursorResolver.FINISHED_CURSOR_HANDLE),
+                                    new Object[0]
+                                };
                             }
-                            return new Object[] { new NativeClusterScanCursor(result[0].toString()), result[1] };
+                            return new Object[] {new NativeClusterScanCursor(result[0].toString()), result[1]};
                         });
     }
 
@@ -1397,8 +1404,9 @@ public class GlideClusterClient extends BaseClient
         // This is for internal use only.
         public NativeClusterScanCursor(@NonNull String cursorHandle) {
             this.cursorHandle = cursorHandle;
-            this.isFinished = ClusterScanCursorResolver.FINISHED_CURSOR_HANDLE != null
-                    && ClusterScanCursorResolver.FINISHED_CURSOR_HANDLE.equals(cursorHandle);
+            this.isFinished =
+                    ClusterScanCursorResolver.FINISHED_CURSOR_HANDLE != null
+                            && ClusterScanCursorResolver.FINISHED_CURSOR_HANDLE.equals(cursorHandle);
         }
 
         @Override

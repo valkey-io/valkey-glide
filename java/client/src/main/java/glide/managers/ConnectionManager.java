@@ -68,29 +68,65 @@ public class ConnectionManager {
                         if (configuration.getSubscriptionConfiguration() != null) {
                             var sc = configuration.getSubscriptionConfiguration();
                             try {
-                                if (sc instanceof glide.api.models.configuration.StandaloneSubscriptionConfiguration) {
-                                    var subs = ((glide.api.models.configuration.StandaloneSubscriptionConfiguration) sc).getSubscriptions();
-                                    var exact = subs.get(glide.api.models.configuration.StandaloneSubscriptionConfiguration.PubSubChannelMode.EXACT);
-                                    var pattern = subs.get(glide.api.models.configuration.StandaloneSubscriptionConfiguration.PubSubChannelMode.PATTERN);
+                                if (sc
+                                        instanceof glide.api.models.configuration.StandaloneSubscriptionConfiguration) {
+                                    var subs =
+                                            ((glide.api.models.configuration.StandaloneSubscriptionConfiguration) sc)
+                                                    .getSubscriptions();
+                                    var exact =
+                                            subs.get(
+                                                    glide.api.models.configuration.StandaloneSubscriptionConfiguration
+                                                            .PubSubChannelMode.EXACT);
+                                    var pattern =
+                                            subs.get(
+                                                    glide.api.models.configuration.StandaloneSubscriptionConfiguration
+                                                            .PubSubChannelMode.PATTERN);
                                     if (exact != null) {
-                                        subExact = exact.stream().map(glide.api.models.GlideString::getBytes).toArray(byte[][]::new);
+                                        subExact =
+                                                exact.stream()
+                                                        .map(glide.api.models.GlideString::getBytes)
+                                                        .toArray(byte[][]::new);
                                     }
                                     if (pattern != null) {
-                                        subPattern = pattern.stream().map(glide.api.models.GlideString::getBytes).toArray(byte[][]::new);
+                                        subPattern =
+                                                pattern.stream()
+                                                        .map(glide.api.models.GlideString::getBytes)
+                                                        .toArray(byte[][]::new);
                                     }
-                                } else if (sc instanceof glide.api.models.configuration.ClusterSubscriptionConfiguration) {
-                                    var subs = ((glide.api.models.configuration.ClusterSubscriptionConfiguration) sc).getSubscriptions();
-                                    var exact = subs.get(glide.api.models.configuration.ClusterSubscriptionConfiguration.PubSubClusterChannelMode.EXACT);
-                                    var pattern = subs.get(glide.api.models.configuration.ClusterSubscriptionConfiguration.PubSubClusterChannelMode.PATTERN);
-                                    var sharded = subs.get(glide.api.models.configuration.ClusterSubscriptionConfiguration.PubSubClusterChannelMode.SHARDED);
+                                } else if (sc
+                                        instanceof glide.api.models.configuration.ClusterSubscriptionConfiguration) {
+                                    var subs =
+                                            ((glide.api.models.configuration.ClusterSubscriptionConfiguration) sc)
+                                                    .getSubscriptions();
+                                    var exact =
+                                            subs.get(
+                                                    glide.api.models.configuration.ClusterSubscriptionConfiguration
+                                                            .PubSubClusterChannelMode.EXACT);
+                                    var pattern =
+                                            subs.get(
+                                                    glide.api.models.configuration.ClusterSubscriptionConfiguration
+                                                            .PubSubClusterChannelMode.PATTERN);
+                                    var sharded =
+                                            subs.get(
+                                                    glide.api.models.configuration.ClusterSubscriptionConfiguration
+                                                            .PubSubClusterChannelMode.SHARDED);
                                     if (exact != null) {
-                                        subExact = exact.stream().map(glide.api.models.GlideString::getBytes).toArray(byte[][]::new);
+                                        subExact =
+                                                exact.stream()
+                                                        .map(glide.api.models.GlideString::getBytes)
+                                                        .toArray(byte[][]::new);
                                     }
                                     if (pattern != null) {
-                                        subPattern = pattern.stream().map(glide.api.models.GlideString::getBytes).toArray(byte[][]::new);
+                                        subPattern =
+                                                pattern.stream()
+                                                        .map(glide.api.models.GlideString::getBytes)
+                                                        .toArray(byte[][]::new);
                                     }
                                     if (sharded != null) {
-                                        subSharded = sharded.stream().map(glide.api.models.GlideString::getBytes).toArray(byte[][]::new);
+                                        subSharded =
+                                                sharded.stream()
+                                                        .map(glide.api.models.GlideString::getBytes)
+                                                        .toArray(byte[][]::new);
                                     }
                                 }
                             } catch (Throwable ignore) {

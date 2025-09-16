@@ -9,9 +9,9 @@ use redis::cluster_routing::{ResponsePolicy, Routable};
 use redis::{Cmd, RedisError, RedisResult};
 
 // Reuse existing protobuf types from glide-core (no wrapper types needed)
-pub use glide_core::command_request::{Command, CommandRequest, Routes, command_request};
 use glide_core::command_request::SimpleRoutes;
 use glide_core::command_request::SlotTypes;
+pub use glide_core::command_request::{Command, CommandRequest, Routes, command_request};
 
 /// Parse CommandRequest from protobuf bytes (using existing protobuf parsing)
 pub fn parse_command_request(bytes: &[u8]) -> Result<CommandRequest> {
@@ -71,11 +71,13 @@ fn get_slot_addr(slot_type: &protobuf::EnumOrUnknown<SlotTypes>) -> Result<SlotA
             SlotTypes::Primary => SlotAddr::Master,
             SlotTypes::Replica => SlotAddr::ReplicaRequired,
         })
-        .map_err(|id| RedisError::from((
-            redis::ErrorKind::ClientError,
-            "Received unexpected slot id type",
-            format!("{id}"),
-        )))
+        .map_err(|id| {
+            RedisError::from((
+                redis::ErrorKind::ClientError,
+                "Received unexpected slot id type",
+                format!("{id}"),
+            ))
+        })
 }
 
 /// Converts a protobuf Routes message into the corresponding RoutingInfo.

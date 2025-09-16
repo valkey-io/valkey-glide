@@ -812,8 +812,9 @@ struct GlideCoreClientCache {
     register_native_buffer_cleaner: JStaticMethodID,
 }
 
-static GLIDE_CORE_CLIENT_CACHE: std::sync::OnceLock<parking_lot::Mutex<Option<GlideCoreClientCache>>> =
-    std::sync::OnceLock::new();
+static GLIDE_CORE_CLIENT_CACHE: std::sync::OnceLock<
+    parking_lot::Mutex<Option<GlideCoreClientCache>>,
+> = std::sync::OnceLock::new();
 
 fn get_glide_core_client_cache(env: &mut JNIEnv) -> Result<GlideCoreClientCache> {
     let cache_mutex = GLIDE_CORE_CLIENT_CACHE.get_or_init(|| parking_lot::Mutex::new(None));
@@ -825,11 +826,7 @@ fn get_glide_core_client_cache(env: &mut JNIEnv) -> Result<GlideCoreClientCache>
     }
     let class = env.find_class("glide/internal/GlideCoreClient")?;
     let global = env.new_global_ref(&class)?;
-    let on_native_push = env.get_static_method_id(
-        &class,
-        "onNativePush",
-        "(J[B[B[B)V",
-    )?;
+    let on_native_push = env.get_static_method_id(&class, "onNativePush", "(J[B[B[B)V")?;
     let register_native_buffer_cleaner = env.get_static_method_id(
         &class,
         "registerNativeBufferCleaner",
