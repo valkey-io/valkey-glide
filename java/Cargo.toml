@@ -25,20 +25,11 @@ anyhow = "1.0"
 dashmap = "6.1.0"
 parking_lot = "0.12"
 scopeguard = "1.2"
-telemetrylib = { path = "../glide-core/telemetry", optional = true }
-
-[features]
-default = []
-telemetry = ["telemetrylib"]
-
-[target.'cfg(not(target_os = "windows"))'.dependencies]
-tikv-jemallocator = { version = "0.6.0" }
+telemetrylib = { path = "../glide-core/telemetry"}
 
 [profile.release]
-opt-level = 3         # Optimize for performance
-lto = "fat"           # Enable the most aggressive Link Time Optimization
-codegen-units = 1     # Reduce the number of code generation units, increasing optimization time but improving performance
-strip = "symbols"     # Remove symbol
-
-[lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(ffi_test)'] }
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true
