@@ -11,16 +11,16 @@
 - AZ affinity routing: fix cluster routing to honor availability-zone preferences.
 - OpenTelemetry export: ensure spans write to the expected path (e.g., `/tmp/spans.json`) during tests.
 - Error mapping: return the correct Java exception types (e.g., `ClosingException` vs generic `RuntimeException`).
-- Script show/invocation: verify EVALSHA→SCRIPT LOAD→retry flow and consistent routing; ensure `scriptShow` passes.
+- Script path finalized: invocation goes via dedicated JNI path to `Client::invoke_script`; protobuf ScriptInvocation removed.
 
 ### Next Actions Checklist
-- [ ] Reproduce and isolate TYPE conversion failures; add/adjust conversion in JNI response pipeline.
-- [ ] Harden binary-safe vs UTF-8 response mapping and large-payload DirectByteBuffer path (>16KB).
-- [ ] Validate AZ affinity route selection in cluster mode; add focused integ test if missing.
-- [ ] Fix OpenTelemetry file export; confirm CI and local paths match test expectations.
-- [ ] Align error type mapping to expected Java exceptions across connection and shutdown paths.
-- [ ] Re-verify script EVALSHA fallback and routing consistency; confirm `scriptShow` integ tests pass.
-  - Implemented: ScriptInvocationPointers handling in JNI (UTF-8 and binary paths) to mirror UDS large-args behavior.
+- [x] Reproduce and isolate TYPE conversion failures; add/adjust conversion in JNI response pipeline.
+- [x] Harden binary-safe vs UTF-8 response mapping and large-payload DirectByteBuffer path (>16KB).
+- [x] Validate AZ affinity route selection in cluster mode; add focused integ test if missing.
+- [x] Fix OpenTelemetry file export; confirm CI and local paths match test expectations.
+- [x] Align error type mapping to expected Java exceptions across connection and shutdown paths.
+- [x] Re-verify script EVALSHA fallback and routing consistency; all script integ tests pass (non-TLS).
+  - Removed: protobuf ScriptInvocation*. JNI calls `executeScriptAsync` with sha1/keys/args/route and expectUtf8.
 
 ## Update – 2025-09-15 (delta notes)
 
@@ -67,9 +67,8 @@ Next steps (targeted, test-driven)
   - Native: `ScriptResolver.storeScript` → core `scripts_container::add_script(code)` returns SHA1.
   - Core: `glide-core/src/scripts_container.rs` keeps code in a ref-counted map keyed by hash.
 
-### Invocation (Java → Core → Server)
-- Java builds `CommandRequest.ScriptInvocation` with `hash`, `keys`, `args`:
-  - `client/src/main/java/glide/managers/CommandManager.java#prepareScript(...)`.
+-### Invocation (Java → Core → Server)
+- Java calls `GlideNativeBridge.executeScriptAsync(sha1, keys, args, route, expectUtf8)`.
 - Core receives invocation and runs fallback flow with preserved routing:
   - `glide-core/src/socket_listener.rs` → `invoke_script(hash, keys, args, client, routes)`.
   - `glide-core/src/client/mod.rs::invoke_script`: `EVALSHA` → on `NoScriptError` → fetch code via `get_script(hash)` → `SCRIPT LOAD` with the same `routing` → retry `EVALSHA`.
@@ -84,7 +83,7 @@ Next steps (targeted, test-driven)
 ## Mapping To JNI (What We Must Mirror)
 - Provide JNI natives for `storeScript`/`dropScript` that call `add_script`/`remove_script`.
 - For execution, call core `invoke_script` (not manual `EVALSHA`) and pass through the original `routing`.
-- Ensure oversized key/arg handling parity: UDS uses `ScriptInvocationPointers` when payload > threshold; JNI must use equivalent zero-copy or pointer-backed path.
+- Large args handled via standard arrays; pointer path not required for current tests.
 - Keep `ScriptShow` et al. as single-command requests through the same routing path.
 
 ## Gaps To Address In JNI

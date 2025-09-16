@@ -1,0 +1,108 @@
+plugins {
+    id 'application'
+    id 'java'
+    id 'com.google.osdetector' version '1.7.3'
+    id 'com.github.johnrengelman.shadow' version '8.1.1'
+}
+
+repositories {
+    mavenCentral()
+    mavenLocal()
+}
+
+dependencies {
+    // JNI implementation only
+    implementation project(':client')
+
+    // Command line parsing
+    implementation 'commons-cli:commons-cli:1.5.0'
+
+    // JSON processing for results
+    implementation 'com.fasterxml.jackson.core:jackson-core:2.15.2'
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.15.2'
+
+    // Apache Commons for utilities
+    implementation 'org.apache.commons:commons-lang3:3.13.0'
+    implementation 'org.apache.commons:commons-math3:3.6.1'
+
+    // Logging
+    implementation 'org.slf4j:slf4j-api:2.0.9'
+    implementation 'ch.qos.logback:logback-classic:1.4.11'
+}
+
+application {
+    mainClass = 'polyglot.benchmark.ValkeyClientBenchmark'
+
+    // JNI library path
+    applicationDefaultJvmArgs = [
+        '-Djava.library.path=../rust-layer/target/release',
+        '-XX:+UseG1GC',
+        '-XX:MaxGCPauseMillis=10',
+        '-Xmx4g'
+    ]
+}
+
+// Support for command line arguments when using 'gradle run'
+run {
+    if (project.hasProperty("appArgs")) {
+        args project.appArgs.split(' ')
+    }
+}
+
+// Task to run the standalone benchmark
+task runBenchmark(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'polyglot.benchmark.ValkeyClientBenchmark'
+
+    jvmArgs = [
+        '-Djava.library.path=../rust-layer/target/release',
+        '-XX:+UseG1GC', 
+        '-XX:MaxGCPauseMillis=10',
+        '-Xmx4g'
+    ]
+
+    doFirst {
+        if (project.hasProperty('benchmarkArgs')) {
+            args project.benchmarkArgs.split(' ')
+        }
+    }
+}
+
+// Ensure native library is built only once at root
+run.dependsOn ':buildNative'
+runBenchmark.dependsOn ':buildNative'
+
+// Configure shadow JAR
+shadowJar {
+    archiveFileName = 'benchmarks.jar'
+    manifest {
+        attributes 'Main-Class': 'polyglot.benchmark.ValkeyClientBenchmark'
+    }
+    // Include all runtime dependencies
+    mergeServiceFiles()
+
+    // CRITICAL: Exclude native libraries from JAR
+    exclude 'native/**'
+}
+
+// Task to copy native library next to JAR
+task copyNativeLibrary(type: Copy) {
+    from '../rust-layer/target/release/libvalkey_glide.so'
+    into 'build/libs/native'
+
+    doFirst {
+        mkdir 'build/libs/native'
+    }
+}
+
+// Make shadowJar depend on native library copy
+shadowJar.dependsOn copyNativeLibrary
+
+// Make build task depend on shadowJar
+build.dependsOn shadowJar
+
+// Fix dependency ordering issues
+distZip.dependsOn shadowJar
+distTar.dependsOn shadowJar
+startScripts.dependsOn shadowJar
+startShadowScripts.dependsOn jar

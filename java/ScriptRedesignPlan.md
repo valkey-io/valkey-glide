@@ -91,9 +91,9 @@
    - Ensure route propagation (explicit vs auto by keys). [DONE]
    - Adjust `GlideCoreClient.executeScriptAsync(...)` to register future and call native bridge. [DONE]
 4) Keep SHOW/EXISTS/FLUSH/KILL on existing `submitNewCommand` path (no changes to Rust). [DONE]
-5) Validation
-   - Run script-related unit tests (invokeScript, scriptExists variants). [DONE]
-   - Run full script integration suites (standalone/cluster): invoke without/with keys/args, exists/show/flush/kill, routing variants, binary/text modes. [NEXT]
+5) Validation [DONE]
+   - Script-related unit tests (invokeScript, scriptExists variants). [DONE]
+   - Full script integration suites (standalone/cluster): invoke without/with keys/args, exists/show/flush/kill, routing variants, binary/text modes. [DONE]
 
 ### Task Breakdown (internal)
 - Add Java resolver and wire `Script`:

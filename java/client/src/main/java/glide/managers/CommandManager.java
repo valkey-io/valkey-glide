@@ -8,7 +8,6 @@ import command_request.CommandRequestOuterClass.Command.ArgsArray;
 import command_request.CommandRequestOuterClass.CommandRequest;
 import command_request.CommandRequestOuterClass.RequestType;
 import command_request.CommandRequestOuterClass.Routes;
-import command_request.CommandRequestOuterClass.ScriptInvocation;
 import command_request.CommandRequestOuterClass.SimpleRoutes;
 import command_request.CommandRequestOuterClass.SlotTypes;
 import glide.api.OpenTelemetry;

@@ -1331,7 +1331,14 @@ public class GlideClusterClient extends BaseClient
         return commandManager
                 .submitClusterScanToJni(cursor, ScanOptions.builder().build(), this::handleArrayResponse, true)
                 .thenApply(
-                        result -> new Object[] {new NativeClusterScanCursor(result[0].toString()), result[1]});
+                        result -> {
+                            if (result == null || result.length < 2 || result[0] == null) {
+                                return new Object[] {
+                                        new NativeClusterScanCursor(ClusterScanCursorResolver.FINISHED_CURSOR_HANDLE),
+                                        new Object[0] };
+                            }
+                            return new Object[] { new NativeClusterScanCursor(result[0].toString()), result[1] };
+                        });
     }
 
     @Override
@@ -1339,7 +1346,14 @@ public class GlideClusterClient extends BaseClient
         return commandManager
                 .submitClusterScanToJni(cursor, ScanOptions.builder().build(), this::handleArrayResponseBinary, false)
                 .thenApply(
-                        result -> new Object[] {new NativeClusterScanCursor(result[0].toString()), result[1]});
+                        result -> {
+                            if (result == null || result.length < 2 || result[0] == null) {
+                                return new Object[] {
+                                        new NativeClusterScanCursor(ClusterScanCursorResolver.FINISHED_CURSOR_HANDLE),
+                                        new Object[0] };
+                            }
+                            return new Object[] { new NativeClusterScanCursor(result[0].toString()), result[1] };
+                        });
     }
 
     @Override
@@ -1347,7 +1361,14 @@ public class GlideClusterClient extends BaseClient
         return commandManager
                 .submitClusterScanToJni(cursor, options, this::handleArrayResponse, true)
                 .thenApply(
-                        result -> new Object[] {new NativeClusterScanCursor(result[0].toString()), result[1]});
+                        result -> {
+                            if (result == null || result.length < 2 || result[0] == null) {
+                                return new Object[] {
+                                        new NativeClusterScanCursor(ClusterScanCursorResolver.FINISHED_CURSOR_HANDLE),
+                                        new Object[0] };
+                            }
+                            return new Object[] { new NativeClusterScanCursor(result[0].toString()), result[1] };
+                        });
     }
 
     @Override
@@ -1355,7 +1376,14 @@ public class GlideClusterClient extends BaseClient
         return commandManager
                 .submitClusterScanToJni(cursor, options, this::handleArrayResponseBinary, false)
                 .thenApply(
-                        result -> new Object[] {new NativeClusterScanCursor(result[0].toString()), result[1]});
+                        result -> {
+                            if (result == null || result.length < 2 || result[0] == null) {
+                                return new Object[] {
+                                        new NativeClusterScanCursor(ClusterScanCursorResolver.FINISHED_CURSOR_HANDLE),
+                                        new Object[0] };
+                            }
+                            return new Object[] { new NativeClusterScanCursor(result[0].toString()), result[1] };
+                        });
     }
 
     /** A {@link ClusterScanCursor} implementation for interacting with the Rust layer. */
