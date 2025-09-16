@@ -90,7 +90,7 @@ async fn execute_command_request_and_complete(
                 // Compute routing
                 let route_box = command_request.route.0;
                 let routing = if let Some(route_box) = route_box {
-                    protobuf_bridge::create_routing_info(*route_box, Some(&cmd))
+                    protobuf_bridge::get_route(*route_box, Some(&cmd))
                         .map_err(|e| anyhow::anyhow!("Routing error: {e}"))?
                 } else {
                     None
@@ -130,7 +130,7 @@ async fn execute_command_request_and_complete(
                 // Routing for batch
                 let route_box = command_request.route.0;
                 let routing = if let Some(route_box) = route_box {
-                    protobuf_bridge::create_routing_info(*route_box, None)
+                    protobuf_bridge::get_route(*route_box, None)
                         .map_err(|e| anyhow::anyhow!("Routing error: {e}"))?
                 } else {
                     None
@@ -273,7 +273,10 @@ fn resp_value_to_java<'local>(
                 Ok(JObject::from(env.byte_array_from_slice(data.as_bytes())?))
             }
         }
-        Value::Okay => Ok(JObject::from(env.new_string("OK")?)),
+        Value::Okay => {
+            let ok = get_ok_jstring(env)?;
+            Ok(JObject::from(ok))
+        },
         Value::Int(num) => {
             let cache = get_java_value_conversion_cache(env)?;
             let cls = to_local_jclass(env, &cache.long_class)?;
@@ -285,16 +288,14 @@ fn resp_value_to_java<'local>(
         }
         Value::BulkString(data) => {
             if encoding_utf8 {
-                // Try UTF-8 conversion for string mode
-                match String::from_utf8(data.clone()) {
+                match String::from_utf8(data) {
                     Ok(utf8_str) => Ok(JObject::from(env.new_string(utf8_str)?)),
-                    Err(_) => {
-                        // Binary data - return as byte array
-                        Ok(JObject::from(env.byte_array_from_slice(&data)?))
+                    Err(err) => {
+                        let bytes = err.into_bytes();
+                        Ok(JObject::from(env.byte_array_from_slice(&bytes)?))
                     }
                 }
             } else {
-                // Binary mode - always return byte array
                 Ok(JObject::from(env.byte_array_from_slice(&data)?))
             }
         }
@@ -1634,7 +1635,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                             }
 
                             // Get routing using FFI approach
-                            let routing = protobuf_bridge::create_routing_info(route_clone, None)
+                            let routing = protobuf_bridge::get_route(route_clone, None)
                                 .map_err(|e| anyhow::anyhow!("Routing error: {e}"))?;
 
                             // Execute using existing client methods
@@ -2028,7 +2029,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
                                 }
                             }
 
-                            match protobuf_bridge::create_routing_info(routes, None) {
+                            match protobuf_bridge::get_route(routes, None) {
                                 Ok(r) => r,
                                 Err(e) => {
                                     complete_callback(
@@ -2051,7 +2052,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
                             for a in &args_data {
                                 route_cmd.arg(a.as_slice());
                             }
-                            match protobuf_bridge::create_routing_info(
+                            match protobuf_bridge::get_route(
                                 Default::default(),
                                 Some(&route_cmd),
                             ) {
@@ -2411,4 +2412,23 @@ fn get_java_value_conversion_cache(
 fn to_local_jclass<'a>(env: &mut JNIEnv<'a>, global: &GlobalRef) -> Result<JClass<'a>, FFIError> {
     let local = env.new_local_ref(global.as_obj())?;
     Ok(JClass::from(local))
+}
+
+#[cfg(not(target_os = "windows"))]
+#[global_allocator]
+static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+
+static OK_STRING_GLOBAL: OnceLock<GlobalRef> = OnceLock::new();
+
+fn get_ok_jstring<'a>(env: &mut JNIEnv<'a>) -> Result<JString<'a>, FFIError> {
+    if OK_STRING_GLOBAL.get().is_none() {
+        let s = env.new_string("OK")?;
+        let g = env.new_global_ref(&s)?;
+        let _ = OK_STRING_GLOBAL.set(g);
+    }
+    let global = OK_STRING_GLOBAL
+        .get()
+        .expect("OK_STRING_GLOBAL should be initialized");
+    let local = env.new_local_ref(global.as_obj())?;
+    Ok(JString::from(local))
 }
