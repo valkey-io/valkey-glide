@@ -5,6 +5,7 @@ use aws_sigv4::http_request::{
 };
 use aws_sigv4::sign::v4;
 use logger_core::{log_debug, log_error, log_info, log_warn};
+use rand::Rng;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
@@ -23,6 +24,12 @@ const DEFAULT_REFRESH_INTERVAL_SECONDS: u32 = 300; // 300 seconds (5min)
 const WARNING_REFRESH_INTERVAL_SECONDS: u32 = 15 * 60; // 900 seconds
 /// SigV4 presign expiration (15 minutes)
 const TOKEN_TTL_SECONDS: u64 = 15 * 60; // 900
+
+/// Exponential backoff settings for token generation
+const TOKEN_GEN_MAX_ATTEMPTS: u32 = 8;
+const TOKEN_GEN_INITIAL_BACKOFF_MS: u64 = 100;
+/// Safety cap so we never sleep unreasonably long between attempts
+const TOKEN_GEN_MAX_BACKOFF_MS: u64 = 3_000;
 
 /// Custom error type for IAM operations in Glide
 #[derive(Debug, Error)]
@@ -146,26 +153,12 @@ struct IamTokenState {
     credentials: aws_credential_types::Credentials,
 }
 
-/// IAM-based authentication token manager for AWS ElastiCache and MemoryDB
+/// IAM-based token manager for ElastiCache/MemoryDB.
 ///
-/// Provides automatic IAM token generation and refresh using AWS IAM credentials and SigV4 signing.
-/// Tokens are valid for 15 minutes and refreshed every 5 minutes (300s) by default.
-///
-/// ## Refresh Strategy
-/// The 300s (5 minute) interval balances safety and overhead:
-/// - Frequent refresh = higher safety, more overhead
-/// - Infrequent refresh = lower overhead, but higher risk if a refresh fails
-///
-/// With 300s, even if a few refresh attempts fail, tokens remain valid for minutes before expiry.
-///
-/// ## Error Handling and Retry Logic
-/// Token refresh operations use a robust retry strategy:
-/// - **First attempt**: If token generation fails, logs a warning and retries immediately
-/// - **Second attempt**: If retry also fails, logs an error and returns (no exceptions thrown)
-/// - **No error propagation**: Refresh failures never bubble up as exceptions to callers
-/// - **Graceful degradation**: Failed refreshes leave the cached token unchanged for continued use
-///
-/// Thread-safe with Arc/RwLock protection.
+/// - Tokens: valid 15m, refreshed every 5m by default.
+/// - Refresh: periodic, uses exponential backoff with ±20% jitter on failures.
+/// - Failures: logged only; cached token stays valid until expiry.
+/// - Thread-safe via `Arc<RwLock<...
 pub struct IAMTokenManager {
     /// Cached auth token, stored in an `Arc<RwLock<String>>` to allow many concurrent readers,
     /// safe exclusive writes on refresh, and shared access across async tasks.
@@ -230,7 +223,7 @@ impl IAMTokenManager {
         };
 
         // Generate initial token using the state
-        let initial_token = Self::generate_token_static(&state).await?;
+        let initial_token = Self::generate_token_with_backoff(&state).await?;
 
         Ok(Self {
             cached_token: Arc::new(RwLock::new(initial_token)),
@@ -290,56 +283,87 @@ impl IAMTokenManager {
         }
     }
 
-    /// Refresh the cached IAM token — **never returns errors**.
-    /// - Try to generate a token; on failure **log warn** and **retry once immediately**.
-    /// - If the retry also fails, **log error** and **return** (cached token unchanged).
-    /// - On success, update `cached_token` and call `token_refresh_callback` (if any).
-    ///
-    /// Callers should just `await` this; no Result to handle.
+    /// Refresh cached token with backoff + jitter.
+    /// On success: update token + run callback.
+    /// On failure: log error, keep old token.
     async fn handle_token_refresh(
         iam_token_state: &IamTokenState,
         cached_token: &Arc<RwLock<String>>,
         token_refresh_callback: &Option<Arc<dyn Fn(String) + Send + Sync>>,
     ) {
-        let new_token = match Self::generate_token_static(iam_token_state).await {
-            Ok(token) => token,
-            Err(first_err) => {
-                log_warn(
-                    "IAM token generation failed (first attempt)",
-                    format!("{} — retrying immediately", first_err),
-                );
-                match Self::generate_token_static(iam_token_state).await {
-                    Ok(token) => token,
-                    Err(second_err) => {
-                        log_error(
-                            "IAM token generation failed (second attempt)",
-                            second_err.to_string(),
-                        );
-                        return;
-                    }
+        match Self::generate_token_with_backoff(iam_token_state).await {
+            Ok(new_token) => {
+                Self::set_cached_token_static(cached_token, new_token.clone()).await;
+
+                if let Some(callback) = token_refresh_callback {
+                    callback(new_token);
+                } else {
+                    log_error(
+                        "IAM token refresh warning",
+                        "No callback set for connection password update",
+                    );
                 }
             }
-        };
+            Err(err) => {
+                // Leave cached token unchanged; logs already emitted in backoff routine
+                log_error(
+                    "IAM token refresh failed",
+                    format!("Could not refresh token after backoff: {}", err),
+                );
+            }
+        }
+    }
 
-        Self::set_cached_token_static(cached_token, new_token.clone()).await;
+    /// Generate a token with exponential backoff + ±20% jitter.
+    /// Retries up to `TOKEN_GEN_MAX_ATTEMPTS`, doubling backoff each time (capped).
+    /// Returns token on success, last error on failure.
+    async fn generate_token_with_backoff(state: &IamTokenState) -> Result<String, GlideIAMError> {
+        let mut attempt: u32 = 0;
+        let mut backoff_ms = TOKEN_GEN_INITIAL_BACKOFF_MS;
 
-        // Call the callback to update connection passwords if provided
-        if let Some(callback) = token_refresh_callback {
-            callback(new_token);
-        } else {
-            // Log error instead of returning error for logging purposes in background task
-            log_error(
-                "IAM token refresh warning",
-                "No callback set for connection password update",
-            );
+        loop {
+            match Self::generate_token_static(state).await {
+                Ok(token) => {
+                    return Ok(token);
+                }
+                Err(e) => {
+                    attempt += 1;
+
+                    if attempt >= TOKEN_GEN_MAX_ATTEMPTS {
+                        log_error(
+                            "IAM token generation failed",
+                            format!(
+                                "Exhausted {} attempts with exponential backoff. error: {}",
+                                TOKEN_GEN_MAX_ATTEMPTS, e
+                            ),
+                        );
+                        return Err(e);
+                    }
+
+                    log_warn(
+                        "IAM token generation failed",
+                        format!(" {}. Retrying in {}ms", e, backoff_ms),
+                    );
+
+                    tokio::time::sleep(Duration::from_millis(backoff_ms)).await;
+
+                    // Exponential increase with cap
+                    // Add random jitter of ±20% to backoff_ms
+                    let jitter = (backoff_ms as f64 * 0.2) as u64;
+                    let min = backoff_ms.saturating_sub(jitter);
+                    let max = backoff_ms.saturating_add(jitter);
+                    let mut rng = rand::thread_rng();
+                    backoff_ms = rng.gen_range(min..=max);
+
+                    // Exponential increase with cap
+                    backoff_ms = (backoff_ms.saturating_mul(2)).min(TOKEN_GEN_MAX_BACKOFF_MS);
+                }
+            }
         }
     }
 
     /// Force refresh the token immediately
     ///
-    /// Uses the same retry strategy as background refresh:
-    /// - Try once; on failure log warn and retry immediately
-    /// - If retry also fails, log error and return (no exceptions thrown)
     /// - Never returns errors; all failures are logged only
     pub async fn refresh_token(&self) {
         Self::handle_token_refresh(

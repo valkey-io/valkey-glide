@@ -972,7 +972,7 @@ impl Client {
     /// # Returns
     /// - `Ok(())` if the token was successfully refreshed and authentication succeeded
     /// - `Err(RedisError)` if no IAM token manager is configured, token generation fails,
-    ///   or authentication with the new token fails
+    ///   or authentication with the new token fails.
     pub async fn refresh_iam_token(&mut self) -> RedisResult<()> {
         // Check if IAM token manager is available
         let iam_manager = self.iam_token_manager.as_ref().ok_or_else(|| {
