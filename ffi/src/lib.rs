@@ -1291,23 +1291,7 @@ fn to_c_error(err: RedisError) -> (*const c_char, RequestErrorType) {
     (c_err_str, error_type)
 }
 
-/// Converts a protobuf Routes message into the corresponding RoutingInfo.
-/// 
-/// This function parses the given Routes message and creates the appropriate
-/// RoutingInfo structure. For multi-node routes, it uses the optional command
-/// to determine the response policy.
-/// 
-/// # Parameters
-/// 
-/// * `route`: The protobuf Routes message to convert.
-/// * `cmd`: Optional command used to determine the response policy for multi-node routes.
-/// 
-/// # Returns
-/// 
-/// * `Ok(Some(RoutingInfo))` if the route was successfully converted.
-/// * `Ok(None)` if no route value was specified.
-/// * `Err(RedisError)` if the route is invalid or cannot be converted.
-pub fn get_route(route: Routes, cmd: Option<&Cmd>) -> RedisResult<Option<RoutingInfo>> {
+fn get_route(route: Routes, cmd: Option<&Cmd>) -> RedisResult<Option<RoutingInfo>> {
     use glide_core::command_request::routes::Value;
     let route = match route.value {
         Some(route) => route,

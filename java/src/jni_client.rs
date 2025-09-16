@@ -18,11 +18,6 @@ use tokio::runtime::Runtime;
 // Type aliases for complex types
 type PushMessageTuple = (Vec<u8>, Vec<u8>, Option<Vec<u8>>);
 
-// Optional: jemalloc for better concurrent allocation (Unix-like systems)
-#[cfg(all(feature = "fast-alloc", not(target_os = "windows")))]
-#[global_allocator]
-static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
-
 // Runtime and JVM statics
 pub static JVM: std::sync::OnceLock<Arc<JavaVM>> = std::sync::OnceLock::new();
 static RUNTIME: std::sync::OnceLock<Runtime> = std::sync::OnceLock::new();
