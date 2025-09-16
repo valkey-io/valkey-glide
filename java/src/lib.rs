@@ -18,7 +18,7 @@ use glide_core::Telemetry;
 use jni::JNIEnv;
 use jni::errors::Error as JniError;
 use jni::objects::{
-    GlobalRef, JByteArray, JClass, JObject, JObjectArray, JStaticMethodID, JString, JMethodID,
+    GlobalRef, JByteArray, JClass, JMethodID, JObject, JObjectArray, JStaticMethodID, JString,
 };
 use jni::sys::{jint, jlong};
 use redis::Value;
@@ -277,10 +277,12 @@ fn resp_value_to_java<'local>(
         Value::Int(num) => {
             let cache = get_java_value_conversion_cache(env)?;
             let cls = to_local_jclass(env, &cache.long_class)?;
-            let arg = jni::sys::jvalue { j: num as jni::sys::jlong };
+            let arg = jni::sys::jvalue {
+                j: num as jni::sys::jlong,
+            };
             let obj = unsafe { env.new_object_unchecked(cls, cache.long_ctor, &[arg])? };
             Ok(obj)
-        },
+        }
         Value::BulkString(data) => {
             if encoding_utf8 {
                 // Try UTF-8 conversion for string mode
@@ -300,7 +302,8 @@ fn resp_value_to_java<'local>(
         Value::Map(map) => {
             let cache = get_java_value_conversion_cache(env)?;
             let cls = to_local_jclass(env, &cache.linked_hash_map_class)?;
-            let linked_hash_map = unsafe { env.new_object_unchecked(cls, cache.linked_hash_map_ctor, &[])? };
+            let linked_hash_map =
+                unsafe { env.new_object_unchecked(cls, cache.linked_hash_map_ctor, &[])? };
 
             for (key, value) in map {
                 let java_key = resp_value_to_java(env, key, encoding_utf8)?;
@@ -312,7 +315,10 @@ fn resp_value_to_java<'local>(
                         &linked_hash_map,
                         cache.linked_hash_map_put,
                         jni::signature::ReturnType::Object,
-                        &[jni::sys::jvalue { l: key_raw }, jni::sys::jvalue { l: val_raw }],
+                        &[
+                            jni::sys::jvalue { l: key_raw },
+                            jni::sys::jvalue { l: val_raw },
+                        ],
                     )?;
                 }
                 let _ = unsafe { JObject::from_raw(key_raw) };
@@ -327,14 +333,16 @@ fn resp_value_to_java<'local>(
             let arg = jni::sys::jvalue { d: float };
             let obj = unsafe { env.new_object_unchecked(cls, cache.double_ctor, &[arg])? };
             Ok(obj)
-        },
+        }
         Value::Boolean(bool) => {
             let cache = get_java_value_conversion_cache(env)?;
             let cls = to_local_jclass(env, &cache.boolean_class)?;
-            let arg = jni::sys::jvalue { z: if bool { 1 } else { 0 } };
+            let arg = jni::sys::jvalue {
+                z: if bool { 1 } else { 0 },
+            };
             let obj = unsafe { env.new_object_unchecked(cls, cache.boolean_ctor, &[arg])? };
             Ok(obj)
-        },
+        }
         Value::VerbatimString { format: _, text } => {
             if encoding_utf8 {
                 Ok(JObject::from(env.new_string(text)?))
@@ -365,7 +373,6 @@ fn resp_value_to_java<'local>(
             let cache = get_java_value_conversion_cache(env)?;
             let cls = to_local_jclass(env, &cache.hash_set_class)?;
             let set = unsafe { env.new_object_unchecked(cls, cache.hash_set_ctor, &[])? };
-
 
             for elem in array {
                 let java_value = resp_value_to_java(env, elem, encoding_utf8)?;
