@@ -74,11 +74,12 @@ public class GlideNativeBridge {
             long clientPtr,
             long callbackId,
             String hash,
-            String[] keys,
-            String[] args,
+            byte[][] keys,
+            byte[][] args,
             boolean hasRoute,
             int routeType,
-            String routeParam);
+            String routeParam,
+            boolean expectUtf8Response);
 
     /** Get glide-core default timeout in milliseconds */
     public static native long getGlideCoreDefaultTimeoutMs();

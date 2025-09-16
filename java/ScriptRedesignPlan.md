@@ -81,18 +81,19 @@
 - Refcount correctness: guard `Script.close()` idempotently.
 
 ### Implementation Steps
-1) Java API wiring
-   - Reinstate `glide/ffi/resolvers/ScriptResolver` with natives.
-   - Update `glide/api/models/Script` constructor/close to call resolver.
-2) JNI functions
-   - Implement `storeScript`/`dropScript` externs mapping to `scripts_container`.
-3) Execute path
-   - Update `CommandManager.submitScript(...)` to call native `executeScriptAsync` and pass `expectUtf8`.
-   - Ensure route propagation (explicit vs auto by keys).
-   - Adjust `executeScriptAsync` to use provided `expectUtf8` when completing response.
-4) Keep SHOW/EXISTS/FLUSH/KILL on existing `submitNewCommand` path (no changes to Rust).
-5) Tests
-   - Re-enable/adjust script unit/integration tests (standalone/cluster, binary/text, flush/kill/exists/show).
+1) Java API wiring [DONE]
+   - Reinstate `glide/ffi/resolvers/ScriptResolver` with natives. [DONE]
+   - Update `glide/api/models/Script` constructor/close to call resolver. [DONE]
+2) JNI functions [DONE]
+   - Implement `storeScript`/`dropScript` externs mapping to `scripts_container`. [DONE]
+3) Execute path [DONE]
+   - Update `CommandManager.submitScript(...)` to call native `executeScriptAsync` and pass `expectUtf8`. [DONE]
+   - Ensure route propagation (explicit vs auto by keys). [DONE]
+   - Adjust `GlideCoreClient.executeScriptAsync(...)` to register future and call native bridge. [DONE]
+4) Keep SHOW/EXISTS/FLUSH/KILL on existing `submitNewCommand` path (no changes to Rust). [DONE]
+5) Validation
+   - Run script-related unit tests (invokeScript, scriptExists variants). [DONE]
+   - Run full script integration suites (standalone/cluster): invoke without/with keys/args, exists/show/flush/kill, routing variants, binary/text modes. [NEXT]
 
 ### Task Breakdown (internal)
 - Add Java resolver and wire `Script`:

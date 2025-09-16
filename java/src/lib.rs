@@ -1209,10 +1209,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync
                                     exec
                                 }
                             }
-                            Some(command_request::Command::ScriptInvocation(_script)) => {
-                                // Temporarily disabled while redesigning script flow
-                                Err(anyhow::anyhow!("ScriptInvocation is temporarily unsupported"))
-                            }
+                            
                             _ => Err(anyhow::anyhow!("Unsupported command type"))
                         };
 
@@ -1564,11 +1561,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBinaryComman
                                     Err(e) => Err(anyhow::anyhow!("Failed to create binary command: {e}"))
                                 }
                             }
-                            Some(command_request::Command::ScriptInvocation(script)) => {
-                                // Handle script invocation in binary mode
-                                // Use EVALSHA command directly
-                                Err(anyhow::anyhow!("ScriptInvocation is temporarily unsupported"))
-                            }
+                            
                             _ => Err(anyhow::anyhow!("Binary command execution only supports single commands and script invocations"))
                         };
 
@@ -1674,9 +1667,10 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
     hash: JString,
     keys: jni::objects::JObjectArray,
     args: jni::objects::JObjectArray,
-    _has_route: jni::sys::jboolean,
-    _route_type: jint,
-    _route_param: JString,
+    has_route: jni::sys::jboolean,
+    route_type: jint,
+    route_param: JString,
+    expect_utf8: jni::sys::jboolean,
 ) {
     handle_panics(
         move || {
@@ -1698,7 +1692,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
                 }
             };
 
-            // Extract keys array
+            // Extract keys array (supports String[] or byte[][])
             let keys_vec: Result<Vec<Vec<u8>>, FFIError> = (|| {
                 if keys.is_null() {
                     return Ok(Vec::new());
@@ -1708,8 +1702,14 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
 
                 for i in 0..length {
                     let key_obj = env.get_object_array_element(&keys, i as i32)?;
-                    let key_bytes = env.convert_byte_array(JByteArray::from(key_obj))?;
-                    keys_data.push(key_bytes);
+                    if env.is_instance_of(&key_obj, "[B")? {
+                        let key_bytes = env.convert_byte_array(JByteArray::from(key_obj))?;
+                        keys_data.push(key_bytes);
+                    } else {
+                        let jstr = JString::from(key_obj);
+                        let s: String = env.get_string(&jstr)?.into();
+                        keys_data.push(s.into_bytes());
+                    }
                 }
                 Ok(keys_data)
             })();
@@ -1723,7 +1723,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
                 }
             };
 
-            // Extract args array
+            // Extract args array (supports String[] or byte[][])
             let args_vec: Result<Vec<Vec<u8>>, FFIError> = (|| {
                 if args.is_null() {
                     return Ok(Vec::new());
@@ -1733,8 +1733,14 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
 
                 for i in 0..length {
                     let arg_obj = env.get_object_array_element(&args, i as i32)?;
-                    let arg_bytes = env.convert_byte_array(JByteArray::from(arg_obj))?;
-                    args_data.push(arg_bytes);
+                    if env.is_instance_of(&arg_obj, "[B")? {
+                        let arg_bytes = env.convert_byte_array(JByteArray::from(arg_obj))?;
+                        args_data.push(arg_bytes);
+                    } else {
+                        let jstr = JString::from(arg_obj);
+                        let s: String = env.get_string(&jstr)?.into();
+                        args_data.push(s.into_bytes());
+                    }
                 }
                 Ok(args_data)
             })();
@@ -1748,10 +1754,20 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
                 }
             };
 
-            // For script execution, infer routing from an EVALSHA-shaped command (auto route)
-
             let client_handle_id = handle_id as u64;
             log::debug!("Executing script '{}' with {} keys and {} args", hash_str, keys_data.len(), args_data.len());
+
+            // Extract route parameters on the current thread (avoid JNI env escaping into async)
+            let has_route_bool = has_route != 0;
+            let route_type_val: i32 = route_type as i32;
+            let route_param_str: Option<String> = if !route_param.is_null() {
+                match env.get_string(&route_param) {
+                    Ok(s) => Some(s.into()),
+                    Err(_) => None,
+                }
+            } else {
+                None
+            };
 
             // Spawn async task for script execution using FFI-imported patterns
             let runtime = get_runtime();
@@ -1759,22 +1775,75 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
                 let client_result = ensure_client_for_handle(client_handle_id).await;
                 match client_result {
                     Ok(mut client) => {
-                        // Build EVALSHA-shaped command to infer routing like the binary path
-                        let mut route_cmd = redis::cmd("EVALSHA");
-                        route_cmd.arg(hash_str.as_bytes());
-                        route_cmd.arg(keys_data.len());
-                        for k in &keys_data { route_cmd.arg(k.as_slice()); }
-                        for a in &args_data { route_cmd.arg(a.as_slice()); }
+                        // Determine routing: explicit route if provided, otherwise infer from keys via EVALSHA-shaped command
+                        let routing_info = if has_route_bool {
+                            use glide_core::command_request::{Routes, SimpleRoutes, SlotTypes, SlotIdRoute, SlotKeyRoute, ByAddressRoute};
+                            use protobuf::EnumOrUnknown;
+                            let mut routes = Routes::default();
+                            // Build route based on route_type/route_param
+                            // SimpleRoutes
+                            if route_type_val >= 0 && route_param_str.is_none() {
+                                let simple = match route_type_val {
+                                    0 => SimpleRoutes::AllNodes,
+                                    1 => SimpleRoutes::AllPrimaries,
+                                    _ => SimpleRoutes::Random,
+                                };
+                                routes.set_simple_routes(simple);
+                            } else if route_type_val >= 0 && route_param_str.is_some() {
+                                // Slot routes with slot type
+                                let slot_type = match route_type_val {
+                                    1 => SlotTypes::Replica,
+                                    _ => SlotTypes::Primary,
+                                };
+                                // Try to parse param as integer slot id; if fails, treat as slot key
+                                let param_str = route_param_str.unwrap_or_default();
+                                if let Ok(slot_id) = param_str.parse::<i32>() {
+                                    let mut s = SlotIdRoute::default();
+                                    s.slot_type = EnumOrUnknown::new(slot_type);
+                                    s.slot_id = slot_id;
+                                    routes.set_slot_id_route(s);
+                                } else if !param_str.is_empty() {
+                                    let mut s = SlotKeyRoute::default();
+                                    s.slot_type = EnumOrUnknown::new(slot_type);
+                                    s.slot_key = param_str.into();
+                                    routes.set_slot_key_route(s);
+                                }
+                            } else if route_type_val < 0 && route_param_str.is_some() {
+                                // ByAddressRoute encoded with route_type = -1 and host:port in route_param
+                                let param_str = route_param_str.unwrap_or_default();
+                                if let Some((host, port_str)) = param_str.split_once(':') {
+                                    if let Ok(port) = port_str.parse::<i32>() {
+                                        let mut s = ByAddressRoute::default();
+                                        s.host = host.to_string().into();
+                                        s.port = port;
+                                        routes.set_by_address_route(s);
+                                    }
+                                }
+                            }
 
-                        let routing_info = match protobuf_bridge::create_routing_info(Default::default(), Some(&route_cmd)) {
-                            Ok(r) => r,
-                            Err(e) => {
-                                complete_callback(jvm, callback_id, Err(anyhow::anyhow!(format!("Routing error: {e}"))), false);
-                                return;
+                            match protobuf_bridge::create_routing_info(routes, None) {
+                                Ok(r) => r,
+                                Err(e) => {
+                                    complete_callback(jvm, callback_id, Err(anyhow::anyhow!(format!("Routing error: {e}"))), false);
+                                    return;
+                                }
+                            }
+                        } else {
+                            // Auto route by constructing EVALSHA-shaped command
+                            let mut route_cmd = redis::cmd("EVALSHA");
+                            route_cmd.arg(hash_str.as_bytes());
+                            route_cmd.arg(keys_data.len());
+                            for k in &keys_data { route_cmd.arg(k.as_slice()); }
+                            for a in &args_data { route_cmd.arg(a.as_slice()); }
+                            match protobuf_bridge::create_routing_info(Default::default(), Some(&route_cmd)) {
+                                Ok(r) => r,
+                                Err(e) => {
+                                    complete_callback(jvm, callback_id, Err(anyhow::anyhow!(format!("Routing error: {e}"))), false);
+                                    return;
+                                }
                             }
                         };
 
-                        // Execute script using FFI approach
                         let result = client.invoke_script(
                             &hash_str,
                             &keys_data.iter().map(|k| k.as_slice()).collect::<Vec<_>>(),
@@ -1783,11 +1852,13 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
                         ).await
                         .map_err(|e| anyhow::anyhow!("Script execution failed: {e}"));
 
-                        complete_callback(jvm, callback_id, result, false);
+                        let binary_mode = expect_utf8 == 0;
+                        complete_callback(jvm, callback_id, result, binary_mode);
                     }
                     Err(err) => {
                         let error = Err(anyhow::anyhow!("Client not found: {err}"));
-                        complete_callback(jvm, callback_id, error, false);
+                        let binary_mode = expect_utf8 == 0;
+                        complete_callback(jvm, callback_id, error, binary_mode);
                     }
                 }
             });

@@ -975,15 +975,25 @@ public class GlideCoreClient implements AutoCloseable {
             }
 
             // Native call executes script and completes via callback
+            // Convert to byte[][] for binary-safe transport; server still expects utf8 for
+            // evalsha params
+            byte[][] keyBytes = keys != null ? java.util.Arrays.stream(keys)
+                    .map(s -> s != null ? s.getBytes(java.nio.charset.StandardCharsets.UTF_8) : null)
+                    .toArray(byte[][]::new) : new byte[0][];
+            byte[][] argBytes = args != null ? java.util.Arrays.stream(args)
+                    .map(s -> s != null ? s.getBytes(java.nio.charset.StandardCharsets.UTF_8) : null)
+                    .toArray(byte[][]::new) : new byte[0][];
+
             GlideNativeBridge.executeScriptAsync(
                     handle,
                     correlationId,
                     hash,
-                    keys,
-                    args,
+                    keyBytes,
+                            argBytes,
                     hasRoute,
                     routeType,
-                    routeParam);
+                    routeParam,
+                    expectUtf8Response);
 
             return future;
 

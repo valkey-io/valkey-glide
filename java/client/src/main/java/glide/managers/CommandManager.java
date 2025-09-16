@@ -789,40 +789,6 @@ public class CommandManager {
         return builder;
     }
 
-    /**
-     * Build a protobuf Script Invoke request. DirectByteBuffer handles large responses automatically,
-     * use standard protobuf for requests.
-     */
-    protected CommandRequest.Builder prepareScript(
-            Script script, List<GlideString> keys, List<GlideString> args) {
-        // Always use ScriptInvocation (not pointers) - DirectByteBuffer handles response size
-        // optimization
-        CommandRequest.Builder builder =
-                CommandRequest.newBuilder()
-                        .setScriptInvocation(
-                                ScriptInvocation.newBuilder()
-                                        .setHash(script.getHash())
-                                        .addAllKeys(
-                                                keys.stream()
-                                                        .map(GlideString::getBytes)
-                                                        .map(ByteString::copyFrom)
-                                                        .collect(Collectors.toList()))
-                                        .addAllArgs(
-                                                args.stream()
-                                                        .map(GlideString::getBytes)
-                                                        .map(ByteString::copyFrom)
-                                                        .collect(Collectors.toList()))
-                                        .build());
-
-        return builder;
-    }
-
-    /** Build a protobuf Script Invoke request with route. */
-    protected CommandRequest.Builder prepareScript(
-            Script script, List<GlideString> args, Route route) {
-        CommandRequest.Builder builder = prepareScript(script, List.of(), args);
-        return prepareCommandRequestRoute(builder, route);
-    }
 
     /** Build a protobuf Batch request object with options. */
     protected CommandRequest.Builder prepareCommandRequest(
