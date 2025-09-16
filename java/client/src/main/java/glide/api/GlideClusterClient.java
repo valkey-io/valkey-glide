@@ -1329,7 +1329,7 @@ public class GlideClusterClient extends BaseClient
     @Override
     public CompletableFuture<Object[]> scan(ClusterScanCursor cursor) {
         return commandManager
-                .submitClusterScanToJni(cursor, ScanOptions.builder().build(), this::handleArrayResponse, true)
+                .submitClusterScan(cursor, ScanOptions.builder().build(), this::handleArrayResponse)
                 .thenApply(
                         result -> {
                             if (result == null || result.length < 2 || result[0] == null) {
@@ -1344,7 +1344,7 @@ public class GlideClusterClient extends BaseClient
     @Override
     public CompletableFuture<Object[]> scanBinary(ClusterScanCursor cursor) {
         return commandManager
-                .submitClusterScanToJni(cursor, ScanOptions.builder().build(), this::handleArrayResponseBinary, false)
+                .submitClusterScan(cursor, ScanOptions.builder().build(), this::handleArrayResponseBinary)
                 .thenApply(
                         result -> {
                             if (result == null || result.length < 2 || result[0] == null) {
@@ -1359,7 +1359,7 @@ public class GlideClusterClient extends BaseClient
     @Override
     public CompletableFuture<Object[]> scan(ClusterScanCursor cursor, ScanOptions options) {
         return commandManager
-                .submitClusterScanToJni(cursor, options, this::handleArrayResponse, true)
+                .submitClusterScan(cursor, options, this::handleArrayResponse)
                 .thenApply(
                         result -> {
                             if (result == null || result.length < 2 || result[0] == null) {
@@ -1374,7 +1374,7 @@ public class GlideClusterClient extends BaseClient
     @Override
     public CompletableFuture<Object[]> scanBinary(ClusterScanCursor cursor, ScanOptions options) {
         return commandManager
-                .submitClusterScanToJni(cursor, options, this::handleArrayResponseBinary, false)
+                .submitClusterScan(cursor, options, this::handleArrayResponseBinary)
                 .thenApply(
                         result -> {
                             if (result == null || result.length < 2 || result[0] == null) {
@@ -1397,7 +1397,8 @@ public class GlideClusterClient extends BaseClient
         // This is for internal use only.
         public NativeClusterScanCursor(@NonNull String cursorHandle) {
             this.cursorHandle = cursorHandle;
-            this.isFinished = ClusterScanCursorResolver.FINISHED_CURSOR_HANDLE.equals(cursorHandle);
+            this.isFinished = ClusterScanCursorResolver.FINISHED_CURSOR_HANDLE != null
+                    && ClusterScanCursorResolver.FINISHED_CURSOR_HANDLE.equals(cursorHandle);
         }
 
         @Override

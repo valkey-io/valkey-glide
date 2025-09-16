@@ -298,16 +298,30 @@ public class CommandManager {
                             result -> {
                                 // Create a minimal Response for compatibility with the handler
                                 Response.Builder builder = Response.newBuilder();
+                                Object normalized;
                                 if (result == null) {
-                                    builder.setRespPointer(0L);
+                                    normalized = new Object[] {
+                                            glide.ffi.resolvers.ClusterScanCursorResolver
+                                                    .getFinishedCursorHandleConstant(),
+                                            new Object[0] };
                                 } else {
                                     // Normalize cluster scan result: ensure cursor is String and
                                     // items decode as String (UTF-8) or GlideString (binary)
-                                    Object normalized = normalizeScanResult(result, expectUtf8Response);
-                                    long objectId = JniResponseRegistry.storeObject(normalized);
-                                    builder.setRespPointer(objectId);
+                                    normalized = normalizeScanResult(result, expectUtf8Response);
                                 }
-                                return responseHandler.apply(builder.build());
+                                long objectId = JniResponseRegistry.storeObject(normalized);
+                                builder.setRespPointer(objectId);
+                                T out = responseHandler.apply(builder.build());
+                                if (out == null) {
+                                    @SuppressWarnings("unchecked")
+                                    T fallback = (T) new Object[] {
+                                            glide.ffi.resolvers.ClusterScanCursorResolver
+                                                    .getFinishedCursorHandleConstant(),
+                                            new Object[0]
+                                    };
+                                    return fallback;
+                                }
+                                return out;
                             })
                     .exceptionally(this::exceptionHandler);
         } catch (Exception e) {
