@@ -17,21 +17,192 @@ use glide_core::Telemetry;
 
 use jni::JNIEnv;
 use jni::errors::Error as JniError;
-use jni::objects::{JByteArray, JClass, JObject, JObjectArray, JString};
+use jni::objects::{
+    GlobalRef, JByteArray, JClass, JObject, JObjectArray, JStaticMethodID, JString, JMethodID,
+};
 use jni::sys::{jint, jlong};
 use redis::Value;
 use std::str::FromStr;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 mod errors;
-mod linked_hashmap;
 mod jni_client;
+mod linked_hashmap;
 mod protobuf_bridge;
 
 use errors::{FFIError, handle_errors, handle_panics};
 use jni_client::*;
 use protobuf_bridge::*;
 
+#[derive(Clone)]
+pub struct RegistryMethodCache {
+    class: GlobalRef,
+    retrieve_method: JStaticMethodID,
+}
+
+static REGISTRY_METHOD_CACHE: OnceLock<RegistryMethodCache> = OnceLock::new();
+
+fn get_registry_method_cache(env: &mut JNIEnv) -> Result<&'static RegistryMethodCache, FFIError> {
+    if let Some(cache) = REGISTRY_METHOD_CACHE.get() {
+        return Ok(cache);
+    }
+
+    let class = env.find_class("glide/managers/JniResponseRegistry")?;
+    let global_class = env.new_global_ref(&class)?;
+    let method = env.get_static_method_id(&class, "retrieveAndRemove", "(J)Ljava/lang/Object;")?;
+
+    let cache = RegistryMethodCache {
+        class: global_class,
+        retrieve_method: method,
+    };
+
+    // If another thread initialized concurrently, prefer the existing value.
+    if REGISTRY_METHOD_CACHE.set(cache).is_err() {
+        Ok(REGISTRY_METHOD_CACHE
+            .get()
+            .expect("RegistryMethodCache should be initialized"))
+    } else {
+        Ok(REGISTRY_METHOD_CACHE
+            .get()
+            .expect("RegistryMethodCache should be initialized"))
+    }
+}
+
+// Internal helper: execute a parsed CommandRequest and complete Java callback
+async fn execute_command_request_and_complete(
+    handle_id: u64,
+    command_request: protobuf_bridge::CommandRequest,
+    callback_id: jlong,
+    jvm: std::sync::Arc<jni::JavaVM>,
+    expect_utf8: bool,
+) {
+    let result = async {
+        let mut client = jni_client::ensure_client_for_handle(handle_id)
+            .await
+            .map_err(|e| anyhow::anyhow!("Client not found: {e}"))?;
+
+        let root_span_ptr_opt = command_request.root_span_ptr;
+        match &command_request.command {
+            Some(protobuf_bridge::command_request::Command::SingleCommand(command)) => {
+                let cmd = protobuf_bridge::create_redis_command(command)
+                    .map_err(|e| anyhow::anyhow!("Failed to create command: {e}"))?;
+
+                // Compute routing
+                let route_box = command_request.route.0;
+                let routing = if let Some(route_box) = route_box {
+                    protobuf_bridge::create_routing_info(*route_box, Some(&cmd))
+                        .map_err(|e| anyhow::anyhow!("Routing error: {e}"))?
+                } else {
+                    None
+                };
+
+                let exec = client
+                    .send_command(&cmd, routing)
+                    .await
+                    .map_err(|e| anyhow::anyhow!("Command execution failed: {e}"));
+
+                if let Some(root_span_ptr) = root_span_ptr_opt {
+                    if root_span_ptr != 0 {
+                        if let Ok(span) = unsafe {
+                            glide_core::GlideOpenTelemetry::span_from_pointer(root_span_ptr)
+                        } {
+                            span.end();
+                        }
+                        unsafe {
+                            std::sync::Arc::from_raw(root_span_ptr as *const glide_core::GlideSpan);
+                        }
+                    }
+                }
+                exec
+            }
+            Some(protobuf_bridge::command_request::Command::Batch(batch)) => {
+                // Build pipeline
+                let mut pipeline = redis::Pipeline::with_capacity(batch.commands.len());
+                if batch.is_atomic {
+                    pipeline.atomic();
+                }
+                for c in &batch.commands {
+                    let redis_cmd = protobuf_bridge::create_redis_command(c)
+                        .map_err(|e| anyhow::anyhow!("Failed to create batch command: {e}"))?;
+                    pipeline.add_command(redis_cmd);
+                }
+
+                // Routing for batch
+                let route_box = command_request.route.0;
+                let routing = if let Some(route_box) = route_box {
+                    protobuf_bridge::create_routing_info(*route_box, None)
+                        .map_err(|e| anyhow::anyhow!("Routing error: {e}"))?
+                } else {
+                    None
+                };
+
+                // Child span as per previous behavior
+                let mut send_batch_span: Option<glide_core::GlideSpan> = None;
+                if let Some(root_span_ptr) = root_span_ptr_opt {
+                    if root_span_ptr != 0 {
+                        if let Ok(root_span) = unsafe {
+                            glide_core::GlideOpenTelemetry::span_from_pointer(root_span_ptr)
+                        } {
+                            if let Ok(child) = root_span.add_span("send_batch") {
+                                send_batch_span = Some(child);
+                            }
+                        }
+                    }
+                }
+
+                let exec_res = if batch.is_atomic {
+                    client
+                        .send_transaction(
+                            &pipeline,
+                            routing,
+                            batch.timeout,
+                            batch.raise_on_error.unwrap_or(true),
+                        )
+                        .await
+                        .map_err(|e| anyhow::anyhow!("Transaction failed: {e}"))
+                } else {
+                    client
+                        .send_pipeline(
+                            &pipeline,
+                            routing,
+                            batch.raise_on_error.unwrap_or(true),
+                            batch.timeout,
+                            redis::PipelineRetryStrategy {
+                                retry_server_error: batch.retry_server_error.unwrap_or(false),
+                                retry_connection_error: batch
+                                    .retry_connection_error
+                                    .unwrap_or(false),
+                            },
+                        )
+                        .await
+                        .map_err(|e| anyhow::anyhow!("Pipeline failed: {e}"))
+                };
+
+                if let Some(child) = send_batch_span.as_ref() {
+                    child.end();
+                }
+                if let Some(root_span_ptr) = root_span_ptr_opt {
+                    if root_span_ptr != 0 {
+                        if let Ok(root_span) = unsafe {
+                            glide_core::GlideOpenTelemetry::span_from_pointer(root_span_ptr)
+                        } {
+                            root_span.end();
+                        }
+                        unsafe {
+                            std::sync::Arc::from_raw(root_span_ptr as *const glide_core::GlideSpan);
+                        }
+                    }
+                }
+                exec_res
+            }
+            _ => Err(anyhow::anyhow!("Unsupported command type")),
+        }
+    }
+    .await;
+
+    let binary_mode = !expect_utf8;
+    jni_client::complete_callback(jvm, callback_id, result, binary_mode);
+}
 
 /// Configuration for OpenTelemetry integration in the Java client.
 ///
@@ -103,7 +274,13 @@ fn resp_value_to_java<'local>(
             }
         }
         Value::Okay => Ok(JObject::from(env.new_string("OK")?)),
-        Value::Int(num) => Ok(env.new_object("java/lang/Long", "(J)V", &[num.into()])?),
+        Value::Int(num) => {
+            let cache = get_java_value_conversion_cache(env)?;
+            let cls = to_local_jclass(env, &cache.long_class)?;
+            let arg = jni::sys::jvalue { j: num as jni::sys::jlong };
+            let obj = unsafe { env.new_object_unchecked(cls, cache.long_ctor, &[arg])? };
+            Ok(obj)
+        },
         Value::BulkString(data) => {
             if encoding_utf8 {
                 // Try UTF-8 conversion for string mode
@@ -121,23 +298,43 @@ fn resp_value_to_java<'local>(
         }
         Value::Array(array) => array_to_java_array(env, array, encoding_utf8),
         Value::Map(map) => {
-            let linked_hash_map = env.new_object("java/util/LinkedHashMap", "()V", &[])?;
+            let cache = get_java_value_conversion_cache(env)?;
+            let cls = to_local_jclass(env, &cache.linked_hash_map_class)?;
+            let linked_hash_map = unsafe { env.new_object_unchecked(cls, cache.linked_hash_map_ctor, &[])? };
 
             for (key, value) in map {
                 let java_key = resp_value_to_java(env, key, encoding_utf8)?;
                 let java_value = resp_value_to_java(env, value, encoding_utf8)?;
-                env.call_method(
-                    &linked_hash_map,
-                    "put",
-                    "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
-                    &[(&java_key).into(), (&java_value).into()],
-                )?;
+                let key_raw = java_key.into_raw();
+                let val_raw = java_value.into_raw();
+                unsafe {
+                    env.call_method_unchecked(
+                        &linked_hash_map,
+                        cache.linked_hash_map_put,
+                        jni::signature::ReturnType::Object,
+                        &[jni::sys::jvalue { l: key_raw }, jni::sys::jvalue { l: val_raw }],
+                    )?;
+                }
+                let _ = unsafe { JObject::from_raw(key_raw) };
+                let _ = unsafe { JObject::from_raw(val_raw) };
             }
 
             Ok(linked_hash_map)
         }
-        Value::Double(float) => Ok(env.new_object("java/lang/Double", "(D)V", &[float.into()])?),
-        Value::Boolean(bool) => Ok(env.new_object("java/lang/Boolean", "(Z)V", &[bool.into()])?),
+        Value::Double(float) => {
+            let cache = get_java_value_conversion_cache(env)?;
+            let cls = to_local_jclass(env, &cache.double_class)?;
+            let arg = jni::sys::jvalue { d: float };
+            let obj = unsafe { env.new_object_unchecked(cls, cache.double_ctor, &[arg])? };
+            Ok(obj)
+        },
+        Value::Boolean(bool) => {
+            let cache = get_java_value_conversion_cache(env)?;
+            let cls = to_local_jclass(env, &cache.boolean_class)?;
+            let arg = jni::sys::jvalue { z: if bool { 1 } else { 0 } };
+            let obj = unsafe { env.new_object_unchecked(cls, cache.boolean_ctor, &[arg])? };
+            Ok(obj)
+        },
         Value::VerbatimString { format: _, text } => {
             if encoding_utf8 {
                 Ok(JObject::from(env.new_string(text)?))
@@ -150,23 +347,38 @@ fn resp_value_to_java<'local>(
             // BigNumbers in Valkey are represented as strings
             let big_int_str = num.to_string();
             let java_string = env.new_string(big_int_str)?;
-            Ok(env.new_object(
-                "java/math/BigInteger",
-                "(Ljava/lang/String;)V",
-                &[(&java_string).into()],
-            )?)
+            let cache = get_java_value_conversion_cache(env)?;
+            let cls = to_local_jclass(env, &cache.big_integer_class)?;
+            let raw = java_string.into_raw();
+            let obj = unsafe {
+                env.new_object_unchecked(
+                    cls,
+                    cache.big_integer_ctor,
+                    &[jni::sys::jvalue { l: raw }],
+                )?
+            };
+            // Recreate to allow drop and avoid leaking the local ref
+            let _ = unsafe { JString::from_raw(raw) };
+            Ok(obj)
         }
         Value::Set(array) => {
-            let set = env.new_object("java/util/HashSet", "()V", &[])?;
+            let cache = get_java_value_conversion_cache(env)?;
+            let cls = to_local_jclass(env, &cache.hash_set_class)?;
+            let set = unsafe { env.new_object_unchecked(cls, cache.hash_set_ctor, &[])? };
+
 
             for elem in array {
                 let java_value = resp_value_to_java(env, elem, encoding_utf8)?;
-                env.call_method(
-                    &set,
-                    "add",
-                    "(Ljava/lang/Object;)Z",
-                    &[(&java_value).into()],
-                )?;
+                let val_raw = java_value.into_raw();
+                unsafe {
+                    env.call_method_unchecked(
+                        &set,
+                        cache.hash_set_add,
+                        jni::signature::ReturnType::Primitive(jni::signature::Primitive::Boolean),
+                        &[jni::sys::jvalue { l: val_raw }],
+                    )?;
+                }
+                let _ = unsafe { JObject::from_raw(val_raw) };
             }
 
             Ok(set)
@@ -174,28 +386,42 @@ fn resp_value_to_java<'local>(
         Value::Attribute { data, attributes } => {
             // Convert Valkey Attribute to Java Map<String, Object>
             // Create a HashMap with both data and attributes
-            let hash_map = env.new_object("java/util/HashMap", "()V", &[])?;
-            
+            let cache = get_java_value_conversion_cache(env)?;
+            let cls = to_local_jclass(env, &cache.hash_map_class)?;
+            let hash_map = unsafe { env.new_object_unchecked(cls, cache.hash_map_ctor, &[])? };
+
             // Add the main data under "data" key
             let data_key = env.new_string("data")?;
             let java_data = resp_value_to_java(env, *data, encoding_utf8)?;
-            env.call_method(
-                &hash_map,
-                "put",
-                "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
-                &[(&data_key).into(), (&java_data).into()],
-            )?;
-            
+            let k_raw = data_key.into_raw();
+            let v_raw = java_data.into_raw();
+            unsafe {
+                env.call_method_unchecked(
+                    &hash_map,
+                    cache.hash_map_put,
+                    jni::signature::ReturnType::Object,
+                    &[jni::sys::jvalue { l: k_raw }, jni::sys::jvalue { l: v_raw }],
+                )?;
+            }
+            let _ = unsafe { JObject::from_raw(k_raw) };
+            let _ = unsafe { JObject::from_raw(v_raw) };
+
             // Add the attributes under "attributes" key
             let attributes_key = env.new_string("attributes")?;
             let java_attributes = resp_value_to_java(env, Value::Map(attributes), encoding_utf8)?;
-            env.call_method(
-                &hash_map,
-                "put",
-                "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
-                &[(&attributes_key).into(), (&java_attributes).into()],
-            )?;
-            
+            let k_raw = attributes_key.into_raw();
+            let v_raw = java_attributes.into_raw();
+            unsafe {
+                env.call_method_unchecked(
+                    &hash_map,
+                    cache.hash_map_put,
+                    jni::signature::ReturnType::Object,
+                    &[jni::sys::jvalue { l: k_raw }, jni::sys::jvalue { l: v_raw }],
+                )?;
+            }
+            let _ = unsafe { JObject::from_raw(k_raw) };
+            let _ = unsafe { JObject::from_raw(v_raw) };
+
             Ok(hash_map)
         }
         // Create a java `Map<String, Object>` with two keys:
@@ -203,38 +429,62 @@ fn resp_value_to_java<'local>(
         //   - "values" which corresponds to the array of values received, stored as `Object[]`
         // Only string messages are supported now by Valkey and `redis-rs`.
         Value::Push { kind, data } => {
-            let hash_map = env.new_object("java/util/HashMap", "()V", &[])?;
+            let cache = get_java_value_conversion_cache(env)?;
+            let cls = to_local_jclass(env, &cache.hash_map_class)?;
+            let hash_map = unsafe { env.new_object_unchecked(cls, cache.hash_map_ctor, &[])? };
 
             let kind_str = env.new_string("kind")?;
             let kind_value_str = env.new_string(format!("{kind:?}"))?;
 
-            let _ = env.call_method(
-                &hash_map,
-                "put",
-                "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
-                &[(&kind_str).into(), (&kind_value_str).into()],
-            )?;
+            let k_raw = kind_str.into_raw();
+            let v_raw = kind_value_str.into_raw();
+            unsafe {
+                env.call_method_unchecked(
+                    &hash_map,
+                    cache.hash_map_put,
+                    jni::signature::ReturnType::Object,
+                    &[jni::sys::jvalue { l: k_raw }, jni::sys::jvalue { l: v_raw }],
+                )?;
+            }
+            let _ = unsafe { JObject::from_raw(k_raw) };
+            let _ = unsafe { JObject::from_raw(v_raw) };
+            let _ = 0;
 
             let values_str = env.new_string("values")?;
             let values = array_to_java_array(env, data, encoding_utf8)?;
 
-            let _ = env.call_method(
-                &hash_map,
-                "put",
-                "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
-                &[(&values_str).into(), (&values).into()],
-            )?;
+            let k_raw = values_str.into_raw();
+            let v_raw = values.into_raw();
+            unsafe {
+                env.call_method_unchecked(
+                    &hash_map,
+                    cache.hash_map_put,
+                    jni::signature::ReturnType::Object,
+                    &[jni::sys::jvalue { l: k_raw }, jni::sys::jvalue { l: v_raw }],
+                )?;
+            }
+            let _ = unsafe { JObject::from_raw(k_raw) };
+            let _ = unsafe { JObject::from_raw(v_raw) };
+            let _ = 0;
 
             Ok(hash_map)
         }
         Value::ServerError(server_error) => {
             let err_msg = error_message(&server_error.into());
-            let java_exception = env.new_object(
-                "glide/api/models/exceptions/RequestException",
-                "(Ljava/lang/String;)V",
-                &[(&env.new_string(err_msg)?).into()],
-            )?;
-            Ok(java_exception)
+            let jmsg = env.new_string(err_msg)?;
+            let cache = get_java_value_conversion_cache(env)?;
+            let cls = to_local_jclass(env, &cache.request_exception_class)?;
+            let raw = jmsg.into_raw();
+            let obj = unsafe {
+                env.new_object_unchecked(
+                    cls,
+                    cache.request_exception_ctor,
+                    &[jni::sys::jvalue { l: raw }],
+                )?
+            };
+            // Recreate to allow drop and avoid leaking the local ref
+            let _ = unsafe { JString::from_raw(raw) };
+            Ok(obj)
         }
     }
 }
@@ -259,7 +509,6 @@ fn array_to_java_array<'local>(
 
     Ok(items.into())
 }
-
 
 /// Returns the maximum total length in bytes of request arguments.
 ///
@@ -300,25 +549,18 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlideValueResolver_valueFromPoin
                 if pointer == 0 {
                     return Ok(JObject::null());
                 }
-                
-                // The pointer is now an ID from JniResponseRegistry, not a Rust pointer
-                // We need to retrieve the Java object from the registry
-                let registry_class = env.find_class("glide/managers/JniResponseRegistry")?;
-                let retrieve_method = env.get_static_method_id(
-                    &registry_class,
-                    "retrieveAndRemove",
-                    "(J)Ljava/lang/Object;"
-                )?;
-                
+
+                let cache = get_registry_method_cache(env)?;
+                let class_j = to_local_jclass(env, &cache.class)?;
                 let result = unsafe {
                     env.call_static_method_unchecked(
-                        &registry_class,
-                        retrieve_method,
+                        class_j,
+                        cache.retrieve_method,
                         jni::signature::ReturnType::Object,
-                        &[jni::sys::jvalue { j: pointer }]
+                        &[jni::sys::jvalue { j: pointer }],
                     )
                 }?;
-                
+
                 match result {
                     jni::objects::JValueGen::Object(obj) => Ok(obj),
                     _ => Ok(JObject::null()),
@@ -340,7 +582,9 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlideValueResolver_valueFromPoin
 /// * `_class`  - The class object. Not used.
 /// * `pointer` - A pointer to a Valkey Value object.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_glide_ffi_resolvers_GlideValueResolver_valueFromPointerBinary<'local>(
+pub extern "system" fn Java_glide_ffi_resolvers_GlideValueResolver_valueFromPointerBinary<
+    'local,
+>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
     pointer: jlong,
@@ -354,25 +598,18 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlideValueResolver_valueFromPoin
                 if pointer == 0 {
                     return Ok(JObject::null());
                 }
-                
-                // Same as valueFromPointer - retrieve from registry
-                // The object is already converted with the correct encoding
-                let registry_class = env.find_class("glide/managers/JniResponseRegistry")?;
-                let retrieve_method = env.get_static_method_id(
-                    &registry_class,
-                    "retrieveAndRemove",
-                    "(J)Ljava/lang/Object;"
-                )?;
-                
+
+                let cache = get_registry_method_cache(env)?;
+                let class_j = to_local_jclass(env, &cache.class)?;
                 let result = unsafe {
                     env.call_static_method_unchecked(
-                        &registry_class,
-                        retrieve_method,
+                        class_j,
+                        cache.retrieve_method,
                         jni::signature::ReturnType::Object,
-                        &[jni::sys::jvalue { j: pointer }]
+                        &[jni::sys::jvalue { j: pointer }],
                     )
                 }?;
-                
+
                 match result {
                     jni::objects::JValueGen::Object(obj) => Ok(obj),
                     _ => Ok(JObject::null()),
@@ -960,6 +1197,9 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createClient(
     client_az: jni::sys::jstring,
     lazy_connect: jni::sys::jboolean,
     client_name: jni::sys::jstring,
+    sub_exact: JObjectArray,
+    sub_pattern: JObjectArray,
+    sub_sharded: JObjectArray,
 ) -> jlong {
     handle_panics(
         move || {
@@ -972,7 +1212,12 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createClient(
                     let addr_obj = env.get_object_array_element(&addresses, i as i32)?;
                     let addr_jstring = JString::from(addr_obj);
                     let addr_str = env.get_string(&addr_jstring)?;
-                    addrs.push(addr_str.to_str().map_err(|e| FFIError::Logger(e.to_string()))?.to_string());
+                    addrs.push(
+                        addr_str
+                            .to_str()
+                            .map_err(|e| FFIError::Logger(e.to_string()))?
+                            .to_string(),
+                    );
                 }
                 Ok(addrs)
             })();
@@ -991,6 +1236,51 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createClient(
             let client_az_opt = get_optional_string_param_raw(&mut env, client_az);
             let client_name_opt = get_optional_string_param_raw(&mut env, client_name);
 
+            // Build PubSubSubscriptionInfo from three arrays if any present
+            let subscriptions_opt: Option<redis::PubSubSubscriptionInfo> = (|| {
+                let mut any = false;
+                let mut info = std::collections::HashMap::new();
+
+                // helper to convert array of byte[] to HashSet<PubSubChannelOrPattern>
+                fn array_to_set(
+                    env: &mut JNIEnv,
+                    arr: JObjectArray,
+                ) -> std::collections::HashSet<redis::PubSubChannelOrPattern> {
+                    let mut set = std::collections::HashSet::new();
+                    if arr.is_null() {
+                        return set;
+                    }
+                    if let Ok(len) = env.get_array_length(&arr) {
+                        for i in 0..len {
+                            if let Ok(obj) = env.get_object_array_element(&arr, i) {
+                                if let Ok(bytes) = env.convert_byte_array(JByteArray::from(obj)) {
+                                    set.insert(redis::PubSubChannelOrPattern::from(bytes));
+                                }
+                            }
+                        }
+                    }
+                    set
+                }
+
+                let exact_set = array_to_set(&mut env, sub_exact);
+                if !exact_set.is_empty() {
+                    any = true;
+                    info.insert(redis::PubSubSubscriptionKind::Exact, exact_set);
+                }
+                let pattern_set = array_to_set(&mut env, sub_pattern);
+                if !pattern_set.is_empty() {
+                    any = true;
+                    info.insert(redis::PubSubSubscriptionKind::Pattern, pattern_set);
+                }
+                let sharded_set = array_to_set(&mut env, sub_sharded);
+                if !sharded_set.is_empty() {
+                    any = true;
+                    info.insert(redis::PubSubSubscriptionKind::Sharded, sharded_set);
+                }
+
+                if any { Some(info) } else { None }
+            })();
+
             // Create connection configuration using all parameters
             let config = match create_valkey_connection_config(ValkeyClientConfig {
                 addresses,
@@ -1006,7 +1296,12 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createClient(
                 client_az: client_az_opt,
                 lazy_connect: lazy_connect != 0,
                 client_name: client_name_opt,
-                max_inflight_requests: if max_inflight_requests > 0 { Some(max_inflight_requests as u32) } else { None },
+                max_inflight_requests: if max_inflight_requests > 0 {
+                    Some(max_inflight_requests as u32)
+                } else {
+                    None
+                },
+                pubsub_subscriptions: subscriptions_opt,
             }) {
                 Ok(config) => config,
                 Err(e) => {
@@ -1022,7 +1317,16 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createClient(
 
             // Direct client creation (no lazy loading for simplified implementation)
             let runtime = get_runtime();
-            let tx_opt: Option<tokio::sync::mpsc::UnboundedSender<redis::PushInfo>> = None;
+            // Enable push channel if pubsub subscriptions are present
+            let mut rx_opt: Option<tokio::sync::mpsc::UnboundedReceiver<redis::PushInfo>> = None;
+            let tx_opt: Option<tokio::sync::mpsc::UnboundedSender<redis::PushInfo>> =
+                if config.pubsub_subscriptions.is_some() {
+                    let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<redis::PushInfo>();
+                    rx_opt = Some(rx);
+                    Some(tx)
+                } else {
+                    None
+                };
 
             match runtime.block_on(async { create_glide_client(config, tx_opt).await }) {
                 Ok(client) => {
@@ -1032,7 +1336,21 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createClient(
                     // Store in handle table
                     handle_table.insert(safe_handle, client);
 
-                    log::debug!("Created client with handle: {safe_handle}");
+                    // If we created a push channel, spawn a forwarder to deliver pushes to Java
+                    if let Some(mut rx) = rx_opt {
+                        let jvm_arc = jni_client::JVM.get().cloned();
+                        let handle_for_java = safe_handle as jlong;
+                        get_runtime().spawn(async move {
+                            while let Some(push) = rx.recv().await {
+                                if let Some(jvm) = jvm_arc.as_ref()
+                                    && let Ok(mut env) = jvm.attach_current_thread_permanently()
+                                {
+                                    handle_push_notification(&mut env, handle_for_java, push);
+                                }
+                            }
+                        });
+                    }
+
                     Some(safe_handle as jlong)
                 }
                 Err(e) => {
@@ -1064,12 +1382,12 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync
                     return Some(());
                 }
             };
-            
+
             if raw_bytes.is_empty() {
                 log::error!("Empty command request bytes");
                 return Some(());
             }
-            
+
             // Parse actual protobuf CommandRequest using existing glide-core logic
             let command_request = match protobuf_bridge::parse_command_request(&raw_bytes) {
                 Ok(r) => r,
@@ -1089,139 +1407,16 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync
                     return Some(());
                 }
             };
-
-            // Spawn async task using existing glide-core command processing logic
+            // Spawn unified async executor
             let runtime = get_runtime();
-            runtime.spawn(async move {
-                // Ensure client exists
-                let client_result = ensure_client_for_handle(handle_id).await;
-                match client_result {
-                    Ok(mut client) => {
-                        let root_span_ptr_opt = command_request.root_span_ptr;
-                        // Process command using FFI methodology (surgical reuse)
-                        let result = match &command_request.command {
-                            Some(command_request::Command::SingleCommand(command)) => {
-                                // Create command using existing FFI approach
-                                match protobuf_bridge::create_redis_command(command) {
-                                    Ok(cmd) => {
-                                        // Use FFI get_route function directly
-                                        let route_box = command_request.route.0;
-                                        let routing = if let Some(route_box) = route_box {
-                                            match protobuf_bridge::create_routing_info(*route_box, Some(&cmd)) {
-                                                Ok(r) => r,
-                                                Err(e) => {
-                                                    log::error!("Routing error: {e}");
-                                                    None
-                                                }
-                                            }
-                                        } else {
-                                            None
-                                        };
-                                        
-                                        {
-                                            let exec = client
-                                                .send_command(&cmd, routing)
-                                                .await
-                                                .map_err(|e| anyhow::anyhow!("Command execution failed: {e}"));
-                                            if let Some(root_span_ptr) = root_span_ptr_opt {
-                                                if root_span_ptr != 0 {
-                                                    if let Ok(span) = unsafe { glide_core::GlideOpenTelemetry::span_from_pointer(root_span_ptr) } {
-                                                        span.end();
-                                                    }
-                                                    unsafe { std::sync::Arc::from_raw(root_span_ptr as *const glide_core::GlideSpan); }
-                                                }
-                                            }
-                                            exec
-                                        }
-                                    }
-                                    Err(e) => Err(anyhow::anyhow!("Failed to create command: {e}"))
-                                }
-                            }
-                            Some(command_request::Command::Batch(batch)) => {
-                                // Handle batch using existing FFI patterns
-                                let mut pipeline = redis::Pipeline::with_capacity(batch.commands.len());
-                                if batch.is_atomic {
-                                    pipeline.atomic();
-                                }
-                                
-                                // Add commands to pipeline using FFI command creation logic
-                                for cmd in &batch.commands {
-                                    match protobuf_bridge::create_redis_command(cmd) {
-                                        Ok(redis_cmd) => pipeline.add_command(redis_cmd),
-                                        Err(e) => {
-                                            let error = Err(anyhow::anyhow!("Failed to create batch command: {e}"));
-                                            complete_callback(jvm, callback_id, error, false);
-                                            return;
-                                        }
-                                    };
-                                }
-                                
-                                // Get routing using FFI approach
-                                let route_box = command_request.route.0;
-                                let routing = if let Some(route_box) = route_box {
-                                    match protobuf_bridge::create_routing_info(*route_box, None) {
-                                        Ok(r) => r,
-                                        Err(e) => {
-                                            log::error!("Routing error: {e}");
-                                            None
-                                        }
-                                    }
-                                } else {
-                                    None
-                                };
-                                
-                                // Execute using existing client methods
-                                if batch.is_atomic {
-                                    let exec = client.send_transaction(
-                                        &pipeline,
-                                        routing,
-                                        batch.timeout,
-                                        batch.raise_on_error.unwrap_or(true)
-                                    ).await.map_err(|e| anyhow::anyhow!("Transaction failed: {e}"));
-                                    if let Some(root_span_ptr) = root_span_ptr_opt {
-                                        if root_span_ptr != 0 {
-                                            if let Ok(span) = unsafe { glide_core::GlideOpenTelemetry::span_from_pointer(root_span_ptr) } {
-                                                span.end();
-                                            }
-                                            unsafe { std::sync::Arc::from_raw(root_span_ptr as *const glide_core::GlideSpan); }
-                                        }
-                                    }
-                                    exec
-                                } else {
-                                    let exec = client.send_pipeline(
-                                        &pipeline,
-                                        routing,
-                                        batch.raise_on_error.unwrap_or(true),
-                                        batch.timeout,
-                                        redis::PipelineRetryStrategy {
-                                            retry_server_error: batch.retry_server_error.unwrap_or(false),
-                                            retry_connection_error: batch.retry_connection_error.unwrap_or(false),
-                                        }
-                                    ).await.map_err(|e| anyhow::anyhow!("Pipeline failed: {e}"));
-                                    if let Some(root_span_ptr) = root_span_ptr_opt {
-                                        if root_span_ptr != 0 {
-                                            if let Ok(span) = unsafe { glide_core::GlideOpenTelemetry::span_from_pointer(root_span_ptr) } {
-                                                span.end();
-                                            }
-                                            unsafe { std::sync::Arc::from_raw(root_span_ptr as *const glide_core::GlideSpan); }
-                                        }
-                                    }
-                                    exec
-                                }
-                            }
-                            
-                            _ => Err(anyhow::anyhow!("Unsupported command type"))
-                        };
-
-                        // Complete callback
-                        complete_callback(jvm, callback_id, result, false);
-                    }
-                    Err(err) => {
-                        let error = Err(anyhow::anyhow!("Client not found: {err}"));
-                        complete_callback(jvm, callback_id, error, false);
-                    }
-                }
-            });
+            let expect_utf8 = true; // executeCommandAsync expects UTF-8 decoding
+            runtime.spawn(execute_command_request_and_complete(
+                handle_id,
+                command_request,
+                callback_id,
+                jvm,
+                expect_utf8,
+            ));
 
             Some(())
         },
@@ -1244,8 +1439,6 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_closeClient(
 
             // DashMap operations are sync and lock-free
             if let Some((_, client)) = handle_table.remove(&handle_id) {
-                log::debug!("Removed client with handle: {handle_id}");
-
                 // Schedule async cleanup
                 let runtime = get_runtime();
                 runtime.spawn(async move {
@@ -1297,7 +1490,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_getClientInfo<'loca
             ) -> Result<JString<'a>, FFIError> {
                 let handle_id = client_ptr as u64;
                 let handle_table = get_handle_table();
-                
+
                 if handle_table.contains_key(&handle_id) {
                     // Return basic client information
                     let info = format!("Client handle: {}, Status: Connected", handle_id);
@@ -1354,12 +1547,12 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                     return Some(());
                 }
             };
-            
+
             if raw_bytes.is_empty() {
                 log::error!("Empty batch request bytes");
                 return Some(());
             }
-            
+
             // Parse actual batch protobuf using existing protobuf logic
             let command_request = match protobuf_bridge::parse_command_request(&raw_bytes) {
                 Ok(r) => r,
@@ -1368,7 +1561,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                     return Some(());
                 }
             };
-            
+
             // Extract the batch from the command request
             let batch = match &command_request.command {
                 Some(command_request::Command::Batch(batch)) => batch,
@@ -1389,9 +1582,6 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                 }
             };
 
-            log::debug!("Executing batch with {} commands (atomic: {})", 
-                       batch.commands.len(), batch.is_atomic);
-
             // Spawn async task for batch execution using existing glide-core patterns
             let batch_clone = batch.clone();
             let route_clone = command_request.route.0.map(|r| *r).unwrap_or_default();
@@ -1406,7 +1596,11 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                             let mut send_batch_span: Option<glide_core::GlideSpan> = None;
                             if let Some(root_span_ptr) = root_span_ptr_opt {
                                 if root_span_ptr != 0 {
-                                    if let Ok(root_span) = unsafe { glide_core::GlideOpenTelemetry::span_from_pointer(root_span_ptr) } {
+                                    if let Ok(root_span) = unsafe {
+                                        glide_core::GlideOpenTelemetry::span_from_pointer(
+                                            root_span_ptr,
+                                        )
+                                    } {
                                         if let Ok(child) = root_span.add_span("send_batch") {
                                             send_batch_span = Some(child);
                                         }
@@ -1414,42 +1608,57 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                                 }
                             }
                             // Create pipeline using existing FFI approach
-                            let mut pipeline = redis::Pipeline::with_capacity(batch_clone.commands.len());
+                            let mut pipeline =
+                                redis::Pipeline::with_capacity(batch_clone.commands.len());
                             if batch_clone.is_atomic {
                                 pipeline.atomic();
                             }
-                            
+
                             // Add commands to pipeline using existing bridge logic
                             for cmd in &batch_clone.commands {
                                 match protobuf_bridge::create_redis_command(cmd) {
                                     Ok(redis_cmd) => pipeline.add_command(redis_cmd),
-                                    Err(e) => return Err(anyhow::anyhow!("Failed to create batch command: {e}"))
+                                    Err(e) => {
+                                        return Err(anyhow::anyhow!(
+                                            "Failed to create batch command: {e}"
+                                        ));
+                                    }
                                 };
                             }
-                            
+
                             // Get routing using FFI approach
                             let routing = protobuf_bridge::create_routing_info(route_clone, None)
                                 .map_err(|e| anyhow::anyhow!("Routing error: {e}"))?;
-                            
+
                             // Execute using existing client methods
                             let exec_res = if batch_clone.is_atomic {
-                                client.send_transaction(
-                                    &pipeline,
-                                    routing,
-                                    batch_clone.timeout,
-                                    batch_clone.raise_on_error.unwrap_or(true)
-                                ).await.map_err(|e| anyhow::anyhow!("Transaction failed: {e}"))
+                                client
+                                    .send_transaction(
+                                        &pipeline,
+                                        routing,
+                                        batch_clone.timeout,
+                                        batch_clone.raise_on_error.unwrap_or(true),
+                                    )
+                                    .await
+                                    .map_err(|e| anyhow::anyhow!("Transaction failed: {e}"))
                             } else {
-                                client.send_pipeline(
-                                    &pipeline,
-                                    routing,
-                                    batch_clone.raise_on_error.unwrap_or(true),
-                                    batch_clone.timeout,
-                                    redis::PipelineRetryStrategy {
-                                        retry_server_error: batch_clone.retry_server_error.unwrap_or(false),
-                                        retry_connection_error: batch_clone.retry_connection_error.unwrap_or(false),
-                                    }
-                                ).await.map_err(|e| anyhow::anyhow!("Pipeline failed: {e}"))
+                                client
+                                    .send_pipeline(
+                                        &pipeline,
+                                        routing,
+                                        batch_clone.raise_on_error.unwrap_or(true),
+                                        batch_clone.timeout,
+                                        redis::PipelineRetryStrategy {
+                                            retry_server_error: batch_clone
+                                                .retry_server_error
+                                                .unwrap_or(false),
+                                            retry_connection_error: batch_clone
+                                                .retry_connection_error
+                                                .unwrap_or(false),
+                                        },
+                                    )
+                                    .await
+                                    .map_err(|e| anyhow::anyhow!("Pipeline failed: {e}"))
                             };
 
                             // End child span if created
@@ -1459,14 +1668,23 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                             // End and drop the root span if provided
                             if let Some(root_span_ptr) = root_span_ptr_opt {
                                 if root_span_ptr != 0 {
-                                    if let Ok(root_span) = unsafe { glide_core::GlideOpenTelemetry::span_from_pointer(root_span_ptr) } {
+                                    if let Ok(root_span) = unsafe {
+                                        glide_core::GlideOpenTelemetry::span_from_pointer(
+                                            root_span_ptr,
+                                        )
+                                    } {
                                         root_span.end();
                                     }
-                                    unsafe { std::sync::Arc::from_raw(root_span_ptr as *const glide_core::GlideSpan); }
+                                    unsafe {
+                                        std::sync::Arc::from_raw(
+                                            root_span_ptr as *const glide_core::GlideSpan,
+                                        );
+                                    }
                                 }
                             }
                             exec_res
-                        }.await;
+                        }
+                        .await;
 
                         let binary_mode = expect_utf8 == 0;
                         complete_callback(jvm, callback_id, result, binary_mode);
@@ -1478,7 +1696,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                     }
                 }
             });
-            
+
             Some(())
         },
         "executeBatchAsync",
@@ -1504,12 +1722,12 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBinaryComman
                     return Some(());
                 }
             };
-            
+
             if raw_bytes.is_empty() {
                 log::error!("Empty binary command request bytes");
                 return Some(());
             }
-            
+
             // Parse protobuf CommandRequest using existing bridge logic
             let command_request = match protobuf_bridge::parse_command_request(&raw_bytes) {
                 Ok(r) => r,
@@ -1527,53 +1745,17 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBinaryComman
                     return Some(());
                 }
             };
-
-            log::debug!("Executing binary command async with {} bytes", raw_bytes.len());
-
-            // Spawn async task with actual command execution
+            // Spawn unified async executor
             let runtime = get_runtime();
-            runtime.spawn(async move {
-                let client_result = ensure_client_for_handle(handle_id).await;
-                match client_result {
-                    Ok(mut client) => {
-                        // Execute binary command using existing FFI methodology
-                        let result = match &command_request.command {
-                            Some(command_request::Command::SingleCommand(command)) => {
-                                match protobuf_bridge::create_redis_command(command) {
-                                    Ok(cmd) => {
-                                        // Get routing using FFI approach
-                                        let route_box = command_request.route.0;
-                                        let routing = if let Some(route_box) = route_box {
-                                            match protobuf_bridge::create_routing_info(*route_box, Some(&cmd)) {
-                                                Ok(r) => r,
-                                                Err(e) => {
-                                                    log::error!("Binary command routing error: {e}");
-                                                    None
-                                                }
-                                            }
-                                        } else {
-                                            None
-                                        };
-                                        
-                                        client.send_command(&cmd, routing).await
-                                            .map_err(|e| anyhow::anyhow!("Binary command execution failed: {e}"))
-                                    }
-                                    Err(e) => Err(anyhow::anyhow!("Failed to create binary command: {e}"))
-                                }
-                            }
-                            
-                            _ => Err(anyhow::anyhow!("Binary command execution only supports single commands and script invocations"))
-                        };
+            let expect_utf8 = false; // binary entrypoint expects binary decoding
+            runtime.spawn(execute_command_request_and_complete(
+                handle_id,
+                command_request,
+                callback_id,
+                jvm,
+                expect_utf8,
+            ));
 
-                        complete_callback(jvm, callback_id, result, true); // binary_mode = true
-                    }
-                    Err(err) => {
-                        let error = Err(anyhow::anyhow!("Client not found: {err}"));
-                        complete_callback(jvm, callback_id, error, true);
-                    }
-                }
-            });
-            
             Some(())
         },
         "executeBinaryCommandAsync",
@@ -1601,7 +1783,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executePublishBinar
                     return Some(());
                 }
             };
-            
+
             let message_bytes = match env.convert_byte_array(&message) {
                 Ok(b) => b,
                 Err(e) => {
@@ -1620,8 +1802,6 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executePublishBinar
             };
 
             let is_sharded = sharded != 0;
-            log::debug!("Executing {} publish async", if is_sharded { "sharded" } else { "regular" });
-
             // Spawn async task
             let runtime = get_runtime();
             runtime.spawn(async move {
@@ -1636,11 +1816,14 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executePublishBinar
                             };
                             cmd.arg(channel_bytes.as_slice());
                             cmd.arg(message_bytes.as_slice());
-                            
-                            client.send_command(&cmd, None).await
+
+                            client
+                                .send_command(&cmd, None)
+                                .await
                                 .map_err(|e| anyhow::anyhow!("Publish failed: {e}"))
-                        }.await;
-                        
+                        }
+                        .await;
+
                         complete_callback(jvm, callback_id, result, false);
                     }
                     Err(err) => {
@@ -1649,7 +1832,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executePublishBinar
                     }
                 }
             });
-            
+
             Some(())
         },
         "executePublishBinaryAsync",
@@ -1687,7 +1870,12 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
                 Ok(h) => h.to_string_lossy().to_string(),
                 Err(e) => {
                     log::error!("Failed to read script hash: {e}");
-                    complete_callback(jvm, callback_id, Err(anyhow::anyhow!("Failed to read hash: {e}")), false);
+                    complete_callback(
+                        jvm,
+                        callback_id,
+                        Err(anyhow::anyhow!("Failed to read hash: {e}")),
+                        false,
+                    );
                     return Some(());
                 }
             };
@@ -1718,7 +1906,12 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
                 Ok(k) => k,
                 Err(e) => {
                     log::error!("Failed to extract script keys: {e}");
-                    complete_callback(jvm, callback_id, Err(anyhow::anyhow!("Failed to extract keys: {e}")), false);
+                    complete_callback(
+                        jvm,
+                        callback_id,
+                        Err(anyhow::anyhow!("Failed to extract keys: {e}")),
+                        false,
+                    );
                     return Some(());
                 }
             };
@@ -1749,13 +1942,17 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
                 Ok(a) => a,
                 Err(e) => {
                     log::error!("Failed to extract script args: {e}");
-                    complete_callback(jvm, callback_id, Err(anyhow::anyhow!("Failed to extract args: {e}")), false);
+                    complete_callback(
+                        jvm,
+                        callback_id,
+                        Err(anyhow::anyhow!("Failed to extract args: {e}")),
+                        false,
+                    );
                     return Some(());
                 }
             };
 
             let client_handle_id = handle_id as u64;
-            log::debug!("Executing script '{}' with {} keys and {} args", hash_str, keys_data.len(), args_data.len());
 
             // Extract route parameters on the current thread (avoid JNI env escaping into async)
             let has_route_bool = has_route != 0;
@@ -1777,7 +1974,10 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
                     Ok(mut client) => {
                         // Determine routing: explicit route if provided, otherwise infer from keys via EVALSHA-shaped command
                         let routing_info = if has_route_bool {
-                            use glide_core::command_request::{Routes, SimpleRoutes, SlotTypes, SlotIdRoute, SlotKeyRoute, ByAddressRoute};
+                            use glide_core::command_request::{
+                                ByAddressRoute, Routes, SimpleRoutes, SlotIdRoute, SlotKeyRoute,
+                                SlotTypes,
+                            };
                             use protobuf::EnumOrUnknown;
                             let mut routes = Routes::default();
                             // Build route based on route_type/route_param
@@ -1824,7 +2024,12 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
                             match protobuf_bridge::create_routing_info(routes, None) {
                                 Ok(r) => r,
                                 Err(e) => {
-                                    complete_callback(jvm, callback_id, Err(anyhow::anyhow!(format!("Routing error: {e}"))), false);
+                                    complete_callback(
+                                        jvm,
+                                        callback_id,
+                                        Err(anyhow::anyhow!(format!("Routing error: {e}"))),
+                                        false,
+                                    );
                                     return;
                                 }
                             }
@@ -1833,24 +2038,38 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
                             let mut route_cmd = redis::cmd("EVALSHA");
                             route_cmd.arg(hash_str.as_bytes());
                             route_cmd.arg(keys_data.len());
-                            for k in &keys_data { route_cmd.arg(k.as_slice()); }
-                            for a in &args_data { route_cmd.arg(a.as_slice()); }
-                            match protobuf_bridge::create_routing_info(Default::default(), Some(&route_cmd)) {
+                            for k in &keys_data {
+                                route_cmd.arg(k.as_slice());
+                            }
+                            for a in &args_data {
+                                route_cmd.arg(a.as_slice());
+                            }
+                            match protobuf_bridge::create_routing_info(
+                                Default::default(),
+                                Some(&route_cmd),
+                            ) {
                                 Ok(r) => r,
                                 Err(e) => {
-                                    complete_callback(jvm, callback_id, Err(anyhow::anyhow!(format!("Routing error: {e}"))), false);
+                                    complete_callback(
+                                        jvm,
+                                        callback_id,
+                                        Err(anyhow::anyhow!(format!("Routing error: {e}"))),
+                                        false,
+                                    );
                                     return;
                                 }
                             }
                         };
 
-                        let result = client.invoke_script(
-                            &hash_str,
-                            &keys_data.iter().map(|k| k.as_slice()).collect::<Vec<_>>(),
-                            &args_data.iter().map(|a| a.as_slice()).collect::<Vec<_>>(),
-                            routing_info
-                        ).await
-                        .map_err(|e| anyhow::anyhow!("Script execution failed: {e}"));
+                        let result = client
+                            .invoke_script(
+                                &hash_str,
+                                &keys_data.iter().map(|k| k.as_slice()).collect::<Vec<_>>(),
+                                &args_data.iter().map(|a| a.as_slice()).collect::<Vec<_>>(),
+                                routing_info,
+                            )
+                            .await
+                            .map_err(|e| anyhow::anyhow!("Script execution failed: {e}"));
 
                         let binary_mode = expect_utf8 == 0;
                         complete_callback(jvm, callback_id, result, binary_mode);
@@ -1862,7 +2081,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
                     }
                 }
             });
-            
+
             Some(())
         },
         "executeScriptAsync",
@@ -1882,9 +2101,9 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_updateConnectionPas
 ) {
     handle_panics(
         move || {
-        let password_opt = get_optional_string_param_raw(&mut env, password);
-        let handle_id = _client_ptr as u64;
-        let do_immediate = immediate_auth != 0;
+            let password_opt = get_optional_string_param_raw(&mut env, password);
+            let handle_id = _client_ptr as u64;
+            let do_immediate = immediate_auth != 0;
 
             let jvm = match env.get_java_vm() {
                 Ok(jvm) => Arc::new(jvm),
@@ -1894,18 +2113,18 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_updateConnectionPas
                 }
             };
 
-            log::debug!("Updating connection password, immediate_auth: {}", do_immediate);
-
             // Spawn async task
             let runtime = get_runtime();
             runtime.spawn(async move {
                 let client_result = ensure_client_for_handle(handle_id).await;
                 match client_result {
                     Ok(mut client) => {
-                        let result = client.update_connection_password(password_opt, do_immediate).await
+                        let result = client
+                            .update_connection_password(password_opt, do_immediate)
+                            .await
                             .map(|_| redis::Value::Okay)
                             .map_err(|e| anyhow::anyhow!("Password update failed: {e}"));
-                        
+
                         complete_callback(jvm, callback_id, result, false);
                     }
                     Err(err) => {
@@ -1914,7 +2133,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_updateConnectionPas
                     }
                 }
             });
-            
+
             Some(())
         },
         "updateConnectionPassword",
@@ -1973,7 +2192,12 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeClusterScanA
                     Ok(s) => Some(s.to_string_lossy().to_string()),
                     Err(e) => {
                         log::error!("Failed to read match pattern: {e}");
-                        complete_callback(jvm, callback_id, Err(anyhow::anyhow!("Failed to read match pattern: {e}")), false);
+                        complete_callback(
+                            jvm,
+                            callback_id,
+                            Err(anyhow::anyhow!("Failed to read match pattern: {e}")),
+                            false,
+                        );
                         return Some(());
                     }
                 }
@@ -1981,13 +2205,18 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeClusterScanA
 
             // Extract optional object type
             let obj_type = if object_type.is_null() {
-                None  
+                None
             } else {
                 match env.get_string(&object_type) {
                     Ok(s) => Some(s.to_string_lossy().to_string()),
                     Err(e) => {
                         log::error!("Failed to read object type: {e}");
-                        complete_callback(jvm, callback_id, Err(anyhow::anyhow!("Failed to read object type: {e}")), false);
+                        complete_callback(
+                            jvm,
+                            callback_id,
+                            Err(anyhow::anyhow!("Failed to read object type: {e}")),
+                            false,
+                        );
                         return Some(());
                     }
                 }
@@ -1995,9 +2224,6 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeClusterScanA
 
             let client_handle_id = client_ptr as u64;
             let count_value = if count > 0 { Some(count as u32) } else { None };
-
-            log::debug!("Executing cluster scan with cursor '{}', pattern: {:?}, count: {:?}, type: {:?}", 
-                       cursor_str, pattern, count_value, obj_type);
 
             // Spawn async task for cluster scan execution
             let runtime = get_runtime();
@@ -2011,10 +2237,17 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeClusterScanA
                             redis::ScanStateRC::new()
                         } else {
                             // Get existing cursor from container
-                            match glide_core::cluster_scan_container::get_cluster_scan_cursor(cursor_str) {
+                            match glide_core::cluster_scan_container::get_cluster_scan_cursor(
+                                cursor_str,
+                            ) {
                                 Ok(cursor) => cursor,
                                 Err(e) => {
-                                    complete_callback(jvm, callback_id, Err(anyhow::anyhow!("Invalid cursor: {e}")), false);
+                                    complete_callback(
+                                        jvm,
+                                        callback_id,
+                                        Err(anyhow::anyhow!("Invalid cursor: {e}")),
+                                        false,
+                                    );
                                     return;
                                 }
                             }
@@ -2023,7 +2256,8 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeClusterScanA
                         // Build cluster scan args
                         let mut scan_args_builder = redis::ClusterScanArgs::builder();
                         if let Some(pattern) = pattern {
-                            scan_args_builder = scan_args_builder.with_match_pattern::<bytes::Bytes>(pattern.into());
+                            scan_args_builder = scan_args_builder
+                                .with_match_pattern::<bytes::Bytes>(pattern.into());
                         }
                         if let Some(count) = count_value {
                             scan_args_builder = scan_args_builder.with_count(count);
@@ -2034,7 +2268,9 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeClusterScanA
                         let scan_args = scan_args_builder.build();
 
                         // Execute cluster scan
-                        let result = client.cluster_scan(&scan_state_cursor, scan_args).await
+                        let result = client
+                            .cluster_scan(&scan_state_cursor, scan_args)
+                            .await
                             .map_err(|e| anyhow::anyhow!("Cluster scan execution failed: {e}"));
 
                         // binary_mode = !expect_utf8
@@ -2048,10 +2284,124 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeClusterScanA
                     }
                 }
             });
-            
+
             Some(())
         },
         "executeClusterScanAsync",
     )
     .unwrap_or(())
+}
+
+#[derive(Clone)]
+pub struct JavaValueConversionCache {
+    long_class: GlobalRef,
+    long_ctor: JMethodID,
+    double_class: GlobalRef,
+    double_ctor: JMethodID,
+    boolean_class: GlobalRef,
+    boolean_ctor: JMethodID,
+    linked_hash_map_class: GlobalRef,
+    linked_hash_map_ctor: JMethodID,
+    linked_hash_map_put: JMethodID,
+    hash_set_class: GlobalRef,
+    hash_set_ctor: JMethodID,
+    hash_set_add: JMethodID,
+    hash_map_class: GlobalRef,
+    hash_map_ctor: JMethodID,
+    hash_map_put: JMethodID,
+    big_integer_class: GlobalRef,
+    big_integer_ctor: JMethodID,
+    request_exception_class: GlobalRef,
+    request_exception_ctor: JMethodID,
+}
+
+static JAVA_VALUE_CONVERSION_CACHE: OnceLock<JavaValueConversionCache> = OnceLock::new();
+
+fn get_java_value_conversion_cache(
+    env: &mut JNIEnv,
+) -> Result<&'static JavaValueConversionCache, FFIError> {
+    if let Some(cache) = JAVA_VALUE_CONVERSION_CACHE.get() {
+        return Ok(cache);
+    }
+
+    let long_cls = env.find_class("java/lang/Long")?;
+    let long_ctor = env.get_method_id(&long_cls, "<init>", "(J)V")?;
+    let long_class = env.new_global_ref(&long_cls)?;
+
+    let double_cls = env.find_class("java/lang/Double")?;
+    let double_ctor = env.get_method_id(&double_cls, "<init>", "(D)V")?;
+    let double_class = env.new_global_ref(&double_cls)?;
+
+    let boolean_cls = env.find_class("java/lang/Boolean")?;
+    let boolean_ctor = env.get_method_id(&boolean_cls, "<init>", "(Z)V")?;
+    let boolean_class = env.new_global_ref(&boolean_cls)?;
+
+    let lhm_cls = env.find_class("java/util/LinkedHashMap")?;
+    let lhm_ctor = env.get_method_id(&lhm_cls, "<init>", "()V")?;
+    let lhm_put = env.get_method_id(
+        &lhm_cls,
+        "put",
+        "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+    )?;
+    let linked_hash_map_class = env.new_global_ref(&lhm_cls)?;
+
+    let hs_cls = env.find_class("java/util/HashSet")?;
+    let hs_ctor = env.get_method_id(&hs_cls, "<init>", "()V")?;
+    let hs_add = env.get_method_id(&hs_cls, "add", "(Ljava/lang/Object;)Z")?;
+    let hash_set_class = env.new_global_ref(&hs_cls)?;
+
+    let hm_cls = env.find_class("java/util/HashMap")?;
+    let hm_ctor = env.get_method_id(&hm_cls, "<init>", "()V")?;
+    let hm_put = env.get_method_id(
+        &hm_cls,
+        "put",
+        "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+    )?;
+    let hash_map_class = env.new_global_ref(&hm_cls)?;
+
+    let bi_cls = env.find_class("java/math/BigInteger")?;
+    let bi_ctor = env.get_method_id(&bi_cls, "<init>", "(Ljava/lang/String;)V")?;
+    let big_integer_class = env.new_global_ref(&bi_cls)?;
+
+    let req_exc_cls = env.find_class("glide/api/models/exceptions/RequestException")?;
+    let req_exc_ctor = env.get_method_id(&req_exc_cls, "<init>", "(Ljava/lang/String;)V")?;
+    let request_exception_class = env.new_global_ref(&req_exc_cls)?;
+
+    let cache = JavaValueConversionCache {
+        long_class,
+        long_ctor,
+        double_class,
+        double_ctor,
+        boolean_class,
+        boolean_ctor,
+        linked_hash_map_class,
+        linked_hash_map_ctor: lhm_ctor,
+        linked_hash_map_put: lhm_put,
+        hash_set_class,
+        hash_set_ctor: hs_ctor,
+        hash_set_add: hs_add,
+        hash_map_class,
+        hash_map_ctor: hm_ctor,
+        hash_map_put: hm_put,
+        big_integer_class,
+        big_integer_ctor: bi_ctor,
+        request_exception_class,
+        request_exception_ctor: req_exc_ctor,
+    };
+
+    // Prefer existing value if concurrently initialized
+    if JAVA_VALUE_CONVERSION_CACHE.set(cache).is_err() {
+        Ok(JAVA_VALUE_CONVERSION_CACHE
+            .get()
+            .expect("JavaValueConversionCache should be initialized"))
+    } else {
+        Ok(JAVA_VALUE_CONVERSION_CACHE
+            .get()
+            .expect("JavaValueConversionCache should be initialized"))
+    }
+}
+
+fn to_local_jclass<'a>(env: &mut JNIEnv<'a>, global: &GlobalRef) -> Result<JClass<'a>, FFIError> {
+    let local = env.new_local_ref(global.as_obj())?;
+    Ok(JClass::from(local))
 }

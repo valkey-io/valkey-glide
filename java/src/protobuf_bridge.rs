@@ -1,17 +1,12 @@
 //! Protobuf bridge for JNI - reuses existing glide-core protobuf parsing logic
 //! This is a surgical change that just parses protobuf and delegates to existing functions
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use protobuf::Message;
 use redis::cluster_routing::RoutingInfo;
 
 // Reuse existing protobuf types from glide-core (no wrapper types needed)
-pub use glide_core::command_request::{
-    CommandRequest,
-    Command, 
-    Routes,
-    command_request,
-};
+pub use glide_core::command_request::{Command, CommandRequest, Routes, command_request};
 
 /// Parse CommandRequest from protobuf bytes (using existing protobuf parsing)
 pub fn parse_command_request(bytes: &[u8]) -> Result<CommandRequest> {
@@ -25,10 +20,13 @@ pub fn create_redis_command(command: &Command) -> Result<redis::Cmd> {
     // Get the command using the same logic as socket_listener
     let request_type: glide_core::request_type::RequestType = command.request_type.into();
     let Some(mut cmd) = request_type.get_command() else {
-        return Err(anyhow!("Received invalid request type: {:?}", command.request_type));
+        return Err(anyhow!(
+            "Received invalid request type: {:?}",
+            command.request_type
+        ));
     };
 
-    // Add arguments using the same logic as socket_listener  
+    // Add arguments using the same logic as socket_listener
     match &command.args {
         Some(glide_core::command_request::command::Args::ArgsArray(args_vec)) => {
             for arg in args_vec.args.iter() {
@@ -42,7 +40,9 @@ pub fn create_redis_command(command: &Command) -> Result<redis::Cmd> {
             }
         }
         None => {
-            return Err(anyhow!("Failed to get request arguments, no arguments are set"));
+            return Err(anyhow!(
+                "Failed to get request arguments, no arguments are set"
+            ));
         }
         // Handle any other cases that might be added to the enum
         Some(_) => {
@@ -51,7 +51,9 @@ pub fn create_redis_command(command: &Command) -> Result<redis::Cmd> {
     };
 
     if cmd.args_iter().next().is_none() {
-        return Err(anyhow!("Received command without a command name or arguments"));
+        return Err(anyhow!(
+            "Received command without a command name or arguments"
+        ));
     }
 
     Ok(cmd)

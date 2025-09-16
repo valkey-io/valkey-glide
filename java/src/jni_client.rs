@@ -4,16 +4,14 @@
 use anyhow::Result;
 use dashmap::DashMap;
 use glide_core::client::Client as GlideClient;
-use glide_core::client::{
-    AuthenticationInfo, ConnectionRequest, NodeAddress, TlsMode,
-};
+use glide_core::client::{AuthenticationInfo, ConnectionRequest, NodeAddress, TlsMode};
 use jni::JNIEnv;
 use jni::JavaVM;
 use jni::objects::{GlobalRef, JClass, JObject, JStaticMethodID, JValue};
 use jni::sys::{jlong, jobject, jstring};
 use redis::Value as ServerValue;
 use std::sync::Arc;
-use std::sync::mpsc::{channel, Sender};
+use std::sync::mpsc::{Sender, channel};
 use std::thread;
 use tokio::runtime::Runtime;
 
@@ -33,19 +31,43 @@ static RUNTIME: std::sync::OnceLock<Runtime> = std::sync::OnceLock::new();
 const DEFAULT_RUNTIME_WORKER_THREADS: usize = 1;
 const DEFAULT_CALLBACK_WORKER_THREADS: usize = 2;
 
+// =========================
+// Native buffer registry
+// =========================
+static NATIVE_BUFFER_REGISTRY: std::sync::OnceLock<dashmap::DashMap<u64, Vec<u8>>> =
+    std::sync::OnceLock::new();
+static NEXT_NATIVE_BUFFER_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
+fn get_native_buffer_registry() -> &'static dashmap::DashMap<u64, Vec<u8>> {
+    NATIVE_BUFFER_REGISTRY.get_or_init(|| dashmap::DashMap::new())
+}
+
+pub fn register_native_buffer(bytes: Vec<u8>) -> (u64, *mut u8, usize) {
+    let id = NEXT_NATIVE_BUFFER_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let registry = get_native_buffer_registry();
+    registry.insert(id, bytes);
+    // Obtain stable pointer/len from stored Vec
+    let guard = registry.get(&id).expect("buffer just inserted");
+    let ptr = guard.as_ptr() as *mut u8;
+    let len = guard.len();
+    (id, ptr, len)
+}
+
+pub fn free_native_buffer(id: u64) -> bool {
+    let registry = get_native_buffer_registry();
+    registry.remove(&id).is_some()
+}
+
 /// Initialize or return the shared Tokio runtime.
 pub(crate) fn get_runtime() -> &'static Runtime {
     RUNTIME.get_or_init(|| {
         let worker_threads = if let Ok(threads_str) = std::env::var("GLIDE_TOKIO_WORKER_THREADS") {
-            threads_str.parse::<usize>().unwrap_or_else(|_| {
-                log::debug!("Invalid GLIDE_TOKIO_WORKER_THREADS; using default");
-                DEFAULT_RUNTIME_WORKER_THREADS
-            })
+            threads_str
+                .parse::<usize>()
+                .unwrap_or(DEFAULT_RUNTIME_WORKER_THREADS)
         } else {
             DEFAULT_RUNTIME_WORKER_THREADS
         };
-
-        log::debug!("Initializing Tokio runtime with {worker_threads} worker threads");
 
         tokio::runtime::Builder::new_multi_thread()
             .worker_threads(worker_threads)
@@ -98,6 +120,7 @@ pub struct ValkeyClientConfig {
     pub lazy_connect: bool,
     pub client_name: Option<String>,
     pub max_inflight_requests: Option<u32>,
+    pub pubsub_subscriptions: Option<redis::PubSubSubscriptionInfo>,
 }
 
 /// Helper function to create Valkey connection configuration
@@ -117,8 +140,9 @@ pub fn create_valkey_connection_config(config: ValkeyClientConfig) -> Result<Con
         lazy_connect,
         client_name,
         max_inflight_requests,
+        pubsub_subscriptions,
     } = config;
-    
+
     if addresses.is_empty() {
         return Err(anyhow::anyhow!("No addresses provided"));
     }
@@ -139,12 +163,12 @@ pub fn create_valkey_connection_config(config: ValkeyClientConfig) -> Result<Con
 
     let connection_request = ConnectionRequest {
         addresses: node_addresses,
-        tls_mode: Some(if insecure_tls { 
-            TlsMode::InsecureTls 
-        } else if use_tls { 
-            TlsMode::SecureTls 
-        } else { 
-            TlsMode::NoTls 
+        tls_mode: Some(if insecure_tls {
+            TlsMode::InsecureTls
+        } else if use_tls {
+            TlsMode::SecureTls
+        } else {
+            TlsMode::NoTls
         }),
         cluster_mode_enabled: cluster_mode,
         database_id: database_id as i64,
@@ -191,7 +215,7 @@ pub fn create_valkey_connection_config(config: ValkeyClientConfig) -> Result<Con
         protocol: None,
         connection_retry_strategy: None,
         periodic_checks: None,
-        pubsub_subscriptions: None,
+        pubsub_subscriptions,
         inflight_requests_limit: max_inflight_requests,
         lazy_connect,
     };
@@ -210,8 +234,6 @@ pub async fn create_glide_client(
             log::error!("Failed to create glide-core client: {e}");
             anyhow::anyhow!("Failed to create glide-core client: {e}")
         })?;
-
-    log::debug!("Successfully created glide-core client");
     Ok(client)
 }
 
@@ -220,33 +242,33 @@ pub async fn ensure_client_for_handle(handle_id: u64) -> Result<GlideClient> {
     if let Some(entry) = table.get(&handle_id) {
         return Ok(entry.value().clone());
     }
-    
+
     // Check for pending config and create lazily
     let pending = {
         let pm = get_pending_map();
         pm.remove(&handle_id).map(|(_, cfg)| cfg)
     };
-    
+
     if let Some(mut cfg) = pending {
         cfg.lazy_connect = false;
-        
+
         // Setup push channel if subscriptions configured
         let has_pubsub = cfg
             .pubsub_subscriptions
             .as_ref()
             .map(|m| !m.is_empty())
             .unwrap_or(false);
-            
+
         let (tx_opt, rx_opt) = if has_pubsub {
             let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<redis::PushInfo>();
             (Some(tx), Some(rx))
         } else {
             (None, None)
         };
-        
+
         let client = create_glide_client(cfg, tx_opt).await?;
         table.insert(handle_id, client.clone());
-        
+
         // Handle push notifications if needed
         if let Some(mut rx) = rx_opt {
             let jvm_arc = JVM.get().cloned();
@@ -262,23 +284,23 @@ pub async fn ensure_client_for_handle(handle_id: u64) -> Result<GlideClient> {
                 }
             });
         }
-        
+
         return Ok(table.get(&handle_id).unwrap().value().clone());
     }
-    
+
     Err(anyhow::anyhow!("Client not found in handle_table"))
 }
 
-fn handle_push_notification(env: &mut JNIEnv, handle_id: jlong, push: redis::PushInfo) {
+pub(crate) fn handle_push_notification(env: &mut JNIEnv, handle_id: jlong, push: redis::PushInfo) {
     use redis::{PushKind, Value};
-    
+
     let as_bytes = |v: &Value| -> Option<Vec<u8>> {
         match v {
             Value::BulkString(b) => Some(b.clone()),
             _ => None,
         }
     };
-    
+
     let mapped: Option<PushMessageTuple> = match push.kind {
         PushKind::Message | PushKind::SMessage => {
             if push.data.len() >= 2 {
@@ -301,7 +323,7 @@ fn handle_push_notification(env: &mut JNIEnv, handle_id: jlong, push: redis::Pus
         }
         _ => None,
     };
-    
+
     if let Some((m, c, p)) = mapped
         && let Ok(class) = env.find_class("glide/internal/GlideCoreClient")
     {
@@ -309,7 +331,7 @@ fn handle_push_notification(env: &mut JNIEnv, handle_id: jlong, push: redis::Pus
         let jm = env.byte_array_from_slice(&m).ok();
         let jc = env.byte_array_from_slice(&c).ok();
         let jp = p.as_ref().and_then(|pp| env.byte_array_from_slice(pp).ok());
-        
+
         if let (Some(jm), Some(jc)) = (jm, jc) {
             let jm_obj: JObject = jm.into();
             let jc_obj: JObject = jc.into();
@@ -337,7 +359,8 @@ pub(crate) struct MethodCache {
     complete_error_method: JStaticMethodID,
 }
 
-static METHOD_CACHE: std::sync::OnceLock<parking_lot::Mutex<Option<MethodCache>>> = std::sync::OnceLock::new();
+static METHOD_CACHE: std::sync::OnceLock<parking_lot::Mutex<Option<MethodCache>>> =
+    std::sync::OnceLock::new();
 
 /// Get or initialize the method cache.
 pub(crate) fn get_method_cache(env: &mut JNIEnv) -> Result<MethodCache> {
@@ -350,14 +373,12 @@ pub(crate) fn get_method_cache(env: &mut JNIEnv) -> Result<MethodCache> {
         }
     }
 
-    // Cache miss: initialize
-    log::debug!("Initializing JNI method cache");
-
     let class = env
         .find_class("glide/internal/AsyncRegistry")
         .map_err(|e| anyhow::anyhow!("Failed to find AsyncRegistry class: {e}"))?;
 
-    let global_class = env.new_global_ref(&class)
+    let global_class = env
+        .new_global_ref(&class)
         .map_err(|e| anyhow::anyhow!("Failed to create global class reference: {e}"))?;
 
     let complete_callback_method = env
@@ -365,7 +386,11 @@ pub(crate) fn get_method_cache(env: &mut JNIEnv) -> Result<MethodCache> {
         .map_err(|e| anyhow::anyhow!("Failed to get completeCallback method ID: {e}"))?;
 
     let complete_error_method = env
-        .get_static_method_id(&class, "completeCallbackWithError", "(JLjava/lang/String;)Z")
+        .get_static_method_id(
+            &class,
+            "completeCallbackWithError",
+            "(JLjava/lang/String;)Z",
+        )
         .map_err(|e| anyhow::anyhow!("Failed to get completeCallbackWithError method ID: {e}"))?;
 
     let method_cache = MethodCache {
@@ -380,7 +405,6 @@ pub(crate) fn get_method_cache(env: &mut JNIEnv) -> Result<MethodCache> {
         *cache_guard = Some(method_cache.clone());
     }
 
-    log::debug!("JNI method cache initialized");
     Ok(method_cache)
 }
 
@@ -416,7 +440,9 @@ pub fn init_callback_workers() -> &'static Sender<CallbackJob> {
                             let guard = rx_clone.lock().unwrap();
                             guard.recv().ok()
                         };
-                        let Some((jvm, callback_id, result, binary_mode)) = job_opt else { break };
+                        let Some((jvm, callback_id, result, binary_mode)) = job_opt else {
+                            break;
+                        };
 
                         // Process callback on this dedicated thread
                         process_callback_job(jvm, callback_id, result, binary_mode);
@@ -429,12 +455,17 @@ pub fn init_callback_workers() -> &'static Sender<CallbackJob> {
     })
 }
 
-fn process_callback_job(jvm: Arc<JavaVM>, callback_id: jlong, result: Result<ServerValue>, binary_mode: bool) {
+fn process_callback_job(
+    jvm: Arc<JavaVM>,
+    callback_id: jlong,
+    result: Result<ServerValue>,
+    binary_mode: bool,
+) {
     match jvm.attach_current_thread_permanently() {
         Ok(mut env) => match result {
             Ok(server_value) => {
                 let _ = env.push_local_frame(16);
-                
+
                 // Direct conversion with size-based routing
                 let java_result = if should_use_direct_buffer(&server_value) {
                     // For large data (>16KB): Use DirectByteBuffer
@@ -443,14 +474,15 @@ fn process_callback_job(jvm: Arc<JavaVM>, callback_id: jlong, result: Result<Ser
                     // For small data (<16KB): Regular JNI objects
                     crate::resp_value_to_java(&mut env, server_value, !binary_mode)
                 };
-                
+
                 match java_result {
                     Ok(java_result) => {
                         let _ = complete_java_callback(&mut env, callback_id, java_result.as_raw());
                     }
                     Err(e) => {
                         let error_msg = format!("Response conversion failed: {e}");
-                        let _ = complete_java_callback_with_error(&mut env, callback_id, &error_msg);
+                        let _ =
+                            complete_java_callback_with_error(&mut env, callback_id, &error_msg);
                     }
                 }
                 let _ = unsafe { env.pop_local_frame(&JObject::null()) };
@@ -525,7 +557,7 @@ pub fn complete_java_callback_with_error(
 /// Check if response should use DirectByteBuffer based on size threshold (16KB)
 fn should_use_direct_buffer(value: &ServerValue) -> bool {
     const THRESHOLD: usize = 16 * 1024; // 16KB threshold
-    
+
     match value {
         redis::Value::BulkString(data) => data.len() > THRESHOLD,
         redis::Value::Array(arr) => {
@@ -535,7 +567,8 @@ fn should_use_direct_buffer(value: &ServerValue) -> bool {
         }
         redis::Value::Map(map) => {
             // Calculate total size of map (keys + values)
-            let total_size: usize = map.iter()
+            let total_size: usize = map
+                .iter()
                 .map(|(k, v)| estimate_value_size(k) + estimate_value_size(v))
                 .sum();
             total_size > THRESHOLD
@@ -555,7 +588,7 @@ fn estimate_value_size(value: &ServerValue) -> usize {
         redis::Value::Nil => 0,
         redis::Value::SimpleString(s) => s.len(),
         redis::Value::BulkString(data) => data.len(),
-        redis::Value::Int(_) => 8, // 64-bit int
+        redis::Value::Int(_) => 8,    // 64-bit int
         redis::Value::Double(_) => 8, // 64-bit double
         redis::Value::Boolean(_) => 1,
         redis::Value::Array(arr) => {
@@ -564,7 +597,8 @@ fn estimate_value_size(value: &ServerValue) -> usize {
         redis::Value::Map(map) => {
             map.iter()
                 .map(|(k, v)| estimate_value_size(k) + estimate_value_size(v))
-                .sum::<usize>() + (map.len() * 16) // overhead for key-value pairs
+                .sum::<usize>()
+                + (map.len() * 16) // overhead for key-value pairs
         }
         redis::Value::Set(set) => {
             set.iter().map(|v| estimate_value_size(v)).sum::<usize>() + (set.len() * 8) // overhead
@@ -575,76 +609,91 @@ fn estimate_value_size(value: &ServerValue) -> usize {
             data.iter().map(|v| estimate_value_size(v)).sum::<usize>()
         }
         redis::Value::ServerError(_) => 128, // Estimate for error messages
-        redis::Value::Okay => 2, // "OK"
-        redis::Value::Attribute { data, .. } => {
-            estimate_value_size(data.as_ref())
-        }
+        redis::Value::Okay => 2,             // "OK"
+        redis::Value::Attribute { data, .. } => estimate_value_size(data.as_ref()),
     }
 }
 
 /// Create DirectByteBuffer for large responses (>16KB) with zero-copy optimization
 fn create_direct_byte_buffer<'local>(
-    env: &mut JNIEnv<'local>, 
+    env: &mut JNIEnv<'local>,
     value: ServerValue,
-    encoding_utf8: bool
+    encoding_utf8: bool,
 ) -> Result<JObject<'local>, crate::errors::FFIError> {
     match value {
-        redis::Value::BulkString(mut data) => {
-            // For large binary data, create DirectByteBuffer
-            log::debug!("Creating DirectByteBuffer for {} bytes", data.len());
-            
-            // Create DirectByteBuffer from the data - JNI requires raw pointer and size
-            let ptr = data.as_mut_ptr();
-            let len = data.len();
-            
-            // Create DirectByteBuffer and transfer ownership
-            let buffer = unsafe { env.new_direct_byte_buffer(ptr, len)? };
-            std::mem::forget(data); // Prevent Vec from being dropped - DirectByteBuffer owns it now
-            
-            Ok(buffer.into())
+        redis::Value::BulkString(data) => {
+            let (id, ptr, len) = register_native_buffer(data);
+            let bb = unsafe { env.new_direct_byte_buffer(ptr.cast(), len)? };
+            // Register Java-side cleaner to free native buffer when GC'd
+            let obj: JObject = bb.into();
+            let out = env.new_local_ref(&obj)?;
+            register_buffer_cleaner(env, &out, id)?;
+            Ok(out)
         }
         redis::Value::Array(arr) => {
-            // For large arrays, serialize to bytes and create DirectByteBuffer
-            let mut serialized = serialize_array_to_bytes(arr, encoding_utf8)?;
-            log::debug!("Creating DirectByteBuffer for serialized array {} bytes", serialized.len());
-            
-            let ptr = serialized.as_mut_ptr();
-            let len = serialized.len();
-            
-            let buffer = unsafe { env.new_direct_byte_buffer(ptr, len)? };
-            std::mem::forget(serialized); // Transfer ownership to DirectByteBuffer
-            
-            Ok(buffer.into())
+            let serialized = serialize_array_to_bytes(arr, encoding_utf8)?;
+            let (id, ptr, len) = register_native_buffer(serialized);
+            let bb = unsafe { env.new_direct_byte_buffer(ptr.cast(), len)? };
+            let obj: JObject = bb.into();
+            let out = env.new_local_ref(&obj)?;
+            register_buffer_cleaner(env, &out, id)?;
+            Ok(out)
         }
         redis::Value::Map(map) => {
-            // For large maps, serialize directly without BTreeMap conversion
-            let mut serialized = serialize_map_vec_to_bytes(map, encoding_utf8)?;
-            log::debug!("Creating DirectByteBuffer for serialized map {} bytes", serialized.len());
-            
-            let ptr = serialized.as_mut_ptr();
-            let len = serialized.len();
-            
-            let buffer = unsafe { env.new_direct_byte_buffer(ptr, len)? };
-            std::mem::forget(serialized); // Transfer ownership to DirectByteBuffer
-            
-            Ok(buffer.into())
+            let serialized = serialize_map_vec_to_bytes(map, encoding_utf8)?;
+            let (id, ptr, len) = register_native_buffer(serialized);
+            let bb = unsafe { env.new_direct_byte_buffer(ptr.cast(), len)? };
+            let obj: JObject = bb.into();
+            let out = env.new_local_ref(&obj)?;
+            register_buffer_cleaner(env, &out, id)?;
+            Ok(out)
         }
         _ => {
             // Fall back to regular conversion for other large types
-            log::debug!("Falling back to regular conversion for large response");
             crate::resp_value_to_java(env, value, encoding_utf8)
         }
     }
 }
 
+fn register_buffer_cleaner<'local>(
+    env: &mut JNIEnv<'local>,
+    buffer: &JObject<'local>,
+    id: u64,
+) -> Result<(), crate::errors::FFIError> {
+    let class = env.find_class("glide/internal/GlideCoreClient")?;
+    let method = env.get_static_method_id(
+        &class,
+        "registerNativeBufferCleaner",
+        "(Ljava/nio/ByteBuffer;J)V",
+    )?;
+
+    // Call and map any JNI error into FFIError via From<jni::errors::Error>
+    unsafe {
+        env.call_static_method_unchecked(
+            &class,
+            method,
+            jni::signature::ReturnType::Primitive(jni::signature::Primitive::Void),
+            &[
+                jni::sys::jvalue { l: buffer.as_raw() },
+                jni::sys::jvalue { j: id as jlong },
+            ],
+        )?
+    };
+
+    Ok(())
+}
+
 /// Serialize array to bytes for DirectByteBuffer (simplified binary format)
-fn serialize_array_to_bytes(arr: Vec<ServerValue>, _encoding_utf8: bool) -> Result<Vec<u8>, crate::errors::FFIError> {
+fn serialize_array_to_bytes(
+    arr: Vec<ServerValue>,
+    _encoding_utf8: bool,
+) -> Result<Vec<u8>, crate::errors::FFIError> {
     let mut bytes = Vec::new();
-    
+
     // Write array marker and length
     bytes.push(b'*'); // Redis array prefix
     bytes.extend_from_slice(&(arr.len() as u32).to_be_bytes());
-    
+
     for value in arr {
         match value {
             redis::Value::BulkString(data) => {
@@ -660,7 +709,7 @@ fn serialize_array_to_bytes(arr: Vec<ServerValue>, _encoding_utf8: bool) -> Resu
                     s
                 };
                 let data = normalized.into_bytes();
-                bytes.push(b'+'); // Simple string marker  
+                bytes.push(b'+'); // Simple string marker
                 bytes.extend_from_slice(&(data.len() as u32).to_be_bytes());
                 bytes.extend_from_slice(&data);
             }
@@ -684,18 +733,21 @@ fn serialize_array_to_bytes(arr: Vec<ServerValue>, _encoding_utf8: bool) -> Resu
             }
         }
     }
-    
+
     Ok(bytes)
 }
 
 /// Serialize map Vec<(K,V)> to bytes for DirectByteBuffer (simplified binary format)
-fn serialize_map_vec_to_bytes(map: Vec<(ServerValue, ServerValue)>, _encoding_utf8: bool) -> Result<Vec<u8>, crate::errors::FFIError> {
+fn serialize_map_vec_to_bytes(
+    map: Vec<(ServerValue, ServerValue)>,
+    _encoding_utf8: bool,
+) -> Result<Vec<u8>, crate::errors::FFIError> {
     let mut bytes = Vec::new();
-    
+
     // Write map marker and length
     bytes.push(b'%'); // Map prefix
     bytes.extend_from_slice(&(map.len() as u32).to_be_bytes());
-    
+
     for (key, value) in map {
         // Serialize key
         if let redis::Value::BulkString(key_data) = key {
@@ -706,7 +758,7 @@ fn serialize_map_vec_to_bytes(map: Vec<(ServerValue, ServerValue)>, _encoding_ut
             bytes.extend_from_slice(&(key_repr.len() as u32).to_be_bytes());
             bytes.extend_from_slice(&key_repr);
         }
-        
+
         // Serialize value
         if let redis::Value::BulkString(value_data) = value {
             bytes.extend_from_slice(&(value_data.len() as u32).to_be_bytes());
@@ -717,7 +769,7 @@ fn serialize_map_vec_to_bytes(map: Vec<(ServerValue, ServerValue)>, _encoding_ut
             bytes.extend_from_slice(&value_repr);
         }
     }
-    
+
     Ok(bytes)
 }
 
@@ -743,4 +795,15 @@ pub extern "system" fn Java_glide_internal_GlideCoreClient_onNativeInit(
     if let Ok(jvm) = env.get_java_vm() {
         let _ = JVM.set(Arc::new(jvm));
     }
+}
+
+/// Native free for DirectByteBuffer-backed native memory (called by Java Cleaner)
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_glide_internal_GlideCoreClient_freeNativeBuffer(
+    _env: JNIEnv,
+    _class: JClass,
+    id: jlong,
+) {
+    let id = id as u64;
+    let _ = free_native_buffer(id);
 }
