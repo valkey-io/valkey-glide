@@ -664,6 +664,12 @@ fn serialize_array_to_bytes(arr: Vec<ServerValue>, _encoding_utf8: bool) -> Resu
                 bytes.extend_from_slice(&(data.len() as u32).to_be_bytes());
                 bytes.extend_from_slice(&data);
             }
+            redis::Value::Okay => {
+                let data = b"OK";
+                bytes.push(b'+');
+                bytes.extend_from_slice(&(data.len() as u32).to_be_bytes());
+                bytes.extend_from_slice(data);
+            }
             redis::Value::Int(n) => {
                 bytes.push(b':'); // Integer marker
                 bytes.extend_from_slice(&n.to_be_bytes());

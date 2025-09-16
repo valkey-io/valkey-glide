@@ -158,13 +158,10 @@ public class CommandManager {
             List<GlideString> keys,
             List<GlideString> args,
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
-        CommandRequest.Builder command = prepareScript(script, keys, args);
-        // Decide response encoding based on script declaration
-        // binaryOutput=false -> expect UTF-8 Java String types
-        // binaryOutput=true  -> expect binary-safe GlideString/byte[]
-        boolean expectUtf8Response = !script.getBinaryOutput();
-        boolean binaryMode = !expectUtf8Response;
-        return submitCommandToJni(command, responseHandler, binaryMode, expectUtf8Response);
+        var cf = new CompletableFuture<T>();
+        cf.completeExceptionally(new glide.api.models.exceptions.RequestException(
+                "ScriptInvocation is temporarily unsupported"));
+        return cf;
     }
 
     /** Build a Script (by hash) request with route to send to Valkey via JNI. */
@@ -173,10 +170,10 @@ public class CommandManager {
             List<GlideString> args,
             Route route,
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
-        CommandRequest.Builder command = prepareScript(script, args, route);
-        boolean expectUtf8Response = !script.getBinaryOutput();
-        boolean binaryMode = !expectUtf8Response;
-        return submitCommandToJni(command, responseHandler, binaryMode, expectUtf8Response);
+        var cf = new CompletableFuture<T>();
+        cf.completeExceptionally(new glide.api.models.exceptions.RequestException(
+                "ScriptInvocation is temporarily unsupported"));
+        return cf;
     }
 
     /** Build a Cluster Batch and send via JNI. */
@@ -617,8 +614,8 @@ public class CommandManager {
                     int simpleLen = buffer.getInt();
                     byte[] simpleData = new byte[simpleLen];
                     buffer.get(simpleData);
-                    // Rust side normalizes "OK" to uppercase for compatibility
-                    result[i] = new String(simpleData, StandardCharsets.UTF_8);
+                    String simpleString = new String(simpleData, StandardCharsets.UTF_8);
+                    result[i] = simpleString.equalsIgnoreCase("ok") ? "OK" : simpleString;
                     break;
 
                 case ':': // Integer

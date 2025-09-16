@@ -84,7 +84,7 @@ public class ConnectionManager {
                                         configuration.getClientName());
 
                         if (nativeClientHandle == 0) {
-                            throw new ClosingException("Failed to create client - connection refused");
+                            throw new ClosingException("Failed to create client - Connection refused");
                         }
 
                         return null; // Success

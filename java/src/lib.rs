@@ -428,53 +428,6 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlideValueResolver_createLeakedB
     .unwrap_or(0)
 }
 
-
-
-#[unsafe(no_mangle)]
-pub extern "system" fn Java_glide_ffi_resolvers_ScriptResolver_storeScript<'local>(
-    mut env: JNIEnv<'local>,
-    _class: JClass<'local>,
-    code: JByteArray,
-) -> JObject<'local> {
-    handle_panics(
-        move || {
-            fn store_script<'a>(
-                env: &mut JNIEnv<'a>,
-                code: JByteArray,
-            ) -> Result<JObject<'a>, FFIError> {
-                let code_byte_array = env.convert_byte_array(code)?;
-                let hash = glide_core::scripts_container::add_script(&code_byte_array);
-                Ok(JObject::from(env.new_string(hash)?))
-            }
-            let result = store_script(&mut env, code);
-            handle_errors(&mut env, result)
-        },
-        "storeScript",
-    )
-    .unwrap_or(JObject::null())
-}
-
-#[unsafe(no_mangle)]
-pub extern "system" fn Java_glide_ffi_resolvers_ScriptResolver_dropScript<'local>(
-    mut env: JNIEnv<'local>,
-    _class: JClass<'local>,
-    hash: JString,
-) {
-    handle_panics(
-        move || {
-            fn drop_script(env: &mut JNIEnv<'_>, hash: JString) -> Result<(), FFIError> {
-                let hash_str: String = env.get_string(&hash)?.into();
-                glide_core::scripts_container::remove_script(&hash_str);
-                Ok(())
-            }
-            let result = drop_script(&mut env, hash);
-            handle_errors(&mut env, result)
-        },
-        "dropScript",
-    )
-    .unwrap_or(())
-}
-
 impl From<logger_core::Level> for Level {
     fn from(level: logger_core::Level) -> Self {
         match level {
@@ -1211,26 +1164,9 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync
                                     exec
                                 }
                             }
-                            Some(command_request::Command::ScriptInvocation(script)) => {
-                                // Handle script using FFI approach
-                                let route_box = command_request.route.0;
-                                let routing = if let Some(route_box) = route_box {
-                                    match protobuf_bridge::create_routing_info(*route_box, None) {
-                                        Ok(r) => r,
-                                        Err(e) => {
-                                            log::error!("Routing error: {e}");
-                                            None
-                                        }
-                                    }
-                                } else {
-                                    None
-                                };
-                                
-                                let keys: Vec<&[u8]> = script.keys.iter().map(|k| k.as_ref()).collect();
-                                let args: Vec<&[u8]> = script.args.iter().map(|a| a.as_ref()).collect();
-                                
-                                client.invoke_script(&script.hash, &keys, &args, routing).await
-                                    .map_err(|e| anyhow::anyhow!("Script execution failed: {e}"))
+                            Some(command_request::Command::ScriptInvocation(_script)) => {
+                                // Temporarily disabled while redesigning script flow
+                                Err(anyhow::anyhow!("ScriptInvocation is temporarily unsupported"))
                             }
                             _ => Err(anyhow::anyhow!("Unsupported command type"))
                         };
@@ -1586,36 +1522,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBinaryComman
                             Some(command_request::Command::ScriptInvocation(script)) => {
                                 // Handle script invocation in binary mode
                                 // Use EVALSHA command directly
-                                let mut cmd = redis::cmd("EVALSHA");
-                                cmd.arg(script.hash.as_bytes());
-                                cmd.arg(script.keys.len());
-                                
-                                // Add keys
-                                for key in &script.keys {
-                                    cmd.arg(key.as_ref());
-                                }
-                                
-                                // Add args
-                                for arg in &script.args {
-                                    cmd.arg(arg.as_ref());
-                                }
-                                
-                                // Get routing if specified
-                                let route_box = command_request.route.0;
-                                let routing = if let Some(route_box) = route_box {
-                                    match protobuf_bridge::create_routing_info(*route_box, Some(&cmd)) {
-                                        Ok(r) => r,
-                                        Err(e) => {
-                                            log::error!("Script routing error: {e}");
-                                            None
-                                        }
-                                    }
-                                } else {
-                                    None
-                                };
-                                
-                                client.send_command(&cmd, routing).await
-                                    .map_err(|e| anyhow::anyhow!("Script invocation failed: {e}"))
+                                Err(anyhow::anyhow!("ScriptInvocation is temporarily unsupported"))
                             }
                             _ => Err(anyhow::anyhow!("Binary command execution only supports single commands and script invocations"))
                         };
@@ -1796,9 +1703,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
                 }
             };
 
-            // For script execution, route parsing will be handled differently
-            // TODO: Implement proper script routing using protobuf Routes if needed
-            let routing_info: Option<redis::cluster_routing::RoutingInfo> = None;
+            // For script execution, infer routing from an EVALSHA-shaped command (auto route)
 
             let client_handle_id = handle_id as u64;
             log::debug!("Executing script '{}' with {} keys and {} args", hash_str, keys_data.len(), args_data.len());
@@ -1809,7 +1714,22 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
                 let client_result = ensure_client_for_handle(client_handle_id).await;
                 match client_result {
                     Ok(mut client) => {
-                        // Execute script using FFI approach  
+                        // Build EVALSHA-shaped command to infer routing like the binary path
+                        let mut route_cmd = redis::cmd("EVALSHA");
+                        route_cmd.arg(hash_str.as_bytes());
+                        route_cmd.arg(keys_data.len());
+                        for k in &keys_data { route_cmd.arg(k.as_slice()); }
+                        for a in &args_data { route_cmd.arg(a.as_slice()); }
+
+                        let routing_info = match protobuf_bridge::create_routing_info(Default::default(), Some(&route_cmd)) {
+                            Ok(r) => r,
+                            Err(e) => {
+                                complete_callback(jvm, callback_id, Err(anyhow::anyhow!(format!("Routing error: {e}"))), false);
+                                return;
+                            }
+                        };
+
+                        // Execute script using FFI approach
                         let result = client.invoke_script(
                             &hash_str,
                             &keys_data.iter().map(|k| k.as_slice()).collect::<Vec<_>>(),
