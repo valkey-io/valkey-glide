@@ -55,6 +55,7 @@ subprojects {
     java {
         toolchain {
             languageVersion.set(JavaLanguageVersion.of(11))
+            // Only specify vendor for non-container environments to allow flexibility in CI containers
             if (!System.getenv("GLIDE_CONTAINER_BUILD")) {
                 vendor = JvmVendorSpec.ADOPTIUM // Temurin
             }
@@ -96,8 +97,7 @@ subprojects {
     }
 }
 
-// Spotless section (code style) - Temporarily disabled for Java 8 compatibility
-// End of Spotless section
+// Spotless section (code style)
 spotless {
     java {
         target fileTree('.') {
@@ -114,3 +114,4 @@ spotless {
         leadingTabsToSpaces(4)
     }
 }
+// End of Spotless section
