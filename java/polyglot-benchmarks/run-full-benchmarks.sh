@@ -1,0 +1,123 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Automated JNI vs UDS benchmark runs.
+# Execute from repo root or this script's directory.
+
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+REPO_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
+cd "$REPO_ROOT"
+
+JDK_BIN=${JAVA_HOME:-}/bin
+JAVA_CMD=${JDK_BIN:+$JDK_BIN/}java
+GRADLE_CMD=./gradlew
+RESULTS_DIR=${RESULTS_DIR:-bench-results}
+JNI_NATIVE_DIR=java/client/build/native-libs
+JNI_JAR_GLOB="java/client/build/libs/valkey-glide-*.jar"
+POLYGLOT_JAR=java/polyglot-benchmarks/build/libs/benchmarks.jar
+MAVEN_COORD=${MAVEN_COORD:-io.valkey:valkey-glide:1.0.0}
+MAVEN_REPO=${MAVEN_REPO:-$HOME/.m2/repository}
+HOST=${HOST:-${ELASTICACHE_HOST:-localhost}}
+PORT=${PORT:-6379}
+TLS_FLAG=${TLS_FLAG:---tls}
+DURATION_DEFAULT=120
+
+scenarios=(
+  "100 100 $DURATION_DEFAULT 10000,20000,30000,40000,50000,60000,70000,80000,90000"
+  "4000 100 $DURATION_DEFAULT 10000,20000,30000,40000,50000,60000,70000"
+  "26214400 20 $DURATION_DEFAULT 10000"
+)
+
+require_cmd() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    echo "Missing dependency: $1" >&2
+    exit 1
+  fi
+}
+
+require_cmd "$JAVA_CMD"
+require_cmd jq
+require_cmd mvn
+require_cmd $GRADLE_CMD
+
+mkdir -p "$RESULTS_DIR/jni" "$RESULTS_DIR/uds"
+
+$GRADLE_CMD :client:buildAll :polyglotBenchmarks:shadowJar
+
+JNI_JAR=$(ls $JNI_JAR_GLOB 2>/dev/null | head -n1 || true)
+if [[ -z "$JNI_JAR" ]]; then
+  echo "Unable to locate JNI jar ($JNI_JAR_GLOB)" >&2
+  exit 1
+fi
+if [[ ! -f "$POLYGLOT_JAR" ]]; then
+  echo "Benchmark jar missing: $POLYGLOT_JAR" >&2
+  exit 1
+fi
+
+IFS=':' read -r UDS_GROUP UDS_ARTIFACT UDS_VERSION <<< "$MAVEN_COORD"
+UDS_JAR="$MAVEN_REPO/${UDS_GROUP//.//}/$UDS_ARTIFACT/$UDS_VERSION/$UDS_ARTIFACT-$UDS_VERSION.jar"
+if [[ ! -f "$UDS_JAR" ]]; then
+  mvn dependency:get -Dartifact="$MAVEN_COORD"
+fi
+if [[ ! -f "$UDS_JAR" ]]; then
+  echo "UDS jar still missing: $UDS_JAR" >&2
+  exit 1
+fi
+
+run_matrix() {
+  local impl=$1
+  local cp=$2
+  local jni_path=${3:-}
+  local out_dir=$4
+
+  mkdir -p "$out_dir"
+
+  for scenario in "${scenarios[@]}"; do
+    IFS=' ' read -r data concurrency duration qps_csv <<< "$scenario"
+    IFS=',' read -ra qps_list <<< "$qps_csv"
+    for qps in "${qps_list[@]}"; do
+      local label="${data}b_q${qps}_c${concurrency}"
+      local result="$out_dir/${label}.json"
+      local log="$out_dir/${label}.log"
+      if [[ -f "$result" ]]; then
+        echo "[$impl] Skipping $label (already exists)"
+        continue
+      fi
+      echo "[$impl] data=${data}B qps=$qps concurrency=$concurrency duration=$duration"
+      timeout -k 30 $((duration + 180)) \
+        "$JAVA_CMD" -Xms4g -Xmx4g -XX:+UseG1GC \
+        ${jni_path:+-Djava.library.path=$jni_path} \
+        -cp "$cp" \
+        polyglot.benchmark.ValkeyClientBenchmark \
+        --host "$HOST" \
+        --port "$PORT" \
+        --data-size "$data" \
+        --duration "$duration" \
+        --concurrency "$concurrency" \
+        --qps "$qps" \
+        --output "$result" \
+        $TLS_FLAG \
+        2>&1 | tee "$log"
+    done
+  done
+}
+
+run_matrix "JNI" "$POLYGLOT_JAR:$JNI_JAR" "$JNI_NATIVE_DIR" "$RESULTS_DIR/jni"
+run_matrix "UDS" "$POLYGLOT_JAR:$UDS_JAR" "" "$RESULTS_DIR/uds"
+
+summarize() {
+  local impl=$1 dir=$2
+  echo "\n=== $impl summary ==="
+  for file in "$dir"/*.json; do
+    [[ -f "$file" ]] || continue
+    base=$(basename "$file")
+    commands=$(jq -r '.finalSnapshot.totalCommands // .results.totalCommands // 0' "$file")
+    qps=$(jq -r '.finalMetrics.actualQps // .results.actualQps // 0' "$file")
+    p99=$(jq -r '.finalMetrics.getHitLatencies.p99 // .results.latency.p99 // 0' "$file")
+    cpu=$(jq -r '.peakResources.processCpuLoad // .results.resources.cpuUsage // 0' "$file")
+    printf "%s\tcommands=%s\tactualQps=%s\tp99=%s\tcpu=%s\n" "$base" "$commands" "$qps" "$p99" "$cpu"
+  done | sort
+}
+
+summarize JNI "$RESULTS_DIR/jni"
+summarize UDS "$RESULTS_DIR/uds"
