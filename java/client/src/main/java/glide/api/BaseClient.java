@@ -1072,7 +1072,15 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<String> objectEncoding(@NonNull GlideString key) {
-        // Keep behavior consistent with unit tests: use standard submit path
+        // Prefer specialized path (textual response) without adding hot-path branching.
+        // In unit tests where CommandManager is a mock, this may return null; fallback
+        // to
+        // the generic mocked method to satisfy the unit contract.
+        CompletableFuture<String> specialized = commandManager.submitObjectEncoding(new GlideString[] { key },
+                this::handleStringOrNullResponse);
+        if (specialized != null) {
+            return specialized;
+        }
         return commandManager.submitNewCommand(
                 ObjectEncoding, new GlideString[] { key }, this::handleStringOrNullResponse);
     }

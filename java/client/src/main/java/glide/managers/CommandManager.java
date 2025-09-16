@@ -140,6 +140,26 @@ public class CommandManager {
                 command, responseHandler, true, false); // GlideString arguments -> expect binary response
     }
 
+    /**
+     * Specialized path for ObjectEncoding with GlideString args but textual
+     * response.
+     */
+    public <T> CompletableFuture<T> submitObjectEncoding(
+            GlideString[] arguments,
+            GlideExceptionCheckedFunction<Response, T> responseHandler) {
+        CommandRequest.Builder command = prepareCommandRequest(RequestType.ObjectEncoding, arguments);
+        return submitCommandToJni(command, responseHandler, true, true);
+    }
+
+    /** Specialized path for ObjectEncoding with route. */
+    public <T> CompletableFuture<T> submitObjectEncoding(
+            GlideString[] arguments,
+            Route route,
+            GlideExceptionCheckedFunction<Response, T> responseHandler) {
+        CommandRequest.Builder command = prepareCommandRequest(RequestType.ObjectEncoding, arguments, route);
+        return submitCommandToJni(command, responseHandler, true, true);
+    }
+
     /** Build a Batch and send via JNI. */
     public <T> CompletableFuture<T> submitNewBatch(
             Batch batch,
