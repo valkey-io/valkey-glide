@@ -33,6 +33,33 @@ static RUNTIME: std::sync::OnceLock<Runtime> = std::sync::OnceLock::new();
 const DEFAULT_RUNTIME_WORKER_THREADS: usize = 1;
 const DEFAULT_CALLBACK_WORKER_THREADS: usize = 2;
 
+// =========================
+// Native buffer registry
+// =========================
+static NATIVE_BUFFER_REGISTRY: std::sync::OnceLock<dashmap::DashMap<u64, Vec<u8>>> =
+    std::sync::OnceLock::new();
+static NEXT_NATIVE_BUFFER_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
+fn get_native_buffer_registry() -> &'static dashmap::DashMap<u64, Vec<u8>> {
+    NATIVE_BUFFER_REGISTRY.get_or_init(|| dashmap::DashMap::new())
+}
+
+pub fn register_native_buffer(bytes: Vec<u8>) -> (u64, *mut u8, usize) {
+    let id = NEXT_NATIVE_BUFFER_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let registry = get_native_buffer_registry();
+    registry.insert(id, bytes);
+    // Obtain stable pointer/len from stored Vec
+    let guard = registry.get(&id).expect("buffer just inserted");
+    let ptr = guard.as_ptr() as *mut u8;
+    let len = guard.len();
+    (id, ptr, len)
+}
+
+pub fn free_native_buffer(id: u64) -> bool {
+    let registry = get_native_buffer_registry();
+    registry.remove(&id).is_some()
+}
+
 /// Initialize or return the shared Tokio runtime.
 pub(crate) fn get_runtime() -> &'static Runtime {
     RUNTIME.get_or_init(|| {
@@ -581,44 +608,66 @@ fn create_direct_byte_buffer<'local>(
     encoding_utf8: bool,
 ) -> Result<JObject<'local>, crate::errors::FFIError> {
     match value {
-        redis::Value::BulkString(mut data) => {            
-            // Create DirectByteBuffer from the data - JNI requires raw pointer and size
-            let ptr = data.as_mut_ptr();
-            let len = data.len();
-            
-            // Create DirectByteBuffer and transfer ownership
-            let buffer = unsafe { env.new_direct_byte_buffer(ptr, len)? };
-            std::mem::forget(data); // Prevent Vec from being dropped - DirectByteBuffer owns it now
-            
-            Ok(buffer.into())
+        redis::Value::BulkString(data) => {
+            let (id, ptr, len) = register_native_buffer(data);
+            let bb = unsafe { env.new_direct_byte_buffer(ptr.cast(), len)? };
+            // Register Java-side cleaner to free native buffer when GC'd
+            let obj: JObject = bb.into();
+            let out = env.new_local_ref(&obj)?;
+            register_buffer_cleaner(env, &out, id)?;
+            Ok(out)
         }
         redis::Value::Array(arr) => {
-            // For large arrays, serialize to bytes and create DirectByteBuffer
-            let mut serialized = serialize_array_to_bytes(arr, encoding_utf8)?;            
-            let ptr = serialized.as_mut_ptr();
-            let len = serialized.len();
-            
-            let buffer = unsafe { env.new_direct_byte_buffer(ptr, len)? };
-            std::mem::forget(serialized); // Transfer ownership to DirectByteBuffer
-            
-            Ok(buffer.into())
+            let serialized = serialize_array_to_bytes(arr, encoding_utf8)?;
+            let (id, ptr, len) = register_native_buffer(serialized);
+            let bb = unsafe { env.new_direct_byte_buffer(ptr.cast(), len)? };
+            let obj: JObject = bb.into();
+            let out = env.new_local_ref(&obj)?;
+            register_buffer_cleaner(env, &out, id)?;
+            Ok(out)
         }
         redis::Value::Map(map) => {
-            // For large maps, serialize directly without BTreeMap conversion
-            let mut serialized = serialize_map_vec_to_bytes(map, encoding_utf8)?;            
-            let ptr = serialized.as_mut_ptr();
-            let len = serialized.len();
-            
-            let buffer = unsafe { env.new_direct_byte_buffer(ptr, len)? };
-            std::mem::forget(serialized); // Transfer ownership to DirectByteBuffer
-            
-            Ok(buffer.into())
+            let serialized = serialize_map_vec_to_bytes(map, encoding_utf8)?;
+            let (id, ptr, len) = register_native_buffer(serialized);
+            let bb = unsafe { env.new_direct_byte_buffer(ptr.cast(), len)? };
+            let obj: JObject = bb.into();
+            let out = env.new_local_ref(&obj)?;
+            register_buffer_cleaner(env, &out, id)?;
+            Ok(out)
         }
         _ => {
             // Fall back to regular conversion for other large types
             crate::resp_value_to_java(env, value, encoding_utf8)
         }
     }
+}
+
+fn register_buffer_cleaner<'local>(
+    env: &mut JNIEnv<'local>,
+    buffer: &JObject<'local>,
+    id: u64,
+) -> Result<(), crate::errors::FFIError> {
+    let class = env.find_class("glide/internal/GlideCoreClient")?;
+    let method = env.get_static_method_id(
+        &class,
+        "registerNativeBufferCleaner",
+        "(Ljava/nio/ByteBuffer;J)V",
+    )?;
+
+    // Call and map any JNI error into FFIError via From<jni::errors::Error>
+    unsafe {
+        env.call_static_method_unchecked(
+            &class,
+            method,
+            jni::signature::ReturnType::Primitive(jni::signature::Primitive::Void),
+            &[
+                jni::sys::jvalue { l: buffer.as_raw() },
+                jni::sys::jvalue { j: id as jlong },
+            ],
+        )?
+    };
+
+    Ok(())
 }
 
 /// Serialize array to bytes for DirectByteBuffer (simplified binary format)
@@ -727,4 +776,15 @@ pub extern "system" fn Java_glide_internal_GlideCoreClient_onNativeInit(
     if let Ok(jvm) = env.get_java_vm() {
         let _ = JVM.set(Arc::new(jvm));
     }
+}
+
+/// Native free for DirectByteBuffer-backed native memory (called by Java Cleaner)
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_glide_internal_GlideCoreClient_freeNativeBuffer(
+    _env: JNIEnv,
+    _class: JClass,
+    id: jlong,
+) {
+    let id = id as u64;
+    let _ = free_native_buffer(id);
 }

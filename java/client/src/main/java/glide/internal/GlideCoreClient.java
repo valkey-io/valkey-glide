@@ -37,6 +37,8 @@ public class GlideCoreClient implements AutoCloseable {
 
     private static native void onNativeInit();
 
+    private static native void freeNativeBuffer(long id);
+
     private static final java.util.concurrent.ConcurrentHashMap<
                     Long, java.lang.ref.WeakReference<glide.api.BaseClient>>
             clients = new java.util.concurrent.ConcurrentHashMap<>();
@@ -62,6 +64,21 @@ public class GlideCoreClient implements AutoCloseable {
             var c = ref.get();
             if (c != null) c.__enqueuePubSubMessage(m);
         }
+    }
+
+    // Register a Java Cleaner to free native memory when the given ByteBuffer is
+    // GC'd
+    static void registerNativeBufferCleaner(java.nio.ByteBuffer buffer, long id) {
+        if (buffer == null || id == 0)
+            return;
+        CLEANER.register(
+                buffer,
+                () -> {
+                    try {
+                        freeNativeBuffer(id);
+                    } catch (Throwable ignored) {
+                    }
+                });
     }
 
     /** Handle for the native client resource. */
