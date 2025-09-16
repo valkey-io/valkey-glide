@@ -8,6 +8,7 @@
 - Fixed `GlideCoreClient.createClient(...)` wrapper to forward `readFrom`, `clientAz`, `lazyConnect`, `clientName`, and PubSub subscriptions to JNI (removed hard-coded defaults). Focused unit + integration tests passed.
 - PubSub end-to-end over JNI: added native push forwarder on eager create, added RESP3-only guard for subscriptions, and isolated user callback exceptions. PubSub integration suite (non-TLS) now passes via dedicated Gradle task.
 - Centralized script routing mapping in `CommandManager` to keep parity with command routing and reduce duplication. Re-ran script integration tests for standalone and cluster – all passed.
+- Unified JNI command execution paths via a shared helper; removed hot-path logging in JNI. Re-ran unit, script, and PubSub (non-TLS) suites — all passing.
 
 ### Scope (this PR)
 - Java client JNI script path parity with UDS: storage, invocation, routing.
@@ -60,12 +61,11 @@
    - In `create_direct_byte_buffer`, Rust `Vec` is `mem::forget`’d after creating `DirectByteBuffer`; JVM does not automatically free Rust allocations.
    - Fix Plan: introduce a small registry (handle → Vec) with a Java Cleaner calling back into JNI to free, or copy to `byte[]` for simplicity when acceptable.
 
-5) Logging in hot paths (perf)
-   - Several `log::debug!` in tight loops/async paths. Reduce or gate by level.
+5) Logging in hot paths (perf) — DONE
+   - Removed logging statements from JNI hot paths.
 
-6) Duplicate command execution flows (maintainability)
-   - `executeCommandAsync` and `executeBinaryCommandAsync` are largely similar.
-   - Fix Plan: unify under a single helper parameterized by `expect_utf8`.
+6) Duplicate command execution flows (maintainability) — DONE
+   - Unified `executeCommandAsync` and `executeBinaryCommandAsync` under a shared helper parameterized by `expect_utf8`.
 
 7) JNI JString handling (safety)
    - Prefer not to use `JString::from_raw` on parameters we don’t own; use `JString::from(obj)` or pass `jni::sys::jstring` and fetch with `get_string`.
@@ -76,11 +76,12 @@
 - [x] Spawn push forwarder in JNI `createClient` to deliver pushes.
 - [x] Run non-TLS PubSub integration tests to validate end-to-end delivery.
 - [ ] Centralize script routing arg mapping from existing `RouteInfo` for scripts.
-- [ ] Trim debug logging in JNI hot paths.
-- [ ] Unify `executeCommandAsync` and `executeBinaryCommandAsync` in Rust.
+- [x] Trim debug logging in JNI hot paths.
+- [x] Unify `executeCommandAsync` and `executeBinaryCommandAsync` in Rust.
 - [ ] Add DirectByteBuffer registry + Cleaner or switch to heap `byte[]` (correctness-first), then iterate toward zero-copy safely.
 - [ ] Add tests for ByAddress/slot routing parity in scripts.
 - [ ] Update documentation (`JNI_MIGRATION_STATUS.md`) with PubSub changes.
+- [ ] Run quick polyglot benchmarks to sanity-check performance (non-TLS).
 
 ### Validation Plan (non-TLS for now)
 - Unit (ran):

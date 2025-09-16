@@ -1,0 +1,41 @@
+Hot Path Performance Notes
+===========================
+
+1) Argument serialization in CommandManager
+   File: client/src/main/java/glide/managers/CommandManager.java (lines ~1030-1055)
+   Issue: Command argument preparation uses Streams (`Arrays.stream(...).map(...).collect(...)`) to
+          build Lists of `byte[]` before copying into ArgsArray.Builder. This allocates
+          intermediate collections and re-wraps values even when caller already has `GlideString`
+          or `String` data.
+   Improvement: Replace the streams with simple loops that append directly to ArgsArray.Builder.
+                For String arguments, call `ByteString.copyFromUtf8` immediately. For GlideString,
+                call `GlideString::getBytes` and add directly. This removes per-command allocation
+                and avoids boxing/collecting overhead.
+
+2) JniResponseRegistry usage on hot response path
+   File: client/src/main/java/glide/managers/CommandManager.java (lines ~476-492 & 600+)
+   Issue: Even when JNI returns fully converted Java objects (String, Long, Boolean, etc.), the
+          code stores them in `JniResponseRegistry` and injects a pointer into the protobuf Response.
+          Each response hits a global ConcurrentHashMap and forces objects through an extra lookup.
+   Improvement: Short-circuit for simple types: if `result` is `null`, `String`, `Long`, `Boolean`,
+                etc., call the handler directly without storing. Reserve the registry for composite
+                objects requiring late materialisation (arrays, maps, DirectByteBuffer). This avoids
+                map churn and allocation on every response.
+
+3) BulkString conversion clones data
+   File: java/src/lib.rs (resp_value_to_java, lines ~240-250)
+   Issue: When converting RESP BulkString, code clones the Vec<u8> before attempting UTF-8 decoding,
+          doubling the copy cost for large payloads.
+   Improvement: Use `match String::from_utf8(data)` to consume the Vec directly. Only fall back to
+                returning a byte[] on the error branch. This removes redundant copying.
+
+4) valueFromPointer JNI lookups per call
+   File: java/src/lib.rs (valueFromPointer/valueFromPointerBinary, lines ~439-454 & 495-506)
+   Issue: Every `valueFromPointer*` invocation calls `env.find_class("glide/managers/JniResponseRegistry")`
+          and `get_static_method_id`, which are expensive JNI lookups.
+   Improvement: Cache a GlobalRef and method IDs in a OnceLock (similar to MethodCache in
+                java/src/jni_client.rs). Reuse these handles for subsequent lookups to eliminate
+                per-call class/method discovery costs.
+
+Implementing these tweaks keeps behaviour identical but removes unnecessary allocations and JNI
+lookup overhead along the request→response hot path.
