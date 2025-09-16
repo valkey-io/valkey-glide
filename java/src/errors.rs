@@ -6,7 +6,6 @@ use std::string::FromUtf8Error;
 
 pub enum FFIError {
     Jni(JNIError),
-    Uds(String),
     Utf8(FromUtf8Error),
     Logger(String),
     OpenTelemetry(String),
@@ -28,7 +27,6 @@ impl std::fmt::Display for FFIError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             FFIError::Jni(err) => write!(f, "{err}"),
-            FFIError::Uds(err) => write!(f, "{err}"),
             FFIError::Utf8(err) => write!(f, "{err}"),
             FFIError::Logger(err) => write!(f, "{err}"),
             FFIError::OpenTelemetry(err) => write!(f, "{err}"),
