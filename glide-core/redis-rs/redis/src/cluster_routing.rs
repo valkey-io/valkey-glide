@@ -545,8 +545,8 @@ impl ResponsePolicy {
             | b"CLIENT SETINFO" | b"CONFIG SET" | b"CONFIG RESETSTAT" | b"CONFIG REWRITE"
             | b"FLUSHALL" | b"FLUSHDB" | b"FUNCTION DELETE" | b"FUNCTION FLUSH"
             | b"FUNCTION LOAD" | b"FUNCTION RESTORE" | b"MEMORY PURGE" | b"MSET" | b"JSON.MSET"
-            | b"PING" | b"SCRIPT FLUSH" | b"SCRIPT LOAD" | b"SLOWLOG RESET" | b"UNWATCH"
-            | b"WATCH" => Some(ResponsePolicy::AllSucceeded),
+            | b"PING" | b"SCRIPT FLUSH" | b"SCRIPT LOAD" | b"SELECT" | b"SLOWLOG RESET"
+            | b"UNWATCH" | b"WATCH" => Some(ResponsePolicy::AllSucceeded),
 
             b"KEYS"
             | b"FT._ALIASLIST"
@@ -601,6 +601,7 @@ fn base_routing(cmd: &[u8]) -> RouteBy {
         | b"ACL SAVE"
         | b"CLIENT SETNAME"
         | b"CLIENT SETINFO"
+        | b"SELECT"
         | b"SLOWLOG GET"
         | b"SLOWLOG LEN"
         | b"SLOWLOG RESET"
@@ -1302,7 +1303,7 @@ impl ShardAddrs {
         self.primary.read().expect(READ_LK_ERR_SHARDADDRS).clone()
     }
 
-    pub(crate) fn replicas(&self) -> std::sync::RwLockReadGuard<Vec<Arc<String>>> {
+    pub(crate) fn replicas(&self) -> std::sync::RwLockReadGuard<'_, Vec<Arc<String>>> {
         self.replicas.read().expect(READ_LK_ERR_SHARDADDRS)
     }
 

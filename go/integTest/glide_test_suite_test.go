@@ -124,6 +124,8 @@ func (suite *GlideTestSuite) SetupSuite() {
 				Endpoint: validEndpointMetrics,
 			},
 			FlushIntervalMs: &intervalMs,
+			// Configure SpanFromContext to enable parent-child span relationships
+			SpanFromContext: glide.DefaultSpanFromContext,
 		}
 		err := glide.GetOtelInstance().Init(openTelemetryConfig)
 		assert.NoError(suite.T(), err)
@@ -144,6 +146,28 @@ func parseHosts(suite *GlideTestSuite, addresses string) []config.NodeAddress {
 		result = append(result, config.NodeAddress{Host: parts[0], Port: port})
 	}
 	return result
+}
+
+func extractClusterFolder(suite *GlideTestSuite, output string) string {
+	lines := strings.Split(output, "\n")
+	foundFolder := false
+	clusterFolder := ""
+
+	for _, line := range lines {
+		if strings.Contains(line, "CLUSTER_FOLDER=") {
+			parts := strings.SplitN(line, "CLUSTER_FOLDER=", 2)
+			if len(parts) != 2 {
+				suite.T().Fatalf("invalid CLUSTER_FOLDER line format: %s", line)
+			}
+			clusterFolder = strings.TrimSpace(parts[1])
+			foundFolder = true
+		}
+	}
+
+	if !foundFolder {
+		suite.T().Fatalf("missing required output fields")
+	}
+	return clusterFolder
 }
 
 func extractAddresses(suite *GlideTestSuite, output string) []config.NodeAddress {

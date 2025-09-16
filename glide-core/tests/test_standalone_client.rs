@@ -144,6 +144,16 @@ mod standalone_client_tests {
             "*2\r\n$4\r\nINFO\r\n$11\r\nREPLICATION\r\n".to_string(),
             Value::BulkString(b"role:master\r\nconnected_slaves:3\r\n".to_vec()),
         );
+        primary_responses.insert(
+            "*2\r\n$5\r\nHELLO\r\n$1\r\n3\r\n".to_string(),
+            Value::Map(vec![
+                (Value::BulkString(b"proto".to_vec()), Value::Int(3)),
+                (
+                    Value::BulkString(b"role".to_vec()),
+                    Value::BulkString(b"master".to_vec()),
+                ),
+            ]),
+        );
         primary_responses
     }
 
@@ -156,6 +166,16 @@ mod standalone_client_tests {
         replica_responses.insert(
             "*2\r\n$4\r\nINFO\r\n$11\r\nREPLICATION\r\n".to_string(),
             Value::BulkString(b"role:slave\r\n".to_vec()),
+        );
+        replica_responses.insert(
+            "*2\r\n$5\r\nHELLO\r\n$1\r\n3\r\n".to_string(),
+            Value::Map(vec![
+                (Value::BulkString(b"proto".to_vec()), Value::Int(3)),
+                (
+                    Value::BulkString(b"role".to_vec()),
+                    Value::BulkString(b"replica".to_vec()),
+                ),
+            ]),
         );
         replica_responses
     }
@@ -227,7 +247,7 @@ mod standalone_client_tests {
         let mut addresses = get_mock_addresses(&servers);
         for i in 4 - config.number_of_missing_replicas..4 {
             addresses.push(redis::ConnectionAddr::Tcp(
-                "foo".to_string(),
+                "192.0.2.1".to_string(), // Use non-routable IP for fast connection failure
                 6379 + i as u16,
             ));
         }
@@ -504,14 +524,6 @@ mod standalone_client_tests {
         });
     }
 
-    fn extract_client_id(client_info: &str) -> Option<String> {
-        client_info
-            .split_whitespace()
-            .find(|part| part.starts_with("id="))
-            .and_then(|id_part| id_part.strip_prefix("id="))
-            .map(|id| id.to_string())
-    }
-
     #[rstest]
     #[serial_test::serial]
     #[timeout(LONG_STANDALONE_TEST_TIMEOUT)]
@@ -563,7 +575,7 @@ mod standalone_client_tests {
             lazy_client_config.lazy_connect = true;
 
             let mut lazy_client_connection_request_pb = utilities::create_connection_request(
-                &[dedicated_server_address.clone()],
+                std::slice::from_ref(&dedicated_server_address),
                 &lazy_client_config,
             );
             lazy_client_connection_request_pb.cluster_mode_enabled = false;

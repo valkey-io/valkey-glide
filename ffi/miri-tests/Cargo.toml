@@ -1,0 +1,15 @@
+[package]
+name = "miri-tests"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+protobuf = { version = "3", features = [] }
+# Mock crates that can be used as drop-in replacements for the real crates
+redis = { path = "./mock-redis", package = "mock-redis" }
+glide-core = { path = "./mock-glide-core",  package = "mock-glide-core" }
+tokio = { path = "./mock-tokio", package = "mock-tokio" }
+logger_core = { path = "./mock-logger-core", package = "mock-logger-core" }
+
+[lib]
+path = "../src/lib.rs"

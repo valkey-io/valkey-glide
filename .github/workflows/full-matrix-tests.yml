@@ -12,6 +12,16 @@ on:
                 description: "Run the full engine and host matrix"
                 type: boolean
                 default: true
+
+            run-with-macos:
+                description: "Run with macos inclauded (only when necessary)"
+                type: choice
+                options:
+                    - false
+                    - use-self-hosted
+                    - use-github
+                default: false
+
             run-modules-tests:
                 description: "Run modules tests"
                 type: boolean
@@ -37,10 +47,6 @@ on:
                 description: "Test Java client"
                 type: boolean
                 default: true
-            csharp:
-                description: "Test C# client"
-                type: boolean
-                default: true
             go:
                 description: "Test Golang client"
                 type: boolean
@@ -62,6 +68,8 @@ jobs:
     run-full-tests-for-core:
         if: (github.repository_owner == 'valkey-io' && github.event_name == 'schedule') || (github.event_name == 'workflow_dispatch' && inputs.core == true)
         uses: ./.github/workflows/rust.yml
+        with:
+            run-with-macos: ${{ inputs.run-with-macos }}
         name: Run CI for GLIDE core lib
         secrets: inherit
 
@@ -74,25 +82,25 @@ jobs:
     run-full-tests-for-java:
         if: (github.repository_owner == 'valkey-io' && github.event_name == 'schedule') || (github.event_name == 'workflow_dispatch' && inputs.java == true)
         uses: ./.github/workflows/java.yml
+        with:
+            run-with-macos: ${{ inputs.run-with-macos }}
         name: Run CI for java client
         secrets: inherit
 
     run-full-tests-for-python:
         if: (github.repository_owner == 'valkey-io' && github.event_name == 'schedule') || (github.event_name == 'workflow_dispatch' && inputs.python == true)
         uses: ./.github/workflows/python.yml
+        with:
+            run-with-macos: ${{ inputs.run-with-macos }}
         name: Run CI for python client
         secrets: inherit
 
     run-full-tests-for-node:
         if: (github.repository_owner == 'valkey-io' && github.event_name == 'schedule') || (github.event_name == 'workflow_dispatch' && inputs.node == true)
         uses: ./.github/workflows/node.yml
+        with:
+            run-with-macos: ${{ inputs.run-with-macos }}
         name: Run CI for node client
-        secrets: inherit
-
-    run-full-tests-for-csharp:
-        if: (github.repository_owner == 'valkey-io' && github.event_name == 'schedule') || (github.event_name == 'workflow_dispatch' && inputs.csharp == true)
-        uses: ./.github/workflows/csharp.yml
-        name: Run CI for c# client
         secrets: inherit
 
     run-full-tests-for-go:

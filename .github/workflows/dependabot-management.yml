@@ -1,0 +1,370 @@
+name: Enhanced Dependabot Management
+
+# This workflow implements timing constraints for dependabot PRs:
+# - Patch updates: Auto-approved after 1 hour (safe bug fixes)
+# - Minor updates: Auto-approved after 1 week (except 0.x versions)
+# - Major updates: Never auto-approved (breaking changes)
+# - 0.x minor updates: Never auto-approved (unstable/breaking changes)
+#
+# Security considerations:
+# - Only operates on dependabot-created PRs
+# - Requires CI checks to pass before auto-approval
+# - Manual review always possible before timing constraints are met
+
+on:
+    schedule:
+        # Run every Monday at 10:00 AM UTC (after dependabot runs)
+        - cron: "0 10 * * 1"
+    workflow_dispatch:
+        inputs:
+            dry_run:
+                description: "Run in dry-run mode (no actual changes)"
+                required: false
+                default: "false"
+                type: boolean
+
+permissions:
+    contents: read
+    pull-requests: write
+    issues: write
+
+jobs:
+    manage-dependabot-prs:
+        runs-on: ubuntu-latest
+        name: Manage Dependabot PRs with timing constraints
+
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "18"
+
+            - name: Install dependencies
+              run: |
+                  cd .github/dependabot-deps
+                  npm install
+
+            - name: Create PR management script
+              run: |
+                  cat > dependabot-manager.js << 'EOF'
+                  const { Octokit } = require("./.github/dependabot-deps/node_modules/@octokit/rest");
+                  const semver = require("./.github/dependabot-deps/node_modules/semver");
+
+                  const octokit = new Octokit({
+                    auth: process.env.GITHUB_TOKEN,
+                  });
+
+                  const owner = process.env.GITHUB_REPOSITORY.split('/')[0];
+                  const repo = process.env.GITHUB_REPOSITORY.split('/')[1];
+                  const dryRun = process.env.DRY_RUN === 'true';
+
+                  // Constants for timing constraints
+                  const HOURS_TO_AUTO_APPROVE_PATCH = 1;
+                  const DAYS_TO_AUTO_APPROVE_MINOR = 7;
+                  const PATCH_APPROVAL_THRESHOLD_DAYS = HOURS_TO_AUTO_APPROVE_PATCH / 24; // Convert to days
+
+                  // Regex for parsing dependabot PR titles
+                  const DEPENDABOT_TITLE_REGEX = /^Bump (.+) from (.+) to (.+)$/;
+
+                  // Helper function to parse dependabot PR title
+                  function parseDependabotTitle(title) {
+                    const match = title.match(DEPENDABOT_TITLE_REGEX);
+                    if (!match) return null;
+                    
+                    const [, depName, fromVersion, toVersion] = match;
+                    return { depName, fromVersion, toVersion };
+                  }
+
+                  // Helper function to identify dependabot PRs more flexibly
+                  function isDependabotPR(pr) {
+                    return pr.user.login === 'dependabot[bot]' ||
+                           pr.user.login === 'dependabot-preview[bot]' ||
+                           pr.user.type === 'Bot' && pr.user.login.includes('dependabot') ||
+                           pr.head.ref.startsWith('dependabot/');
+                  }
+
+                  // Helper function to determine ecosystem label from PR branch
+                  function getEcosystemLabel(pr) {
+                    const branch = pr.head.ref;
+                    
+                    // Extract ecosystem from dependabot branch name
+                    // Pattern: dependabot/{ecosystem}/{dependency_name}-{version}
+                    const branchMatch = branch.match(/^dependabot\/([^\/]+)\//);
+                    if (branchMatch) {
+                      const ecosystem = branchMatch[1];
+                      
+                      // Map dependabot ecosystem names to our label conventions
+                      const ecosystemMap = {
+                        'npm_and_yarn': 'npm',
+                        'npm': 'npm',
+                        'gradle': 'java',
+                        'cargo': 'rust',
+                        'gomod': 'go',
+                        'pip': 'python',
+                        'github_actions': 'github-actions'
+                      };
+                      
+                      return ecosystemMap[ecosystem] || ecosystem;
+                    }
+                    
+                    return null;
+                  }
+
+                  async function main() {
+                    console.log(`Managing Dependabot PRs for ${owner}/${repo}`);
+                    console.log(`Dry run mode: ${dryRun}`);
+
+                    // Get all open PRs created by dependabot
+                    const { data: prs } = await octokit.rest.pulls.list({
+                      owner,
+                      repo,
+                      state: 'open',
+                    });
+
+                    const dependabotPrs = prs.filter(isDependabotPR);
+
+                    console.log(`Found ${dependabotPrs.length} dependabot PRs`);
+
+                    for (const pr of dependabotPrs) {
+                      await processPR(pr);
+                    }
+                  }
+
+                  async function processPR(pr) {
+                    console.log(`\nProcessing PR #${pr.number}: ${pr.title}`);
+                    
+                    // Parse the PR title to extract dependency info
+                    const parsedTitle = parseDependabotTitle(pr.title);
+                    if (!parsedTitle) {
+                      console.log(`  Skipping - unable to parse title: ${pr.title}`);
+                      return;
+                    }
+
+                    const { depName, fromVersion, toVersion } = parsedTitle;
+                    console.log(`  Dependency: ${depName} (${fromVersion} -> ${toVersion})`);
+
+                    // Determine update type
+                    const updateType = getUpdateType(fromVersion, toVersion);
+                    console.log(`  Update type: ${updateType}`);
+
+                    // Add changelog to PR if not already present
+                    await addChangelogToPR(pr, depName, fromVersion, toVersion);
+
+                    // Apply labels based on update type
+                    await applyLabels(pr, updateType);
+
+                    // Check if PR should be auto-approved based on timing
+                    const shouldAutoApprove = await shouldAutoApprovePR(pr, updateType);
+                    console.log(`  Should auto-approve: ${shouldAutoApprove}`);
+
+                    if (shouldAutoApprove && !dryRun) {
+                      await autoApprovePR(pr);
+                    }
+                  }
+
+                  function getUpdateType(fromVersion, toVersion) {
+                    try {
+                      const from = semver.coerce(fromVersion);
+                      const to = semver.coerce(toVersion);
+                      
+                      if (!from || !to) {
+                        return 'unknown';
+                      }
+
+                      if (semver.major(from) !== semver.major(to)) {
+                        return 'major';
+                      } else if (semver.minor(from) !== semver.minor(to)) {
+                        return 'minor';
+                      } else if (semver.patch(from) !== semver.patch(to)) {
+                        return 'patch';
+                      }
+                      
+                      return 'unknown';
+                    } catch (error) {
+                      console.log(`  Error determining update type: ${error.message}`);
+                      return 'unknown';
+                    }
+                  }
+
+                  async function shouldAutoApprovePR(pr, updateType) {
+                    const createdAt = new Date(pr.created_at);
+                    const now = new Date();
+                    const ageInDays = (now - createdAt) / (1000 * 60 * 60 * 24);
+
+                    console.log(`  PR age: ${ageInDays.toFixed(1)} days`);
+
+                    // Never auto-approve major version updates
+                    if (updateType === 'major') {
+                      console.log(`  Major update - never auto-approve`);
+                      return false;
+                    }
+
+                    // Check if this is a 0.x version (unstable) - don't auto-approve minor updates
+                    if (updateType === 'minor') {
+                      const parsedTitle = parseDependabotTitle(pr.title);
+                      if (parsedTitle) {
+                        const { fromVersion, toVersion } = parsedTitle;
+                        try {
+                          const from = semver.coerce(fromVersion);
+                          const to = semver.coerce(toVersion);
+                          
+                          if (from && to && (semver.major(from) === 0 || semver.major(to) === 0)) {
+                            console.log(`  0.x version detected - not auto-approving minor update`);
+                            return false;
+                          }
+                        } catch (error) {
+                          console.log(`  Error parsing version for 0.x check: ${error.message}`);
+                        }
+                      }
+                    }
+
+                    switch (updateType) {
+                      case 'patch':
+                        // Patch updates: wait for CI completion
+                        return ageInDays >= PATCH_APPROVAL_THRESHOLD_DAYS;
+                      case 'minor':
+                        // Minor updates: after 1 week (but not for 0.x versions, handled above)
+                        return ageInDays >= DAYS_TO_AUTO_APPROVE_MINOR;
+                      default:
+                        // Unknown updates: do not auto-approve
+                        return false;
+                    }
+                  }
+
+                  async function addChangelogToPR(pr, depName, fromVersion, toVersion) {
+                    try {
+                      // Check if changelog is already added
+                      const { data: prData } = await octokit.rest.pulls.get({
+                        owner,
+                        repo,
+                        pull_number: pr.number,
+                      });
+
+                      const body = prData.body || '';
+                      if (body.includes('## Changelog') || body.includes('## Release Notes')) {
+                        console.log(`  Changelog already present`);
+                        return;
+                      }
+
+                      // Add basic changelog information
+                      const changelog = `## Changelog\n\nUpdated ${depName} from ${fromVersion} to ${toVersion}\n\n📋 To view detailed changes, visit the package repository or release notes.`;
+                      
+                      const newBody = `${body}\n\n${changelog}`;
+                      
+                      if (!dryRun) {
+                        await octokit.rest.pulls.update({
+                          owner,
+                          repo,
+                          pull_number: pr.number,
+                          body: newBody,
+                        });
+                        console.log(`  Added changelog to PR`);
+                      } else {
+                        console.log(`  Would add changelog to PR (dry run)`);
+                      }
+                    } catch (error) {
+                      console.log(`  Error adding changelog: ${error.message}`);
+                    }
+                  }
+
+                  async function applyLabels(pr, updateType) {
+                    try {
+                      const labels = ['dependencies'];
+                      
+                      // Add update type label
+                      if (updateType !== 'unknown') {
+                        labels.push(`dependency-${updateType}`);
+                      }
+
+                      // Add ecosystem-specific label based on PR branch or existing labels
+                      const ecosystemLabel = getEcosystemLabel(pr);
+                      if (ecosystemLabel) {
+                        labels.push(ecosystemLabel);
+                      }
+
+                      if (!dryRun) {
+                        await octokit.rest.issues.addLabels({
+                          owner,
+                          repo,
+                          issue_number: pr.number,
+                          labels: labels,
+                        });
+                        console.log(`  Added labels: ${labels.join(', ')}`);
+                      } else {
+                        console.log(`  Would add labels: ${labels.join(', ')} (dry run)`);
+                      }
+                    } catch (error) {
+                      console.log(`  Error adding labels: ${error.message}`);
+                    }
+                  }
+
+                  async function autoApprovePR(pr) {
+                    try {
+                      // Check if PR has required checks passing
+                      const { data: checks } = await octokit.rest.checks.listForRef({
+                        owner,
+                        repo,
+                        ref: pr.head.sha,
+                      });
+
+                      // Only allow auto-approval if all checks have concluded successfully
+                      const incompleteChecks = checks.check_runs.filter(check => 
+                        check.conclusion !== 'success' && check.conclusion !== 'skipped'
+                      );
+
+                      if (incompleteChecks.length > 0) {
+                        const failedChecks = incompleteChecks.filter(check =>
+                          check.conclusion === 'failure' || check.conclusion === 'cancelled'
+                        );
+                        const pendingChecks = incompleteChecks.filter(check =>
+                          check.status === 'in_progress' || check.status === 'queued' || check.conclusion === null
+                        );
+                        
+                        if (failedChecks.length > 0) {
+                          console.log(`  Cannot auto-approve - failed checks: ${failedChecks.map(c => c.name).join(', ')}`);
+                        } else {
+                          console.log(`  Cannot auto-approve - pending checks: ${pendingChecks.map(c => c.name).join(', ')}`);
+                        }
+                        return;
+                      }
+
+                      // Auto-approve the PR
+                      await octokit.rest.pulls.createReview({
+                        owner,
+                        repo,
+                        pull_number: pr.number,
+                        event: 'APPROVE',
+                        body: 'Auto-approved by enhanced dependabot workflow after timing constraints were met.',
+                      });
+
+                      console.log(`  Auto-approved PR #${pr.number}`);
+                    } catch (error) {
+                      console.log(`  Error auto-approving PR: ${error.message}`);
+                    }
+                  }
+
+                  main().catch(console.error);
+                  EOF
+
+            - name: Run Dependabot PR management
+              env:
+                  DRY_RUN: ${{ inputs.dry_run || 'false' }}
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  GITHUB_REPOSITORY: ${{ github.repository }}
+              run: |
+                  node dependabot-manager.js
+
+            - name: Summary
+              env:
+                  DRY_RUN: ${{ inputs.dry_run || 'false' }}
+              run: |
+                  echo "## Dependabot Management Summary" >> $GITHUB_STEP_SUMMARY
+                  echo "- Processed dependabot PRs with timing constraints" >> $GITHUB_STEP_SUMMARY
+                  echo "- Patch updates: Auto-approve after 1 hour" >> $GITHUB_STEP_SUMMARY
+                  echo "- Minor updates: Auto-approve after 1 week (except for 0.x versions)" >> $GITHUB_STEP_SUMMARY
+                  echo "- Major updates: Never auto-approve (manual review required)" >> $GITHUB_STEP_SUMMARY
+                  echo "- 0.x versions: Never auto-approve minor updates (unstable)" >> $GITHUB_STEP_SUMMARY
+                  echo "- Dry run mode: \"$DRY_RUN\"" >> $GITHUB_STEP_SUMMARY

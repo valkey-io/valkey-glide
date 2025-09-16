@@ -403,7 +403,7 @@ where
             != crate::cluster_slotmap::ReadFromReplicaStrategy::AlwaysFromPrimary
         {
             // If READONLY is sent to primary nodes, it will have no effect
-            cmd("READONLY").query(&mut conn)?;
+            cmd("READONLY").query::<()>(&mut conn)?;
         }
         conn.set_read_timeout(*self.read_timeout.borrow())?;
         conn.set_write_timeout(*self.write_timeout.borrow())?;
@@ -992,7 +992,7 @@ pub(crate) fn get_connection_info(
             username: cluster_params.username,
             client_name: cluster_params.client_name,
             protocol: cluster_params.protocol,
-            db: 0,
+            db: cluster_params.database_id,
             pubsub_subscriptions: cluster_params.pubsub_subscriptions,
         },
     })

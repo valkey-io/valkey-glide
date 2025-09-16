@@ -54,14 +54,19 @@ The client currently supports Python, Java, Node.js, and Go. Active development 
 
 ## Getting Started
 
-**Documentation** 
-GLIDE's [documentation site](https://valkey.io/valkey-glide/) currently offers documentation for the Python and Node wrappers. 
+**Documentation**
+GLIDE's [documentation site](https://valkey.io/valkey-glide/) currently offers documentation for the Python and Node wrappers.
 
 **SDKs**
 - [Java](./java/README.md)
 - [Python](./python/README.md)
 - [Node](./node/README.md)
 - [Go](./go/README.md)
+
+**Under Development SDKs**
+- [C#](https://github.com/valkey-io/valkey-glide-csharp)
+- [C++](https://github.com/valkey-io/valkey-glide-cpp)
+- [Ruby](https://github.com/valkey-io/valkey-glide-ruby)
 
 **General Concepts:**
 - [Custom Command](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command)
@@ -76,8 +81,12 @@ GLIDE's [documentation site](https://valkey.io/valkey-glide/) currently offers d
 - [OpenTelemetry](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#opentelemetry)
 
 **Migration Guides**
+- [go-redis](https://github.com/valkey-io/valkey-glide/wiki/Migration-Guide-go%E2%80%90redis)
 - [ioredis](https://github.com/valkey-io/valkey-glide/wiki/Migration-Guide-ioredis)
 - [Jedis](https://github.com/valkey-io/valkey-glide/wiki/Migration-Guide-Jedis)
+- [Lettuce](https://github.com/valkey-io/valkey-glide/wiki/Migration-Guide-Lettuce)
+- [Redisson](https://github.com/valkey-io/valkey-glide/wiki/Migration-Guide-redisson)
+- [redis-py](https://github.com/valkey-io/valkey-glide/wiki/Migration-Guide-redis%E2%80%90py)
 
 **Community**
 - [Contributors meeting](https://github.com/valkey-io/valkey-glide/wiki/Contributors-meeting)

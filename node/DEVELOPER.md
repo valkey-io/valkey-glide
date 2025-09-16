@@ -21,7 +21,7 @@ If your Nodejs version is below the supported version specified in the client's 
 - GCC
 - pkg-config
 - cmake
-- protoc (protobuf compiler)
+- protoc (protobuf compiler) >= v3.20.0
 - openssl
 - openssl-dev
 - rustup
@@ -30,32 +30,56 @@ If your Nodejs version is below the supported version specified in the client's 
 
 ```bash
 sudo apt update -y
-sudo apt install -y nodejs npm git gcc pkg-config protobuf-compiler openssl libssl-dev cmake
+sudo apt install -y nodejs npm git gcc pkg-config openssl libssl-dev cmake
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 # Check the installed node version
 node -v
 ```
 
-> **Note:** Ensure that you installed a supported Node.js version. For Ubuntu 22.04 or earlier, please refer to the instructions [here](#note-nodejs-supported-version) to upgrade your Node.js version.
+Continue with **Install protobuf compiler** below.
+
+> [!NOTE]
+> Ensure that you installed a supported Node.js version. For Ubuntu 22.04 or earlier, please refer to the instructions [here](#note-nodejs-supported-version) to upgrade your Node.js version.
 
 **Dependencies installation for CentOS**
 
 ```bash
 sudo yum update -y
-sudo yum install -y nodejs git gcc pkgconfig protobuf-compiler openssl openssl-devel gettext cmake
+sudo yum install -y nodejs git gcc pkgconfig openssl openssl-devel gettext cmake
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 ```
+
+Continue with **Install protobuf compiler** below.
 
 **Dependencies installation for MacOS**
 
 ```bash
 brew update
-brew install nodejs git gcc pkgconfig protobuf openssl cmake
+brew install nodejs git gcc pkgconfig openssl cmake
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 ```
+
+Continue with **Install protobuf compiler** below.
+
+**Install protobuf compiler**
+
+Various platform-specific zips can be found [here](https://github.com/protocolbuffers/protobuf/releases/v3.20.3).
+Choose the appropriate zip for your system and run the commands below, adjusting for the zip you chose:
+
+```bash
+PB_REL="https://github.com/protocolbuffers/protobuf/releases"
+curl -LO $PB_REL/download/v3.20.3/protoc-3.20.3-linux-x86_64.zip
+unzip protoc-3.20.3-linux-x86_64.zip -d $HOME/.local
+export PATH="$PATH:$HOME/.local/bin"
+# Check that the protobuf compiler is installed. A minimum version of 3.20.0 is required.
+protoc --version
+```
+
+> [!NOTE]
+> You may wish to add the entire `export PATH` line to your shell configuration file to persist this path addition, either `.bashrc` or `.zshrc` depending on which shell you are using.
 
 **Valkey Server and CLI**
 See the [Valkey installation guide](https://valkey.io/topics/installation/) to install the Valkey server and CLI.

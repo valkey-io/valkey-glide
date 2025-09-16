@@ -3,6 +3,7 @@
 
 debug/
 target/
+.env*/**
 
 # Git stuff
 .worktrees
@@ -75,3 +76,6 @@ cpp/src/connection_request.pb.cc
 **/.claude/settings.local.json
 copilot-instructions.md
 **/.yarn
+
+# AI agent related files
+.kiro/

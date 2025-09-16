@@ -4,7 +4,12 @@
 
 import { afterAll, afterEach, beforeAll, describe } from "@jest/globals";
 import { ValkeyCluster } from "../../utils/TestUtils.js";
-import { GlideClient, GlideClusterClient, ProtocolVersion } from "../build-ts";
+import {
+    GlideClient,
+    GlideClusterClient,
+    Logger,
+    ProtocolVersion,
+} from "../build-ts";
 import {
     flushAndCloseClient,
     getClientConfigurationOption,
@@ -21,7 +26,7 @@ const TLS_OPTIONS = {
 // tls cluster tests
 describe("tls GlideClusterClient", () => {
     let cluster: ValkeyCluster;
-    let client: GlideClusterClient;
+    let client: GlideClusterClient | undefined;
 
     beforeAll(async () => {
         cluster = await ValkeyCluster.createCluster(
@@ -32,20 +37,31 @@ describe("tls GlideClusterClient", () => {
             true,
             TLS_OPTIONS,
         );
-    }, 40000);
+    }, TIMEOUT);
 
     afterEach(async () => {
         await flushAndCloseClient(
             true,
-            cluster.getAddresses(),
+            cluster?.getAddresses(),
             client,
             TLS_OPTIONS,
         );
+        client = undefined;
     });
 
     afterAll(async () => {
-        if (cluster) {
-            await cluster.close();
+        try {
+            if (cluster) {
+                await cluster.close();
+            }
+        } catch (error) {
+            // Log the error but don't throw to avoid masking test results
+            Logger.log(
+                "warn",
+                "TlsTest",
+                "Error closing cluster",
+                error as Error,
+            );
         }
     });
 
@@ -72,7 +88,7 @@ describe("tls GlideClusterClient", () => {
 // tls cluster tests
 describe("tls GlideClient", () => {
     let cluster: ValkeyCluster;
-    let client: GlideClient;
+    let client: GlideClient | undefined;
 
     beforeAll(async () => {
         cluster = await ValkeyCluster.createCluster(
@@ -83,20 +99,31 @@ describe("tls GlideClient", () => {
             true,
             TLS_OPTIONS,
         );
-    }, 40000);
+    }, TIMEOUT);
 
     afterEach(async () => {
         await flushAndCloseClient(
             false,
-            cluster.getAddresses(),
+            cluster?.getAddresses(),
             client,
             TLS_OPTIONS,
         );
+        client = undefined;
     });
 
     afterAll(async () => {
-        if (cluster) {
-            await cluster.close();
+        try {
+            if (cluster) {
+                await cluster.close();
+            }
+        } catch (error) {
+            // Log the error but don't throw to avoid masking test results
+            Logger.log(
+                "warn",
+                "TlsTest",
+                "Error closing cluster",
+                error as Error,
+            );
         }
     });
 
