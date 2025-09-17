@@ -102,13 +102,17 @@ public class ConfigurationMapper {
         ServerCredentials.ServerCredentialsBuilder credentialsBuilder = null;
 
         // Handle authentication
-        if (jedisConfig.getUser() != null || jedisConfig.getPassword() != null) {
+        // Only set credentials if user or password is non-empty
+        boolean hasUser = jedisConfig.getUser() != null && !jedisConfig.getUser().isEmpty();
+        boolean hasPassword = jedisConfig.getPassword() != null && !jedisConfig.getPassword().isEmpty();
+
+        if (hasUser || hasPassword) {
             credentialsBuilder = ServerCredentials.builder();
 
-            if (jedisConfig.getUser() != null) {
+            if (hasUser) {
                 credentialsBuilder.username(jedisConfig.getUser());
             }
-            if (jedisConfig.getPassword() != null) {
+            if (hasPassword) {
                 credentialsBuilder.password(jedisConfig.getPassword());
             }
         }
