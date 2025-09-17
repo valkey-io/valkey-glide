@@ -127,7 +127,17 @@ func (suite *GlideTestSuite) TestBatchMove() {
 		key := "{prefix}-" + uuid.NewString()
 		switch c := client.(type) {
 		case *glide.ClusterClient:
-			return // Move is not supported in cluster client
+			if suite.serverVersion >= "9.0.0" {
+				batch := pipeline.NewClusterBatch(isAtomic).
+					Set(key, "val").
+					Move(key, 2)
+
+				res, err := c.Exec(context.Background(), *batch, true)
+				suite.verifyOK(res[0].(string), err)
+				suite.True(res[1].(bool))
+			} else {
+				return // Move is not supported in cluster client
+			}
 		case *glide.Client:
 			batch := pipeline.NewStandaloneBatch(isAtomic).
 				Set(key, "val").

@@ -615,31 +615,6 @@ func (client *Client) ClientSetName(ctx context.Context, connectionName string) 
 	return handleOkResponse(result)
 }
 
-// Move key from the currently selected database to the database specified by `dbIndex`.
-//
-// See [valkey.io] for details.
-//
-// Parameters:
-//
-//	ctx - The context for controlling the command execution.
-//	key - The key to move.
-//	dbIndex - The index of the database to move key to.
-//
-// Return value:
-//
-//	`true` if `key` was moved, or `false` if the `key` already exists in the destination
-//	database or does not exist in the source database.
-//
-// [valkey.io]: https://valkey.io/commands/move/
-func (client *Client) Move(ctx context.Context, key string, dbIndex int64) (bool, error) {
-	result, err := client.executeCommand(ctx, C.Move, []string{key, utils.IntToString(dbIndex)})
-	if err != nil {
-		return models.DefaultBoolResponse, err
-	}
-
-	return handleBoolResponse(result)
-}
-
 // Iterates incrementally over a database for matching keys.
 //
 // See [valkey.io] for details.
