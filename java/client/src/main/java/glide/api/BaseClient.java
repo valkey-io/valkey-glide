@@ -449,7 +449,14 @@ public abstract class BaseClient
                                 try {
                                     glide.internal.GlideCoreClient.registerClient(
                                             connectionManager.getNativeClientHandle(), client);
-                                } catch (Throwable ignore) {
+                                } catch (Throwable t) {
+                                    glide.api.logging.Logger.log(
+                                            glide.api.logging.Logger.Level.WARN,
+                                            "BaseClient",
+                                            () -> "Failed to register JNI client (handle="
+                                                    + connectionManager.getNativeClientHandle()
+                                                    + ") - continuing",
+                                            t);
                                 }
                                 return client;
                             });
@@ -489,7 +496,14 @@ public abstract class BaseClient
         // Register for PubSub push delivery
         try {
             GlideCoreClient.registerClient(connectionManager.getNativeClientHandle(), null);
-        } catch (Throwable ignore) {
+        } catch (Throwable t) {
+            glide.api.logging.Logger.log(
+                    glide.api.logging.Logger.Level.WARN,
+                    "BaseClient",
+                    () -> "Failed to register JNI client for push delivery (handle="
+                            + connectionManager.getNativeClientHandle()
+                            + ") - continuing",
+                    t);
         }
         return new CommandManager(core);
     }
