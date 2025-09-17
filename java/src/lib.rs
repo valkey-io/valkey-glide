@@ -97,10 +97,11 @@ async fn execute_command_request_and_complete(
                     .map_err(|e| anyhow::anyhow!("Command execution failed: {e}"));
 
                 if let Some(root_span_ptr) = root_span_ptr_opt
-                    && root_span_ptr != 0 {
-                    if let Ok(span) = unsafe {
-                        glide_core::GlideOpenTelemetry::span_from_pointer(root_span_ptr)
-                    } {
+                    && root_span_ptr != 0
+                {
+                    if let Ok(span) =
+                        unsafe { glide_core::GlideOpenTelemetry::span_from_pointer(root_span_ptr) }
+                    {
                         span.end();
                     }
                     unsafe {
@@ -134,10 +135,10 @@ async fn execute_command_request_and_complete(
                 let mut send_batch_span: Option<glide_core::GlideSpan> = None;
                 if let Some(root_span_ptr) = root_span_ptr_opt
                     && root_span_ptr != 0
-                    && let Ok(root_span) = unsafe {
-                        glide_core::GlideOpenTelemetry::span_from_pointer(root_span_ptr)
-                    }
-                    && let Ok(child) = root_span.add_span("send_batch") {
+                    && let Ok(root_span) =
+                        unsafe { glide_core::GlideOpenTelemetry::span_from_pointer(root_span_ptr) }
+                    && let Ok(child) = root_span.add_span("send_batch")
+                {
                     send_batch_span = Some(child);
                 }
 
@@ -173,10 +174,11 @@ async fn execute_command_request_and_complete(
                     child.end();
                 }
                 if let Some(root_span_ptr) = root_span_ptr_opt
-                    && root_span_ptr != 0 {
-                    if let Ok(root_span) = unsafe {
-                        glide_core::GlideOpenTelemetry::span_from_pointer(root_span_ptr)
-                    } {
+                    && root_span_ptr != 0
+                {
+                    if let Ok(root_span) =
+                        unsafe { glide_core::GlideOpenTelemetry::span_from_pointer(root_span_ptr) }
+                    {
                         root_span.end();
                     }
                     unsafe {
@@ -251,13 +253,12 @@ fn resp_value_to_java<'local>(
         Value::Nil => Ok(JObject::null()),
         Value::SimpleString(data) => {
             if encoding_utf8 {
-                // Normalize "ok" to "OK" for compatibility with Java constants
-                let normalized = if data.eq_ignore_ascii_case("ok") {
-                    "OK".to_string()
+                if data.eq_ignore_ascii_case("ok") {
+                    let ok = get_ok_jstring(env)?;
+                    Ok(JObject::from(ok))
                 } else {
-                    data
-                };
-                Ok(JObject::from(env.new_string(normalized)?))
+                    Ok(JObject::from(env.new_string(data)?))
+                }
             } else {
                 // Return raw byte array - Java will convert to GlideString
                 Ok(JObject::from(env.byte_array_from_slice(data.as_bytes())?))
@@ -293,7 +294,8 @@ fn resp_value_to_java<'local>(
         Value::Map(map) => {
             let cache = get_java_value_conversion_cache(env)?;
             let cls = to_local_jclass(env, &cache.linked_hash_map_class)?;
-            let linked_hash_map = unsafe { env.new_object_unchecked(cls, cache.linked_hash_map_ctor, &[])? };
+            let linked_hash_map =
+                unsafe { env.new_object_unchecked(cls, cache.linked_hash_map_ctor, &[])? };
 
             for (key, value) in map {
                 let java_key = resp_value_to_java(env, key, encoding_utf8)?;
@@ -319,50 +321,31 @@ fn resp_value_to_java<'local>(
         }
         Value::Double(float) => {
             let cache = get_java_value_conversion_cache(env)?;
-            // Prefer Double.valueOf(double) to allow JVM boxing caches/optimizations
+            // Use cached Double.valueOf for minimal overhead
             let jclass = to_local_jclass(env, &cache.double_class)?;
             let obj = unsafe {
-                match env.get_static_method_id(&jclass, "valueOf", "(D)Ljava/lang/Double;") {
-                    Ok(mid) => env
-                        .call_static_method_unchecked(
-                            &jclass,
-                            mid,
-                            jni::signature::ReturnType::Object,
-                            &[jni::sys::jvalue { d: float }],
-                        )?
-                        .l()?,
-                    Err(_) => env
-                        .new_object_unchecked(
-                            jclass,
-                            cache.double_ctor,
-                            &[jni::sys::jvalue { d: float }],
-                        )?,
-                }
+                env.call_static_method_unchecked(
+                    &jclass,
+                    cache.double_value_of,
+                    jni::signature::ReturnType::Object,
+                    &[jni::sys::jvalue { d: float }],
+                )?
+                .l()?
             };
             Ok(obj)
         }
         Value::Boolean(bool) => {
             let cache = get_java_value_conversion_cache(env)?;
-            // Use Boolean.valueOf(Z) to avoid allocations
             let jclass = to_local_jclass(env, &cache.boolean_class)?;
             let z = if bool { 1 } else { 0 };
             let obj = unsafe {
-                match env.get_static_method_id(&jclass, "valueOf", "(Z)Ljava/lang/Boolean;") {
-                    Ok(mid) => env
-                        .call_static_method_unchecked(
-                            &jclass,
-                            mid,
-                            jni::signature::ReturnType::Object,
-                            &[jni::sys::jvalue { z }],
-                        )?
-                        .l()?,
-                    Err(_) => env
-                        .new_object_unchecked(
-                            jclass,
-                            cache.boolean_ctor,
-                            &[jni::sys::jvalue { z }],
-                        )?,
-                }
+                env.call_static_method_unchecked(
+                    &jclass,
+                    cache.boolean_value_of,
+                    jni::signature::ReturnType::Object,
+                    &[jni::sys::jvalue { z }],
+                )?
+                .l()?
             };
             Ok(obj)
         }
@@ -1283,7 +1266,8 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createClient(
                     if let Ok(len) = env.get_array_length(&arr) {
                         for i in 0..len {
                             if let Ok(obj) = env.get_object_array_element(&arr, i)
-                                && let Ok(bytes) = env.convert_byte_array(JByteArray::from(obj)) {
+                                && let Ok(bytes) = env.convert_byte_array(JByteArray::from(obj))
+                            {
                                 set.insert(redis::PubSubChannelOrPattern::from(bytes));
                             }
                         }
@@ -1626,11 +1610,10 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                             if let Some(root_span_ptr) = root_span_ptr_opt
                                 && root_span_ptr != 0
                                 && let Ok(root_span) = unsafe {
-                                    glide_core::GlideOpenTelemetry::span_from_pointer(
-                                        root_span_ptr,
-                                    )
+                                    glide_core::GlideOpenTelemetry::span_from_pointer(root_span_ptr)
                                 }
-                                && let Ok(child) = root_span.add_span("send_batch") {
+                                && let Ok(child) = root_span.add_span("send_batch")
+                            {
                                 send_batch_span = Some(child);
                             }
                             // Create pipeline using existing FFI approach
@@ -1693,11 +1676,10 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                             }
                             // End and drop the root span if provided
                             if let Some(root_span_ptr) = root_span_ptr_opt
-                                && root_span_ptr != 0 {
+                                && root_span_ptr != 0
+                            {
                                 if let Ok(root_span) = unsafe {
-                                    glide_core::GlideOpenTelemetry::span_from_pointer(
-                                        root_span_ptr,
-                                    )
+                                    glide_core::GlideOpenTelemetry::span_from_pointer(root_span_ptr)
                                 } {
                                     root_span.end();
                                 }
@@ -2041,7 +2023,8 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
                                 // ByAddressRoute encoded with route_type = -1 and host:port in route_param
                                 let param_str = route_param_str.unwrap_or_default();
                                 if let Some((host, port_str)) = param_str.split_once(':')
-                                    && let Ok(port) = port_str.parse::<i32>() {
+                                    && let Ok(port) = port_str.parse::<i32>()
+                                {
                                     let s = ByAddressRoute {
                                         host: host.to_string().into(),
                                         port,
@@ -2324,9 +2307,9 @@ pub struct JavaValueConversionCache {
     long_class: GlobalRef,
     long_ctor: JMethodID,
     double_class: GlobalRef,
-    double_ctor: JMethodID,
+    double_value_of: JStaticMethodID,
     boolean_class: GlobalRef,
-    boolean_ctor: JMethodID,
+    boolean_value_of: JStaticMethodID,
     linked_hash_map_class: GlobalRef,
     linked_hash_map_ctor: JMethodID,
     linked_hash_map_put: JMethodID,
@@ -2356,11 +2339,13 @@ fn get_java_value_conversion_cache(
     let long_class = env.new_global_ref(&long_cls)?;
 
     let double_cls = env.find_class("java/lang/Double")?;
-    let double_ctor = env.get_method_id(&double_cls, "<init>", "(D)V")?;
+    let double_value_of =
+        env.get_static_method_id(&double_cls, "valueOf", "(D)Ljava/lang/Double;")?;
     let double_class = env.new_global_ref(&double_cls)?;
 
     let boolean_cls = env.find_class("java/lang/Boolean")?;
-    let boolean_ctor = env.get_method_id(&boolean_cls, "<init>", "(Z)V")?;
+    let boolean_value_of =
+        env.get_static_method_id(&boolean_cls, "valueOf", "(Z)Ljava/lang/Boolean;")?;
     let boolean_class = env.new_global_ref(&boolean_cls)?;
 
     let lhm_cls = env.find_class("java/util/LinkedHashMap")?;
@@ -2398,9 +2383,9 @@ fn get_java_value_conversion_cache(
         long_class,
         long_ctor,
         double_class,
-        double_ctor,
+        double_value_of,
         boolean_class,
-        boolean_ctor,
+        boolean_value_of,
         linked_hash_map_class,
         linked_hash_map_ctor: lhm_ctor,
         linked_hash_map_put: lhm_put,
