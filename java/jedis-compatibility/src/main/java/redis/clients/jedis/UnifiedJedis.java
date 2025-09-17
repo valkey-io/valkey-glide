@@ -778,7 +778,7 @@ public class UnifiedJedis implements Closeable {
 
             return baseClient.set(key, value, options).get();
         } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("SETGET operation failed", e);
+            throw new JedisException("SETGET operation failed with SetParams: " + params, e);
         }
     }
 
@@ -3998,7 +3998,7 @@ public class UnifiedJedis implements Closeable {
             String result = baseClient.set(GlideString.of(key), GlideString.of(value), options).get();
             return result != null ? result.getBytes() : null;
         } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("SET operation failed", e);
+            throw new JedisException("SETGET operation failed with SetParams: " + params, e);
         }
     }
 
