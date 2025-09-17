@@ -8,6 +8,3 @@ rootProject.name = 'glide'
 include 'client'
 include 'integTest'
 include 'benchmarks'
-include 'polyglotBenchmarks'
-
-project(':polyglotBenchmarks').projectDir = file('polyglot-benchmarks')
