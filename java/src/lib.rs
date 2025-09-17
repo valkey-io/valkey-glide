@@ -293,8 +293,7 @@ fn resp_value_to_java<'local>(
         Value::Map(map) => {
             let cache = get_java_value_conversion_cache(env)?;
             let cls = to_local_jclass(env, &cache.linked_hash_map_class)?;
-            let linked_hash_map =
-                unsafe { env.new_object_unchecked(cls, cache.linked_hash_map_ctor, &[])? };
+            let linked_hash_map = unsafe { env.new_object_unchecked(cls, cache.linked_hash_map_ctor, &[])? };
 
             for (key, value) in map {
                 let java_key = resp_value_to_java(env, key, encoding_utf8)?;
@@ -320,18 +319,51 @@ fn resp_value_to_java<'local>(
         }
         Value::Double(float) => {
             let cache = get_java_value_conversion_cache(env)?;
-            let cls = to_local_jclass(env, &cache.double_class)?;
-            let arg = jni::sys::jvalue { d: float };
-            let obj = unsafe { env.new_object_unchecked(cls, cache.double_ctor, &[arg])? };
+            // Prefer Double.valueOf(double) to allow JVM boxing caches/optimizations
+            let jclass = to_local_jclass(env, &cache.double_class)?;
+            let obj = unsafe {
+                match env.get_static_method_id(&jclass, "valueOf", "(D)Ljava/lang/Double;") {
+                    Ok(mid) => env
+                        .call_static_method_unchecked(
+                            &jclass,
+                            mid,
+                            jni::signature::ReturnType::Object,
+                            &[jni::sys::jvalue { d: float }],
+                        )?
+                        .l()?,
+                    Err(_) => env
+                        .new_object_unchecked(
+                            jclass,
+                            cache.double_ctor,
+                            &[jni::sys::jvalue { d: float }],
+                        )?,
+                }
+            };
             Ok(obj)
         }
         Value::Boolean(bool) => {
             let cache = get_java_value_conversion_cache(env)?;
-            let cls = to_local_jclass(env, &cache.boolean_class)?;
-            let arg = jni::sys::jvalue {
-                z: if bool { 1 } else { 0 },
+            // Use Boolean.valueOf(Z) to avoid allocations
+            let jclass = to_local_jclass(env, &cache.boolean_class)?;
+            let z = if bool { 1 } else { 0 };
+            let obj = unsafe {
+                match env.get_static_method_id(&jclass, "valueOf", "(Z)Ljava/lang/Boolean;") {
+                    Ok(mid) => env
+                        .call_static_method_unchecked(
+                            &jclass,
+                            mid,
+                            jni::signature::ReturnType::Object,
+                            &[jni::sys::jvalue { z }],
+                        )?
+                        .l()?,
+                    Err(_) => env
+                        .new_object_unchecked(
+                            jclass,
+                            cache.boolean_ctor,
+                            &[jni::sys::jvalue { z }],
+                        )?,
+                }
             };
-            let obj = unsafe { env.new_object_unchecked(cls, cache.boolean_ctor, &[arg])? };
             Ok(obj)
         }
         Value::VerbatimString { format: _, text } => {
