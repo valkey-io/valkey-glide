@@ -96,7 +96,7 @@ fn get_slot_addr(slot_type: &protobuf::EnumOrUnknown<SlotTypes>) -> Result<SlotA
 /// * `Ok(Some(RoutingInfo))` if the route was successfully converted.
 /// * `Ok(None)` if no route value was specified.
 /// * `Err(RedisError)` if the route is invalid or cannot be converted.
-pub fn get_route(route: Routes, cmd: Option<&Cmd>) -> RedisResult<Option<RoutingInfo>> {
+pub(crate) fn get_route(route: Routes, cmd: Option<&Cmd>) -> RedisResult<Option<RoutingInfo>> {
     use glide_core::command_request::routes::Value;
     let route = match route.value {
         Some(route) => route,
