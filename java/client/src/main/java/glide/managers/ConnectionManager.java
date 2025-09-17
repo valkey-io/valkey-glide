@@ -284,12 +284,11 @@ public class ConnectionManager {
     }
 
     private static int resolveConnectionTimeout(BaseClientConfiguration configuration) {
-        final int defaultTimeoutMs = 2000;
         AdvancedBaseClientConfiguration advanced = extractAdvancedConfiguration(configuration);
         if (advanced != null && advanced.getConnectionTimeout() != null) {
             return advanced.getConnectionTimeout();
         }
-        return defaultTimeoutMs;
+        return (int) GlideNativeBridge.getGlideCoreDefaultTimeoutMs();
     }
 
     private static boolean resolveInsecureTls(BaseClientConfiguration configuration) {

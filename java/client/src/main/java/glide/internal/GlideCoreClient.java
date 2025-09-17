@@ -868,13 +868,12 @@ public class GlideCoreClient implements AutoCloseable {
 
     private static int resolveConnectionTimeout(
             glide.api.models.configuration.BaseClientConfiguration config) {
-        final int defaultTimeoutMs = 2000;
         glide.api.models.configuration.AdvancedBaseClientConfiguration advanced =
                 extractAdvancedConfiguration(config);
         if (advanced != null && advanced.getConnectionTimeout() != null) {
             return advanced.getConnectionTimeout();
         }
-        return defaultTimeoutMs;
+        return (int) GlideNativeBridge.getGlideCoreDefaultTimeoutMs();
     }
 
     private static boolean resolveInsecureTls(
