@@ -13,9 +13,9 @@ import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 
 /**
- * A lightweight leak smoke test that performs many GET/SET with large values to check heap growth is bounded.
- * Tests specifically with values >16KB to trigger DirectByteBuffer path in JNI implementation.
- * Disabled by default; enable locally or in CI leak jobs.
+ * A lightweight leak smoke test that performs many GET/SET with large values to check heap growth
+ * is bounded. Tests specifically with values >16KB to trigger DirectByteBuffer path in JNI
+ * implementation. Disabled by default; enable locally or in CI leak jobs.
  */
 public class LeakSmokeTest {
 
@@ -25,26 +25,32 @@ public class LeakSmokeTest {
         Assumptions.assumeTrue(enabled, "Leak smoke test disabled; run with -DRUN_LEAK_SMOKE=true");
 
         // Use environment variables or system properties for configuration
-        String host = System.getProperty("LEAK_HOST",
-            System.getenv("ELASTICACHE_HOST") != null
-                ? System.getenv("ELASTICACHE_HOST")
-                : "127.0.0.1");
+        String host =
+                System.getProperty(
+                        "LEAK_HOST",
+                        System.getenv("ELASTICACHE_HOST") != null
+                                ? System.getenv("ELASTICACHE_HOST")
+                                : "127.0.0.1");
         int port = Integer.getInteger("LEAK_PORT", 6379);
         // Use TLS if specified via environment or property
-        boolean tls = Boolean.parseBoolean(
-            System.getProperty("LEAK_TLS",
-                System.getenv("LEAK_TLS") != null
-                    ? System.getenv("LEAK_TLS")
-                    : "false"));
+        boolean tls =
+                Boolean.parseBoolean(
+                        System.getProperty(
+                                "LEAK_TLS",
+                                System.getenv("LEAK_TLS") != null ? System.getenv("LEAK_TLS") : "false"));
 
         // Skip if CLI ping fails to avoid false positives
-        Assumptions.assumeTrue(cliPing(host, port, tls, Duration.ofSeconds(1)),
+        Assumptions.assumeTrue(
+                cliPing(host, port, tls, Duration.ofSeconds(1)),
                 () -> "valkey-cli ping failed for " + host + ":" + port + (tls ? " (tls)" : ""));
 
-        Logger.log(Logger.Level.INFO, "LeakSmokeTest",
-            "Starting leak test with host=" + host + ", port=" + port + ", tls=" + tls);
+        Logger.log(
+                Logger.Level.INFO,
+                "LeakSmokeTest",
+                "Starting leak test with host=" + host + ", port=" + port + ", tls=" + tls);
 
-        GlideClusterClientConfiguration config = GlideClusterClientConfiguration.builder()
+        GlideClusterClientConfiguration config =
+                GlideClusterClientConfiguration.builder()
                         .address(NodeAddress.builder().host(host).port(port).build())
                         .useTLS(tls)
                         .requestTimeout(10000) // 10 second timeout for operations
@@ -55,9 +61,9 @@ public class LeakSmokeTest {
 
             // Create test data of various sizes, ensuring we test the DirectByteBuffer path
             // Values >16KB will trigger the DirectByteBuffer optimization in JNI
-            int smallSize = 1024;        // 1KB - standard path
-            int mediumSize = 8 * 1024;   // 8KB - standard path
-            int largeSize = 32 * 1024;   // 32KB - DirectByteBuffer path
+            int smallSize = 1024; // 1KB - standard path
+            int mediumSize = 8 * 1024; // 8KB - standard path
+            int largeSize = 32 * 1024; // 32KB - DirectByteBuffer path
             int veryLargeSize = Integer.getInteger("LEAK_VALUE_SIZE", 128 * 1024); // 128KB default
 
             String smallValue = "x".repeat(smallSize);
@@ -68,12 +74,15 @@ public class LeakSmokeTest {
             // Also test with non-ASCII to stress UTF-8 encoding with large data
             String unicodeLarge = "测试数据🔥".repeat(largeSize / 10); // >16KB in UTF-8
 
-            Logger.log(Logger.Level.INFO, "LeakSmokeTest", String.format(
-                "Value sizes: small=%d, medium=%d, large=%d, veryLarge=%d bytes",
-                smallSize, mediumSize, largeSize, veryLargeSize));
+            Logger.log(
+                    Logger.Level.INFO,
+                    "LeakSmokeTest",
+                    String.format(
+                            "Value sizes: small=%d, medium=%d, large=%d, veryLarge=%d bytes",
+                            smallSize, mediumSize, largeSize, veryLargeSize));
 
-            Logger.log(Logger.Level.INFO, "LeakSmokeTest",
-                "Values >16KB will use DirectByteBuffer path in JNI");
+            Logger.log(
+                    Logger.Level.INFO, "LeakSmokeTest", "Values >16KB will use DirectByteBuffer path in JNI");
 
             // Warmup with mixed sizes
             Logger.log(Logger.Level.INFO, "LeakSmokeTest", "Starting warmup phase...");
@@ -100,13 +109,17 @@ public class LeakSmokeTest {
             System.gc();
             Thread.sleep(500);
             long baseline = usedHeapMb();
-            Logger.log(Logger.Level.INFO, "LeakSmokeTest",
-                "Baseline heap usage after warmup: " + baseline + " MB");
+            Logger.log(
+                    Logger.Level.INFO,
+                    "LeakSmokeTest",
+                    "Baseline heap usage after warmup: " + baseline + " MB");
 
             // Run many operations focusing on large values that use DirectByteBuffer
             int loops = Integer.getInteger("LEAK_LOOPS", 10000);
-            Logger.log(Logger.Level.INFO, "LeakSmokeTest",
-                "Running " + loops + " iterations with focus on >16KB values...");
+            Logger.log(
+                    Logger.Level.INFO,
+                    "LeakSmokeTest",
+                    "Running " + loops + " iterations with focus on >16KB values...");
 
             for (int i = 0; i < loops; i++) {
                 String key = "test:" + i;
@@ -118,8 +131,10 @@ public class LeakSmokeTest {
                     String result = client.get(key).get(10, TimeUnit.SECONDS);
                     // Verify we got the right data back
                     if (!largeValue.equals(result)) {
-                        Logger.log(Logger.Level.ERROR, "LeakSmokeTest",
-                            "Data mismatch for key " + key + ", expected " + largeSize + " bytes");
+                        Logger.log(
+                                Logger.Level.ERROR,
+                                "LeakSmokeTest",
+                                "Data mismatch for key " + key + ", expected " + largeSize + " bytes");
                     }
                 } else if (i % 10 < 7) {
                     // 30% - Very large values (128KB) - DirectByteBuffer path
@@ -143,9 +158,12 @@ public class LeakSmokeTest {
                 // Periodic progress report
                 if (i > 0 && i % 2000 == 0) {
                     long current = usedHeapMb();
-                    Logger.log(Logger.Level.INFO, "LeakSmokeTest", String.format(
-                        "Progress: %d/%d iterations, current heap: %d MB (growth: %d MB)",
-                        i, loops, current, (current - baseline)));
+                    Logger.log(
+                            Logger.Level.INFO,
+                            "LeakSmokeTest",
+                            String.format(
+                                    "Progress: %d/%d iterations, current heap: %d MB (growth: %d MB)",
+                                    i, loops, current, (current - baseline)));
                 }
             }
 
@@ -160,23 +178,32 @@ public class LeakSmokeTest {
             double avgBytesPerOp = (growth * 1024.0 * 1024.0) / loops;
 
             Logger.log(Logger.Level.INFO, "LeakSmokeTest", "=== RESULTS ===");
-            Logger.log(Logger.Level.INFO, "LeakSmokeTest",
-                "Final heap usage: " + after + " MB");
-            Logger.log(Logger.Level.INFO, "LeakSmokeTest",
-                "Heap growth: " + growth + " MB (max allowed: " + maxMb + " MB)");
-            Logger.log(Logger.Level.INFO, "LeakSmokeTest",
-                String.format("Average growth per operation: %.2f bytes", avgBytesPerOp));
+            Logger.log(Logger.Level.INFO, "LeakSmokeTest", "Final heap usage: " + after + " MB");
+            Logger.log(
+                    Logger.Level.INFO,
+                    "LeakSmokeTest",
+                    "Heap growth: " + growth + " MB (max allowed: " + maxMb + " MB)");
+            Logger.log(
+                    Logger.Level.INFO,
+                    "LeakSmokeTest",
+                    String.format("Average growth per operation: %.2f bytes", avgBytesPerOp));
 
             // With large values, some growth is expected due to string pooling and JVM internals
             // but it should be bounded
-            Logger.log(Logger.Level.INFO, "LeakSmokeTest",
-                growth < maxMb ? "PASSED - No memory leak detected" :
-                "FAILED - Possible memory leak in DirectByteBuffer handling");
+            Logger.log(
+                    Logger.Level.INFO,
+                    "LeakSmokeTest",
+                    growth < maxMb
+                            ? "PASSED - No memory leak detected"
+                            : "FAILED - Possible memory leak in DirectByteBuffer handling");
 
-            assertTrue(growth < maxMb,
-                String.format("Heap growth too large: %d MB (max: %d MB). " +
-                    "This indicates a memory leak in DirectByteBuffer handling. " +
-                    "Average: %.2f bytes/op", growth, maxMb, avgBytesPerOp));
+            assertTrue(
+                    growth < maxMb,
+                    String.format(
+                            "Heap growth too large: %d MB (max: %d MB). "
+                                    + "This indicates a memory leak in DirectByteBuffer handling. "
+                                    + "Average: %.2f bytes/op",
+                            growth, maxMb, avgBytesPerOp));
         }
     }
 
