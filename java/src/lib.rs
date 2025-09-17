@@ -14,6 +14,7 @@ const MAX_REQUEST_ARGS_LENGTH_IN_BYTES: usize = 2_i32.pow(12) as usize; // 4096 
 
 // Telemetry required for getStatistics
 use glide_core::Telemetry;
+use glide_core::client::ConnectionRetryStrategy;
 
 use jni::JNIEnv;
 use jni::errors::Error as JniError;
@@ -1210,6 +1211,11 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createClient(
     client_az: jni::sys::jstring,
     lazy_connect: jni::sys::jboolean,
     client_name: jni::sys::jstring,
+    protocol: jni::sys::jstring,
+    reconnect_num_retries: jint,
+    reconnect_factor: jint,
+    reconnect_exponent_base: jint,
+    reconnect_jitter_percent: jint,
     sub_exact: JObjectArray,
     sub_pattern: JObjectArray,
     sub_sharded: JObjectArray,
@@ -1248,6 +1254,24 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createClient(
             let read_from_str = get_optional_string_param_raw(&mut env, read_from);
             let client_az_opt = get_optional_string_param_raw(&mut env, client_az);
             let client_name_opt = get_optional_string_param_raw(&mut env, client_name);
+            let protocol_opt = get_optional_string_param_raw(&mut env, protocol);
+
+            let reconnect_strategy =
+                if reconnect_num_retries > 0 && reconnect_factor > 0 && reconnect_exponent_base > 0
+                {
+                    Some(ConnectionRetryStrategy {
+                        exponent_base: reconnect_exponent_base as u32,
+                        factor: reconnect_factor as u32,
+                        number_of_retries: reconnect_num_retries as u32,
+                        jitter_percent: if reconnect_jitter_percent >= 0 {
+                            Some(reconnect_jitter_percent as u32)
+                        } else {
+                            None
+                        },
+                    })
+                } else {
+                    None
+                };
 
             // Build PubSubSubscriptionInfo from three arrays if any present
             let subscriptions_opt: Option<redis::PubSubSubscriptionInfo> = {
@@ -1309,12 +1333,14 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createClient(
                 client_az: client_az_opt,
                 lazy_connect: lazy_connect != 0,
                 client_name: client_name_opt,
+                protocol: protocol_opt,
                 max_inflight_requests: if max_inflight_requests > 0 {
                     Some(max_inflight_requests as u32)
                 } else {
                     None
                 },
                 pubsub_subscriptions: subscriptions_opt,
+                connection_retry_strategy: reconnect_strategy,
             }) {
                 Ok(config) => config,
                 Err(e) => {

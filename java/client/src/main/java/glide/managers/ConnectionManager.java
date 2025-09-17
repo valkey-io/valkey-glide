@@ -1,8 +1,12 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.managers;
 
+import glide.api.models.configuration.AdvancedBaseClientConfiguration;
+import glide.api.models.configuration.BackoffStrategy;
 import glide.api.models.configuration.BaseClientConfiguration;
+import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
+import glide.api.models.configuration.TlsAdvancedConfiguration;
 import glide.api.models.exceptions.ClosingException;
 import glide.internal.AsyncRegistry;
 import glide.internal.GlideNativeBridge;
@@ -60,6 +64,28 @@ public class ConnectionManager {
                                 configuration.getRequestTimeout() != null
                                         ? configuration.getRequestTimeout()
                                         : (int) GlideNativeBridge.getGlideCoreDefaultTimeoutMs();
+
+                        boolean insecureTls = resolveInsecureTls(configuration);
+                        int connectionTimeoutMs = resolveConnectionTimeout(configuration);
+                        String protocolName =
+                                configuration.getProtocol() != null ? configuration.getProtocol().name() : null;
+                        BackoffStrategy reconnectStrategy = configuration.getReconnectStrategy();
+                        int reconnectNumRetries =
+                                reconnectStrategy != null && reconnectStrategy.getNumOfRetries() != null
+                                        ? reconnectStrategy.getNumOfRetries()
+                                        : 0;
+                        int reconnectFactor =
+                                reconnectStrategy != null && reconnectStrategy.getFactor() != null
+                                        ? reconnectStrategy.getFactor()
+                                        : 0;
+                        int reconnectExponentBase =
+                                reconnectStrategy != null && reconnectStrategy.getExponentBase() != null
+                                        ? reconnectStrategy.getExponentBase()
+                                        : 0;
+                        int reconnectJitterPercent =
+                                reconnectStrategy != null && reconnectStrategy.getJitterPercent() != null
+                                        ? reconnectStrategy.getJitterPercent()
+                                        : -1;
 
                         // Create native client through JNI bridge
                         byte[][] subExact = new byte[0][];
@@ -140,15 +166,20 @@ public class ConnectionManager {
                                         username,
                                         password,
                                         configuration.isUseTLS(),
-                                        false, // insecureTls - default value
+                                        insecureTls,
                                         isCluster,
                                         requestTimeoutMs,
-                                        (int) GlideNativeBridge.getGlideCoreDefaultTimeoutMs(),
+                                        connectionTimeoutMs,
                                         maxInflightRequests,
                                         configuration.getReadFrom() != null ? configuration.getReadFrom().name() : null,
                                         configuration.getClientAZ(),
                                         configuration.isLazyConnect(),
                                         configuration.getClientName(),
+                                        protocolName,
+                                        reconnectNumRetries,
+                                        reconnectFactor,
+                                        reconnectExponentBase,
+                                        reconnectJitterPercent,
                                         subExact,
                                         subPattern,
                                         subSharded);
@@ -250,5 +281,37 @@ public class ConnectionManager {
             throw new IllegalStateException("Client is closed");
         }
         return GlideNativeBridge.getClientInfo(nativeClientHandle);
+    }
+
+    private static int resolveConnectionTimeout(BaseClientConfiguration configuration) {
+        final int defaultTimeoutMs = 2000;
+        AdvancedBaseClientConfiguration advanced = extractAdvancedConfiguration(configuration);
+        if (advanced != null && advanced.getConnectionTimeout() != null) {
+            return advanced.getConnectionTimeout();
+        }
+        return defaultTimeoutMs;
+    }
+
+    private static boolean resolveInsecureTls(BaseClientConfiguration configuration) {
+        if (!configuration.isUseTLS()) {
+            return false;
+        }
+        AdvancedBaseClientConfiguration advanced = extractAdvancedConfiguration(configuration);
+        if (advanced == null) {
+            return false;
+        }
+        TlsAdvancedConfiguration tlsConfig = advanced.getTlsAdvancedConfiguration();
+        return tlsConfig != null && tlsConfig.isUseInsecureTLS();
+    }
+
+    private static AdvancedBaseClientConfiguration extractAdvancedConfiguration(
+            BaseClientConfiguration configuration) {
+        if (configuration instanceof GlideClientConfiguration) {
+            return ((GlideClientConfiguration) configuration).getAdvancedConfiguration();
+        }
+        if (configuration instanceof GlideClusterClientConfiguration) {
+            return ((GlideClusterClientConfiguration) configuration).getAdvancedConfiguration();
+        }
+        return null;
     }
 }

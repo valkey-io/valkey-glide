@@ -115,8 +115,10 @@ pub struct ValkeyClientConfig {
     pub client_az: Option<String>,
     pub lazy_connect: bool,
     pub client_name: Option<String>,
+    pub protocol: Option<String>,
     pub max_inflight_requests: Option<u32>,
     pub pubsub_subscriptions: Option<redis::PubSubSubscriptionInfo>,
+    pub connection_retry_strategy: Option<glide_core::client::ConnectionRetryStrategy>,
 }
 
 /// Helper function to create Valkey connection configuration
@@ -135,8 +137,10 @@ pub fn create_valkey_connection_config(config: ValkeyClientConfig) -> Result<Con
         client_az,
         lazy_connect,
         client_name,
+        protocol,
         max_inflight_requests,
         pubsub_subscriptions,
+        connection_retry_strategy,
     } = config;
 
     if addresses.is_empty() {
@@ -208,8 +212,15 @@ pub fn create_valkey_connection_config(config: ValkeyClientConfig) -> Result<Con
                 }
             }
         }),
-        protocol: None,
-        connection_retry_strategy: None,
+        protocol: protocol.and_then(|proto| match proto.as_str() {
+            "RESP2" => Some(redis::ProtocolVersion::RESP2),
+            "RESP3" => Some(redis::ProtocolVersion::RESP3),
+            other => {
+                log::warn!("Unknown protocol {}, defaulting to RESP3", other);
+                None
+            }
+        }),
+        connection_retry_strategy,
         periodic_checks: None,
         pubsub_subscriptions,
         inflight_requests_limit: max_inflight_requests,

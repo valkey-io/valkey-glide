@@ -354,6 +354,11 @@ public class GlideCoreClient implements AutoCloseable {
                             config.getClientAZ(),
                             config.getLazyConnect(),
                             config.getClientName(),
+                            config.getProtocol() != null ? config.getProtocol().name() : null,
+                            config.getReconnectNumRetriesOrDefault(),
+                            config.getReconnectFactorOrDefault(),
+                            config.getReconnectExponentBaseOrDefault(),
+                            config.getReconnectJitterPercentOrDefault(),
                             config.getSubExact(),
                             config.getSubPattern(),
                             config.getSubSharded());
@@ -432,6 +437,7 @@ public class GlideCoreClient implements AutoCloseable {
 
         // Map configuration fields
         result.useTls(config.isUseTLS());
+        result.useInsecureTls(resolveInsecureTls(config));
 
         if (config.getCredentials() != null) {
             glide.api.models.configuration.ServerCredentials creds = config.getCredentials();
@@ -442,8 +448,7 @@ public class GlideCoreClient implements AutoCloseable {
             result.requestTimeout(config.getRequestTimeout());
         }
 
-        // Use default connection timeout since method doesn't exist
-        result.connectionTimeout(5000);
+        result.connectionTimeout(resolveConnectionTimeout(config));
 
         if (config.getProtocol() != null) {
             result.protocol(config.getProtocol());
@@ -861,6 +866,45 @@ public class GlideCoreClient implements AutoCloseable {
         return 512; // 512MB default - let users configure as needed
     }
 
+    private static int resolveConnectionTimeout(
+            glide.api.models.configuration.BaseClientConfiguration config) {
+        final int defaultTimeoutMs = 2000;
+        glide.api.models.configuration.AdvancedBaseClientConfiguration advanced =
+                extractAdvancedConfiguration(config);
+        if (advanced != null && advanced.getConnectionTimeout() != null) {
+            return advanced.getConnectionTimeout();
+        }
+        return defaultTimeoutMs;
+    }
+
+    private static boolean resolveInsecureTls(
+            glide.api.models.configuration.BaseClientConfiguration config) {
+        if (!config.isUseTLS()) {
+            return false;
+        }
+        glide.api.models.configuration.AdvancedBaseClientConfiguration advanced =
+                extractAdvancedConfiguration(config);
+        if (advanced == null) {
+            return false;
+        }
+        glide.api.models.configuration.TlsAdvancedConfiguration tlsConfig =
+                advanced.getTlsAdvancedConfiguration();
+        return tlsConfig != null && tlsConfig.isUseInsecureTLS();
+    }
+
+    private static glide.api.models.configuration.AdvancedBaseClientConfiguration
+            extractAdvancedConfiguration(glide.api.models.configuration.BaseClientConfiguration config) {
+        if (config instanceof glide.api.models.configuration.GlideClientConfiguration) {
+            return ((glide.api.models.configuration.GlideClientConfiguration) config)
+                    .getAdvancedConfiguration();
+        }
+        if (config instanceof glide.api.models.configuration.GlideClusterClientConfiguration) {
+            return ((glide.api.models.configuration.GlideClusterClientConfiguration) config)
+                    .getAdvancedConfiguration();
+        }
+        return null;
+    }
+
     // Removed blocking command detection - Rust handles all timeout logic
 
     private static String formatSpanName(String commandName) {
@@ -956,6 +1000,11 @@ public class GlideCoreClient implements AutoCloseable {
             String clientAz,
             boolean lazyConnect,
             String clientName,
+            String protocol,
+            int reconnectNumRetries,
+            int reconnectFactor,
+            int reconnectExponentBase,
+            int reconnectJitterPercent,
             byte[][] subExact,
             byte[][] subPattern,
             byte[][] subSharded) {
@@ -974,6 +1023,11 @@ public class GlideCoreClient implements AutoCloseable {
                 clientAz,
                 lazyConnect,
                 clientName,
+                protocol,
+                reconnectNumRetries,
+                reconnectFactor,
+                reconnectExponentBase,
+                reconnectJitterPercent,
                 subExact,
                 subPattern,
                 subSharded);
