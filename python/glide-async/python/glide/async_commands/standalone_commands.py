@@ -651,31 +651,6 @@ class StandaloneCommands(CoreCommands):
             await self._execute_command(RequestType.LastSave, []),
         )
 
-    async def move(self, key: TEncodable, db_index: int) -> bool:
-        """
-        Move `key` from the currently selected database to the database specified by `db_index`.
-
-        See [valkey.io](https://valkey.io/commands/move/) for more details.
-
-        Args:
-            key (TEncodable): The key to move.
-            db_index (int): The index of the database to move `key` to.
-
-        Returns:
-            bool: `True` if `key` was moved.
-
-            `False` if the `key` already exists in the destination database
-            or does not exist in the source database.
-
-        Example:
-            >>> await client.move("some_key", 1)
-                True
-        """
-        return cast(
-            bool,
-            await self._execute_command(RequestType.Move, [key, str(db_index)]),
-        )
-
     async def publish(self, message: TEncodable, channel: TEncodable) -> int:
         """
         Publish a message on pubsub channel.

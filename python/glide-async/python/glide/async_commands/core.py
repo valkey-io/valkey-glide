@@ -430,6 +430,31 @@ class CoreCommands(Protocol):
         """
         return cast(int, await self._execute_command(RequestType.Del, keys))
 
+    async def move(self, key: TEncodable, db: int) -> bool:
+        """
+        Move key from the currently selected database to the specified destination database.
+
+        See [valkey.io](https://valkey.io/commands/move/) for more details.
+
+        Args:
+            key (TEncodable): The key to move.
+            db (int): The destination database number.
+
+        Returns:
+            bool: True if the key was moved successfully, False if the key does not exist
+            or was already present in the destination database.
+
+        Examples:
+            >>> await client.move("some_key", 1)
+                True  # The key was successfully moved to database 1
+            >>> await client.move("nonexistent_key", 1)
+                False  # The key does not exist
+        """
+        return cast(
+            bool,
+            await self._execute_command(RequestType.Move, [key, str(db)]),
+        )
+
     async def incr(self, key: TEncodable) -> int:
         """
         Increments the number stored at `key` by one. If the key does not exist, it is set to 0 before performing the

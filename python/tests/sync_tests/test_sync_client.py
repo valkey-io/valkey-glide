@@ -613,9 +613,15 @@ class TestCommands:
         info_result = get_first_result(info_result)
         assert b"# Memory" in info_result
 
-    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    def test_sync_move(self, glide_sync_client: GlideClient):
+    def test_sync_move(self, glide_sync_client: TGlideClient, cluster_mode):
+        if cluster_mode:
+            if sync_check_if_server_version_lt(glide_sync_client, "9.0.0"):
+                pytest.skip(
+                    reason="Database ID selection in cluster mode requires Valkey >= 9.0.0"
+                )
+
         key = get_random_string(10)
         value = get_random_string(10)
 
