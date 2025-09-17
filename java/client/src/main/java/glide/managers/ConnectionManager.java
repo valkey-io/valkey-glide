@@ -8,6 +8,7 @@ import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.TlsAdvancedConfiguration;
 import glide.api.models.exceptions.ClosingException;
+import glide.api.models.exceptions.ConfigurationError;
 import glide.internal.AsyncRegistry;
 import glide.internal.GlideNativeBridge;
 import java.util.concurrent.CompletableFuture;
@@ -292,15 +293,19 @@ public class ConnectionManager {
     }
 
     private static boolean resolveInsecureTls(BaseClientConfiguration configuration) {
-        if (!configuration.isUseTLS()) {
-            return false;
-        }
         AdvancedBaseClientConfiguration advanced = extractAdvancedConfiguration(configuration);
         if (advanced == null) {
             return false;
         }
         TlsAdvancedConfiguration tlsConfig = advanced.getTlsAdvancedConfiguration();
-        return tlsConfig != null && tlsConfig.isUseInsecureTLS();
+        if (tlsConfig != null && tlsConfig.isUseInsecureTLS()) {
+            if (!configuration.isUseTLS()) {
+                throw new ConfigurationError(
+                        "`useInsecureTLS` cannot be enabled when `useTLS` is disabled.");
+            }
+            return true;
+        }
+        return false;
     }
 
     private static AdvancedBaseClientConfiguration extractAdvancedConfiguration(
