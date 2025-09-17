@@ -9,6 +9,3 @@ include 'client'
 include 'jedis-compatibility'
 include 'integTest'
 include 'benchmarks'
-include 'polyglotBenchmarks'
-
-project(':polyglotBenchmarks').projectDir = file('polyglot-benchmarks')
