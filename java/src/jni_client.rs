@@ -35,7 +35,7 @@ static NATIVE_BUFFER_REGISTRY: std::sync::OnceLock<dashmap::DashMap<u64, Vec<u8>
 static NEXT_NATIVE_BUFFER_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 
 fn get_native_buffer_registry() -> &'static dashmap::DashMap<u64, Vec<u8>> {
-    NATIVE_BUFFER_REGISTRY.get_or_init(|| dashmap::DashMap::new())
+    NATIVE_BUFFER_REGISTRY.get_or_init(dashmap::DashMap::new)
 }
 
 pub fn register_native_buffer(bytes: Vec<u8>) -> (u64, *mut u8, usize) {
@@ -563,7 +563,7 @@ fn should_use_direct_buffer(value: &ServerValue) -> bool {
         redis::Value::BulkString(data) => data.len() > THRESHOLD,
         redis::Value::Array(arr) => {
             // Calculate total estimated size of array elements
-            let total_size: usize = arr.iter().map(|v| estimate_value_size(v)).sum();
+            let total_size: usize = arr.iter().map(estimate_value_size).sum();
             total_size > THRESHOLD
         }
         redis::Value::Map(map) => {
@@ -576,7 +576,7 @@ fn should_use_direct_buffer(value: &ServerValue) -> bool {
         }
         redis::Value::Set(set) => {
             // Calculate total size of set elements
-            let total_size: usize = set.iter().map(|v| estimate_value_size(v)).sum();
+            let total_size: usize = set.iter().map(estimate_value_size).sum();
             total_size > THRESHOLD
         }
         _ => false, // Other types (Int, Double, Boolean, etc.) are typically small
@@ -593,7 +593,7 @@ fn estimate_value_size(value: &ServerValue) -> usize {
         redis::Value::Double(_) => 8, // 64-bit double
         redis::Value::Boolean(_) => 1,
         redis::Value::Array(arr) => {
-            arr.iter().map(|v| estimate_value_size(v)).sum::<usize>() + (arr.len() * 8) // overhead
+            arr.iter().map(estimate_value_size).sum::<usize>() + (arr.len() * 8) // overhead
         }
         redis::Value::Map(map) => {
             map.iter()
@@ -602,12 +602,12 @@ fn estimate_value_size(value: &ServerValue) -> usize {
                 + (map.len() * 16) // overhead for key-value pairs
         }
         redis::Value::Set(set) => {
-            set.iter().map(|v| estimate_value_size(v)).sum::<usize>() + (set.len() * 8) // overhead
+            set.iter().map(estimate_value_size).sum::<usize>() + (set.len() * 8) // overhead
         }
         redis::Value::VerbatimString { text, .. } => text.len(),
         redis::Value::BigNumber(num) => num.to_string().len(), // Estimate size as string representation
         redis::Value::Push { data, .. } => {
-            data.iter().map(|v| estimate_value_size(v)).sum::<usize>()
+            data.iter().map(estimate_value_size).sum::<usize>()
         }
         redis::Value::ServerError(_) => 128, // Estimate for error messages
         redis::Value::Okay => 2,             // "OK"
@@ -699,16 +699,22 @@ fn serialize_array_to_bytes(
                 bytes.extend_from_slice(&data);
             }
             redis::Value::SimpleString(s) => {
-                // Normalize "ok" to "OK" for compatibility with Java constants
-                let normalized = if s.eq_ignore_ascii_case("ok") {
-                    "OK".to_string()
+                // Normalize "ok" to "OK" while avoiding unnecessary allocations
+                if s == "OK" {
+                    let data = s.into_bytes();
+                    bytes.push(b'+'); // Simple string marker
+                    bytes.extend_from_slice(&(data.len() as u32).to_be_bytes());
+                    bytes.extend_from_slice(&data);
+                } else if s.eq_ignore_ascii_case("ok") {
+                    bytes.push(b'+');
+                    bytes.extend_from_slice(&2u32.to_be_bytes());
+                    bytes.extend_from_slice(b"OK");
                 } else {
-                    s
-                };
-                let data = normalized.into_bytes();
-                bytes.push(b'+'); // Simple string marker
-                bytes.extend_from_slice(&(data.len() as u32).to_be_bytes());
-                bytes.extend_from_slice(&data);
+                    let data = s.into_bytes();
+                    bytes.push(b'+');
+                    bytes.extend_from_slice(&(data.len() as u32).to_be_bytes());
+                    bytes.extend_from_slice(&data);
+                }
             }
             redis::Value::Okay => {
                 let data = b"OK";

@@ -4001,7 +4001,7 @@ public class UnifiedJedis implements Closeable {
             String result = baseClient.set(GlideString.of(key), GlideString.of(value), options).get();
             return result != null ? result.getBytes() : null;
         } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException((params == null) ? "null" : "SetParams", e);
+            throw new JedisException("SETGET operation failed" + (params != null ? " with parameters" : ""), e);
         }
     }
 

@@ -57,15 +57,10 @@ fn get_registry_method_cache(env: &mut JNIEnv) -> Result<&'static RegistryMethod
     };
 
     // If another thread initialized concurrently, prefer the existing value.
-    if REGISTRY_METHOD_CACHE.set(cache).is_err() {
-        Ok(REGISTRY_METHOD_CACHE
-            .get()
-            .expect("RegistryMethodCache should be initialized"))
-    } else {
-        Ok(REGISTRY_METHOD_CACHE
-            .get()
-            .expect("RegistryMethodCache should be initialized"))
-    }
+    let _ = REGISTRY_METHOD_CACHE.set(cache);
+    Ok(REGISTRY_METHOD_CACHE
+        .get()
+        .expect("RegistryMethodCache should be initialized"))
 }
 
 // Internal helper: execute a parsed CommandRequest and complete Java callback
@@ -101,16 +96,15 @@ async fn execute_command_request_and_complete(
                     .await
                     .map_err(|e| anyhow::anyhow!("Command execution failed: {e}"));
 
-                if let Some(root_span_ptr) = root_span_ptr_opt {
-                    if root_span_ptr != 0 {
-                        if let Ok(span) = unsafe {
-                            glide_core::GlideOpenTelemetry::span_from_pointer(root_span_ptr)
-                        } {
-                            span.end();
-                        }
-                        unsafe {
-                            std::sync::Arc::from_raw(root_span_ptr as *const glide_core::GlideSpan);
-                        }
+                if let Some(root_span_ptr) = root_span_ptr_opt
+                    && root_span_ptr != 0 {
+                    if let Ok(span) = unsafe {
+                        glide_core::GlideOpenTelemetry::span_from_pointer(root_span_ptr)
+                    } {
+                        span.end();
+                    }
+                    unsafe {
+                        std::sync::Arc::from_raw(root_span_ptr as *const glide_core::GlideSpan);
                     }
                 }
                 exec
@@ -138,16 +132,13 @@ async fn execute_command_request_and_complete(
 
                 // Child span as per previous behavior
                 let mut send_batch_span: Option<glide_core::GlideSpan> = None;
-                if let Some(root_span_ptr) = root_span_ptr_opt {
-                    if root_span_ptr != 0 {
-                        if let Ok(root_span) = unsafe {
-                            glide_core::GlideOpenTelemetry::span_from_pointer(root_span_ptr)
-                        } {
-                            if let Ok(child) = root_span.add_span("send_batch") {
-                                send_batch_span = Some(child);
-                            }
-                        }
+                if let Some(root_span_ptr) = root_span_ptr_opt
+                    && root_span_ptr != 0
+                    && let Ok(root_span) = unsafe {
+                        glide_core::GlideOpenTelemetry::span_from_pointer(root_span_ptr)
                     }
+                    && let Ok(child) = root_span.add_span("send_batch") {
+                    send_batch_span = Some(child);
                 }
 
                 let exec_res = if batch.is_atomic {
@@ -181,16 +172,15 @@ async fn execute_command_request_and_complete(
                 if let Some(child) = send_batch_span.as_ref() {
                     child.end();
                 }
-                if let Some(root_span_ptr) = root_span_ptr_opt {
-                    if root_span_ptr != 0 {
-                        if let Ok(root_span) = unsafe {
-                            glide_core::GlideOpenTelemetry::span_from_pointer(root_span_ptr)
-                        } {
-                            root_span.end();
-                        }
-                        unsafe {
-                            std::sync::Arc::from_raw(root_span_ptr as *const glide_core::GlideSpan);
-                        }
+                if let Some(root_span_ptr) = root_span_ptr_opt
+                    && root_span_ptr != 0 {
+                    if let Ok(root_span) = unsafe {
+                        glide_core::GlideOpenTelemetry::span_from_pointer(root_span_ptr)
+                    } {
+                        root_span.end();
+                    }
+                    unsafe {
+                        std::sync::Arc::from_raw(root_span_ptr as *const glide_core::GlideSpan);
                     }
                 }
                 exec_res
@@ -1245,7 +1235,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createClient(
             let client_name_opt = get_optional_string_param_raw(&mut env, client_name);
 
             // Build PubSubSubscriptionInfo from three arrays if any present
-            let subscriptions_opt: Option<redis::PubSubSubscriptionInfo> = (|| {
+            let subscriptions_opt: Option<redis::PubSubSubscriptionInfo> = {
                 let mut any = false;
                 let mut info = std::collections::HashMap::new();
 
@@ -1260,10 +1250,9 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createClient(
                     }
                     if let Ok(len) = env.get_array_length(&arr) {
                         for i in 0..len {
-                            if let Ok(obj) = env.get_object_array_element(&arr, i) {
-                                if let Ok(bytes) = env.convert_byte_array(JByteArray::from(obj)) {
-                                    set.insert(redis::PubSubChannelOrPattern::from(bytes));
-                                }
+                            if let Ok(obj) = env.get_object_array_element(&arr, i)
+                                && let Ok(bytes) = env.convert_byte_array(JByteArray::from(obj)) {
+                                set.insert(redis::PubSubChannelOrPattern::from(bytes));
                             }
                         }
                     }
@@ -1287,7 +1276,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createClient(
                 }
 
                 if any { Some(info) } else { None }
-            })();
+            };
 
             // Create connection configuration using all parameters
             let config = match create_valkey_connection_config(ValkeyClientConfig {
@@ -1602,18 +1591,15 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                         let result = async {
                             // If we have a root span, create a child span named "send_batch" to match expectations
                             let mut send_batch_span: Option<glide_core::GlideSpan> = None;
-                            if let Some(root_span_ptr) = root_span_ptr_opt {
-                                if root_span_ptr != 0 {
-                                    if let Ok(root_span) = unsafe {
-                                        glide_core::GlideOpenTelemetry::span_from_pointer(
-                                            root_span_ptr,
-                                        )
-                                    } {
-                                        if let Ok(child) = root_span.add_span("send_batch") {
-                                            send_batch_span = Some(child);
-                                        }
-                                    }
+                            if let Some(root_span_ptr) = root_span_ptr_opt
+                                && root_span_ptr != 0
+                                && let Ok(root_span) = unsafe {
+                                    glide_core::GlideOpenTelemetry::span_from_pointer(
+                                        root_span_ptr,
+                                    )
                                 }
+                                && let Ok(child) = root_span.add_span("send_batch") {
+                                send_batch_span = Some(child);
                             }
                             // Create pipeline using existing FFI approach
                             let mut pipeline =
@@ -1674,20 +1660,19 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                                 child.end();
                             }
                             // End and drop the root span if provided
-                            if let Some(root_span_ptr) = root_span_ptr_opt {
-                                if root_span_ptr != 0 {
-                                    if let Ok(root_span) = unsafe {
-                                        glide_core::GlideOpenTelemetry::span_from_pointer(
-                                            root_span_ptr,
-                                        )
-                                    } {
-                                        root_span.end();
-                                    }
-                                    unsafe {
-                                        std::sync::Arc::from_raw(
-                                            root_span_ptr as *const glide_core::GlideSpan,
-                                        );
-                                    }
+                            if let Some(root_span_ptr) = root_span_ptr_opt
+                                && root_span_ptr != 0 {
+                                if let Ok(root_span) = unsafe {
+                                    glide_core::GlideOpenTelemetry::span_from_pointer(
+                                        root_span_ptr,
+                                    )
+                                } {
+                                    root_span.end();
+                                }
+                                unsafe {
+                                    std::sync::Arc::from_raw(
+                                        root_span_ptr as *const glide_core::GlideSpan,
+                                    );
                                 }
                             }
                             exec_res
@@ -1964,7 +1949,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
 
             // Extract route parameters on the current thread (avoid JNI env escaping into async)
             let has_route_bool = has_route != 0;
-            let route_type_val: i32 = route_type as i32;
+            let route_type_val: i32 = route_type;
             let route_param_str: Option<String> = if !route_param.is_null() {
                 match env.get_string(&route_param) {
                     Ok(s) => Some(s.into()),
@@ -2006,26 +1991,31 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
                                 // Try to parse param as integer slot id; if fails, treat as slot key
                                 let param_str = route_param_str.unwrap_or_default();
                                 if let Ok(slot_id) = param_str.parse::<i32>() {
-                                    let mut s = SlotIdRoute::default();
-                                    s.slot_type = EnumOrUnknown::new(slot_type);
-                                    s.slot_id = slot_id;
+                                    let s = SlotIdRoute {
+                                        slot_type: EnumOrUnknown::new(slot_type),
+                                        slot_id,
+                                        ..Default::default()
+                                    };
                                     routes.set_slot_id_route(s);
                                 } else if !param_str.is_empty() {
-                                    let mut s = SlotKeyRoute::default();
-                                    s.slot_type = EnumOrUnknown::new(slot_type);
-                                    s.slot_key = param_str.into();
+                                    let s = SlotKeyRoute {
+                                        slot_type: EnumOrUnknown::new(slot_type),
+                                        slot_key: param_str.into(),
+                                        ..Default::default()
+                                    };
                                     routes.set_slot_key_route(s);
                                 }
                             } else if route_type_val < 0 && route_param_str.is_some() {
                                 // ByAddressRoute encoded with route_type = -1 and host:port in route_param
                                 let param_str = route_param_str.unwrap_or_default();
-                                if let Some((host, port_str)) = param_str.split_once(':') {
-                                    if let Ok(port) = port_str.parse::<i32>() {
-                                        let mut s = ByAddressRoute::default();
-                                        s.host = host.to_string().into();
-                                        s.port = port;
-                                        routes.set_by_address_route(s);
-                                    }
+                                if let Some((host, port_str)) = param_str.split_once(':')
+                                    && let Ok(port) = port_str.parse::<i32>() {
+                                    let s = ByAddressRoute {
+                                        host: host.to_string().into(),
+                                        port,
+                                        ..Default::default()
+                                    };
+                                    routes.set_by_address_route(s);
                                 }
                             }
 
@@ -2395,15 +2385,10 @@ fn get_java_value_conversion_cache(
     };
 
     // Prefer existing value if concurrently initialized
-    if JAVA_VALUE_CONVERSION_CACHE.set(cache).is_err() {
-        Ok(JAVA_VALUE_CONVERSION_CACHE
-            .get()
-            .expect("JavaValueConversionCache should be initialized"))
-    } else {
-        Ok(JAVA_VALUE_CONVERSION_CACHE
-            .get()
-            .expect("JavaValueConversionCache should be initialized"))
-    }
+    let _ = JAVA_VALUE_CONVERSION_CACHE.set(cache);
+    Ok(JAVA_VALUE_CONVERSION_CACHE
+        .get()
+        .expect("JavaValueConversionCache should be initialized"))
 }
 
 fn to_local_jclass<'a>(env: &mut JNIEnv<'a>, global: &GlobalRef) -> Result<JClass<'a>, FFIError> {
