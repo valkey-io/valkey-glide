@@ -53,6 +53,8 @@ public class CommandManager {
     /** JNI connection representation. */
     private final GlideCoreClient coreClient;
 
+    private static final byte[][] EMPTY_SCRIPT_ARGS = new byte[0][];
+
     /** Internal interface for exposing implementation details about a ClusterScanCursor. */
     public interface ClusterScanCursorDetail extends ClusterScanCursor {
         /**
@@ -181,9 +183,8 @@ public class CommandManager {
         }
 
         try {
-            // Prepare keys/args as Strings for routing and JNI bridging
-            String[] keyArgs = keys.stream().map(GlideString::toString).toArray(String[]::new);
-            String[] argArgs = args.stream().map(GlideString::toString).toArray(String[]::new);
+            byte[][] keyArgs = toByteMatrix(keys);
+            byte[][] argArgs = toByteMatrix(args);
 
             final boolean expectUtf8Response =
                     script.getBinaryOutput() == null || !script.getBinaryOutput();
@@ -223,8 +224,8 @@ public class CommandManager {
         }
 
         try {
-            String[] keyArgs = new String[0];
-            String[] argArgs = args.stream().map(GlideString::toString).toArray(String[]::new);
+            byte[][] keyArgs = EMPTY_SCRIPT_ARGS;
+            byte[][] argArgs = toByteMatrix(args);
             final boolean expectUtf8Response =
                     script.getBinaryOutput() == null || !script.getBinaryOutput();
 
@@ -305,6 +306,18 @@ public class CommandManager {
         CommandRequest.Builder command = prepareCommandRequest(batch, raiseOnError, options);
         boolean expectUtf8Response = !batch.isBinaryOutput();
         return submitBatchToJni(command, responseHandler, expectUtf8Response);
+    }
+
+    private static byte[][] toByteMatrix(List<GlideString> values) {
+        if (values == null || values.isEmpty()) {
+            return EMPTY_SCRIPT_ARGS;
+        }
+        byte[][] result = new byte[values.size()][];
+        for (int i = 0; i < values.size(); i++) {
+            GlideString value = values.get(i);
+            result[i] = value != null ? value.getBytes() : null;
+        }
+        return result;
     }
 
     /** Submit a scan request with cursor via JNI. */

@@ -43,6 +43,8 @@ public class GlideCoreClient implements AutoCloseable {
                     Long, java.lang.ref.WeakReference<glide.api.BaseClient>>
             clients = new java.util.concurrent.ConcurrentHashMap<>();
 
+    private static final byte[][] EMPTY_SCRIPT_PARAMS = new byte[0][];
+
     public static void registerClient(long handle, glide.api.BaseClient client) {
         clients.put(handle, new java.lang.ref.WeakReference<>(client));
     }
@@ -995,8 +997,8 @@ public class GlideCoreClient implements AutoCloseable {
     /** Execute script via native invoke_script path */
     public CompletableFuture<Object> executeScriptAsync(
             String hash,
-            String[] keys,
-            String[] args,
+            byte[][] keys,
+            byte[][] args,
             boolean hasRoute,
             int routeType,
             String routeParam,
@@ -1019,28 +1021,12 @@ public class GlideCoreClient implements AutoCloseable {
                 return future;
             }
 
-            // Native call executes script and completes via callback
-            // Convert to byte[][] for binary-safe transport; server still expects utf8 for
-            // evalsha params
-            byte[][] keyBytes =
-                    keys != null
-                            ? java.util.Arrays.stream(keys)
-                                    .map(s -> s != null ? s.getBytes(java.nio.charset.StandardCharsets.UTF_8) : null)
-                                    .toArray(byte[][]::new)
-                            : new byte[0][];
-            byte[][] argBytes =
-                    args != null
-                            ? java.util.Arrays.stream(args)
-                                    .map(s -> s != null ? s.getBytes(java.nio.charset.StandardCharsets.UTF_8) : null)
-                                    .toArray(byte[][]::new)
-                            : new byte[0][];
-
             GlideNativeBridge.executeScriptAsync(
                     handle,
                     correlationId,
                     hash,
-                    keyBytes,
-                    argBytes,
+                    keys != null ? keys : EMPTY_SCRIPT_PARAMS,
+                    args != null ? args : EMPTY_SCRIPT_PARAMS,
                     hasRoute,
                     routeType,
                     routeParam,
