@@ -2242,7 +2242,7 @@ public class UnifiedJedis implements Closeable {
                 ClusterScanCursor clusterCursor;
                 if ("0".equals(cursor)) {
                     // Initial cursor
-                    clusterCursor = ClusterScanCursor.initialCursor();
+                    clusterCursor = ClusterScanCursor.initalCursor();
                 } else {
                     // For subsequent cursors, we need to use the cursor from previous result
                     // Since we can't reconstruct a ClusterScanCursor from a string,
@@ -2297,7 +2297,7 @@ public class UnifiedJedis implements Closeable {
                 ClusterScanCursor clusterCursor;
                 if ("0".equals(cursor)) {
                     // Initial cursor
-                    clusterCursor = ClusterScanCursor.initialCursor();
+                    clusterCursor = ClusterScanCursor.initalCursor();
                     result = glideClusterClient.scan(clusterCursor, options).get();
                 } else {
                     // For subsequent cursors, use customCommand with params
@@ -3993,16 +3993,12 @@ public class UnifiedJedis implements Closeable {
     public byte[] setGet(byte[] key, byte[] value, SetParams params) {
         checkNotClosed();
         try {
-            // Respect SetParams when provided; always request old value
-            SetOptions options =
-                    (params == null)
-                            ? SetOptions.builder().returnOldValue(true).build()
-                            : convertSetParams(params, true);
+            // Use basic setGet without complex parameter handling
+            SetOptions options = SetOptions.builder().returnOldValue(true).build();
             String result = baseClient.set(GlideString.of(key), GlideString.of(value), options).get();
             return result != null ? result.getBytes() : null;
         } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException(
-                    "SETGET operation failed" + (params != null ? " with parameters" : ""), e);
+            throw new JedisException("SET operation failed", e);
         }
     }
 
@@ -4588,7 +4584,7 @@ public class UnifiedJedis implements Closeable {
                 ClusterScanCursor clusterCursor;
                 if ("0".equals(cursorStr)) {
                     // Initial cursor
-                    clusterCursor = ClusterScanCursor.initialCursor();
+                    clusterCursor = ClusterScanCursor.initalCursor();
                     result = glideClusterClient.scan(clusterCursor).get();
                     ClusterScanCursor nextCursor = (ClusterScanCursor) result[0];
                     String[] keys = (String[]) result[1];
@@ -4648,7 +4644,7 @@ public class UnifiedJedis implements Closeable {
                 ClusterScanCursor clusterCursor;
                 if ("0".equals(cursorStr)) {
                     // Initial cursor
-                    clusterCursor = ClusterScanCursor.initialCursor();
+                    clusterCursor = ClusterScanCursor.initalCursor();
                     result = glideClusterClient.scan(clusterCursor, options).get();
                     ClusterScanCursor nextCursor = (ClusterScanCursor) result[0];
                     String[] keys = (String[]) result[1];
