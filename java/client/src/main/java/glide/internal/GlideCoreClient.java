@@ -878,9 +878,6 @@ public class GlideCoreClient implements AutoCloseable {
 
     private static boolean resolveInsecureTls(
             glide.api.models.configuration.BaseClientConfiguration config) {
-        if (!config.isUseTLS()) {
-            return false;
-        }
         glide.api.models.configuration.AdvancedBaseClientConfiguration advanced =
                 extractAdvancedConfiguration(config);
         if (advanced == null) {
@@ -888,7 +885,14 @@ public class GlideCoreClient implements AutoCloseable {
         }
         glide.api.models.configuration.TlsAdvancedConfiguration tlsConfig =
                 advanced.getTlsAdvancedConfiguration();
-        return tlsConfig != null && tlsConfig.isUseInsecureTLS();
+        if (tlsConfig != null && tlsConfig.isUseInsecureTLS()) {
+            if (!config.isUseTLS()) {
+                throw new glide.api.models.exceptions.ConfigurationError(
+                        "`useInsecureTLS` cannot be enabled when `useTLS` is disabled.");
+            }
+            return true;
+        }
+        return false;
     }
 
     private static glide.api.models.configuration.AdvancedBaseClientConfiguration
