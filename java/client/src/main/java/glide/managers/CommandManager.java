@@ -200,7 +200,7 @@ public class CommandManager {
                             expectUtf8Response);
 
             return jniFuture
-                    .thenApply(result -> createDirectResponse(result))
+                    .thenApply(result -> createDirectResponse(result, expectUtf8Response))
                     .thenApply(responseHandler::apply)
                     .exceptionally(this::exceptionHandler);
         } catch (Exception e) {
@@ -243,7 +243,7 @@ public class CommandManager {
                             expectUtf8Response);
 
             return jniFuture
-                    .thenApply(result -> createDirectResponse(result))
+                    .thenApply(result -> createDirectResponse(result, expectUtf8Response))
                     .thenApply(responseHandler::apply)
                     .exceptionally(this::exceptionHandler);
         } catch (Exception e) {
@@ -538,7 +538,7 @@ public class CommandManager {
         dup.rewind();
         if (marker == '*') {
             // Serialized array/map (custom wire format)
-            return deserializeByteBufferArray(dup);
+            return deserializeByteBufferArray(dup, expectUtf8Response);
         } else if (marker == '%') {
             return deserializeByteBufferMap(dup, expectUtf8Response);
         }
@@ -611,7 +611,7 @@ public class CommandManager {
             // Execute via JNI and convert response
             return coreClient
                     .executeBatchAsync(requestBytes, expectUtf8Response)
-                    .thenApply(result -> convertJniToProtobufResponse(result))
+                    .thenApply(result -> convertJniToProtobufResponse(result, expectUtf8Response))
                     .thenApply(responseHandler::apply)
                     .exceptionally(this::exceptionHandler);
         } catch (Exception e) {
@@ -640,7 +640,7 @@ public class CommandManager {
      * Convert JNI result to protobuf Response format. This bridges the gap between JNI responses and
      * the expected protobuf Response.
      */
-    private Response convertJniToProtobufResponse(Object jniResult) {
+    private Response convertJniToProtobufResponse(Object jniResult, boolean expectUtf8Response) {
         Response.Builder builder = Response.newBuilder();
 
         if (jniResult == null) {
@@ -657,19 +657,23 @@ public class CommandManager {
             Object toStore;
             if (dup.remaining() > 0) {
                 byte marker = dup.get();
-                if (marker == '*' || marker == '%') {
-                    // Serialized array/map (our custom wire format)
+                if (marker == '*') {
                     dup.rewind();
-                    toStore = deserializeByteBufferArray(dup);
+                    toStore = deserializeByteBufferArray(dup, expectUtf8Response);
+                } else if (marker == '%') {
+                    dup.rewind();
+                    toStore = deserializeByteBufferMap(dup, expectUtf8Response);
                 } else {
-                    // Treat as bulk string bytes; default to UTF-8 string for safety
                     dup.rewind();
                     byte[] bytes = new byte[dup.remaining()];
                     dup.get(bytes);
-                    toStore = new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
+                    toStore =
+                            expectUtf8Response
+                                    ? new String(bytes, java.nio.charset.StandardCharsets.UTF_8)
+                                    : glide.api.models.GlideString.gs(bytes);
                 }
             } else {
-                toStore = "";
+                toStore = expectUtf8Response ? "" : glide.api.models.GlideString.gs(new byte[0]);
             }
             long objectId = JniResponseRegistry.storeObject(toStore);
             builder.setRespPointer(objectId);
@@ -687,7 +691,7 @@ public class CommandManager {
      * Create a direct Response from a JNI result object. Since JNI now returns converted Java objects
      * directly (not pointers), we store the object in a temporary registry and pass an ID.
      */
-    private Response createDirectResponse(Object jniResult) {
+    private Response createDirectResponse(Object jniResult, boolean expectUtf8Response) {
         Response.Builder builder = Response.newBuilder();
 
         if (jniResult == null) {
@@ -704,17 +708,23 @@ public class CommandManager {
             Object toStore;
             if (dup.remaining() > 0) {
                 byte marker = dup.get();
-                if (marker == '*' || marker == '%') {
+                if (marker == '*') {
                     dup.rewind();
-                    toStore = deserializeByteBufferArray(dup);
+                    toStore = deserializeByteBufferArray(dup, expectUtf8Response);
+                } else if (marker == '%') {
+                    dup.rewind();
+                    toStore = deserializeByteBufferMap(dup, expectUtf8Response);
                 } else {
                     dup.rewind();
                     byte[] bytes = new byte[dup.remaining()];
                     dup.get(bytes);
-                    toStore = new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
+                    toStore =
+                            expectUtf8Response
+                                    ? new String(bytes, java.nio.charset.StandardCharsets.UTF_8)
+                                    : glide.api.models.GlideString.gs(bytes);
                 }
             } else {
-                toStore = "";
+                toStore = expectUtf8Response ? "" : glide.api.models.GlideString.gs(new byte[0]);
             }
             long objectId = JniResponseRegistry.storeObject(toStore);
             builder.setRespPointer(objectId);
@@ -733,7 +743,7 @@ public class CommandManager {
      * DirectByteBuffer responses for large data (>16KB). Format uses Redis-like protocol: '*' +
      * array_len(4 bytes BE) + elements Each element: type_marker + data
      */
-    private Object[] deserializeByteBufferArray(ByteBuffer buffer) {
+    private Object[] deserializeByteBufferArray(ByteBuffer buffer, boolean expectUtf8Response) {
         buffer.order(ByteOrder.BIG_ENDIAN); // Rust uses big-endian
         buffer.rewind();
 
@@ -759,8 +769,10 @@ public class CommandManager {
                     } else {
                         byte[] data = new byte[bulkLen];
                         buffer.get(data);
-                        // Return as string for normal responses
-                        result[i] = new String(data, StandardCharsets.UTF_8);
+                        result[i] =
+                                expectUtf8Response
+                                        ? new String(data, StandardCharsets.UTF_8)
+                                        : glide.api.models.GlideString.gs(data);
                     }
                     break;
 
@@ -781,7 +793,10 @@ public class CommandManager {
                     int complexLen = buffer.getInt();
                     byte[] complexData = new byte[complexLen];
                     buffer.get(complexData);
-                    result[i] = new String(complexData, StandardCharsets.UTF_8);
+                    result[i] =
+                            expectUtf8Response
+                                    ? new String(complexData, StandardCharsets.UTF_8)
+                                    : glide.api.models.GlideString.gs(complexData);
                     break;
 
                 default:
