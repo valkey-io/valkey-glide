@@ -61,6 +61,7 @@ import glide.api.models.commands.stream.StreamTrimOptions.MinId;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.BiFunction;
 import java.util.stream.Stream;
@@ -90,8 +91,12 @@ public class BatchTestUtilities {
             // Use keySlot to force the same hash slot with a random suffix.
             return "{" + keySlot + "}-" + generateRandomNumericSuffix();
         }
-        // Generate a random key
-        return generateRandomNumericSuffix();
+        // Generate a random key with UUID for better uniqueness to avoid flaky test collisions
+        return keySlot
+                + "-"
+                + UUID.randomUUID().toString().substring(0, 8)
+                + "-"
+                + generateRandomNumericSuffix();
     }
 
     private static String generateRandomNumericSuffix() {

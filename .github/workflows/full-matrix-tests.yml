@@ -14,8 +14,12 @@ on:
                 default: true
 
             run-with-macos:
-                description: "Run with macos included (only when necessary)"
-                type: boolean
+                description: "Run with macos inclauded (only when necessary)"
+                type: choice
+                options:
+                    - false
+                    - use-self-hosted
+                    - use-github
                 default: false
 
             run-modules-tests:

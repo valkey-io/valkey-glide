@@ -1,13 +1,30 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import asyncio
-from typing import List
-from utils import start_servers, stop_servers, parse_cluster_script_start_output, create_client
+from typing import List, Union
 
-from glide import (
-    GlideClient,
-    NodeAddress,
-)
+from glide import (GlideClient, GlideClientConfiguration, GlideClusterClient,
+                   GlideClusterClientConfiguration, NodeAddress)
+
+from utils import (parse_cluster_script_start_output, start_servers,
+                   stop_servers)
+
+
+def create_client(
+    nodes_list: List[NodeAddress] = [("localhost", 6379)], is_cluster: bool = False
+) -> Union[GlideClusterClient, GlideClient]:
+    addresses: List[NodeAddress] = nodes_list
+    if is_cluster:
+        config_class = GlideClusterClientConfiguration
+        client_class = GlideClusterClient
+    else:
+        config_class = GlideClientConfiguration
+        client_class = GlideClient
+    config = config_class(
+        addresses=addresses,
+        client_name=f"test_{'cluster' if is_cluster else 'standalone'}_client",
+    )
+    return client_class.create(config)
 
 
 async def run_commands(client: GlideClient) -> None:
@@ -87,7 +104,7 @@ async def test_standalone_client() -> None:
     output = start_servers(False, 1, 1)
     servers, folder = parse_cluster_script_start_output(output)
     servers = [NodeAddress(hp.host, hp.port) for hp in servers]
-    standalone_client = await create_client(servers, is_cluster=False, is_sync=False)
+    standalone_client = await create_client(servers, is_cluster=False)
     await run_commands(standalone_client)
     stop_servers(folder)
     print("Async Standalone Client test completed")
@@ -98,7 +115,7 @@ async def test_cluster_client() -> None:
     output = start_servers(True, 3, 1)
     servers, folder = parse_cluster_script_start_output(output)
     servers = [NodeAddress(hp.host, hp.port) for hp in servers]
-    cluster_client = await create_client(servers, is_cluster=True, is_sync=False)
+    cluster_client = await create_client(servers, is_cluster=True)
     await run_commands(cluster_client)
     stop_servers(folder)
     print("Async Cluster Client test completed")

@@ -1,6 +1,7 @@
 [project]
-dynamic = ["version"]
+dynamic = ["version", "readme"]
 name = "valkey-glide-sync"
+description = "Valkey GLIDE Sync client. Supports Valkey and Redis OSS."
 license = { text = "Apache-2.0" }
 dependencies = [
     # ⚠️  Note: If you add a dependency here, make sure to also add it to glide-sync/requirements.txt

@@ -338,7 +338,7 @@ class BaseClient(CoreCommands):
                     request.callback_idx if isinstance(request, CommandRequest) else 0
                 )
                 res_future = self._available_futures.pop(callback_idx, None)
-                if res_future:
+                if res_future and not res_future.done():
                     res_future.set_exception(e)
                 else:
                     ClientLogger.log(
@@ -355,7 +355,10 @@ class BaseClient(CoreCommands):
         b_arr = bytearray()
         for request in requests:
             ProtobufCodec.encode_delimited(b_arr, request)
-        await self._stream.send(b_arr)
+        try:
+            await self._stream.send(b_arr)
+        except (anyio.ClosedResourceError, anyio.EndOfStream):
+            raise ClosingError("The communication layer was unexpectedly closed.")
 
     def _encode_arg(self, arg: TEncodable) -> bytes:
         """

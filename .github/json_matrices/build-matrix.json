@@ -22,6 +22,14 @@
     {
         "OS": "macos",
         "NAMED_OS": "darwin",
+        "RUNNER": ["self-hosted", "macOS", "ARM64", "ephemeral"],
+        "ARCH": "arm64",
+        "TARGET": "aarch64-apple-darwin",
+        "languages": ["python", "node", "java", "go"]
+    },
+    {
+        "OS": "macos",
+        "NAMED_OS": "darwin",
         "RUNNER": "macos-15",
         "ARCH": "arm64",
         "TARGET": "aarch64-apple-darwin",

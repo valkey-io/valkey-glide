@@ -149,7 +149,7 @@ jobs:
               id: load-platform-matrix
               shell: bash
               run: |
-                  # Filter entries with npm in PACKAGE_MANAGERS and use CD_RUNNER if available
+                  # Filter entries with npm in PACKAGE_MANAGERS and use CD_RUNNER if available, replace "ephemeral" with "persistent" in RUNNER
                   export PLATFORM_MATRIX=$(jq 'map(
                       select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains(["npm"])))
                       | .runner = (
@@ -271,7 +271,7 @@ jobs:
             - name: Upload Native Modules
               uses: actions/upload-artifact@v4
               with:
-                  name: bindings-${{ matrix.TARGET }}
+                  name: bindings-${{ matrix.TARGET }}-${{ matrix.RUNNER }}
                   path: ./node/${{ matrix.TARGET }}
                   retention-days: 1
                   if-no-files-found: error
