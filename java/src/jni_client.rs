@@ -606,9 +606,7 @@ fn estimate_value_size(value: &ServerValue) -> usize {
         }
         redis::Value::VerbatimString { text, .. } => text.len(),
         redis::Value::BigNumber(num) => num.to_string().len(), // Estimate size as string representation
-        redis::Value::Push { data, .. } => {
-            data.iter().map(estimate_value_size).sum::<usize>()
-        }
+        redis::Value::Push { data, .. } => data.iter().map(estimate_value_size).sum::<usize>(),
         redis::Value::ServerError(_) => 128, // Estimate for error messages
         redis::Value::Okay => 2,             // "OK"
         redis::Value::Attribute { data, .. } => estimate_value_size(data.as_ref()),
