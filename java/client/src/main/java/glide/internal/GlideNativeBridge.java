@@ -39,6 +39,11 @@ public class GlideNativeBridge {
             String clientAz,
             boolean lazyConnect,
             String clientName,
+            String protocol,
+            int reconnectNumRetries,
+            int reconnectFactor,
+            int reconnectExponentBase,
+            int reconnectJitterPercent,
             byte[][] subExact,
             byte[][] subPattern,
             byte[][] subSharded);
