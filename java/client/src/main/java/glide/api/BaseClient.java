@@ -453,9 +453,10 @@ public abstract class BaseClient
                                     glide.api.logging.Logger.log(
                                             glide.api.logging.Logger.Level.WARN,
                                             "BaseClient",
-                                            () -> "Failed to register JNI client (handle="
-                                                    + connectionManager.getNativeClientHandle()
-                                                    + ") - continuing",
+                                            () ->
+                                                    "Failed to register JNI client (handle="
+                                                            + connectionManager.getNativeClientHandle()
+                                                            + ") - continuing",
                                             t);
                                 }
                                 return client;
@@ -500,9 +501,10 @@ public abstract class BaseClient
             glide.api.logging.Logger.log(
                     glide.api.logging.Logger.Level.WARN,
                     "BaseClient",
-                    () -> "Failed to register JNI client for push delivery (handle="
-                            + connectionManager.getNativeClientHandle()
-                            + ") - continuing",
+                    () ->
+                            "Failed to register JNI client for push delivery (handle="
+                                    + connectionManager.getNativeClientHandle()
+                                    + ") - continuing",
                     t);
         }
         return new CommandManager(core);
