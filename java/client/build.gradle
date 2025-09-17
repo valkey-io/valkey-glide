@@ -206,9 +206,7 @@ test.dependsOn('buildRust')
 testFfi.dependsOn('buildRustFfi')
 clean.dependsOn('cleanProtobuf', 'cleanRust')
 
-test {
-    exclude "glide/ffi/FfiTest.class"
-}
+
 
 sourceSets {
     main {
