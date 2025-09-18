@@ -46,12 +46,12 @@ jobs:
       - name: Download and setup Redis
         shell: pwsh
         run: |
-          Write-Host "=== Setting up Redis for Windows ==="
+          Write-Host "=== Setting up Redis 7.2.8 for Windows ==="
 
-          # Try Redis 5.0.14 (more recent fork)
-          $url = "https://github.com/tporadowski/redis/releases/download/v5.0.14.1/Redis-x64-5.0.14.1.zip"
+          # Use Redis 7.2.8 (latest open source, Valkey project compliant)
+          $url = "https://github.com/redis-windows/redis-windows/releases/download/7.2.8/Redis-7.2.8-Windows-x64-msys2.zip"
 
-          Write-Host "Downloading Redis 5.0.14..."
+          Write-Host "Downloading Redis 7.2.8..."
           Invoke-WebRequest -Uri $url -OutFile "redis.zip"
 
           Write-Host "Extracting Redis..."
@@ -66,6 +66,23 @@ jobs:
           # List Redis executables
           Get-ChildItem -Path $redisPath -Filter "*.exe" | ForEach-Object {
             Write-Host "Found: $($_.Name)"
+          }
+
+          # Verify Redis version meets Valkey project requirements (6.2-7.2)
+          $version = & "C:\redis\redis-server.exe" --version
+          Write-Host "Redis version: $version"
+
+          if ($version -match "v=([67])\.([0-9]+)\.([0-9]+)") {
+            $major = [int]$Matches[1]
+            $minor = [int]$Matches[2]
+
+            if (($major -eq 6 -and $minor -ge 2) -or ($major -eq 7 -and $minor -le 2)) {
+              Write-Host "✅ Redis version is compliant with Valkey project requirements (6.2-7.2)"
+            } else {
+              throw "❌ Redis version $version is not in supported range (6.2-7.2)"
+            }
+          } else {
+            throw "❌ Could not parse Redis version"
           }
 
       - name: Test Redis connectivity
@@ -189,7 +206,7 @@ jobs:
           Write-Host "Environment:"
           Write-Host "  OS: Windows Server 2022"
           Write-Host "  Java: 17 (Temurin)"
-          Write-Host "  Redis: 5.0.14 (tporadowski fork)"
+          Write-Host "  Redis: 7.2.8 (redis-windows, open source)"
           Write-Host "  Rust: stable (MSVC target)"
           Write-Host ""
           Write-Host "Status:"
@@ -207,7 +224,7 @@ jobs:
           Write-Host "  - Process management differences"
           Write-Host ""
           Write-Host "Next Steps:"
-          Write-Host "  1. Fix any build errors found"
-          Write-Host "  2. Get unit tests passing"
-          Write-Host "  3. Fix cluster manager for basic standalone mode"
-          Write-Host "  4. Gradually enable more integration tests"
+          Write-Host "  1. Verify Redis 7.2.8 compatibility"
+          Write-Host "  2. Test with latest Redis features"
+          Write-Host "  3. Expand integration test coverage"
+          Write-Host "  4. Consider matrix testing with Redis 6.2-7.2"
