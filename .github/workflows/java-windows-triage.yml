@@ -1,0 +1,213 @@
+name: Java Windows Triage Test
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - ci-cd-java-windows-support
+    paths:
+      - '.github/workflows/java-windows-triage.yml'
+      - 'utils/cluster_manager_windows_patch.py'
+      - 'java/**'
+
+jobs:
+  windows-triage:
+    name: Windows Triage - Minimal Testing
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Install protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          version: "29.1"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download and setup Redis
+        shell: pwsh
+        run: |
+          Write-Host "=== Setting up Redis for Windows ==="
+
+          # Try Redis 5.0.14 (more recent fork)
+          $url = "https://github.com/tporadowski/redis/releases/download/v5.0.14.1/Redis-x64-5.0.14.1.zip"
+
+          Write-Host "Downloading Redis 5.0.14..."
+          Invoke-WebRequest -Uri $url -OutFile "redis.zip"
+
+          Write-Host "Extracting Redis..."
+          Expand-Archive -Path "redis.zip" -DestinationPath "C:\redis" -Force
+
+          # Find and add to PATH
+          $redisPath = "C:\redis"
+          Write-Host "Redis extracted to: $redisPath"
+          echo "$redisPath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          echo "REDIS_PATH=$redisPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+          # List Redis executables
+          Get-ChildItem -Path $redisPath -Filter "*.exe" | ForEach-Object {
+            Write-Host "Found: $($_.Name)"
+          }
+
+      - name: Test Redis connectivity
+        shell: pwsh
+        run: |
+          Write-Host "=== Testing basic Redis connectivity ==="
+
+          # Start Redis in background
+          $redis = Start-Process -FilePath "C:\redis\redis-server.exe" `
+                                 -ArgumentList "--port", "6379", "--protected-mode", "no" `
+                                 -PassThru -WindowStyle Hidden
+
+          Write-Host "Redis started with PID: $($redis.Id)"
+          Start-Sleep -Seconds 3
+
+          # Test ping
+          & "C:\redis\redis-cli.exe" ping
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "✓ Redis is responding to ping"
+          } else {
+            Write-Host "✗ Redis ping failed"
+            exit 1
+          }
+
+          # Stop Redis
+          Stop-Process -Id $redis.Id -Force
+          Write-Host "Redis stopped"
+
+      - name: Build Java client
+        shell: cmd
+        run: |
+          cd java
+          echo === Building Java client ===
+          gradlew.bat --info :client:build -x javadoc -x test
+
+      - name: Run basic unit tests
+        shell: cmd
+        run: |
+          cd java
+          echo === Running basic unit tests ===
+          gradlew.bat :client:test --tests "*ConfigurationTest*" || echo "Unit tests status: %ERRORLEVEL%"
+
+      - name: Test cluster manager patch
+        shell: cmd
+        run: |
+          echo === Testing cluster_manager_windows_patch.py ===
+          python utils\cluster_manager_windows_patch.py --help
+
+      - name: Try to start standalone Redis with cluster manager
+        shell: cmd
+        run: |
+          echo === Starting standalone Redis via cluster manager ===
+          python utils\cluster_manager_windows_patch.py start --cluster-mode false --shard-count 1 --replica-count 0 || echo "Status: %ERRORLEVEL%"
+
+      - name: Run minimal integration test
+        shell: cmd
+        run: |
+          cd java
+          echo === Running minimal integration test ===
+          set STANDALONE_ENDPOINTS=localhost:6379
+          gradlew.bat :integTest:test --tests "*ConnectionTests.testBasicCommands*" -Dstandalone-endpoints=localhost:6379 || echo "Integration test status: %ERRORLEVEL%"
+
+      - name: Collect test results
+        if: always()
+        shell: pwsh
+        run: |
+          Write-Host "=== Test Results Summary ==="
+
+          # Check for test results
+          $testDirs = @(
+            "java\client\build\test-results",
+            "java\integTest\build\test-results"
+          )
+
+          foreach ($dir in $testDirs) {
+            if (Test-Path $dir) {
+              Write-Host "Found test results in: $dir"
+              Get-ChildItem -Path $dir -Recurse -Filter "*.xml" | ForEach-Object {
+                Write-Host "  - $($_.Name)"
+              }
+            }
+          }
+
+          # Check for built artifacts
+          if (Test-Path "java\client\build\libs") {
+            Write-Host "Built JARs:"
+            Get-ChildItem -Path "java\client\build\libs" -Filter "*.jar" | ForEach-Object {
+              Write-Host "  - $($_.Name) ($($_.Length) bytes)"
+            }
+          }
+
+          # Check for DLL
+          $dlls = Get-ChildItem -Path "java" -Recurse -Filter "*.dll" -ErrorAction SilentlyContinue
+          if ($dlls) {
+            Write-Host "Found DLLs:"
+            foreach ($dll in $dlls) {
+              Write-Host "  - $($dll.FullName) ($($dll.Length) bytes)"
+            }
+          }
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-triage-artifacts
+          path: |
+            java/client/build/reports/**
+            java/client/build/test-results/**
+            java/integTest/build/reports/**
+            java/integTest/build/test-results/**
+            java/target/**/*.dll
+            java/client/build/libs/*.jar
+            utils/clusters/**/server.log
+
+      - name: Document findings
+        if: always()
+        shell: pwsh
+        run: |
+          Write-Host "=== Windows Triage Report ==="
+          Write-Host ""
+          Write-Host "Environment:"
+          Write-Host "  OS: Windows Server 2022"
+          Write-Host "  Java: 17 (Temurin)"
+          Write-Host "  Redis: 5.0.14 (tporadowski fork)"
+          Write-Host "  Rust: stable (MSVC target)"
+          Write-Host ""
+          Write-Host "Status:"
+          Write-Host "  [✓] Redis executable found and runs"
+          Write-Host "  [✓] Basic Redis connectivity works"
+          Write-Host "  [?] Java client build status"
+          Write-Host "  [?] Unit tests status"
+          Write-Host "  [?] Integration tests status"
+          Write-Host "  [?] Cluster manager compatibility"
+          Write-Host ""
+          Write-Host "Known Issues:"
+          Write-Host "  - Redis --daemonize not supported on Windows"
+          Write-Host "  - 'which' command not available (using shutil.which)"
+          Write-Host "  - Path separator differences (/ vs \)"
+          Write-Host "  - Process management differences"
+          Write-Host ""
+          Write-Host "Next Steps:"
+          Write-Host "  1. Fix any build errors found"
+          Write-Host "  2. Get unit tests passing"
+          Write-Host "  3. Fix cluster manager for basic standalone mode"
+          Write-Host "  4. Gradually enable more integration tests"
