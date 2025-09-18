@@ -6,6 +6,7 @@ from glide_shared.config import (
     AdvancedGlideClientConfiguration,
     AdvancedGlideClusterClientConfiguration,
     BackoffStrategy,
+    CompressionConfiguration,
 )
 from glide_shared.config import (
     GlideClientConfiguration as SharedGlideClientConfiguration,
@@ -79,6 +80,7 @@ class GlideClientConfiguration(SharedGlideClientConfiguration):
         client_az: Optional[str] = None,
         advanced_config: Optional[AdvancedGlideClientConfiguration] = None,
         lazy_connect: Optional[bool] = None,
+        compression: Optional["CompressionConfiguration"] = None,
     ):
         super().__init__(
             addresses=addresses,
@@ -95,6 +97,7 @@ class GlideClientConfiguration(SharedGlideClientConfiguration):
             client_az=client_az,
             advanced_config=advanced_config,
             lazy_connect=lazy_connect,
+            compression=compression,
         )
 
 
@@ -164,6 +167,7 @@ class GlideClusterClientConfiguration(SharedGlideClusterClientConfiguration):
         client_az: Optional[str] = None,
         advanced_config: Optional[AdvancedGlideClusterClientConfiguration] = None,
         lazy_connect: Optional[bool] = None,
+        compression: Optional["CompressionConfiguration"] = None,
     ):
         super().__init__(
             addresses=addresses,
@@ -181,4 +185,5 @@ class GlideClusterClientConfiguration(SharedGlideClusterClientConfiguration):
             client_az=client_az,
             advanced_config=advanced_config,
             lazy_connect=lazy_connect,
+            compression=compression,
         )
