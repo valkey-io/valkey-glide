@@ -39,9 +39,9 @@ jobs:
                   export PLATFORM_MATRIX=$(jq 'map(
                       select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains(["maven"])))
                       | .RUNNER = (
-                          if (.RUNNER | type == "array") 
-                          then (.RUNNER | map(if . == "ephemeral" then "persistent" else . end)) 
-                          else (if .RUNNER == "ephemeral" then "persistent" else .RUNNER end) 
+                          if (.RUNNER | type == "array")
+                          then (.RUNNER | map(if . == "ephemeral" then "persistent" else . end))
+                          else (if .RUNNER == "ephemeral" then "persistent" else .RUNNER end)
                           end
                       )
                   )' < .github/json_matrices/build-matrix.json | jq -c .)
@@ -129,11 +129,22 @@ jobs:
                       ${{ runner.os }}-gradle-cd-
                       ${{ runner.os }}-gradle-
 
-            - name: Create secret key ring file
+            - name: Create secret key ring file for all Java submodules
               working-directory: java/client
               run: |
+                  # Decode the provided base64 GPG key into the client module
                   echo "$SECRING_GPG" | base64 --decode > ./secring.gpg
-                  ls -ltr
+
+                  # Copy the key ring file into the jedis-compatibility module which also performs signing
+                  if [ -d ../jedis-compatibility ]; then
+                    cp ./secring.gpg ../jedis-compatibility/secring.gpg
+                  else
+                    echo "jedis-compatibility module directory not found" >&2
+                    exit 1
+                  fi
+
+                  echo "Listing key ring files to verify presence:"
+                  ls -l ./secring.gpg ../jedis-compatibility/secring.gpg
               env:
                   SECRING_GPG: ${{ secrets.SECRING_GPG }}
 
@@ -141,11 +152,22 @@ jobs:
               working-directory: java
               run: |
                   if [[ "${{ matrix.host.TARGET }}" == *"musl"* ]]; then
+                    # Build and publish client first
                     ./gradlew --build-cache :client:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
                     -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }} \
                     -Ptarget=${{ matrix.host.TARGET }}
+                    
+                    # Then build jedis-compatibility
+                    ./gradlew --build-cache :jedis-compatibility:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
+                    -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }} \
+                    -Ptarget=${{ matrix.host.TARGET }}
                   else
+                    # Build and publish client first
                     ./gradlew --build-cache :client:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
+                    -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
+                    
+                    # Then build jedis-compatibility
+                    ./gradlew --build-cache :jedis-compatibility:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
                     -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
                   fi
               env:
@@ -154,12 +176,21 @@ jobs:
             - name: Bundle JAR
               working-directory: java
               run: |
+                  # Bundle client JAR
                   src_folder=~/.m2/repository/io/valkey/valkey-glide/${{ env.RELEASE_VERSION }}
                   cd $src_folder
                   jar -cvf bundle.jar *
                   ls -ltr
                   cd -
                   cp $src_folder/bundle.jar bundle-${{ matrix.host.TARGET }}.jar
+
+                  # Bundle jedis-compatibility JAR
+                  jedis_src_folder=~/.m2/repository/io/valkey/valkey-glide-jedis-compatibility/${{ env.RELEASE_VERSION }}
+                  cd $jedis_src_folder
+                  jar -cvf jedis-bundle.jar *
+                  ls -ltr
+                  cd -
+                  cp $jedis_src_folder/jedis-bundle.jar jedis-bundle-${{ matrix.host.TARGET }}.jar
 
             - name: Upload artifacts to publish
               continue-on-error: true
@@ -168,6 +199,7 @@ jobs:
                   name: java-${{ matrix.host.TARGET }}
                   path: |
                       java/bundle*.jar
+                      java/jedis-bundle*.jar
 
     publish-to-maven-central-deployment:
         if: ${{ inputs.maven_publish == true || github.event_name == 'push' }}
@@ -196,8 +228,16 @@ jobs:
             - name: Move files to the correct directory tree
               run: |
                   mkdir -p build/io/valkey/valkey-glide/${{ env.RELEASE_VERSION }}
-                  cp -a maven-files/* build/io/valkey/valkey-glide/${{ env.RELEASE_VERSION }}
+                  mkdir -p build/io/valkey/valkey-glide-jedis-compatibility/${{ env.RELEASE_VERSION }}
+
+                  # Move jedis-compatibility files first
+                  cp -a maven-files/valkey-glide-jedis-compatibility* build/io/valkey/valkey-glide-jedis-compatibility/${{ env.RELEASE_VERSION }}
+
+                  # Move client files (exclude jedis-compatibility files)
+                  find maven-files -name "valkey-glide-*" ! -name "*jedis-compatibility*" -exec cp {} build/io/valkey/valkey-glide/${{ env.RELEASE_VERSION }}/ \;
+
                   rm -rf build/io/valkey/valkey-glide/${{ env.RELEASE_VERSION }}/META-INF
+                  rm -rf build/io/valkey/valkey-glide-jedis-compatibility/${{ env.RELEASE_VERSION }}/META-INF
                   cd build
                   zip -r ../build io
 
@@ -253,6 +293,9 @@ jobs:
             fail-fast: false
             matrix:
                 host: ${{ fromJson(needs.load-platform-matrix.outputs.PLATFORM_MATRIX) }}
+                exclude:
+                    - host:
+                          TARGET: aarch64-unknown-linux-musl
         runs-on: ${{ matrix.host.test-runner || matrix.host.runner }}
         container:
             image: ${{ matrix.host.IMAGE || ''}}

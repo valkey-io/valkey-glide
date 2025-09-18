@@ -447,9 +447,9 @@ jobs:
               uses: geekyeggo/delete-artifact@v2
               with:
                   name: |
-                      npm-packages-${{ github.run_id }}
                       artifacts-*
                       js-files-${{ github.run_id }}
+                  failOnError: false
 
     test-published-release:
         needs: [get-build-parameters, prepare-and-publish]
@@ -550,9 +550,9 @@ jobs:
               uses: geekyeggo/delete-artifact@v2
               with:
                   name: |
-                      npm-packages-${{ github.run_id }}
                       bindings-*
                       js-files-${{ github.run_id }}
+                  failOnError: false
 
     deprecate-on-failure:
         needs: [test-published-release, get-build-parameters]
