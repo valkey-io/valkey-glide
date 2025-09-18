@@ -2360,7 +2360,7 @@ pub unsafe extern "C" fn drop_otel_span(span_ptr: u64) {
     }
 
     // Validate pointer alignment and bounds (basic safety checks)
-    if span_ptr % 8 != 0 {
+    if !span_ptr.is_multiple_of(8) {
         logger_core::log_error(
             "ffi_otel",
             format!("drop_otel_span: Invalid span pointer - misaligned: 0x{span_ptr:x}",),
