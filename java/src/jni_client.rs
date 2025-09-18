@@ -573,11 +573,25 @@ fn should_use_direct_buffer(value: &ServerValue) -> bool {
     match value {
         redis::Value::BulkString(data) => data.len() > THRESHOLD,
         redis::Value::Array(arr) => {
+            // Only offload arrays composed of simple scalar types. Nested arrays/maps lose fidelity
+            if arr.iter().any(|elem| !is_simple_scalar(elem)) {
+                return false;
+            }
+
             // Calculate total estimated size of array elements
             let total_size: usize = arr.iter().map(estimate_value_size).sum();
             total_size > THRESHOLD
         }
         redis::Value::Map(map) => {
+            // Direct buffers are only safe when both keys and values are bulk strings; complex
+            // structures (arrays, integers, maps) need full decoding to preserve types.
+            if map.iter().any(|(k, v)| {
+                !matches!(k, redis::Value::BulkString(_))
+                    || !matches!(v, redis::Value::BulkString(_))
+            }) {
+                return false;
+            }
+
             // Calculate total size of map (keys + values)
             let total_size: usize = map
                 .iter()
@@ -586,12 +600,31 @@ fn should_use_direct_buffer(value: &ServerValue) -> bool {
             total_size > THRESHOLD
         }
         redis::Value::Set(set) => {
+            // Sets must also contain only scalar elements to be safely serialized.
+            if set.iter().any(|elem| !is_simple_scalar(elem)) {
+                return false;
+            }
+
             // Calculate total size of set elements
             let total_size: usize = set.iter().map(estimate_value_size).sum();
             total_size > THRESHOLD
         }
         _ => false, // Other types (Int, Double, Boolean, etc.) are typically small
     }
+}
+
+fn is_simple_scalar(value: &ServerValue) -> bool {
+    matches!(
+        value,
+        redis::Value::BulkString(_)
+            | redis::Value::SimpleString(_)
+            | redis::Value::Int(_)
+            | redis::Value::Boolean(_)
+            | redis::Value::Double(_)
+            | redis::Value::Nil
+            | redis::Value::Okay
+            | redis::Value::BigNumber(_)
+    )
 }
 
 /// Estimate the memory size of a ServerValue for threshold calculations

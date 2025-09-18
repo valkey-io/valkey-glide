@@ -43,7 +43,10 @@ public class GlideCoreClient implements AutoCloseable {
                     Long, java.lang.ref.WeakReference<glide.api.BaseClient>>
             clients = new java.util.concurrent.ConcurrentHashMap<>();
 
-    private static final byte[][] EMPTY_SCRIPT_PARAMS = new byte[0][];
+    /**
+     * Empty 2D byte array constant for reuse in various contexts (script params, subPattern, etc.)
+     */
+    public static final byte[][] EMPTY_2D_BYTE_ARRAY = new byte[0][];
 
     public static void registerClient(long handle, glide.api.BaseClient client) {
         clients.put(handle, new java.lang.ref.WeakReference<>(client));
@@ -122,9 +125,9 @@ public class GlideCoreClient implements AutoCloseable {
         private Integer nativeDirectMemoryMB = null;
         private glide.api.models.configuration.ProtocolVersion protocol =
                 glide.api.models.configuration.ProtocolVersion.RESP3;
-        private byte[][] subExact = new byte[0][];
-        private byte[][] subPattern = new byte[0][];
-        private byte[][] subSharded = new byte[0][];
+        private byte[][] subExact = EMPTY_2D_BYTE_ARRAY;
+        private byte[][] subPattern = EMPTY_2D_BYTE_ARRAY;
+        private byte[][] subSharded = EMPTY_2D_BYTE_ARRAY;
         private String clientName = null;
         private glide.api.models.configuration.ReadFrom readFrom =
                 glide.api.models.configuration.ReadFrom.PRIMARY;
@@ -191,9 +194,9 @@ public class GlideCoreClient implements AutoCloseable {
         }
 
         public Config subscriptions(byte[][] exact, byte[][] pattern, byte[][] sharded) {
-            this.subExact = exact != null ? exact : new byte[0][];
-            this.subPattern = pattern != null ? pattern : new byte[0][];
-            this.subSharded = sharded != null ? sharded : new byte[0][];
+            this.subExact = exact != null ? exact : EMPTY_2D_BYTE_ARRAY;
+            this.subPattern = pattern != null ? pattern : EMPTY_2D_BYTE_ARRAY;
+            this.subSharded = sharded != null ? sharded : EMPTY_2D_BYTE_ARRAY;
             return this;
         }
 
@@ -462,6 +465,10 @@ public class GlideCoreClient implements AutoCloseable {
             result.reconnectStrategy(config.getReconnectStrategy());
         }
 
+        if (config.getDatabaseId() != null) {
+            result.databaseId(config.getDatabaseId());
+        }
+
         // Handle cluster vs standalone specific configurations
         if (config instanceof glide.api.models.configuration.GlideClusterClientConfiguration) {
             glide.api.models.configuration.GlideClusterClientConfiguration clusterConfig =
@@ -475,10 +482,6 @@ public class GlideCoreClient implements AutoCloseable {
             glide.api.models.configuration.GlideClientConfiguration standaloneConfig =
                     (glide.api.models.configuration.GlideClientConfiguration) config;
             result.clusterMode(false);
-
-            if (standaloneConfig.getDatabaseId() != null) {
-                result.databaseId(standaloneConfig.getDatabaseId());
-            }
 
             if (standaloneConfig.getReadFrom() != null) {
                 result.readFrom(standaloneConfig.getReadFrom());
@@ -505,21 +508,13 @@ public class GlideCoreClient implements AutoCloseable {
         return executeCommand(CommandRequest.auto(command, args));
     }
 
-    /** Execute any server command using the Command object with automatic routing. */
-    public CompletableFuture<Object> executeCommand(glide.internal.protocol.Command command) {
-        if (command == null) {
-            throw new IllegalArgumentException("Command cannot be null");
-        }
-        return executeCommand(CommandRequest.auto(command.getType(), command.getArgumentsArray()));
-    }
-
     /** Execute a binary command with mixed String/byte[] arguments using automatic routing. */
     public CompletableFuture<Object> executeBinaryCommand(
-            BinaryCommandRequest.BinaryCommand command) {
-        if (command == null) {
-            throw new IllegalArgumentException("BinaryCommand cannot be null");
+            String commandName, List<Object> arguments) {
+        if (commandName == null) {
+            throw new IllegalArgumentException("Command name cannot be null");
         }
-        return executeBinaryCommand(BinaryCommandRequest.auto(command));
+        return executeBinaryCommand(CommandRequest.binaryAuto(commandName, arguments));
     }
 
     /**
@@ -750,9 +745,9 @@ public class GlideCoreClient implements AutoCloseable {
     }
 
     /** Core binary command execution method supporting mixed String/byte[] arguments. */
-    private CompletableFuture<Object> executeBinaryCommand(BinaryCommandRequest request) {
+    private CompletableFuture<Object> executeBinaryCommand(CommandRequest request) {
         if (request == null) {
-            throw new IllegalArgumentException("BinaryCommandRequest cannot be null");
+            throw new IllegalArgumentException("CommandRequest cannot be null");
         }
 
         try {
@@ -1082,8 +1077,8 @@ public class GlideCoreClient implements AutoCloseable {
                     handle,
                     correlationId,
                     hash,
-                    keys != null ? keys : EMPTY_SCRIPT_PARAMS,
-                    args != null ? args : EMPTY_SCRIPT_PARAMS,
+                    keys != null ? keys : EMPTY_2D_BYTE_ARRAY,
+                    args != null ? args : EMPTY_2D_BYTE_ARRAY,
                     hasRoute,
                     routeType,
                     routeParam,

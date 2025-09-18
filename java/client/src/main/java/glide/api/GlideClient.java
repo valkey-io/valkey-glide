@@ -427,7 +427,7 @@ public class GlideClient extends BaseClient
     @Override
     public CompletableFuture<byte[]> functionDump() {
         return commandManager.submitNewCommand(
-                FunctionDump, new GlideString[0], this::handleBytesOrNullResponse);
+                FunctionDump, BaseClient.EMPTY_GLIDE_STRING_ARRAY, this::handleBytesOrNullResponse);
     }
 
     @Override
@@ -452,7 +452,8 @@ public class GlideClient extends BaseClient
 
     @Override
     public CompletableFuture<Object> fcall(@NonNull GlideString function) {
-        return fcall(function, new GlideString[0], new GlideString[0]);
+        return fcall(
+                function, BaseClient.EMPTY_GLIDE_STRING_ARRAY, BaseClient.EMPTY_GLIDE_STRING_ARRAY);
     }
 
     @Override
@@ -462,7 +463,8 @@ public class GlideClient extends BaseClient
 
     @Override
     public CompletableFuture<Object> fcallReadOnly(@NonNull GlideString function) {
-        return fcallReadOnly(function, new GlideString[0], new GlideString[0]);
+        return fcallReadOnly(
+                function, BaseClient.EMPTY_GLIDE_STRING_ARRAY, BaseClient.EMPTY_GLIDE_STRING_ARRAY);
     }
 
     @Override
@@ -528,7 +530,7 @@ public class GlideClient extends BaseClient
             functionStatsBinary() {
         return commandManager.submitNewCommand(
                 FunctionStats,
-                new GlideString[0],
+                BaseClient.EMPTY_GLIDE_STRING_ARRAY,
                 response -> handleFunctionStatsBinaryResponse(response, false).getMultiValue());
     }
 
@@ -546,7 +548,7 @@ public class GlideClient extends BaseClient
     @Override
     public CompletableFuture<GlideString> randomKeyBinary() {
         return commandManager.submitNewCommand(
-                RandomKey, new GlideString[0], this::handleGlideStringOrNullResponse);
+                RandomKey, BaseClient.EMPTY_GLIDE_STRING_ARRAY, this::handleGlideStringOrNullResponse);
     }
 
     @Override
