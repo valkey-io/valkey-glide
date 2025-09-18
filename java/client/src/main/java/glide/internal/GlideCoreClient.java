@@ -14,8 +14,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * GLIDE core client transport using JNI. Replaces UDS-based communication. Provides direct JNI
- * access to glide-core with all routing and performance optimizations.
+ * GLIDE core client transport. Provides direct native access to glide-core with all routing and
+ * performance optimizations.
  */
 public class GlideCoreClient implements AutoCloseable {
     private static final Cleaner CLEANER = Cleaner.create();
@@ -227,7 +227,7 @@ public class GlideCoreClient implements AutoCloseable {
             return this;
         }
 
-        // Package-private getters for JNI access
+        // Package-private getters for native access
         String[] getAddresses() {
             return addresses.toArray(new String[0]);
         }
@@ -493,7 +493,7 @@ public class GlideCoreClient implements AutoCloseable {
         return CompletableFuture.supplyAsync(() -> new GlideCoreClient(config));
     }
 
-    /** Create a new GlideCoreClient with basic configuration (for compatibility with UDS API). */
+    /** Create a new GlideCoreClient with basic configuration. */
     public static GlideCoreClient createClient(Config config) {
         return new GlideCoreClient(config);
     }
@@ -547,7 +547,7 @@ public class GlideCoreClient implements AutoCloseable {
                 return future;
             }
 
-            // Execute binary command directly via JNI using protobuf bytes
+            // Execute binary command directly using protobuf bytes
             GlideNativeBridge.executeBinaryCommandAsync(handle, requestBytes, correlationId);
 
             return future;
@@ -583,7 +583,7 @@ public class GlideCoreClient implements AutoCloseable {
                 return future;
             }
 
-            // Execute command directly via JNI using protobuf bytes
+            // Execute command directly using protobuf bytes
             GlideNativeBridge.executeCommandAsync(handle, requestBytes, correlationId);
 
             return future;
@@ -619,7 +619,7 @@ public class GlideCoreClient implements AutoCloseable {
                 return future;
             }
 
-            // Execute batch directly via JNI
+            // Execute batch directly
             GlideNativeBridge.executeBatchAsync(
                     handle, batchRequestBytes, expectUtf8Response, correlationId);
 
@@ -658,7 +658,7 @@ public class GlideCoreClient implements AutoCloseable {
                 return future;
             }
 
-            // Execute cluster scan with proper cursor management via dedicated JNI bridge
+            // Execute cluster scan with proper cursor management via dedicated bridge
             GlideNativeBridge.executeClusterScanAsync(
                     handle, cursorId, matchPattern, count, objectType, expectUtf8Response, correlationId);
 
@@ -709,7 +709,7 @@ public class GlideCoreClient implements AutoCloseable {
                 return future;
             }
 
-            // Create OpenTelemetry span if configured (matching UDS pattern)
+            // Create OpenTelemetry span if configured
             long spanPtr = 0;
             if (OpenTelemetry.isInitialized() && OpenTelemetry.shouldSample()) {
                 spanPtr =
@@ -728,7 +728,7 @@ public class GlideCoreClient implements AutoCloseable {
                 return future;
             }
 
-            // Execute command directly via JNI
+            // Execute command directly
             GlideNativeBridge.executeCommandAsync(handle, request.toBytes(), correlationId);
 
             // Ensure span cleanup on completion
@@ -781,7 +781,7 @@ public class GlideCoreClient implements AutoCloseable {
                 return future;
             }
 
-            // Execute binary command via JNI
+            // Execute binary command directly
             GlideNativeBridge.executeBinaryCommandAsync(handle, request.toBytes(), correlationId);
 
             // Ensure span cleanup on completion

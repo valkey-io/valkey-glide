@@ -16,13 +16,13 @@ import java.util.concurrent.Future;
 import lombok.RequiredArgsConstructor;
 
 /**
- * JNI-based ConnectionManager that wraps GlideNativeBridge. Provides the same interface as UDS
- * ConnectionManager but uses JNI instead of Unix Domain Sockets.
+ * ConnectionManager that wraps GlideNativeBridge to handle native client connections. Manages the
+ * lifecycle of native client instances and provides connection services.
  */
 @RequiredArgsConstructor
 public class ConnectionManager {
 
-    /** Native client handle for JNI operations */
+    /** Native client handle for operations */
     private long nativeClientHandle = 0;
 
     private int maxInflightRequests = 0;
@@ -30,7 +30,7 @@ public class ConnectionManager {
     private volatile boolean isClosed = false;
 
     /**
-     * Connect to Valkey using JNI bridge instead of UDS.
+     * Connect to Valkey using the native bridge.
      *
      * @param configuration Connection Configuration
      * @return CompletableFuture that completes when connection is established
@@ -88,7 +88,7 @@ public class ConnectionManager {
                                         ? reconnectStrategy.getJitterPercent()
                                         : -1;
 
-                        // Create native client through JNI bridge
+                        // Create native client through bridge
                         byte[][] subExact = new byte[0][];
                         byte[][] subPattern = new byte[0][];
                         byte[][] subSharded = new byte[0][];
@@ -194,7 +194,7 @@ public class ConnectionManager {
                         if (e instanceof ClosingException) {
                             throw e;
                         }
-                        throw new RuntimeException("Failed to create JNI client", e);
+                        throw new RuntimeException("Failed to create client", e);
                     }
                 });
     }

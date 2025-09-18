@@ -5,8 +5,8 @@ import glide.api.logging.Logger;
 import glide.ffi.resolvers.NativeUtils;
 
 /**
- * JNI bridge for the native Valkey client. Methods expose a handle-based API for safe
- * cross-language operations.
+ * Native bridge for the Valkey client. Methods expose a handle-based API for safe cross-language
+ * operations.
  */
 public class GlideNativeBridge {
 
