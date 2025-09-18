@@ -5,7 +5,6 @@ import glide.api.OpenTelemetry;
 import glide.api.models.exceptions.ClosingException;
 import glide.ffi.resolvers.NativeUtils;
 import glide.ffi.resolvers.OpenTelemetryResolver;
-import glide.internal.protocol.*;
 import java.lang.ref.Cleaner;
 import java.util.Arrays;
 import java.util.List;
@@ -503,20 +502,6 @@ public class GlideCoreClient implements AutoCloseable {
 
     // ==================== COMMAND EXECUTION METHODS ====================
 
-    /** Execute a Valkey command with automatic routing (RECOMMENDED for 95% of commands). */
-    public CompletableFuture<Object> execute(String command, String... args) {
-        return executeCommand(CommandRequest.auto(command, args));
-    }
-
-    /** Execute a binary command with mixed String/byte[] arguments using automatic routing. */
-    public CompletableFuture<Object> executeBinaryCommand(
-            String commandName, List<Object> arguments) {
-        if (commandName == null) {
-            throw new IllegalArgumentException("Command name cannot be null");
-        }
-        return executeBinaryCommand(CommandRequest.binaryAuto(commandName, arguments));
-    }
-
     /**
      * Execute binary command asynchronously using raw protobuf bytes (for compatibility with
      * CommandManager)
@@ -687,114 +672,6 @@ public class GlideCoreClient implements AutoCloseable {
 
         GlideNativeBridge.updateConnectionPassword(handle, password, immediateAuth, correlationId);
         return future;
-    }
-
-    /** Core command execution method using the enhanced routing architecture. */
-    private CompletableFuture<Object> executeCommand(CommandRequest request) {
-        if (request == null) {
-            throw new IllegalArgumentException("CommandRequest cannot be null");
-        }
-
-        try {
-            long handle = nativeClientHandle.get();
-            if (handle == 0) {
-                CompletableFuture<Object> future = new CompletableFuture<>();
-                future.completeExceptionally(
-                        new glide.api.models.exceptions.ClosingException("Client is closed"));
-                return future;
-            }
-
-            // Create OpenTelemetry span if configured
-            long spanPtr = 0;
-            if (OpenTelemetry.isInitialized() && OpenTelemetry.shouldSample()) {
-                spanPtr =
-                        OpenTelemetryResolver.createLeakedOtelSpan(formatSpanName(request.getCommandName()));
-            }
-
-            // Create future and register it with the async registry
-            CompletableFuture<Object> future = new CompletableFuture<>();
-            long correlationId;
-
-            try {
-                // Rust handles all timeout logic - Java just waits for response
-                correlationId = AsyncRegistry.register(future, this.maxInflightRequests, handle);
-            } catch (glide.api.models.exceptions.RequestException e) {
-                future.completeExceptionally(e);
-                return future;
-            }
-
-            // Execute command directly
-            GlideNativeBridge.executeCommandAsync(handle, request.toBytes(), correlationId);
-
-            // Ensure span cleanup on completion
-            final long finalSpanPtr = spanPtr;
-            if (finalSpanPtr != 0) {
-                future.whenComplete(
-                        (result, throwable) -> {
-                            OpenTelemetryResolver.dropOtelSpan(finalSpanPtr);
-                        });
-            }
-
-            return future;
-
-        } catch (Exception e) {
-            CompletableFuture<Object> future = new CompletableFuture<>();
-            future.completeExceptionally(e);
-            return future;
-        }
-    }
-
-    /** Core binary command execution method supporting mixed String/byte[] arguments. */
-    private CompletableFuture<Object> executeBinaryCommand(CommandRequest request) {
-        if (request == null) {
-            throw new IllegalArgumentException("CommandRequest cannot be null");
-        }
-
-        try {
-            long handle = nativeClientHandle.get();
-            if (handle == 0) {
-                CompletableFuture<Object> future = new CompletableFuture<>();
-                future.completeExceptionally(
-                        new glide.api.models.exceptions.ClosingException("Client is closed"));
-                return future;
-            }
-
-            // Create OpenTelemetry span if configured
-            long spanPtr = 0;
-            if (OpenTelemetry.isInitialized() && OpenTelemetry.shouldSample()) {
-                spanPtr =
-                        OpenTelemetryResolver.createLeakedOtelSpan(formatSpanName(request.getCommandName()));
-            }
-
-            // Create future and register it with the async registry
-            CompletableFuture<Object> future = new CompletableFuture<>();
-            long correlationId;
-            try {
-                correlationId = AsyncRegistry.register(future, this.maxInflightRequests, handle);
-            } catch (glide.api.models.exceptions.RequestException e) {
-                future.completeExceptionally(e);
-                return future;
-            }
-
-            // Execute binary command directly
-            GlideNativeBridge.executeBinaryCommandAsync(handle, request.toBytes(), correlationId);
-
-            // Ensure span cleanup on completion
-            final long finalSpanPtr = spanPtr;
-            if (finalSpanPtr != 0) {
-                future.whenComplete(
-                        (result, throwable) -> {
-                            OpenTelemetryResolver.dropOtelSpan(finalSpanPtr);
-                        });
-            }
-
-            return future;
-
-        } catch (Exception e) {
-            CompletableFuture<Object> future = new CompletableFuture<>();
-            future.completeExceptionally(e);
-            return future;
-        }
     }
 
     // ==================== CLIENT STATUS AND INFO METHODS ====================
