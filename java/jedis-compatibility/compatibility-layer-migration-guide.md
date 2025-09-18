@@ -111,9 +111,10 @@ blockingSocketTimeoutMillis
 - **Retry mechanisms**: Jedis-specific retry logic not implemented
 
 ### Cluster Support
-- **JedisCluster**: Cluster client not supported in compatibility layer
-- **Cluster failover**: Automatic cluster failover not available
-- **Hash slot management**: Manual slot management not supported
+- ✅ **JedisCluster**: Basic cluster client supported via compatibility layer
+- ✅ **Cluster operations**: Standard Redis commands work in cluster mode
+- ✅ **Multiple node configuration**: Supports Set<HostAndPort> initialization
+- ⚠️ **Advanced cluster features**: Some Jedis-specific cluster management features may have limitations
 
 ### Performance Features
 - **Async operations**: Jedis async methods not implemented
