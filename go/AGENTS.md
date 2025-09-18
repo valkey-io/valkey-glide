@@ -11,7 +11,7 @@ This is the Go client binding for Valkey GLIDE, providing both standalone and cl
 **Architecture:** Go wrapper around Rust FFI core with CGO bindings
 
 **Key Components:**
-- `api/` - Main Go client library and interfaces
+- `./` - Main Go client library and interfaces
 - `integTest/` - Integration tests and test suites
 - `benchmarks/` - Performance benchmarking tool
 - `internal/` - Internal packages including protobuf definitions
