@@ -14945,8 +14945,8 @@ public class SharedCommandTests {
         assertEquals(0L, result.get("len"));
 
         // setting string values
-        client.set(key1, "abcdefghijk");
-        client.set(key2, "defjkjuighijk");
+        assertEquals(OK, client.set(key1, "abcdefghijk").get());
+        assertEquals(OK, client.set(key2, "defjkjuighijk").get());
 
         // LCS with only IDX
         Object expectedMatchesObject = new Long[][][] {{{6L, 10L}, {8L, 12L}}, {{3L, 5L}, {0L, 2L}}};
@@ -15028,8 +15028,8 @@ public class SharedCommandTests {
         assertEquals(0L, result.get("len"));
 
         // setting string values
-        client.set(key1, gs("abcdefghijk"));
-        client.set(key2, gs("defjkjuighijk"));
+        assertEquals(OK, client.set(key1, gs("abcdefghijk")).get());
+        assertEquals(OK, client.set(key2, gs("defjkjuighijk")).get());
 
         // LCS with only IDX
         Object expectedMatchesObject = new Long[][][] {{{6L, 10L}, {8L, 12L}}, {{3L, 5L}, {0L, 2L}}};
