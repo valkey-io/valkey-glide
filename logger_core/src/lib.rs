@@ -195,7 +195,7 @@ pub fn init(minimal_level: Option<Level>, file_name: Option<&str>) -> Level {
                 .console_reload
                 .write()
                 .expect("error reloading stdout")
-                .modify(|layer| (*layer.filter_mut() = level_filter));
+                .modify(|layer| *layer.filter_mut() = level_filter);
             let _ = reloads
                 .file_reload
                 .write()
@@ -221,7 +221,7 @@ pub fn init(minimal_level: Option<Level>, file_name: Option<&str>) -> Level {
                 .console_reload
                 .write()
                 .expect("error reloading stdout")
-                .modify(|layer| (*layer.filter_mut() = LevelFilter::OFF));
+                .modify(|layer| *layer.filter_mut() = LevelFilter::OFF);
         }
     };
     level
