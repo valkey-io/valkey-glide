@@ -80,7 +80,7 @@ async fn execute_command_request_and_complete(
         let root_span_ptr_opt = command_request.root_span_ptr;
         match &command_request.command {
             Some(protobuf_bridge::command_request::Command::SingleCommand(command)) => {
-                let cmd = protobuf_bridge::create_redis_command(command)
+                let cmd = protobuf_bridge::create_valkey_command(command)
                     .map_err(|e| anyhow::anyhow!("Failed to create command: {e}"))?;
 
                 // Compute routing
@@ -118,9 +118,9 @@ async fn execute_command_request_and_complete(
                     pipeline.atomic();
                 }
                 for c in &batch.commands {
-                    let redis_cmd = protobuf_bridge::create_redis_command(c)
+                    let valkey_cmd = protobuf_bridge::create_valkey_command(c)
                         .map_err(|e| anyhow::anyhow!("Failed to create batch command: {e}"))?;
-                    pipeline.add_command(redis_cmd);
+                    pipeline.add_command(valkey_cmd);
                 }
 
                 // Routing for batch
@@ -1651,8 +1651,8 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
 
                             // Add commands to pipeline using existing bridge logic
                             for cmd in &batch_clone.commands {
-                                match protobuf_bridge::create_redis_command(cmd) {
-                                    Ok(redis_cmd) => pipeline.add_command(redis_cmd),
+                                match protobuf_bridge::create_valkey_command(cmd) {
+                                    Ok(valkey_cmd) => pipeline.add_command(valkey_cmd),
                                     Err(e) => {
                                         return Err(anyhow::anyhow!(
                                             "Failed to create batch command: {e}"

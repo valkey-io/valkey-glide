@@ -31,9 +31,9 @@ import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.RequestException;
 import glide.ffi.resolvers.OpenTelemetryResolver;
 import glide.internal.GlideCoreClient;
+import glide.utils.BufferUtils;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -51,8 +51,6 @@ public class CommandManager {
 
     /** Core client connection. */
     private final GlideCoreClient coreClient;
-
-    private static final byte[][] EMPTY_SCRIPT_ARGS = new byte[0][];
 
     /** Internal interface for exposing implementation details about a ClusterScanCursor. */
     public interface ClusterScanCursorDetail extends ClusterScanCursor {
@@ -223,7 +221,7 @@ public class CommandManager {
         }
 
         try {
-            byte[][] keyArgs = EMPTY_SCRIPT_ARGS;
+            byte[][] keyArgs = GlideCoreClient.EMPTY_2D_BYTE_ARRAY;
             byte[][] argArgs = toByteMatrix(args);
             final boolean expectUtf8Response =
                     script.getBinaryOutput() == null || !script.getBinaryOutput();
@@ -309,7 +307,7 @@ public class CommandManager {
 
     private static byte[][] toByteMatrix(List<GlideString> values) {
         if (values == null || values.isEmpty()) {
-            return EMPTY_SCRIPT_ARGS;
+            return GlideCoreClient.EMPTY_2D_BYTE_ARRAY;
         }
         byte[][] result = new byte[values.size()][];
         for (int i = 0; i < values.size(); i++) {
@@ -542,11 +540,12 @@ public class CommandManager {
             return deserializeByteBufferMap(dup, expectUtf8Response);
         }
         // Bulk string bytes
-        byte[] bytes = new byte[dup.remaining()];
-        dup.get(bytes);
         if (expectUtf8Response) {
-            return new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
+            // Decode UTF-8 directly from buffer
+            return BufferUtils.decodeUtf8(dup);
         } else {
+            byte[] bytes = new byte[dup.remaining()];
+            dup.get(bytes);
             return glide.api.models.GlideString.gs(bytes);
         }
     }
@@ -569,20 +568,26 @@ public class CommandManager {
                 new java.util.LinkedHashMap<>(Math.max(16, count));
         for (int i = 0; i < count; i++) {
             int klen = buffer.getInt();
-            byte[] kbytes = new byte[klen];
-            buffer.get(kbytes);
-            int vlen = buffer.getInt();
-            byte[] vbytes = new byte[vlen];
-            buffer.get(vbytes);
+            Object key;
+            if (expectUtf8) {
+                // Decode UTF-8 directly from buffer
+                key = BufferUtils.decodeUtf8(buffer, klen);
+            } else {
+                byte[] kbytes = new byte[klen];
+                buffer.get(kbytes);
+                key = glide.api.models.GlideString.gs(kbytes);
+            }
 
-            Object key =
-                    expectUtf8
-                            ? new String(kbytes, java.nio.charset.StandardCharsets.UTF_8)
-                            : glide.api.models.GlideString.gs(kbytes);
-            Object val =
-                    expectUtf8
-                            ? new String(vbytes, java.nio.charset.StandardCharsets.UTF_8)
-                            : glide.api.models.GlideString.gs(vbytes);
+            int vlen = buffer.getInt();
+            Object val;
+            if (expectUtf8) {
+                // Decode UTF-8 directly from buffer
+                val = BufferUtils.decodeUtf8(buffer, vlen);
+            } else {
+                byte[] vbytes = new byte[vlen];
+                buffer.get(vbytes);
+                val = glide.api.models.GlideString.gs(vbytes);
+            }
             map.put(key, val);
         }
         return map;
@@ -664,12 +669,13 @@ public class CommandManager {
                     toStore = deserializeByteBufferMap(dup, expectUtf8Response);
                 } else {
                     dup.rewind();
-                    byte[] bytes = new byte[dup.remaining()];
-                    dup.get(bytes);
-                    toStore =
-                            expectUtf8Response
-                                    ? new String(bytes, java.nio.charset.StandardCharsets.UTF_8)
-                                    : glide.api.models.GlideString.gs(bytes);
+                    if (expectUtf8Response) {
+                        toStore = BufferUtils.decodeUtf8(dup);
+                    } else {
+                        byte[] bytes = new byte[dup.remaining()];
+                        dup.get(bytes);
+                        toStore = glide.api.models.GlideString.gs(bytes);
+                    }
                 }
             } else {
                 toStore = expectUtf8Response ? "" : glide.api.models.GlideString.gs(new byte[0]);
@@ -715,12 +721,13 @@ public class CommandManager {
                     toStore = deserializeByteBufferMap(dup, expectUtf8Response);
                 } else {
                     dup.rewind();
-                    byte[] bytes = new byte[dup.remaining()];
-                    dup.get(bytes);
-                    toStore =
-                            expectUtf8Response
-                                    ? new String(bytes, java.nio.charset.StandardCharsets.UTF_8)
-                                    : glide.api.models.GlideString.gs(bytes);
+                    if (expectUtf8Response) {
+                        toStore = BufferUtils.decodeUtf8(dup);
+                    } else {
+                        byte[] bytes = new byte[dup.remaining()];
+                        dup.get(bytes);
+                        toStore = glide.api.models.GlideString.gs(bytes);
+                    }
                 }
             } else {
                 toStore = expectUtf8Response ? "" : glide.api.models.GlideString.gs(new byte[0]);
@@ -766,20 +773,21 @@ public class CommandManager {
                     if (bulkLen == -1) {
                         result[i] = null;
                     } else {
-                        byte[] data = new byte[bulkLen];
-                        buffer.get(data);
-                        result[i] =
-                                expectUtf8Response
-                                        ? new String(data, StandardCharsets.UTF_8)
-                                        : glide.api.models.GlideString.gs(data);
+                        if (expectUtf8Response) {
+                            // Decode UTF-8 directly from buffer
+                            result[i] = BufferUtils.decodeUtf8(buffer, bulkLen);
+                        } else {
+                            byte[] data = new byte[bulkLen];
+                            buffer.get(data);
+                            result[i] = glide.api.models.GlideString.gs(data);
+                        }
                     }
                     break;
 
                 case '+': // Simple string (includes "OK")
                     int simpleLen = buffer.getInt();
-                    byte[] simpleData = new byte[simpleLen];
-                    buffer.get(simpleData);
-                    String simpleString = new String(simpleData, StandardCharsets.UTF_8);
+                    // Simple strings are always UTF-8
+                    String simpleString = BufferUtils.decodeUtf8(buffer, simpleLen);
                     result[i] = simpleString.equalsIgnoreCase("ok") ? "OK" : simpleString;
                     break;
 
@@ -790,12 +798,14 @@ public class CommandManager {
 
                 case '#': // Complex type (serialized as string)
                     int complexLen = buffer.getInt();
-                    byte[] complexData = new byte[complexLen];
-                    buffer.get(complexData);
-                    result[i] =
-                            expectUtf8Response
-                                    ? new String(complexData, StandardCharsets.UTF_8)
-                                    : glide.api.models.GlideString.gs(complexData);
+                    if (expectUtf8Response) {
+                        // Decode UTF-8 directly from buffer
+                        result[i] = BufferUtils.decodeUtf8(buffer, complexLen);
+                    } else {
+                        byte[] complexData = new byte[complexLen];
+                        buffer.get(complexData);
+                        result[i] = glide.api.models.GlideString.gs(complexData);
+                    }
                     break;
 
                 default:

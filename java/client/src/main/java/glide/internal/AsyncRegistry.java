@@ -1,6 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.internal;
 
+import glide.api.models.exceptions.ErrorType;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
@@ -110,8 +111,14 @@ public final class AsyncRegistry {
                     if (maxInflightRequests > 0) {
                         java.util.concurrent.atomic.AtomicInteger clientCount =
                                 clientInflightCounts.get(clientHandle);
+                        // Null check needed: cleanupClient() may have been called concurrently
                         if (clientCount != null) {
-                            clientCount.decrementAndGet();
+                            int remaining = clientCount.decrementAndGet();
+                            // Clean up the entry when no more inflight requests
+                            // This prevents memory leak for inactive clients
+                            if (remaining == 0) {
+                                clientInflightCounts.remove(clientHandle, clientCount);
+                            }
                         }
                     }
                 });
@@ -159,7 +166,13 @@ public final class AsyncRegistry {
             return false;
         }
 
-        RuntimeException exception = mapToTypedException(errorMessage);
+        // Without an error code, we can't determine the specific error type
+        // Return a generic RequestException rather than trying to guess from the message
+        String msg =
+                (errorMessage == null || errorMessage.isBlank())
+                        ? "Unknown error from native code"
+                        : errorMessage;
+        RuntimeException exception = new glide.api.models.exceptions.RequestException(msg);
 
         // completeExceptionally() is also atomic and safe
         boolean completed = future.completeExceptionally(exception);
@@ -185,18 +198,28 @@ public final class AsyncRegistry {
                 (errorMessage == null || errorMessage.isBlank())
                         ? "Unknown error from native code"
                         : errorMessage;
+
+        ErrorType errorType = ErrorType.fromCode(errorTypeCode);
         RuntimeException ex;
-        switch (errorTypeCode) {
-            case 3: // Disconnect
+
+        switch (errorType) {
+            case DISCONNECT:
+                // DISCONNECT represents unrecoverable connection errors
+                // The Rust layer uses is_unrecoverable_error() to detect these
                 ex = new glide.api.models.exceptions.ClosingException(msg);
                 break;
-            case 0: // Unspecified - check if it's actually a connection error
-                // For unspecified errors, check the message to determine the actual type
-                ex = mapToTypedException(msg);
+            case TIMEOUT:
+                // Timeout errors - properly identified by Rust's is_timeout()
+                ex = new glide.api.models.exceptions.TimeoutException(msg);
                 break;
-            case 1: // ExecAbort
-            case 2: // Timeout
+            case EXEC_ABORT:
+                // Transaction execution aborted - use specific exception type
+                ex = new glide.api.models.exceptions.ExecAbortException(msg);
+                break;
+            case UNSPECIFIED:
             default:
+                // Generic request errors - we don't know the specific type
+                // Don't try to guess from the message as that's unreliable
                 ex = new glide.api.models.exceptions.RequestException(msg);
                 break;
         }
@@ -204,46 +227,9 @@ public final class AsyncRegistry {
         return future.completeExceptionally(ex);
     }
 
-    private static RuntimeException mapToTypedException(String errorMessage) {
-        String msg =
-                (errorMessage == null || errorMessage.isBlank())
-                        ? "Unknown error from native code"
-                        : errorMessage;
-
-        String lower = msg.toLowerCase();
-
-        // Timeout errors → TimeoutException (only when the message indicates a real timeout event)
-        if (lower.contains("timed out")
-                || lower.contains("timeout while")
-                || lower.contains("timeout waiting")
-                || lower.contains("timeout during")) {
-            return new glide.api.models.exceptions.TimeoutException(msg);
-        }
-
-        // Command/argument errors → RequestException
-        if (lower.contains("unknown command")
-                || lower.contains("wrong number of arguments")
-                || lower.contains("syntax error")
-                || lower.contains("invalid argument")) {
-            return new glide.api.models.exceptions.RequestException(msg);
-        }
-
-        // Connection/setup errors → ClosingException
-        if (lower.contains("connection refused")
-                || lower.contains("failed to create client")
-                || (lower.contains("connect") && lower.contains("failed"))
-                || lower.contains("host") && lower.contains("unreachable")
-                || lower.contains("failed connecting to")
-                || lower.contains("connect failed")) {
-            return new glide.api.models.exceptions.ClosingException(msg);
-        }
-
-        return new glide.api.models.exceptions.RequestException(msg);
-    }
-
     /**
-     * Complete multiple callbacks in a single batch operation This reduces native crossing overhead
-     * by processing multiple completions together
+     * Complete multiple callbacks in a single batch operation. This reduces native crossing overhead
+     * by processing multiple completions together.
      */
     public static int completeBatchedCallbacks(long[] correlationIds, Object[] results) {
         if (correlationIds == null || results == null) {

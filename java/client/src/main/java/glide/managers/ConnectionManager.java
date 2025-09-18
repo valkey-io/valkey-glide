@@ -89,9 +89,9 @@ public class ConnectionManager {
                                         : -1;
 
                         // Create native client through bridge
-                        byte[][] subExact = new byte[0][];
-                        byte[][] subPattern = new byte[0][];
-                        byte[][] subSharded = new byte[0][];
+                        byte[][] subExact = glide.internal.GlideCoreClient.EMPTY_2D_BYTE_ARRAY;
+                        byte[][] subPattern = glide.internal.GlideCoreClient.EMPTY_2D_BYTE_ARRAY;
+                        byte[][] subSharded = glide.internal.GlideCoreClient.EMPTY_2D_BYTE_ARRAY;
                         if (configuration.getSubscriptionConfiguration() != null) {
                             var sc = configuration.getSubscriptionConfiguration();
                             try {

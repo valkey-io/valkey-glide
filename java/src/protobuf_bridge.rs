@@ -21,7 +21,7 @@ pub fn parse_command_request(bytes: &[u8]) -> Result<CommandRequest> {
 
 /// Since socket_listener functions are private, we'll need to access the core request_type logic
 /// This reuses the same pattern as socket_listener but makes it accessible for JNI
-pub fn create_redis_command(command: &Command) -> Result<redis::Cmd> {
+pub fn create_valkey_command(command: &Command) -> Result<redis::Cmd> {
     // Get the command using the same logic as socket_listener
     let request_type: glide_core::request_type::RequestType = command.request_type.into();
     let Some(mut cmd) = request_type.get_command() else {

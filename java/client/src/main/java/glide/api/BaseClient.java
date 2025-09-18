@@ -297,6 +297,7 @@ import glide.managers.BaseResponseResolver;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
 import glide.utils.ArgsBuilder;
+import glide.utils.BufferUtils;
 import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
@@ -354,6 +355,10 @@ public abstract class BaseClient
     public static final String MINMATCHLEN_COMMAND_STRING = "MINMATCHLEN";
     public static final String WITHMATCHLEN_COMMAND_STRING = "WITHMATCHLEN";
     public static final String LCS_MATCHES_RESULT_KEY = "matches";
+
+    // Constant empty arrays to reduce allocations
+    private static final String[] EMPTY_STRING_ARRAY = new String[0];
+    protected static final GlideString[] EMPTY_GLIDE_STRING_ARRAY = new GlideString[0];
 
     // Client components
     protected final CommandManager commandManager;
@@ -617,18 +622,18 @@ public abstract class BaseClient
 
         // Handle DirectByteBuffer conversion for large responses (>16KB)
         if (value instanceof java.nio.ByteBuffer) {
-            java.nio.ByteBuffer buffer = (java.nio.ByteBuffer) value;
-            byte[] bytes = new byte[buffer.remaining()];
-            buffer.get(bytes);
+            java.nio.ByteBuffer duplicatedBuffer = ((java.nio.ByteBuffer) value).duplicate();
+            duplicatedBuffer.rewind();
+            java.nio.ByteBuffer readOnlyBuffer = duplicatedBuffer.asReadOnlyBuffer();
             if (classType == String.class && encodingUtf8) {
-                value = new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
+                value = java.nio.charset.StandardCharsets.UTF_8.decode(readOnlyBuffer).toString();
             } else if (classType == GlideString.class) {
-                value = GlideString.of(bytes);
+                value = GlideString.of(copyBufferToArray(readOnlyBuffer));
             } else if (classType == byte[].class) {
-                value = bytes;
+                value = copyBufferToArray(readOnlyBuffer);
             } else if (classType == Map.class) {
-                // Deserialize Map from DirectByteBuffer
-                value = deserializeMapFromBytes(bytes, encodingUtf8);
+                // Deserialize Map from DirectByteBuffer without intermediate copy
+                value = deserializeMapFromBuffer(readOnlyBuffer, encodingUtf8);
             }
         }
 
@@ -907,7 +912,11 @@ public abstract class BaseClient
         Map<String, Object> converted = new LinkedHashMap<>(Math.max(response.size(), 1));
         for (Map.Entry<GlideString, Object> entry : response.entrySet()) {
             GlideString key = entry.getKey();
-            converted.put(key != null ? key.toString() : null, entry.getValue());
+            if (key == null) {
+                throw new IllegalStateException(
+                        "Received null key from native layer - this indicates a bug in the protocol handling");
+            }
+            converted.put(key.toString(), entry.getValue());
         }
         return converted;
     }
@@ -1317,7 +1326,7 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Long> hsetex(
             @NonNull String key, @NonNull Map<String, String> fieldValueMap, HSetExOptions options) {
-        String[] optionsArgs = options != null ? options.toArgs() : new String[0];
+        String[] optionsArgs = options != null ? options.toArgs() : EMPTY_STRING_ARRAY;
         String[] arguments =
                 concatenateArrays(
                         new String[] {key},
@@ -1348,7 +1357,7 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<String[]> hgetex(
             @NonNull String key, @NonNull String[] fields, HGetExOptions options) {
-        String[] optionsArgs = options != null ? options.toArgs() : new String[0];
+        String[] optionsArgs = options != null ? options.toArgs() : EMPTY_STRING_ARRAY;
         String[] arguments =
                 concatenateArrays(
                         new String[] {key},
@@ -1379,7 +1388,7 @@ public abstract class BaseClient
             long seconds,
             @NonNull String[] fields,
             HashFieldExpirationConditionOptions options) {
-        String[] optionsArgs = options != null ? options.toArgs() : new String[0];
+        String[] optionsArgs = options != null ? options.toArgs() : EMPTY_STRING_ARRAY;
         String[] arguments =
                 concatenateArrays(
                         new String[] {key, String.valueOf(seconds)},
@@ -1429,7 +1438,7 @@ public abstract class BaseClient
             long milliseconds,
             @NonNull String[] fields,
             HashFieldExpirationConditionOptions options) {
-        String[] optionsArgs = options != null ? options.toArgs() : new String[0];
+        String[] optionsArgs = options != null ? options.toArgs() : EMPTY_STRING_ARRAY;
         String[] arguments =
                 concatenateArrays(
                         new String[] {key, String.valueOf(milliseconds)},
@@ -1461,7 +1470,7 @@ public abstract class BaseClient
             long unixSeconds,
             @NonNull String[] fields,
             HashFieldExpirationConditionOptions options) {
-        String[] optionsArgs = options != null ? options.toArgs() : new String[0];
+        String[] optionsArgs = options != null ? options.toArgs() : EMPTY_STRING_ARRAY;
         String[] arguments =
                 concatenateArrays(
                         new String[] {key, String.valueOf(unixSeconds)},
@@ -1493,7 +1502,7 @@ public abstract class BaseClient
             long unixMilliseconds,
             @NonNull String[] fields,
             HashFieldExpirationConditionOptions options) {
-        String[] optionsArgs = options != null ? options.toArgs() : new String[0];
+        String[] optionsArgs = options != null ? options.toArgs() : EMPTY_STRING_ARRAY;
         String[] arguments =
                 concatenateArrays(
                         new String[] {key, String.valueOf(unixMilliseconds)},
@@ -2387,16 +2396,18 @@ public abstract class BaseClient
     }
 
     public CompletableFuture<String> scriptFlush() {
-        return commandManager.submitNewCommand(ScriptFlush, new String[0], this::handleStringResponse);
+        return commandManager.submitNewCommand(
+                ScriptFlush, EMPTY_STRING_ARRAY, this::handleStringResponse);
     }
 
     public CompletableFuture<String> scriptFlush(@NonNull FlushMode flushMode) {
         return commandManager.submitNewCommand(
-                ScriptFlush, new String[] {flushMode.toString()}, this::handleStringResponse);
+                ScriptFlush, flushMode.toArgs(), this::handleStringResponse);
     }
 
     public CompletableFuture<String> scriptKill() {
-        return commandManager.submitNewCommand(ScriptKill, new String[0], this::handleStringResponse);
+        return commandManager.submitNewCommand(
+                ScriptKill, EMPTY_STRING_ARRAY, this::handleStringResponse);
     }
 
     @Override
@@ -2405,7 +2416,7 @@ public abstract class BaseClient
             @NonNull Map<String, Double> membersScoresMap,
             @NonNull ZAddOptions options,
             boolean changed) {
-        String[] changedArg = changed ? new String[] {"CH"} : new String[] {};
+        String[] changedArg = changed ? new String[] {"CH"} : EMPTY_STRING_ARRAY;
         String[] membersScores = convertMapToValueKeyStringArray(membersScoresMap);
 
         String[] arguments =
@@ -5121,7 +5132,7 @@ public abstract class BaseClient
     public CompletableFuture<String[]> pubsubChannels() {
         return commandManager.submitNewCommand(
                 PubSubChannels,
-                new String[0],
+                EMPTY_STRING_ARRAY,
                 response -> castArray(handleArrayResponse(response), String.class));
     }
 
@@ -5129,7 +5140,7 @@ public abstract class BaseClient
     public CompletableFuture<GlideString[]> pubsubChannelsBinary() {
         return commandManager.submitNewCommand(
                 PubSubChannels,
-                new GlideString[0],
+                EMPTY_GLIDE_STRING_ARRAY,
                 response -> castArray(handleArrayResponseBinary(response), GlideString.class));
     }
 
@@ -5151,7 +5162,8 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Long> pubsubNumPat() {
-        return commandManager.submitNewCommand(PubSubNumPat, new String[0], this::handleLongResponse);
+        return commandManager.submitNewCommand(
+                PubSubNumPat, EMPTY_STRING_ARRAY, this::handleLongResponse);
     }
 
     @Override
@@ -5215,52 +5227,131 @@ public abstract class BaseClient
         return o;
     }
 
+    private byte[] copyBufferToArray(java.nio.ByteBuffer buffer) {
+        java.nio.ByteBuffer duplicate = buffer.duplicate();
+        duplicate.rewind();
+        byte[] bytes = new byte[duplicate.remaining()];
+        duplicate.get(bytes);
+        return bytes;
+    }
+
     /**
      * Deserialize a Map from bytes received via DirectByteBuffer. Binary format:
-     * [entry_count(4)][key1_len(4)][key1][val1_len(4)][val1]...
+     * optional('%')+[entry_count(4)][key1_len(4)][key1][val1_len(4)][val1]...
      */
     private Map<?, ?> deserializeMapFromBytes(byte[] bytes, boolean encodingUtf8) {
-        if (bytes == null || bytes.length < 4) {
+        if (bytes == null || bytes.length == 0) {
+            return new LinkedHashMap<>();
+        }
+        return deserializeMapFromBuffer(java.nio.ByteBuffer.wrap(bytes), encodingUtf8);
+    }
+
+    private Map<?, ?> deserializeMapFromBuffer(java.nio.ByteBuffer buffer, boolean encodingUtf8) {
+        if (buffer == null) {
             return new LinkedHashMap<>();
         }
 
-        java.nio.ByteBuffer buffer = java.nio.ByteBuffer.wrap(bytes);
-        Map<Object, Object> map = new LinkedHashMap<>();
+        java.nio.ByteBuffer workingBuffer = buffer.duplicate();
+        workingBuffer.rewind();
+        workingBuffer = workingBuffer.asReadOnlyBuffer();
+        workingBuffer.order(java.nio.ByteOrder.BIG_ENDIAN);
 
         try {
-            int entryCount = buffer.getInt();
-            for (int i = 0; i < entryCount; i++) {
-                // Read key
-                int keyLen = buffer.getInt();
-                byte[] keyBytes = new byte[keyLen];
-                buffer.get(keyBytes);
-                Object key =
-                        encodingUtf8
-                                ? new String(keyBytes, java.nio.charset.StandardCharsets.UTF_8)
-                                : GlideString.of(keyBytes);
-
-                // Read value
-                int valueLen = buffer.getInt();
-                if (valueLen < 0) {
-                    // Null value
-                    map.put(key, null);
-                } else {
-                    byte[] valueBytes = new byte[valueLen];
-                    buffer.get(valueBytes);
-                    Object value =
-                            encodingUtf8
-                                    ? new String(valueBytes, java.nio.charset.StandardCharsets.UTF_8)
-                                    : GlideString.of(valueBytes);
-                    map.put(key, value);
-                }
+            if (!workingBuffer.hasRemaining()) {
+                return new LinkedHashMap<>();
             }
+
+            byte marker = workingBuffer.get();
+            if (marker != '%') {
+                // Older buffers may omit the '%' prefix; rewind and fall back to entry-count first.
+                workingBuffer.position(workingBuffer.position() - 1);
+            }
+
+            if (workingBuffer.remaining() < Integer.BYTES) {
+                Logger.log(
+                        Logger.Level.ERROR,
+                        "BaseClient",
+                        () -> "DirectByteBuffer map payload missing entry count");
+                return new LinkedHashMap<>();
+            }
+
+            int entryCount = workingBuffer.getInt();
+            Map<Object, Object> map = new LinkedHashMap<>(Math.max(16, entryCount));
+
+            for (int i = 0; i < entryCount; i++) {
+                if (workingBuffer.remaining() < Integer.BYTES) {
+                    Logger.log(
+                            Logger.Level.ERROR,
+                            "BaseClient",
+                            () -> "DirectByteBuffer map payload truncated before key length");
+                    return new LinkedHashMap<>();
+                }
+
+                int keyLen = workingBuffer.getInt();
+                if (keyLen < 0 || keyLen > workingBuffer.remaining()) {
+                    Logger.log(
+                            Logger.Level.ERROR,
+                            "BaseClient",
+                            () -> "Invalid key length in DirectByteBuffer map: " + keyLen);
+                    return new LinkedHashMap<>();
+                }
+
+                Object key;
+                if (encodingUtf8) {
+                    // Decode UTF-8 directly from buffer
+                    key = BufferUtils.decodeUtf8(workingBuffer, keyLen);
+                } else {
+                    // For binary mode, we need the byte array
+                    byte[] keyBytes = new byte[keyLen];
+                    workingBuffer.get(keyBytes);
+                    key = GlideString.of(keyBytes);
+                }
+
+                if (workingBuffer.remaining() < Integer.BYTES) {
+                    Logger.log(
+                            Logger.Level.ERROR,
+                            "BaseClient",
+                            () -> "DirectByteBuffer map payload truncated before value length");
+                    return new LinkedHashMap<>();
+                }
+
+                int valueLen = workingBuffer.getInt();
+
+                if (valueLen < 0) {
+                    map.put(key, null);
+                    continue;
+                }
+
+                if (valueLen > workingBuffer.remaining()) {
+                    Logger.log(
+                            Logger.Level.ERROR,
+                            "BaseClient",
+                            () -> "Invalid value length in DirectByteBuffer map: " + valueLen);
+                    return new LinkedHashMap<>();
+                }
+
+                Object value;
+                if (encodingUtf8) {
+                    // Decode UTF-8 directly from buffer
+                    value = BufferUtils.decodeUtf8(workingBuffer, valueLen);
+                } else {
+                    // For binary mode, we need the byte array
+                    byte[] valueBytes = new byte[valueLen];
+                    workingBuffer.get(valueBytes);
+                    value = GlideString.of(valueBytes);
+                }
+                map.put(key, value);
+            }
+
+            return map;
         } catch (Exception e) {
-            // If deserialization fails, return empty map
-            Logger.log(Logger.Level.ERROR, "BaseClient", () -> "Error deserializing Map from bytes", e);
+            Logger.log(
+                    Logger.Level.ERROR,
+                    "BaseClient",
+                    () -> "Error deserializing Map from DirectByteBuffer",
+                    e);
             return new LinkedHashMap<>();
         }
-
-        return map;
     }
 
     @Override
