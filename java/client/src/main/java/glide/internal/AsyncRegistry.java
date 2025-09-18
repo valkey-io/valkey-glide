@@ -14,7 +14,7 @@ import java.util.concurrent.atomic.AtomicLong;
  *   <li>Maintain a thread-safe mapping from correlation id to the original future
  *   <li>Enforce per-client max inflight requests in Java (0 = defer to core default)
  *   <li>Perform atomic cleanup on completion to avoid races and leaks
- *   <li>Provide batched completion helpers to reduce JNI overhead
+ *   <li>Provide batched completion helpers to reduce native call overhead
  * </ul>
  *
  * <p>Timeouts, backpressure defaults, and concurrency tuning are handled by the Rust core.
@@ -81,7 +81,7 @@ public final class AsyncRegistry {
 
             // Check if this specific client has reached its limit
             if (clientCount.get() >= maxInflightRequests) {
-                // Use same error type and message as glide-core UDS implementation
+                // Use same error type and message as glide-core implementation
                 throw new glide.api.models.exceptions.RequestException(
                         "Client reached maximum inflight requests");
             }
@@ -242,8 +242,8 @@ public final class AsyncRegistry {
     }
 
     /**
-     * Complete multiple callbacks in a single batch operation This reduces JNI crossing overhead by
-     * processing multiple completions together
+     * Complete multiple callbacks in a single batch operation This reduces native crossing overhead
+     * by processing multiple completions together
      */
     public static int completeBatchedCallbacks(long[] correlationIds, Object[] results) {
         if (correlationIds == null || results == null) {
@@ -267,8 +267,8 @@ public final class AsyncRegistry {
     }
 
     /**
-     * Complete multiple callbacks with errors in a single batch operation This reduces JNI crossing
-     * overhead by processing multiple error completions together
+     * Complete multiple callbacks with errors in a single batch operation This reduces native
+     * crossing overhead by processing multiple error completions together
      */
     public static int completeBatchedCallbacksWithError(
             long[] correlationIds, String[] errorMessages) {

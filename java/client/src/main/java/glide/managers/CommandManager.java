@@ -43,14 +43,13 @@ import response.ResponseOuterClass.ConstantResponse;
 import response.ResponseOuterClass.Response;
 
 /**
- * CommandManager that submits command requests directly to the Rust glide-core via JNI calls. This
- * replaces the previous UDS-based socket communication while preserving the existing protobuf
- * serialization format for compatibility.
+ * CommandManager that submits command requests directly to the Rust glide-core. Handles command
+ * serialization, routing, and response processing for all client operations.
  */
 @RequiredArgsConstructor
 public class CommandManager {
 
-    /** JNI connection representation. */
+    /** Core client connection. */
     private final GlideCoreClient coreClient;
 
     private static final byte[][] EMPTY_SCRIPT_ARGS = new byte[0][];
@@ -65,14 +64,14 @@ public class CommandManager {
         String getCursorHandle();
 
         /**
-         * Returns the cursor ID for the fixed JNI bridge.
+         * Returns the cursor ID for the bridge.
          *
          * @return the cursor ID string.
          */
         String getCursorId();
     }
 
-    /** Build a command and send via JNI. */
+    /** Build a command and submit it. */
     public <T> CompletableFuture<T> submitNewCommand(
             RequestType requestType,
             String[] arguments,
@@ -83,7 +82,7 @@ public class CommandManager {
                 command, responseHandler, false, true); // String arguments -> expect UTF-8 response
     }
 
-    /** Build a command and send via JNI. */
+    /** Build a command and submit it. */
     public <T> CompletableFuture<T> submitNewCommand(
             RequestType requestType,
             GlideString[] arguments,
@@ -117,7 +116,7 @@ public class CommandManager {
         return submitCommandToJni(command, responseHandler, true, expectUtf8Response);
     }
 
-    /** Build a command and send via JNI. */
+    /** Build a command and submit it. */
     public <T> CompletableFuture<T> submitNewCommand(
             RequestType requestType,
             String[] arguments,
@@ -129,7 +128,7 @@ public class CommandManager {
                 command, responseHandler, false, true); // String arguments -> expect UTF-8 response
     }
 
-    /** Build a command and send via JNI. */
+    /** Build a command and submit it. */
     public <T> CompletableFuture<T> submitNewCommand(
             RequestType requestType,
             GlideString[] arguments,
@@ -158,7 +157,7 @@ public class CommandManager {
         return submitCommandToJni(command, responseHandler, true, true);
     }
 
-    /** Build a Batch and send via JNI. */
+    /** Build a Batch and submit it. */
     public <T> CompletableFuture<T> submitNewBatch(
             Batch batch,
             boolean raiseOnError,
@@ -169,7 +168,7 @@ public class CommandManager {
         return submitBatchToJni(command, responseHandler, expectUtf8Response);
     }
 
-    /** Build a Script (by hash) request to send to Valkey via JNI. */
+    /** Build a Script (by hash) request to send to Valkey. */
     public <T> CompletableFuture<T> submitScript(
             Script script,
             List<GlideString> keys,
@@ -210,7 +209,7 @@ public class CommandManager {
         }
     }
 
-    /** Build a Script (by hash) request with route to send to Valkey via JNI. */
+    /** Build a Script (by hash) request with route to send to Valkey. */
     public <T> CompletableFuture<T> submitScript(
             Script script,
             List<GlideString> args,
@@ -229,7 +228,7 @@ public class CommandManager {
             final boolean expectUtf8Response =
                     script.getBinaryOutput() == null || !script.getBinaryOutput();
 
-            // Map Route to simple JNI route tuple via centralized helper
+            // Map Route to simple route tuple via centralized helper
             ScriptRouteArgs routeArgs = computeScriptRouteArgs(route);
 
             CompletableFuture<Object> jniFuture =
@@ -253,7 +252,7 @@ public class CommandManager {
         }
     }
 
-    /** Lightweight container for script routing arguments over JNI. */
+    /** Lightweight container for script routing arguments. */
     private static final class ScriptRouteArgs {
         final boolean hasRoute;
         final int routeType;
@@ -266,7 +265,7 @@ public class CommandManager {
         }
     }
 
-    /** Centralized mapping from RouteInfo to JNI script routing tuple. */
+    /** Centralized mapping from RouteInfo to script routing tuple. */
     private ScriptRouteArgs computeScriptRouteArgs(Route route) {
         if (route == null) {
             return new ScriptRouteArgs(false, 0, null);
@@ -297,7 +296,7 @@ public class CommandManager {
                         "Unsupported route type for script invocation: %s", route.getClass().getSimpleName()));
     }
 
-    /** Build a Cluster Batch and send via JNI. */
+    /** Build a Cluster Batch and submit it. */
     public <T> CompletableFuture<T> submitNewBatch(
             ClusterBatch batch,
             boolean raiseOnError,
@@ -320,7 +319,7 @@ public class CommandManager {
         return result;
     }
 
-    /** Submit a scan request with cursor via JNI. */
+    /** Submit a scan request with cursor. */
     public <T> CompletableFuture<T> submitClusterScan(
             ClusterScanCursor cursor,
             @NonNull ScanOptions options,
@@ -357,7 +356,7 @@ public class CommandManager {
                 }
             }
 
-            // Execute via enhanced cluster scan JNI bridge
+            // Execute via enhanced cluster scan bridge
             return coreClient
                     .executeClusterScanAsync(
                             cursorId, matchPattern, count != null ? count : 0L, objectType, expectUtf8Response)
@@ -446,7 +445,7 @@ public class CommandManager {
         return new Object[] {cursor, itemsObj};
     }
 
-    /** Submit a password update request to GLIDE core via JNI. */
+    /** Submit a password update request to GLIDE core. */
     public <T> CompletableFuture<T> submitPasswordUpdate(
             Optional<String> password,
             boolean immediateAuth,
@@ -465,7 +464,7 @@ public class CommandManager {
                         });
     }
 
-    /** Take a command request and send via JNI (backward compatibility). */
+    /** Take a command request and submit it (backward compatibility). */
     protected <T> CompletableFuture<T> submitCommandToJni(
             CommandRequest.Builder command,
             GlideExceptionCheckedFunction<Response, T> responseHandler,
@@ -476,7 +475,7 @@ public class CommandManager {
         return submitCommandToJni(command, responseHandler, binaryMode, !binaryMode);
     }
 
-    /** Take a command request and send via JNI. */
+    /** Take a command request and submit it. */
     protected <T> CompletableFuture<T> submitCommandToJni(
             CommandRequest.Builder command,
             GlideExceptionCheckedFunction<Response, T> responseHandler,

@@ -111,7 +111,7 @@ public class GlideClusterClient extends BaseClient
 
     /**
      * Creates a new {@link GlideClusterClient} instance and establishes connections to a Valkey
-     * Cluster using Unix Domain Sockets (UDS).
+     * Cluster.
      *
      * @param config The configuration options for the client, including cluster addresses,
      *     authentication credentials, TLS settings, periodic checks, and Pub/Sub subscriptions.
@@ -162,16 +162,14 @@ public class GlideClusterClient extends BaseClient
     }
 
     /**
-     * Creates a new {@link GlideClusterClient} instance using JNI direct calls instead of Unix Domain
-     * Sockets. This method provides improved performance and Windows compatibility by eliminating the
-     * socket layer.
+     * Creates a new {@link GlideClusterClient} instance with native client integration. This method
+     * provides improved performance and Windows compatibility.
      *
      * @param config The configuration options for the client, including cluster addresses,
      *     authentication credentials, TLS settings, periodic checks, and Pub/Sub subscriptions.
      * @return A Future that resolves to a connected {@link GlideClusterClient} instance.
-     * @remarks This method creates a cluster client with the same functionality as {@link
-     *     #createClient(GlideClusterClientConfiguration)} but uses direct JNI calls to the Rust
-     *     glide-core library instead of Unix Domain Sockets. Benefits include:
+     * @remarks This method creates a cluster client with direct native calls to the Rust glide-core
+     *     library. Benefits include:
      *     <ul>
      *       <li><b>Windows Support</b>: Full native Windows compatibility without WSL/Cygwin
      *       <li><b>Performance</b>: Eliminates socket layer overhead with zero-copy operations

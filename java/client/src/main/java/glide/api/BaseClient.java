@@ -355,7 +355,7 @@ public abstract class BaseClient
     public static final String WITHMATCHLEN_COMMAND_STRING = "WITHMATCHLEN";
     public static final String LCS_MATCHES_RESULT_KEY = "matches";
 
-    // Client components - matches UDS pattern exactly
+    // Client components
     protected final CommandManager commandManager;
     protected final ConnectionManager connectionManager;
     protected final MessageHandler messageHandler;
@@ -377,8 +377,8 @@ public abstract class BaseClient
                         if (pointer == null || pointer == 0) {
                             return null;
                         }
-                        // The pointer is now an ID to retrieve the object from the registry
-                        // The object was already converted from Redis Value to Java in the JNI layer
+                        // The pointer is an ID to retrieve the object from the registry
+                        // The object was already converted from Redis Value to Java in the native layer
                         return GlideValueResolver.valueFromPointer(pointer);
                     });
 
@@ -389,12 +389,12 @@ public abstract class BaseClient
                         if (pointer == null || pointer == 0) {
                             return null;
                         }
-                        // The pointer is now an ID to retrieve the object from the registry
-                        // The object was already converted with binary encoding in the JNI layer
+                        // The pointer is an ID to retrieve the object from the registry
+                        // The object was already converted with binary encoding in the native layer
                         return GlideValueResolver.valueFromPointerBinary(pointer);
                     });
 
-    /** Constructor matching UDS pattern exactly */
+    /** Constructor for client initialization */
     protected BaseClient(ClientBuilder builder) {
         this.connectionManager = builder.connectionManager;
         this.commandManager = builder.commandManager;
@@ -402,7 +402,7 @@ public abstract class BaseClient
         this.subscriptionConfiguration = builder.subscriptionConfiguration;
     }
 
-    /** Auxiliary builder which wraps all fields - matches UDS signature exactly */
+    /** Auxiliary builder which wraps all fields */
     @RequiredArgsConstructor
     protected static class ClientBuilder {
         private final ConnectionManager connectionManager;
@@ -412,7 +412,7 @@ public abstract class BaseClient
     }
 
     /**
-     * Create JNI-based client directly - replaces the old UDS approach.
+     * Create native client
      *
      * @param config client Configuration.
      * @param constructor client constructor reference.
@@ -427,11 +427,11 @@ public abstract class BaseClient
             throw new ConfigurationError("PubSub subscriptions require RESP3 protocol");
         }
         try {
-            // Create client components using build methods (matches UDS pattern)
+            // Create client components using build methods
             ConnectionManager connectionManager = buildConnectionManager();
             MessageHandler messageHandler = buildMessageHandler(config);
 
-            // Return async chain (same as UDS pattern)
+            // Return async chain
             return connectionManager
                     .connectToValkey(config)
                     .thenApply(
@@ -454,7 +454,7 @@ public abstract class BaseClient
                                             glide.api.logging.Logger.Level.WARN,
                                             "BaseClient",
                                             () ->
-                                                    "Failed to register JNI client (handle="
+                                                    "Failed to register native client (handle="
                                                             + connectionManager.getNativeClientHandle()
                                                             + ") - continuing",
                                             t);
@@ -469,12 +469,12 @@ public abstract class BaseClient
         }
     }
 
-    /** Build ConnectionManager for JNI-based client */
+    /** Build ConnectionManager for native client */
     protected static ConnectionManager buildConnectionManager() {
         return new ConnectionManager();
     }
 
-    /** Build MessageHandler for JNI-based client */
+    /** Build MessageHandler for native client */
     protected static MessageHandler buildMessageHandler(BaseClientConfiguration config) {
         // TODO: Extract callback and context from config
         return new MessageHandler(
@@ -487,7 +487,7 @@ public abstract class BaseClient
                 responseResolver);
     }
 
-    /** Build CommandManager for JNI-based client */
+    /** Build CommandManager for native client */
     protected static CommandManager buildCommandManager(ConnectionManager connectionManager) {
         // CommandManager will be created after connection is established
         // We'll update this once the connection provides the native handle
@@ -502,7 +502,7 @@ public abstract class BaseClient
                     glide.api.logging.Logger.Level.WARN,
                     "BaseClient",
                     () ->
-                            "Failed to register JNI client for push delivery (handle="
+                            "Failed to register native client for push delivery (handle="
                                     + connectionManager.getNativeClientHandle()
                                     + ") - continuing",
                     t);
@@ -5186,7 +5186,7 @@ public abstract class BaseClient
     }
 
     // Hack: convert all `byte[]` -> `GlideString`. Better doing it here in the Java realm
-    // rather than doing it in the Rust code using JNI calls (performance)
+    // rather than doing it in the Rust code using native calls (performance)
     private Object convertByteArrayToGlideString(Object o) {
         if (o == null) return o;
 
