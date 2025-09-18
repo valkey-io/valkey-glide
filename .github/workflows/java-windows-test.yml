@@ -1,0 +1,192 @@
+name: Java Windows Feasibility Test
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - ci-cd-java-windows-support
+    paths:
+      - '.github/workflows/java-windows-test.yml'
+
+jobs:
+  test-windows-build:
+    name: Test Windows Build with MSYS2
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-make
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-openssl
+            mingw-w64-x86_64-pkg-config
+            base-devel
+            git
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-gnu, x86_64-pc-windows-msvc
+
+      - name: Install protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          version: "29.1"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Build Valkey from source
+        shell: msys2 {0}
+        run: |
+          echo "Attempting to build Valkey from source..."
+          git clone https://github.com/valkey-io/valkey.git
+          cd valkey
+          git checkout 8.0
+          echo "Building Valkey..."
+          make BUILD_TLS=yes || echo "Valkey build failed, continuing anyway"
+          if [ -f src/valkey-server ]; then
+            echo "Valkey build successful!"
+            mkdir -p /c/valkey/bin
+            cp src/valkey-server /c/valkey/bin/
+            cp src/valkey-cli /c/valkey/bin/
+            echo "Valkey binaries copied to /c/valkey/bin/"
+          else
+            echo "Valkey build failed - will try alternative"
+          fi
+
+      - name: Try alternative - Download Redis Windows binaries
+        if: always()
+        shell: pwsh
+        run: |
+          Write-Host "Downloading Redis Windows binaries as fallback..."
+          $url = "https://github.com/microsoftarchive/redis/releases/download/win-3.0.504/Redis-x64-3.0.504.zip"
+          $output = "redis.zip"
+          Invoke-WebRequest -Uri $url -OutFile $output
+
+          Expand-Archive -Path $output -DestinationPath "C:\redis" -Force
+          Write-Host "Redis extracted to C:\redis"
+
+          # List contents
+          Get-ChildItem -Path "C:\redis" -Recurse -Name
+
+      - name: Start Redis/Valkey server
+        shell: pwsh
+        run: |
+          # Try Valkey first, fall back to Redis
+          if (Test-Path "C:\valkey\bin\valkey-server.exe") {
+            Write-Host "Starting Valkey server..."
+            $proc = Start-Process -FilePath "C:\valkey\bin\valkey-server.exe" -ArgumentList "--port 6379" -PassThru -WindowStyle Hidden
+          } elseif (Test-Path "C:\redis\Redis-x64-3.0.504\redis-server.exe") {
+            Write-Host "Starting Redis server (fallback)..."
+            $proc = Start-Process -FilePath "C:\redis\Redis-x64-3.0.504\redis-server.exe" -ArgumentList "--port 6379" -PassThru -WindowStyle Hidden
+          } else {
+            Write-Host "No Redis/Valkey server found!"
+            exit 1
+          }
+
+          Write-Host "Server started with PID: $($proc.Id)"
+          Start-Sleep -Seconds 5
+
+          # Test connection
+          if (Test-Path "C:\valkey\bin\valkey-cli.exe") {
+            & "C:\valkey\bin\valkey-cli.exe" ping
+          } elseif (Test-Path "C:\redis\Redis-x64-3.0.504\redis-cli.exe") {
+            & "C:\redis\Redis-x64-3.0.504\redis-cli.exe" ping
+          }
+
+      - name: Build Java client (MSVC target)
+        shell: cmd
+        run: |
+          cd java
+          echo "Building with MSVC target..."
+          gradlew.bat --info --build-cache :client:build -x javadoc -x test
+
+      - name: Build Java client (GNU target)
+        if: always()
+        shell: cmd
+        run: |
+          cd java
+          echo "Building with GNU target..."
+          gradlew.bat --info --build-cache :client:build -x javadoc -x test -Ptarget=x86_64-pc-windows-gnu
+
+      - name: Check built artifacts
+        shell: pwsh
+        run: |
+          Write-Host "Checking for built JNI library..."
+          Get-ChildItem -Path "java\target" -Recurse -Include "*.dll" | ForEach-Object {
+            Write-Host "Found DLL: $($_.FullName)"
+          }
+          Get-ChildItem -Path "java\client\build" -Recurse -Include "*.jar" | ForEach-Object {
+            Write-Host "Found JAR: $($_.FullName)"
+          }
+
+      - name: Run basic tests
+        shell: cmd
+        run: |
+          cd java
+          echo "Running basic unit tests..."
+          gradlew.bat --info :client:test --tests "*GlideClientConfigurationTest*" || echo "Tests completed with status %ERRORLEVEL%"
+
+      - name: Run standalone integration test (if server available)
+        if: always()
+        shell: cmd
+        run: |
+          cd java
+          echo "Attempting integration test..."
+          gradlew.bat --info :integTest:test --tests "*ConnectionTests*" -Dstandalone-endpoints=localhost:6379 || echo "Integration test completed with status %ERRORLEVEL%"
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-test-reports
+          path: |
+            java/client/build/reports/**
+            java/integTest/build/reports/**
+            java/client/build/test-results/**
+            java/integTest/build/test-results/**
+
+      - name: Summary
+        if: always()
+        shell: pwsh
+        run: |
+          Write-Host "=== Windows Build Feasibility Test Summary ==="
+          Write-Host "Java version:"
+          java -version
+          Write-Host ""
+          Write-Host "Gradle version:"
+          cd java
+          .\gradlew.bat --version
+          Write-Host ""
+          Write-Host "Rust version:"
+          rustc --version
+          Write-Host ""
+          Write-Host "Build artifacts:"
+          if (Test-Path "java\client\build\libs") {
+            Get-ChildItem "java\client\build\libs"
+          }
