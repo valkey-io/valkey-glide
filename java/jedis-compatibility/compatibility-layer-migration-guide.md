@@ -20,7 +20,7 @@ dependencies {
 **After (Valkey GLIDE):**
 ```gradle
 dependencies {
-    implementation group: 'io.valkey', name: 'valkey-glide', version: '1.+', classifier: 'osx-aarch_64'
+    implementation group: 'io.valkey', name: 'valkey-glide-jedis-compatibility', version: '1.+', classifier: 'osx-aarch_64'
 }
 ```
 
@@ -51,7 +51,7 @@ Change the application's classpath such that it does not have the Jedis JAR and 
 
 The compatibility layer provides varying levels of support for Jedis configuration parameters, based on detailed analysis of `DefaultJedisClientConfig` fields:
 
-#### ✅ Successfully Mapped
+#### Successfully Mapped
 - `user` → `ServerCredentials.username`
 - `password` → `ServerCredentials.password`
 - `clientName` → `BaseClientConfiguration.clientName`
@@ -61,12 +61,12 @@ The compatibility layer provides varying levels of support for Jedis configurati
 - `socketTimeoutMillis` → `BaseClientConfiguration.requestTimeout`
 - `database` → Handled via SELECT command after connection
 
-#### 🔶 Partially Mapped
+#### Partially Mapped
 - `sslSocketFactory` → Requires SSL/TLS migration to system certificate store
 - `sslParameters` → Limited mapping; custom protocols/ciphers not supported
 - `hostnameVerifier` → Standard verification works; custom verifiers require `useInsecureTLS`
 
-#### ❌ Not Mapped
+#### Not Mapped
 - `blockingSocketTimeoutMillis` → No equivalent (GLIDE uses async I/O model)
 
 ### SSL/TLS Configuration Complexity
@@ -78,20 +78,12 @@ The compatibility layer provides varying levels of support for Jedis configurati
 
 #### Migration Requirements by Complexity:
 
-**Low Complexity**
-- Direct parameter mapping
-- No code changes required
+**Low Complexity**: Direct parameter mapping, No code changes required
 - Examples: Basic auth, timeouts, protocol selection
 
-**Medium Complexity**
-- SSL/TLS certificate migration required
-- System certificate store installation needed
-- Custom SSL configurations → GLIDE secure defaults
+**Medium Complexity**: SSL/TLS certificate migration required, System certificate store installation needed, Custom SSL configurations → GLIDE secure defaults
 
-**High Complexity**
-- No GLIDE equivalent
-- Architectural differences (async vs blocking I/O)
-- Requires application redesign
+**High Complexity**: No GLIDE equivalent, Architectural differences (async vs blocking I/O), Requires application redesign
 
 ### Overall Migration Success Rate
 

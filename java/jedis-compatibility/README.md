@@ -64,7 +64,7 @@ try (Jedis jedis = new Jedis("localhost", 6379)) {
 
 ## Migration Guide
 
-See the [compatibility layer migration guide](src/main/java/redis/clients/jedis/compatibility-layer-migration-guide.md) for detailed migration instructions.
+See the [compatibility layer migration guide](./compatibility-layer-migration-guide.md) for detailed migration instructions.
 
 ## Build Commands
 
