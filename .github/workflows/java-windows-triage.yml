@@ -118,7 +118,7 @@ jobs:
         shell: cmd
         run: |
           echo === Starting standalone Redis via cluster manager ===
-          python utils\cluster_manager_windows_patch.py start --cluster-mode false --shard-count 1 --replica-count 0 || echo "Status: %ERRORLEVEL%"
+          python utils\cluster_manager_windows_patch.py start --shard-count 1 --replica-count 0 || echo "Status: %ERRORLEVEL%"
 
       - name: Run minimal integration test
         shell: cmd
