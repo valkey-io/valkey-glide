@@ -208,11 +208,9 @@ cargo fmt --manifest-path ./Cargo.toml --all
 ## Project Structure (Essential)
 
 ```
-go/
-├── api/                        # Main Go client library
-│   ├── client.go               # Standalone client implementation
-│   ├── cluster_client.go       # Cluster client implementation
-│   └── commands/               # Command interfaces and implementations
+go/                             # Main Go client library
+├── client.go                   # Standalone client implementation
+├── cluster_client.go           # Cluster client implementation
 ├── integTest/                  # Integration test suites
 ├── benchmarks/                 # Performance benchmarking tool
 ├── internal/                   # Internal packages
