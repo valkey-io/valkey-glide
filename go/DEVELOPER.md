@@ -141,15 +141,7 @@ Before starting this step, make sure you've installed all software requirements.
     make build
     ```
 
-4. Run tests:
-    1. Ensure that you have installed valkey-server and valkey-cli on your host. You can find the Valkey installation guide at the following link: [Valkey Installation Guide](https://valkey.io/topics/installation/).
-    2. Execute the following command from the go folder:
-
-        ```bash
-        go test -race ./...
-        ```
-
-5. Install Go development tools with:
+4. Install Go development tools with:
 
     ```bash
     make install-dev-tools

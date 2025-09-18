@@ -50,6 +50,13 @@ To install Valkey GLIDE in your Go project, follow these steps:
     ```
 3. After installation, you can start up a Valkey server and run one of the examples in [Basic Examples](#basic-examples).
 
+### Alpine Linux / MUSL
+
+If you are running on Alpine Linux or otherwise require a MUSL-based build, you must add the 'musl' tag to your build.
+
+```
+export GOFLAGS := -tags=musl
+```
 
 ## Basic Examples
 

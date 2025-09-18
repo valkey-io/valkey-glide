@@ -17,10 +17,14 @@ runs:
           run: |
               if [[ `cat /etc/os-release | grep "Amazon Linux"` ]]; then
                   yum install -y python3-pip
+                  pip3 install ziglang
+              elif [[ `cat /etc/os-release | grep "Alpine"` ]]; then
+                  apk add py3-pip
+                  pip3 install ziglang --break-system-packages
               else
                   sudo apt install -y python3-pip
+                  pip3 install ziglang
               fi
-              pip3 install ziglang
               cargo install --locked cargo-zigbuild
 
               # Set environment variable to prevent cargo-zigbuild from auto-detecting malformed targets
