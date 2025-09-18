@@ -1,10 +1,8 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.internal;
 
-import glide.api.OpenTelemetry;
 import glide.api.models.exceptions.ClosingException;
 import glide.ffi.resolvers.NativeUtils;
-import glide.ffi.resolvers.OpenTelemetryResolver;
 import java.lang.ref.Cleaner;
 import java.util.Arrays;
 import java.util.List;

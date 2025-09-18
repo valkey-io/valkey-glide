@@ -1,7 +1,6 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.internal;
 
-import glide.api.models.exceptions.ErrorType;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
@@ -158,31 +157,6 @@ public final class AsyncRegistry {
         return completed;
     }
 
-    /** Complete with error using same race-free pattern */
-    public static boolean completeCallbackWithError(long correlationId, String errorMessage) {
-        CompletableFuture<Object> future = activeFutures.get(correlationId);
-
-        if (future == null) {
-            return false;
-        }
-
-        // Without an error code, we can't determine the specific error type
-        // Return a generic RequestException rather than trying to guess from the message
-        String msg =
-                (errorMessage == null || errorMessage.isBlank())
-                        ? "Unknown error from native code"
-                        : errorMessage;
-        RuntimeException exception = new glide.api.models.exceptions.RequestException(msg);
-
-        // completeExceptionally() is also atomic and safe
-        boolean completed = future.completeExceptionally(exception);
-
-        // Note: cleanup happens automatically in whenComplete()
-        // No manual removal needed, which eliminates race conditions
-
-        return completed;
-    }
-
     /**
      * Complete with error using a structured error code from native layer. Codes map to glide-core
      * RequestErrorType: 0-Unspecified, 1-ExecAbort, 2-Timeout, 3-Disconnect.
@@ -199,27 +173,20 @@ public final class AsyncRegistry {
                         ? "Unknown error from native code"
                         : errorMessage;
 
-        ErrorType errorType = ErrorType.fromCode(errorTypeCode);
+        // Map error codes directly to exception types
         RuntimeException ex;
-
-        switch (errorType) {
-            case DISCONNECT:
-                // DISCONNECT represents unrecoverable connection errors
-                // The Rust layer uses is_unrecoverable_error() to detect these
-                ex = new glide.api.models.exceptions.ClosingException(msg);
-                break;
-            case TIMEOUT:
-                // Timeout errors - properly identified by Rust's is_timeout()
+        switch (errorTypeCode) {
+            case 2: // TIMEOUT
                 ex = new glide.api.models.exceptions.TimeoutException(msg);
                 break;
-            case EXEC_ABORT:
-                // Transaction execution aborted - use specific exception type
+            case 3: // DISCONNECT
+                ex = new glide.api.models.exceptions.ClosingException(msg);
+                break;
+            case 1: // EXEC_ABORT
                 ex = new glide.api.models.exceptions.ExecAbortException(msg);
                 break;
-            case UNSPECIFIED:
+            case 0: // UNSPECIFIED
             default:
-                // Generic request errors - we don't know the specific type
-                // Don't try to guess from the message as that's unreliable
                 ex = new glide.api.models.exceptions.RequestException(msg);
                 break;
         }
@@ -245,32 +212,6 @@ public final class AsyncRegistry {
         int completed = 0;
         for (int i = 0; i < correlationIds.length; i++) {
             if (completeCallback(correlationIds[i], results[i])) {
-                completed++;
-            }
-        }
-
-        return completed;
-    }
-
-    /**
-     * Complete multiple callbacks with errors in a single batch operation This reduces native
-     * crossing overhead by processing multiple error completions together
-     */
-    public static int completeBatchedCallbacksWithError(
-            long[] correlationIds, String[] errorMessages) {
-        if (correlationIds == null || errorMessages == null) {
-            throw new IllegalArgumentException("Arrays cannot be null");
-        }
-        if (correlationIds.length != errorMessages.length) {
-            throw new IllegalArgumentException("Array lengths must match");
-        }
-        if (correlationIds.length == 0) {
-            return 0;
-        }
-
-        int completed = 0;
-        for (int i = 0; i < correlationIds.length; i++) {
-            if (completeCallbackWithError(correlationIds[i], errorMessages[i])) {
                 completed++;
             }
         }

@@ -72,30 +72,43 @@ async fn execute_command_request_and_complete(
     jvm: std::sync::Arc<jni::JavaVM>,
     expect_utf8: bool,
 ) {
-    let result = async {
+    let result: Result<redis::Value, redis::RedisError> = async {
         let mut client = jni_client::ensure_client_for_handle(handle_id)
             .await
-            .map_err(|e| anyhow::anyhow!("Client not found: {e}"))?;
+            .map_err(|e| {
+                redis::RedisError::from((
+                    redis::ErrorKind::ClientError,
+                    "Client not found",
+                    e.to_string(),
+                ))
+            })?;
 
         let root_span_ptr_opt = command_request.root_span_ptr;
         match &command_request.command {
             Some(protobuf_bridge::command_request::Command::SingleCommand(command)) => {
-                let cmd = protobuf_bridge::create_valkey_command(command)
-                    .map_err(|e| anyhow::anyhow!("Failed to create command: {e}"))?;
+                let cmd = protobuf_bridge::create_valkey_command(command).map_err(|e| {
+                    redis::RedisError::from((
+                        redis::ErrorKind::ClientError,
+                        "Failed to create command",
+                        e.to_string(),
+                    ))
+                })?;
 
                 // Compute routing
                 let route_box = command_request.route.0;
                 let routing = if let Some(route_box) = route_box {
-                    protobuf_bridge::get_route(*route_box, Some(&cmd))
-                        .map_err(|e| anyhow::anyhow!("Routing error: {e}"))?
+                    protobuf_bridge::get_route(*route_box, Some(&cmd)).map_err(|e| {
+                        redis::RedisError::from((
+                            redis::ErrorKind::ClientError,
+                            "Routing error",
+                            e.to_string(),
+                        ))
+                    })?
                 } else {
                     None
                 };
 
-                let exec = client
-                    .send_command(&cmd, routing)
-                    .await
-                    .map_err(|e| anyhow::anyhow!("Command execution failed: {e}"));
+                let exec = client.send_command(&cmd, routing).await;
 
                 if let Some(root_span_ptr) = root_span_ptr_opt
                     && root_span_ptr != 0
@@ -118,16 +131,26 @@ async fn execute_command_request_and_complete(
                     pipeline.atomic();
                 }
                 for c in &batch.commands {
-                    let valkey_cmd = protobuf_bridge::create_valkey_command(c)
-                        .map_err(|e| anyhow::anyhow!("Failed to create batch command: {e}"))?;
+                    let valkey_cmd = protobuf_bridge::create_valkey_command(c).map_err(|e| {
+                        redis::RedisError::from((
+                            redis::ErrorKind::ClientError,
+                            "Failed to create batch command",
+                            e.to_string(),
+                        ))
+                    })?;
                     pipeline.add_command(valkey_cmd);
                 }
 
                 // Routing for batch
                 let route_box = command_request.route.0;
                 let routing = if let Some(route_box) = route_box {
-                    protobuf_bridge::get_route(*route_box, None)
-                        .map_err(|e| anyhow::anyhow!("Routing error: {e}"))?
+                    protobuf_bridge::get_route(*route_box, None).map_err(|e| {
+                        redis::RedisError::from((
+                            redis::ErrorKind::ClientError,
+                            "Routing error",
+                            e.to_string(),
+                        ))
+                    })?
                 } else {
                     None
                 };
@@ -152,7 +175,6 @@ async fn execute_command_request_and_complete(
                             batch.raise_on_error.unwrap_or(true),
                         )
                         .await
-                        .map_err(|e| anyhow::anyhow!("Transaction failed: {e}"))
                 } else {
                     client
                         .send_pipeline(
@@ -168,7 +190,6 @@ async fn execute_command_request_and_complete(
                             },
                         )
                         .await
-                        .map_err(|e| anyhow::anyhow!("Pipeline failed: {e}"))
                 };
 
                 if let Some(child) = send_batch_span.as_ref() {
@@ -188,7 +209,10 @@ async fn execute_command_request_and_complete(
                 }
                 exec_res
             }
-            _ => Err(anyhow::anyhow!("Unsupported command type")),
+            _ => Err(redis::RedisError::from((
+                redis::ErrorKind::ClientError,
+                "Unsupported command type",
+            ))),
         }
     }
     .await;
@@ -1630,7 +1654,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                 match client_result {
                     Ok(mut client) => {
                         // Execute batch using existing FFI methodology
-                        let result = async {
+                        let result: Result<redis::Value, redis::RedisError> = async {
                             // If we have a root span, create a child span named "send_batch" to match expectations
                             let mut send_batch_span: Option<glide_core::GlideSpan> = None;
                             if let Some(root_span_ptr) = root_span_ptr_opt
@@ -1654,16 +1678,24 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                                 match protobuf_bridge::create_valkey_command(cmd) {
                                     Ok(valkey_cmd) => pipeline.add_command(valkey_cmd),
                                     Err(e) => {
-                                        return Err(anyhow::anyhow!(
-                                            "Failed to create batch command: {e}"
-                                        ));
+                                        return Err(redis::RedisError::from((
+                                            redis::ErrorKind::ClientError,
+                                            "Failed to create batch command",
+                                            e.to_string(),
+                                        )));
                                     }
                                 };
                             }
 
                             // Get routing using FFI approach
-                            let routing = protobuf_bridge::get_route(route_clone, None)
-                                .map_err(|e| anyhow::anyhow!("Routing error: {e}"))?;
+                            let routing =
+                                protobuf_bridge::get_route(route_clone, None).map_err(|e| {
+                                    redis::RedisError::from((
+                                        redis::ErrorKind::ClientError,
+                                        "Routing error",
+                                        e.to_string(),
+                                    ))
+                                })?;
 
                             // Execute using existing client methods
                             let exec_res = if batch_clone.is_atomic {
@@ -1675,7 +1707,6 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                                         batch_clone.raise_on_error.unwrap_or(true),
                                     )
                                     .await
-                                    .map_err(|e| anyhow::anyhow!("Transaction failed: {e}"))
                             } else {
                                 client
                                     .send_pipeline(
@@ -1693,7 +1724,6 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                                         },
                                     )
                                     .await
-                                    .map_err(|e| anyhow::anyhow!("Pipeline failed: {e}"))
                             };
 
                             // End child span if created
@@ -1723,7 +1753,11 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                         complete_callback(jvm, callback_id, result, binary_mode);
                     }
                     Err(err) => {
-                        let error = Err(anyhow::anyhow!("Client not found: {err}"));
+                        let error = Err(redis::RedisError::from((
+                            redis::ErrorKind::ClientError,
+                            "Client not found",
+                            err.to_string(),
+                        )));
                         let binary_mode = expect_utf8 == 0;
                         complete_callback(jvm, callback_id, error, binary_mode);
                     }
@@ -1850,17 +1884,24 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executePublishBinar
                             cmd.arg(channel_bytes.as_slice());
                             cmd.arg(message_bytes.as_slice());
 
-                            client
-                                .send_command(&cmd, None)
-                                .await
-                                .map_err(|e| anyhow::anyhow!("Publish failed: {e}"))
+                            client.send_command(&cmd, None).await.map_err(|e| {
+                                redis::RedisError::from((
+                                    redis::ErrorKind::ClientError,
+                                    "Publish failed",
+                                    e.to_string(),
+                                ))
+                            })
                         }
                         .await;
 
                         complete_callback(jvm, callback_id, result, false);
                     }
                     Err(err) => {
-                        let error = Err(anyhow::anyhow!("Client not found: {err}"));
+                        let error = Err(redis::RedisError::from((
+                            redis::ErrorKind::ClientError,
+                            "Client not found",
+                            err.to_string(),
+                        )));
                         complete_callback(jvm, callback_id, error, false);
                     }
                 }
@@ -1906,7 +1947,11 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
                     complete_callback(
                         jvm,
                         callback_id,
-                        Err(anyhow::anyhow!("Failed to read hash: {e}")),
+                        Err(redis::RedisError::from((
+                            redis::ErrorKind::ClientError,
+                            "Failed to read hash",
+                            e.to_string(),
+                        ))),
                         false,
                     );
                     return Some(());
@@ -1942,7 +1987,11 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
                     complete_callback(
                         jvm,
                         callback_id,
-                        Err(anyhow::anyhow!("Failed to extract keys: {e}")),
+                        Err(redis::RedisError::from((
+                            redis::ErrorKind::ClientError,
+                            "Failed to extract keys",
+                            e.to_string(),
+                        ))),
                         false,
                     );
                     return Some(());
@@ -1978,7 +2027,11 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
                     complete_callback(
                         jvm,
                         callback_id,
-                        Err(anyhow::anyhow!("Failed to extract args: {e}")),
+                        Err(redis::RedisError::from((
+                            redis::ErrorKind::ClientError,
+                            "Failed to extract args",
+                            e.to_string(),
+                        ))),
                         false,
                     );
                     return Some(());
@@ -2066,7 +2119,11 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
                                     complete_callback(
                                         jvm,
                                         callback_id,
-                                        Err(anyhow::anyhow!(format!("Routing error: {e}"))),
+                                        Err(redis::RedisError::from((
+                                            redis::ErrorKind::ClientError,
+                                            "Routing error",
+                                            e.to_string(),
+                                        ))),
                                         false,
                                     );
                                     return;
@@ -2089,7 +2146,11 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
                                     complete_callback(
                                         jvm,
                                         callback_id,
-                                        Err(anyhow::anyhow!(format!("Routing error: {e}"))),
+                                        Err(redis::RedisError::from((
+                                            redis::ErrorKind::ClientError,
+                                            "Routing error",
+                                            e.to_string(),
+                                        ))),
                                         false,
                                     );
                                     return;
@@ -2105,13 +2166,23 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
                                 routing_info,
                             )
                             .await
-                            .map_err(|e| anyhow::anyhow!("Script execution failed: {e}"));
+                            .map_err(|e| {
+                                redis::RedisError::from((
+                                    redis::ErrorKind::ClientError,
+                                    "Script execution failed",
+                                    e.to_string(),
+                                ))
+                            });
 
                         let binary_mode = expect_utf8 == 0;
                         complete_callback(jvm, callback_id, result, binary_mode);
                     }
                     Err(err) => {
-                        let error = Err(anyhow::anyhow!("Client not found: {err}"));
+                        let error = Err(redis::RedisError::from((
+                            redis::ErrorKind::ClientError,
+                            "Client not found",
+                            err.to_string(),
+                        )));
                         let binary_mode = expect_utf8 == 0;
                         complete_callback(jvm, callback_id, error, binary_mode);
                     }
@@ -2159,12 +2230,22 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_updateConnectionPas
                             .update_connection_password(password_opt, do_immediate)
                             .await
                             .map(|_| redis::Value::Okay)
-                            .map_err(|e| anyhow::anyhow!("Password update failed: {e}"));
+                            .map_err(|e| {
+                                redis::RedisError::from((
+                                    redis::ErrorKind::ClientError,
+                                    "Password update failed",
+                                    e.to_string(),
+                                ))
+                            });
 
                         complete_callback(jvm, callback_id, result, false);
                     }
                     Err(err) => {
-                        let error = Err(anyhow::anyhow!("Client not found: {err}"));
+                        let error = Err(redis::RedisError::from((
+                            redis::ErrorKind::ClientError,
+                            "Client not found",
+                            err.to_string(),
+                        )));
                         complete_callback(jvm, callback_id, error, false);
                     }
                 }
@@ -2212,7 +2293,11 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeClusterScanA
                         complete_callback(
                             jvm,
                             callback_id,
-                            Err(anyhow::anyhow!("Failed to read cursor ID: {e}")),
+                            Err(redis::RedisError::from((
+                                redis::ErrorKind::ClientError,
+                                "Failed to read cursor ID",
+                                e.to_string(),
+                            ))),
                             false,
                         );
                         return Some(());
@@ -2231,7 +2316,11 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeClusterScanA
                         complete_callback(
                             jvm,
                             callback_id,
-                            Err(anyhow::anyhow!("Failed to read match pattern: {e}")),
+                            Err(redis::RedisError::from((
+                                redis::ErrorKind::ClientError,
+                                "Failed to read match pattern",
+                                e.to_string(),
+                            ))),
                             false,
                         );
                         return Some(());
@@ -2250,7 +2339,11 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeClusterScanA
                         complete_callback(
                             jvm,
                             callback_id,
-                            Err(anyhow::anyhow!("Failed to read object type: {e}")),
+                            Err(redis::RedisError::from((
+                                redis::ErrorKind::ClientError,
+                                "Failed to read object type",
+                                e.to_string(),
+                            ))),
                             false,
                         );
                         return Some(());
@@ -2281,7 +2374,11 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeClusterScanA
                                     complete_callback(
                                         jvm,
                                         callback_id,
-                                        Err(anyhow::anyhow!("Invalid cursor: {e}")),
+                                        Err(redis::RedisError::from((
+                                            redis::ErrorKind::ClientError,
+                                            "Invalid cursor",
+                                            e.to_string(),
+                                        ))),
                                         false,
                                     );
                                     return;
@@ -2307,14 +2404,24 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeClusterScanA
                         let result = client
                             .cluster_scan(&scan_state_cursor, scan_args)
                             .await
-                            .map_err(|e| anyhow::anyhow!("Cluster scan execution failed: {e}"));
+                            .map_err(|e| {
+                                redis::RedisError::from((
+                                    redis::ErrorKind::ClientError,
+                                    "Cluster scan execution failed",
+                                    e.to_string(),
+                                ))
+                            });
 
                         // binary_mode = !expect_utf8
                         let binary_mode = expect_utf8 == 0;
                         complete_callback(jvm, callback_id, result, binary_mode);
                     }
                     Err(err) => {
-                        let error = Err(anyhow::anyhow!("Client not found: {err}"));
+                        let error = Err(redis::RedisError::from((
+                            redis::ErrorKind::ClientError,
+                            "Client not found",
+                            err.to_string(),
+                        )));
                         let binary_mode = expect_utf8 == 0;
                         complete_callback(jvm, callback_id, error, binary_mode);
                     }
