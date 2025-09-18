@@ -5,12 +5,13 @@ use anyhow::Result;
 use dashmap::DashMap;
 use glide_core::client::Client as GlideClient;
 use glide_core::client::{AuthenticationInfo, ConnectionRequest, NodeAddress, TlsMode};
+use glide_core::errors::{error_message, error_type};
 use jni::JNIEnv;
 use jni::JavaVM;
 use jni::objects::{GlobalRef, JClass, JObject, JStaticMethodID, JValue};
 use jni::signature;
 use jni::sys::{jlong, jobject, jstring};
-use redis::Value as ServerValue;
+use redis::{RedisError, Value as ServerValue};
 use std::sync::Arc;
 use std::sync::mpsc::{Sender, channel};
 use std::thread;
@@ -18,6 +19,7 @@ use tokio::runtime::Runtime;
 
 // Type aliases for complex types
 type PushMessageTuple = (Vec<u8>, Vec<u8>, Option<Vec<u8>>);
+type CallbackResult = Result<ServerValue, RedisError>;
 
 // Runtime and JVM statics
 pub static JVM: std::sync::OnceLock<Arc<JavaVM>> = std::sync::OnceLock::new();
@@ -368,7 +370,7 @@ pub(crate) fn handle_push_notification(env: &mut JNIEnv, handle_id: jlong, push:
 pub(crate) struct MethodCache {
     async_handle_table_class: GlobalRef,
     complete_callback_method: JStaticMethodID,
-    complete_error_method: JStaticMethodID,
+    complete_error_with_code_method: JStaticMethodID,
 }
 
 static METHOD_CACHE: std::sync::OnceLock<parking_lot::Mutex<Option<MethodCache>>> =
@@ -397,18 +399,20 @@ pub(crate) fn get_method_cache(env: &mut JNIEnv) -> Result<MethodCache> {
         .get_static_method_id(&class, "completeCallback", "(JLjava/lang/Object;)Z")
         .map_err(|e| anyhow::anyhow!("Failed to get completeCallback method ID: {e}"))?;
 
-    let complete_error_method = env
+    let complete_error_with_code_method = env
         .get_static_method_id(
             &class,
-            "completeCallbackWithError",
-            "(JLjava/lang/String;)Z",
+            "completeCallbackWithErrorCode",
+            "(JILjava/lang/String;)Z",
         )
-        .map_err(|e| anyhow::anyhow!("Failed to get completeCallbackWithError method ID: {e}"))?;
+        .map_err(|e| {
+            anyhow::anyhow!("Failed to get completeCallbackWithErrorCode method ID: {e}")
+        })?;
 
     let method_cache = MethodCache {
         async_handle_table_class: global_class,
         complete_callback_method,
-        complete_error_method,
+        complete_error_with_code_method,
     };
 
     // Store in cache
@@ -421,7 +425,7 @@ pub(crate) fn get_method_cache(env: &mut JNIEnv) -> Result<MethodCache> {
 }
 
 /// Callback job type handled by dedicated callback workers
-type CallbackJob = (Arc<JavaVM>, jlong, Result<ServerValue>, bool);
+type CallbackJob = (Arc<JavaVM>, jlong, CallbackResult, bool);
 
 /// Global unbounded callback queue sender
 static CALLBACK_SENDER: std::sync::OnceLock<Sender<CallbackJob>> = std::sync::OnceLock::new();
@@ -470,7 +474,7 @@ pub fn init_callback_workers() -> &'static Sender<CallbackJob> {
 fn process_callback_job(
     jvm: Arc<JavaVM>,
     callback_id: jlong,
-    result: Result<ServerValue>,
+    result: CallbackResult,
     binary_mode: bool,
 ) {
     match jvm.attach_current_thread_permanently() {
@@ -492,15 +496,29 @@ fn process_callback_job(
                         let _ = complete_java_callback(&mut env, callback_id, java_result.as_raw());
                     }
                     Err(e) => {
+                        // Use ClientError for conversion failures
+                        let error_code = 0; // UNSPECIFIED error type
                         let error_msg = format!("Response conversion failed: {e}");
-                        let _ =
-                            complete_java_callback_with_error(&mut env, callback_id, &error_msg);
+                        let _ = complete_java_callback_with_error_code(
+                            &mut env,
+                            callback_id,
+                            error_code,
+                            &error_msg,
+                        );
                     }
                 }
                 let _ = unsafe { env.pop_local_frame(&JObject::null()) };
             }
-            Err(e) => {
-                let _ = complete_java_callback_with_error(&mut env, callback_id, &e.to_string());
+            Err(redis_err) => {
+                // Always use error codes for consistent error handling
+                let error_code = error_type(&redis_err) as i32;
+                let error_msg = error_message(&redis_err);
+                let _ = complete_java_callback_with_error_code(
+                    &mut env,
+                    callback_id,
+                    error_code,
+                    &error_msg,
+                );
             }
         },
         Err(e) => {
@@ -513,7 +531,7 @@ fn process_callback_job(
 pub fn complete_callback(
     jvm: Arc<JavaVM>,
     callback_id: jlong,
-    result: Result<ServerValue>,
+    result: CallbackResult,
     binary_mode: bool,
 ) {
     let sender = init_callback_workers();
@@ -542,10 +560,11 @@ pub fn complete_java_callback(env: &mut JNIEnv, callback_id: jlong, result: jobj
     Ok(())
 }
 
-/// Complete Java CompletableFuture with error using cached method IDs.
-pub fn complete_java_callback_with_error(
+/// Complete Java CompletableFuture with error code and message using cached method IDs.
+pub fn complete_java_callback_with_error_code(
     env: &mut JNIEnv,
     callback_id: jlong,
+    error_code: i32,
     error: &str,
 ) -> Result<()> {
     let method_cache = get_method_cache(env)?;
@@ -554,10 +573,11 @@ pub fn complete_java_callback_with_error(
     unsafe {
         env.call_static_method_unchecked(
             &method_cache.async_handle_table_class,
-            method_cache.complete_error_method,
+            method_cache.complete_error_with_code_method,
             jni::signature::ReturnType::Primitive(jni::signature::Primitive::Boolean),
             &[
                 JValue::Long(callback_id).as_jni(),
+                JValue::Int(error_code).as_jni(),
                 JValue::Object(&error_string).as_jni(),
             ],
         )
