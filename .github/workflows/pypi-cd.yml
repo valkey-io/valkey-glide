@@ -43,6 +43,7 @@ jobs:
         runs-on: ubuntu-latest
         outputs:
             PLATFORM_MATRIX: ${{ steps.load-platform-matrix.outputs.PLATFORM_MATRIX }}
+            TESTS_PLATFORM_MATRIX: ${{ steps.load-platform-matrix.outputs.TESTS_PLATFORM_MATRIX }}
         steps:
             - name: Checkout
               uses: actions/checkout@v4
@@ -51,16 +52,22 @@ jobs:
               id: load-platform-matrix
               shell: bash
               run: |
-                  # Filter entries with pypi in PACKAGE_MANAGERS and replace "ephemeral" with "persistent" in RUNNER
-                  export PLATFORM_MATRIX=$(jq 'map(
+
+                  # For testing, Filter entries with pypi in PACKAGE_MANAGERS
+                  export TESTS_PLATFORM_MATRIX=$(jq 'map(
                       select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains(["pypi"])))
-                      | .RUNNER = (
+                  )' < .github/json_matrices/build-matrix.json | jq -c .)
+                  echo "TESTS_PLATFORM_MATRIX=${TESTS_PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
+
+                  # For building and publishing, replace "ephemeral" with "persistent" in RUNNER
+                  export PLATFORM_MATRIX=$(echo "${TESTS_PLATFORM_MATRIX}" | jq 'map(
+                      .RUNNER = (
                           if (.RUNNER | type == "array") 
                           then (.RUNNER | map(if . == "ephemeral" then "persistent" else . end)) 
                           else (if .RUNNER == "ephemeral" then "persistent" else .RUNNER end) 
                           end
                       )
-                  )' < .github/json_matrices/build-matrix.json | jq -c .)
+                  )' | jq -c .)
                   echo "PLATFORM_MATRIX=${PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
 
     start-self-hosted-runner:
@@ -529,7 +536,7 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                build: ${{ fromJson(needs.load-platform-matrix.outputs.PLATFORM_MATRIX) }}
+                build: ${{ fromJson(needs.load-platform-matrix.outputs.TESTS_PLATFORM_MATRIX) }}
         steps:
             - name: Setup self-hosted runner access
               if: ${{ matrix.build.TARGET == 'aarch64-unknown-linux-gnu' }}
