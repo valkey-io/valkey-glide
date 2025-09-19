@@ -17,6 +17,9 @@ import {
     GlideClusterClient,
     ProtocolVersion,
     RequestError,
+    ServiceType,
+    IamAuthConfig,
+    Logger,
 } from "../build-ts";
 import {
     flushAndCloseClient,
@@ -595,4 +598,47 @@ describe("Auth tests", () => {
             });
         },
     );
+});
+
+// Skip IAM Auth tests in CI/CD environments
+const describeIamTests =
+    process.env.CI || process.env.GITHUB_ACTIONS || process.env.JENKINS_URL
+        ? describe.skip
+        : describe;
+
+describeIamTests("IAM Auth: Elasticache Cluster", () => {
+    it("test_iam_authentication_elasticache_cluster", async () => {
+        // Use debug level to see detailed logs about the iam auth process
+        Logger.setLoggerConfig("debug");
+
+        // Replace these values with your actual cluster info and region
+        const clusterName = "iam-auth-cluster";
+        const username = "iam-auth";
+        const region = "us-east-1";
+        const endpoint =
+            "clustercfg.iam-auth-cluster.nra7gl.use1.cache.amazonaws.com";
+        const iamConfig: IamAuthConfig = {
+            clusterName: clusterName,
+            service: ServiceType.Elasticache,
+            region: region,
+            // refreshIntervalSeconds: 10, // optional
+        };
+
+        const client = await GlideClusterClient.createClient({
+            addresses: [{ host: endpoint, port: 6379 }],
+            credentials: { username: username, iamConfig: iamConfig },
+            useTLS: true,
+        });
+
+        // Basic ping test to verify connection
+        const result = await client.ping();
+        expect(result).toBe("PONG");
+
+        Logger.log("info", "IAM test", "Refreshing the token manually");
+
+        // Should see in the logs ""send_immediate_auth - Using IAM token for authentication`
+        await client.refreshIamToken();
+
+        await client.close();
+    });
 });
