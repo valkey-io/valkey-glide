@@ -14,13 +14,15 @@ repositories {
 }
 
 dependencies {
-    implementation group: 'com.google.protobuf', name: 'protobuf-java', version: '4.29.1'
+    implementation('com.google.protobuf:protobuf-java') {
+        version {
+            require '[4.29.1,5.0)'
+            prefer '4.29.1'
+        }
+    }
     implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.13.0'
 
     compileOnly 'com.github.spotbugs:spotbugs-annotations:4.8.6'
-
-    // Apache Commons Pool 2 for Jedis compatibility layer
-    implementation group: 'org.apache.commons', name: 'commons-pool2', version: '2.12.0'
 
     // junit
     testImplementation group: 'org.mockito', name: 'mockito-inline', version: '5.2.0'
@@ -36,13 +38,13 @@ dependencies {
 
 ext {
     checkProtocVersion = { String output ->
-        // Line in format like: libprotoc 29.1 - relaxed requirement
-        def versionParts = output.split(" ")[1].split("\\.")
-        int majorVersion = Integer.parseInt(versionParts[0].trim())
-        
-        // Relaxed requirement - accept protoc 3.0+
-        if (majorVersion < 3) {
-            throw new RuntimeException("Protobuf compiler (protoc) version 3.0 or newer is required. Current version: $output")
+        // Line in format like: libprotoc 29.1
+        def parts = output.split(" ")[1].split("\\.")
+        int majorVersion = Integer.parseInt(parts[0].trim())
+        int minorVersion = parts.length > 1 ? Integer.parseInt(parts[1].trim()) : 0
+        if (majorVersion < 4 || (majorVersion == 4 && minorVersion < 29)) {
+            throw new GradleException(
+                    "Protobuf compiler (protoc) version 4.29 or newer is required. Current version: $output")
         }
         return output.split(" ")[1]
     }
@@ -60,11 +62,11 @@ tasks.register('protobuf', Exec) {
                     workingDir Paths.get(project.rootDir.path, '..').toFile()
                     standardOutput = os
                 }
-                checkProtocVersion(os.toString())
+                checkProtocVersion(os.toString());
             }
         } catch (Exception e) {
             if (e.getMessage().startsWith("A problem occurred starting process")) {
-                throw new RuntimeException("No Protobuf compiler (protoc) found. Protobuf compiler version 3.0 or newer is required.")
+                throw new GradleException("No Protobuf compiler (protoc) found. Protobuf compiler version 4.29 or newer is required.");
             }
             throw e
         }
@@ -119,90 +121,46 @@ tasks.register('buildRust', Exec) {
     environment CARGO_TERM_COLOR: 'always'
 }
 
-tasks.register('buildRustFfi', Exec) {
-    def target
-    if (project.hasProperty('target')) {
-        target = project.target
-    } else {
-        if (osdetector.os == 'linux' && osdetector.release.id != 'alpine') {
-            target = "${arch}-unknown-linux-gnu.2.17"
-        } else if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
-            target = "${arch}-unknown-linux-musl"
-        } else {
-            target = ""
-        }
-    }
-
-    print("Building Rust FFI with target: '$target'\n")
-    if (target.contains("linux") && !target.contains("musl")) {
-        commandLine 'cargo', 'zigbuild', '--target', "$target", '--release'
-        environment RUSTFLAGS: '--cfg ffi_test'
-    } else if (target.contains("musl")) {
-        commandLine 'cargo', 'zigbuild', '--target', "$target", '--release'
-        environment RUSTFLAGS: '--cfg ffi_test -C target-feature=-crt-static'
-    } else {
-        commandLine 'cargo', 'build', '--release'
-        environment RUSTFLAGS: '--cfg ffi_test'
-    }
-    workingDir project.rootDir
-    environment CARGO_TERM_COLOR: 'always'
+tasks.register('buildWithRust') {
+    dependsOn 'buildRust'
+    finalizedBy 'build'
 }
 
-// Native library copying task - simplified and works for all platforms
-tasks.register('copyNativeLib', Copy) {
-    def sourceDir
-    def target
-    
-    if (project.hasProperty('target')) {
-        target = project.target
-        sourceDir = "${projectDir}/../target/${target}/release/"
-    } else if (osdetector.os == 'linux' && osdetector.release.id != 'alpine') {
-        sourceDir = "${projectDir}/../target/${arch}-unknown-linux-gnu/release/"
-    } else if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
-        sourceDir = "${projectDir}/../target/${arch}-unknown-linux-musl/release/"
-    } else {
-        // Default case for macOS and other platforms
-        sourceDir = "${projectDir}/../target/release/"
-    }
-    
-    from sourceDir
-    include "*.dylib", "*.so", "*.dll"  // Include Windows DLLs for future support
-    into sourceSets.main.output.resourcesDir
-    
-    doFirst {
-        println "Copying native libraries from: ${sourceDir}"
-    }
+tasks.register('buildWithProto') {
+    dependsOn 'protobuf'
+    finalizedBy 'build'
 }
 
-tasks.register('testFfi', Test) {
-    // Opt-in FFI test suite for legacy C-ABI checks. Not part of default build.
-    dependsOn 'buildRustFfi'
-    include "glide/ffi/FfiTest.class"
-    // Keep logging consistent with other tests
-    testLogging {
-        exceptionFormat "full"
-        events "started", "skipped", "passed", "failed"
-        showStandardStreams true
-    }
-}
-
-// Default buildAll excludes FFI tests to avoid UnsatisfiedLinkError on JNI-only builds.
 tasks.register('buildAll') {
     dependsOn 'protobuf', 'buildRust'
     finalizedBy 'build'
 }
 
-// Task dependencies
 compileJava.dependsOn('protobuf')
+clean.dependsOn('cleanProtobuf', 'cleanRust')
+
+tasks.register('copyNativeLib', Copy) {
+    def target
+    if (project.hasProperty('target')) {
+        target = project.target
+        from "${projectDir}/../target/${target}/release/"
+    } else if (osdetector.os == 'linux' && osdetector.release.id != 'alpine') {
+        from "${projectDir}/../target/${arch}-unknown-linux-gnu/release/"
+    } else if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
+        from "${projectDir}/../target/${arch}-unknown-linux-musl/release/"
+    } else {
+        from "${projectDir}/../target/release/"
+    }
+    include "*.dylib", "*.so", "*.dll"
+    into sourceSets.main.output.resourcesDir
+}
+
+delombok.dependsOn('compileJava')
 jar.dependsOn('copyNativeLib')
 javadoc.dependsOn('copyNativeLib')
 copyNativeLib.dependsOn('buildRust')
 compileTestJava.dependsOn('copyNativeLib')
 test.dependsOn('buildRust')
-testFfi.dependsOn('buildRustFfi')
-clean.dependsOn('cleanProtobuf', 'cleanRust')
-
-
 
 sourceSets {
     main {
@@ -224,17 +182,6 @@ task sourcesJar(type: Jar, dependsOn: classes) {
     archiveClassifier = 'sources'
     from sourceSets.main.allSource
     exclude 'glide/models' // exclude protobuf files
-    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-}
-
-// Simplified JAR configuration
-jar {
-    archiveBaseName = 'valkey-glide'
-    if (project.hasProperty('target') && project.target.contains("musl")) {
-        archiveClassifier = "linux_musl_${arch}"
-    } else {
-        archiveClassifier = osdetector.classifier
-    }
 }
 
 publishing {
@@ -278,8 +225,7 @@ publishing {
 }
 
 java {
-    modularity.inferModulePath = false
-    // Removed withSourcesJar() and withJavadocJar() to avoid conflicts with manual tasks
+    modularity.inferModulePath = true
 }
 
 tasks.withType(Sign) {
@@ -313,6 +259,24 @@ tasks.withType(Test) {
     finalizedBy jacocoTestReport, jacocoTestCoverageVerification
 }
 
+jar {
+    if (project.hasProperty('target') && project.target.contains("musl")) {
+        archiveClassifier = "linux_musl-${osdetector.arch}"
+    } else {
+        archiveClassifier = osdetector.classifier
+    }
+}
+
+sourcesJar {
+    // suppress following error
+    // Entry glide/api/BaseClient.java is a duplicate but no duplicate handling strategy has been set
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+delombok {
+    modulePath = classpath
+}
+
 javadoc {
     dependsOn delombok
     source = delombok.outputs
@@ -332,11 +296,11 @@ spotbugsMain {
             outputLocation = file("$buildDir/reports/spotbugs/main/spotbugs.xml")
         }
     }
-    excludeFilter.set(file('config/spotbugs-exclude.xml'))
+    excludeFilter = file('config/spotbugs-exclude.xml')
 }
 
 spotbugsTest {
-    excludeFilter.set(file('config/spotbugs-exclude.xml'))
+    excludeFilter = file('config/spotbugs-exclude.xml')
 }
 
 spotbugs {
