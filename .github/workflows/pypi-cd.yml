@@ -456,7 +456,7 @@ jobs:
                   args: --out sdist
 
             - name: Async client - Download binaries
-              uses: actions/download-artifact@v4
+              uses: actions/download-artifact@v5
               with:
                   pattern: wheels-*-async
                   path: python/glide-async/wheels
@@ -494,7 +494,7 @@ jobs:
                   python3 -m build --sdist
 
             - name: Sync client - Download binaries
-              uses: actions/download-artifact@v4
+              uses: actions/download-artifact@v5
               with:
                   pattern: wheels-*-sync
                   path: python/glide-sync/wheels
