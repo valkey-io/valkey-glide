@@ -498,25 +498,6 @@ impl StandaloneClient {
     }
 
     pub async fn send_command(&mut self, cmd: &redis::Cmd) -> RedisResult<Value> {
-        // Check if this is a SELECT command and handle it specially
-        if self.is_select_command(cmd) {
-            // Execute the command first
-            let result = self.send_command_internal(cmd).await;
-            match result {
-                Ok(value) => {
-                    // Extract database ID and update connection
-                    let database_id = self.extract_database_id_from_select(cmd)?;
-                    self.update_connection_database(database_id).await?;
-                    Ok(value)
-                }
-                Err(err) => Err(err),
-            }
-        } else {
-            self.send_command_internal(cmd).await
-        }
-    }
-
-    async fn send_command_internal(&mut self, cmd: &redis::Cmd) -> RedisResult<Value> {
         let Some(cmd_bytes) = Routable::command(cmd) else {
             return self.send_request_to_single_node(cmd, false).await;
         };
@@ -527,41 +508,6 @@ impl StandaloneClient {
         }
         self.send_request_to_single_node(cmd, is_readonly_cmd(cmd_bytes.as_slice()))
             .await
-    }
-
-    /// Checks if the given command is a SELECT command.
-    fn is_select_command(&self, cmd: &redis::Cmd) -> bool {
-        cmd.command().is_some_and(|bytes| bytes == b"SELECT")
-    }
-
-    /// Extracts the database ID from a SELECT command.
-    fn extract_database_id_from_select(&self, cmd: &redis::Cmd) -> RedisResult<i64> {
-        // For both redis::cmd("SELECT").arg("5") and redis::Cmd::new().arg("SELECT").arg("5")
-        // the database ID is at arg_idx(1)
-        cmd.arg_idx(1)
-            .ok_or_else(|| {
-                RedisError::from((
-                    redis::ErrorKind::ResponseError,
-                    "SELECT command missing database argument",
-                ))
-            })
-            .and_then(|db_bytes| {
-                std::str::from_utf8(db_bytes)
-                    .map_err(|_| {
-                        RedisError::from((
-                            redis::ErrorKind::ResponseError,
-                            "Invalid database ID format",
-                        ))
-                    })
-                    .and_then(|db_str| {
-                        db_str.parse::<i64>().map_err(|_| {
-                            RedisError::from((
-                                redis::ErrorKind::ResponseError,
-                                "Database ID must be a valid integer",
-                            ))
-                        })
-                    })
-            })
     }
 
     pub async fn send_pipeline(
