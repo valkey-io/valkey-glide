@@ -469,6 +469,146 @@ mod cluster_client_tests {
 
     #[rstest]
     #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    /// Test that verifies the client maintains the correct database ID after an automatic reconnection
+    /// when the database was changed using the SELECT command.
+    /// This test:
+    /// 1. Creates a client connected to database 0 (default)
+    /// 2. Uses SELECT command to change to database 5
+    /// 3. Verifies the connection is now on database 5
+    /// 4. Simulates a connection drop by killing the connection
+    /// 5. Sends another command which either:
+    ///    - Fails due to the dropped connection, then retries and verifies reconnection to db=5
+    ///    - Succeeds with a new client ID (indicating reconnection) and verifies still on db=5
+    /// This ensures that database selection via SELECT command persists across reconnections.
+    fn test_select_command_database_persistence_after_reconnection() {
+        let mut client_info_cmd = redis::cmd("CLIENT");
+        client_info_cmd.arg("INFO");
+
+        let mut select_cmd = redis::cmd("SELECT");
+        select_cmd.arg("5");
+
+        block_on_all(async {
+            // First create a basic client to check server version
+            let mut version_check_basics = setup_test_basics_internal(TestConfiguration {
+                cluster_mode: ClusterMode::Enabled,
+                shared_server: true,
+                ..Default::default()
+            })
+            .await;
+
+            // Skip test if server version is less than 9.0 (database isolation not supported)
+            if !utilities::version_greater_or_equal(&mut version_check_basics.client, "9.0.0").await
+            {
+                return;
+            }
+
+            let mut test_basics = setup_test_basics_internal(TestConfiguration {
+                cluster_mode: ClusterMode::Enabled,
+                shared_server: true,
+                database_id: 0, // Start with default database
+                ..Default::default()
+            })
+            .await;
+
+            // Verify initial connection is to database 0
+            let initial_client_info = test_basics
+                .client
+                .send_command(&client_info_cmd, None)
+                .await
+                .unwrap();
+            let initial_client_info_str = match initial_client_info {
+                redis::Value::BulkString(bytes) => String::from_utf8_lossy(&bytes).to_string(),
+                redis::Value::VerbatimString { text, .. } => text,
+                _ => panic!(
+                    "Unexpected CLIENT INFO response type: {:?}",
+                    initial_client_info
+                ),
+            };
+            assert!(initial_client_info_str.contains("db=0"));
+
+            // Extract initial client ID
+            let initial_client_id = extract_client_id(&initial_client_info_str)
+                .expect("Failed to extract initial client ID");
+
+            // Execute SELECT command to change to database 5
+            let select_result = test_basics
+                .client
+                .send_command(&select_cmd, None)
+                .await
+                .unwrap();
+            assert_eq!(select_result, redis::Value::Okay);
+
+            // Verify we're now on database 5
+            let post_select_client_info = test_basics
+                .client
+                .send_command(&client_info_cmd, None)
+                .await
+                .unwrap();
+            let post_select_client_info_str = match post_select_client_info {
+                redis::Value::BulkString(bytes) => String::from_utf8_lossy(&bytes).to_string(),
+                redis::Value::VerbatimString { text, .. } => text,
+                _ => panic!(
+                    "Unexpected CLIENT INFO response type: {:?}",
+                    post_select_client_info
+                ),
+            };
+            assert!(post_select_client_info_str.contains("db=5"));
+
+            // Kill the connection to simulate a network drop
+            kill_connection(&mut test_basics.client).await;
+
+            // Try to send another command - this should trigger reconnection
+            let res = test_basics
+                .client
+                .send_command(&client_info_cmd, None)
+                .await;
+            match res {
+                Err(err) => {
+                    // Connection was dropped as expected
+                    assert!(
+                        err.is_connection_dropped() || err.is_timeout(),
+                        "Expected connection dropped or timeout error, got: {err:?}",
+                    );
+                    // Retry and verify we're still on database 5 after reconnection
+                    let client_info = repeat_try_create(|| async {
+                        let mut client = test_basics.client.clone();
+                        let response = client.send_command(&client_info_cmd, None).await.ok()?;
+                        match response {
+                            redis::Value::BulkString(bytes) => {
+                                Some(String::from_utf8_lossy(&bytes).to_string())
+                            }
+                            redis::Value::VerbatimString { text, .. } => Some(text),
+                            _ => None,
+                        }
+                    })
+                    .await;
+                    assert!(client_info.contains("db=5"));
+                }
+                Ok(response) => {
+                    // Command succeeded, extract new client ID and compare
+                    let new_client_info = match response {
+                        redis::Value::BulkString(bytes) => {
+                            String::from_utf8_lossy(&bytes).to_string()
+                        }
+                        redis::Value::VerbatimString { text, .. } => text,
+                        _ => panic!("Unexpected CLIENT INFO response type: {:?}", response),
+                    };
+                    let new_client_id = extract_client_id(&new_client_info)
+                        .expect("Failed to extract new client ID");
+                    assert_ne!(
+                        initial_client_id, new_client_id,
+                        "Client ID should change after reconnection if command succeeds"
+                    );
+                    // Check that the database ID is still 5 (from SELECT command)
+                    assert!(new_client_info.contains("db=5"));
+                }
+            }
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
     #[timeout(LONG_CLUSTER_TEST_TIMEOUT)]
     fn test_lazy_cluster_connection_establishes_on_first_command(
         #[values(GlideProtocolVersion::RESP2, GlideProtocolVersion::RESP3)]

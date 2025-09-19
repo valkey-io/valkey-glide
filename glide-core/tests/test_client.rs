@@ -800,6 +800,151 @@ pub(crate) mod shared_client_tests {
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_select_command_interception(#[values(false, true)] use_cluster: bool) {
+        block_on_all(async {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            // Test that SELECT commands are intercepted correctly
+            let mut select_cmd = redis::Cmd::new();
+            select_cmd.arg("SELECT").arg("1");
+
+            let result = test_basics.client.send_command(&select_cmd, None).await;
+
+            if use_cluster {
+                // In cluster mode,  SELECT should succeed
+                assert!(result.is_ok());
+                assert_eq!(result.unwrap(), Value::Okay);
+            } else {
+                // In standalone mode, SELECT should succeed
+                assert!(result.is_ok());
+                assert_eq!(result.unwrap(), Value::Okay);
+            }
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_non_select_commands_bypass_interception(#[values(false, true)] use_cluster: bool) {
+        block_on_all(async {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            // Test that non-SELECT commands bypass interception and work normally
+            let key = generate_random_string(6);
+            let value = generate_random_string(10);
+
+            // Test SET command (should bypass interception)
+            let mut set_cmd = redis::Cmd::new();
+            set_cmd.arg("SET").arg(&key).arg(&value);
+            let set_result = test_basics.client.send_command(&set_cmd, None).await;
+            assert!(set_result.is_ok());
+            assert_eq!(set_result.unwrap(), Value::Okay);
+
+            // Test GET command (should bypass interception)
+            let mut get_cmd = redis::Cmd::new();
+            get_cmd.arg("GET").arg(&key);
+            let get_result = test_basics.client.send_command(&get_cmd, None).await;
+            assert!(get_result.is_ok());
+            assert_eq!(get_result.unwrap(), Value::BulkString(value.into_bytes()));
+
+            // Test PING command (should bypass interception)
+            let mut ping_cmd = redis::Cmd::new();
+            ping_cmd.arg("PING");
+            let ping_result = test_basics.client.send_command(&ping_cmd, None).await;
+            assert!(ping_result.is_ok());
+            assert_eq!(
+                ping_result.unwrap(),
+                Value::SimpleString("PONG".to_string())
+            );
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_select_command_case_sensitivity(#[values(false, true)] use_cluster: bool) {
+        block_on_all(async {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            // Test that SELECT command detection is case-sensitive
+            // Only uppercase "SELECT" should be intercepted
+
+            // Test uppercase SELECT (should be intercepted)
+            let mut select_upper_cmd = redis::Cmd::new();
+            select_upper_cmd.arg("SELECT").arg("1");
+            let result_upper = test_basics
+                .client
+                .send_command(&select_upper_cmd, None)
+                .await;
+
+            if use_cluster {
+                // Should be intercepted and fail with cluster error
+                assert!(result_upper.is_ok());
+            } else {
+                // Should be intercepted and succeed
+                assert!(result_upper.is_ok());
+            }
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_select_like_commands_not_intercepted(#[values(false, true)] use_cluster: bool) {
+        block_on_all(async {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            // Test that commands containing "SELECT" but not exactly "SELECT" are not intercepted
+
+            // Test a command that starts with SELECT but has more characters
+            let mut select_like_cmd = redis::Cmd::new();
+            select_like_cmd.arg("SELECTDB").arg("1"); // This is not a real command
+            let result = test_basics
+                .client
+                .send_command(&select_like_cmd, None)
+                .await;
+
+            // Should fail with "unknown command" error, not be intercepted
+            assert!(result.is_err());
+            let err = result.unwrap_err();
+            assert!(
+                err.to_string().to_lowercase().contains("unknown")
+                    || err.to_string().to_lowercase().contains("command")
+            );
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_blocking_command_inside_pipeline_raises_timeout_error(
         #[values(false, true)] use_cluster: bool,
     ) {
