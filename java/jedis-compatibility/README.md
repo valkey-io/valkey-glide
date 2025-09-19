@@ -14,7 +14,7 @@ The Jedis compatibility layer is implemented as a separate Gradle sub-module tha
 
 ### Core Classes
 - `Jedis` - Main client class compatible with Jedis API
-- `JedisCluster` - Cluster client compatible with Jedis cluster API  
+- `JedisCluster` - Cluster client compatible with Jedis cluster API
 - `UnifiedJedis` - Unified interface for both standalone and cluster operations
 - `JedisPool` / `JedisPooled` - Connection pooling implementations
 
@@ -35,7 +35,7 @@ The Jedis compatibility layer is implemented as a separate Gradle sub-module tha
 
 ```gradle
 dependencies {
-    implementation project(':jedis-compatibility')
+    implementation group: 'io.valkey', name: 'valkey-glide-jedis-compatibility', version: '1.+', classifier: 'osx-aarch_64'
 }
 ```
 
@@ -45,6 +45,7 @@ dependencies {
 <dependency>
     <groupId>io.valkey</groupId>
     <artifactId>valkey-glide-jedis-compatibility</artifactId>
+    <classifier>osx-aarch_64</classifier>
     <version>${valkey-glide.version}</version>
 </dependency>
 ```

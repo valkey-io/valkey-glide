@@ -20,7 +20,7 @@ dependencies {
 **After (Valkey GLIDE):**
 ```gradle
 dependencies {
-    implementation group: 'io.valkey', name: 'valkey-glide-jedis-compatibility', version: '1.+', classifier: 'osx-aarch_64'
+    implementation group: 'io.valkey', name: 'valkey-glide-jedis-compatibility', version: '2.+', classifier: 'osx-aarch_64'
 }
 ```
 
