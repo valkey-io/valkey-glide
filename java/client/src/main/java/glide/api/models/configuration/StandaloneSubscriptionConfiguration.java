@@ -4,9 +4,11 @@ package glide.api.models.configuration;
 import glide.api.GlideClient;
 import glide.api.models.GlideString;
 import java.util.LinkedHashMap;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.Getter;
 
 /**
@@ -49,6 +51,11 @@ public final class StandaloneSubscriptionConfiguration extends BaseSubscriptionC
      * Will be applied via <code>SUBSCRIBE</code>/<code>PSUBSCRIBE</code> commands during connection
      * establishment.
      */
+    @Getter(onMethod_ = {
+        @SuppressFBWarnings(
+                value = "EI_EXPOSE_REP",
+                justification = "Subscriptions map is wrapped as unmodifiable")
+    })
     private final Map<PubSubChannelMode, Set<GlideString>> subscriptions;
 
     // All code below is a custom implementation of `SuperBuilder`
@@ -57,7 +64,10 @@ public final class StandaloneSubscriptionConfiguration extends BaseSubscriptionC
             Optional<Object> context,
             Map<PubSubChannelMode, Set<GlideString>> subscriptions) {
         super(callback, context);
-        this.subscriptions = subscriptions;
+        this.subscriptions =
+                subscriptions.entrySet().stream()
+                        .collect(
+                                Collectors.toUnmodifiableMap(Map.Entry::getKey, e -> Set.copyOf(e.getValue())));
     }
 
     public static StandaloneSubscriptionConfigurationBuilder builder() {
@@ -91,7 +101,7 @@ public final class StandaloneSubscriptionConfiguration extends BaseSubscriptionC
          */
         public StandaloneSubscriptionConfigurationBuilder subscriptions(
                 Map<PubSubChannelMode, Set<GlideString>> subscriptions) {
-            this.subscriptions = subscriptions;
+            this.subscriptions = new LinkedHashMap<>(subscriptions);
             return this;
         }
 
@@ -102,7 +112,7 @@ public final class StandaloneSubscriptionConfiguration extends BaseSubscriptionC
          */
         public StandaloneSubscriptionConfigurationBuilder subscriptions(
                 PubSubChannelMode mode, Set<GlideString> subscriptions) {
-            this.subscriptions.put(mode, subscriptions);
+            this.subscriptions.put(mode, Set.copyOf(subscriptions));
             return this;
         }
 

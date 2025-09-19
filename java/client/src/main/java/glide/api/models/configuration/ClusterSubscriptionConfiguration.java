@@ -9,6 +9,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import lombok.Getter;
 
 /**
@@ -58,6 +60,11 @@ public final class ClusterSubscriptionConfiguration extends BaseSubscriptionConf
      * Will be applied via <code>SUBSCRIBE</code>/<code>PSUBSCRIBE</code>/<code>SSUBSCRIBE</code>
      * commands during connection establishment.
      */
+    @Getter(onMethod_ = {
+        @SuppressFBWarnings(
+                value = "EI_EXPOSE_REP",
+                justification = "Subscriptions map is wrapped as unmodifiable")
+    })
     private final Map<PubSubClusterChannelMode, Set<GlideString>> subscriptions;
 
     // All code below is a custom implementation of `SuperBuilder`
@@ -66,7 +73,11 @@ public final class ClusterSubscriptionConfiguration extends BaseSubscriptionConf
             Optional<Object> context,
             Map<PubSubClusterChannelMode, Set<GlideString>> subscriptions) {
         super(callback, context);
-        this.subscriptions = subscriptions;
+        this.subscriptions =
+                subscriptions.entrySet().stream()
+                        .collect(
+                                Collectors.toUnmodifiableMap(
+                                        Map.Entry::getKey, e -> Set.copyOf(e.getValue())));
     }
 
     public static ClusterSubscriptionConfigurationBuilder builder() {
@@ -110,7 +121,7 @@ public final class ClusterSubscriptionConfiguration extends BaseSubscriptionConf
          */
         public ClusterSubscriptionConfigurationBuilder subscriptions(
                 Map<PubSubClusterChannelMode, Set<GlideString>> subscriptions) {
-            this.subscriptions = subscriptions;
+            this.subscriptions = new HashMap<>(subscriptions);
             return this;
         }
 
@@ -121,7 +132,7 @@ public final class ClusterSubscriptionConfiguration extends BaseSubscriptionConf
          */
         public ClusterSubscriptionConfigurationBuilder subscriptions(
                 PubSubClusterChannelMode mode, Set<GlideString> subscriptions) {
-            this.subscriptions.put(mode, subscriptions);
+            this.subscriptions.put(mode, Set.copyOf(subscriptions));
             return this;
         }
 

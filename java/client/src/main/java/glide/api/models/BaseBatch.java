@@ -297,6 +297,7 @@ import glide.api.models.commands.geospatial.GeoSearchResultOptions;
 import glide.api.models.commands.geospatial.GeoSearchShape;
 import glide.api.models.commands.geospatial.GeoSearchStoreOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.scan.HScanOptions;
 import glide.api.models.commands.scan.HScanOptions.HScanOptionsBuilder;
@@ -339,6 +340,11 @@ import lombok.NonNull;
 @Getter
 public abstract class BaseBatch<T extends BaseBatch<T>> {
     /** Command class to send a single request to Valkey. */
+    @Getter(onMethod_ = {
+        @SuppressFBWarnings(
+                value = "EI_EXPOSE_REP",
+                justification = "Batch builder is intentionally mutable for command assembly")
+    })
     protected final Batch.Builder protobufBatch;
 
     /**

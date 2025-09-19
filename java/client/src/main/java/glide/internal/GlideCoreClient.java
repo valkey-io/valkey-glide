@@ -1,6 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.internal;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import glide.api.models.exceptions.ClosingException;
 import glide.ffi.resolvers.NativeUtils;
 import java.lang.ref.Cleaner;
@@ -135,7 +136,7 @@ public class GlideCoreClient implements AutoCloseable {
         private Integer reconnectJitterPercent = null;
 
         public Config(List<String> addresses) {
-            this.addresses = addresses;
+            this.addresses = List.copyOf(addresses);
         }
 
         public Config useTls(boolean useTls) {
@@ -312,6 +313,9 @@ public class GlideCoreClient implements AutoCloseable {
     }
 
     /** Create a new GlideClient with the specified configuration */
+    @SuppressFBWarnings(
+            value = "CT_CONSTRUCTOR_THROW",
+            justification = "Constructor validates config and throws before native state is assigned")
     public GlideCoreClient(Config config) {
         if (config == null) {
             throw new IllegalArgumentException("Config cannot be null");
@@ -385,16 +389,25 @@ public class GlideCoreClient implements AutoCloseable {
     }
 
     /** Constructor accepting BaseClientConfiguration (for compatibility with existing API) */
+    @SuppressFBWarnings(
+            value = "CT_CONSTRUCTOR_THROW",
+            justification = "Delegates to config constructor which may throw on invalid input")
     public GlideCoreClient(glide.api.models.configuration.BaseClientConfiguration configuration) {
         this(convertFromBaseClientConfiguration(configuration));
     }
 
     /** Convenience constructor for simple host:port connections */
+    @SuppressFBWarnings(
+            value = "CT_CONSTRUCTOR_THROW",
+            justification = "Constructor validates host/port arguments before creating native client")
     public GlideCoreClient(String host, int port) {
         this(new Config(Arrays.asList(host + ":" + port)));
     }
 
     /** Constructor that wraps an existing native client handle (for BaseClient integration) */
+    @SuppressFBWarnings(
+            value = "CT_CONSTRUCTOR_THROW",
+            justification = "Constructor fails fast on invalid handles prior to registering resources")
     public GlideCoreClient(long existingHandle, int maxInflight) {
         if (existingHandle == 0) {
             throw new IllegalArgumentException("Native handle cannot be zero");

@@ -5235,17 +5235,6 @@ public abstract class BaseClient
         return bytes;
     }
 
-    /**
-     * Deserialize a Map from bytes received via DirectByteBuffer. Binary format:
-     * optional('%')+[entry_count(4)][key1_len(4)][key1][val1_len(4)][val1]...
-     */
-    private Map<?, ?> deserializeMapFromBytes(byte[] bytes, boolean encodingUtf8) {
-        if (bytes == null || bytes.length == 0) {
-            return new LinkedHashMap<>();
-        }
-        return deserializeMapFromBuffer(java.nio.ByteBuffer.wrap(bytes), encodingUtf8);
-    }
-
     private Map<?, ?> deserializeMapFromBuffer(java.nio.ByteBuffer buffer, boolean encodingUtf8) {
         if (buffer == null) {
             return new LinkedHashMap<>();
@@ -5865,31 +5854,5 @@ public abstract class BaseClient
             return;
         }
         messageHandler.getQueue().push(message);
-    }
-
-    /**
-     * Extract connection timeout from configuration, handling both standalone and cluster configs.
-     */
-    private static int getConnectionTimeoutFromConfig(BaseClientConfiguration config) {
-        // Default value from Rust core documentation: 2000ms
-        int defaultConnectionTimeout = 2000;
-
-        if (config instanceof glide.api.models.configuration.GlideClientConfiguration) {
-            glide.api.models.configuration.GlideClientConfiguration standaloneConfig =
-                    (glide.api.models.configuration.GlideClientConfiguration) config;
-            if (standaloneConfig.getAdvancedConfiguration() != null
-                    && standaloneConfig.getAdvancedConfiguration().getConnectionTimeout() != null) {
-                return standaloneConfig.getAdvancedConfiguration().getConnectionTimeout();
-            }
-        } else if (config instanceof glide.api.models.configuration.GlideClusterClientConfiguration) {
-            glide.api.models.configuration.GlideClusterClientConfiguration clusterConfig =
-                    (glide.api.models.configuration.GlideClusterClientConfiguration) config;
-            if (clusterConfig.getAdvancedConfiguration() != null
-                    && clusterConfig.getAdvancedConfiguration().getConnectionTimeout() != null) {
-                return clusterConfig.getAdvancedConfiguration().getConnectionTimeout();
-            }
-        }
-
-        return defaultConnectionTimeout;
     }
 }

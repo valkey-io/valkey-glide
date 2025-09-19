@@ -1103,22 +1103,6 @@ public class CommandManager {
         outputBuilder.setArgsArray(commandArgs);
     }
 
-    /**
-     * Add the given set of arguments to the output Command.Builder. DirectByteBuffer implementation
-     * handles large arguments automatically via size-based routing.
-     */
-    private static void populateCommandWithArgs(
-            List<byte[]> arguments, Command.Builder outputBuilder) {
-        ArgsArray.Builder commandArgs = ArgsArray.newBuilder();
-        for (byte[] argument : arguments) {
-            if (argument == null) {
-                throw new NullPointerException("Argument cannot be null");
-            }
-            commandArgs.addArgs(UnsafeByteOperations.unsafeWrap(argument));
-        }
-        outputBuilder.setArgsArray(commandArgs);
-    }
-
     private static void appendArgument(ArgsArray.Builder commandArgs, Object value) {
         if (value instanceof GlideString) {
             commandArgs.addArgs(UnsafeByteOperations.unsafeWrap(((GlideString) value).getBytes()));

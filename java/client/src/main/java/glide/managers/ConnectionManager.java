@@ -172,7 +172,7 @@ public class ConnectionManager {
                                         requestTimeoutMs,
                                         connectionTimeoutMs,
                                         maxInflightRequests,
-                                        configuration.getReadFrom() != null ? configuration.getReadFrom().name() : null,
+                                        configuration.getReadFrom().name(),
                                         configuration.getClientAZ(),
                                         configuration.isLazyConnect(),
                                         configuration.getClientName(),

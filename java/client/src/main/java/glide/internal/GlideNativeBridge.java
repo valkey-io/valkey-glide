@@ -60,10 +60,6 @@ public class GlideNativeBridge {
     public static native void executeBatchAsync(
             long clientPtr, byte[] batchRequestBytes, boolean expectUtf8Response, long callbackId);
 
-    /** Execute binary-safe PUBLISH/SPUBLISH asynchronously */
-    public static native void executePublishBinaryAsync(
-            long clientPtr, boolean sharded, byte[] channel, byte[] message, long callbackId);
-
     /** Update the connection password with optional immediate authentication. */
     public static native void updateConnectionPassword(
             long clientPtr, String password, boolean immediateAuth, long callbackId);
