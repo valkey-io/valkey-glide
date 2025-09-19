@@ -71,8 +71,45 @@ tasks.register('stopAllBeforeTests', Exec) {
 }
 
 // delete dirs if stop failed due to https://github.com/valkey-io/valkey-glide/issues/849
-tasks.register('clearDirs', Delete) {
-    delete "${project.rootDir}/../utils/clusters"
+tasks.register('clearDirs') {
+    doLast {
+        def clustersDir = file("${project.rootDir}/../utils/clusters")
+        if (clustersDir.exists()) {
+            // On Windows, we need to be more careful about deletion
+            if (System.getProperty("os.name").toLowerCase().contains("win")) {
+                // Try to delete with retries for Windows file locking
+                def maxAttempts = 3
+                def attempt = 0
+                while (attempt < maxAttempts && clustersDir.exists()) {
+                    attempt++
+                    try {
+                        // First try to kill any remaining Redis processes
+                        exec {
+                            commandLine 'cmd', '/c', 'taskkill', '/F', '/IM', 'redis-server.exe'
+                            ignoreExitValue true
+                        }
+                        Thread.sleep(1000)  // Wait for processes to die
+
+                        // Now try to delete
+                        project.delete(clustersDir)
+                        logger.info("Successfully deleted clusters directory on attempt ${attempt}")
+                        break
+                    } catch (Exception e) {
+                        if (attempt >= maxAttempts) {
+                            logger.warn("Failed to delete clusters directory after ${maxAttempts} attempts: ${e.message}")
+                            logger.warn("Continuing anyway - old files may remain")
+                        } else {
+                            logger.info("Deletion attempt ${attempt} failed, retrying...")
+                            Thread.sleep(2000)
+                        }
+                    }
+                }
+            } else {
+                // Unix/Linux - standard deletion
+                project.delete(clustersDir)
+            }
+        }
+    }
 }
 
 tasks.register('startCluster') {
