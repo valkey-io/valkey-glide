@@ -74,20 +74,21 @@ public final class AsyncRegistry {
         // Client-specific inflight limit check
         // 0 means "use native/core defaults" - no limit enforcement in Java layer
         if (maxInflightRequests > 0) {
-            // Get or create per-client counter
-            java.util.concurrent.atomic.AtomicInteger clientCount =
-                    clientInflightCounts.computeIfAbsent(
-                            clientHandle, k -> new java.util.concurrent.atomic.AtomicInteger(0));
+            clientInflightCounts.compute(
+                    clientHandle,
+                    (key, counter) -> {
+                        java.util.concurrent.atomic.AtomicInteger value =
+                                counter != null ? counter : new java.util.concurrent.atomic.AtomicInteger(0);
 
-            // Check if this specific client has reached its limit
-            if (clientCount.get() >= maxInflightRequests) {
-                // Use same error type and message as glide-core implementation
-                throw new glide.api.models.exceptions.RequestException(
-                        "Client reached maximum inflight requests");
-            }
+                        int updated = value.incrementAndGet();
+                        if (updated > maxInflightRequests) {
+                            value.decrementAndGet();
+                            throw new glide.api.models.exceptions.RequestException(
+                                    "Client reached maximum inflight requests");
+                        }
 
-            // Increment the client's inflight count
-            clientCount.incrementAndGet();
+                        return value;
+                    });
         }
 
         long correlationId = nextId.getAndIncrement();
@@ -108,31 +109,23 @@ public final class AsyncRegistry {
 
                     // Decrement per-client counter if applicable
                     if (maxInflightRequests > 0) {
-                        java.util.concurrent.atomic.AtomicInteger clientCount =
-                                clientInflightCounts.get(clientHandle);
-                        // Null check needed: cleanupClient() may have been called concurrently
-                        if (clientCount != null) {
-                            int remaining = clientCount.decrementAndGet();
-                            // Clean up the entry when no more inflight requests
-                            // This prevents memory leak for inactive clients
-                            if (remaining == 0) {
-                                clientInflightCounts.remove(clientHandle, clientCount);
-                            }
-                        }
+                        clientInflightCounts.compute(
+                                clientHandle,
+                                (key, counter) -> {
+                                    if (counter == null) {
+                                        return null;
+                                    }
+
+                                    int remaining = counter.decrementAndGet();
+
+                                    // Clean up the entry when no more inflight requests to avoid
+                                    // leaking counters for inactive clients.
+                                    return remaining <= 0 ? null : counter;
+                                });
                     }
                 });
 
         return correlationId;
-    }
-
-    /** Register with default settings */
-    public static <T> long register(CompletableFuture<T> future) {
-        return register(future, 0, 0L);
-    }
-
-    /** Register with client-specific inflight limit */
-    public static <T> long register(CompletableFuture<T> future, int maxInflightRequests) {
-        return register(future, maxInflightRequests, 0L);
     }
 
     /**
@@ -192,31 +185,6 @@ public final class AsyncRegistry {
         }
 
         return future.completeExceptionally(ex);
-    }
-
-    /**
-     * Complete multiple callbacks in a single batch operation. This reduces native crossing overhead
-     * by processing multiple completions together.
-     */
-    public static int completeBatchedCallbacks(long[] correlationIds, Object[] results) {
-        if (correlationIds == null || results == null) {
-            throw new IllegalArgumentException("Arrays cannot be null");
-        }
-        if (correlationIds.length != results.length) {
-            throw new IllegalArgumentException("Array lengths must match");
-        }
-        if (correlationIds.length == 0) {
-            return 0;
-        }
-
-        int completed = 0;
-        for (int i = 0; i < correlationIds.length; i++) {
-            if (completeCallback(correlationIds[i], results[i])) {
-                completed++;
-            }
-        }
-
-        return completed;
     }
 
     /** Get current pending operation count */

@@ -119,7 +119,6 @@ public class GlideCoreClient implements AutoCloseable {
         private String password = null;
         private int databaseId = 0;
         private Integer maxInflightRequests = null;
-        private Integer nativeDirectMemoryMB = null;
         private glide.api.models.configuration.ProtocolVersion protocol =
                 glide.api.models.configuration.ProtocolVersion.RESP3;
         private byte[][] subExact = EMPTY_2D_BYTE_ARRAY;
@@ -177,11 +176,6 @@ public class GlideCoreClient implements AutoCloseable {
 
         public Config maxInflightRequests(int maxInflight) {
             this.maxInflightRequests = maxInflight;
-            return this;
-        }
-
-        public Config nativeDirectMemoryMB(int mb) {
-            this.nativeDirectMemoryMB = mb;
             return this;
         }
 
@@ -286,10 +280,6 @@ public class GlideCoreClient implements AutoCloseable {
 
         Integer getMaxInflightRequests() {
             return maxInflightRequests;
-        }
-
-        Integer getNativeDirectMemoryMB() {
-            return nativeDirectMemoryMB;
         }
 
         glide.api.models.configuration.ReadFrom getReadFrom() {
@@ -727,15 +717,6 @@ public class GlideCoreClient implements AutoCloseable {
         return 0; // 0 means "use native/core defaults"
     }
 
-    private static int computeNativeDirectMemoryMB(Config config) {
-        if (config.getNativeDirectMemoryMB() != null && config.getNativeDirectMemoryMB() > 0) {
-            return config.getNativeDirectMemoryMB();
-        }
-
-        // Simple default without memory management intervention
-        return 512; // 512MB default - let users configure as needed
-    }
-
     private static int resolveConnectionTimeout(
             glide.api.models.configuration.BaseClientConfiguration config) {
         glide.api.models.configuration.AdvancedBaseClientConfiguration advanced =
@@ -779,20 +760,6 @@ public class GlideCoreClient implements AutoCloseable {
     }
 
     // Removed blocking command detection - Rust handles all timeout logic
-
-    private static String formatSpanName(String commandName) {
-        if (commandName == null || commandName.isEmpty()) return "Command";
-        String primary = commandName;
-        int space = commandName.indexOf(' ');
-        if (space > 0) {
-            primary = commandName.substring(0, space);
-        }
-        if (primary.length() == 1) {
-            return primary.toUpperCase();
-        }
-        String lower = primary.toLowerCase();
-        return Character.toUpperCase(lower.charAt(0)) + lower.substring(1);
-    }
 
     // ==================== RESOURCE MANAGEMENT ====================
 
