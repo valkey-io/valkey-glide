@@ -11,7 +11,7 @@ crate-type = ["staticlib", "rlib", "cdylib"]
 [dependencies]
 protobuf = { version = "3", features = [] }
 redis = { path = "../glide-core/redis-rs/redis", features = ["aio", "tokio-comp", "tokio-rustls-comp"] }
-glide-core = { path = "../glide-core", features = ["proto"] }
+glide-core = { path = "../glide-core", features = ["proto", "compression"] }
 tokio = { version = "^1", features = ["rt", "macros", "rt-multi-thread", "time"] }
 logger_core = { path = "../logger_core" }
 

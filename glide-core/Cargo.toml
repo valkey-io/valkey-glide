@@ -50,6 +50,8 @@ serde = { version = "1", features = ["derive"] }
 versions = "7"
 strum = "0.26"       
 strum_macros = "0.26"
+zstd = { version = "0.13", optional = true }
+lz4 = { version = "1.28", optional = true }
 
 [features]
 proto = ["protobuf"]
@@ -62,6 +64,7 @@ socket-layer = [
 ]
 standalone_heartbeat = []
 iam_tests = []
+compression = ["zstd", "lz4"]
 
 [dev-dependencies]
 rsevents = "0.3.1"
