@@ -9,6 +9,8 @@ import shutil
 import subprocess
 import sys
 import os
+import logging
+import time
 
 # Add the parent directory to path to import the original cluster_manager
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -133,9 +135,33 @@ def start_server(
         server = Server(host, port)
         server.set_process_id(p.pid)
 
-        # Wait a bit for server to start
+        # Wait for server to actually start and respond to pings
         import time
-        time.sleep(2)  # Simple wait for now
+        max_attempts = 30  # 30 seconds timeout
+        for attempt in range(max_attempts):
+            time.sleep(1)
+            try:
+                # Try to ping the server
+                result = subprocess.run(
+                    [get_command(["redis-cli", "valkey-cli"]), "-p", str(port), "ping"],
+                    capture_output=True,
+                    text=True,
+                    timeout=1
+                )
+                if result.stdout.strip() == "PONG":
+                    logging.debug(f"Server {host}:{port} started successfully (PID: {p.pid})")
+                    break
+            except (subprocess.TimeoutExpired, subprocess.SubprocessError):
+                pass
+
+            if attempt == max_attempts - 1:
+                # Check if process is still alive
+                if p.poll() is not None:
+                    with open(logfile, 'r') as f:
+                        log_content = f.read()
+                    raise Exception(f"Redis server process died. Exit code: {p.poll()}\nLast 500 chars of log:\n{log_content[-500:]}")
+                else:
+                    raise Exception(f"Server {host}:{port} failed to start after {max_attempts} seconds")
 
     else:
         # Unix/Linux: Use original --daemonize approach
@@ -204,7 +230,7 @@ def wait_for_server_shutdown(
     if IS_WINDOWS:
         # On Windows, check if process is still running instead of using redis-cli
         process_id = server.process_id
-        if process_id:
+        if process_id and process_id > 0:
             while time.time() < timeout_start + timeout:
                 try:
                     # Check if process still exists
@@ -220,7 +246,13 @@ def wait_for_server_shutdown(
                 except (subprocess.TimeoutExpired, subprocess.SubprocessError):
                     pass
                 time.sleep(0.5)
-        return False
+            # Timeout reached, but don't error - just log and return False
+            logging.debug(f"Timeout waiting for process {process_id} to shutdown (might already be dead)")
+            return False
+        else:
+            # No valid PID, assume server is not running
+            logging.debug(f"No valid process ID for {server}, assuming already shutdown")
+            return True
     else:
         # Use original implementation for Unix/Linux
         return cluster_manager._wait_for_server_shutdown(
