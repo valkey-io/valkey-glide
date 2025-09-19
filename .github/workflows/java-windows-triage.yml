@@ -55,7 +55,13 @@ jobs:
           Invoke-WebRequest -Uri $url -OutFile "redis.zip"
 
           Write-Host "Extracting Redis..."
-          Expand-Archive -Path "redis.zip" -DestinationPath "C:\redis" -Force
+          # Create redis directory
+          New-Item -Path "C:\redis" -ItemType Directory -Force | Out-Null
+
+          # Extract to temp and move contents (package has subdirectory)
+          Expand-Archive -Path "redis.zip" -DestinationPath "C:\temp" -Force
+          Move-Item -Path "C:\temp\Redis-7.2.8-Windows-x64-msys2\*" -Destination "C:\redis\" -Force
+          Remove-Item -Path "C:\temp" -Recurse -Force
 
           # Find and add to PATH
           $redisPath = "C:\redis"
