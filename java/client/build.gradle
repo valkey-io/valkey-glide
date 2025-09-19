@@ -91,6 +91,7 @@ tasks.register('cleanRust') {
 }
 
 tasks.register('buildRust', Exec) {
+    def arch = osdetector.arch == "x86_64" ? "x86_64" : osdetector.arch
     def target
     if (project.hasProperty('target')) {
         target = project.target
@@ -120,6 +121,7 @@ tasks.register('buildRust', Exec) {
 }
 
 tasks.register('buildRustFfi', Exec) {
+    def arch = osdetector.arch == "x86_64" ? "x86_64" : osdetector.arch
     def target
     if (project.hasProperty('target')) {
         target = project.target
@@ -152,9 +154,10 @@ tasks.register('buildRustFfi', Exec) {
 
 // Native library copying task - simplified and works for all platforms
 tasks.register('copyNativeLib', Copy) {
+    def arch = osdetector.arch == "x86_64" ? "x86_64" : osdetector.arch
     def sourceDir
     def target
-    
+
     if (project.hasProperty('target')) {
         target = project.target
         sourceDir = "${projectDir}/../target/${target}/release/"
@@ -170,11 +173,18 @@ tasks.register('copyNativeLib', Copy) {
     }
     
     from sourceDir
-    include "*.dylib", "*.so", "*.dll"  // Include Windows DLLs for future support
+    include "*.dylib", "*.so", "*.dll", "*.pdb"  // Include Windows DLLs and debug symbols
     into sourceSets.main.output.resourcesDir
-    
+
     doFirst {
         println "Copying native libraries from: ${sourceDir}"
+        println "Target directory: ${sourceSets.main.output.resourcesDir}"
+        // List files in source directory for debugging
+        file(sourceDir).listFiles()?.each { file ->
+            if (file.name.endsWith('.dll') || file.name.endsWith('.so') || file.name.endsWith('.dylib')) {
+                println "Found native library: ${file.name}"
+            }
+        }
     }
 }
 
@@ -303,6 +313,7 @@ signing {
 }
 
 tasks.withType(Test) {
+    def arch = osdetector.arch == "x86_64" ? "x86_64" : osdetector.arch
     testLogging {
         exceptionFormat "full"
         events "started", "skipped", "passed", "failed"
