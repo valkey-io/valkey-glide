@@ -113,13 +113,24 @@ async fn execute_command_request_and_complete(
                 if let Some(root_span_ptr) = root_span_ptr_opt
                     && root_span_ptr != 0
                 {
-                    if let Ok(span) =
-                        unsafe { glide_core::GlideOpenTelemetry::span_from_pointer(root_span_ptr) }
-                    {
-                        span.end();
-                    }
-                    unsafe {
-                        std::sync::Arc::from_raw(root_span_ptr as *const glide_core::GlideSpan);
+                    match unsafe {
+                        glide_core::GlideOpenTelemetry::span_from_pointer(root_span_ptr)
+                    } {
+                        Ok(span) => {
+                            span.end();
+                            unsafe {
+                                std::sync::Arc::from_raw(
+                                    root_span_ptr as *const glide_core::GlideSpan,
+                                );
+                            }
+                        }
+                        Err(err) => {
+                            log::warn!(
+                                "Failed to finalize OpenTelemetry span: pointer={}, error={}",
+                                root_span_ptr,
+                                err
+                            );
+                        }
                     }
                 }
                 exec
@@ -198,13 +209,24 @@ async fn execute_command_request_and_complete(
                 if let Some(root_span_ptr) = root_span_ptr_opt
                     && root_span_ptr != 0
                 {
-                    if let Ok(root_span) =
-                        unsafe { glide_core::GlideOpenTelemetry::span_from_pointer(root_span_ptr) }
-                    {
-                        root_span.end();
-                    }
-                    unsafe {
-                        std::sync::Arc::from_raw(root_span_ptr as *const glide_core::GlideSpan);
+                    match unsafe {
+                        glide_core::GlideOpenTelemetry::span_from_pointer(root_span_ptr)
+                    } {
+                        Ok(root_span) => {
+                            root_span.end();
+                            unsafe {
+                                std::sync::Arc::from_raw(
+                                    root_span_ptr as *const glide_core::GlideSpan,
+                                );
+                            }
+                        }
+                        Err(err) => {
+                            log::warn!(
+                                "Failed to finalize OpenTelemetry span: pointer={}, error={}",
+                                root_span_ptr,
+                                err
+                            );
+                        }
                     }
                 }
                 exec_res
@@ -1132,6 +1154,14 @@ pub unsafe extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_dro
                         "Received an invalid pointer value.".to_string(),
                     ));
                 }
+
+                let span_ptr_u64 = span_ptr as u64;
+                if unsafe { !glide_core::GlideOpenTelemetry::is_span_pointer_valid(span_ptr_u64) } {
+                    return Err(FFIError::OpenTelemetry(format!(
+                        "Received an invalid pointer value: {span_ptr}"
+                    )));
+                }
+
                 unsafe {
                     Arc::from_raw(span_ptr as *const glide_core::GlideSpan);
                 }
@@ -1605,7 +1635,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
 
             // Spawn async task for batch execution using existing glide-core patterns
             let batch_clone = batch.clone();
-            let route_clone = command_request.route.0.map(|r| *r).unwrap_or_default();
+            let route = command_request.route.0.map(|r| *r);
             let runtime = get_runtime();
             runtime.spawn(async move {
                 let client_result = ensure_client_for_handle(handle_id).await;
@@ -1646,8 +1676,8 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                             }
 
                             // Get routing using FFI approach
-                            let routing =
-                                protobuf_bridge::get_route(route_clone, None).map_err(|e| {
+                            let route = route.unwrap_or_default();
+                            let routing = protobuf_bridge::get_route(route, None).map_err(|e| {
                                     redis::RedisError::from((
                                         redis::ErrorKind::ClientError,
                                         "Routing error",
@@ -1692,15 +1722,24 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                             if let Some(root_span_ptr) = root_span_ptr_opt
                                 && root_span_ptr != 0
                             {
-                                if let Ok(root_span) = unsafe {
+                                match unsafe {
                                     glide_core::GlideOpenTelemetry::span_from_pointer(root_span_ptr)
                                 } {
-                                    root_span.end();
-                                }
-                                unsafe {
-                                    std::sync::Arc::from_raw(
-                                        root_span_ptr as *const glide_core::GlideSpan,
-                                    );
+                                    Ok(root_span) => {
+                                        root_span.end();
+                                        unsafe {
+                                            std::sync::Arc::from_raw(
+                                                root_span_ptr as *const glide_core::GlideSpan,
+                                            );
+                                        }
+                                    }
+                                    Err(err) => {
+                                        log::warn!(
+                                            "Failed to finalize OpenTelemetry span: pointer={}, error={}",
+                                            root_span_ptr,
+                                            err
+                                        );
+                                    }
                                 }
                             }
                             exec_res
