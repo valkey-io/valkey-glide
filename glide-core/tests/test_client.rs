@@ -802,6 +802,23 @@ pub(crate) mod shared_client_tests {
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_select_command_interception(#[values(false, true)] use_cluster: bool) {
         block_on_all(async {
+            if use_cluster {
+                // First create a basic client to check server version
+                let mut version_check_basics =
+                    utilities::setup_test_basics_internal(&TestConfiguration {
+                        shared_server: true,
+                        ..Default::default()
+                    })
+                    .await;
+
+                // Skip test if server version is less than 9.0 (database isolation not supported)
+                if !utilities::version_greater_or_equal(&mut version_check_basics.client, "9.0.0")
+                    .await
+                {
+                    return;
+                }
+            }
+
             let mut test_basics = setup_test_basics(
                 use_cluster,
                 TestConfiguration {
@@ -878,17 +895,18 @@ pub(crate) mod shared_client_tests {
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_select_command_case_sensitivity(#[values(false, true)] use_cluster: bool) {
         block_on_all(async {
-            
             if use_cluster {
                 // First create a basic client to check server version
-                let mut version_check_basics = utilities::setup_test_basics_internal(&TestConfiguration {
-                    shared_server: true,
-                    ..Default::default()
-                })
-                .await;
-                
+                let mut version_check_basics =
+                    utilities::setup_test_basics_internal(&TestConfiguration {
+                        shared_server: true,
+                        ..Default::default()
+                    })
+                    .await;
+
                 // Skip test if server version is less than 9.0 (database isolation not supported)
-                if !utilities::version_greater_or_equal(&mut version_check_basics.client, "9.0.0").await
+                if !utilities::version_greater_or_equal(&mut version_check_basics.client, "9.0.0")
+                    .await
                 {
                     return;
                 }
