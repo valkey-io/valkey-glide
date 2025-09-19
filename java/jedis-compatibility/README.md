@@ -45,8 +45,8 @@ dependencies {
 <dependency>
     <groupId>io.valkey</groupId>
     <artifactId>valkey-glide-jedis-compatibility</artifactId>
-    <classifier>osx-aarch_64</classifier>
     <version>${valkey-glide.version}</version>
+    <classifier>${valkey-glide.classifier}</classifier>
 </dependency>
 ```
 
