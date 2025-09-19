@@ -45,8 +45,6 @@ dependencies {
 
 java {
     modularity.inferModulePath = false // Disable module system for compatibility
-    withSourcesJar()
-    withJavadocJar()
 }
 
 javadoc {
@@ -102,12 +100,25 @@ jar {
     }
 }
 
+tasks.register('javadocJar', Jar) {
+    dependsOn javadoc
+    archiveClassifier = 'javadoc'
+    from javadoc.destinationDir
+}
+
+tasks.register('sourcesJar', Jar) {
+    dependsOn classes
+    archiveClassifier = 'sources'
+    from sourceSets.main.allSource
+    exclude 'glide/models' // exclude protobuf files
+}
+
 publishing {
     publications {
         mavenJava(MavenPublication) {
             from components.java
-            artifact javadocJar
-            artifact sourcesJar
+            artifact tasks.named('javadocJar')
+            artifact tasks.named('sourcesJar')
             groupId = 'io.valkey'
             artifactId = 'valkey-glide-jedis-compatibility'
             version = System.getenv("GLIDE_RELEASE_VERSION") ?: project.ext.defaultReleaseVersion
