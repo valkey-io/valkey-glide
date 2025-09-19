@@ -403,7 +403,6 @@ class BaseBatch:
         """
         return self.append_command(RequestType.ConfigResetStat, [])
 
-    # TODO: add SLAVEOF and all SENTINEL commands
     def move(self: TBatch, key: TEncodable, db_index: int) -> "TBatch":
         """
         Move `key` from the currently selected database to the database specified by `db_index`.

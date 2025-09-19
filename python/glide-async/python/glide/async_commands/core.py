@@ -430,7 +430,7 @@ class CoreCommands(Protocol):
         """
         return cast(int, await self._execute_command(RequestType.Del, keys))
 
-    async def move(self, key: TEncodable, db: int) -> bool:
+    async def move(self, key: TEncodable, db_index: int) -> bool:
         """
         Move key from the currently selected database to the specified destination database.
 
@@ -438,7 +438,7 @@ class CoreCommands(Protocol):
 
         Args:
             key (TEncodable): The key to move.
-            db (int): The destination database number.
+            db_index (int): The destination database number.
 
         Returns:
             bool: True if the key was moved successfully, False if the key does not exist
@@ -452,7 +452,7 @@ class CoreCommands(Protocol):
         """
         return cast(
             bool,
-            await self._execute_command(RequestType.Move, [key, str(db)]),
+            await self._execute_command(RequestType.Move, [key, str(db_index)]),
         )
 
     async def incr(self, key: TEncodable) -> int:
