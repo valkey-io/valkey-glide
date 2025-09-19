@@ -189,11 +189,50 @@ def stop_server(
         logging.debug(f"No process ID for {server}, skipping termination")
 
 
+# Override wait_for_server_shutdown for Windows compatibility
+def wait_for_server_shutdown(
+    server,
+    cluster_folder: str,
+    use_tls: bool,
+    auth: str,
+    timeout: int = 20,
+):
+    """Modified wait_for_server_shutdown that works on Windows"""
+    logging.debug(f"Waiting for server {server} to shutdown")
+    timeout_start = time.time()
+
+    if IS_WINDOWS:
+        # On Windows, check if process is still running instead of using redis-cli
+        process_id = server.process_id
+        if process_id:
+            while time.time() < timeout_start + timeout:
+                try:
+                    # Check if process still exists
+                    result = subprocess.run(
+                        ["tasklist", "/FI", f"PID eq {process_id}"],
+                        capture_output=True,
+                        text=True,
+                        timeout=2
+                    )
+                    if str(process_id) not in result.stdout:
+                        logging.debug(f"Success: server process {process_id} is down")
+                        return True
+                except (subprocess.TimeoutExpired, subprocess.SubprocessError):
+                    pass
+                time.sleep(0.5)
+        return False
+    else:
+        # Use original implementation for Unix/Linux
+        return cluster_manager._wait_for_server_shutdown(
+            server, cluster_folder, use_tls, auth, timeout
+        )
+
 # Replace the original functions with our patched versions
 import cluster_manager
 cluster_manager.get_command = get_command
 cluster_manager.start_server = start_server
 cluster_manager.stop_server = stop_server
+cluster_manager.wait_for_server_shutdown = wait_for_server_shutdown
 
 # Run the main function with our patches
 if __name__ == "__main__":

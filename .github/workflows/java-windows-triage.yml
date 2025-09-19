@@ -136,31 +136,28 @@ jobs:
           echo === Running basic unit tests ===
           gradlew.bat :client:test --tests "*ConfigurationTest*" || echo "Unit tests status: %ERRORLEVEL%"
 
-      - name: Start Redis for integration tests
-        shell: pwsh
+      - name: Start Redis cluster with cluster_manager
+        shell: cmd
         run: |
-          Write-Host "=== Starting Redis for integration tests ==="
+          echo === Starting Redis cluster for integration tests ===
+          python utils\cluster_manager_windows_patch.py start --cluster-mode --shard-count 3 --replica-count 1 || echo "Cluster start status: %ERRORLEVEL%"
 
-          # Use simple PowerShell script instead of cluster_manager
-          & .\utils\simple_redis_windows.ps1 -Action start -Port 6379
+          echo === Starting standalone Redis ===
+          python utils\cluster_manager_windows_patch.py start --shard-count 1 --replica-count 0 || echo "Standalone start status: %ERRORLEVEL%"
 
-          # Verify Redis is running
-          & .\utils\simple_redis_windows.ps1 -Action test -Port 6379
-
-      - name: Run minimal integration test
+      - name: Run integration tests
         shell: cmd
         run: |
           cd java
-          echo === Running minimal integration test ===
-          set STANDALONE_ENDPOINTS=localhost:6379
-          gradlew.bat :integTest:test --tests "glide.standalone.StandaloneClientTests.client_name" -Dstandalone-endpoints=localhost:6379 || echo "Integration test status: %ERRORLEVEL%"
+          echo === Running integration tests ===
+          gradlew.bat :integTest:test || echo "Integration test status: %ERRORLEVEL%"
 
-      - name: Stop Redis
+      - name: Stop Redis servers
         if: always()
-        shell: pwsh
+        shell: cmd
         run: |
-          Write-Host "=== Stopping Redis ==="
-          & .\utils\simple_redis_windows.ps1 -Action stop -Port 6379
+          echo === Stopping all Redis servers ===
+          python utils\cluster_manager_windows_patch.py stop || echo "Stop status: %ERRORLEVEL%"
 
       - name: Collect test results
         if: always()
