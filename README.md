@@ -39,7 +39,7 @@ The client currently supports Python, Java, Node.js, Go, C#, and PHP. C# and PHP
 #### v2.1 (Sep. 2025)
  - Valkey 9 Support – First class support for Multi-DB and Hash Field Expiration (HFE)
  - Python Sync Support – Full synchronous API support for Python
- - Lazy Connection - Extended lazy connection support to Go and Java clients
+ - Lazy Connection – Extended lazy connection support to Go and Java clients
  - Jedis Compatibility - Added Jedis compatibility layer for Java client
 
 ### Previous Releases
