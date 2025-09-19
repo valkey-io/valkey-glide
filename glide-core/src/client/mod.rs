@@ -369,12 +369,7 @@ impl Client {
 
     /// Handles SELECT command processing after successful execution.
     /// Updates database state for standalone, cluster, and lazy clients.
-    async fn handle_select_command(
-        &mut self,
-        cmd: &Cmd,
-        _routing: Option<RoutingInfo>,
-        value: Value,
-    ) -> RedisResult<Value> {
+    async fn handle_select_command(&mut self, cmd: &Cmd, value: Value) -> RedisResult<Value> {
         // Extract database ID from the SELECT command
         let database_id = self.extract_database_id_from_select(cmd)?;
 
@@ -464,14 +459,13 @@ impl Client {
                 Err(err) => return Err(err),
             };
 
-            let routing_for_closure = routing.clone();
             let result = run_with_timeout(request_timeout, async move {
                 match client {
                     ClientWrapper::Standalone(mut client) => client.send_command(cmd).await,
                     ClientWrapper::Cluster {mut client } => {
                         let final_routing =
                             if let Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)) =
-                                routing_for_closure
+                                routing
                             {
                                 let cmd_name = cmd.command().unwrap_or_default();
                                 let cmd_name = String::from_utf8_lossy(&cmd_name);
@@ -490,7 +484,7 @@ impl Client {
                                     RoutingInfo::SingleNode(SingleNodeRoutingInfo::RandomPrimary)
                                 }
                             } else {
-                                routing_for_closure
+                                routing
                                     .or_else(|| RoutingInfo::for_routable(cmd))
                                     .unwrap_or(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random))
                             };
@@ -508,7 +502,7 @@ impl Client {
                 match result {
                     Ok(value) => {
                         // SELECT command succeeded, handle database state update
-                        return self.handle_select_command(cmd, routing, value).await;
+                        return self.handle_select_command(cmd, value).await;
                     }
                     Err(err) => {
                         // SELECT command failed, let the error propagate without updating state
