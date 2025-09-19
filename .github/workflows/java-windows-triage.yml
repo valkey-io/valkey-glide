@@ -153,7 +153,7 @@ jobs:
           cd java
           echo === Running minimal integration test ===
           set STANDALONE_ENDPOINTS=localhost:6379
-          gradlew.bat :integTest:test --tests "*ConnectionTests.testBasicCommands*" -Dstandalone-endpoints=localhost:6379 || echo "Integration test status: %ERRORLEVEL%"
+          gradlew.bat :integTest:test --tests "glide.standalone.StandaloneClientTests.client_name" -Dstandalone-endpoints=localhost:6379 || echo "Integration test status: %ERRORLEVEL%"
 
       - name: Stop Redis
         if: always()
