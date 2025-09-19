@@ -48,8 +48,8 @@ jobs:
         run: |
           Write-Host "=== Setting up Redis 7.2.8 for Windows ==="
 
-          # Use Redis 7.2.8 (latest open source, Valkey project compliant)
-          $url = "https://github.com/redis-windows/redis-windows/releases/download/7.2.8/Redis-7.2.8-Windows-x64-msys2.zip"
+          # Use Redis 7.2.8 Cygwin build for better Windows compatibility
+          $url = "https://github.com/redis-windows/redis-windows/releases/download/7.2.8/Redis-7.2.8-Windows-x64-cygwin.zip"
 
           Write-Host "Downloading Redis 7.2.8..."
           Invoke-WebRequest -Uri $url -OutFile "redis.zip"
@@ -60,7 +60,7 @@ jobs:
 
           # Extract to temp and move contents (package has subdirectory)
           Expand-Archive -Path "redis.zip" -DestinationPath "C:\temp" -Force
-          Move-Item -Path "C:\temp\Redis-7.2.8-Windows-x64-msys2\*" -Destination "C:\redis\" -Force
+          Move-Item -Path "C:\temp\Redis-7.2.8-Windows-x64-cygwin\*" -Destination "C:\redis\" -Force
           Remove-Item -Path "C:\temp" -Recurse -Force
 
           # Find and add to PATH
@@ -96,9 +96,14 @@ jobs:
         run: |
           Write-Host "=== Testing basic Redis connectivity ==="
 
-          # Start Redis in background
+          # Start Redis with optimized settings (no persistence for tests)
           $redis = Start-Process -FilePath "C:\redis\redis-server.exe" `
-                                 -ArgumentList "--port", "6379", "--protected-mode", "no" `
+                                 -ArgumentList "--port", "6379", `
+                                              "--protected-mode", "no", `
+                                              "--save", "", `
+                                              "--appendonly", "no", `
+                                              "--databases", "1", `
+                                              "--timeout", "0" `
                                  -PassThru -WindowStyle Hidden
 
           Write-Host "Redis started with PID: $($redis.Id)"
