@@ -35,16 +35,18 @@ public class NativeUtils {
     private NativeUtils() {}
 
     public static void loadGlideLib() {
-        String glideLib = "/libglide_rs";
         try {
             String osName = System.getProperty("os.name").toLowerCase();
             if (osName.contains("mac")) {
-                NativeUtils.loadLibraryFromJar(glideLib + ".dylib");
+                NativeUtils.loadLibraryFromJar("/libglide_rs.dylib");
             } else if (osName.contains("linux")) {
-                NativeUtils.loadLibraryFromJar(glideLib + ".so");
+                NativeUtils.loadLibraryFromJar("/libglide_rs.so");
+            } else if (osName.contains("win")) {
+                // Windows doesn't use 'lib' prefix for DLLs
+                NativeUtils.loadLibraryFromJar("/glide_rs.dll");
             } else {
                 throw new UnsupportedOperationException(
-                        "OS not supported. Glide is only available on Mac OS and Linux systems.");
+                        "OS not supported. Glide is only available on Mac OS, Linux, and Windows systems.");
             }
         } catch (java.io.IOException e) {
             e.printStackTrace();
