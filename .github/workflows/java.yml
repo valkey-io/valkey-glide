@@ -14,6 +14,7 @@ on:
             - glide-core/redis-rs/redis/src/**
             - java/**
             - utils/cluster_manager.py
+            - utils/cluster_manager_windows_patch.py
             - .github/workflows/java.yml
             - .github/workflows/install-shared-dependencies/action.yml
             - .github/workflows/test-benchmark/action.yml
@@ -28,6 +29,7 @@ on:
             - glide-core/redis-rs/redis/src/**
             - java/**
             - utils/cluster_manager.py
+            - utils/cluster_manager_windows_patch.py
             - .github/workflows/java.yml
             - .github/workflows/install-shared-dependencies/action.yml
             - .github/workflows/test-benchmark/action.yml
@@ -120,12 +122,40 @@ jobs:
                   java-version: ${{ matrix.java }}
 
             - name: Install shared software dependencies
+              if: ${{ matrix.host.OS != 'windows' }}
               uses: ./.github/workflows/install-shared-dependencies
               with:
                   os: ${{ matrix.host.OS }}
                   target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
+
+            - name: Install Redis for Windows
+              if: ${{ matrix.host.OS == 'windows' }}
+              run: |
+                  $ErrorActionPreference = 'Stop'
+                  Write-Host "Installing Redis 7.2.8 for Windows..."
+
+                  # Download Redis for Windows (Cygwin build)
+                  $redisUrl = "https://github.com/redis-windows/redis-windows/releases/download/7.2.8/Redis-7.2.8-Windows-x64-cygwin.tar.gz"
+                  $tempDir = "C:\temp"
+                  $extractDir = "C:\redis"
+
+                  New-Item -ItemType Directory -Force -Path $tempDir
+                  New-Item -ItemType Directory -Force -Path $extractDir
+
+                  Write-Host "Downloading Redis..."
+                  Invoke-WebRequest -Uri $redisUrl -OutFile "$tempDir\redis.tar.gz"
+
+                  Write-Host "Extracting Redis..."
+                  tar -xzf "$tempDir\redis.tar.gz" -C $extractDir
+
+                  # Add Redis to PATH
+                  $redisPath = "$extractDir\Redis-7.2.8-Windows-x64-cygwin"
+                  echo "$redisPath" | Out-File -FilePath $env:GITHUB_PATH -Append
+
+                  Write-Host "Redis installation complete"
+              shell: pwsh
 
             - name: Install protoc (protobuf)
               uses: arduino/setup-protoc@v3
@@ -206,12 +236,40 @@ jobs:
                   java-version: ${{ matrix.java }}
 
             - name: Install shared software dependencies
+              if: ${{ matrix.host.OS != 'windows' }}
               uses: ./.github/workflows/install-shared-dependencies
               with:
                   os: ${{ matrix.host.OS }}
                   target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
+
+            - name: Install Redis for Windows
+              if: ${{ matrix.host.OS == 'windows' }}
+              run: |
+                  $ErrorActionPreference = 'Stop'
+                  Write-Host "Installing Redis 7.2.8 for Windows..."
+
+                  # Download Redis for Windows (Cygwin build)
+                  $redisUrl = "https://github.com/redis-windows/redis-windows/releases/download/7.2.8/Redis-7.2.8-Windows-x64-cygwin.tar.gz"
+                  $tempDir = "C:\temp"
+                  $extractDir = "C:\redis"
+
+                  New-Item -ItemType Directory -Force -Path $tempDir
+                  New-Item -ItemType Directory -Force -Path $extractDir
+
+                  Write-Host "Downloading Redis..."
+                  Invoke-WebRequest -Uri $redisUrl -OutFile "$tempDir\redis.tar.gz"
+
+                  Write-Host "Extracting Redis..."
+                  tar -xzf "$tempDir\redis.tar.gz" -C $extractDir
+
+                  # Add Redis to PATH
+                  $redisPath = "$extractDir\Redis-7.2.8-Windows-x64-cygwin"
+                  echo "$redisPath" | Out-File -FilePath $env:GITHUB_PATH -Append
+
+                  Write-Host "Redis installation complete"
+              shell: pwsh
 
             - name: Install protoc (protobuf)
               uses: arduino/setup-protoc@v3
