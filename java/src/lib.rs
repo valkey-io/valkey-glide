@@ -661,48 +661,6 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlideValueResolver_valueFromPoin
     .unwrap_or(JObject::null())
 }
 
-/// Create a leaked byte vector from Java byte array arguments.
-///
-/// This function is meant to be invoked by Java using JNI.
-///
-/// * `env`     - The JNI environment.
-/// * `_class`  - The class object. Not used.
-/// * `args`    - A Java array of byte arrays.
-#[unsafe(no_mangle)]
-pub extern "system" fn Java_glide_ffi_resolvers_GlideValueResolver_createLeakedBytesVec<'local>(
-    mut env: JNIEnv<'local>,
-    _class: JClass<'local>,
-    args: JObjectArray<'local>,
-) -> jlong {
-    handle_panics(
-        move || {
-            fn create_leaked_bytes_vec<'a>(
-                env: &mut JNIEnv<'a>,
-                args: JObjectArray<'a>,
-            ) -> Result<jlong, FFIError> {
-                let length = env.get_array_length(&args)? as usize;
-                let mut byte_arrays = Vec::with_capacity(length);
-
-                for i in 0..length {
-                    let byte_array_obj = env.get_object_array_element(&args, i as i32)?;
-                    let byte_array = JByteArray::from(byte_array_obj);
-                    let bytes = env.convert_byte_array(&byte_array)?;
-                    byte_arrays.push(bytes);
-                }
-
-                // Create a Box and leak it to get a stable pointer
-                let boxed_vec = Box::new(byte_arrays);
-                let leaked_ptr = Box::into_raw(boxed_vec);
-                Ok(leaked_ptr as jlong)
-            }
-            let result = create_leaked_bytes_vec(&mut env, args);
-            handle_errors(&mut env, result)
-        },
-        "createLeakedBytesVec",
-    )
-    .unwrap_or(0)
-}
-
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_glide_ffi_resolvers_ScriptResolver_storeScript<'local>(
     mut env: JNIEnv<'local>,

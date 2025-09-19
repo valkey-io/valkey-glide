@@ -3,6 +3,7 @@ package glide.api.models.configuration;
 
 import static glide.api.models.GlideString.gs;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import glide.api.GlideClusterClient;
 import glide.api.models.GlideString;
 import java.util.HashMap;
@@ -10,7 +11,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import lombok.Getter;
 
 /**
@@ -60,11 +60,12 @@ public final class ClusterSubscriptionConfiguration extends BaseSubscriptionConf
      * Will be applied via <code>SUBSCRIBE</code>/<code>PSUBSCRIBE</code>/<code>SSUBSCRIBE</code>
      * commands during connection establishment.
      */
-    @Getter(onMethod_ = {
-        @SuppressFBWarnings(
-                value = "EI_EXPOSE_REP",
-                justification = "Subscriptions map is wrapped as unmodifiable")
-    })
+    @Getter(
+            onMethod_ = {
+                @SuppressFBWarnings(
+                        value = "EI_EXPOSE_REP",
+                        justification = "Subscriptions map is wrapped as unmodifiable")
+            })
     private final Map<PubSubClusterChannelMode, Set<GlideString>> subscriptions;
 
     // All code below is a custom implementation of `SuperBuilder`
@@ -76,8 +77,7 @@ public final class ClusterSubscriptionConfiguration extends BaseSubscriptionConf
         this.subscriptions =
                 subscriptions.entrySet().stream()
                         .collect(
-                                Collectors.toUnmodifiableMap(
-                                        Map.Entry::getKey, e -> Set.copyOf(e.getValue())));
+                                Collectors.toUnmodifiableMap(Map.Entry::getKey, e -> Set.copyOf(e.getValue())));
     }
 
     public static ClusterSubscriptionConfigurationBuilder builder() {

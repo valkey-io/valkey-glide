@@ -10,7 +10,7 @@ use jni::JNIEnv;
 use jni::JavaVM;
 use jni::objects::{GlobalRef, JClass, JObject, JStaticMethodID, JValue};
 use jni::signature;
-use jni::sys::{jlong, jobject, jstring};
+use jni::sys::{jlong, jstring};
 use redis::{RedisError, Value as ServerValue};
 use std::sync::Arc;
 use std::sync::mpsc::{Sender, channel};
@@ -493,7 +493,7 @@ fn process_callback_job(
 
                 match java_result {
                     Ok(java_result) => {
-                        let _ = complete_java_callback(&mut env, callback_id, java_result.as_raw());
+                        let _ = complete_java_callback(&mut env, callback_id, &java_result);
                     }
                     Err(e) => {
                         // Use ClientError for conversion failures
@@ -541,9 +541,12 @@ pub fn complete_callback(
 }
 
 /// Complete Java CompletableFuture with success result using cached method IDs.
-pub fn complete_java_callback(env: &mut JNIEnv, callback_id: jlong, result: jobject) -> Result<()> {
+pub fn complete_java_callback(
+    env: &mut JNIEnv,
+    callback_id: jlong,
+    result: &JObject,
+) -> Result<()> {
     let method_cache = get_method_cache(env)?;
-    let result_obj = unsafe { JObject::from_raw(result) };
 
     unsafe {
         env.call_static_method_unchecked(
@@ -552,7 +555,7 @@ pub fn complete_java_callback(env: &mut JNIEnv, callback_id: jlong, result: jobj
             jni::signature::ReturnType::Primitive(jni::signature::Primitive::Boolean),
             &[
                 JValue::Long(callback_id).as_jni(),
-                JValue::Object(&result_obj).as_jni(),
+                JValue::Object(result).as_jni(),
             ],
         )
     }?;
