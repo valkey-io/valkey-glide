@@ -136,17 +136,16 @@ jobs:
           echo === Running basic unit tests ===
           gradlew.bat :client:test --tests "*ConfigurationTest*" || echo "Unit tests status: %ERRORLEVEL%"
 
-      - name: Test cluster manager patch
-        shell: cmd
+      - name: Start Redis for integration tests
+        shell: pwsh
         run: |
-          echo === Testing cluster_manager_windows_patch.py ===
-          python utils\cluster_manager_windows_patch.py --help
+          Write-Host "=== Starting Redis for integration tests ==="
 
-      - name: Try to start standalone Redis with cluster manager
-        shell: cmd
-        run: |
-          echo === Starting standalone Redis via cluster manager ===
-          python utils\cluster_manager_windows_patch.py start --shard-count 1 --replica-count 0 || echo "Status: %ERRORLEVEL%"
+          # Use simple PowerShell script instead of cluster_manager
+          & .\utils\simple_redis_windows.ps1 -Action start -Port 6379
+
+          # Verify Redis is running
+          & .\utils\simple_redis_windows.ps1 -Action test -Port 6379
 
       - name: Run minimal integration test
         shell: cmd
@@ -155,6 +154,13 @@ jobs:
           echo === Running minimal integration test ===
           set STANDALONE_ENDPOINTS=localhost:6379
           gradlew.bat :integTest:test --tests "*ConnectionTests.testBasicCommands*" -Dstandalone-endpoints=localhost:6379 || echo "Integration test status: %ERRORLEVEL%"
+
+      - name: Stop Redis
+        if: always()
+        shell: pwsh
+        run: |
+          Write-Host "=== Stopping Redis ==="
+          & .\utils\simple_redis_windows.ps1 -Action stop -Port 6379
 
       - name: Collect test results
         if: always()
