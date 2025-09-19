@@ -57,10 +57,8 @@ ext {
 
 tasks.register('stopAllAfterTests', Exec) {
     workingDir "${project.rootDir}/../utils"
-    def clusterScript = System.getProperty("os.name").toLowerCase().contains("win") ?
-        'cluster_manager_windows_patch.py' : 'cluster_manager.py'
     def pythonCmd = System.getProperty("os.name").toLowerCase().contains("win") ? 'python' : 'python3'
-    commandLine pythonCmd, clusterScript, 'stop', '--prefix', 'cluster', '--keep-folder'
+    commandLine pythonCmd, 'cluster_manager.py', 'stop', '--prefix', 'cluster', '--keep-folder'
 }
 
 // We need to call for stop before and after the test, but gradle doesn't support executing a task
@@ -68,10 +66,8 @@ tasks.register('stopAllAfterTests', Exec) {
 // We need to call for stop in case if previous test run was interrupted/crashed and didn't stop.
 tasks.register('stopAllBeforeTests', Exec) {
     workingDir "${project.rootDir}/../utils"
-    def clusterScript = System.getProperty("os.name").toLowerCase().contains("win") ?
-        'cluster_manager_windows_patch.py' : 'cluster_manager.py'
     def pythonCmd = System.getProperty("os.name").toLowerCase().contains("win") ? 'python' : 'python3'
-    commandLine pythonCmd, clusterScript, 'stop', '--prefix', 'cluster'
+    commandLine pythonCmd, 'cluster_manager.py', 'stop', '--prefix', 'cluster'
     ignoreExitValue true // ignore fail if servers are stopped before
 }
 
@@ -86,11 +82,9 @@ tasks.register('startCluster') {
             new ByteArrayOutputStream().withStream { os ->
                 exec {
                     workingDir "${project.rootDir}/../utils"
-                    def clusterScript = System.getProperty("os.name").toLowerCase().contains("win") ?
-                        'cluster_manager_windows_patch.py' : 'cluster_manager.py'
                     def pythonCmd = System.getProperty("os.name").toLowerCase().contains("win") ? 'python' : 'python3'
-                    def args = [pythonCmd, clusterScript, 'start', '--cluster-mode']
-                    if (System.getProperty("tls") == 'true') args.add(3, '--tls')
+                    def args = [pythonCmd, 'cluster_manager.py', 'start', '--cluster-mode']
+                    if (System.getProperty("tls") == 'true') args.add(2, '--tls')
                     commandLine args
                     standardOutput = os
                 }
@@ -108,11 +102,9 @@ tasks.register('startClusterForAz') {
             new ByteArrayOutputStream().withStream { os ->
                 exec {
                     workingDir "${project.rootDir}/../utils"
-                    def clusterScript = System.getProperty("os.name").toLowerCase().contains("win") ?
-                        'cluster_manager_windows_patch.py' : 'cluster_manager.py'
                     def pythonCmd = System.getProperty("os.name").toLowerCase().contains("win") ? 'python' : 'python3'
-                    def args = [pythonCmd, clusterScript, 'start', '--cluster-mode', '-r', '4']
-                    if (System.getProperty("tls") == 'true') args.add(3, '--tls')
+                    def args = [pythonCmd, 'cluster_manager.py', 'start', '--cluster-mode', '-r', '4']
+                    if (System.getProperty("tls") == 'true') args.add(2, '--tls')
                     commandLine args
                     standardOutput = os
                 }
@@ -132,11 +124,9 @@ tasks.register('startStandalone') {
             new ByteArrayOutputStream().withStream { os ->
                 exec {
                     workingDir "${project.rootDir}/../utils"
-                    def clusterScript = System.getProperty("os.name").toLowerCase().contains("win") ?
-                        'cluster_manager_windows_patch.py' : 'cluster_manager.py'
                     def pythonCmd = System.getProperty("os.name").toLowerCase().contains("win") ? 'python' : 'python3'
-                    def args = [pythonCmd, clusterScript, 'start', '-r', '0']
-                    if (System.getProperty("tls") == 'true') args.add(3, '--tls')
+                    def args = [pythonCmd, 'cluster_manager.py', 'start', '-r', '0']
+                    if (System.getProperty("tls") == 'true') args.add(2, '--tls')
                     commandLine args
                     standardOutput = os
                 }

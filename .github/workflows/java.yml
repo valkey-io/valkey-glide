@@ -14,7 +14,6 @@ on:
             - glide-core/redis-rs/redis/src/**
             - java/**
             - utils/cluster_manager.py
-            - utils/cluster_manager_windows_patch.py
             - .github/workflows/java.yml
             - .github/workflows/install-shared-dependencies/action.yml
             - .github/workflows/test-benchmark/action.yml
@@ -29,7 +28,6 @@ on:
             - glide-core/redis-rs/redis/src/**
             - java/**
             - utils/cluster_manager.py
-            - utils/cluster_manager_windows_patch.py
             - .github/workflows/java.yml
             - .github/workflows/install-shared-dependencies/action.yml
             - .github/workflows/test-benchmark/action.yml

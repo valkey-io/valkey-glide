@@ -6,6 +6,7 @@ import argparse
 import json
 import logging
 import os
+import platform
 import random
 import re
 import signal
@@ -16,6 +17,9 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional, Tuple
+
+# Detect if running on Windows
+IS_WINDOWS = platform.system().lower() == "windows"
 
 LOG_LEVELS = {
     "critical": logging.CRITICAL,
@@ -39,14 +43,38 @@ SERVER_KEY = f"{TLS_FOLDER}/server.key"
 def get_command(commands: List[str]) -> str:
     for command in commands:
         try:
-            result = subprocess.run(
-                ["which", command],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-            )
-            if result.returncode == 0:
-                return command
+            # On Windows, check with 'where' command or add .exe extension
+            if IS_WINDOWS:
+                # Try with .exe extension first
+                exe_command = command if command.endswith(".exe") else f"{command}.exe"
+                result = subprocess.run(
+                    ["where", exe_command],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    shell=True,
+                )
+                if result.returncode == 0:
+                    return exe_command
+                # Try without .exe
+                result = subprocess.run(
+                    ["where", command],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    shell=True,
+                )
+                if result.returncode == 0:
+                    return command
+            else:
+                result = subprocess.run(
+                    ["which", command],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+                if result.returncode == 0:
+                    return command
         except Exception as e:
             logging.error(f"Error checking {command}: {e}")
     raise Exception(f"Neither {' nor '.join(commands)} found in the system.")
@@ -384,10 +412,24 @@ def start_server(
         f"{'yes' if cluster_mode else 'no'}",
         "--dir",
         node_folder,
-        "--daemonize",
-        "yes",
-        "--logfile",
-        logfile,
+    ]
+
+    # Windows doesn't support daemonize, so we'll use subprocess differently
+    if not IS_WINDOWS:
+        cmd_args.extend([
+            "--daemonize",
+            "yes",
+            "--logfile",
+            logfile,
+        ])
+    else:
+        # On Windows, redirect to log file manually
+        cmd_args.extend([
+            "--logfile",
+            logfile,
+        ])
+
+    cmd_args.extend([
         "--protected-mode",
         "no",
         "--appendonly",
@@ -408,27 +450,43 @@ def start_server(
         for module_path in load_module:
             cmd_args.extend(["--loadmodule", module_path])
     cmd_args += tls_args
-    p = subprocess.Popen(
-        cmd_args,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-    output, err = p.communicate(timeout=2)
-    if p.returncode != 0:
-        raise Exception(
-            f"Failed to execute command: {str(p.args)}\n Return code: {p.returncode}\n Error: {err}"
-        )
 
-    server = Server(host, port)
+    # On Windows, we need to start the process in a different way
+    if IS_WINDOWS:
+        # Use CREATE_NEW_PROCESS_GROUP flag to detach the process
+        creationflags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
+        p = subprocess.Popen(
+            cmd_args,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=creationflags,
+        )
+        # Store the PID for later use
+        server = Server(host, port)
+        server.set_process_id(p.pid)
+    else:
+        p = subprocess.Popen(
+            cmd_args,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        output, err = p.communicate(timeout=2)
+        if p.returncode != 0:
+            raise Exception(
+                f"Failed to execute command: {str(p.args)}\n Return code: {p.returncode}\n Error: {err}"
+            )
+        server = Server(host, port)
 
     # Read the process ID from the log file
-    # Note that `p.pid` is not good here since we daemonize the process
-    process_id = wait_for_regex_in_log(
-        logfile, r"version=(.*?)pid=([\d]+), just started", 2
-    )
-    if process_id:
-        server.set_process_id(int(process_id))
+    # Note that `p.pid` is not good here on Linux since we daemonize the process
+    # On Windows, we already set the PID above
+    if not IS_WINDOWS:
+        process_id = wait_for_regex_in_log(
+            logfile, r"version=(.*?)pid=([\d]+), just started", 2
+        )
+        if process_id:
+            server.set_process_id(int(process_id))
 
     return server, node_folder
 
@@ -910,6 +968,29 @@ def wait_for_server_shutdown(
     logging.debug(f"Waiting for server {server} to shutdown")
     timeout_start = time.time()
     verify_times = 2
+
+    # On Windows, check if process still exists using different method
+    if IS_WINDOWS and hasattr(server, 'process_id') and server.process_id() > 0:
+        while time.time() < timeout_start + timeout:
+            try:
+                # Check if process still exists using tasklist
+                result = subprocess.run(
+                    ["tasklist", "/FI", f"PID eq {server.process_id()}"],
+                    capture_output=True,
+                    text=True,
+                    timeout=2
+                )
+                # If the PID is not in the output, the process is dead
+                if str(server.process_id()) not in result.stdout:
+                    logging.debug(f"Success: server process {server.process_id()} is down")
+                    return True
+            except Exception as e:
+                logging.debug(f"Error checking process: {e}")
+            time.sleep(0.5)
+        logging.error(f"Server process {server.process_id()} did not shutdown within {timeout} seconds")
+        return False
+
+    # Original method for non-Windows systems
     while time.time() < timeout_start + timeout:
         p = subprocess.Popen(
             [
@@ -943,21 +1024,45 @@ def wait_for_server_shutdown(
 
 def remove_folder(folder_path: str):
     logging.debug(f"Removing folder {folder_path}")
-    p = subprocess.Popen(
-        [
-            "rm",
-            "-rf",
-            folder_path,
-        ],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-    output, err = p.communicate(timeout=3)
-    if p.returncode != 0:
-        raise Exception(
-            f"Failed to execute command: {str(p.args)}\n Return code: {p.returncode}\n Error: {err}"
+
+    if IS_WINDOWS:
+        # Windows uses different commands for removing folders
+        import shutil
+        try:
+            # Try rmdir first
+            subprocess.run(
+                ["rmdir", "/S", "/Q", str(folder_path)],
+                shell=True,
+                check=False,
+                capture_output=True,
+                timeout=5
+            )
+        except:
+            pass
+
+        # If folder still exists, try Python's rmtree
+        if Path(folder_path).exists():
+            try:
+                shutil.rmtree(str(folder_path), ignore_errors=True)
+            except:
+                pass
+    else:
+        p = subprocess.Popen(
+            [
+                "rm",
+                "-rf",
+                folder_path,
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
         )
+        output, err = p.communicate(timeout=3)
+        if p.returncode != 0:
+            raise Exception(
+                f"Failed to execute command: {str(p.args)}\n Return code: {p.returncode}\n Error: {err}"
+            )
+
     logging.debug(f"Folder {folder_path} removed")
 
 
