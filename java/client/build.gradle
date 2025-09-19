@@ -99,6 +99,8 @@ tasks.register('buildRust', Exec) {
             target = "${arch}-unknown-linux-gnu.2.17"
         } else if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
             target = "${arch}-unknown-linux-musl"
+        } else if (osdetector.os == 'windows') {
+            target = "${arch}-pc-windows-msvc"
         } else {
             target = ""
         }
@@ -126,6 +128,8 @@ tasks.register('buildRustFfi', Exec) {
             target = "${arch}-unknown-linux-gnu.2.17"
         } else if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
             target = "${arch}-unknown-linux-musl"
+        } else if (osdetector.os == 'windows') {
+            target = "${arch}-pc-windows-msvc"
         } else {
             target = ""
         }
@@ -158,6 +162,8 @@ tasks.register('copyNativeLib', Copy) {
         sourceDir = "${projectDir}/../target/${arch}-unknown-linux-gnu/release/"
     } else if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
         sourceDir = "${projectDir}/../target/${arch}-unknown-linux-musl/release/"
+    } else if (osdetector.os == 'windows') {
+        sourceDir = "${projectDir}/../target/${arch}-pc-windows-msvc/release/"
     } else {
         // Default case for macOS and other platforms
         sourceDir = "${projectDir}/../target/release/"
@@ -305,6 +311,8 @@ tasks.withType(Test) {
     // This is needed for the FFI tests
     if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
         jvmArgs "-Djava.library.path=${projectDir}/../target/${arch}-unknown-linux-musl/release"
+    } else if (osdetector.os == 'windows') {
+        jvmArgs "-Djava.library.path=${projectDir}/../target/${arch}-pc-windows-msvc/release"
     } else {
         jvmArgs "-Djava.library.path=${projectDir}/../target/release"
     }
