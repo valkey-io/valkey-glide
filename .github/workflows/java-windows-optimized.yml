@@ -1,0 +1,261 @@
+name: Java Windows CI (Optimized)
+
+on:
+  push:
+    branches:
+      - main
+      - release-*
+      - ci-cd-java-windows-support
+  pull_request:
+    paths:
+      - java/**
+      - glide-core/src/**
+      - utils/cluster_manager.py
+      - .github/workflows/java-windows*.yml
+
+concurrency:
+  group: java-windows-opt-${{ github.head_ref || github.ref }}-${{ toJson(inputs) }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0  # Disable incremental compilation for CI
+  CARGO_NET_RETRY: 10
+  RUST_BACKTRACE: short
+  GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.parallel=true -Dorg.gradle.workers.max=4
+  GRADLE_USER_HOME: ${{ github.workspace }}/.gradle
+
+jobs:
+  test-windows-optimized:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        java-version: ['11', '17']
+        redis-version: ['7.2.8', '7.0.15', '6.2.18']
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up JDK ${{ matrix.java-version }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ matrix.java-version }}
+          distribution: 'temurin'
+          cache: 'gradle'  # Enable Gradle caching
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'  # Cache pip dependencies
+
+      # Cache Rust toolchain and cargo registry
+      - name: Cache Rust toolchain
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      # Cache Rust build artifacts
+      - name: Cache Rust build
+        uses: actions/cache@v4
+        with:
+          path: |
+            java/target/
+            glide-core/target/
+          key: ${{ runner.os }}-rust-build-${{ hashFiles('**/Cargo.toml', '**/Cargo.lock') }}-${{ hashFiles('glide-core/src/**') }}
+          restore-keys: |
+            ${{ runner.os }}-rust-build-${{ hashFiles('**/Cargo.toml', '**/Cargo.lock') }}-
+            ${{ runner.os }}-rust-build-
+
+      # Cache Gradle dependencies and build outputs
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            .gradle/
+            java/client/build/
+            java/integTest/build/
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Install sccache for Rust
+        shell: pwsh
+        run: |
+          # Install sccache for faster Rust compilation
+          $SCCACHE_VERSION = "v0.7.7"
+          $url = "https://github.com/mozilla/sccache/releases/download/$SCCACHE_VERSION/sccache-$SCCACHE_VERSION-x86_64-pc-windows-msvc.tar.gz"
+
+          Write-Host "Downloading sccache..."
+          Invoke-WebRequest -Uri $url -OutFile "sccache.tar.gz"
+
+          tar -xzf sccache.tar.gz
+          $sccachePath = "$pwd\sccache-$SCCACHE_VERSION-x86_64-pc-windows-msvc"
+
+          # Add to PATH
+          echo "$sccachePath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+          # Set environment variables
+          echo "RUSTC_WRAPPER=sccache" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          echo "SCCACHE_DIR=$pwd\.sccache" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          echo "SCCACHE_CACHE_SIZE=2G" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Install Rust (with caching)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+          components: rustfmt, clippy
+
+      - name: Install protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          version: "26.1"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Cache Redis downloads
+      - name: Cache Redis binaries
+        uses: actions/cache@v4
+        with:
+          path: C:\redis-cache\
+          key: ${{ runner.os }}-redis-${{ matrix.redis-version }}
+          restore-keys: |
+            ${{ runner.os }}-redis-
+
+      - name: Download and setup Redis ${{ matrix.redis-version }}
+        shell: pwsh
+        run: |
+          Write-Host "=== Setting up Redis ${{ matrix.redis-version }} for Windows ==="
+
+          $version = "${{ matrix.redis-version }}"
+          $cacheDir = "C:\redis-cache\$version"
+          $redisDir = "C:\redis"
+
+          # Check if Redis is cached
+          if (Test-Path $cacheDir) {
+            Write-Host "Using cached Redis $version"
+            New-Item -Path $redisDir -ItemType Directory -Force | Out-Null
+            Copy-Item -Path "$cacheDir\*" -Destination $redisDir -Recurse -Force
+          } else {
+            Write-Host "Downloading Redis $version..."
+            $url = "https://github.com/redis-windows/redis-windows/releases/download/${version}/Redis-${version}-Windows-x64-cygwin.zip"
+
+            New-Item -Path $redisDir -ItemType Directory -Force | Out-Null
+            Invoke-WebRequest -Uri $url -OutFile "redis.zip"
+
+            # Extract
+            Expand-Archive -Path "redis.zip" -DestinationPath "C:\temp" -Force
+            Move-Item -Path "C:\temp\Redis-${version}-Windows-x64-cygwin\*" -Destination $redisDir -Force
+
+            # Cache for next time
+            New-Item -Path $cacheDir -ItemType Directory -Force | Out-Null
+            Copy-Item -Path "$redisDir\*" -Destination $cacheDir -Recurse -Force
+
+            Remove-Item -Path "C:\temp" -Recurse -Force -ErrorAction SilentlyContinue
+          }
+
+          # Add to PATH
+          echo "C:\redis" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          echo "REDIS_PATH=C:\redis" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+          # Quick verification
+          & "C:\redis\redis-server.exe" --version
+
+      - name: Show sccache stats
+        shell: pwsh
+        run: |
+          sccache --show-stats
+
+      - name: Build Java client (optimized)
+        shell: cmd
+        env:
+          RUSTC_WRAPPER: sccache
+        run: |
+          cd java
+          echo === Building Java client with optimizations ===
+
+          REM Use parallel execution and build cache
+          gradlew.bat --build-cache ^
+                      --parallel ^
+                      --max-workers=4 ^
+                      --continue ^
+                      build ^
+                      -x javadoc ^
+                      -x spotlessCheck ^
+                      -x test
+
+      - name: Show sccache stats after build
+        shell: pwsh
+        run: |
+          sccache --show-stats
+
+      - name: Run unit tests (parallel)
+        shell: cmd
+        run: |
+          cd java
+          echo === Running unit tests in parallel ===
+          gradlew.bat --build-cache ^
+                      --parallel ^
+                      --max-workers=4 ^
+                      :client:test
+
+      - name: Start Redis servers for integration tests
+        shell: cmd
+        run: |
+          echo === Starting Redis cluster ===
+          python utils\cluster_manager_windows_patch.py start --cluster-mode --shard-count 3 --replica-count 1
+
+          echo === Starting standalone Redis ===
+          python utils\cluster_manager_windows_patch.py start --shard-count 1 --replica-count 0
+
+      - name: Run integration tests (parallel)
+        shell: cmd
+        env:
+          RUST_BACKTRACE: 1
+        run: |
+          cd java
+          echo === Running integration tests ===
+          gradlew.bat --build-cache ^
+                      --parallel ^
+                      --max-workers=4 ^
+                      :integTest:test
+
+      - name: Stop Redis servers
+        if: always()
+        shell: cmd
+        run: |
+          echo === Stopping all Redis servers ===
+          python utils\cluster_manager_windows_patch.py stop || echo "Stop completed"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-windows-java${{ matrix.java-version }}-redis${{ matrix.redis-version }}
+          path: |
+            java/client/build/reports/**
+            java/client/build/test-results/**
+            java/integTest/build/reports/**
+            java/integTest/build/test-results/**
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-windows-java${{ matrix.java-version }}-redis${{ matrix.redis-version }}
+          path: |
+            java/client/build/libs/*.jar
+            java/target/release/*.dll
