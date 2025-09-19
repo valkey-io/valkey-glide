@@ -227,12 +227,48 @@ def wait_for_server_shutdown(
             server, cluster_folder, use_tls, auth, timeout
         )
 
+# Override remove_folder for Windows compatibility
+def remove_folder(folder_path: str):
+    """Modified remove_folder that works on Windows"""
+    if IS_WINDOWS:
+        # Windows: Use rmdir command with /S /Q flags
+        # First try to remove read-only attributes
+        try:
+            subprocess.run(
+                ["attrib", "-R", f"{folder_path}\\*.*", "/S"],
+                check=False,
+                capture_output=True,
+                shell=True
+            )
+            # Use rmdir for Windows
+            result = subprocess.run(
+                ["rmdir", "/S", "/Q", folder_path],
+                check=False,
+                capture_output=True,
+                shell=True,
+                text=True
+            )
+            if result.returncode != 0 and os.path.exists(folder_path):
+                # Fallback: try Python's shutil
+                import shutil
+                shutil.rmtree(folder_path, ignore_errors=True)
+        except Exception as e:
+            logging.warning(f"Failed to remove folder {folder_path}: {e}")
+    else:
+        # Unix/Linux: Use original rm -rf
+        subprocess.run(
+            ["rm", "-rf", folder_path],
+            check=False,
+            capture_output=True
+        )
+
 # Replace the original functions with our patched versions
 import cluster_manager
 cluster_manager.get_command = get_command
 cluster_manager.start_server = start_server
 cluster_manager.stop_server = stop_server
 cluster_manager.wait_for_server_shutdown = wait_for_server_shutdown
+cluster_manager.remove_folder = remove_folder
 
 # Run the main function with our patches
 if __name__ == "__main__":

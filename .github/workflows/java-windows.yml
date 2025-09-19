@@ -1,0 +1,157 @@
+name: Java Windows CI
+
+on:
+  push:
+    branches:
+      - main
+      - release-*
+      - ci-cd-java-windows-support
+  pull_request:
+    paths:
+      - java/**
+      - glide-core/src/**
+      - utils/cluster_manager.py
+      - .github/workflows/java-windows.yml
+
+concurrency:
+  group: java-windows-${{ github.head_ref || github.ref }}-${{ toJson(inputs) }}
+  cancel-in-progress: true
+
+jobs:
+  test-windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        java-version: ['11', '17']
+        redis-version: ['7.2.8', '7.0.15', '6.2.18']
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up JDK ${{ matrix.java-version }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ matrix.java-version }}
+          distribution: 'temurin'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Install protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          version: "26.1"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download and setup Redis ${{ matrix.redis-version }}
+        shell: pwsh
+        run: |
+          Write-Host "=== Setting up Redis ${{ matrix.redis-version }} for Windows ==="
+
+          # Create redis directory
+          New-Item -Path "C:\redis" -ItemType Directory -Force | Out-Null
+
+          # Download appropriate Redis version
+          $version = "${{ matrix.redis-version }}"
+          $url = "https://github.com/redis-windows/redis-windows/releases/download/${version}/Redis-${version}-Windows-x64-cygwin.zip"
+
+          Write-Host "Downloading Redis ${version}..."
+          Invoke-WebRequest -Uri $url -OutFile "redis.zip"
+
+          Write-Host "Extracting Redis..."
+          # Extract to temp and move contents
+          Expand-Archive -Path "redis.zip" -DestinationPath "C:\temp" -Force
+          Move-Item -Path "C:\temp\Redis-${version}-Windows-x64-cygwin\*" -Destination "C:\redis\" -Force
+          Remove-Item -Path "C:\temp" -Recurse -Force -ErrorAction SilentlyContinue
+
+          # Add to PATH
+          $redisPath = "C:\redis"
+          Write-Host "Redis extracted to: $redisPath"
+          echo "$redisPath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          echo "REDIS_PATH=$redisPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+          # Verify Redis version
+          $version_output = & "C:\redis\redis-server.exe" --version
+          Write-Host "Redis version: $version_output"
+
+          if ($version_output -match "v=([67])\.([0-9]+)\.([0-9]+)") {
+            $major = [int]$Matches[1]
+            $minor = [int]$Matches[2]
+
+            if (($major -eq 6 -and $minor -ge 2) -or ($major -eq 7 -and $minor -le 2)) {
+              Write-Host "✅ Redis version is compliant with Valkey project requirements"
+            } else {
+              throw "❌ Redis version is not in supported range (6.2-7.2)"
+            }
+          }
+
+      - name: Build Java client
+        shell: cmd
+        run: |
+          cd java
+          echo === Building Java client with Windows support ===
+          gradlew.bat --build-cache --continue build -x javadoc
+
+      - name: Run unit tests
+        shell: cmd
+        run: |
+          cd java
+          echo === Running unit tests ===
+          gradlew.bat :client:test
+
+      - name: Start Redis servers for integration tests
+        shell: cmd
+        run: |
+          echo === Starting Redis cluster ===
+          python utils\cluster_manager_windows_patch.py start --cluster-mode --shard-count 3 --replica-count 1
+
+          echo === Starting standalone Redis ===
+          python utils\cluster_manager_windows_patch.py start --shard-count 1 --replica-count 0
+
+      - name: Run integration tests
+        shell: cmd
+        env:
+          RUST_BACKTRACE: 1
+        run: |
+          cd java
+          echo === Running integration tests ===
+          gradlew.bat :integTest:test
+
+      - name: Stop Redis servers
+        if: always()
+        shell: cmd
+        run: |
+          echo === Stopping all Redis servers ===
+          python utils\cluster_manager_windows_patch.py stop || echo "Stop completed"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-windows-java${{ matrix.java-version }}-redis${{ matrix.redis-version }}
+          path: |
+            java/client/build/reports/**
+            java/client/build/test-results/**
+            java/integTest/build/reports/**
+            java/integTest/build/test-results/**
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-windows-java${{ matrix.java-version }}-redis${{ matrix.redis-version }}
+          path: |
+            java/client/build/libs/*.jar
+            java/target/release/*.dll
