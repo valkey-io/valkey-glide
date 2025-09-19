@@ -34,7 +34,7 @@ Valkey GLIDE is API-compatible with the following engine versions:
 
 ## Current Status and Upcoming Releases
 
-The client currently supports Python, Java, Node.js, Go, C# and PHP. C# and PHP have preview releases, and have been moved to separate repositories to simplify development. Active development continues for C#, PHP, C++ and Ruby clients. Python, Java, Node.js and Go clients will be moved to separate repositories in the near future.
+The client currently supports Python, Java, Node.js, Go, C#, and PHP. C# and PHP have preview releases, and have been moved to separate repositories to simplify development. Active development continues for C#, PHP, C++ and Ruby clients. Python, Java, Node.js and Go clients will be moved to separate repositories in the near future.
 
 #### v2.1 (Sept. 2025)
  - Valkey 9 Support – First class support for Multi-DB and Hash Field Expiration (HFE)
