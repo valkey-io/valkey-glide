@@ -178,9 +178,9 @@ public class TestUtilities {
             commonClientConfig() {
         var builder = GlideClientConfiguration.builder();
         for (var host : STANDALONE_HOSTS) {
-            var parts = host.split(":");
+            var parts = host.trim().split(":");
             builder.address(
-                    NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build());
+                    NodeAddress.builder().host(parts[0].trim()).port(Integer.parseInt(parts[1].trim())).build());
         }
         return builder.useTLS(TLS);
     }
@@ -189,9 +189,9 @@ public class TestUtilities {
             commonClusterClientConfig() {
         var builder = GlideClusterClientConfiguration.builder();
         for (var host : CLUSTER_HOSTS) {
-            var parts = host.split(":");
+            var parts = host.trim().split(":");
             builder.address(
-                    NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build());
+                    NodeAddress.builder().host(parts[0].trim()).port(Integer.parseInt(parts[1].trim())).build());
         }
         return builder.useTLS(TLS);
     }
@@ -200,9 +200,9 @@ public class TestUtilities {
             azClusterClientConfig() {
         var builder = GlideClusterClientConfiguration.builder();
         for (var host : AZ_CLUSTER_HOSTS) {
-            var parts = host.split(":");
+            var parts = host.trim().split(":");
             builder.address(
-                    NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build());
+                    NodeAddress.builder().host(parts[0].trim()).port(Integer.parseInt(parts[1].trim())).build());
         }
         return builder.useTLS(TLS);
     }
