@@ -113,7 +113,11 @@ tasks.register('buildRust', Exec) {
     } else if (target.contains("musl")) {
         commandLine 'cargo', 'build', '--target', "$target", '--release'
         environment RUSTFLAGS: '-C target-feature=-crt-static'
+    } else if (target != "") {
+        // For Windows and other specific targets
+        commandLine 'cargo', 'build', '--target', "$target", '--release'
     } else {
+        // Default case (macOS without specific target)
         commandLine 'cargo', 'build', '--release'
     }
     workingDir project.rootDir
@@ -144,7 +148,12 @@ tasks.register('buildRustFfi', Exec) {
     } else if (target.contains("musl")) {
         commandLine 'cargo', 'build', '--target', "$target", '--release'
         environment RUSTFLAGS: '--cfg ffi_test -C target-feature=-crt-static'
+    } else if (target != "") {
+        // For Windows and other specific targets
+        commandLine 'cargo', 'build', '--target', "$target", '--release'
+        environment RUSTFLAGS: '--cfg ffi_test'
     } else {
+        // Default case (macOS without specific target)
         commandLine 'cargo', 'build', '--release'
         environment RUSTFLAGS: '--cfg ffi_test'
     }
