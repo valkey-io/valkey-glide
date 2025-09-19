@@ -878,6 +878,22 @@ pub(crate) mod shared_client_tests {
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_select_command_case_sensitivity(#[values(false, true)] use_cluster: bool) {
         block_on_all(async {
+            
+            if use_cluster {
+                // First create a basic client to check server version
+                let mut version_check_basics = utilities::setup_test_basics_internal(&TestConfiguration {
+                    shared_server: true,
+                    ..Default::default()
+                })
+                .await;
+                
+                // Skip test if server version is less than 9.0 (database isolation not supported)
+                if !utilities::version_greater_or_equal(&mut version_check_basics.client, "9.0.0").await
+                {
+                    return;
+                }
+            }
+
             let mut test_basics = setup_test_basics(
                 use_cluster,
                 TestConfiguration {
@@ -898,13 +914,7 @@ pub(crate) mod shared_client_tests {
                 .send_command(&select_upper_cmd, None)
                 .await;
 
-            if use_cluster {
-                // Should be intercepted and fail with cluster error
-                assert!(result_upper.is_ok());
-            } else {
-                // Should be intercepted and succeed
-                assert!(result_upper.is_ok());
-            }
+            assert!(result_upper.is_ok());
         });
     }
 
