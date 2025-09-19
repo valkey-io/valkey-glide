@@ -88,12 +88,8 @@
         "RUNNER": "windows-latest",
         "ARCH": "x64",
         "TARGET": "x86_64-pc-windows-msvc",
-        "PACKAGE_MANAGERS": [
-            "maven"
-        ],
-        "languages": [
-            "java"
-        ],
+        "PACKAGE_MANAGERS": ["maven"],
+        "languages": ["java"],
         "comment": "Windows support for Java client only"
     }
 ]
