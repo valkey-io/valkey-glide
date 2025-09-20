@@ -618,6 +618,25 @@ where
         })
     }
 
+    /// Returns the management connection for the given address if it exists,
+    /// otherwise returns the user connection.
+    pub(crate) fn management_connection_for_address(
+        &self,
+        address: &str,
+    ) -> Option<ConnectionAndAddress<Connection>> {
+        self.connection_map.get(address).map(|item| {
+            let (address, conn) = (item.key(), item.value());
+            (
+                address.clone(),
+                conn.management_connection
+                    .as_ref()
+                    .unwrap_or(&conn.user_connection)
+                    .conn
+                    .clone(),
+            )
+        })
+    }
+
     pub(crate) fn connection_details_for_address(
         &self,
         address: &str,
