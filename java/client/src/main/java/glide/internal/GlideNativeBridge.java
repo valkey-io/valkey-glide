@@ -46,7 +46,12 @@ public class GlideNativeBridge {
             int reconnectJitterPercent,
             byte[][] subExact,
             byte[][] subPattern,
-            byte[][] subSharded);
+            byte[][] subSharded,
+            String iamClusterName,
+            String iamRegion,
+            String iamServiceType,
+            int iamRefreshIntervalSeconds,
+            boolean hasIamConfig);
 
     /** Execute command asynchronously */
     public static native void executeCommandAsync(
@@ -63,6 +68,9 @@ public class GlideNativeBridge {
     /** Update the connection password with optional immediate authentication. */
     public static native void updateConnectionPassword(
             long clientPtr, String password, boolean immediateAuth, long callbackId);
+
+    /** Trigger an immediate IAM token refresh. */
+    public static native void refreshIamToken(long clientPtr, long callbackId);
 
     /** Check if the native client is connected */
     public static native boolean isConnected(long clientPtr);

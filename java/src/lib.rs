@@ -14,7 +14,8 @@ const MAX_REQUEST_ARGS_LENGTH_IN_BYTES: usize = 2_i32.pow(12) as usize; // 4096 
 
 // Telemetry required for getStatistics
 use glide_core::Telemetry;
-use glide_core::client::ConnectionRetryStrategy;
+use glide_core::client::{ConnectionRetryStrategy, IamAuthenticationConfig};
+use glide_core::iam::ServiceType;
 
 use jni::JNIEnv;
 use jni::errors::Error as JniError;
@@ -1231,6 +1232,11 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createClient(
     sub_exact: JObjectArray,
     sub_pattern: JObjectArray,
     sub_sharded: JObjectArray,
+    iam_cluster_name: jni::sys::jstring,
+    iam_region: jni::sys::jstring,
+    iam_service_type: jni::sys::jstring,
+    iam_refresh_interval_seconds: jint,
+    has_iam_config: jni::sys::jboolean,
 ) -> jlong {
     handle_panics(
         move || {
@@ -1267,6 +1273,55 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createClient(
             let client_az_opt = get_optional_string_param_raw(&mut env, client_az);
             let client_name_opt = get_optional_string_param_raw(&mut env, client_name);
             let protocol_opt = get_optional_string_param_raw(&mut env, protocol);
+            let iam_cluster_name_opt = get_optional_string_param_raw(&mut env, iam_cluster_name);
+            let iam_region_opt = get_optional_string_param_raw(&mut env, iam_region);
+            let iam_service_type_opt = get_optional_string_param_raw(&mut env, iam_service_type);
+
+            let iam_config = if has_iam_config != 0 {
+                let cluster_name = match iam_cluster_name_opt.clone() {
+                    Some(value) if !value.is_empty() => value,
+                    _ => {
+                        log::error!("IAM configuration requires a cluster name");
+                        return Some(0);
+                    }
+                };
+
+                let region = match iam_region_opt.clone() {
+                    Some(value) if !value.is_empty() => value,
+                    _ => {
+                        log::error!("IAM configuration requires a region");
+                        return Some(0);
+                    }
+                };
+
+                let service_type = match iam_service_type_opt
+                    .clone()
+                    .map(|s| s.to_ascii_lowercase())
+                    .as_deref()
+                {
+                    Some("elasticache") => ServiceType::ElastiCache,
+                    Some("memorydb") => ServiceType::MemoryDB,
+                    other => {
+                        log::error!("Unsupported IAM service type: {:?}", other);
+                        return Some(0);
+                    }
+                };
+
+                let refresh_interval = if iam_refresh_interval_seconds >= 0 {
+                    Some(iam_refresh_interval_seconds as u32)
+                } else {
+                    None
+                };
+
+                Some(IamAuthenticationConfig {
+                    cluster_name,
+                    region,
+                    service_type,
+                    refresh_interval_seconds: refresh_interval,
+                })
+            } else {
+                None
+            };
 
             let reconnect_strategy =
                 if reconnect_num_retries > 0 && reconnect_factor > 0 && reconnect_exponent_base > 0
@@ -1336,6 +1391,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createClient(
                 database_id: database_id as u32,
                 username,
                 password,
+                iam_config,
                 use_tls: use_tls != 0,
                 insecure_tls: insecure_tls != 0,
                 cluster_mode: cluster_mode != 0,
@@ -2167,6 +2223,62 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_updateConnectionPas
             Some(())
         },
         "updateConnectionPassword",
+    )
+    .unwrap_or(())
+}
+
+/// Manually refresh IAM authentication token
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_glide_internal_GlideNativeBridge_refreshIamToken(
+    env: JNIEnv,
+    _class: JClass,
+    client_ptr: jlong,
+    callback_id: jlong,
+) {
+    handle_panics(
+        move || {
+            let handle_id = client_ptr as u64;
+
+            let jvm = match env.get_java_vm() {
+                Ok(jvm) => Arc::new(jvm),
+                Err(_) => {
+                    log::error!("JVM error in refreshIamToken");
+                    return Some(());
+                }
+            };
+
+            let runtime = get_runtime();
+            runtime.spawn(async move {
+                let client_result = ensure_client_for_handle(handle_id).await;
+                match client_result {
+                    Ok(mut client) => {
+                        let result = client
+                            .refresh_iam_token()
+                            .await
+                            .map(|_| redis::Value::Okay)
+                            .map_err(|e| {
+                                redis::RedisError::from((
+                                    redis::ErrorKind::ClientError,
+                                    "IAM token refresh failed",
+                                    e.to_string(),
+                                ))
+                            });
+                        complete_callback(jvm, callback_id, result, false);
+                    }
+                    Err(err) => {
+                        let error = Err(redis::RedisError::from((
+                            redis::ErrorKind::ClientError,
+                            "Client not found",
+                            err.to_string(),
+                        )));
+                        complete_callback(jvm, callback_id, error, false);
+                    }
+                }
+            });
+
+            Some(())
+        },
+        "refreshIamToken",
     )
     .unwrap_or(())
 }

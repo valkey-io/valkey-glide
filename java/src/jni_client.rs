@@ -4,7 +4,7 @@
 use anyhow::Result;
 use dashmap::DashMap;
 use glide_core::client::Client as GlideClient;
-use glide_core::client::{AuthenticationInfo, ConnectionRequest, NodeAddress, TlsMode};
+use glide_core::client::{AuthenticationInfo, ConnectionRequest, IamAuthenticationConfig, NodeAddress, TlsMode};
 use glide_core::errors::{error_message, error_type};
 use jni::JNIEnv;
 use jni::JavaVM;
@@ -108,6 +108,7 @@ pub struct ValkeyClientConfig {
     pub database_id: u32,
     pub username: Option<String>,
     pub password: Option<String>,
+    pub iam_config: Option<IamAuthenticationConfig>,
     pub use_tls: bool,
     pub insecure_tls: bool,
     pub cluster_mode: bool,
@@ -130,6 +131,7 @@ pub fn create_valkey_connection_config(config: ValkeyClientConfig) -> Result<Con
         database_id,
         username,
         password,
+        iam_config,
         use_tls,
         insecure_tls,
         cluster_mode,
@@ -163,6 +165,33 @@ pub fn create_valkey_connection_config(config: ValkeyClientConfig) -> Result<Con
         node_addresses.push(NodeAddress { host, port });
     }
 
+    let authentication_info = if let Some(iam_config) = iam_config {
+        Some(AuthenticationInfo {
+            username: username.clone(),
+            password: None,
+            iam_config: Some(iam_config),
+        })
+    } else {
+        match (username.clone(), password.clone()) {
+            (Some(user), Some(pass)) => Some(AuthenticationInfo {
+                username: Some(user),
+                password: Some(pass),
+                iam_config: None,
+            }),
+            (None, Some(pass)) => Some(AuthenticationInfo {
+                username: None,
+                password: Some(pass),
+                iam_config: None,
+            }),
+            (Some(user), None) => Some(AuthenticationInfo {
+                username: Some(user),
+                password: None,
+                iam_config: None,
+            }),
+            _ => None,
+        }
+    };
+
     let connection_request = ConnectionRequest {
         addresses: node_addresses,
         tls_mode: Some(if insecure_tls {
@@ -174,17 +203,7 @@ pub fn create_valkey_connection_config(config: ValkeyClientConfig) -> Result<Con
         }),
         cluster_mode_enabled: cluster_mode,
         database_id: database_id as i64,
-        authentication_info: match (username, password) {
-            (Some(user), Some(pass)) => Some(AuthenticationInfo {
-                username: Some(user),
-                password: Some(pass),
-            }),
-            (None, Some(pass)) => Some(AuthenticationInfo {
-                username: None,
-                password: Some(pass),
-            }),
-            _ => None,
-        },
+        authentication_info,
         request_timeout: Some(request_timeout_ms as u32),
         connection_timeout: Some(connection_timeout_ms as u32),
         client_name: client_name.clone(),

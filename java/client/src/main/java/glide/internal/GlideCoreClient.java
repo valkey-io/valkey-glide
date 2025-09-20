@@ -118,6 +118,7 @@ public class GlideCoreClient implements AutoCloseable {
         private int connectionTimeoutMs = 5000;
         private String username = null;
         private String password = null;
+        private glide.api.models.configuration.IamAuthConfig iamAuthConfig = null;
         private int databaseId = 0;
         private Integer maxInflightRequests = null;
         private glide.api.models.configuration.ProtocolVersion protocol =
@@ -167,6 +168,20 @@ public class GlideCoreClient implements AutoCloseable {
         public Config credentials(String username, String password) {
             this.username = username;
             this.password = password;
+            this.iamAuthConfig = null;
+            return this;
+        }
+
+        public Config credentials(glide.api.models.configuration.ServerCredentials credentials) {
+            if (credentials == null) {
+                this.username = null;
+                this.password = null;
+                this.iamAuthConfig = null;
+                return this;
+            }
+            this.username = credentials.getUsername();
+            this.password = credentials.getPassword();
+            this.iamAuthConfig = credentials.getIamAuthConfig();
             return this;
         }
 
@@ -251,6 +266,10 @@ public class GlideCoreClient implements AutoCloseable {
             return password;
         }
 
+        glide.api.models.configuration.IamAuthConfig getIamAuthConfig() {
+            return iamAuthConfig;
+        }
+
         int getDatabaseId() {
             return databaseId;
         }
@@ -330,6 +349,16 @@ public class GlideCoreClient implements AutoCloseable {
         // Request timeout is passed to Rust for its timeout handling
 
         // Create client with simplified parameters
+        glide.api.models.configuration.IamAuthConfig iamAuthConfig = config.getIamAuthConfig();
+        String iamClusterName = iamAuthConfig != null ? iamAuthConfig.getClusterName() : null;
+        String iamRegion = iamAuthConfig != null ? iamAuthConfig.getRegion() : null;
+        String iamServiceType =
+                iamAuthConfig != null ? iamAuthConfig.getService().toCoreValue() : null;
+        int iamRefreshInterval =
+                iamAuthConfig != null && iamAuthConfig.getRefreshIntervalSeconds() != null
+                        ? iamAuthConfig.getRefreshIntervalSeconds()
+                        : -1;
+
         long handle;
         try {
             handle =
@@ -355,7 +384,12 @@ public class GlideCoreClient implements AutoCloseable {
                             config.getReconnectJitterPercentOrDefault(),
                             config.getSubExact(),
                             config.getSubPattern(),
-                            config.getSubSharded());
+                            config.getSubSharded(),
+                            iamClusterName,
+                            iamRegion,
+                            iamServiceType,
+                            iamRefreshInterval,
+                            iamAuthConfig != null);
         } catch (RuntimeException e) {
             // Propagate the exception from the native layer with proper context
             String errorMsg = e.getMessage();
@@ -443,8 +477,7 @@ public class GlideCoreClient implements AutoCloseable {
         result.useInsecureTls(resolveInsecureTls(config));
 
         if (config.getCredentials() != null) {
-            glide.api.models.configuration.ServerCredentials creds = config.getCredentials();
-            result.credentials(creds.getUsername(), creds.getPassword());
+            result.credentials(config.getCredentials());
         }
 
         if (config.getRequestTimeout() != null) {
@@ -675,6 +708,28 @@ public class GlideCoreClient implements AutoCloseable {
         return future;
     }
 
+    /** Refresh IAM token immediately (for compatibility with BaseClient). */
+    public CompletableFuture<String> refreshIamToken() {
+        long handle = nativeClientHandle.get();
+        if (handle == 0) {
+            CompletableFuture<String> f = new CompletableFuture<>();
+            f.completeExceptionally(new glide.api.models.exceptions.ClosingException("Client is closed"));
+            return f;
+        }
+
+        CompletableFuture<String> future = new CompletableFuture<>();
+        long correlationId;
+        try {
+            correlationId = AsyncRegistry.register(future, this.maxInflightRequests, handle);
+        } catch (glide.api.models.exceptions.RequestException e) {
+            future.completeExceptionally(e);
+            return future;
+        }
+
+        GlideNativeBridge.refreshIamToken(handle, correlationId);
+        return future;
+    }
+
     // ==================== CLIENT STATUS AND INFO METHODS ====================
 
     /** Check if client is connected. */
@@ -860,7 +915,12 @@ public class GlideCoreClient implements AutoCloseable {
             int reconnectJitterPercent,
             byte[][] subExact,
             byte[][] subPattern,
-            byte[][] subSharded) {
+            byte[][] subSharded,
+            String iamClusterName,
+            String iamRegion,
+            String iamServiceType,
+            int iamRefreshIntervalSeconds,
+            boolean hasIamConfig) {
         return GlideNativeBridge.createClient(
                 addresses,
                 databaseId,
@@ -883,7 +943,12 @@ public class GlideCoreClient implements AutoCloseable {
                 reconnectJitterPercent,
                 subExact,
                 subPattern,
-                subSharded);
+                subSharded,
+                iamClusterName,
+                iamRegion,
+                iamServiceType,
+                iamRefreshIntervalSeconds,
+                hasIamConfig);
     }
 
     /** Check if the native client is connected */

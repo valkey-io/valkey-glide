@@ -6,6 +6,8 @@ import glide.api.models.configuration.BackoffStrategy;
 import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
+import glide.api.models.configuration.IamAuthConfig;
+import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.configuration.TlsAdvancedConfiguration;
 import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.ConfigurationError;
@@ -27,6 +29,7 @@ public class ConnectionManager {
 
     private int maxInflightRequests = 0;
     private int requestTimeoutMs = 5000;
+    private ServerCredentials credentials;
     private volatile boolean isClosed = false;
 
     /**
@@ -48,9 +51,14 @@ public class ConnectionManager {
                         // Extract credentials
                         String username = null;
                         String password = null;
+                        IamAuthConfig iamAuthConfig = null;
                         if (configuration.getCredentials() != null) {
-                            username = configuration.getCredentials().getUsername();
-                            password = configuration.getCredentials().getPassword();
+                            this.credentials = configuration.getCredentials();
+                            username = credentials.getUsername();
+                            password = credentials.getPassword();
+                            iamAuthConfig = credentials.getIamAuthConfig();
+                        } else {
+                            this.credentials = null;
                         }
 
                         // Determine client type
@@ -160,6 +168,16 @@ public class ConnectionManager {
                             }
                         }
 
+                        String iamClusterName =
+                                iamAuthConfig != null ? iamAuthConfig.getClusterName() : null;
+                        String iamRegion = iamAuthConfig != null ? iamAuthConfig.getRegion() : null;
+                        String iamServiceType =
+                                iamAuthConfig != null ? iamAuthConfig.getService().toCoreValue() : null;
+                        int iamRefreshInterval =
+                                iamAuthConfig != null && iamAuthConfig.getRefreshIntervalSeconds() != null
+                                        ? iamAuthConfig.getRefreshIntervalSeconds()
+                                        : -1;
+
                         this.nativeClientHandle =
                                 GlideNativeBridge.createClient(
                                         addresses,
@@ -183,7 +201,12 @@ public class ConnectionManager {
                                         reconnectJitterPercent,
                                         subExact,
                                         subPattern,
-                                        subSharded);
+                                        subSharded,
+                                        iamClusterName,
+                                        iamRegion,
+                                        iamServiceType,
+                                        iamRefreshInterval,
+                                        iamAuthConfig != null);
 
                         if (nativeClientHandle == 0) {
                             throw new ClosingException("Failed to create client - Connection refused");
@@ -274,6 +297,26 @@ public class ConnectionManager {
         } catch (Exception e) {
             return false;
         }
+    }
+
+    /** Returns the credentials configured for this connection, if any. */
+    public ServerCredentials getCredentials() {
+        return credentials;
+    }
+
+    /** Update the cached password after a successful rotation (used by BaseClient). */
+    public void updateStoredPassword(String password) {
+        if (credentials == null) {
+            return;
+        }
+        if (credentials.isUsingIamAuth()) {
+            return; // IAM credentials are immutable
+        }
+        credentials =
+                ServerCredentials.builder()
+                        .username(credentials.getUsername())
+                        .password(password != null ? password : "")
+                        .build();
     }
 
     /** Get client information from the native layer. */
