@@ -932,7 +932,8 @@ export async function batchTest(
         key25, // Geospatial Data/ZSET
         key26, // sorted set
         key27, // sorted set
-    ] = Array.from({ length: 27 }, () =>
+        key28, // move
+    ] = Array.from({ length: 28 }, () =>
         decodeString("{key}" + getRandomKey(), decoder),
     );
 
@@ -1063,6 +1064,14 @@ export async function batchTest(
 
     baseBatch.set(key2, baz, { returnOldValue: true });
     responseData.push(['set(key2, "baz", { returnOldValue: true })', null]);
+
+    if (!cluster.checkIfServerVersionLessThan("9.0.0")) {
+        baseBatch.set(key28, foo);
+        responseData.push(['set(key1, "foo")', "OK"]);
+        baseBatch.move(key28, 1);
+        responseData.push(["move(key1, 1)", true]);
+    }
+
     baseBatch.customCommand(["MGET", key1, key2]);
     responseData.push(['customCommand(["MGET", key1, key2])', ["bar", "baz"]]);
     baseBatch.mset([{ key: key3, value }]);
