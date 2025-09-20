@@ -332,6 +332,12 @@ where
             .await
     }
 
+    /// Update the database ID used for all cluster connections
+    pub async fn update_connection_database(&mut self, database_id: i64) -> RedisResult<Value> {
+        self.route_operation_request(Operation::UpdateConnectionDatabase(database_id))
+            .await
+    }
+
     /// Get the username used to authenticate with all cluster servers
     pub async fn get_username(&mut self) -> RedisResult<Value> {
         self.route_operation_request(Operation::GetUsername).await
@@ -655,6 +661,7 @@ enum CmdArg<C> {
 #[derive(Clone)]
 enum Operation {
     UpdateConnectionPassword(Option<String>),
+    UpdateConnectionDatabase(i64),
     GetUsername,
 }
 
@@ -2589,6 +2596,11 @@ where
             CmdArg::OperationRequest(operation_request) => match operation_request {
                 Operation::UpdateConnectionPassword(password) => {
                     core.set_cluster_param(|params| params.password = password)
+                        .expect(MUTEX_WRITE_ERR);
+                    Ok(Response::Single(Value::Okay))
+                }
+                Operation::UpdateConnectionDatabase(database_id) => {
+                    core.set_cluster_param(|params| params.database_id = database_id)
                         .expect(MUTEX_WRITE_ERR);
                     Ok(Response::Single(Value::Okay))
                 }
