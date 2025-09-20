@@ -1,3 +1,4 @@
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.configuration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -18,8 +19,7 @@ class ServerCredentialsTest {
     @Test
     void buildWithoutPasswordOrIamFails() {
         assertThrows(
-                ConfigurationError.class,
-                () -> ServerCredentials.builder().username("user").build());
+                ConfigurationError.class, () -> ServerCredentials.builder().username("user").build());
     }
 
     @Test
@@ -31,8 +31,7 @@ class ServerCredentialsTest {
                         .service(ServiceType.ELASTICACHE)
                         .build();
         assertThrows(
-                ConfigurationError.class,
-                () -> ServerCredentials.builder().iamAuthConfig(config).build());
+                ConfigurationError.class, () -> ServerCredentials.builder().iamAuthConfig(config).build());
     }
 
     @Test

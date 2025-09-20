@@ -1,3 +1,4 @@
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.configuration;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;

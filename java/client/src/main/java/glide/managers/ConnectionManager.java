@@ -168,8 +168,7 @@ public class ConnectionManager {
                             }
                         }
 
-                        String iamClusterName =
-                                iamAuthConfig != null ? iamAuthConfig.getClusterName() : null;
+                        String iamClusterName = iamAuthConfig != null ? iamAuthConfig.getClusterName() : null;
                         String iamRegion = iamAuthConfig != null ? iamAuthConfig.getRegion() : null;
                         String iamServiceType =
                                 iamAuthConfig != null ? iamAuthConfig.getService().toCoreValue() : null;

@@ -1001,8 +1001,7 @@ public abstract class BaseClient
      * Manually refresh the IAM token for the current connection.
      *
      * <p>This method is only available when the client is configured for IAM authentication. It
-     * triggers an immediate token regeneration, ensuring that future requests use a fresh
-     * credential.</p>
+     * triggers an immediate token regeneration, ensuring that future requests use a fresh credential.
      *
      * @return <code>"OK"</code> when the token refresh succeeds.
      * @throws ConfigurationError if IAM authentication is not enabled for this client.

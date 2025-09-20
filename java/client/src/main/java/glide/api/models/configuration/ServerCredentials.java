@@ -26,8 +26,7 @@ import lombok.Getter;
 @Builder
 @SuppressFBWarnings(
         value = "CT_CONSTRUCTOR_THROW",
-        justification =
-                "Builder validates credential mode before customers observe the instance")
+        justification = "Builder validates credential mode before customers observe the instance")
 public class ServerCredentials {
     /** The password that will be used for authenticating connections to the servers. */
     private final String password;
@@ -54,8 +53,7 @@ public class ServerCredentials {
             }
 
             if (iamAuthConfig != null && (username == null || username.isBlank())) {
-                throw new ConfigurationError(
-                        "IAM authentication requires a non-empty username.");
+                throw new ConfigurationError("IAM authentication requires a non-empty username.");
             }
 
             if (password == null && iamAuthConfig == null) {

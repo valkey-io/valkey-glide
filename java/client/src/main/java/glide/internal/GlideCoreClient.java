@@ -352,8 +352,7 @@ public class GlideCoreClient implements AutoCloseable {
         glide.api.models.configuration.IamAuthConfig iamAuthConfig = config.getIamAuthConfig();
         String iamClusterName = iamAuthConfig != null ? iamAuthConfig.getClusterName() : null;
         String iamRegion = iamAuthConfig != null ? iamAuthConfig.getRegion() : null;
-        String iamServiceType =
-                iamAuthConfig != null ? iamAuthConfig.getService().toCoreValue() : null;
+        String iamServiceType = iamAuthConfig != null ? iamAuthConfig.getService().toCoreValue() : null;
         int iamRefreshInterval =
                 iamAuthConfig != null && iamAuthConfig.getRefreshIntervalSeconds() != null
                         ? iamAuthConfig.getRefreshIntervalSeconds()
