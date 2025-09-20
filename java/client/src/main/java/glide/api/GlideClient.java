@@ -28,9 +28,6 @@ import static command_request.CommandRequestOuterClass.RequestType.Move;
 import static command_request.CommandRequestOuterClass.RequestType.Ping;
 import static command_request.CommandRequestOuterClass.RequestType.RandomKey;
 import static command_request.CommandRequestOuterClass.RequestType.Scan;
-import static command_request.CommandRequestOuterClass.RequestType.ScriptExists;
-import static command_request.CommandRequestOuterClass.RequestType.ScriptFlush;
-import static command_request.CommandRequestOuterClass.RequestType.ScriptKill;
 import static command_request.CommandRequestOuterClass.RequestType.Select;
 import static command_request.CommandRequestOuterClass.RequestType.Time;
 import static command_request.CommandRequestOuterClass.RequestType.UnWatch;
@@ -84,16 +81,13 @@ public class GlideClient extends BaseClient
                 ScriptingAndFunctionsCommands,
                 TransactionsCommands {
 
-    /**
-     * A constructor. Use {@link #createClient} to get a client. Made protected to simplify testing.
-     */
+    /** Constructor using ClientParams from BaseClient. */
     protected GlideClient(ClientBuilder builder) {
         super(builder);
     }
 
     /**
      * Creates a new {@link GlideClient} instance and establishes a connection to a standalone Valkey
-     * server.
      *
      * @param config The configuration options for the client, including server addresses,
      *     authentication credentials, TLS settings, database selection, reconnection strategy, and
@@ -138,7 +132,7 @@ public class GlideClient extends BaseClient
      */
     public static CompletableFuture<GlideClient> createClient(
             @NonNull GlideClientConfiguration config) {
-        return createClient(config, GlideClient::new);
+        return BaseClient.createClient(config, GlideClient::new);
     }
 
     @Override
@@ -433,7 +427,7 @@ public class GlideClient extends BaseClient
     @Override
     public CompletableFuture<byte[]> functionDump() {
         return commandManager.submitNewCommand(
-                FunctionDump, new GlideString[0], this::handleBytesOrNullResponse);
+                FunctionDump, BaseClient.EMPTY_GLIDE_STRING_ARRAY, this::handleBytesOrNullResponse);
     }
 
     @Override
@@ -458,7 +452,8 @@ public class GlideClient extends BaseClient
 
     @Override
     public CompletableFuture<Object> fcall(@NonNull GlideString function) {
-        return fcall(function, new GlideString[0], new GlideString[0]);
+        return fcall(
+                function, BaseClient.EMPTY_GLIDE_STRING_ARRAY, BaseClient.EMPTY_GLIDE_STRING_ARRAY);
     }
 
     @Override
@@ -468,7 +463,8 @@ public class GlideClient extends BaseClient
 
     @Override
     public CompletableFuture<Object> fcallReadOnly(@NonNull GlideString function) {
-        return fcallReadOnly(function, new GlideString[0], new GlideString[0]);
+        return fcallReadOnly(
+                function, BaseClient.EMPTY_GLIDE_STRING_ARRAY, BaseClient.EMPTY_GLIDE_STRING_ARRAY);
     }
 
     @Override
@@ -534,7 +530,7 @@ public class GlideClient extends BaseClient
             functionStatsBinary() {
         return commandManager.submitNewCommand(
                 FunctionStats,
-                new GlideString[0],
+                BaseClient.EMPTY_GLIDE_STRING_ARRAY,
                 response -> handleFunctionStatsBinaryResponse(response, false).getMultiValue());
     }
 
@@ -552,7 +548,7 @@ public class GlideClient extends BaseClient
     @Override
     public CompletableFuture<GlideString> randomKeyBinary() {
         return commandManager.submitNewCommand(
-                RandomKey, new GlideString[0], this::handleGlideStringOrNullResponse);
+                RandomKey, BaseClient.EMPTY_GLIDE_STRING_ARRAY, this::handleGlideStringOrNullResponse);
     }
 
     @Override
@@ -577,33 +573,5 @@ public class GlideClient extends BaseClient
             @NonNull GlideString cursor, @NonNull ScanOptions options) {
         GlideString[] arguments = new ArgsBuilder().add(cursor).add(options.toArgs()).toArray();
         return commandManager.submitNewCommand(Scan, arguments, this::handleArrayResponseBinary);
-    }
-
-    @Override
-    public CompletableFuture<Boolean[]> scriptExists(@NonNull String[] sha1s) {
-        return commandManager.submitNewCommand(
-                ScriptExists, sha1s, response -> castArray(handleArrayResponse(response), Boolean.class));
-    }
-
-    @Override
-    public CompletableFuture<Boolean[]> scriptExists(@NonNull GlideString[] sha1s) {
-        return commandManager.submitNewCommand(
-                ScriptExists, sha1s, response -> castArray(handleArrayResponse(response), Boolean.class));
-    }
-
-    @Override
-    public CompletableFuture<String> scriptFlush() {
-        return commandManager.submitNewCommand(ScriptFlush, new String[0], this::handleStringResponse);
-    }
-
-    @Override
-    public CompletableFuture<String> scriptFlush(@NonNull FlushMode flushMode) {
-        return commandManager.submitNewCommand(
-                ScriptFlush, new String[] {flushMode.toString()}, this::handleStringResponse);
-    }
-
-    @Override
-    public CompletableFuture<String> scriptKill() {
-        return commandManager.submitNewCommand(ScriptKill, new String[0], this::handleStringResponse);
     }
 }

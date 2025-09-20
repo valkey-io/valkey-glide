@@ -3,6 +3,7 @@ package glide.connectors.handlers;
 
 import static glide.api.models.GlideString.gs;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import glide.api.logging.Logger;
 import glide.api.models.GlideString;
 import glide.api.models.PubSubMessage;
@@ -51,7 +52,13 @@ public class MessageHandler {
     private final BaseResponseResolver responseResolver;
 
     /** A message queue wrapper. */
-    @Getter private final PubSubMessageQueue queue = new PubSubMessageQueue();
+    @Getter(
+            onMethod_ = {
+                @SuppressFBWarnings(
+                        value = "EI_EXPOSE_REP",
+                        justification = "Queue is intentionally shared for asynchronous message consumption")
+            })
+    private final PubSubMessageQueue queue = new PubSubMessageQueue();
 
     /** Process a push (PUBSUB) message received as a part of {@link Response} from GLIDE. */
     void handle(Response response) throws MessageCallbackException {
@@ -193,6 +200,9 @@ public class MessageHandler {
         }
 
         /** Get a promise for a next message. */
+        @SuppressFBWarnings(
+                value = "EI_EXPOSE_REP",
+                justification = "Future represents pending queue state and must be shared with caller")
         public CompletableFuture<PubSubMessage> popAsync() {
             synchronized (lock) {
                 PubSubMessage message = messageQueue.poll();

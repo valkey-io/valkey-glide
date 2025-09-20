@@ -17,6 +17,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import glide.api.GlideClusterClient;
 import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.exceptions.ClosingException;
+import glide.api.models.exceptions.ConfigurationError;
 import glide.api.models.exceptions.RequestException;
 import java.util.Map;
 import java.util.UUID;
@@ -233,6 +234,15 @@ public class ClusterClientTests {
                     assertThrows(
                             ExecutionException.class, () -> testClient.updateConnectionPassword(true).get());
             assertInstanceOf(RequestException.class, noPasswordException.getCause());
+        }
+    }
+
+    @SneakyThrows
+    @Test
+    public void refresh_iam_token_requires_iam_credentials_cluster() {
+        try (GlideClusterClient testClient =
+                GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
+            assertThrows(ConfigurationError.class, testClient::refreshIamToken);
         }
     }
 

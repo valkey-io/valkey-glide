@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter>
+    <!-- Generated protocol buffer classes expose internal state intentionally; exclude them. -->
+    <Match>
+        <Class name="~^command_request\..*$"/>
+    </Match>
+    <Match>
+        <Class name="~^connection_request\..*$"/>
+    </Match>
+    <Match>
+        <Class name="~^response\..*$"/>
+    </Match>
+    <!-- Jedis compatibility layer is vendored; retain upstream structure without SpotBugs noise. -->
+    <Match>
+        <Class name="~^redis\.clients\.jedis\..*$"/>
+    </Match>
+    <!-- RediSearch command builders intentionally expose mutable arrays for fluent APIs. -->
+    <Match>
+        <Class name="~^glide\.api\.models\.commands\..*$"/>
+    </Match>
+</FindBugsFilter>

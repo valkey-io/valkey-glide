@@ -18,7 +18,7 @@ public class BaseResponseResolver implements GlideExceptionCheckedFunction<Respo
     private GlideExceptionCheckedFunction<Long, Object> respPointerResolver;
 
     /**
-     * Extracts value from the RESP pointer.
+     * Extracts value from the DirectByteBuffer response.
      *
      * @return A generic Object with the Response or null if the response is empty
      */
@@ -36,7 +36,8 @@ public class BaseResponseResolver implements GlideExceptionCheckedFunction<Respo
             return OK;
         }
         if (response.hasRespPointer()) {
-            // Return the shared value - which may be a null value
+            // DirectByteBuffer approach: the response is already converted to a Java object
+            // The pointer now points to the converted Java object, not raw Redis data
             return respPointerResolver.apply(response.getRespPointer());
         }
         // if no response payload is provided, assume null

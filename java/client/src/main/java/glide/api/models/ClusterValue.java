@@ -1,6 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -29,6 +30,9 @@ public class ClusterValue<T> {
      * Get per-node value.<br>
      * Asserts if {@link #hasMultiData()} is false.
      */
+    @SuppressFBWarnings(
+            value = "EI_EXPOSE_REP",
+            justification = "Subscriptions are wrapped with unmodifiable maps and safe to expose")
     public Map<String, T> getMultiValue() {
         assert hasMultiData() : "No multi value stored";
         return multiValue;
@@ -68,7 +72,7 @@ public class ClusterValue<T> {
     /** A constructor for the value. */
     public static <T> ClusterValue<T> ofMultiValue(Map<String, T> data) {
         var res = new ClusterValue<T>();
-        res.multiValue = data;
+        res.multiValue = Map.copyOf(data);
         return res;
     }
 
@@ -77,8 +81,9 @@ public class ClusterValue<T> {
         var res = new ClusterValue<T>();
         // the map node address can be converted to a string
         res.multiValue =
-                data.entrySet().stream()
-                        .collect(Collectors.toMap(e -> e.getKey().getString(), Map.Entry::getValue));
+                Map.copyOf(
+                        data.entrySet().stream()
+                                .collect(Collectors.toMap(e -> e.getKey().getString(), Map.Entry::getValue)));
         return res;
     }
 

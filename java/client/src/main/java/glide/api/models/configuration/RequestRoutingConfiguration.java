@@ -1,6 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.configuration;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import glide.api.models.exceptions.RequestException;
 import lombok.Getter;
 import lombok.NonNull;
@@ -128,12 +129,18 @@ public class RequestRoutingConfiguration {
          * @param port The port to access the node. If port is not provided, <code>host</code> is
          *     assumed to be in the format <code>"address:port"</code>.
          */
+        @SuppressFBWarnings(
+                value = "CT_CONSTRUCTOR_THROW",
+                justification = "Constructor validates input and throws immediately on malformed address")
         public ByAddressRoute(@NonNull String host, int port) {
             this.host = host;
             this.port = port;
         }
 
         /** Create a route using address string formatted as <code>"address:port"</code>. */
+        @SuppressFBWarnings(
+                value = "CT_CONSTRUCTOR_THROW",
+                justification = "Constructor parses string and fails fast on invalid port format")
         public ByAddressRoute(@NonNull String host) {
             String[] split = host.split(":");
             if (split.length < 2) {
