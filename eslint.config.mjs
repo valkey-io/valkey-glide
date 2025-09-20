@@ -18,6 +18,7 @@ export default tseslint.config(
             "jest.config.js",
             "**/dist/**",
             "docs/**",
+            "benchmarks/utilities/*.js",
         ],
     },
     {
@@ -67,6 +68,14 @@ export default tseslint.config(
                     ignoredNodes: ["TSTypeParameterInstantiation"],
                 },
             ],
+        },
+    },
+    {
+        files: ["benchmarks/**/*.ts"],
+        rules: {
+            "@typescript-eslint/no-require-imports": "off",
+            "import/no-commonjs": "off",
+            "@typescript-eslint/no-var-requires": "off",
         },
     },
     prettierConfig,
