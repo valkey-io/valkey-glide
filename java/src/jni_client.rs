@@ -4,7 +4,9 @@
 use anyhow::Result;
 use dashmap::DashMap;
 use glide_core::client::Client as GlideClient;
-use glide_core::client::{AuthenticationInfo, ConnectionRequest, IamAuthenticationConfig, NodeAddress, TlsMode};
+use glide_core::client::{
+    AuthenticationInfo, ConnectionRequest, IamAuthenticationConfig, NodeAddress, TlsMode,
+};
 use glide_core::errors::{error_message, error_type};
 use jni::JNIEnv;
 use jni::JavaVM;
