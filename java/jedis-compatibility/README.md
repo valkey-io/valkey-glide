@@ -14,7 +14,7 @@ The Jedis compatibility layer is implemented as a separate Gradle sub-module tha
 
 ### Core Classes
 - `Jedis` - Main client class compatible with Jedis API
-- `JedisCluster` - Cluster client compatible with Jedis cluster API  
+- `JedisCluster` - Cluster client compatible with Jedis cluster API
 - `UnifiedJedis` - Unified interface for both standalone and cluster operations
 - `JedisPool` / `JedisPooled` - Connection pooling implementations
 
@@ -35,7 +35,7 @@ The Jedis compatibility layer is implemented as a separate Gradle sub-module tha
 
 ```gradle
 dependencies {
-    implementation project(':jedis-compatibility')
+    implementation group: 'io.valkey', name: 'valkey-glide-jedis-compatibility', version: '2.+', classifier: 'osx-aarch_64'
 }
 ```
 
@@ -46,6 +46,7 @@ dependencies {
     <groupId>io.valkey</groupId>
     <artifactId>valkey-glide-jedis-compatibility</artifactId>
     <version>${valkey-glide.version}</version>
+    <classifier>${valkey-glide.classifier}</classifier>
 </dependency>
 ```
 
@@ -64,7 +65,7 @@ try (Jedis jedis = new Jedis("localhost", 6379)) {
 
 ## Migration Guide
 
-See the [compatibility layer migration guide](src/main/java/redis/clients/jedis/compatibility-layer-migration-guide.md) for detailed migration instructions.
+See the [compatibility layer migration guide](./compatibility-layer-migration-guide.md) for detailed migration instructions.
 
 ## Build Commands
 
