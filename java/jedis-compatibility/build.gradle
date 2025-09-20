@@ -41,6 +41,9 @@ dependencies {
     annotationProcessor 'org.projectlombok:lombok:1.18.38'
     testCompileOnly 'org.projectlombok:lombok:1.18.38'
     testAnnotationProcessor 'org.projectlombok:lombok:1.18.38'
+
+    // SpotBugs annotations for static analysis (compile-only to avoid IDE errors)
+    compileOnly 'com.github.spotbugs:spotbugs-annotations:4.8.0'
 }
 
 java {
