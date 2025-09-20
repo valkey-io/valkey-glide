@@ -736,22 +736,6 @@ export function checkAndHandleFlakyTests(
             break;
         }
 
-        case "httl(key4, [field, field2, field3])": {
-            // Response Type: number[] - TTL values for hash fields
-            if (expectedResponse === "TTL_ARRAY" && Array.isArray(response)) {
-                const ttlArray = response as number[];
-                expect(ttlArray.length).toEqual(3);
-                // field and field2 should have positive TTL values (they have expiration)
-                expect(ttlArray[0]).toBeGreaterThan(0);
-                expect(ttlArray[1]).toBeGreaterThan(0);
-                // field3 doesn't exist, should return -2
-                expect(ttlArray[2]).toEqual(-2);
-                return true;
-            }
-
-            return false;
-        }
-
         default: {
             // All other tests
             return false;

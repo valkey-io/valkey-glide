@@ -116,7 +116,7 @@ jobs:
               uses: ./.github/workflows/install-shared-dependencies
               with:
                   os: ${{ matrix.host.OS }}
-                  target: ${{ matrix.host.TARGET }}
+                  target: ${{ matrix.host.CD_TARGET || matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
             - name: Build Go client
               working-directory: go
@@ -124,9 +124,9 @@ jobs:
                   RELEASE_VERSION: ${{ needs.validate-release-version.outputs.RELEASE_VERSION }}
               run: |
                   make install-build-tools
-                  make build GLIDE_VERSION="${RELEASE_VERSION}"
+                  make build GLIDE_VERSION="${RELEASE_VERSION}" TARGET_TRIPLET="${{ matrix.host.TARGET }}"
             - name: Move FFI artifacts on linux
-              if: ${{ contains(matrix.host.TARGET, 'linux-gnu') }}
+              if: ${{ contains(matrix.host.TARGET, 'linux') }}
               run: |
                   mkdir -p $GITHUB_WORKSPACE/ffi/target/release
                   cp ffi/target/*/release/libglide_ffi.a $GITHUB_WORKSPACE/ffi/target/release/
@@ -187,6 +187,12 @@ jobs:
             fail-fast: false
             matrix:
                 host: ${{ fromJson(needs.load-platform-matrix.outputs.PLATFORM_MATRIX) }}
+                # Excluding musl targets for testing for now as there are issues with the runners
+                exclude:
+                    - host:
+                          TARGET: aarch64-unknown-linux-musl
+                    - host:
+                          TARGET: x86_64-unknown-linux-musl
         runs-on: ${{ matrix.host.RUNNER }}
         steps:
             - name: Setup self-hosted runner access
