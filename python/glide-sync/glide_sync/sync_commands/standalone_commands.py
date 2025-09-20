@@ -612,31 +612,6 @@ class StandaloneCommands(CoreCommands):
             self._execute_command(RequestType.LastSave, []),
         )
 
-    def move(self, key: TEncodable, db_index: int) -> bool:
-        """
-        Move `key` from the currently selected database to the database specified by `db_index`.
-
-        See [valkey.io](https://valkey.io/commands/move/) for more details.
-
-        Args:
-            key (TEncodable): The key to move.
-            db_index (int): The index of the database to move `key` to.
-
-        Returns:
-            bool: `True` if `key` was moved.
-
-            `False` if the `key` already exists in the destination database
-            or does not exist in the source database.
-
-        Example:
-            >>> client.move("some_key", 1)
-                True
-        """
-        return cast(
-            bool,
-            self._execute_command(RequestType.Move, [key, str(db_index)]),
-        )
-
     def flushall(self, flush_mode: Optional[FlushMode] = None) -> TOK:
         """
         Deletes all the keys of all the existing databases. This command never fails.
