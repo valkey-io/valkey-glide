@@ -256,7 +256,7 @@ mod standalone_client_tests {
         connection_request.read_from = config.read_from.into();
 
         block_on_all(async {
-            let mut client = StandaloneClient::create_client(connection_request.into(), None)
+            let mut client = StandaloneClient::create_client(connection_request.into(), None, None)
                 .await
                 .unwrap();
             logger_core::log_info(
@@ -402,7 +402,7 @@ mod standalone_client_tests {
         let connection_request =
             create_connection_request(addresses.as_slice(), &Default::default());
         block_on_all(async {
-            let client_res = StandaloneClient::create_client(connection_request.into(), None)
+            let client_res = StandaloneClient::create_client(connection_request.into(), None, None)
                 .await
                 .map_err(ConnectionError::Standalone);
             assert!(client_res.is_err());
@@ -441,7 +441,7 @@ mod standalone_client_tests {
             create_connection_request(addresses.as_slice(), &Default::default());
 
         block_on_all(async {
-            let mut client = StandaloneClient::create_client(connection_request.into(), None)
+            let mut client = StandaloneClient::create_client(connection_request.into(), None, None)
                 .await
                 .unwrap();
 
