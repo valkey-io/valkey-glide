@@ -9161,10 +9161,6 @@ export class BaseClient {
 
         // Immediately close the socket
         this.socket.destroy();
-
-        // Socket cleanup is handled by the Rust process itself
-        // Individual clients should not clean up the socket as multiple
-        // clients may be connected to the same socket
     }
 
     /**
@@ -9221,8 +9217,6 @@ export class BaseClient {
         } catch (err) {
             // Ensure socket is closed
             socket.destroy();
-            // Socket cleanup is handled by the Rust process
-            // Don't call CloseSocketConnection here as other clients may be using it
             throw err;
         }
     }
