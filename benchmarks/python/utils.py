@@ -73,7 +73,7 @@ def create_argument_parser():
     )
     parser.add_argument(
         "--concurrentTasks",
-        help="List of number of concurrent tasks/threads to run",
+        help="List of number of concurrent tasks to run for async python/ concurrent threads to run for sync python",
         nargs="+",
         required=False,
         default=("1", "10", "100", "1000"),

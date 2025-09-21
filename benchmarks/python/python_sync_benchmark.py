@@ -89,6 +89,43 @@ def create_and_run_concurrent_threads(
         thread.join()
 
 
+def warmup_connections_with_threads(clients, num_of_concurrent_threads, is_cluster):
+    """
+    Pre-warm all connections to eliminate lazy creation overhead during benchmarking.
+
+    Creates one thread per desired connection, each executing a blocking WAIT command
+    targeting all cluster primaries simultaneously. Since WAIT blocks each connection,
+    the connection pool is forced to create new connections rather than reuse existing ones.
+    This ensures every benchmark thread has a dedicated, pre-established connection to
+    each cluster node, eliminating connection setup latency from timing measurements.
+    """
+    print(f"Starting redis-py warm-up with {num_of_concurrent_threads} threads...")
+
+    def open_connection_to_all_nodes_and_block_it(client):
+        if is_cluster:
+            client.wait(
+                num_replicas=999, timeout=60000, target_nodes=RedisCluster.PRIMARIES
+            )
+        else:
+            client.wait(num_replicas=999, timeout=60000)
+
+    threads = []
+    for client in clients:
+        for i in range(num_of_concurrent_threads):
+            thread = Thread(
+                target=open_connection_to_all_nodes_and_block_it,
+                args=(client,),
+                name=f"Warmup-{i}",
+            )
+            threads.append(thread)
+            thread.start()
+
+        for thread in threads:
+            thread.join()
+
+    print("Warm-up completed. All connections established.")
+
+
 def create_clients(client_count, action):
     return [action() for _ in range(client_count)]
 
@@ -160,17 +197,14 @@ def main(
         clients = create_clients(
             client_count,
             lambda: client_class(
-                host=host, port=port, ssl=use_tls
+                host=host,
+                port=port,
+                ssl=use_tls,
+                max_connections=num_of_concurrent_threads,
             ),
         )
-        
-        # redis-py starts the connection in the connection pool lazily, so we need to ping the nodes
-        # to not include the connection time in the benchmark
-        for client in clients:
-            if is_cluster:
-                client.ping(target_nodes=RedisCluster.ALL_NODES)
-            else:
-                client.ping()
+
+        warmup_connections_with_threads(clients, num_of_concurrent_threads, is_cluster)
 
         run_clients(
             clients,

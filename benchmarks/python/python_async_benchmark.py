@@ -174,14 +174,6 @@ async def main(
                 host=host, port=port, decode_responses=True, ssl=use_tls
             ),
         )
-        
-        # redis-py starts the connection in the connection pool lazily, so we need to ping the nodes
-        # in order for the connection time to not be included in the benchmark
-        for client in clients:
-            if is_cluster:
-                await client.ping(target_nodes=RedisCluster.ALL_NODES)
-            else:
-                await client.ping()
 
         await run_clients(
             clients,
