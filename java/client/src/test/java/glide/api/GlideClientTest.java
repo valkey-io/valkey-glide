@@ -9836,7 +9836,8 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<String>submitNewCommand(eq(Type), eq(arguments), any()))
+        when(commandManager.<String>submitNewCommandWithResponseType(
+                        eq(Type), eq(arguments), any(), eq(true)))
                 .thenReturn(testResponse);
 
         // exercise

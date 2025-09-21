@@ -11754,8 +11754,9 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void objectEncoding_binary_returns_string_embstr(BaseClient client) {
-        GlideString stringEmbstrKey = gs(UUID.randomUUID().toString());
-        assertEquals(OK, client.set(stringEmbstrKey, gs("value")).get());
+        // Use shorter key and value to ensure embstr encoding (total < 44 bytes)
+        GlideString stringEmbstrKey = gs("k" + UUID.randomUUID().toString().substring(0, 8));
+        assertEquals(OK, client.set(stringEmbstrKey, gs("abc")).get());
         String encoding = client.objectEncoding(stringEmbstrKey).get();
         // Valkey 9.0.0+ may return "raw" instead of "embstr" for short strings with long key names
         assertTrue(
@@ -14944,8 +14945,8 @@ public class SharedCommandTests {
         assertEquals(0L, result.get("len"));
 
         // setting string values
-        client.set(key1, "abcdefghijk");
-        client.set(key2, "defjkjuighijk");
+        assertEquals(OK, client.set(key1, "abcdefghijk").get());
+        assertEquals(OK, client.set(key2, "defjkjuighijk").get());
 
         // LCS with only IDX
         Object expectedMatchesObject = new Long[][][] {{{6L, 10L}, {8L, 12L}}, {{3L, 5L}, {0L, 2L}}};
@@ -15027,8 +15028,8 @@ public class SharedCommandTests {
         assertEquals(0L, result.get("len"));
 
         // setting string values
-        client.set(key1, gs("abcdefghijk"));
-        client.set(key2, gs("defjkjuighijk"));
+        assertEquals(OK, client.set(key1, gs("abcdefghijk")).get());
+        assertEquals(OK, client.set(key2, gs("defjkjuighijk")).get());
 
         // LCS with only IDX
         Object expectedMatchesObject = new Long[][][] {{{6L, 10L}, {8L, 12L}}, {{3L, 5L}, {0L, 2L}}};

@@ -36,5 +36,19 @@ public enum FlushMode {
      */
     SYNC,
     /** Flushes asynchronously. */
-    ASYNC
+    ASYNC;
+
+    // Pre-allocated argument arrays to reduce allocations
+    private static final String[] SYNC_ARGS = new String[] {"SYNC"};
+    private static final String[] ASYNC_ARGS = new String[] {"ASYNC"};
+
+    /**
+     * Returns the command arguments for this flush mode. Uses pre-allocated arrays to reduce GC
+     * pressure.
+     *
+     * @return Array containing the flush mode as a string argument
+     */
+    public String[] toArgs() {
+        return this == SYNC ? SYNC_ARGS : ASYNC_ARGS;
+    }
 }

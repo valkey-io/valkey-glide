@@ -1,6 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.configuration;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NonNull;
@@ -19,6 +20,9 @@ import lombok.ToString;
 @Getter
 @Builder
 @ToString
+@SuppressFBWarnings(
+        value = "CT_CONSTRUCTOR_THROW",
+        justification = "Builder enforces non-null/default invariants and throws early")
 public class NodeAddress {
     public static final String DEFAULT_HOST = "localhost";
     public static final Integer DEFAULT_PORT = 6379;

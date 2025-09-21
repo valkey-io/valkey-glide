@@ -4,7 +4,6 @@ package glide.api.models;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicBoolean;
-import lombok.Getter;
 
 /**
  * Represents a Valkey string type. Since Valkey stores strings as <code>byte[]</code>, such strings
@@ -17,7 +16,7 @@ import lombok.Getter;
 public class GlideString implements Comparable<GlideString> {
 
     /** The Valkey string as a binary representation. */
-    @Getter private byte[] bytes;
+    private byte[] bytes;
 
     /**
      * Stores a string when it is possible.<br>
@@ -44,7 +43,7 @@ public class GlideString implements Comparable<GlideString> {
     /** Create a GlideString using a byte array. */
     public static GlideString of(byte[] bytes) {
         var res = new GlideString();
-        res.bytes = bytes;
+        res.bytes = bytes.clone();
         return res;
     }
 
@@ -72,6 +71,11 @@ public class GlideString implements Comparable<GlideString> {
     /** Create a GlideString using a byte array. */
     public static GlideString gs(byte[] bytes) {
         return GlideString.of(bytes);
+    }
+
+    /** Returns a copy of the underlying byte array to preserve immutability of the stored value. */
+    public byte[] getBytes() {
+        return bytes.clone();
     }
 
     /** Converts stored data to a human-friendly {@link String} if it is possible. */
