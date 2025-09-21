@@ -19,8 +19,12 @@ runs:
 
               # Check if WSL has Ubuntu installed
               $wslList = wsl --list --quiet 2>$null
-              if ($wslList -notcontains "Ubuntu-22.04") {
-                  Write-Host "Ubuntu-22.04 not found, skipping cleanup"
+              $ubuntuDistro = if ($wslList -contains "Ubuntu-22.04") {
+                  "Ubuntu-22.04"
+              } elseif ($wslList -contains "Ubuntu") {
+                  "Ubuntu"
+              } else {
+                  Write-Host "No Ubuntu distribution found, skipping cleanup"
                   exit 0
               }
 
@@ -29,16 +33,16 @@ runs:
               $CLUSTER_PORTS = @("${PORT_PREFIX}7000", "${PORT_PREFIX}7001", "${PORT_PREFIX}7002")
 
               # Stop and remove all containers
-              Write-Host "Stopping containers..."
-              wsl -d Ubuntu-22.04 sudo docker stop valkey-standalone 2>`$null
-              wsl -d Ubuntu-22.04 sudo docker rm valkey-standalone 2>`$null
+              Write-Host "Stopping containers in $ubuntuDistro..."
+              wsl -d $ubuntuDistro sudo docker stop valkey-standalone 2>`$null
+              wsl -d $ubuntuDistro sudo docker rm valkey-standalone 2>`$null
 
               foreach ($port in $CLUSTER_PORTS) {
-                  wsl -d Ubuntu-22.04 sudo docker stop valkey-cluster-$port 2>`$null
-                  wsl -d Ubuntu-22.04 sudo docker rm valkey-cluster-$port 2>`$null
+                  wsl -d $ubuntuDistro sudo docker stop valkey-cluster-$port 2>`$null
+                  wsl -d $ubuntuDistro sudo docker rm valkey-cluster-$port 2>`$null
               }
 
               # Remove network
-              wsl -d Ubuntu-22.04 sudo docker network rm valkey-net 2>`$null
+              wsl -d $ubuntuDistro sudo docker network rm valkey-net 2>`$null
 
               Write-Host "✓ WSL cleanup complete"

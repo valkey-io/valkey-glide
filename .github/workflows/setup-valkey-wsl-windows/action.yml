@@ -25,18 +25,71 @@ runs:
           run: |
               Write-Host "Setting up Valkey/Redis in WSL..."
 
-              # Install WSL and Ubuntu
-              Write-Host "Installing WSL and Ubuntu distribution..."
-              wsl --install -d Ubuntu-22.04 --no-launch
+              # Check if WSL is available
+              $wslVersion = wsl --version 2>$null
+              if ($LASTEXITCODE -ne 0) {
+                  Write-Error "WSL is not available on this system"
+                  Write-Error "GitHub Actions Windows runners may not support WSL"
+                  Write-Host "Attempting to enable WSL features..."
 
-              # Set default distribution
-              wsl --set-default Ubuntu-22.04
+                  # Try to enable WSL (may require restart which we can't do in CI)
+                  dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart
+                  dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart
 
-              # Initialize Ubuntu (create default user)
-              wsl -d Ubuntu-22.04 --exec echo "WSL Ubuntu initialized"
+                  Write-Error "WSL features enabled but system restart required. WSL not available in current session."
+                  exit 1
+              }
+
+              Write-Host "WSL version: $wslVersion"
+
+              # Try to import or download Ubuntu
+              Write-Host "Setting up Ubuntu distribution..."
+
+              # Check if Ubuntu is already installed
+              $existingDistros = wsl --list --quiet 2>$null
+              if ($existingDistros -contains "Ubuntu-22.04") {
+                  Write-Host "Ubuntu-22.04 already installed"
+              } else {
+                  Write-Host "Installing Ubuntu-22.04..."
+
+                  # Try the simple install command first
+                  wsl --install -d Ubuntu-22.04 --no-launch 2>$null
+
+                  if ($LASTEXITCODE -ne 0) {
+                      Write-Host "Simple install failed, trying manual download..."
+
+                      # Download Ubuntu manually
+                      $ubuntuUrl = "https://aka.ms/wslubuntu2204"
+                      $tempFile = "$env:TEMP\ubuntu2204.appx"
+
+                      Write-Host "Downloading Ubuntu from $ubuntuUrl..."
+                      Invoke-WebRequest -Uri $ubuntuUrl -OutFile $tempFile -UseBasicParsing
+
+                      Write-Host "Installing Ubuntu package..."
+                      Add-AppxPackage -Path $tempFile
+
+                      # Initialize the distribution
+                      ubuntu2204 install --root
+                  }
+              }
+
+              # Verify Ubuntu is installed
+              $distros = wsl --list --quiet
+              if ($distros -notcontains "Ubuntu-22.04" -and $distros -notcontains "Ubuntu") {
+                  Write-Error "Failed to install Ubuntu distribution"
+                  Write-Error "Available distributions: $distros"
+                  exit 1
+              }
+
+              # Use the first available Ubuntu distribution
+              $ubuntuDistro = if ($distros -contains "Ubuntu-22.04") { "Ubuntu-22.04" } else { "Ubuntu" }
+              Write-Host "Using distribution: $ubuntuDistro"
+
+              # Initialize distribution
+              wsl -d $ubuntuDistro --exec echo "WSL initialized"
 
               # Wait for WSL to be ready
-              Start-Sleep -Seconds 5
+              Start-Sleep -Seconds 2
 
               $ENGINE_TYPE = $env:ENGINE_TYPE
               $ENGINE_VERSION = $env:ENGINE_VERSION
@@ -167,14 +220,20 @@ runs:
               # Execute script in WSL
               Write-Host "Executing setup in WSL..."
 
-              # Check if Ubuntu is properly installed
+              # Determine which Ubuntu distribution to use
               $distros = wsl --list --quiet
-              if ($distros -notcontains "Ubuntu-22.04") {
-                  Write-Error "Ubuntu-22.04 not found in WSL distributions"
+              $ubuntuDistro = if ($distros -contains "Ubuntu-22.04") {
+                  "Ubuntu-22.04"
+              } elseif ($distros -contains "Ubuntu") {
+                  "Ubuntu"
+              } else {
+                  Write-Error "No Ubuntu distribution found in WSL"
+                  Write-Error "Available distributions: $distros"
                   exit 1
               }
 
-              wsl -d Ubuntu-22.04 bash setup-valkey-wsl.sh
+              Write-Host "Executing setup script in $ubuntuDistro..."
+              wsl -d $ubuntuDistro bash setup-valkey-wsl.sh
 
               # Set environment variables for tests
               "STANDALONE_ENDPOINT=localhost:$STANDALONE_PORT" >> $env:GITHUB_ENV
@@ -194,23 +253,27 @@ runs:
 
               # Check if WSL has Ubuntu installed
               $wslList = wsl --list --quiet 2>$null
-              if ($wslList -notcontains "Ubuntu-22.04") {
-                  Write-Host "Ubuntu-22.04 not found, skipping cleanup"
+              $ubuntuDistro = if ($wslList -contains "Ubuntu-22.04") {
+                  "Ubuntu-22.04"
+              } elseif ($wslList -contains "Ubuntu") {
+                  "Ubuntu"
+              } else {
+                  Write-Host "No Ubuntu distribution found, skipping cleanup"
                   exit 0
               }
 
               # Stop and remove containers
-              wsl -d Ubuntu-22.04 sudo docker stop valkey-standalone 2>`$null
-              wsl -d Ubuntu-22.04 sudo docker rm valkey-standalone 2>`$null
+              wsl -d $ubuntuDistro sudo docker stop valkey-standalone 2>`$null
+              wsl -d $ubuntuDistro sudo docker rm valkey-standalone 2>`$null
 
               $PORT_PREFIX = $env:PORT_PREFIX
               $CLUSTER_PORTS = @("${PORT_PREFIX}7000", "${PORT_PREFIX}7001", "${PORT_PREFIX}7002")
 
               foreach ($port in $CLUSTER_PORTS) {
-                  wsl -d Ubuntu-22.04 sudo docker stop valkey-cluster-$port 2>`$null
-                  wsl -d Ubuntu-22.04 sudo docker rm valkey-cluster-$port 2>`$null
+                  wsl -d $ubuntuDistro sudo docker stop valkey-cluster-$port 2>`$null
+                  wsl -d $ubuntuDistro sudo docker rm valkey-cluster-$port 2>`$null
               }
 
-              wsl -d Ubuntu-22.04 sudo docker network rm valkey-net 2>`$null
+              wsl -d $ubuntuDistro sudo docker network rm valkey-net 2>`$null
 
               Write-Host "✓ Cleanup complete"
