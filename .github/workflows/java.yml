@@ -171,9 +171,11 @@ jobs:
                     ./gradlew --build-cache --continue build -x javadoc
                   fi
 
-            - name: Cleanup Docker containers (Windows)
+            - name: Cleanup WSL containers (Windows)
               if: always() && matrix.host.OS == 'windows'
-              uses: ./.github/workflows/cleanup-valkey-docker-windows
+              uses: ./.github/workflows/cleanup-valkey-wsl-windows
+              with:
+                  port-prefix: ""
 
             - name: Ensure no skipped files by linter
               working-directory: java
@@ -281,9 +283,9 @@ jobs:
                     ./gradlew --build-cache :integTest:pubsubTest
                   fi
 
-            - name: Cleanup Docker containers (Windows)
+            - name: Cleanup WSL containers (Windows) for PubSub
               if: always() && matrix.host.OS == 'windows'
-              uses: ./.github/workflows/cleanup-valkey-docker-windows
+              uses: ./.github/workflows/cleanup-valkey-wsl-windows
               with:
                   port-prefix: "1"
 

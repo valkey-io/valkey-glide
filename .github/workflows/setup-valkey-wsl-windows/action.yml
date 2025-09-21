@@ -1,0 +1,188 @@
+name: Setup Valkey/Redis with WSL on Windows
+description: Sets up Valkey/Redis standalone and cluster instances using WSL2 on Windows
+
+inputs:
+    engine-type:
+        description: "Engine type (valkey or redis)"
+        required: true
+    engine-version:
+        description: "Engine version"
+        required: true
+    port-prefix:
+        description: "Port prefix to avoid conflicts"
+        required: false
+        default: ""
+
+runs:
+    using: "composite"
+    steps:
+        - name: Setup Valkey/Redis in WSL
+          shell: pwsh
+          env:
+              ENGINE_TYPE: ${{ inputs.engine-type }}
+              ENGINE_VERSION: ${{ inputs.engine-version }}
+              PORT_PREFIX: ${{ inputs.port-prefix }}
+          run: |
+              Write-Host "Setting up Valkey/Redis in WSL..."
+
+              $ENGINE_TYPE = $env:ENGINE_TYPE
+              $ENGINE_VERSION = $env:ENGINE_VERSION
+              $PORT_PREFIX = $env:PORT_PREFIX
+
+              # Define ports
+              $STANDALONE_PORT = "${PORT_PREFIX}6379"
+              $CLUSTER_PORTS = @("${PORT_PREFIX}7000", "${PORT_PREFIX}7001", "${PORT_PREFIX}7002")
+
+              # Determine which engine to use
+              $USE_VALKEY = $false
+              if ($ENGINE_TYPE -eq "valkey" -or $ENGINE_VERSION -in @("7.2", "8.0", "8.1") -or $ENGINE_VERSION -match "^9\.") {
+                  $USE_VALKEY = $true
+                  Write-Host "Will install Valkey"
+              } else {
+                  Write-Host "Will install Redis"
+              }
+
+              # Create WSL setup script
+              $wslScript = @"
+              #!/bin/bash
+              set -e
+
+              echo '=== Starting Valkey/Redis setup in WSL ==='
+
+              # Update package lists
+              sudo apt-get update -qq
+
+              # Install Docker in WSL
+              sudo apt-get install -y docker.io
+              sudo service docker start
+
+              # Add current user to docker group
+              sudo usermod -aG docker `$USER
+
+              # Pull and run containers
+              ENGINE_TYPE='$ENGINE_TYPE'
+              ENGINE_VERSION='$ENGINE_VERSION'
+              PORT_PREFIX='$PORT_PREFIX'
+
+              # Determine Docker image
+              if [[ "`$ENGINE_TYPE" == "valkey" ]] || [[ "`$ENGINE_VERSION" == "7.2" || "`$ENGINE_VERSION" == "8.0" || "`$ENGINE_VERSION" == "8.1" || "`$ENGINE_VERSION" =~ ^9\. ]]; then
+                  DOCKER_IMAGE="valkey/valkey:`$ENGINE_VERSION"
+                  CLI_CMD="valkey-cli"
+              else
+                  DOCKER_IMAGE="redis:`$ENGINE_VERSION"
+                  CLI_CMD="redis-cli"
+              fi
+
+              echo "Using Docker image: `$DOCKER_IMAGE"
+
+              # Define ports
+              STANDALONE_PORT="`${PORT_PREFIX}6379"
+              CLUSTER_PORTS=(`${PORT_PREFIX}7000 `${PORT_PREFIX}7001 `${PORT_PREFIX}7002)
+
+              # Create network
+              sudo docker network create valkey-net 2>/dev/null || true
+
+              # Start standalone instance
+              echo "Starting standalone instance on port `$STANDALONE_PORT..."
+              sudo docker run -d --name valkey-standalone \
+                  --network valkey-net \
+                  -p `${STANDALONE_PORT}:6379 \
+                  `$DOCKER_IMAGE \
+                  --maxmemory 128mb \
+                  --maxmemory-policy allkeys-lru \
+                  --bind 0.0.0.0 \
+                  --protected-mode no
+
+              # Start cluster nodes
+              for port in `${CLUSTER_PORTS[@]}; do
+                  echo "Starting cluster node on port `$port..."
+                  sudo docker run -d --name valkey-cluster-`$port \
+                      --network valkey-net \
+                      -p `${port}:6379 \
+                      `$DOCKER_IMAGE \
+                      --cluster-enabled yes \
+                      --cluster-config-file nodes.conf \
+                      --cluster-node-timeout 5000 \
+                      --appendonly no \
+                      --maxmemory 128mb \
+                      --maxmemory-policy allkeys-lru \
+                      --bind 0.0.0.0 \
+                      --protected-mode no \
+                      --cluster-announce-ip 127.0.0.1 \
+                      --cluster-announce-port `${port}
+              done
+
+              # Wait for all instances to be ready
+              echo "Waiting for instances to start..."
+              sleep 10
+
+              # Install redis-cli/valkey-cli if needed for cluster creation
+              if ! command -v `$CLI_CMD &> /dev/null; then
+                  if [[ "`$CLI_CMD" == "valkey-cli" ]]; then
+                      # Install valkey-cli from container
+                      sudo docker cp valkey-standalone:/usr/local/bin/valkey-cli /usr/local/bin/
+                  else
+                      # Install redis-cli
+                      sudo apt-get install -y redis-tools
+                  fi
+              fi
+
+              # Create cluster
+              echo "Creating cluster..."
+              echo yes | `$CLI_CMD --cluster create \
+                  127.0.0.1:`${CLUSTER_PORTS[0]} \
+                  127.0.0.1:`${CLUSTER_PORTS[1]} \
+                  127.0.0.1:`${CLUSTER_PORTS[2]} \
+                  --cluster-replicas 0
+
+              # Test connectivity
+              echo "Testing connectivity..."
+              `$CLI_CMD -p `$STANDALONE_PORT ping
+              `$CLI_CMD -c -p `${CLUSTER_PORTS[0]} ping
+
+              echo "=== Setup complete ==="
+              "@
+
+              # Write script to file
+              $wslScript | Out-File -FilePath "setup-valkey-wsl.sh" -Encoding UTF8 -NoNewline
+
+              # Convert line endings to Unix format
+              $content = Get-Content "setup-valkey-wsl.sh" -Raw
+              $content = $content -replace "`r`n", "`n"
+              [System.IO.File]::WriteAllText("setup-valkey-wsl.sh", $content)
+
+              # Execute script in WSL
+              Write-Host "Executing setup in WSL..."
+              wsl bash setup-valkey-wsl.sh
+
+              # Set environment variables for tests
+              "STANDALONE_ENDPOINT=localhost:$STANDALONE_PORT" >> $env:GITHUB_ENV
+              "CLUSTER_ENDPOINTS=localhost:$($CLUSTER_PORTS -join ',localhost:')" >> $env:GITHUB_ENV
+
+              Write-Host "✓ Valkey/Redis setup complete in WSL"
+              Write-Host "  Standalone endpoint: localhost:$STANDALONE_PORT"
+              Write-Host "  Cluster endpoints: localhost:$($CLUSTER_PORTS -join ', localhost:')"
+
+        - name: Cleanup on failure
+          if: failure()
+          shell: pwsh
+          env:
+              PORT_PREFIX: ${{ inputs.port-prefix }}
+          run: |
+              Write-Host "Cleaning up WSL containers..."
+
+              # Stop and remove containers
+              wsl sudo docker stop valkey-standalone 2>`$null
+              wsl sudo docker rm valkey-standalone 2>`$null
+
+              $PORT_PREFIX = $env:PORT_PREFIX
+              $CLUSTER_PORTS = @("${PORT_PREFIX}7000", "${PORT_PREFIX}7001", "${PORT_PREFIX}7002")
+
+              foreach ($port in $CLUSTER_PORTS) {
+                  wsl sudo docker stop valkey-cluster-$port 2>`$null
+                  wsl sudo docker rm valkey-cluster-$port 2>`$null
+              }
+
+              wsl sudo docker network rm valkey-net 2>`$null
+
+              Write-Host "✓ Cleanup complete"
