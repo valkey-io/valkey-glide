@@ -9222,6 +9222,7 @@ export class BaseClient {
         constructor: (
             socket: net.Socket,
             options?: BaseClientConfiguration,
+            socketPath?: string,
         ) => TConnection,
     ): Promise<TConnection> {
         const path = await StartSocketConnection();
