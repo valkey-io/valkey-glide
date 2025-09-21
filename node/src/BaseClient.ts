@@ -9171,7 +9171,11 @@ export class BaseClient {
             try {
                 CloseSocketConnection(this.socketPath);
             } catch (error) {
-                Logger.log("warn", "Client lifetime", `Failed to clean up socket file: ${error}`);
+                Logger.log(
+                    "warn",
+                    "Client lifetime",
+                    `Failed to clean up socket file: ${error}`,
+                );
             }
         }
     }
@@ -9233,11 +9237,17 @@ export class BaseClient {
         } catch (err) {
             // Ensure socket is closed and cleaned up
             socket.destroy();
+
             try {
                 CloseSocketConnection(path);
             } catch (cleanupError) {
-                Logger.log("warn", "Client lifetime", `Failed to clean up socket file during error handling: ${cleanupError}`);
+                Logger.log(
+                    "warn",
+                    "Client lifetime",
+                    `Failed to clean up socket file during error handling: ${cleanupError}`,
+                );
             }
+
             throw err;
         }
     }
