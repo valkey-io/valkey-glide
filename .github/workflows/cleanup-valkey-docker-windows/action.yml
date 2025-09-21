@@ -1,0 +1,35 @@
+name: Cleanup Valkey/Redis Docker containers on Windows
+description: Stops and removes Valkey/Redis Docker containers and networks
+
+inputs:
+    port-prefix:
+        description: "Port prefix used during setup"
+        required: false
+        default: ""
+
+runs:
+    using: "composite"
+    steps:
+        - name: Cleanup Docker containers and network
+          shell: bash
+          run: |
+              PORT_PREFIX="${{ inputs.port-prefix }}"
+              STANDALONE_PORT="${PORT_PREFIX}6379"
+              CLUSTER_PORTS=("${PORT_PREFIX}7000" "${PORT_PREFIX}7001" "${PORT_PREFIX}7002")
+
+              echo "Cleaning up Docker containers..."
+
+              # Stop and remove standalone
+              docker stop valkey-standalone-${PORT_PREFIX} 2>/dev/null || true
+              docker rm valkey-standalone-${PORT_PREFIX} 2>/dev/null || true
+
+              # Stop and remove cluster nodes
+              for port in "${CLUSTER_PORTS[@]}"; do
+                docker stop valkey-cluster-${port} 2>/dev/null || true
+                docker rm valkey-cluster-${port} 2>/dev/null || true
+              done
+
+              # Remove network
+              docker network rm valkey-net-${PORT_PREFIX} 2>/dev/null || true
+
+              echo "✓ Docker cleanup complete"

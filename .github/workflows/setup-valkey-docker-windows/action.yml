@@ -1,0 +1,141 @@
+name: Setup Valkey/Redis with Docker on Windows
+description: Sets up Valkey/Redis standalone and cluster instances using Docker on Windows
+
+inputs:
+    engine-type:
+        description: "Engine type (valkey or redis)"
+        required: true
+    engine-version:
+        description: "Engine version"
+        required: true
+    port-prefix:
+        description: "Port prefix to avoid conflicts (e.g., '' for default, '1' for 16379, 17000-17002)"
+        required: false
+        default: ""
+
+runs:
+    using: "composite"
+    steps:
+        - name: Setup Valkey/Redis with Docker
+          shell: bash
+          run: |
+              # Determine the Docker image
+              ENGINE_TYPE="${{ inputs.engine-type }}"
+              ENGINE_VERSION="${{ inputs.engine-version }}"
+              PORT_PREFIX="${{ inputs.port-prefix }}"
+
+              # Version 7.2+ should use Valkey (forked from Redis 7.2.4)
+              if [[ "$ENGINE_TYPE" == "valkey" ]] || [[ "$ENGINE_VERSION" == "7.2" || "$ENGINE_VERSION" == "8.0" || "$ENGINE_VERSION" == "8.1" || "$ENGINE_VERSION" =~ ^9\. ]]; then
+                DOCKER_IMAGE="valkey/valkey:${ENGINE_VERSION}"
+                CLI_CMD="valkey-cli"
+              else
+                DOCKER_IMAGE="redis:${ENGINE_VERSION}"
+                CLI_CMD="redis-cli"
+              fi
+
+              echo "Using Docker image: $DOCKER_IMAGE"
+
+              # Define ports with optional prefix
+              STANDALONE_PORT="${PORT_PREFIX}6379"
+              CLUSTER_PORTS=("${PORT_PREFIX}7000" "${PORT_PREFIX}7001" "${PORT_PREFIX}7002")
+
+              # Resource limits
+              MEMORY_LIMIT="256m"
+              CPU_LIMIT="0.5"
+
+              # Create Docker network for cluster communication
+              docker network create valkey-net-${PORT_PREFIX} 2>/dev/null || true
+
+              # Start standalone instance
+              echo "Starting standalone instance on port $STANDALONE_PORT..."
+              docker run -d --name valkey-standalone-${PORT_PREFIX} \
+                --network valkey-net-${PORT_PREFIX} \
+                --network-alias standalone-${PORT_PREFIX} \
+                --memory=$MEMORY_LIMIT \
+                --cpus=$CPU_LIMIT \
+                -p ${STANDALONE_PORT}:6379 \
+                $DOCKER_IMAGE \
+                --maxmemory 128mb \
+                --maxmemory-policy allkeys-lru \
+                --bind 0.0.0.0 \
+                --protected-mode no
+
+              # Start cluster nodes
+              echo "Starting cluster nodes..."
+              for i in "${!CLUSTER_PORTS[@]}"; do
+                port="${CLUSTER_PORTS[$i]}"
+                docker run -d --name valkey-cluster-${port} \
+                  --network valkey-net-${PORT_PREFIX} \
+                  --network-alias cluster-node-$i-${PORT_PREFIX} \
+                  --memory=$MEMORY_LIMIT \
+                  --cpus=$CPU_LIMIT \
+                  -p ${port}:6379 \
+                  $DOCKER_IMAGE \
+                  --cluster-enabled yes \
+                  --cluster-config-file nodes.conf \
+                  --cluster-node-timeout 5000 \
+                  --appendonly no \
+                  --maxmemory 128mb \
+                  --maxmemory-policy allkeys-lru \
+                  --bind 0.0.0.0 \
+                  --protected-mode no \
+                  --cluster-announce-ip host.docker.internal \
+                  --cluster-announce-port ${port}
+              done
+
+              # Wait for all instances to be ready
+              echo "Waiting for all instances to start..."
+              for port in $STANDALONE_PORT "${CLUSTER_PORTS[@]}"; do
+                if [ "$port" == "$STANDALONE_PORT" ]; then
+                  container="valkey-standalone-${PORT_PREFIX}"
+                else
+                  container="valkey-cluster-${port}"
+                fi
+
+                for i in {1..30}; do
+                  if docker exec $container $CLI_CMD ping 2>/dev/null; then
+                    echo "✓ Instance $container (port $port) is ready!"
+                    break
+                  fi
+                  if [ $i -eq 30 ]; then
+                    echo "✗ ERROR: $container failed to start"
+                    docker logs $container
+                    exit 1
+                  fi
+                  sleep 2
+                done
+              done
+
+              # Create cluster
+              echo "Creating cluster..."
+              CLUSTER_NODES=""
+              for port in "${CLUSTER_PORTS[@]}"; do
+                CLUSTER_NODES="$CLUSTER_NODES host.docker.internal:${port}"
+              done
+
+              docker exec valkey-cluster-${CLUSTER_PORTS[0]} $CLI_CMD --cluster create \
+                $CLUSTER_NODES \
+                --cluster-replicas 0 \
+                --cluster-yes
+
+              # Verify cluster status
+              echo "Verifying cluster status..."
+              docker exec valkey-cluster-${CLUSTER_PORTS[0]} $CLI_CMD --cluster check host.docker.internal:${CLUSTER_PORTS[0]}
+
+              # Show resource usage
+              echo "Docker resource usage:"
+              docker stats --no-stream --format "table {{.Container}}\t{{.MemUsage}}\t{{.CPUPerc}}"
+
+              # Export endpoints for tests
+              echo "STANDALONE_ENDPOINT=localhost:${STANDALONE_PORT}" >> $GITHUB_ENV
+              echo "CLUSTER_ENDPOINTS=localhost:${CLUSTER_PORTS[0]},localhost:${CLUSTER_PORTS[1]},localhost:${CLUSTER_PORTS[2]}" >> $GITHUB_ENV
+
+        - name: Cleanup on failure
+          if: failure()
+          shell: bash
+          run: |
+              PORT_PREFIX="${{ inputs.port-prefix }}"
+              echo "Cleaning up Docker resources on failure..."
+              docker stop $(docker ps -q --filter "name=valkey-") 2>/dev/null || true
+              docker rm $(docker ps -aq --filter "name=valkey-") 2>/dev/null || true
+              docker network rm valkey-net-${PORT_PREFIX} 2>/dev/null || true

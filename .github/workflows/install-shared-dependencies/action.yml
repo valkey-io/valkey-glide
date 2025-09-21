@@ -9,6 +9,7 @@ inputs:
             - amazon-linux
             - macos
             - ubuntu
+            - windows
     target:
         description: "Specified target for rust toolchain, ex. x86_64-apple-darwin"
         type: string
@@ -62,6 +63,17 @@ runs:
           run: |
               yum install -y gcc pkgconfig openssl openssl-devel which curl gettext libasan tar --allowerasing
 
+        - name: Install software dependencies for Windows
+          shell: bash
+          if: "${{ inputs.os == 'windows' }}"
+          run: |
+              # Docker is pre-installed on Windows runners
+              # Verify Docker is available
+              docker --version
+
+              # Install Visual Studio Build Tools components for Rust
+              # Note: GitHub Windows runners have VS 2022 pre-installed with C++ tools
+
         - name: Install Rust toolchain and protoc
           if: "${{ !contains(inputs.target, 'musl') }}"
           uses: ./.github/workflows/install-rust-and-protoc
@@ -70,7 +82,7 @@ runs:
               github-token: ${{ inputs.github-token }}
 
         - name: Install engine
-          if: "${{ inputs.engine-version }}"
+          if: "${{ inputs.engine-version && inputs.os != 'windows' }}"
           uses: ./.github/workflows/install-engine
           with:
               engine-version: ${{ inputs.engine-version }}

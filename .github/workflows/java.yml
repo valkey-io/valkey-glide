@@ -133,6 +133,13 @@ jobs:
                   version: "29.1"
                   repo-token: ${{ secrets.GITHUB_TOKEN }}
 
+            - name: Setup Valkey with Docker (Windows)
+              if: matrix.host.OS == 'windows'
+              uses: ./.github/workflows/setup-valkey-docker-windows
+              with:
+                  engine-type: ${{ matrix.engine.type }}
+                  engine-version: ${{ matrix.engine.version }}
+
             - uses: actions/cache@v4
               with:
                   path: |
@@ -155,11 +162,28 @@ jobs:
 
             - name: Build java client
               working-directory: java
-              run: ./gradlew --build-cache --continue build -x javadoc
+              shell: bash
+              run: |
+                  if [[ "${{ runner.os }}" == "Windows" ]]; then
+                    # On Windows, pass the Docker endpoints to prevent tests from starting their own servers
+                    gradlew.bat --build-cache --continue build -x javadoc -Dstandalone-endpoints=${{ env.STANDALONE_ENDPOINT }} -Dcluster-endpoints=${{ env.CLUSTER_ENDPOINTS }}
+                  else
+                    ./gradlew --build-cache --continue build -x javadoc
+                  fi
+
+            - name: Cleanup Docker containers (Windows)
+              if: always() && matrix.host.OS == 'windows'
+              uses: ./.github/workflows/cleanup-valkey-docker-windows
 
             - name: Ensure no skipped files by linter
               working-directory: java
-              run: ./gradlew --build-cache spotlessDiagnose | grep 'All formatters are well behaved for all files'
+              shell: bash
+              run: |
+                  if [[ "${{ runner.os }}" == "Windows" ]]; then
+                    gradlew.bat --build-cache spotlessDiagnose | grep 'All formatters are well behaved for all files'
+                  else
+                    ./gradlew --build-cache spotlessDiagnose | grep 'All formatters are well behaved for all files'
+                  fi
 
             - uses: ./.github/workflows/test-benchmark
               if: ${{ matrix.engine.version == '8.0' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.java == '17' }}
@@ -239,9 +263,29 @@ jobs:
                   restore-keys: |
                       ${{ runner.os }}-gradle-
 
+            - name: Setup Valkey with Docker (Windows) for PubSub
+              if: matrix.host.OS == 'windows'
+              uses: ./.github/workflows/setup-valkey-docker-windows
+              with:
+                  engine-type: ${{ matrix.engine.type }}
+                  engine-version: ${{ matrix.engine.version }}
+                  port-prefix: "1" # Use different ports to avoid conflicts if running in parallel
+
             - name: Test pubsub
               working-directory: java
-              run: ./gradlew --build-cache :integTest:pubsubTest
+              shell: bash
+              run: |
+                  if [[ "${{ runner.os }}" == "Windows" ]]; then
+                    gradlew.bat --build-cache :integTest:pubsubTest -Dstandalone-endpoints=${{ env.STANDALONE_ENDPOINT }} -Dcluster-endpoints=${{ env.CLUSTER_ENDPOINTS }}
+                  else
+                    ./gradlew --build-cache :integTest:pubsubTest
+                  fi
+
+            - name: Cleanup Docker containers (Windows)
+              if: always() && matrix.host.OS == 'windows'
+              uses: ./.github/workflows/cleanup-valkey-docker-windows
+              with:
+                  port-prefix: "1"
 
             - name: Upload test & spotbugs reports
               if: always()
