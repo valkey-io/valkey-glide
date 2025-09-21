@@ -281,9 +281,19 @@ public class GlideClusterClientTest {
         }
 
         @Override
-        public <T> CompletableFuture<T> submitCommandToChannel(
+        protected <T> CompletableFuture<T> submitCommandToJni(
                 CommandRequest.Builder command,
-                GlideExceptionCheckedFunction<Response, T> responseHandler) {
+                GlideExceptionCheckedFunction<Response, T> responseHandler,
+                boolean binaryMode) {
+            return CompletableFuture.supplyAsync(() -> responseHandler.apply(response));
+        }
+
+        @Override
+        protected <T> CompletableFuture<T> submitCommandToJni(
+                CommandRequest.Builder command,
+                GlideExceptionCheckedFunction<Response, T> responseHandler,
+                boolean binaryMode,
+                boolean expectUtf8Response) {
             return CompletableFuture.supplyAsync(() -> responseHandler.apply(response));
         }
     }
@@ -3291,7 +3301,7 @@ public class GlideClusterClientTest {
                 .thenReturn(testResponse);
 
         final CompletableFuture<Object[]> actualResponse =
-                service.scan(ClusterScanCursor.initalCursor());
+                service.scan(ClusterScanCursor.initialCursor());
         assertEquals(
                 mockCursor.getCursorHandle(),
                 ((CommandManager.ClusterScanCursorDetail) actualResponse.get()[0]).getCursorHandle());
@@ -3368,7 +3378,7 @@ public class GlideClusterClientTest {
 
         final CompletableFuture<Object[]> actualResponse =
                 service.scan(
-                        ClusterScanCursor.initalCursor(),
+                        ClusterScanCursor.initialCursor(),
                         ScanOptions.builder()
                                 .matchPattern("key:*")
                                 .count(10L)

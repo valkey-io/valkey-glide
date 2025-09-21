@@ -1,7 +1,9 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.configuration;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.util.List;
+import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NonNull;
@@ -13,6 +15,9 @@ import lombok.experimental.SuperBuilder;
  * clients.
  */
 @Getter
+@SuppressFBWarnings(
+        value = "CT_CONSTRUCTOR_THROW",
+        justification = "Lombok-generated builder validates inputs and throws before object escapes")
 @SuperBuilder
 public abstract class BaseClientConfiguration {
     /**
@@ -22,7 +27,9 @@ public abstract class BaseClientConfiguration {
      * client. For example: <code>[ {address:sample-address-0001.use1.cache.amazonaws.com, port:6379},
      * {address: sample-address-0002.use2.cache.amazonaws.com, port:6379} ]</code>.
      */
-    @Singular private final List<NodeAddress> addresses;
+    @Getter(AccessLevel.NONE)
+    @Singular
+    private final List<NodeAddress> addresses;
 
     /**
      * True if communication with the cluster should use Transport Level Security.
@@ -114,4 +121,8 @@ public abstract class BaseClientConfiguration {
      * {@code false}).
      */
     @Builder.Default private final boolean lazyConnect = false;
+
+    public List<NodeAddress> getAddresses() {
+        return List.copyOf(addresses);
+    }
 }
