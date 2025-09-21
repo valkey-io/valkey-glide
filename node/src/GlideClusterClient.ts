@@ -608,11 +608,8 @@ export class GlideClusterClient extends BaseClient {
     ): Promise<GlideClusterClient> {
         return await super.createClientInternal(
             options,
-            (
-                socket: net.Socket,
-                options?: GlideClusterClientConfiguration,
-                socketPath?: string,
-            ) => new GlideClusterClient(socket, options, socketPath),
+            (socket: net.Socket, options?: GlideClusterClientConfiguration) =>
+                new GlideClusterClient(socket, options),
         );
     }
     /**
@@ -625,8 +622,7 @@ export class GlideClusterClient extends BaseClient {
         return super.__createClientInternal(
             options,
             connectedSocket,
-            (socket, options, socketPath) =>
-                new GlideClusterClient(socket, options, socketPath),
+            (socket, options) => new GlideClusterClient(socket, options),
         );
     }
 

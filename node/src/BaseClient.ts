@@ -68,7 +68,6 @@ import {
     SetOptions,
     SortOptions,
     StartSocketConnection,
-    CloseSocketConnection,
     StreamAddOptions,
     StreamClaimOptions,
     StreamGroupOptions,
@@ -973,7 +972,6 @@ type WritePromiseOptions =
  */
 export class BaseClient {
     private socket: net.Socket;
-    private socketPath?: string;
     protected readonly promiseCallbackFunctions:
         | [PromiseFunction, ErrorFunction, Decoder | undefined][]
         | [PromiseFunction, ErrorFunction][] = [];
@@ -1236,7 +1234,6 @@ export class BaseClient {
     protected constructor(
         socket: net.Socket,
         options?: BaseClientConfiguration,
-        socketPath?: string,
     ) {
         // if logger has been initialized by the external-user on info level this log will be shown
         Logger.log("info", "Client lifetime", `construct client`);
@@ -1245,7 +1242,6 @@ export class BaseClient {
         this.requestTimeout =
             options?.requestTimeout ?? DEFAULT_REQUEST_TIMEOUT_IN_MILLISECONDS;
         this.socket = socket;
-        this.socketPath = socketPath;
         this.socket
             .on("data", (data) => this.handleReadData(data))
             .on("error", (err) => {
@@ -9166,18 +9162,9 @@ export class BaseClient {
         // Immediately close the socket
         this.socket.destroy();
 
-        // Clean up socket file if path is available
-        if (this.socketPath) {
-            try {
-                CloseSocketConnection(this.socketPath);
-            } catch (error) {
-                Logger.log(
-                    "warn",
-                    "Client lifetime",
-                    `Failed to clean up socket file: ${error}`,
-                );
-            }
-        }
+        // Socket cleanup is handled by the Rust process itself
+        // Individual clients should not clean up the socket as multiple
+        // clients may be connected to the same socket
     }
 
     /**
@@ -9191,11 +9178,9 @@ export class BaseClient {
         constructor: (
             socket: net.Socket,
             options?: BaseClientConfiguration,
-            socketPath?: string,
         ) => TConnection,
-        socketPath?: string,
     ): Promise<TConnection> {
-        const connection = constructor(connectedSocket, options, socketPath);
+        const connection = constructor(connectedSocket, options);
         await connection.connectToServer(options);
         Logger.log("info", "Client lifetime", "connected to server");
         return connection;
@@ -9222,7 +9207,6 @@ export class BaseClient {
         constructor: (
             socket: net.Socket,
             options?: BaseClientConfiguration,
-            socketPath?: string,
         ) => TConnection,
     ): Promise<TConnection> {
         const path = await StartSocketConnection();
@@ -9233,22 +9217,12 @@ export class BaseClient {
                 options,
                 socket,
                 constructor,
-                path,
             );
         } catch (err) {
-            // Ensure socket is closed and cleaned up
+            // Ensure socket is closed
             socket.destroy();
-
-            try {
-                CloseSocketConnection(path);
-            } catch (cleanupError) {
-                Logger.log(
-                    "warn",
-                    "Client lifetime",
-                    `Failed to clean up socket file during error handling: ${cleanupError}`,
-                );
-            }
-
+            // Socket cleanup is handled by the Rust process
+            // Don't call CloseSocketConnection here as other clients may be using it
             throw err;
         }
     }
