@@ -238,8 +238,11 @@ export class GlideClient extends BaseClient {
     ): Promise<GlideClient> {
         return super.createClientInternal<GlideClient>(
             options,
-            (socket: net.Socket, options?: GlideClientConfiguration, socketPath?: string) =>
-                new GlideClient(socket, options, socketPath),
+            (
+                socket: net.Socket,
+                options?: GlideClientConfiguration,
+                socketPath?: string,
+            ) => new GlideClient(socket, options, socketPath),
         );
     }
     /**
@@ -252,7 +255,8 @@ export class GlideClient extends BaseClient {
         return this.__createClientInternal(
             options,
             connectedSocket,
-            (socket, options, socketPath) => new GlideClient(socket, options, socketPath),
+            (socket, options, socketPath) =>
+                new GlideClient(socket, options, socketPath),
         );
     }
 
