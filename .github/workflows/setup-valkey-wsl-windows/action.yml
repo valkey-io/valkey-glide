@@ -25,6 +25,19 @@ runs:
           run: |
               Write-Host "Setting up Valkey/Redis in WSL..."
 
+              # Install WSL and Ubuntu
+              Write-Host "Installing WSL and Ubuntu distribution..."
+              wsl --install -d Ubuntu-22.04 --no-launch
+
+              # Set default distribution
+              wsl --set-default Ubuntu-22.04
+
+              # Initialize Ubuntu (create default user)
+              wsl -d Ubuntu-22.04 --exec echo "WSL Ubuntu initialized"
+
+              # Wait for WSL to be ready
+              Start-Sleep -Seconds 5
+
               $ENGINE_TYPE = $env:ENGINE_TYPE
               $ENGINE_VERSION = $env:ENGINE_VERSION
               $PORT_PREFIX = $env:PORT_PREFIX
@@ -153,7 +166,15 @@ runs:
 
               # Execute script in WSL
               Write-Host "Executing setup in WSL..."
-              wsl bash setup-valkey-wsl.sh
+
+              # Check if Ubuntu is properly installed
+              $distros = wsl --list --quiet
+              if ($distros -notcontains "Ubuntu-22.04") {
+                  Write-Error "Ubuntu-22.04 not found in WSL distributions"
+                  exit 1
+              }
+
+              wsl -d Ubuntu-22.04 bash setup-valkey-wsl.sh
 
               # Set environment variables for tests
               "STANDALONE_ENDPOINT=localhost:$STANDALONE_PORT" >> $env:GITHUB_ENV
@@ -171,18 +192,25 @@ runs:
           run: |
               Write-Host "Cleaning up WSL containers..."
 
+              # Check if WSL has Ubuntu installed
+              $wslList = wsl --list --quiet 2>$null
+              if ($wslList -notcontains "Ubuntu-22.04") {
+                  Write-Host "Ubuntu-22.04 not found, skipping cleanup"
+                  exit 0
+              }
+
               # Stop and remove containers
-              wsl sudo docker stop valkey-standalone 2>`$null
-              wsl sudo docker rm valkey-standalone 2>`$null
+              wsl -d Ubuntu-22.04 sudo docker stop valkey-standalone 2>`$null
+              wsl -d Ubuntu-22.04 sudo docker rm valkey-standalone 2>`$null
 
               $PORT_PREFIX = $env:PORT_PREFIX
               $CLUSTER_PORTS = @("${PORT_PREFIX}7000", "${PORT_PREFIX}7001", "${PORT_PREFIX}7002")
 
               foreach ($port in $CLUSTER_PORTS) {
-                  wsl sudo docker stop valkey-cluster-$port 2>`$null
-                  wsl sudo docker rm valkey-cluster-$port 2>`$null
+                  wsl -d Ubuntu-22.04 sudo docker stop valkey-cluster-$port 2>`$null
+                  wsl -d Ubuntu-22.04 sudo docker rm valkey-cluster-$port 2>`$null
               }
 
-              wsl sudo docker network rm valkey-net 2>`$null
+              wsl -d Ubuntu-22.04 sudo docker network rm valkey-net 2>`$null
 
               Write-Host "✓ Cleanup complete"
