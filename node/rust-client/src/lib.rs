@@ -195,10 +195,6 @@ pub fn start_socket_listener_external(env: Env) -> Result<JsObject> {
     Ok(promise)
 }
 
-#[napi(js_name = "CloseSocketConnection")]
-pub fn close_socket_connection(socket_path: String) {
-    glide_core::close_socket(&socket_path);
-}
 
 #[napi(js_name = "InitOpenTelemetry")]
 pub fn init_open_telemetry(open_telemetry_config: OpenTelemetryConfig) -> Result<()> {
