@@ -3,15 +3,16 @@ package glide.api.models.configuration;
 
 import lombok.Builder;
 import lombok.Getter;
+import lombok.NonNull;
 
 /**
  * Represents the credentials for connecting to a server.
  *
  * @example
  *     <pre>{@code
- * // credentials with password only:
+ * // credentials with username:
  * ServerCredentials credentials1 = ServerCredentials.builder()
- *     .password(pwd)
+ *     .username("GLIDE")
  *     .build();
  * // credentials with username and password:
  * ServerCredentials credentials2 = ServerCredentials.builder()
@@ -24,7 +25,7 @@ import lombok.Getter;
 @Builder
 public class ServerCredentials {
     /** The password that will be used for authenticating connections to the servers. */
-    private final String password;
+    @NonNull private final String password;
 
     /**
      * The username that will be used for authenticating connections to the servers. If not supplied,
