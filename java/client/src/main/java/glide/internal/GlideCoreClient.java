@@ -2,11 +2,8 @@
 package glide.internal;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import glide.api.models.exceptions.ClosingException;
 import glide.ffi.resolvers.NativeUtils;
 import java.lang.ref.Cleaner;
-import java.util.Arrays;
-import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -14,6 +11,9 @@ import java.util.concurrent.atomic.AtomicLong;
 /**
  * GLIDE core client transport. Provides direct native access to glide-core with all routing and
  * performance optimizations.
+ *
+ * <p>This class wraps an existing native client handle created by ConnectionManager. It does NOT
+ * create connections - that responsibility belongs to ConnectionManager.
  */
 public class GlideCoreClient implements AutoCloseable {
     private static final Cleaner CLEANER = Cleaner.create();
@@ -23,7 +23,6 @@ public class GlideCoreClient implements AutoCloseable {
         try {
             NativeUtils.loadGlideLib();
         } catch (Exception e) {
-            // Use proper logging instead of System.err.println
             glide.api.logging.Logger.log(
                     glide.api.logging.Logger.Level.ERROR,
                     "GlideCoreClient",
@@ -69,8 +68,7 @@ public class GlideCoreClient implements AutoCloseable {
         }
     }
 
-    // Register a Java Cleaner to free native memory when the given ByteBuffer is
-    // GC'd
+    // Register a Java Cleaner to free native memory when the given ByteBuffer is GC'd
     static void registerNativeBufferCleaner(java.nio.ByteBuffer buffer, long id) {
         if (buffer == null || id == 0) return;
         CLEANER.register(
@@ -97,8 +95,6 @@ public class GlideCoreClient implements AutoCloseable {
         return maxInflightRequests;
     }
 
-    // Removed requestTimeoutMs field - Rust handles all timeouts
-
     /** Cleanup coordination flag. */
     private final AtomicBoolean cleanupInProgress = new AtomicBoolean(false);
 
@@ -108,336 +104,10 @@ public class GlideCoreClient implements AutoCloseable {
     /** Shared state for cleanup coordination. */
     private final NativeState nativeState;
 
-    /** Client configuration. */
-    public static class Config {
-        private final List<String> addresses;
-        private boolean useTls = false;
-        private boolean clusterMode = false;
-        private boolean insecureTls = false;
-        private int requestTimeoutMs = 5000;
-        private int connectionTimeoutMs = 5000;
-        private String username = null;
-        private String password = null;
-        private glide.api.models.configuration.IamAuthConfig iamAuthConfig = null;
-        private int databaseId = 0;
-        private Integer maxInflightRequests = null;
-        private glide.api.models.configuration.ProtocolVersion protocol =
-                glide.api.models.configuration.ProtocolVersion.RESP3;
-        private byte[][] subExact = EMPTY_2D_BYTE_ARRAY;
-        private byte[][] subPattern = EMPTY_2D_BYTE_ARRAY;
-        private byte[][] subSharded = EMPTY_2D_BYTE_ARRAY;
-        private String clientName = null;
-        private glide.api.models.configuration.ReadFrom readFrom =
-                glide.api.models.configuration.ReadFrom.PRIMARY;
-        private String clientAZ = null;
-        private boolean lazyConnect = true;
-        private Integer reconnectNumRetries = null;
-        private Integer reconnectFactor = null;
-        private Integer reconnectExponentBase = null;
-        private Integer reconnectJitterPercent = null;
-
-        public Config(List<String> addresses) {
-            this.addresses = List.copyOf(addresses);
-        }
-
-        public Config useTls(boolean useTls) {
-            this.useTls = useTls;
-            return this;
-        }
-
-        public Config clusterMode(boolean clusterMode) {
-            this.clusterMode = clusterMode;
-            return this;
-        }
-
-        public Config useInsecureTls(boolean insecure) {
-            this.insecureTls = insecure;
-            return this;
-        }
-
-        public Config requestTimeout(int timeoutMs) {
-            this.requestTimeoutMs = timeoutMs;
-            return this;
-        }
-
-        public Config connectionTimeout(int timeoutMs) {
-            this.connectionTimeoutMs = timeoutMs;
-            return this;
-        }
-
-        public Config credentials(String username, String password) {
-            this.username = username;
-            this.password = password;
-            this.iamAuthConfig = null;
-            return this;
-        }
-
-        public Config credentials(glide.api.models.configuration.ServerCredentials credentials) {
-            if (credentials == null) {
-                this.username = null;
-                this.password = null;
-                this.iamAuthConfig = null;
-                return this;
-            }
-            this.username = credentials.getUsername();
-            this.password = credentials.getPassword();
-            this.iamAuthConfig = credentials.getIamAuthConfig();
-            return this;
-        }
-
-        public Config databaseId(int databaseId) {
-            this.databaseId = databaseId;
-            return this;
-        }
-
-        public Config maxInflightRequests(int maxInflight) {
-            this.maxInflightRequests = maxInflight;
-            return this;
-        }
-
-        public Config protocol(glide.api.models.configuration.ProtocolVersion protocol) {
-            if (protocol != null) this.protocol = protocol;
-            return this;
-        }
-
-        public Config subscriptions(byte[][] exact, byte[][] pattern, byte[][] sharded) {
-            this.subExact = exact != null ? exact : EMPTY_2D_BYTE_ARRAY;
-            this.subPattern = pattern != null ? pattern : EMPTY_2D_BYTE_ARRAY;
-            this.subSharded = sharded != null ? sharded : EMPTY_2D_BYTE_ARRAY;
-            return this;
-        }
-
-        public Config clientName(String clientName) {
-            this.clientName = clientName;
-            return this;
-        }
-
-        public Config readFrom(glide.api.models.configuration.ReadFrom readFrom) {
-            this.readFrom = readFrom != null ? readFrom : glide.api.models.configuration.ReadFrom.PRIMARY;
-            return this;
-        }
-
-        public Config clientAZ(String clientAZ) {
-            this.clientAZ = clientAZ;
-            return this;
-        }
-
-        public Config lazyConnect(boolean lazy) {
-            this.lazyConnect = lazy;
-            return this;
-        }
-
-        public Config reconnectStrategy(glide.api.models.configuration.BackoffStrategy strategy) {
-            if (strategy != null) {
-                this.reconnectNumRetries = strategy.getNumOfRetries();
-                this.reconnectFactor = strategy.getFactor();
-                this.reconnectExponentBase = strategy.getExponentBase();
-                this.reconnectJitterPercent = strategy.getJitterPercent();
-            }
-            return this;
-        }
-
-        // Package-private getters for native access
-        String[] getAddresses() {
-            return addresses.toArray(new String[0]);
-        }
-
-        boolean getUseTls() {
-            return useTls;
-        }
-
-        boolean getClusterMode() {
-            return clusterMode;
-        }
-
-        int getRequestTimeoutMs() {
-            return requestTimeoutMs;
-        }
-
-        int getConnectionTimeoutMs() {
-            return connectionTimeoutMs;
-        }
-
-        String getUsername() {
-            return username;
-        }
-
-        String getPassword() {
-            return password;
-        }
-
-        glide.api.models.configuration.IamAuthConfig getIamAuthConfig() {
-            return iamAuthConfig;
-        }
-
-        int getDatabaseId() {
-            return databaseId;
-        }
-
-        glide.api.models.configuration.ProtocolVersion getProtocol() {
-            return protocol;
-        }
-
-        boolean getInsecureTls() {
-            return insecureTls;
-        }
-
-        byte[][] getSubExact() {
-            return subExact;
-        }
-
-        byte[][] getSubPattern() {
-            return subPattern;
-        }
-
-        byte[][] getSubSharded() {
-            return subSharded;
-        }
-
-        String getClientName() {
-            return clientName;
-        }
-
-        Integer getMaxInflightRequests() {
-            return maxInflightRequests;
-        }
-
-        glide.api.models.configuration.ReadFrom getReadFrom() {
-            return readFrom;
-        }
-
-        String getClientAZ() {
-            return clientAZ;
-        }
-
-        boolean getLazyConnect() {
-            return lazyConnect;
-        }
-
-        int getReconnectNumRetriesOrDefault() {
-            return reconnectNumRetries != null ? reconnectNumRetries : 0;
-        }
-
-        int getReconnectExponentBaseOrDefault() {
-            return reconnectExponentBase != null ? reconnectExponentBase : 0;
-        }
-
-        int getReconnectFactorOrDefault() {
-            return reconnectFactor != null ? reconnectFactor : 0;
-        }
-
-        int getReconnectJitterPercentOrDefault() {
-            return reconnectJitterPercent != null ? reconnectJitterPercent : -1;
-        }
-    }
-
-    /** Create a new GlideClient with the specified configuration */
-    @SuppressFBWarnings(
-            value = "CT_CONSTRUCTOR_THROW",
-            justification = "Constructor validates config and throws before native state is assigned")
-    public GlideCoreClient(Config config) {
-        if (config == null) {
-            throw new IllegalArgumentException("Config cannot be null");
-        }
-        if (config.addresses.isEmpty()) {
-            throw new IllegalArgumentException("At least one address must be provided");
-        }
-
-        // Store the computed inflight limit for this client instance
-        this.maxInflightRequests = computeMaxInflight(config);
-
-        // Request timeout is passed to Rust for its timeout handling
-
-        // Create client with simplified parameters
-        glide.api.models.configuration.IamAuthConfig iamAuthConfig = config.getIamAuthConfig();
-        String iamClusterName = iamAuthConfig != null ? iamAuthConfig.getClusterName() : null;
-        String iamRegion = iamAuthConfig != null ? iamAuthConfig.getRegion() : null;
-        String iamServiceType = iamAuthConfig != null ? iamAuthConfig.getService().toCoreValue() : null;
-        int iamRefreshInterval =
-                iamAuthConfig != null && iamAuthConfig.getRefreshIntervalSeconds() != null
-                        ? iamAuthConfig.getRefreshIntervalSeconds()
-                        : -1;
-
-        long handle;
-        try {
-            handle =
-                    createClient(
-                            config.getAddresses(),
-                            config.getDatabaseId(),
-                            config.getUsername(),
-                            config.getPassword(),
-                            config.getUseTls(),
-                            config.getInsecureTls(),
-                            config.getClusterMode(),
-                            config.getRequestTimeoutMs(),
-                            config.getConnectionTimeoutMs(),
-                            this.maxInflightRequests,
-                            config.getReadFrom() != null ? config.getReadFrom().name() : null,
-                            config.getClientAZ(),
-                            config.getLazyConnect(),
-                            config.getClientName(),
-                            config.getProtocol() != null ? config.getProtocol().name() : null,
-                            config.getReconnectNumRetriesOrDefault(),
-                            config.getReconnectFactorOrDefault(),
-                            config.getReconnectExponentBaseOrDefault(),
-                            config.getReconnectJitterPercentOrDefault(),
-                            config.getSubExact(),
-                            config.getSubPattern(),
-                            config.getSubSharded(),
-                            iamClusterName,
-                            iamRegion,
-                            iamServiceType,
-                            iamRefreshInterval,
-                            iamAuthConfig != null);
-        } catch (RuntimeException e) {
-            // Propagate the exception from the native layer with proper context
-            String errorMsg = e.getMessage();
-            if (errorMsg != null
-                    && (errorMsg.contains("Connection refused")
-                            || errorMsg.contains("Failed to create client"))) {
-                throw e; // Already has proper message from Rust
-            }
-            // Wrap with more context if needed
-            throw new ClosingException("Failed to create client: " + errorMsg);
-        }
-
-        if (handle == 0) {
-            String errorMsg = "Failed to create client - Connection refused";
-            throw new ClosingException(errorMsg);
-        }
-
-        this.nativeClientHandle.set(handle);
-
-        // Register for PubSub push delivery
-        try {
-            registerClient(handle, null); // will be replaced by BaseClient after it is constructed
-        } catch (Throwable ignore) {
-        }
-
-        // Create shared state for proper cleanup coordination
-        this.nativeState = new NativeState(handle);
-
-        // Register cleanup action with Cleaner - modern replacement for finalize()
-        this.cleanable = CLEANER.register(this, new CleanupAction(this.nativeState));
-    }
-
-    /** Constructor accepting BaseClientConfiguration (for compatibility with existing API) */
-    @SuppressFBWarnings(
-            value = "CT_CONSTRUCTOR_THROW",
-            justification = "Delegates to config constructor which may throw on invalid input")
-    public GlideCoreClient(glide.api.models.configuration.BaseClientConfiguration configuration) {
-        this(convertFromBaseClientConfiguration(configuration));
-    }
-
-    /** Convenience constructor for simple host:port connections */
-    @SuppressFBWarnings(
-            value = "CT_CONSTRUCTOR_THROW",
-            justification = "Constructor validates host/port arguments before creating native client")
-    public GlideCoreClient(String host, int port) {
-        this(new Config(Arrays.asList(host + ":" + port)));
-    }
-
-    /** Constructor that wraps an existing native client handle (for BaseClient integration) */
+    /**
+     * Constructor that wraps an existing native client handle (for BaseClient integration). This is
+     * the ONLY constructor - GlideCoreClient does not create connections.
+     */
     @SuppressFBWarnings(
             value = "CT_CONSTRUCTOR_THROW",
             justification = "Constructor fails fast on invalid handles prior to registering resources")
@@ -458,79 +128,6 @@ public class GlideCoreClient implements AutoCloseable {
         // Register cleanup action with Cleaner - but don't double-close since handle is managed
         // externally
         this.cleanable = CLEANER.register(this, new CleanupAction(this.nativeState));
-    }
-
-    /** Convert BaseClientConfiguration to our internal Config format */
-    private static Config convertFromBaseClientConfiguration(
-            glide.api.models.configuration.BaseClientConfiguration config) {
-        // Extract addresses from NodeAddress objects
-        List<String> addresses =
-                config.getAddresses().stream()
-                        .map(addr -> addr.getHost() + ":" + addr.getPort())
-                        .collect(java.util.stream.Collectors.toList());
-
-        Config result = new Config(addresses);
-
-        // Map configuration fields
-        result.useTls(config.isUseTLS());
-        result.useInsecureTls(resolveInsecureTls(config));
-
-        if (config.getCredentials() != null) {
-            result.credentials(config.getCredentials());
-        }
-
-        if (config.getRequestTimeout() != null) {
-            result.requestTimeout(config.getRequestTimeout());
-        }
-
-        result.connectionTimeout(resolveConnectionTimeout(config));
-
-        if (config.getProtocol() != null) {
-            result.protocol(config.getProtocol());
-        }
-
-        if (config.getClientName() != null) {
-            result.clientName(config.getClientName());
-        }
-
-        if (config.getReconnectStrategy() != null) {
-            result.reconnectStrategy(config.getReconnectStrategy());
-        }
-
-        if (config.getDatabaseId() != null) {
-            result.databaseId(config.getDatabaseId());
-        }
-
-        // Handle cluster vs standalone specific configurations
-        if (config instanceof glide.api.models.configuration.GlideClusterClientConfiguration) {
-            glide.api.models.configuration.GlideClusterClientConfiguration clusterConfig =
-                    (glide.api.models.configuration.GlideClusterClientConfiguration) config;
-            result.clusterMode(true);
-
-            if (clusterConfig.getReadFrom() != null) {
-                result.readFrom(clusterConfig.getReadFrom());
-            }
-        } else if (config instanceof glide.api.models.configuration.GlideClientConfiguration) {
-            glide.api.models.configuration.GlideClientConfiguration standaloneConfig =
-                    (glide.api.models.configuration.GlideClientConfiguration) config;
-            result.clusterMode(false);
-
-            if (standaloneConfig.getReadFrom() != null) {
-                result.readFrom(standaloneConfig.getReadFrom());
-            }
-        }
-
-        return result;
-    }
-
-    /** Create a new client connection to Valkey asynchronously. */
-    public static CompletableFuture<GlideCoreClient> createAsync(Config config) {
-        return CompletableFuture.supplyAsync(() -> new GlideCoreClient(config));
-    }
-
-    /** Create a new GlideCoreClient with basic configuration. */
-    public static GlideCoreClient createClient(Config config) {
-        return new GlideCoreClient(config);
     }
 
     // ==================== COMMAND EXECUTION METHODS ====================
@@ -707,264 +304,6 @@ public class GlideCoreClient implements AutoCloseable {
         return future;
     }
 
-    /** Refresh IAM token immediately (for compatibility with BaseClient). */
-    public CompletableFuture<String> refreshIamToken() {
-        long handle = nativeClientHandle.get();
-        if (handle == 0) {
-            CompletableFuture<String> f = new CompletableFuture<>();
-            f.completeExceptionally(new glide.api.models.exceptions.ClosingException("Client is closed"));
-            return f;
-        }
-
-        CompletableFuture<String> future = new CompletableFuture<>();
-        long correlationId;
-        try {
-            correlationId = AsyncRegistry.register(future, this.maxInflightRequests, handle);
-        } catch (glide.api.models.exceptions.RequestException e) {
-            future.completeExceptionally(e);
-            return future;
-        }
-
-        GlideNativeBridge.refreshIamToken(handle, correlationId);
-        return future;
-    }
-
-    // ==================== CLIENT STATUS AND INFO METHODS ====================
-
-    /** Check if client is connected. */
-    public boolean isConnected() {
-        long handle = nativeClientHandle.get();
-        return handle != 0 && isConnected(handle);
-    }
-
-    /** Get client information for debugging and monitoring. */
-    public String getClientInfo() {
-        long handle = nativeClientHandle.get();
-        if (handle == 0) {
-            return "Client is closed";
-        }
-        return getClientInfo(handle);
-    }
-
-    /** Get the number of pending async operations. */
-    public int getPendingOperations() {
-        return AsyncRegistry.getPendingCount();
-    }
-
-    /** Health check to detect if client is working properly */
-    public boolean isHealthy() {
-        return isConnected() && AsyncRegistry.getPendingCount() < 1000;
-    }
-
-    // ==================== HELPER METHODS ====================
-
-    private static int computeMaxInflight(Config config) {
-        if (config.getMaxInflightRequests() != null && config.getMaxInflightRequests() > 0) {
-            return config.getMaxInflightRequests();
-        }
-
-        String env = System.getenv("GLIDE_MAX_INFLIGHT_REQUESTS");
-        if (env != null) {
-            try {
-                int v = Integer.parseInt(env.trim());
-                if (v > 0) return v;
-            } catch (NumberFormatException ignored) {
-            }
-        }
-
-        String prop = System.getProperty("glide.maxInflightRequests");
-        if (prop != null) {
-            try {
-                int v = Integer.parseInt(prop.trim());
-                if (v > 0) return v;
-            } catch (NumberFormatException ignored) {
-            }
-        }
-
-        return 0; // 0 means "use native/core defaults"
-    }
-
-    private static int resolveConnectionTimeout(
-            glide.api.models.configuration.BaseClientConfiguration config) {
-        glide.api.models.configuration.AdvancedBaseClientConfiguration advanced =
-                extractAdvancedConfiguration(config);
-        if (advanced != null && advanced.getConnectionTimeout() != null) {
-            return advanced.getConnectionTimeout();
-        }
-        return (int) GlideNativeBridge.getGlideCoreDefaultTimeoutMs();
-    }
-
-    private static boolean resolveInsecureTls(
-            glide.api.models.configuration.BaseClientConfiguration config) {
-        glide.api.models.configuration.AdvancedBaseClientConfiguration advanced =
-                extractAdvancedConfiguration(config);
-        if (advanced == null) {
-            return false;
-        }
-        glide.api.models.configuration.TlsAdvancedConfiguration tlsConfig =
-                advanced.getTlsAdvancedConfiguration();
-        if (tlsConfig != null && tlsConfig.isUseInsecureTLS()) {
-            if (!config.isUseTLS()) {
-                throw new glide.api.models.exceptions.ConfigurationError(
-                        "`useInsecureTLS` cannot be enabled when `useTLS` is disabled.");
-            }
-            return true;
-        }
-        return false;
-    }
-
-    private static glide.api.models.configuration.AdvancedBaseClientConfiguration
-            extractAdvancedConfiguration(glide.api.models.configuration.BaseClientConfiguration config) {
-        if (config instanceof glide.api.models.configuration.GlideClientConfiguration) {
-            return ((glide.api.models.configuration.GlideClientConfiguration) config)
-                    .getAdvancedConfiguration();
-        }
-        if (config instanceof glide.api.models.configuration.GlideClusterClientConfiguration) {
-            return ((glide.api.models.configuration.GlideClusterClientConfiguration) config)
-                    .getAdvancedConfiguration();
-        }
-        return null;
-    }
-
-    // Removed blocking command detection - Rust handles all timeout logic
-
-    // ==================== RESOURCE MANAGEMENT ====================
-
-    /** Close the client and cleanup all resources */
-    @Override
-    public void close() {
-        if (!cleanupInProgress.compareAndSet(false, true)) {
-            // Cleanup already in progress or completed
-            return;
-        }
-
-        long handle = nativeClientHandle.getAndSet(0);
-        if (handle != 0) {
-            try {
-                unregisterClient(handle);
-            } catch (Throwable ignore) {
-            }
-            try {
-                // Clean up per-client inflight tracking
-                AsyncRegistry.cleanupClient(handle);
-                closeClient(handle);
-            } finally {
-                // Reset AsyncRegistry only when no clients remain (test isolation / full shutdown)
-                if (clients.isEmpty()) {
-                    AsyncRegistry.reset();
-                }
-            }
-        }
-
-        // Also trigger the cleaner cleanup (safe to call multiple times)
-        cleanable.clean();
-    }
-
-    /** Shared state for cleanup coordination */
-    private static class NativeState {
-        volatile long nativePtr;
-
-        NativeState(long nativePtr) {
-            this.nativePtr = nativePtr;
-        }
-    }
-
-    /** Cleanup action for the Cleaner */
-    private static class CleanupAction implements Runnable {
-        private final NativeState nativeState;
-
-        CleanupAction(NativeState nativeState) {
-            this.nativeState = nativeState;
-        }
-
-        @Override
-        public void run() {
-            long ptr = nativeState.nativePtr;
-            if (ptr != 0) {
-                nativeState.nativePtr = 0;
-                // Clean up per-client inflight tracking
-                AsyncRegistry.cleanupClient(ptr);
-                closeClient(ptr);
-            }
-        }
-    }
-
-    // ==================== NATIVE METHODS ====================
-
-    /** Create client with enhanced routing support */
-    private static long createClient(
-            String[] addresses,
-            int databaseId,
-            String username,
-            String password,
-            boolean useTls,
-            boolean insecureTls,
-            boolean clusterMode,
-            int requestTimeoutMs,
-            int connectionTimeoutMs,
-            int maxInflightRequests,
-            String readFrom,
-            String clientAz,
-            boolean lazyConnect,
-            String clientName,
-            String protocol,
-            int reconnectNumRetries,
-            int reconnectFactor,
-            int reconnectExponentBase,
-            int reconnectJitterPercent,
-            byte[][] subExact,
-            byte[][] subPattern,
-            byte[][] subSharded,
-            String iamClusterName,
-            String iamRegion,
-            String iamServiceType,
-            int iamRefreshIntervalSeconds,
-            boolean hasIamConfig) {
-        return GlideNativeBridge.createClient(
-                addresses,
-                databaseId,
-                username,
-                password,
-                useTls,
-                insecureTls,
-                clusterMode,
-                requestTimeoutMs,
-                connectionTimeoutMs,
-                maxInflightRequests,
-                readFrom,
-                clientAz,
-                lazyConnect,
-                clientName,
-                protocol,
-                reconnectNumRetries,
-                reconnectFactor,
-                reconnectExponentBase,
-                reconnectJitterPercent,
-                subExact,
-                subPattern,
-                subSharded,
-                iamClusterName,
-                iamRegion,
-                iamServiceType,
-                iamRefreshIntervalSeconds,
-                hasIamConfig);
-    }
-
-    /** Check if the native client is connected */
-    private static boolean isConnected(long clientPtr) {
-        return GlideNativeBridge.isConnected(clientPtr);
-    }
-
-    /** Get client information from native layer */
-    private static String getClientInfo(long clientPtr) {
-        return GlideNativeBridge.getClientInfo(clientPtr);
-    }
-
-    /** Close and release a native client */
-    private static void closeClient(long clientPtr) {
-        GlideNativeBridge.closeClient(clientPtr);
-    }
-
     /** Execute script via native invoke_script path */
     public CompletableFuture<Object> executeScriptAsync(
             String hash,
@@ -1009,6 +348,94 @@ public class GlideCoreClient implements AutoCloseable {
             CompletableFuture<Object> future = new CompletableFuture<>();
             future.completeExceptionally(e);
             return future;
+        }
+    }
+
+    // ==================== CLIENT STATUS AND INFO METHODS ====================
+
+    /** Check if client is connected. */
+    public boolean isConnected() {
+        long handle = nativeClientHandle.get();
+        return handle != 0 && GlideNativeBridge.isConnected(handle);
+    }
+
+    /** Get client information for debugging and monitoring. */
+    public String getClientInfo() {
+        long handle = nativeClientHandle.get();
+        if (handle == 0) {
+            return "Client is closed";
+        }
+        return GlideNativeBridge.getClientInfo(handle);
+    }
+
+    /** Get the number of pending async operations. */
+    public int getPendingOperations() {
+        return AsyncRegistry.getPendingCount();
+    }
+
+    /** Health check to detect if client is working properly */
+    public boolean isHealthy() {
+        return isConnected() && AsyncRegistry.getPendingCount() < 1000;
+    }
+
+    // ==================== RESOURCE MANAGEMENT ====================
+
+    /** Close the client and cleanup all resources */
+    @Override
+    public void close() {
+        if (!cleanupInProgress.compareAndSet(false, true)) {
+            // Cleanup already in progress or completed
+            return;
+        }
+
+        long handle = nativeClientHandle.getAndSet(0);
+        if (handle != 0) {
+            try {
+                unregisterClient(handle);
+            } catch (Throwable ignore) {
+            }
+            try {
+                // Clean up per-client inflight tracking
+                AsyncRegistry.cleanupClient(handle);
+                GlideNativeBridge.closeClient(handle);
+            } finally {
+                // Reset AsyncRegistry only when no clients remain (test isolation / full shutdown)
+                if (clients.isEmpty()) {
+                    AsyncRegistry.reset();
+                }
+            }
+        }
+
+        // Also trigger the cleaner cleanup (safe to call multiple times)
+        cleanable.clean();
+    }
+
+    /** Shared state for cleanup coordination */
+    private static class NativeState {
+        volatile long nativePtr;
+
+        NativeState(long nativePtr) {
+            this.nativePtr = nativePtr;
+        }
+    }
+
+    /** Cleanup action for the Cleaner */
+    private static class CleanupAction implements Runnable {
+        private final NativeState nativeState;
+
+        CleanupAction(NativeState nativeState) {
+            this.nativeState = nativeState;
+        }
+
+        @Override
+        public void run() {
+            long ptr = nativeState.nativePtr;
+            if (ptr != 0) {
+                nativeState.nativePtr = 0;
+                // Clean up per-client inflight tracking
+                AsyncRegistry.cleanupClient(ptr);
+                GlideNativeBridge.closeClient(ptr);
+            }
         }
     }
 }

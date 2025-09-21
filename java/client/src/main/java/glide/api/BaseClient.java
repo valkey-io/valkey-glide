@@ -948,7 +948,6 @@ public abstract class BaseClient
      */
     public CompletableFuture<String> updateConnectionPassword(
             @NonNull String password, boolean immediateAuth) {
-        ensurePasswordUpdateAllowed();
         return commandManager
                 .submitPasswordUpdate(Optional.of(password), immediateAuth, this::handleStringResponse)
                 .thenApply(
@@ -985,7 +984,6 @@ public abstract class BaseClient
      * }</pre>
      */
     public CompletableFuture<String> updateConnectionPassword(boolean immediateAuth) {
-        ensurePasswordUpdateAllowed();
         return commandManager
                 .submitPasswordUpdate(Optional.empty(), immediateAuth, this::handleStringResponse)
                 .thenApply(
@@ -995,36 +993,6 @@ public abstract class BaseClient
                             }
                             return result;
                         });
-    }
-
-    /**
-     * Manually refresh the IAM token for the current connection.
-     *
-     * <p>This method is only available when the client is configured for IAM authentication. It
-     * triggers an immediate token regeneration, ensuring that future requests use a fresh credential.
-     *
-     * @return <code>"OK"</code> when the token refresh succeeds.
-     * @throws ConfigurationError if IAM authentication is not enabled for this client.
-     */
-    public CompletableFuture<String> refreshIamToken() {
-        ensureIamAuthenticationEnabled();
-        return commandManager.submitRefreshIamToken(this::handleStringResponse);
-    }
-
-    private void ensurePasswordUpdateAllowed() {
-        var creds = connectionManager.getCredentials();
-        if (creds != null && creds.isUsingIamAuth()) {
-            throw new ConfigurationError(
-                    "updateConnectionPassword is not supported when IAM authentication is enabled.");
-        }
-    }
-
-    private void ensureIamAuthenticationEnabled() {
-        var creds = connectionManager.getCredentials();
-        if (creds == null || !creds.isUsingIamAuth()) {
-            throw new ConfigurationError(
-                    "refreshIamToken is only available when IAM authentication is enabled.");
-        }
     }
 
     @Override

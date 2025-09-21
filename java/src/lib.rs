@@ -14,8 +14,7 @@ const MAX_REQUEST_ARGS_LENGTH_IN_BYTES: usize = 2_i32.pow(12) as usize; // 4096 
 
 // Telemetry required for getStatistics
 use glide_core::Telemetry;
-use glide_core::client::{ConnectionRetryStrategy, IamAuthenticationConfig};
-use glide_core::iam::ServiceType;
+use protobuf::Message;
 
 use jni::JNIEnv;
 use jni::errors::Error as JniError;
@@ -1208,214 +1207,34 @@ fn safe_create_jstring<'local>(
 /// Create Valkey client and store handle.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_glide_internal_GlideNativeBridge_createClient(
-    mut env: JNIEnv,
+    env: JNIEnv,
     _class: JClass,
-    addresses: JObjectArray,
-    database_id: jint,
-    username: jni::sys::jstring,
-    password: jni::sys::jstring,
-    use_tls: jni::sys::jboolean,
-    insecure_tls: jni::sys::jboolean,
-    cluster_mode: jni::sys::jboolean,
-    request_timeout_ms: jint,
-    connection_timeout_ms: jint,
-    max_inflight_requests: jint,
-    read_from: jni::sys::jstring,
-    client_az: jni::sys::jstring,
-    lazy_connect: jni::sys::jboolean,
-    client_name: jni::sys::jstring,
-    protocol: jni::sys::jstring,
-    reconnect_num_retries: jint,
-    reconnect_factor: jint,
-    reconnect_exponent_base: jint,
-    reconnect_jitter_percent: jint,
-    sub_exact: JObjectArray,
-    sub_pattern: JObjectArray,
-    sub_sharded: JObjectArray,
-    iam_cluster_name: jni::sys::jstring,
-    iam_region: jni::sys::jstring,
-    iam_service_type: jni::sys::jstring,
-    iam_refresh_interval_seconds: jint,
-    has_iam_config: jni::sys::jboolean,
+    connection_request_bytes: JByteArray,
 ) -> jlong {
     handle_panics(
         move || {
-            // Convert Java parameters to Rust types
-            let addresses_result: Result<Vec<String>, FFIError> = (|| {
-                let length = env.get_array_length(&addresses)? as usize;
-                let mut addrs = Vec::with_capacity(length);
-
-                for i in 0..length {
-                    let addr_obj = env.get_object_array_element(&addresses, i as i32)?;
-                    let addr_jstring = JString::from(addr_obj);
-                    let addr_str = env.get_string(&addr_jstring)?;
-                    addrs.push(
-                        addr_str
-                            .to_str()
-                            .map_err(|e| FFIError::Logger(e.to_string()))?
-                            .to_string(),
-                    );
-                }
-                Ok(addrs)
-            })();
-
-            let addresses = match addresses_result {
-                Ok(addrs) => addrs,
+            // Convert Java byte array to Rust bytes
+            let request_bytes = match env.convert_byte_array(&connection_request_bytes) {
+                Ok(bytes) => bytes,
                 Err(e) => {
-                    log::error!("Failed to parse addresses: {e}");
+                    log::error!("Failed to convert byte array: {e}");
                     return Some(0);
                 }
             };
 
-            let username = get_optional_string_param_raw(&mut env, username);
-            let password = get_optional_string_param_raw(&mut env, password);
-            let read_from_str = get_optional_string_param_raw(&mut env, read_from);
-            let client_az_opt = get_optional_string_param_raw(&mut env, client_az);
-            let client_name_opt = get_optional_string_param_raw(&mut env, client_name);
-            let protocol_opt = get_optional_string_param_raw(&mut env, protocol);
-            let iam_cluster_name_opt = get_optional_string_param_raw(&mut env, iam_cluster_name);
-            let iam_region_opt = get_optional_string_param_raw(&mut env, iam_region);
-            let iam_service_type_opt = get_optional_string_param_raw(&mut env, iam_service_type);
-
-            let iam_config = if has_iam_config != 0 {
-                let cluster_name = match iam_cluster_name_opt.clone() {
-                    Some(value) if !value.is_empty() => value,
-                    _ => {
-                        log::error!("IAM configuration requires a cluster name");
-                        return Some(0);
-                    }
-                };
-
-                let region = match iam_region_opt.clone() {
-                    Some(value) if !value.is_empty() => value,
-                    _ => {
-                        log::error!("IAM configuration requires a region");
-                        return Some(0);
-                    }
-                };
-
-                let service_type = match iam_service_type_opt
-                    .clone()
-                    .map(|s| s.to_ascii_lowercase())
-                    .as_deref()
-                {
-                    Some("elasticache") => ServiceType::ElastiCache,
-                    Some("memorydb") => ServiceType::MemoryDB,
-                    other => {
-                        log::error!("Unsupported IAM service type: {:?}", other);
-                        return Some(0);
-                    }
-                };
-
-                let refresh_interval = if iam_refresh_interval_seconds >= 0 {
-                    Some(iam_refresh_interval_seconds as u32)
-                } else {
-                    None
-                };
-
-                Some(IamAuthenticationConfig {
-                    cluster_name,
-                    region,
-                    service_type,
-                    refresh_interval_seconds: refresh_interval,
-                })
-            } else {
-                None
-            };
-
-            let reconnect_strategy =
-                if reconnect_num_retries > 0 && reconnect_factor > 0 && reconnect_exponent_base > 0
-                {
-                    Some(ConnectionRetryStrategy {
-                        exponent_base: reconnect_exponent_base as u32,
-                        factor: reconnect_factor as u32,
-                        number_of_retries: reconnect_num_retries as u32,
-                        jitter_percent: if reconnect_jitter_percent >= 0 {
-                            Some(reconnect_jitter_percent as u32)
-                        } else {
-                            None
-                        },
-                    })
-                } else {
-                    None
-                };
-
-            // Build PubSubSubscriptionInfo from three arrays if any present
-            let subscriptions_opt: Option<redis::PubSubSubscriptionInfo> = {
-                let mut any = false;
-                let mut info = std::collections::HashMap::new();
-
-                // helper to convert array of byte[] to HashSet<PubSubChannelOrPattern>
-                fn array_to_set(
-                    env: &mut JNIEnv,
-                    arr: JObjectArray,
-                ) -> std::collections::HashSet<redis::PubSubChannelOrPattern> {
-                    let mut set = std::collections::HashSet::new();
-                    if arr.is_null() {
-                        return set;
-                    }
-                    if let Ok(len) = env.get_array_length(&arr) {
-                        for i in 0..len {
-                            if let Ok(obj) = env.get_object_array_element(&arr, i)
-                                && let Ok(bytes) = env.convert_byte_array(JByteArray::from(obj))
-                            {
-                                set.insert(redis::PubSubChannelOrPattern::from(bytes));
-                            }
-                        }
-                    }
-                    set
-                }
-
-                let exact_set = array_to_set(&mut env, sub_exact);
-                if !exact_set.is_empty() {
-                    any = true;
-                    info.insert(redis::PubSubSubscriptionKind::Exact, exact_set);
-                }
-                let pattern_set = array_to_set(&mut env, sub_pattern);
-                if !pattern_set.is_empty() {
-                    any = true;
-                    info.insert(redis::PubSubSubscriptionKind::Pattern, pattern_set);
-                }
-                let sharded_set = array_to_set(&mut env, sub_sharded);
-                if !sharded_set.is_empty() {
-                    any = true;
-                    info.insert(redis::PubSubSubscriptionKind::Sharded, sharded_set);
-                }
-
-                if any { Some(info) } else { None }
-            };
-
-            // Create connection configuration using all parameters
-            let config = match create_valkey_connection_config(ValkeyClientConfig {
-                addresses,
-                database_id: database_id as u32,
-                username,
-                password,
-                iam_config,
-                use_tls: use_tls != 0,
-                insecure_tls: insecure_tls != 0,
-                cluster_mode: cluster_mode != 0,
-                request_timeout_ms: request_timeout_ms as u64,
-                connection_timeout_ms: connection_timeout_ms as u64,
-                read_from: read_from_str,
-                client_az: client_az_opt,
-                lazy_connect: lazy_connect != 0,
-                client_name: client_name_opt,
-                protocol: protocol_opt,
-                max_inflight_requests: if max_inflight_requests > 0 {
-                    Some(max_inflight_requests as u32)
-                } else {
-                    None
-                },
-                pubsub_subscriptions: subscriptions_opt,
-                connection_retry_strategy: reconnect_strategy,
-            }) {
-                Ok(config) => config,
+            // Parse ConnectionRequest protobuf
+            let request = match glide_core::connection_request::ConnectionRequest::parse_from_bytes(
+                &request_bytes,
+            ) {
+                Ok(req) => req,
                 Err(e) => {
-                    log::error!("Failed to create connection config: {e}");
+                    log::error!("Failed to parse ConnectionRequest protobuf: {e}");
                     return Some(0);
                 }
             };
+
+            // Convert protobuf to glide_core ConnectionRequest
+            let connection_request = glide_core::client::ConnectionRequest::from(request);
 
             // Cache JVM for push callbacks
             if let Ok(jvm) = env.get_java_vm() {
@@ -1426,16 +1245,21 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createClient(
             let runtime = get_runtime();
             // Enable push channel if pubsub subscriptions are present
             let mut rx_opt: Option<tokio::sync::mpsc::UnboundedReceiver<redis::PushInfo>> = None;
-            let tx_opt: Option<tokio::sync::mpsc::UnboundedSender<redis::PushInfo>> =
-                if config.pubsub_subscriptions.is_some() {
-                    let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<redis::PushInfo>();
-                    rx_opt = Some(rx);
-                    Some(tx)
-                } else {
-                    None
-                };
 
-            match runtime.block_on(async { create_glide_client(config, tx_opt).await }) {
+            // Check if pubsub subscriptions exist in the connection request
+            let has_pubsub = connection_request.pubsub_subscriptions.is_some();
+
+            let tx_opt: Option<tokio::sync::mpsc::UnboundedSender<redis::PushInfo>> = if has_pubsub
+            {
+                let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<redis::PushInfo>();
+                rx_opt = Some(rx);
+                Some(tx)
+            } else {
+                None
+            };
+
+            match runtime.block_on(async { create_glide_client(connection_request, tx_opt).await })
+            {
                 Ok(client) => {
                     let safe_handle = jni_client::generate_safe_handle();
                     let handle_table = get_handle_table();

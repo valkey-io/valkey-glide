@@ -1,12 +1,13 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.managers;
 
+import static connection_request.ConnectionRequestOuterClass.*;
+
 import glide.api.models.configuration.AdvancedBaseClientConfiguration;
 import glide.api.models.configuration.BackoffStrategy;
 import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
-import glide.api.models.configuration.IamAuthConfig;
 import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.configuration.TlsAdvancedConfiguration;
 import glide.api.models.exceptions.ClosingException;
@@ -49,14 +50,8 @@ public class ConnectionManager {
                                         .toArray(String[]::new);
 
                         // Extract credentials
-                        String username = null;
-                        String password = null;
-                        IamAuthConfig iamAuthConfig = null;
                         if (configuration.getCredentials() != null) {
                             this.credentials = configuration.getCredentials();
-                            username = credentials.getUsername();
-                            password = credentials.getPassword();
-                            iamAuthConfig = credentials.getIamAuthConfig();
                         } else {
                             this.credentials = null;
                         }
@@ -168,44 +163,145 @@ public class ConnectionManager {
                             }
                         }
 
-                        String iamClusterName = iamAuthConfig != null ? iamAuthConfig.getClusterName() : null;
-                        String iamRegion = iamAuthConfig != null ? iamAuthConfig.getRegion() : null;
-                        String iamServiceType =
-                                iamAuthConfig != null ? iamAuthConfig.getService().toCoreValue() : null;
-                        int iamRefreshInterval =
-                                iamAuthConfig != null && iamAuthConfig.getRefreshIntervalSeconds() != null
-                                        ? iamAuthConfig.getRefreshIntervalSeconds()
-                                        : -1;
+                        // Build ConnectionRequest protobuf
+                        ConnectionRequest.Builder requestBuilder = ConnectionRequest.newBuilder();
 
-                        this.nativeClientHandle =
-                                GlideNativeBridge.createClient(
-                                        addresses,
-                                        configuration.getDatabaseId() != null ? configuration.getDatabaseId() : 0,
-                                        username,
-                                        password,
-                                        configuration.isUseTLS(),
-                                        insecureTls,
-                                        isCluster,
-                                        requestTimeoutMs,
-                                        connectionTimeoutMs,
-                                        maxInflightRequests,
-                                        configuration.getReadFrom().name(),
-                                        configuration.getClientAZ(),
-                                        configuration.isLazyConnect(),
-                                        configuration.getClientName(),
-                                        protocolName,
-                                        reconnectNumRetries,
-                                        reconnectFactor,
-                                        reconnectExponentBase,
-                                        reconnectJitterPercent,
-                                        subExact,
-                                        subPattern,
-                                        subSharded,
-                                        iamClusterName,
-                                        iamRegion,
-                                        iamServiceType,
-                                        iamRefreshInterval,
-                                        iamAuthConfig != null);
+                        // Add addresses
+                        for (String addr : addresses) {
+                            String[] parts = addr.split(":");
+                            if (parts.length == 2) {
+                                requestBuilder.addAddresses(
+                                        NodeAddress.newBuilder()
+                                                .setHost(parts[0])
+                                                .setPort(Integer.parseInt(parts[1]))
+                                                .build());
+                            }
+                        }
+
+                        // Set TLS mode
+                        if (configuration.isUseTLS()) {
+                            if (insecureTls) {
+                                requestBuilder.setTlsMode(TlsMode.InsecureTls);
+                            } else {
+                                requestBuilder.setTlsMode(TlsMode.SecureTls);
+                            }
+                        } else {
+                            requestBuilder.setTlsMode(TlsMode.NoTls);
+                        }
+
+                        // Set authentication
+                        if (credentials != null) {
+                            AuthenticationInfo.Builder authBuilder = AuthenticationInfo.newBuilder();
+                            if (credentials.getUsername() != null) {
+                                authBuilder.setUsername(credentials.getUsername());
+                            }
+                            if (credentials.getPassword() != null) {
+                                authBuilder.setPassword(credentials.getPassword());
+                            }
+                            requestBuilder.setAuthenticationInfo(authBuilder.build());
+                        }
+
+                        // Set cluster mode
+                        requestBuilder.setClusterModeEnabled(isCluster);
+
+                        // Set timeouts
+                        requestBuilder.setRequestTimeout(requestTimeoutMs);
+                        requestBuilder.setConnectionTimeout(connectionTimeoutMs);
+                        requestBuilder.setInflightRequestsLimit(maxInflightRequests);
+
+                        // Set read from strategy
+                        String readFromName = configuration.getReadFrom().name();
+                        if ("PRIMARY".equals(readFromName)) {
+                            requestBuilder.setReadFrom(ReadFrom.Primary);
+                        } else if ("PREFER_REPLICA".equals(readFromName)) {
+                            requestBuilder.setReadFrom(ReadFrom.PreferReplica);
+                        } else if ("AZ_AFFINITY".equals(readFromName)) {
+                            requestBuilder.setReadFrom(ReadFrom.AZAffinity);
+                        } else if ("AZ_AFFINITY_PREFER_PRIMARY".equals(readFromName)) {
+                            requestBuilder.setReadFrom(ReadFrom.AZAffinityReplicasAndPrimary);
+                        }
+
+                        // Set client metadata
+                        if (configuration.getClientAZ() != null) {
+                            requestBuilder.setClientAz(configuration.getClientAZ());
+                        }
+                        if (configuration.getClientName() != null) {
+                            requestBuilder.setClientName(configuration.getClientName());
+                        }
+                        requestBuilder.setLazyConnect(configuration.isLazyConnect());
+
+                        // Set database ID
+                        if (configuration.getDatabaseId() != null) {
+                            requestBuilder.setDatabaseId(configuration.getDatabaseId());
+                        }
+
+                        // Set protocol version if specified
+                        if (protocolName != null) {
+                            if ("RESP2".equals(protocolName)) {
+                                requestBuilder.setProtocol(ProtocolVersion.RESP2);
+                            } else if ("RESP3".equals(protocolName)) {
+                                requestBuilder.setProtocol(ProtocolVersion.RESP3);
+                            }
+                        }
+
+                        // Set reconnect strategy
+                        if (reconnectNumRetries > 0 || reconnectFactor > 0 || reconnectExponentBase > 0) {
+                            ConnectionRetryStrategy.Builder retryBuilder = ConnectionRetryStrategy.newBuilder();
+                            retryBuilder.setNumberOfRetries(reconnectNumRetries);
+                            retryBuilder.setFactor(reconnectFactor);
+                            retryBuilder.setExponentBase(reconnectExponentBase);
+                            if (reconnectJitterPercent >= 0) {
+                                retryBuilder.setJitterPercent(reconnectJitterPercent);
+                            }
+                            requestBuilder.setConnectionRetryStrategy(retryBuilder.build());
+                        }
+
+                        // Set pubsub subscriptions
+                        if (subExact.length > 0 || subPattern.length > 0 || subSharded.length > 0) {
+                            PubSubSubscriptions.Builder subBuilder = PubSubSubscriptions.newBuilder();
+
+                            if (subExact.length > 0) {
+                                PubSubChannelsOrPatterns.Builder exactBuilder =
+                                        PubSubChannelsOrPatterns.newBuilder();
+                                for (byte[] channel : subExact) {
+                                    exactBuilder.addChannelsOrPatterns(
+                                            com.google.protobuf.ByteString.copyFrom(channel));
+                                }
+                                subBuilder.putChannelsOrPatternsByType(
+                                        PubSubChannelType.Exact.getNumber(), exactBuilder.build());
+                            }
+
+                            if (subPattern.length > 0) {
+                                PubSubChannelsOrPatterns.Builder patternBuilder =
+                                        PubSubChannelsOrPatterns.newBuilder();
+                                for (byte[] pattern : subPattern) {
+                                    patternBuilder.addChannelsOrPatterns(
+                                            com.google.protobuf.ByteString.copyFrom(pattern));
+                                }
+                                subBuilder.putChannelsOrPatternsByType(
+                                        PubSubChannelType.Pattern.getNumber(), patternBuilder.build());
+                            }
+
+                            if (isCluster && subSharded.length > 0) {
+                                PubSubChannelsOrPatterns.Builder shardedBuilder =
+                                        PubSubChannelsOrPatterns.newBuilder();
+                                for (byte[] sharded : subSharded) {
+                                    shardedBuilder.addChannelsOrPatterns(
+                                            com.google.protobuf.ByteString.copyFrom(sharded));
+                                }
+                                subBuilder.putChannelsOrPatternsByType(
+                                        PubSubChannelType.Sharded.getNumber(), shardedBuilder.build());
+                            }
+
+                            requestBuilder.setPubsubSubscriptions(subBuilder.build());
+                        }
+
+                        // Build and serialize to bytes
+                        ConnectionRequest request = requestBuilder.build();
+                        byte[] requestBytes = request.toByteArray();
+
+                        // Create native client with protobuf bytes
+                        this.nativeClientHandle = GlideNativeBridge.createClient(requestBytes);
 
                         if (nativeClientHandle == 0) {
                             throw new ClosingException("Failed to create client - Connection refused");
@@ -307,9 +403,6 @@ public class ConnectionManager {
     public void updateStoredPassword(String password) {
         if (credentials == null) {
             return;
-        }
-        if (credentials.isUsingIamAuth()) {
-            return; // IAM credentials are immutable
         }
         credentials =
                 ServerCredentials.builder()
