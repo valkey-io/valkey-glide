@@ -39,6 +39,13 @@ runs:
 
               echo "Using Docker image: $DOCKER_IMAGE"
 
+              # On Windows, ensure we're using Linux containers and specify platform
+              PLATFORM_FLAG=""
+              if [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]] || [[ "$OSTYPE" == "win32" ]]; then
+                echo "Running on Windows - using Linux containers"
+                PLATFORM_FLAG="--platform linux/amd64"
+              fi
+
               # Define ports with optional prefix
               STANDALONE_PORT="${PORT_PREFIX}6379"
               CLUSTER_PORTS=("${PORT_PREFIX}7000" "${PORT_PREFIX}7001" "${PORT_PREFIX}7002")
@@ -53,6 +60,7 @@ runs:
               # Start standalone instance
               echo "Starting standalone instance on port $STANDALONE_PORT..."
               docker run -d --name valkey-standalone-${PORT_PREFIX} \
+                $PLATFORM_FLAG \
                 --network valkey-net-${PORT_PREFIX} \
                 --network-alias standalone-${PORT_PREFIX} \
                 --memory=$MEMORY_LIMIT \
@@ -69,6 +77,7 @@ runs:
               for i in "${!CLUSTER_PORTS[@]}"; do
                 port="${CLUSTER_PORTS[$i]}"
                 docker run -d --name valkey-cluster-${port} \
+                  $PLATFORM_FLAG \
                   --network valkey-net-${PORT_PREFIX} \
                   --network-alias cluster-node-$i-${PORT_PREFIX} \
                   --memory=$MEMORY_LIMIT \
