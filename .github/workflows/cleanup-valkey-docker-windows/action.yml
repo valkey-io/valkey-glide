@@ -12,8 +12,10 @@ runs:
     steps:
         - name: Cleanup Docker containers and network
           shell: bash
+          env:
+              PORT_PREFIX: ${{ inputs.port-prefix }}
           run: |
-              PORT_PREFIX="${{ inputs.port-prefix }}"
+              PORT_PREFIX="$PORT_PREFIX"
               STANDALONE_PORT="${PORT_PREFIX}6379"
               CLUSTER_PORTS=("${PORT_PREFIX}7000" "${PORT_PREFIX}7001" "${PORT_PREFIX}7002")
 

@@ -18,11 +18,15 @@ runs:
     steps:
         - name: Setup Valkey/Redis with Docker
           shell: bash
+          env:
+              ENGINE_TYPE: ${{ inputs.engine-type }}
+              ENGINE_VERSION: ${{ inputs.engine-version }}
+              PORT_PREFIX: ${{ inputs.port-prefix }}
           run: |
               # Determine the Docker image
-              ENGINE_TYPE="${{ inputs.engine-type }}"
-              ENGINE_VERSION="${{ inputs.engine-version }}"
-              PORT_PREFIX="${{ inputs.port-prefix }}"
+              ENGINE_TYPE="$ENGINE_TYPE"
+              ENGINE_VERSION="$ENGINE_VERSION"
+              PORT_PREFIX="$PORT_PREFIX"
 
               # Version 7.2+ should use Valkey (forked from Redis 7.2.4)
               if [[ "$ENGINE_TYPE" == "valkey" ]] || [[ "$ENGINE_VERSION" == "7.2" || "$ENGINE_VERSION" == "8.0" || "$ENGINE_VERSION" == "8.1" || "$ENGINE_VERSION" =~ ^9\. ]]; then
@@ -133,8 +137,10 @@ runs:
         - name: Cleanup on failure
           if: failure()
           shell: bash
+          env:
+              PORT_PREFIX: ${{ inputs.port-prefix }}
           run: |
-              PORT_PREFIX="${{ inputs.port-prefix }}"
+              PORT_PREFIX="$PORT_PREFIX"
               echo "Cleaning up Docker resources on failure..."
               docker stop $(docker ps -q --filter "name=valkey-") 2>/dev/null || true
               docker rm $(docker ps -aq --filter "name=valkey-") 2>/dev/null || true
