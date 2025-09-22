@@ -71,7 +71,7 @@ rstest = "^0.26"
 serial_test = "3"
 criterion = { version = "^0.6", features = ["html_reports", "async_tokio"] }
 which = "8"
-ctor = "0.4"
+ctor = "0.5"
 redis = { path = "./redis-rs/redis", features = ["tls-rustls-insecure"] }
 rustls = { version = "0.23", features = ["aws-lc-rs"]}
 iai-callgrind = "0.15"
