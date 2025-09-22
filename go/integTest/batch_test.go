@@ -1230,6 +1230,107 @@ func CreateHashTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer strin
 		CommandTestData{ExpectedResponse: [][]string{{"counter", "10"}}, TestName: "HRandFieldWithCountWithValues(key, 1)"},
 	)
 
+	// Hash field expiration commands (Valkey 9.0+)
+	if serverVer >= "9.0.0" {
+		// Test HSetEx - Set fields with expiration
+		expiryKey := prefix + "expiry-" + uuid.NewString()
+		fields := map[string]string{"field1": "value1", "field2": "value2"}
+		hsetExOptions := options.NewHSetExOptions().SetExpiry(options.NewExpiryIn(10 * time.Second))
+		batch.HSetEx(expiryKey, fields, hsetExOptions)
+		testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "HSetEx(expiryKey, fields, 10s)"})
+
+		// Test HGetEx - Get fields and set expiration
+		batch.HSet(expiryKey, map[string]string{"field3": "value3"})
+		testData = append(testData, CommandTestData{ExpectedResponse: int64(1), TestName: "HSet(expiryKey, field3)"})
+		hgetExOptions := options.NewHGetExOptions().SetExpiry(options.NewExpiryIn(5 * time.Second))
+		batch.HGetEx(expiryKey, []string{"field3"}, hgetExOptions)
+		testData = append(
+			testData,
+			CommandTestData{
+				ExpectedResponse: []models.Result[string]{models.CreateStringResult("value3")},
+				TestName:         "HGetEx(expiryKey, [field3], 5s)",
+			},
+		)
+
+		// Test HExpire - Set expiration on existing fields
+		batch.HExpire(expiryKey, 30*time.Second, []string{"field1", "field2"}, options.HExpireOptions{})
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: []int64{1, 1}, TestName: "HExpire(expiryKey, 30s, [field1, field2])"},
+		)
+
+		// Test HTtl - Get TTL of fields
+		batch.HTtl(expiryKey, []string{"field1", "field2", "nonexistent"})
+		testData = append(
+			testData,
+			CommandTestData{
+				ExpectedResponse: []int64{0, 0, -2}, // TTL > 0, TTL > 0, field doesn't exist
+				CheckTypeOnly:    true,              // TTL values will vary
+				TestName:         "HTtl(expiryKey, [field1, field2, nonexistent])",
+			},
+		)
+
+		// Test HPersist - Remove expiration from fields
+		batch.HPersist(expiryKey, []string{"field1"})
+		testData = append(testData, CommandTestData{ExpectedResponse: []int64{1}, TestName: "HPersist(expiryKey, [field1])"})
+
+		// Test HPExpire - Set expiration in milliseconds
+		batch.HPExpire(expiryKey, 5*time.Second, []string{"field2"}, options.HExpireOptions{})
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: []int64{1}, TestName: "HPExpire(expiryKey, 5s, [field2])"},
+		)
+
+		// Test HPTtl - Get TTL in milliseconds
+		batch.HPTtl(expiryKey, []string{"field2"})
+		testData = append(
+			testData,
+			CommandTestData{
+				ExpectedResponse: []int64{0}, // TTL > 0
+				CheckTypeOnly:    true,       // TTL values will vary
+				TestName:         "HPTtl(expiryKey, [field2])",
+			},
+		)
+
+		// Test HExpireAt - Set expiration using Unix timestamp
+		futureTime := time.Now().Add(60 * time.Second)
+		batch.HExpireAt(expiryKey, futureTime, []string{"field3"}, options.HExpireOptions{})
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: []int64{1}, TestName: "HExpireAt(expiryKey, futureTime, [field3])"},
+		)
+
+		// Test HPExpireAt - Set expiration using Unix timestamp in milliseconds
+		futureTimeMs := time.Now().Add(60 * time.Second)
+		batch.HPExpireAt(expiryKey, futureTimeMs, []string{"field3"}, options.HExpireOptions{})
+		testData = append(
+			testData,
+			CommandTestData{ExpectedResponse: []int64{1}, TestName: "HPExpireAt(expiryKey, futureTimeMs, [field3])"},
+		)
+
+		// Test HExpireTime - Get expiration timestamp
+		batch.HExpireTime(expiryKey, []string{"field3"})
+		testData = append(
+			testData,
+			CommandTestData{
+				ExpectedResponse: []int64{0}, // timestamp > 0
+				CheckTypeOnly:    true,       // timestamp values will vary
+				TestName:         "HExpireTime(expiryKey, [field3])",
+			},
+		)
+
+		// Test HPExpireTime - Get expiration timestamp in milliseconds
+		batch.HPExpireTime(expiryKey, []string{"field3"})
+		testData = append(
+			testData,
+			CommandTestData{
+				ExpectedResponse: []int64{0}, // timestamp > 0
+				CheckTypeOnly:    true,       // timestamp values will vary
+				TestName:         "HPExpireTime(expiryKey, [field3])",
+			},
+		)
+	}
+
 	return BatchTestData{CommandTestData: testData, TestName: "Hash commands"}
 }
 

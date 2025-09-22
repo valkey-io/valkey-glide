@@ -340,3 +340,54 @@ func TestConfig_LazyConnect(t *testing.T) {
 
 	assert.False(t, defaultClusterResult.LazyConnect)
 }
+
+func TestConfig_DatabaseId(t *testing.T) {
+	// Test standalone client with database ID
+	standaloneConfig := NewClientConfiguration().WithDatabaseId(5)
+	standaloneResult, err := standaloneConfig.ToProtobuf()
+	if err != nil {
+		t.Fatalf("Failed to convert standalone config to protobuf: %v", err)
+	}
+	assert.Equal(t, uint32(5), standaloneResult.DatabaseId)
+
+	// Test cluster client with database ID
+	clusterConfig := NewClusterClientConfiguration().WithDatabaseId(3)
+	clusterResult, err := clusterConfig.ToProtobuf()
+	if err != nil {
+		t.Fatalf("Failed to convert cluster config to protobuf: %v", err)
+	}
+	assert.Equal(t, uint32(3), clusterResult.DatabaseId)
+
+	// Test default behavior (no database ID set)
+	defaultStandaloneConfig := NewClientConfiguration()
+	defaultStandaloneResult, err := defaultStandaloneConfig.ToProtobuf()
+	if err != nil {
+		t.Fatalf("Failed to convert default standalone config to protobuf: %v", err)
+	}
+	assert.Equal(t, uint32(0), defaultStandaloneResult.DatabaseId)
+
+	defaultClusterConfig := NewClusterClientConfiguration()
+	defaultClusterResult, err := defaultClusterConfig.ToProtobuf()
+	if err != nil {
+		t.Fatalf("Failed to convert default cluster config to protobuf: %v", err)
+	}
+	assert.Equal(t, uint32(0), defaultClusterResult.DatabaseId)
+}
+
+func TestConfig_DatabaseId_BaseConfiguration(t *testing.T) {
+	// Test that database_id is properly handled in base configuration for both client types
+
+	// Test standalone client inherits database_id from base configuration
+	standaloneConfig := NewClientConfiguration().WithDatabaseId(5)
+	standaloneResult, err := standaloneConfig.ToProtobuf()
+	assert.NoError(t, err)
+	assert.Equal(t, uint32(5), standaloneResult.DatabaseId)
+	assert.False(t, standaloneResult.ClusterModeEnabled)
+
+	// Test cluster client inherits database_id from base configuration
+	clusterConfig := NewClusterClientConfiguration().WithDatabaseId(3)
+	clusterResult, err := clusterConfig.ToProtobuf()
+	assert.NoError(t, err)
+	assert.Equal(t, uint32(3), clusterResult.DatabaseId)
+	assert.True(t, clusterResult.ClusterModeEnabled)
+}

@@ -14,6 +14,7 @@ import static glide.TestUtilities.createLuaLibWithLongRunningFunction;
 import static glide.TestUtilities.generateLuaLibCode;
 import static glide.TestUtilities.generateLuaLibCodeBinary;
 import static glide.TestUtilities.getFirstEntryFromMultiValue;
+import static glide.TestUtilities.getFirstKeyFromMultiValue;
 import static glide.TestUtilities.getValueFromInfo;
 import static glide.TestUtilities.parseInfoResponseToMap;
 import static glide.TestUtilities.waitForNotBusy;
@@ -556,17 +557,25 @@ public class CommandTests {
         clusterClient.info(new Section[] {STATS}).get();
 
         var data = clusterClient.info(new Section[] {STATS}).get();
-        String firstNodeInfo = getFirstEntryFromMultiValue(data);
+        // always use the same node address for before and after
+        final String firstNodeAddress = getFirstKeyFromMultiValue(data);
+        String firstNodeInfo = data.getMultiValue().get(firstNodeAddress);
         long valueBefore = getValueFromInfo(firstNodeInfo, "total_net_input_bytes");
 
         var result = clusterClient.configResetStat().get();
         assertEquals(OK, result);
 
         data = clusterClient.info(new Section[] {STATS}).get();
-        firstNodeInfo = getFirstEntryFromMultiValue(data);
+        // always use the same node address for before and after
+        firstNodeInfo = data.getMultiValue().get(firstNodeAddress);
         long valueAfter = getValueFromInfo(firstNodeInfo, "total_net_input_bytes");
 
-        assertTrue(valueAfter < valueBefore);
+        assertTrue(
+                valueAfter < valueBefore,
+                () ->
+                        String.format(
+                                "Expected valueAfter (%d) to be less than valueBefore (%d)",
+                                valueAfter, valueBefore));
     }
 
     @ParameterizedTest
@@ -825,36 +834,54 @@ public class CommandTests {
     public void lolwut_lolwut(GlideClusterClient clusterClient) {
         var response = clusterClient.lolwut().get();
         System.out.printf("%nLOLWUT cluster client standard response%n%s%n", response);
-        assertTrue(response.contains("Redis ver. " + SERVER_VERSION));
+        assertTrue(
+                response.contains("ver") && response.contains(SERVER_VERSION.toString()),
+                "Expected LOLWUT output to contain version string");
 
         response = clusterClient.lolwut(new int[] {50, 20}).get();
         System.out.printf(
                 "%nLOLWUT cluster client standard response with params 50 20%n%s%n", response);
-        assertTrue(response.contains("Redis ver. " + SERVER_VERSION));
+        assertTrue(
+                response.contains("ver") && response.contains(SERVER_VERSION.toString()),
+                "Expected LOLWUT output to contain version string");
 
         response = clusterClient.lolwut(6).get();
         System.out.printf("%nLOLWUT cluster client ver 6 response%n%s%n", response);
-        assertTrue(response.contains("Redis ver. " + SERVER_VERSION));
+        assertTrue(
+                response.contains("ver") && response.contains(SERVER_VERSION.toString()),
+                "Expected LOLWUT output to contain version string");
 
         response = clusterClient.lolwut(5, new int[] {30, 4, 4}).get();
         System.out.printf("%nLOLWUT cluster client ver 5 response with params 30 4 4%n%s%n", response);
-        assertTrue(response.contains("Redis ver. " + SERVER_VERSION));
+        assertTrue(
+                response.contains("ver") && response.contains(SERVER_VERSION.toString()),
+                "Expected LOLWUT output to contain version string");
 
         var clusterResponse = clusterClient.lolwut(ALL_NODES).get();
         for (var nodeResponse : clusterResponse.getMultiValue().values()) {
-            assertTrue(nodeResponse.contains("Redis ver. " + SERVER_VERSION));
+            assertTrue(
+                    nodeResponse.contains("ver") && nodeResponse.contains(SERVER_VERSION.toString()),
+                    "Expected LOLWUT output to contain version string");
         }
 
         clusterResponse = clusterClient.lolwut(new int[] {10, 20}, ALL_NODES).get();
         for (var nodeResponse : clusterResponse.getMultiValue().values()) {
-            assertTrue(nodeResponse.contains("Redis ver. " + SERVER_VERSION));
+            assertTrue(
+                    nodeResponse.contains("ver") && nodeResponse.contains(SERVER_VERSION.toString()),
+                    "Expected LOLWUT output to contain version string");
         }
 
         clusterResponse = clusterClient.lolwut(2, RANDOM).get();
-        assertTrue(clusterResponse.getSingleValue().contains("Redis ver. " + SERVER_VERSION));
+        assertTrue(
+                clusterResponse.getSingleValue().contains("ver")
+                        && clusterResponse.getSingleValue().contains(SERVER_VERSION.toString()),
+                "Expected LOLWUT output to contain version string");
 
         clusterResponse = clusterClient.lolwut(2, new int[] {10, 20}, RANDOM).get();
-        assertTrue(clusterResponse.getSingleValue().contains("Redis ver. " + SERVER_VERSION));
+        assertTrue(
+                clusterResponse.getSingleValue().contains("ver")
+                        && clusterResponse.getSingleValue().contains(SERVER_VERSION.toString()),
+                "Expected LOLWUT output to contain version string");
     }
 
     @ParameterizedTest
@@ -2770,7 +2797,7 @@ public class CommandTests {
         assertEquals(OK, clusterClient.mset(expectedData).get());
 
         Set<String> result = new LinkedHashSet<>();
-        ClusterScanCursor cursor = ClusterScanCursor.initalCursor();
+        ClusterScanCursor cursor = ClusterScanCursor.initialCursor();
         while (!cursor.isFinished()) {
             final Object[] response = clusterClient.scan(cursor).get();
             cursor.releaseCursorHandle();
@@ -2802,7 +2829,7 @@ public class CommandTests {
         assertEquals(OK, clusterClient.mset(expectedData).get());
 
         Set<String> result = new LinkedHashSet<>();
-        ClusterScanCursor cursor = ClusterScanCursor.initalCursor();
+        ClusterScanCursor cursor = ClusterScanCursor.initialCursor();
         while (!cursor.isFinished()) {
             final Object[] response = clusterClient.scanBinary(cursor).get();
             cursor.releaseCursorHandle();
@@ -2849,7 +2876,7 @@ public class CommandTests {
         assertEquals(OK, clusterClient.mset(unexpectedPatterns).get());
 
         Set<String> result = new LinkedHashSet<>();
-        ClusterScanCursor cursor = ClusterScanCursor.initalCursor();
+        ClusterScanCursor cursor = ClusterScanCursor.initialCursor();
         while (!cursor.isFinished()) {
             final Object[] response =
                     clusterClient
@@ -2891,7 +2918,7 @@ public class CommandTests {
 
         assertEquals(OK, clusterClient.mset(expectedData).get());
 
-        ClusterScanCursor cursor = ClusterScanCursor.initalCursor();
+        ClusterScanCursor cursor = ClusterScanCursor.initialCursor();
         Set<String> keys = new LinkedHashSet<>();
         int successfulComparedScans = 0;
         while (!cursor.isFinished()) {
@@ -2946,7 +2973,7 @@ public class CommandTests {
         }
         assertEquals(OK, clusterClient.mset(unexpectedPatterns).get());
 
-        ClusterScanCursor cursor = ClusterScanCursor.initalCursor();
+        ClusterScanCursor cursor = ClusterScanCursor.initialCursor();
         Set<String> keys = new LinkedHashSet<>();
         while (!cursor.isFinished()) {
             Object[] result =
@@ -2978,7 +3005,7 @@ public class CommandTests {
         }
         assertEquals(OK, clusterClient.mset(expectedData).get());
 
-        ClusterScanCursor cursor = ClusterScanCursor.initalCursor();
+        ClusterScanCursor cursor = ClusterScanCursor.initialCursor();
         final Object[] response = clusterClient.scan(cursor).get();
         cursor = (ClusterScanCursor) (response[0]);
         cursor.releaseCursorHandle();
@@ -3003,7 +3030,7 @@ public class CommandTests {
         }
         assertEquals(OK, clusterClient.mset(stringData).get());
 
-        ClusterScanCursor cursor = ClusterScanCursor.initalCursor();
+        ClusterScanCursor cursor = ClusterScanCursor.initialCursor();
         Set<String> results = new LinkedHashSet<>();
         while (!cursor.isFinished()) {
             Object[] response =
@@ -3035,7 +3062,7 @@ public class CommandTests {
             assertEquals(1L, clusterClient.sadd(k, new String[] {"value" + k}).get());
         }
 
-        ClusterScanCursor cursor = ClusterScanCursor.initalCursor();
+        ClusterScanCursor cursor = ClusterScanCursor.initialCursor();
         Set<String> results = new LinkedHashSet<>();
         while (!cursor.isFinished()) {
             Object[] response =
@@ -3067,7 +3094,7 @@ public class CommandTests {
             assertEquals(1L, clusterClient.hset(k, Map.of("field" + k, "value" + k)).get());
         }
 
-        ClusterScanCursor cursor = ClusterScanCursor.initalCursor();
+        ClusterScanCursor cursor = ClusterScanCursor.initialCursor();
         Set<String> results = new LinkedHashSet<>();
         while (!cursor.isFinished()) {
             Object[] response =
@@ -3099,7 +3126,7 @@ public class CommandTests {
             assertEquals(1L, clusterClient.lpush(k, new String[] {"value" + k}).get());
         }
 
-        ClusterScanCursor cursor = ClusterScanCursor.initalCursor();
+        ClusterScanCursor cursor = ClusterScanCursor.initialCursor();
         Set<String> results = new LinkedHashSet<>();
         while (!cursor.isFinished()) {
             Object[] response =
@@ -3131,7 +3158,7 @@ public class CommandTests {
             assertEquals(1L, clusterClient.zadd(k, Map.of(k, 1.0)).get());
         }
 
-        ClusterScanCursor cursor = ClusterScanCursor.initalCursor();
+        ClusterScanCursor cursor = ClusterScanCursor.initialCursor();
         Set<String> results = new LinkedHashSet<>();
 
         while (!cursor.isFinished()) {
@@ -3164,7 +3191,7 @@ public class CommandTests {
             assertNotNull(clusterClient.xadd(k, Map.of(k, "value " + k)).get());
         }
 
-        ClusterScanCursor cursor = ClusterScanCursor.initalCursor();
+        ClusterScanCursor cursor = ClusterScanCursor.initialCursor();
         Set<String> results = new LinkedHashSet<>();
 
         while (!cursor.isFinished()) {

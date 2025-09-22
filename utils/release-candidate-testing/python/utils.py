@@ -1,24 +1,8 @@
-from dataclasses import dataclass
 import os
 import subprocess
 import sys
-from typing import List, Tuple, Union
-
-from glide import (
-    GlideClient,
-    GlideClientConfiguration,
-    GlideClusterClient,
-    GlideClusterClientConfiguration,
-    NodeAddress,
-)
-
-from glide_sync import (
-    GlideClient as SyncGlideClient,
-    GlideClientConfiguration as SyncGlideClientConfiguration,
-    GlideClusterClient as SyncGlideClusterClient,
-    GlideClusterClientConfiguration as SyncGlideClusterClientConfiguration,
-    NodeAddress as SyncNodeAddress,
-)
+from dataclasses import dataclass
+from typing import List, Tuple
 
 SCRIPT_FILE = os.path.abspath(f"{__file__}/../../../cluster_manager.py")
 
@@ -27,7 +11,8 @@ SCRIPT_FILE = os.path.abspath(f"{__file__}/../../../cluster_manager.py")
 class HostPort:
     host: str
     port: int
-    
+
+
 def start_servers(cluster_mode: bool, shard_count: int, replica_count: int) -> str:
     args_list: List[str] = [sys.executable, SCRIPT_FILE]
     args_list.append("start")
@@ -86,20 +71,3 @@ def stop_servers(folder: str) -> str:
         raise Exception(f"Failed to stop the cluster. Executed: {p}:\n{err}")
     print("Servers stopped successfully")
     return output
-
-
-def create_client(
-    nodes_list: List[Union[NodeAddress, SyncNodeAddress]] = [("localhost", 6379)], is_cluster: bool = False, is_sync: bool = False
-) -> GlideClusterClient:
-    addresses: List[Union[NodeAddress, SyncNodeAddress]] = nodes_list
-    if is_cluster:
-        config_class = SyncGlideClusterClientConfiguration if is_sync else GlideClusterClientConfiguration
-        client_class = SyncGlideClusterClient if is_sync else GlideClusterClient
-    else:
-        config_class = SyncGlideClientConfiguration if is_sync else GlideClientConfiguration
-        client_class = SyncGlideClient if is_sync else GlideClient
-    config = config_class(
-        addresses=addresses,
-        client_name=f"test_{'cluster' if is_cluster else 'standalone'}_client",
-    )
-    return client_class.create(config)

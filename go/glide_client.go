@@ -210,6 +210,20 @@ func (client *Client) ConfigGet(ctx context.Context, args []string) (map[string]
 
 // Select changes the currently selected database.
 //
+// WARNING: This command is NOT RECOMMENDED for production use.
+// Upon reconnection, the client will revert to the database_id specified
+// in the client configuration (default: 0), NOT the database selected
+// via this command.
+//
+// RECOMMENDED APPROACH: Use the database_id parameter in client
+// configuration instead:
+//
+//	config := &config.ClientConfiguration{
+//		Addresses: []config.NodeAddress{{Host: "localhost", Port: 6379}},
+//		DatabaseId: &databaseId, // Recommended: persists across reconnections
+//	}
+//	client, err := NewClient(config)
+//
 // See [valkey.io] for details.
 //
 // Parameters:

@@ -167,6 +167,11 @@ export namespace GlideClusterClientConfiguration {
  * @example
  * ```typescript
  * const config: GlideClusterClientConfiguration = {
+ *   addresses: [
+ *     { host: 'cluster-node-1.example.com', port: 6379 },
+ *     { host: 'cluster-node-2.example.com', port: 6379 },
+ *   ],
+ *   databaseId: 5, // Connect to database 5 (requires Valkey 9.0+ with multi-database cluster mode)
  *   periodicChecks: {
  *     duration_in_sec: 30, // Perform periodic checks every 30 seconds
  *   },
@@ -545,12 +550,12 @@ export class GlideClusterClient extends BaseClient {
     /**
      * Creates a new `GlideClusterClient` instance and establishes connections to a Valkey Cluster.
      *
-     * @param options - The configuration options for the client, including cluster addresses, authentication credentials, TLS settings, periodic checks, and Pub/Sub subscriptions.
+     * @param options - The configuration options for the client, including cluster addresses, database selection, authentication credentials, TLS settings, periodic checks, and Pub/Sub subscriptions.
      * @returns A promise that resolves to a connected `GlideClusterClient` instance.
      *
      * @remarks
      * Use this static method to create and connect a `GlideClusterClient` to a Valkey Cluster.
-     * The client will automatically handle connection establishment, including cluster topology discovery and handling of authentication and TLS configurations.
+     * The client will automatically handle connection establishment, including cluster topology discovery, database selection, and handling of authentication and TLS configurations.
      *
      * @example
      * ```typescript
@@ -562,6 +567,7 @@ export class GlideClusterClient extends BaseClient {
      *     { host: 'address1.example.com', port: 6379 },
      *     { host: 'address2.example.com', port: 6379 },
      *   ],
+     *   databaseId: 5, // Connect to database 5 (requires Valkey 9.0+)
      *   credentials: {
      *     username: 'user1',
      *     password: 'passwordA',
@@ -590,6 +596,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * @remarks
      * - **Cluster Topology Discovery**: The client will automatically discover the cluster topology based on the seed addresses provided.
+     * - **Database Selection**: Use `databaseId` to specify which logical database to connect to. Requires Valkey 9.0+ with multi-database cluster mode enabled.
      * - **Authentication**: If `credentials` are provided, the client will attempt to authenticate using the specified username and password.
      * - **TLS**: If `useTLS` is set to `true`, the client will establish secure connections using TLS.
      *      Should match the TLS configuration of the server/cluster, otherwise the connection attempt will fail.

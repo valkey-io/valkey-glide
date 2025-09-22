@@ -6,8 +6,10 @@ package glide
 // #cgo !windows LDFLAGS: -lm
 // #cgo darwin LDFLAGS: -framework Security
 // #cgo darwin,amd64 LDFLAGS: -framework CoreFoundation
-// #cgo linux,amd64 LDFLAGS: -L${SRCDIR}/rustbin/x86_64-unknown-linux-gnu
-// #cgo linux,arm64 LDFLAGS: -L${SRCDIR}/rustbin/aarch64-unknown-linux-gnu
+// #cgo linux,amd64,!musl LDFLAGS: -L${SRCDIR}/rustbin/x86_64-unknown-linux-gnu
+// #cgo linux,amd64,musl LDFLAGS: -L${SRCDIR}/rustbin/x86_64-unknown-linux-musl
+// #cgo linux,arm64,!musl LDFLAGS: -L${SRCDIR}/rustbin/aarch64-unknown-linux-gnu
+// #cgo linux,arm64,musl LDFLAGS: -L${SRCDIR}/rustbin/aarch64-unknown-linux-musl
 // #cgo darwin,arm64 LDFLAGS: -L${SRCDIR}/rustbin/aarch64-apple-darwin
 // #cgo darwin,amd64 LDFLAGS: -L${SRCDIR}/rustbin/x86_64-apple-darwin
 // #include "lib.h"
@@ -1821,6 +1823,468 @@ func (client *baseClient) HRandFieldWithCountWithValues(ctx context.Context, key
 		return nil, err
 	}
 	return handle2DStringArrayResponse(result)
+}
+
+// Sets the value of one or more fields of a given hash key, and optionally set their expiration time or time-to-live
+// (TTL).
+// This command overwrites the values and expirations of specified fields that exist in the hash.
+// If `key` doesn't exist, a new key holding a hash is created.
+//
+// Since:
+//
+//	Valkey 9.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx              - The context for controlling the command execution.
+//	key              - The key of the hash.
+//	fieldsAndValues  - A map of field-value pairs to set in the hash.
+//	options          - Optional arguments for the command.
+//
+// Return value:
+//
+//   - 1 if all fields were set successfully.
+//   - 0 if no fields were set due to conditional restrictions.
+//
+// [valkey.io]: https://valkey.io/commands/hsetex/
+func (client *baseClient) HSetEx(
+	ctx context.Context,
+	key string,
+	fieldsAndValues map[string]string,
+	opts options.HSetExOptions,
+) (int64, error) {
+	args, err := internal.BuildHSetExArgs(key, fieldsAndValues, opts)
+	if err != nil {
+		return 0, err
+	}
+
+	result, err := client.executeCommand(ctx, C.HSetEx, args)
+	if err != nil {
+		return 0, err
+	}
+
+	return handleIntResponse(result)
+}
+
+// Gets the values of one or more fields of a given hash key and optionally sets their expiration time or time-to-live
+// (TTL).
+//
+// Since:
+//
+//	Valkey 9.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx     - The context for controlling the command execution.
+//	key     - The key of the hash.
+//	fields  - The fields in the hash stored at key to retrieve from the database.
+//	options - Optional arguments for the command.
+//
+// Return value:
+//
+//	An array of [models.Result[string]] values associated with the given fields, in the same order as they are requested.
+//	- For every field that does not exist in the hash, a [models.CreateNilStringResult()] is returned.
+//	- If key does not exist, returns an empty string array.
+//
+// [valkey.io]: https://valkey.io/commands/hgetex/
+func (client *baseClient) HGetEx(
+	ctx context.Context,
+	key string,
+	fields []string,
+	opts options.HGetExOptions,
+) ([]models.Result[string], error) {
+	args, err := internal.BuildHGetExArgs(key, fields, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := client.executeCommand(ctx, C.HGetEx, args)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringOrNilArrayResponse(result)
+}
+
+// Sets an expiration (TTL or time to live) on one or more fields of a given hash key. You must specify at least one
+// field.
+// Field(s) will automatically be deleted from the hash key when their TTLs expire.
+// Field expirations will only be cleared by commands that delete or overwrite the contents of the hash fields, including HDEL
+// and HSET commands. This means that all the operations that conceptually alter the value stored at a hash key's field without
+// replacing it with a new one will leave the TTL untouched.
+// You can clear the TTL of a specific field by specifying 0 for the `seconds` argument.
+//
+// Note:
+//
+//	Calling HEXPIRE/HPEXPIRE with a time in the past will result in the hash field being deleted immediately.
+//
+// Since:
+//
+//	Valkey 9.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx        - The context for controlling the command execution.
+//	key        - The key of the hash.
+//	expireTime - The expiration time as a duration.
+//	fields     - The fields to set expiration for.
+//	options    - Optional arguments for the command, see [options.HExpireOptions].
+//
+// Return value:
+//
+//	An array of integers indicating the result for each field:
+//	- -2: Field does not exist in the hash, or key does not exist.
+//	- 0: The specified condition was not met.
+//	- 1: The expiration time was applied.
+//	- 2: When called with 0 seconds.
+//
+// [valkey.io]: https://valkey.io/commands/hexpire/
+func (client *baseClient) HExpire(
+	ctx context.Context,
+	key string,
+	expireTime time.Duration,
+	fields []string,
+	opts options.HExpireOptions,
+) ([]int64, error) {
+	args, err := internal.BuildHExpireArgs(key, expireTime, fields, opts, false)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := client.executeCommand(ctx, C.HExpire, args)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleIntArrayResponse(result)
+}
+
+// Sets an expiration (TTL or time to live) on one or more fields of a given hash key using an absolute Unix
+// timestamp. A timestamp in the past will delete the field immediately.
+// Field(s) will automatically be deleted from the hash key when their TTLs expire.
+//
+// Since:
+//
+//	Valkey 9.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx        - The context for controlling the command execution.
+//	key        - The key of the hash.
+//	expireTime - The expiration time as a time.Time.
+//	fields     - The fields to set expiration for.
+//	options    - Optional arguments for the command, see [options.HExpireOptions].
+//
+// Return value:
+//
+//	An array of integers indicating the result for each field:
+//	- -2: Field does not exist in the hash, or hash is empty.
+//	- 0: The specified condition was not met.
+//	- 1: The expiration time was applied.
+//	- 2: When called with 0 seconds or past Unix time.
+//
+// [valkey.io]: https://valkey.io/commands/hexpireat/
+func (client *baseClient) HExpireAt(
+	ctx context.Context,
+	key string,
+	expireTime time.Time,
+	fields []string,
+	opts options.HExpireOptions,
+) ([]int64, error) {
+	args, err := internal.BuildHExpireArgs(key, expireTime, fields, opts, false)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := client.executeCommand(ctx, C.HExpireAt, args)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleIntArrayResponse(result)
+}
+
+// Sets an expiration (TTL or time to live) on one or more fields of a given hash key.
+// Field(s) will automatically be deleted from the hash key when their TTLs expire.
+//
+// Since:
+//
+//	Valkey 9.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx        - The context for controlling the command execution.
+//	key        - The key of the hash.
+//	expireTime - The expiration time as a duration.
+//	fields     - The fields to set expiration for.
+//	options    - Optional arguments for the command, see [options.HExpireOptions].
+//
+// Return value:
+//
+//	An array of integers indicating the result for each field:
+//	- -2: Field does not exist in the hash, or hash is empty.
+//	- 0: The specified condition was not met.
+//	- 1: The expiration time was applied.
+//	- 2: When called with 0 milliseconds.
+//
+// [valkey.io]: https://valkey.io/commands/hpexpire/
+func (client *baseClient) HPExpire(
+	ctx context.Context,
+	key string,
+	expireTime time.Duration,
+	fields []string,
+	opts options.HExpireOptions,
+) ([]int64, error) {
+	args, err := internal.BuildHExpireArgs(key, expireTime, fields, opts, true)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := client.executeCommand(ctx, C.HPExpire, args)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleIntArrayResponse(result)
+}
+
+// Sets an expiration (TTL or time to live) on one or more fields of a given hash key using an absolute Unix
+// timestamp. A timestamp in the past will delete the field immediately.
+// Field(s) will automatically be deleted from the hash key when their TTLs expire.
+//
+// Since:
+//
+//	Valkey 9.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx        - The context for controlling the command execution.
+//	key        - The key of the hash.
+//	expireTime - The expiration time as a time.Time.
+//	fields     - The fields to set expiration for.
+//	options    - Optional arguments for the command, see [options.HExpireOptions].
+//
+// Return value:
+//
+//	An array of integers indicating the result for each field:
+//	- -2: Field does not exist in the hash, or hash is empty.
+//	- 0: The specified condition was not met.
+//	- 1: The expiration time was applied.
+//	- 2: When called with 0 milliseconds or past Unix time.
+//
+// [valkey.io]: https://valkey.io/commands/hpexpireat/
+func (client *baseClient) HPExpireAt(
+	ctx context.Context,
+	key string,
+	expireTime time.Time,
+	fields []string,
+	opts options.HExpireOptions,
+) ([]int64, error) {
+	args, err := internal.BuildHExpireArgs(key, expireTime, fields, opts, true)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := client.executeCommand(ctx, C.HPExpireAt, args)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleIntArrayResponse(result)
+}
+
+// Removes the existing expiration on a hash key's field(s), turning the field(s) from volatile (a field with
+// expiration set) to persistent (a field that will never expire as no TTL (time to live) is associated).
+//
+// Since:
+//
+//	Valkey 9.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx    - The context for controlling the command execution.
+//	key    - The key of the hash.
+//	fields - The fields to remove expiration from.
+//
+// Return value:
+//
+//	An array of integers indicating the result for each field:
+//	- -2: Field does not exist in the hash, or hash does not exist.
+//	- -1: Field exists but has no expiration.
+//	- 1: The expiration was successfully removed from the field.
+//
+// [valkey.io]: https://valkey.io/commands/hpersist/
+func (client *baseClient) HPersist(ctx context.Context, key string, fields []string) ([]int64, error) {
+	args, err := internal.BuildHPersistArgs(key, fields)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := client.executeCommand(ctx, C.HPersist, args)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleIntArrayResponse(result)
+}
+
+// Returns the remaining TTL (time to live) of a hash key's field(s) that have a set expiration.
+//
+// Since:
+//
+//	Valkey 9.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx    - The context for controlling the command execution.
+//	key    - The key of the hash.
+//	fields - The fields to get TTL for.
+//
+// Return value:
+//
+//	An array of integers indicating the TTL for each field in seconds:
+//	- Positive number: remaining TTL.
+//	- -1: field exists but has no expiration.
+//	- -2: field doesn't exist.
+//
+// [valkey.io]: https://valkey.io/commands/httl/
+func (client *baseClient) HTtl(ctx context.Context, key string, fields []string) ([]int64, error) {
+	args, err := internal.BuildHTTLAndExpireTimeArgs(key, fields)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := client.executeCommand(ctx, C.HTtl, args)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleIntArrayResponse(result)
+}
+
+// Returns the remaining TTL (time to live) of a hash key's field(s) that have a set expiration, in milliseconds.
+//
+// Since:
+//
+//	Valkey 9.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx    - The context for controlling the command execution.
+//	key    - The key of the hash.
+//	fields - The fields to get TTL for.
+//
+// Return value:
+//
+//	An array of integers indicating the TTL for each field in milliseconds:
+//	- Positive number: remaining TTL.
+//	- -1: field exists but has no expiration.
+//	- -2: field doesn't exist.
+//
+// [valkey.io]: https://valkey.io/commands/hpttl/
+func (client *baseClient) HPTtl(ctx context.Context, key string, fields []string) ([]int64, error) {
+	args, err := internal.BuildHTTLAndExpireTimeArgs(key, fields)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := client.executeCommand(ctx, C.HPTtl, args)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleIntArrayResponse(result)
+}
+
+// Returns the absolute Unix timestamp in seconds since Unix epoch at which the given key's field(s) will expire.
+//
+// Since:
+//
+//	Valkey 9.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx    - The context for controlling the command execution.
+//	key    - The key of the hash.
+//	fields - The fields to get expiration time for.
+//
+// Return value:
+//
+//	An array of integers indicating the expiration timestamp for each field in seconds:
+//	- Positive number: expiration timestamp.
+//	- -1: field exists but has no expiration.
+//	- -2: field doesn't exist.
+//
+// [valkey.io]: https://valkey.io/commands/hexpiretime/
+func (client *baseClient) HExpireTime(ctx context.Context, key string, fields []string) ([]int64, error) {
+	args, err := internal.BuildHTTLAndExpireTimeArgs(key, fields)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := client.executeCommand(ctx, C.HExpireTime, args)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleIntArrayResponse(result)
+}
+
+// Returns the absolute Unix timestamp in milliseconds since Unix epoch at which the given key's field(s) will
+// expire.
+//
+// Since:
+//
+//	Valkey 9.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx    - The context for controlling the command execution.
+//	key    - The key of the hash.
+//	fields - The fields to get expiration time for.
+//
+// Return value:
+//
+//	An array of integers indicating the expiration timestamp for each field in milliseconds:
+//	- Positive number: expiration timestamp.
+//	- -1: field exists but has no expiration.
+//	- -2: field doesn't exist.
+//
+// [valkey.io]: https://valkey.io/commands/hpexpiretime/
+func (client *baseClient) HPExpireTime(ctx context.Context, key string, fields []string) ([]int64, error) {
+	args, err := internal.BuildHTTLAndExpireTimeArgs(key, fields)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := client.executeCommand(ctx, C.HPExpireTime, args)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleIntArrayResponse(result)
 }
 
 // Inserts all the specified values at the head of the list stored at key. elements are inserted one after the other to the

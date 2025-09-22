@@ -14,12 +14,6 @@ TESTS_SYNC_DIR = PYTHON_DIR / "tests" / "sync_tests"
 
 EXCLUDED_API_FUNCTIONS = {
     "async_only": [
-        # Script
-        "script_flush",
-        "script_exists",
-        "invoke_script",
-        "invoke_script_route",
-        "script_kill",
         # PubSub
         "pubsub_shardchannels",
         "pubsub_shardnumsub",
@@ -29,24 +23,42 @@ EXCLUDED_API_FUNCTIONS = {
         "pubsub_channels",
         "get_pubsub_message",
         "try_get_pubsub_message",
-        # scan
+        # cluster scan
         "scan",
+        "get_cursor",
+        "is_finished",
         # _CompatFuture
         "done",
         "result",
         "set_exception",
         "set_result",
+        # opentelemetry
+        "create_otel_span",
+        "drop_otel_span",
+        "get_endpoint",
+        "get_metrics",
+        "get_sample_percentage",
+        "get_traces",
+        "init_opentelemetry",
+        "set_traces",
+        "get_statistics",
+        # Logger
+        "is_lower",
+        "py_init",
+        "py_log",
         # others
         "init_callback",
-        "get_statistics",
+        "create_leaked_bytes_vec",
+        "create_leaked_value",
+        "start_socket_listener_external",
+        "value_from_pointer",
+        "select",
     ],
     "sync_only": [],
 }
 
 EXCLUDED_API_FILENAMES = {
     "async_only": [
-        "ft.py",
-        "glide_json.py",
         "opentelemetry.py",
     ],
     "sync_only": ["_glide_ffi.py"],
@@ -54,37 +66,19 @@ EXCLUDED_API_FILENAMES = {
 
 EXCLUDED_TESTS = {
     "async_only": [
-        # Script
-        "test_script",
-        "test_script_kill_no_route",
-        "test_script_flush",
-        "test_script_large_keys_no_args",
         "test_inflight_request_limit",
-        "test_script_isnt_removed_while_another_instance_exists",
         "test_statistics",
-        "test_script_kill_unkillable",
-        "test_script_large_args_no_keys",
-        "test_script_show",
-        "run_long_script",
-        "test_script_exists",
-        "attempt_kill_writing_script",
-        "test_script_binary",
-        "script_kill_tests",
-        "wait_and_kill_script",
-        "test_script_large_keys_and_args",
-        "test_script_kill_route",
-        "run_writing_script",
+        "test_select",
+        "test_UDS_socket_connection_failure",
     ],
     "sync_only": ["test_sync_fork"],
 }
 
 EXCLUDED_TESTS_FILENAMES = {
     "async_only": [
-        "test_json.py",
         "test_opentelemetry.py",
         "test_pubsub.py",
         "test_scan.py",
-        "test_ft.py",
     ],
     "sync_only": [],
 }
@@ -110,13 +104,14 @@ def get_all_functions_in_directory(
     excluding `__init__.py` files and excluded files.
     """
     functions_by_file = defaultdict(set)
-    for file in directory.rglob("*.py"):
-        if file.name.startswith("__") or file.name in exclude_filenames:
-            continue
-        if filename_prefix and not file.name.startswith(filename_prefix):
-            continue
-        for func in get_functions_from_file(file):
-            functions_by_file[func].add(str(file))
+    for file in directory.rglob("*"):
+        if file.suffix in {".py", ".pyi"}:
+            if file.name.startswith("__") or file.name in exclude_filenames:
+                continue
+            if filename_prefix and not file.name.startswith(filename_prefix):
+                continue
+            for func in get_functions_from_file(file):
+                functions_by_file[func].add(str(file))
     return functions_by_file
 
 

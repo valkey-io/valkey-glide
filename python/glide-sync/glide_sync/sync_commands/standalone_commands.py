@@ -21,6 +21,7 @@ from glide_shared.constants import (
 from glide_shared.protobuf.command_request_pb2 import RequestType
 
 from .core import CoreCommands
+from .script import Script
 
 
 class StandaloneCommands(CoreCommands):
@@ -159,20 +160,6 @@ class StandaloneCommands(CoreCommands):
             raise_on_error=raise_on_error,
             timeout=timeout,
         )
-
-    def select(self, index: int) -> TOK:
-        """
-        Change the currently selected database.
-
-        See [valkey.io](https://valkey.io/commands/select/) for details.
-
-        Args:
-            index (int): The index of the database to select.
-
-        Returns:
-            A simple OK response.
-        """
-        return cast(TOK, self._execute_command(RequestType.Select, [str(index)]))
 
     def config_resetstat(self) -> TOK:
         """
@@ -851,3 +838,94 @@ class StandaloneCommands(CoreCommands):
             TOK,
             self._execute_command(RequestType.UnWatch, []),
         )
+
+    def script_exists(self, sha1s: List[TEncodable]) -> List[bool]:
+        """
+        Check existence of scripts in the script cache by their SHA1 digest.
+
+        See [valkey.io](https://valkey.io/commands/script-exists) for more details.
+
+        Args:
+            sha1s (List[TEncodable]): List of SHA1 digests of the scripts to check.
+
+        Returns:
+            List[bool]: A list of boolean values indicating the existence of each script.
+
+        Examples:
+            >>> client.script_exists(["sha1_digest1", "sha1_digest2"])
+                [True, False]
+        """
+        return cast(List[bool], self._execute_command(RequestType.ScriptExists, sha1s))
+
+    def script_flush(self, mode: Optional[FlushMode] = None) -> TOK:
+        """
+        Flush the Lua scripts cache.
+
+        See [valkey.io](https://valkey.io/commands/script-flush) for more details.
+
+        Args:
+            mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
+
+        Returns:
+            TOK: A simple `OK` response.
+
+        Examples:
+            >>> client.script_flush()
+                "OK"
+
+            >>> client.script_flush(FlushMode.ASYNC)
+                "OK"
+        """
+
+        return cast(
+            TOK,
+            self._execute_command(
+                RequestType.ScriptFlush, [mode.value] if mode else []
+            ),
+        )
+
+    def script_kill(self) -> TOK:
+        """
+        Kill the currently executing Lua script, assuming no write operation was yet performed by the script.
+
+        See [valkey.io](https://valkey.io/commands/script-kill) for more details.
+
+        Returns:
+            TOK: A simple `OK` response.
+
+        Examples:
+            >>> client.script_kill()
+                "OK"
+        """
+        return cast(TOK, self._execute_command(RequestType.ScriptKill, []))
+
+    def invoke_script(
+        self,
+        script: Script,
+        keys: Optional[List[TEncodable]] = None,
+        args: Optional[List[TEncodable]] = None,
+    ) -> TResult:
+        """
+        Invokes a Lua script with its keys and arguments.
+        This method simplifies the process of invoking scripts on a the server by using an object that represents a Lua script.
+        The script loading, argument preparation, and execution will all be handled internally.
+        If the script has not already been loaded, it will be loaded automatically using the `SCRIPT LOAD` command.
+        After that, it will be invoked using the `EVALSHA` command.
+
+        See [SCRIPT LOAD](https://valkey.io/commands/script-load/) and [EVALSHA](https://valkey.io/commands/evalsha/)
+        for more details.
+
+        Args:
+            script (Script): The Lua script to execute.
+            keys (Optional[List[TEncodable]]): The keys that are used in the script.
+            args (Optional[List[TEncodable]]): The arguments for the script.
+
+        Returns:
+            TResult: a value that depends on the script that was executed.
+
+        Examples:
+            >>> lua_script = Script("return { KEYS[1], ARGV[1] }")
+            >>> client.invoke_script(lua_script, keys=["foo"], args=["bar"])
+                [b"foo", b"bar"]
+        """
+        return self._execute_script(script.get_hash(), keys, args)

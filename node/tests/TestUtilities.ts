@@ -28,6 +28,7 @@ import {
     GlideClusterClient,
     GlideReturnType,
     GlideString,
+    HashFieldConditionalChange,
     InfBoundary,
     InfoOptions,
     InsertPosition,
@@ -1131,6 +1132,94 @@ export async function batchTest(
     responseData.push(["hexists(key4, field)", false]);
     baseBatch.hrandfield(key4);
     responseData.push(["hrandfield(key4)", null]);
+
+    // HSETEX tests - only run if server version is 9.0.0 or higher
+    if (!cluster.checkIfServerVersionLessThan("9.0.0")) {
+        // Test basic HSETEX with expiry
+        baseBatch.hsetex(
+            key4,
+            { [field.toString()]: value },
+            {
+                expiry: { type: TimeUnit.Seconds, count: 60 },
+            },
+        );
+        responseData.push([
+            "hsetex(key4, { [field]: value }, { expiry: { type: TimeUnit.Seconds, count: 60 } })",
+            1,
+        ]);
+
+        // Test HSETEX with KEEPTTL
+        baseBatch.hsetex(
+            key4,
+            { [field2.toString()]: value },
+            {
+                expiry: "KEEPTTL",
+            },
+        );
+        responseData.push([
+            "hsetex(key4, { [field2]: value }, { expiry: 'KEEPTTL' })",
+            1,
+        ]);
+
+        // Test HSETEX with basic expiry
+        baseBatch.hsetex(
+            key4,
+            { [field3.toString()]: value },
+            {
+                expiry: { type: TimeUnit.Seconds, count: 60 },
+            },
+        );
+        responseData.push([
+            "hsetex(key4, { [field3]: value }, { expiry: { type: TimeUnit.Seconds, count: 60 } })",
+            1,
+        ]);
+
+        // Test HSETEX with field conditional changes
+        baseBatch.hsetex(
+            key4,
+            { [field4.toString()]: value },
+            {
+                fieldConditionalChange:
+                    HashFieldConditionalChange.ONLY_IF_NONE_EXIST,
+                expiry: { type: TimeUnit.Seconds, count: 60 },
+            },
+        );
+        responseData.push([
+            "hsetex(key4, { [field4]: value }, { fieldConditionalChange: HashFieldConditionalChange.ONLY_IF_NONE_EXIST, expiry: { type: TimeUnit.Seconds, count: 60 } })",
+            1,
+        ]);
+
+        // HGETEX tests - only run if server version is 9.0.0 or higher
+        // Test basic HGETEX with expiry
+        baseBatch.hgetex(key4, [field.toString(), field2.toString()], {
+            expiry: { type: TimeUnit.Seconds, count: 60 },
+        });
+        responseData.push([
+            "hgetex(key4, [field, field2], { expiry: { type: TimeUnit.Seconds, count: 60 } })",
+            [value.toString(), value.toString()],
+        ]);
+
+        // Test HGETEX with PERSIST
+        baseBatch.hgetex(key4, [field.toString()], {
+            expiry: "PERSIST",
+        });
+        responseData.push([
+            "hgetex(key4, [field], { expiry: 'PERSIST' })",
+            [value.toString()],
+        ]);
+
+        // Test HTTL
+        baseBatch.httl(key4, [
+            field.toString(),
+            field2.toString(),
+            field3.toString(),
+        ]);
+        // Note: TTL values are dynamic, so we'll validate the structure rather than exact values
+        responseData.push([
+            "httl(key4, [field, field2, field3])",
+            [-1, 60, 60],
+        ]);
+    }
 
     baseBatch.lpush(key5, [field1, field2, field3, field4]);
     responseData.push(["lpush(key5, [1, 2, 3, 4])", 4]);

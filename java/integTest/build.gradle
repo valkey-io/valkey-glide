@@ -13,14 +13,17 @@ tasks.withType(JavaCompile) {
 }
 
 dependencies {
-    // client
+    // Use published GLIDE artifact
     implementation group: 'io.valkey', name: 'valkey-glide', version: project.ext.defaultReleaseVersion, classifier: osdetector.classifier
+    
+    // Use published jedis-compatibility artifact
+    testImplementation group: 'io.valkey', name: 'valkey-glide-jedis-compatibility', version: project.ext.defaultReleaseVersion, classifier: osdetector.classifier
 
     implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.13.0'
-    implementation 'com.google.code.gson:gson:2.10.1'
+    implementation 'com.google.code.gson:gson:2.13.2'
 
-    // Add commons-pool2 as runtime dependency (required by glide.api module)
-    runtimeOnly group: 'org.apache.commons', name: 'commons-pool2', version: '2.12.0'
+    // Add commons-pool2 as compile-time dependency for tests
+    implementation group: 'org.apache.commons', name: 'commons-pool2', version: '2.12.1'
 
 
 
@@ -32,8 +35,8 @@ dependencies {
     implementation group: 'org.semver4j', name: 'semver4j', version: '5.6.0'
 
     //lombok
-    testCompileOnly 'org.projectlombok:lombok:1.18.38'
-    testAnnotationProcessor 'org.projectlombok:lombok:1.18.38'
+    testCompileOnly 'org.projectlombok:lombok:1.18.42'
+    testAnnotationProcessor 'org.projectlombok:lombok:1.18.42'
 }
 
 def standaloneHosts = ''
@@ -136,9 +139,10 @@ clearDirs.finalizedBy 'startStandalone'
 clearDirs.finalizedBy 'startCluster'
 clearDirs.finalizedBy 'startClusterForAz'
 afterTests.finalizedBy 'stopAllAfterTests'
-compileTestJava.dependsOn ':client:publishToMavenLocal'
+compileTestJava.dependsOn ':client:publishToMavenLocal', ':jedis-compatibility:publishToMavenLocal'
 
 tasks.withType(Test) {
+    dependsOn ':client:publishToMavenLocal', ':jedis-compatibility:publishToMavenLocal'
     useJUnitPlatform()
     if (!project.gradle.startParameter.taskNames.contains(':integTest:modulesTest')) {
         dependsOn 'beforeTests'
@@ -160,6 +164,15 @@ tasks.withType(Test) {
 
     minHeapSize = "2048m" // Initial heap size. Needed for max size tests.
     maxHeapSize = "2048m" // Maximum heap size. Needed for max size tests.
+    
+    // Native library path for GLIDE FFI - needed for Jedis compatibility tests
+    jvmArgs "-Djava.library.path=${project.rootDir}/../target/release"
+    
+    // Disable modularity for jedis compatibility tests
+    if (name.contains('jedis') || filter.includePatterns.any { it.contains('jedis') }) {
+        jvmArgs += "--add-opens=java.base/java.lang=ALL-UNNAMED"
+        jvmArgs += "--add-opens=java.base/java.util=ALL-UNNAMED"
+    }
 
     afterTest { desc, result ->
         logger.quiet "${desc.className}.${desc.name}: ${result.resultType} ${(result.getEndTime() - result.getStartTime())/1000}s"

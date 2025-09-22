@@ -1,6 +1,11 @@
 [
     {
         "type": "valkey",
+        "version": "9.0.0-rc1",
+        "run": "always"
+    },
+    {
+        "type": "valkey",
         "version": "8.1",
         "run": "always"
     },

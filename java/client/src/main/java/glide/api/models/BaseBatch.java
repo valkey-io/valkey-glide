@@ -56,18 +56,29 @@ import static command_request.CommandRequestOuterClass.RequestType.GetEx;
 import static command_request.CommandRequestOuterClass.RequestType.GetRange;
 import static command_request.CommandRequestOuterClass.RequestType.HDel;
 import static command_request.CommandRequestOuterClass.RequestType.HExists;
+import static command_request.CommandRequestOuterClass.RequestType.HExpire;
+import static command_request.CommandRequestOuterClass.RequestType.HExpireAt;
+import static command_request.CommandRequestOuterClass.RequestType.HExpireTime;
 import static command_request.CommandRequestOuterClass.RequestType.HGet;
 import static command_request.CommandRequestOuterClass.RequestType.HGetAll;
+import static command_request.CommandRequestOuterClass.RequestType.HGetEx;
 import static command_request.CommandRequestOuterClass.RequestType.HIncrBy;
 import static command_request.CommandRequestOuterClass.RequestType.HIncrByFloat;
 import static command_request.CommandRequestOuterClass.RequestType.HKeys;
 import static command_request.CommandRequestOuterClass.RequestType.HLen;
 import static command_request.CommandRequestOuterClass.RequestType.HMGet;
+import static command_request.CommandRequestOuterClass.RequestType.HPExpire;
+import static command_request.CommandRequestOuterClass.RequestType.HPExpireAt;
+import static command_request.CommandRequestOuterClass.RequestType.HPExpireTime;
+import static command_request.CommandRequestOuterClass.RequestType.HPTtl;
+import static command_request.CommandRequestOuterClass.RequestType.HPersist;
 import static command_request.CommandRequestOuterClass.RequestType.HRandField;
 import static command_request.CommandRequestOuterClass.RequestType.HScan;
 import static command_request.CommandRequestOuterClass.RequestType.HSet;
+import static command_request.CommandRequestOuterClass.RequestType.HSetEx;
 import static command_request.CommandRequestOuterClass.RequestType.HSetNX;
 import static command_request.CommandRequestOuterClass.RequestType.HStrlen;
+import static command_request.CommandRequestOuterClass.RequestType.HTtl;
 import static command_request.CommandRequestOuterClass.RequestType.HVals;
 import static command_request.CommandRequestOuterClass.RequestType.Incr;
 import static command_request.CommandRequestOuterClass.RequestType.IncrBy;
@@ -193,6 +204,7 @@ import static command_request.CommandRequestOuterClass.RequestType.ZScore;
 import static command_request.CommandRequestOuterClass.RequestType.ZUnion;
 import static command_request.CommandRequestOuterClass.RequestType.ZUnionStore;
 import static glide.api.commands.GenericBaseCommands.REPLACE_VALKEY_API;
+import static glide.api.commands.HashBaseCommands.FIELDS_VALKEY_API;
 import static glide.api.commands.HashBaseCommands.WITH_VALUES_VALKEY_API;
 import static glide.api.commands.ListBaseCommands.COUNT_FOR_LIST_VALKEY_API;
 import static glide.api.commands.ServerManagementCommands.VERSION_VALKEY_API;
@@ -227,10 +239,14 @@ import command_request.CommandRequestOuterClass.Batch;
 import command_request.CommandRequestOuterClass.Command;
 import command_request.CommandRequestOuterClass.Command.ArgsArray;
 import command_request.CommandRequestOuterClass.RequestType;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import glide.api.commands.StringBaseCommands;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.GetExOptions;
+import glide.api.models.commands.HGetExOptions;
+import glide.api.models.commands.HSetExOptions;
+import glide.api.models.commands.HashFieldExpirationConditionOptions;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
 import glide.api.models.commands.LPosOptions;
@@ -324,6 +340,12 @@ import lombok.NonNull;
 @Getter
 public abstract class BaseBatch<T extends BaseBatch<T>> {
     /** Command class to send a single request to Valkey. */
+    @Getter(
+            onMethod_ = {
+                @SuppressFBWarnings(
+                        value = "EI_EXPOSE_REP",
+                        justification = "Batch builder is intentionally mutable for command assembly")
+            })
     protected final Batch.Builder protobufBatch;
 
     /**
@@ -797,6 +819,424 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
         protobufBatch.addCommands(
                 buildCommand(
                         HSet, newArgsBuilder().add(key).add(flattenMapToGlideStringArray(fieldValueMap))));
+        return getThis();
+    }
+
+    /**
+     * Sets the specified fields to their respective values in the hash stored at <code>key</code>
+     * with optional expiration. If <code>key</code> does not exist, a new key holding a hash is
+     * created.
+     *
+     * @since Valkey 9.0.0.
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
+     * @see <a href="https://valkey.io/commands/hsetex/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param fieldValueMap A field-value map consisting of fields and their corresponding values to
+     *     be set in the hash stored at the specified key.
+     * @param options The {@link HSetExOptions} for the command, including field conditional changes
+     *     and expiry settings.
+     * @return Command Response - The number of fields that were added to the hash.
+     * @example
+     *     <pre>{@code
+     * // Set fields with 60 second expiration, only if none exist
+     * HSetExOptions options = HSetExOptions.builder()
+     *     .onlyIfNoneExist()
+     *     .expiry(ExpirySet.Seconds(60L))
+     *     .build();
+     *
+     * Map<String, String> fieldValueMap = Map.of("field1", "value1", "field2", "value2");
+     * batch.hsetex("myHash", fieldValueMap, options);
+     * }</pre>
+     */
+    public <ArgType> T hsetex(
+            @NonNull ArgType key,
+            @NonNull Map<ArgType, ArgType> fieldValueMap,
+            @NonNull HSetExOptions options) {
+        checkTypeOrThrow(key);
+        protobufBatch.addCommands(
+                buildCommand(
+                        HSetEx,
+                        newArgsBuilder()
+                                .add(key)
+                                .add(options.toArgs())
+                                .add(FIELDS_VALKEY_API)
+                                .add(fieldValueMap.size())
+                                .add(flattenMapToGlideStringArray(fieldValueMap))));
+        return getThis();
+    }
+
+    /**
+     * Gets the values of the specified fields from the hash stored at <code>key</code> and optionally
+     * sets their expiration.<br>
+     * If a field does not exist in the hash, a <code>null</code> value is returned for that field.
+     *
+     * @since Valkey 9.0.0.
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
+     * @see <a href="https://valkey.io/commands/hgetex/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param fields The fields to retrieve from the hash.
+     * @param options The {@link HGetExOptions} for the command, including expiry settings that
+     *     support PERSIST but exclude KEEPTTL.
+     * @return Command Response - An array of values associated with the given fields, in the same
+     *     order as they are requested. For every field that does not exist in the hash, a <code>null
+     *     </code> value is returned.
+     * @example
+     *     <pre>{@code
+     * // Get fields and set them to persist (no expiration)
+     * HGetExOptions options = HGetExOptions.builder()
+     *     .expiry(HGetExExpiry.Persist())
+     *     .build();
+     *
+     * String[] fields = {"field1", "field2"};
+     * batch.hgetex("myHash", fields, options);
+     * }</pre>
+     */
+    public <ArgType> T hgetex(
+            @NonNull ArgType key, @NonNull ArgType[] fields, @NonNull HGetExOptions options) {
+        checkTypeOrThrow(key);
+        protobufBatch.addCommands(
+                buildCommand(
+                        HGetEx,
+                        newArgsBuilder()
+                                .add(key)
+                                .add(options.toArgs())
+                                .add(FIELDS_VALKEY_API)
+                                .add(fields.length)
+                                .add(fields)));
+        return getThis();
+    }
+
+    /**
+     * Sets expiration time for hash fields. HEXPIRE sets the expiration time in seconds for the
+     * specified fields of the hash stored at <code>key</code>. You can specify whether to set the
+     * expiration only if the field has no expiration, only if the field has an existing expiration,
+     * only if the new expiration is greater than the current one, or only if the new expiration is
+     * less than the current one.
+     *
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/hexpire/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param seconds The expiration time in seconds.
+     * @param fields The fields in the hash stored at <code>key</code> to set expiration for.
+     * @param options The {@link HashFieldExpirationConditionOptions} for the command, supporting only
+     *     expiration conditions (NX/XX/GT/LT).
+     * @return Command Response - An array of <code>Boolean</code> values indicating the success of
+     *     setting expiration for each field. <code>true</code> indicates that the expiration was
+     *     successfully set, and <code>false</code> indicates that the condition was not met or the
+     *     field does not exist.
+     * @example
+     *     <pre>{@code
+     * // Set expiration only if fields have no existing expiration
+     * HashFieldExpirationConditionOptions options = HashFieldExpirationConditionOptions.builder()
+     *     .onlyIfNoExpiry()
+     *     .build();
+     *
+     * String[] fields = {"field1", "field2"};
+     * batch.hexpire("myHash", 300L, fields, options);
+     * }</pre>
+     */
+    public <ArgType> T hexpire(
+            @NonNull ArgType key,
+            long seconds,
+            @NonNull ArgType[] fields,
+            @NonNull HashFieldExpirationConditionOptions options) {
+        checkTypeOrThrow(key);
+        protobufBatch.addCommands(
+                buildCommand(
+                        HExpire,
+                        newArgsBuilder()
+                                .add(key)
+                                .add(seconds)
+                                .add(options.toArgs())
+                                .add(FIELDS_VALKEY_API)
+                                .add(fields.length)
+                                .add(fields)));
+        return getThis();
+    }
+
+    /**
+     * Removes the expiration time for each specified field, turning the field from volatile (a field
+     * with expiration time) to persistent (a field that will never expire as no expiration time is
+     * associated).
+     *
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/hpersist/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param fields The fields to remove expiration from.
+     * @return Command Response - An array of <code>Boolean</code> values, each corresponding to a
+     *     field:
+     *     <ul>
+     *       <li><code>true</code> if the expiration time was successfully removed from the field.
+     *       <li><code>false</code> if the field does not exist or does not have an expiration time.
+     *     </ul>
+     */
+    public <ArgType> T hpersist(@NonNull ArgType key, @NonNull ArgType[] fields) {
+        checkTypeOrThrow(key);
+        protobufBatch.addCommands(
+                buildCommand(
+                        HPersist,
+                        newArgsBuilder().add(key).add(FIELDS_VALKEY_API).add(fields.length).add(fields)));
+        return getThis();
+    }
+
+    /**
+     * Sets expiration time for hash fields, in milliseconds. Creates the hash if it doesn't exist. If
+     * a field is already expired, it will be deleted rather than expired.
+     *
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/hpexpire/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param milliseconds The expiration time to set for the fields, in milliseconds.
+     * @param fields The fields to set expiration for.
+     * @param options The {@link HashFieldExpirationConditionOptions} for the command, supporting only
+     *     expiration conditions (NX/XX/GT/LT).
+     * @return Command response - An array of <code>Boolean</code> values, each corresponding to a
+     *     field:
+     *     <ul>
+     *       <li><code>true</code> if the expiration time was successfully set for the field.
+     *       <li><code>false</code> if the field does not exist or the expiration time was not set due
+     *           to the condition not being met.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * // Set expiration only if new expiration is greater than current
+     * HashFieldExpirationConditionOptions options = HashFieldExpirationConditionOptions.builder()
+     *     .onlyIfGreaterThanCurrent()
+     *     .build();
+     *
+     * String[] fields = {"field1", "field2"};
+     * batch.hpexpire("myHash", 30000L, fields, options);
+     * }</pre>
+     */
+    public <ArgType> T hpexpire(
+            @NonNull ArgType key,
+            long milliseconds,
+            @NonNull ArgType[] fields,
+            @NonNull HashFieldExpirationConditionOptions options) {
+        checkTypeOrThrow(key);
+        protobufBatch.addCommands(
+                buildCommand(
+                        HPExpire,
+                        newArgsBuilder()
+                                .add(key)
+                                .add(milliseconds)
+                                .add(options.toArgs())
+                                .add(FIELDS_VALKEY_API)
+                                .add(fields.length)
+                                .add(fields)));
+        return getThis();
+    }
+
+    /**
+     * Sets expiration time for hash fields, in seconds, using an absolute Unix timestamp. Creates the
+     * hash if it doesn't exist. If a field is already expired, it will be deleted rather than
+     * expired.
+     *
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/hexpireat/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param unixSeconds The expiration time to set for the fields, as a Unix timestamp in seconds.
+     * @param fields The fields to set expiration for.
+     * @param options The {@link HashFieldExpirationConditionOptions} for the command, supporting only
+     *     expiration conditions (NX/XX/GT/LT).
+     * @return Command response - An array of <code>Boolean</code> values, each corresponding to a
+     *     field:
+     *     <ul>
+     *       <li><code>true</code> if the expiration time was successfully set for the field.
+     *       <li><code>false</code> if the field does not exist or the expiration time was not set due
+     *           to the condition not being met.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * // Set expiration only if fields have existing expiration
+     * HashFieldExpirationConditionOptions options = HashFieldExpirationConditionOptions.builder()
+     *     .onlyIfHasExpiry()
+     *     .build();
+     *
+     * String[] fields = {"field1", "field2"};
+     * long unixTimestamp = System.currentTimeMillis() / 1000 + 3600; // 1 hour from now
+     * batch.hexpireat("myHash", unixTimestamp, fields, options);
+     * }</pre>
+     */
+    public <ArgType> T hexpireat(
+            @NonNull ArgType key,
+            long unixSeconds,
+            @NonNull ArgType[] fields,
+            @NonNull HashFieldExpirationConditionOptions options) {
+        checkTypeOrThrow(key);
+        protobufBatch.addCommands(
+                buildCommand(
+                        HExpireAt,
+                        newArgsBuilder()
+                                .add(key)
+                                .add(unixSeconds)
+                                .add(options.toArgs())
+                                .add(FIELDS_VALKEY_API)
+                                .add(fields.length)
+                                .add(fields)));
+        return getThis();
+    }
+
+    /**
+     * Sets expiration time for hash fields, using an absolute Unix timestamp in milliseconds. <code>
+     * HPEXPIREAT</code> has the same effect and semantic as <code>HEXPIREAT</code>, but the Unix time
+     * at which the field will expire is specified in milliseconds instead of seconds. See {@link
+     * #hexpireat(Object, long, Object[], HashFieldExpirationConditionOptions)} for more details.
+     *
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/hpexpireat/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param unixMilliseconds The expiration time to set for the fields, as a Unix timestamp in
+     *     milliseconds.
+     * @param fields The fields to set expiration for.
+     * @param options The {@link HashFieldExpirationConditionOptions} for the command, supporting only
+     *     expiration conditions (NX/XX/GT/LT).
+     * @return Command response - An array of <code>Boolean</code> values, each corresponding to a
+     *     field:
+     *     <ul>
+     *       <li><code>true</code> if the expiration time was successfully set for the field.
+     *       <li><code>false</code> if the field does not exist or the expiration time was not set due
+     *           to the condition not being met.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * // Set expiration only if new expiration is less than current
+     * HashFieldExpirationConditionOptions options = HashFieldExpirationConditionOptions.builder()
+     *     .onlyIfLessThanCurrent()
+     *     .build();
+     *
+     * String[] fields = {"field1", "field2"};
+     * long unixTimestamp = System.currentTimeMillis() + 1800000; // 30 minutes from now
+     * batch.hpexpireat("myHash", unixTimestamp, fields, options);
+     * }</pre>
+     */
+    public <ArgType> T hpexpireat(
+            @NonNull ArgType key,
+            long unixMilliseconds,
+            @NonNull ArgType[] fields,
+            @NonNull HashFieldExpirationConditionOptions options) {
+        checkTypeOrThrow(key);
+        protobufBatch.addCommands(
+                buildCommand(
+                        HPExpireAt,
+                        newArgsBuilder()
+                                .add(key)
+                                .add(unixMilliseconds)
+                                .add(options.toArgs())
+                                .add(FIELDS_VALKEY_API)
+                                .add(fields.length)
+                                .add(fields)));
+        return getThis();
+    }
+
+    /**
+     * Returns the remaining time to live of hash fields that have a timeout, in seconds.
+     *
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/httl/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param fields The fields to get the TTL for.
+     * @return Command Response - An array of <code>Long</code> values, each corresponding to a field:
+     *     <ul>
+     *       <li>TTL in seconds if the field exists and has a timeout.
+     *       <li><code>-1</code> if the field exists but has no associated expire.
+     *       <li><code>-2</code> if the field does not exist.
+     *     </ul>
+     */
+    public <ArgType> T httl(@NonNull ArgType key, @NonNull ArgType[] fields) {
+        checkTypeOrThrow(key);
+        protobufBatch.addCommands(
+                buildCommand(
+                        HTtl, newArgsBuilder().add(key).add(FIELDS_VALKEY_API).add(fields.length).add(fields)));
+        return getThis();
+    }
+
+    /**
+     * Returns the remaining time to live of hash fields that have a timeout, in milliseconds.
+     *
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/hpttl/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param fields The fields to get the TTL for.
+     * @return Command Response - An array of TTL values in milliseconds for the specified fields:
+     *     <ul>
+     *       <li>For fields with a timeout, returns the remaining TTL in milliseconds.
+     *       <li>For fields that exist but have no associated expire, returns <code>-1</code>.
+     *       <li>For fields that do not exist, returns <code>-2</code>.
+     *     </ul>
+     */
+    public <ArgType> T hpttl(@NonNull ArgType key, @NonNull ArgType[] fields) {
+        checkTypeOrThrow(key);
+        protobufBatch.addCommands(
+                buildCommand(
+                        HPTtl,
+                        newArgsBuilder().add(key).add(FIELDS_VALKEY_API).add(fields.length).add(fields)));
+        return getThis();
+    }
+
+    /**
+     * Returns the absolute Unix timestamp (in seconds) at which the given hash fields will expire.
+     *
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, using any other
+     *     type will throw {@link IllegalArgumentException}.
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/hexpiretime/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param fields The fields to get the expiration timestamp for.
+     * @return Command Response - An array of expiration timestamps in seconds for the specified
+     *     fields:
+     *     <ul>
+     *       <li>For fields with a timeout, returns the absolute Unix timestamp in seconds.
+     *       <li>For fields that exist but have no associated expire, returns <code>-1</code>.
+     *       <li>For fields that do not exist, returns <code>-2</code>.
+     *     </ul>
+     */
+    public <ArgType> T hexpiretime(@NonNull ArgType key, @NonNull ArgType[] fields) {
+        checkTypeOrThrow(key);
+        protobufBatch.addCommands(
+                buildCommand(
+                        HExpireTime,
+                        newArgsBuilder().add(key).add(FIELDS_VALKEY_API).add(fields.length).add(fields)));
+        return getThis();
+    }
+
+    /**
+     * Returns the absolute Unix timestamp (in milliseconds) at which the given hash fields will
+     * expire.
+     *
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, using any other
+     *     type will throw {@link IllegalArgumentException}.
+     * @since Valkey 9.0 and above.
+     * @see <a href="https://valkey.io/commands/hpexpiretime/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param fields The fields to get the expiration timestamp for.
+     * @return Command Response - An array of expiration timestamps in milliseconds for the specified
+     *     fields:
+     *     <ul>
+     *       <li>For fields with a timeout, returns the absolute Unix timestamp in milliseconds.
+     *       <li>For fields that exist but have no associated expire, returns <code>-1</code>.
+     *       <li>For fields that do not exist, returns <code>-2</code>.
+     *     </ul>
+     */
+    public <ArgType> T hpexpiretime(@NonNull ArgType key, @NonNull ArgType[] fields) {
+        checkTypeOrThrow(key);
+        protobufBatch.addCommands(
+                buildCommand(
+                        HPExpireTime,
+                        newArgsBuilder().add(key).add(FIELDS_VALKEY_API).add(fields.length).add(fields)));
         return getThis();
     }
 

@@ -2,10 +2,22 @@
 
 #### Changes
 
+* GO: Hash Field Expiration commands for Valkey 9 ([#4554](https://github.com/valkey-io/valkey-glide/pull/4554))
+* JAVA: Valkey 9 new commands HASH items expiration ([#4556](https://github.com/valkey-io/valkey-glide/pull/4556))
+* NODE: Valkey 9 support - Add Hash Field Expiration Commands Support ([#4598](https://github.com/valkey-io/valkey-glide/pull/4598))
+* Python: Valkey 9 new hash field expiration commands ([#4610](https://github.com/valkey-io/valkey-glide/pull/4610))
+* Node: Add Multi-Database Support for Cluster Mode (Valkey 9.0) ([#4657](https://github.com/valkey-io/valkey-glide/pull/4657))
+* Java: Multi-Database Support for Cluster Mode Valkey 9.0 ([#4658](https://github.com/valkey-io/valkey-glide/pull/4658))
+* Go: Add Multi-Database Support for Cluster Mode Valkey 9.0 ([#4660](https://github.com/valkey-io/valkey-glide/pull/4660))
+* Python: Add Multi-Database Support for Cluster Mode Valkey 9.0 ([#4659](https://github.com/valkey-io/valkey-glide/pull/4659))
+
 #### Fixes
 
 * Java: Add lazy connection support to Java module ([#4350](https://github.com/valkey-io/valkey-glide/pull/4370))
 * Go: Add lazy connection support ([#4374](https://github.com/valkey-io/valkey-glide/pull/4374))
+* Java/Go/Node/Python: Fixed LOLWUT tests and Jedis compatibility layer tests for Valkey 9 ([#4632](https://github.com/valkey-io/valkey-glide/pull/4632))
+* Core/Python: fix 100% CPU when blocking command returning data after client closure ([#4612](https://github.com/valkey-io/valkey-glide/pull/4612))
+* Java: Add MUSL build to support Alpine Linux ([#4073](https://github.com/valkey-io/valkey-glide/issues/4073))
 
 #### Operational Enhancements
 * FFI: Add MIRI tests to CI ([#4506](https://github.com/valkey-io/valkey-glide/pull/4506))
@@ -125,6 +137,7 @@
 * Go: Fix API to use errors idiomatically ([#4090](https://github.com/valkey-io/valkey-glide/pull/4090))
 * Go: XInfoStream example fix ([#4185](https://github.com/valkey-io/valkey-glide/pull/4185))
 * Node: Validate clientAZ when using AZ affinity strategies ([#4267](https://github.com/valkey-io/valkey-glide/pull/4267))
+* Core: Add support for OTLP environment variables ([#4334](https://github.com/valkey-io/valkey-glide/issues/4334))
 
 #### Breaking Changes
 

@@ -43,6 +43,14 @@ on:
                 description: "Run the full engine, host, and language version matrix"
                 type: boolean
                 default: false
+            run-with-macos:
+                description: "Run with macos included (only when necessary)"
+                type: choice
+                options:
+                    - false
+                    - use-self-hosted
+                    - use-github
+                default: false
             name:
                 required: false
                 type: string
@@ -63,6 +71,11 @@ on:
                 default: false
 
     workflow_call:
+        inputs:
+            run-with-macos:
+                description: "Run with macos included (only when necessary)"
+                type: string
+                default: false
 
 concurrency:
     group: python-${{ github.head_ref || github.ref }}-${{ toJson(inputs) }}
@@ -80,6 +93,7 @@ run-name:
 env:
     # Run full test matrix if job started by cron or it was explictly specified by a person who triggered the workflow
     RUN_FULL_MATRIX: ${{ (github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule') }}
+    RUN_WITH_MACOS: ${{ (github.event.inputs.run-with-macos) }}
     RUN_SYNC_ONLY: ${{ (github.event.inputs.run_sync_tests == 'true' && github.event.inputs.run_async_tests == 'false') }}
     RUN_ASYNC_ONLY: ${{ (github.event.inputs.run_async_tests == 'true' && github.event.inputs.run_sync_tests == 'false') }}
 
@@ -97,12 +111,13 @@ jobs:
               with:
                   language-name: python
                   run-full-matrix: ${{ env.RUN_FULL_MATRIX == 'true' }}
+                  run-with-macos: ${{ env.RUN_WITH_MACOS }}
 
     test-python:
         name: Python Tests - ${{ matrix.python }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
         runs-on: ${{ matrix.host.RUNNER }}
         needs: get-matrices
-        timeout-minutes: 90
+        timeout-minutes: 120
         strategy:
             fail-fast: false
             matrix:
@@ -410,7 +425,7 @@ jobs:
                   target: aarch64-unknown-linux-gnu
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
-            - name: Test with pytest (asyncio only)
+            - name: Test with pytest
               if: ${{ env.RUN_FULL_MATRIX != 'true' }}
               working-directory: ./python
               run: |
@@ -421,6 +436,18 @@ jobs:
               working-directory: ./python
               run: |
                   python3 dev.py test --args --tls --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} -k server_modules --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
+
+            - name: Test with pytest (async only)
+              if: ${{ env.RUN_ASYNC_ONLY == 'true' && env.RUN_FULL_MATRIX != 'true'}}
+              working-directory: ./python
+              run: |
+                  python3 dev.py test --args --tls --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} -k server_modules tests/async_tests --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
+
+            - name: Test with pytest (sync only)
+              if: ${{ env.RUN_SYNC_ONLY == 'true' && env.RUN_FULL_MATRIX != 'true'}}
+              working-directory: ./python
+              run: |
+                  python3 dev.py test --args --tls --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} -k server_modules tests/sync_tests --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
 
             - name: Upload test reports
               if: always()

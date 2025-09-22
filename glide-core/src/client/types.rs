@@ -8,6 +8,7 @@ use std::time::Duration;
 
 #[cfg(feature = "proto")]
 use crate::connection_request as protobuf;
+use crate::iam::ServiceType;
 
 #[derive(Default, Clone, Debug)]
 pub struct ConnectionRequest {
@@ -28,10 +29,39 @@ pub struct ConnectionRequest {
     pub lazy_connect: bool,
 }
 
+/// Authentication information for connecting to Redis/Valkey servers
+///
+/// Supports traditional username/password authentication and AWS IAM authentication.
+/// IAM authentication takes priority when both are configured.
 #[derive(PartialEq, Eq, Clone, Default, Debug)]
 pub struct AuthenticationInfo {
+    /// Username for authentication (required for IAM)
     pub username: Option<String>,
+
+    /// Password for traditional authentication (fallback when IAM unavailable)
     pub password: Option<String>,
+
+    /// IAM authentication configuration (takes precedence over password)
+    pub iam_config: Option<IamAuthenticationConfig>,
+}
+
+/// AWS IAM authentication configuration for ElastiCache and MemoryDB
+///
+/// Handles AWS credential resolution, SigV4 token signing, and automatic token refresh.
+/// Tokens are valid for 15 minutes and refreshed every 14 minutes by default.
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub struct IamAuthenticationConfig {
+    /// AWS ElastiCache or MemoryDB cluster name
+    pub cluster_name: String,
+
+    /// AWS region where the cluster is located
+    pub region: String,
+
+    /// AWS service type (ElastiCache or MemoryDB)
+    pub service_type: ServiceType,
+
+    /// Token refresh interval in seconds (1 second to 12 hours, default 14 minutes)
+    pub refresh_interval_seconds: Option<u32>,
 }
 
 #[derive(Default, Clone, Copy, Debug)]
@@ -133,14 +163,32 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
         });
 
         let client_name = chars_to_string_option(&value.client_name);
-        let authentication_info = value.authentication_info.0.and_then(|authentication_info| {
+        let authentication_info = value.authentication_info.0.map(|authentication_info| {
             let password = chars_to_string_option(&authentication_info.password);
             let username = chars_to_string_option(&authentication_info.username);
-            if password.is_none() && username.is_none() {
-                return None;
-            }
+            let iam_config = authentication_info.iam_credentials.0.map(|iam_creds| {
+                let cluster_name =
+                    chars_to_string_option(&iam_creds.cluster_name).unwrap_or_default();
+                let region = chars_to_string_option(&iam_creds.region).unwrap_or_default();
+                let service_type = match iam_creds.service_type.enum_value() {
+                    Ok(protobuf::ServiceType::MEMORYDB) => ServiceType::MemoryDB,
+                    _ => ServiceType::ElastiCache,
+                };
+                let refresh_interval_seconds = iam_creds.refresh_interval_seconds;
 
-            Some(AuthenticationInfo { password, username })
+                IamAuthenticationConfig {
+                    cluster_name,
+                    region,
+                    service_type,
+                    refresh_interval_seconds,
+                }
+            });
+
+            AuthenticationInfo {
+                password,
+                username,
+                iam_config,
+            }
         });
 
         let database_id = value.database_id as i64;

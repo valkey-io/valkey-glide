@@ -8,7 +8,7 @@ import os
 import threading
 import time
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict, List, Mapping, Union, cast
+from typing import Any, Dict, List, Mapping, Optional, Union, cast
 
 import pytest
 from glide_shared.commands.batch import Batch, ClusterBatch
@@ -32,9 +32,12 @@ from glide_shared.commands.core_options import (
     ConditionalChange,
     ExpireOptions,
     ExpiryGetEx,
+    ExpirySet,
+    ExpiryType,
     ExpiryTypeGetEx,
     FlushMode,
     FunctionRestorePolicy,
+    HashFieldConditionalChange,
     InfoSection,
     InsertPosition,
     OnlyIfEqual,
@@ -88,6 +91,7 @@ from glide_shared.routes import (
     SlotType,
 )
 from glide_sync.glide_client import GlideClient, GlideClusterClient, TGlideClient
+from glide_sync.sync_commands.script import Script
 
 from tests.sync_tests.conftest import create_sync_client
 from tests.utils.utils import (
@@ -96,6 +100,7 @@ from tests.utils.utils import (
     compare_maps,
     convert_bytes_to_string_object,
     convert_string_to_bytes_object,
+    create_long_running_lua_script,
     create_lua_lib_with_long_running_function,
     generate_lua_lib_code,
     get_first_result,
@@ -104,6 +109,7 @@ from tests.utils.utils import (
     round_values,
     run_sync_func_with_timeout_in_thread,
     sync_check_if_server_version_lt,
+    sync_get_version,
 )
 
 
@@ -263,11 +269,39 @@ class TestGlideClients:
             # Delete this user
             glide_sync_client.custom_command(["ACL", "DELUSER", username])
 
-    @pytest.mark.parametrize("cluster_mode", [False])
-    def test_sync_select_standalone_database_id(self, request, cluster_mode):
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_sync_select_database_id(self, request, cluster_mode):
+        if cluster_mode:
+            # Check version using a temporary standalone client
+            temp_client = create_sync_client(request, cluster_mode=False)
+            if sync_check_if_server_version_lt(temp_client, "9.0.0"):
+                temp_client.close()
+                pytest.skip(
+                    reason="Database ID selection in cluster mode requires Valkey >= 9.0.0"
+                )
+            temp_client.close()
+
         glide_sync_client = create_sync_client(
             request, cluster_mode=cluster_mode, database_id=4
         )
+        client_info = glide_sync_client.custom_command(["CLIENT", "INFO"])
+        assert b"db=4" in client_info
+        glide_sync_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    def test_sync_select_database_id_custom_command(self, request, cluster_mode):
+        if cluster_mode:
+            # Check version using a temporary standalone client
+            temp_client = create_sync_client(request, cluster_mode=False)
+            if sync_check_if_server_version_lt(temp_client, "9.0.0"):
+                temp_client.close()
+                return pytest.skip(
+                    reason="Database ID selection in cluster mode requires Valkey >= 9.0.0"
+                )
+            temp_client.close()
+
+        glide_sync_client = create_sync_client(request, cluster_mode=cluster_mode)
+        assert glide_sync_client.custom_command(["SELECT", "4"]) == OK
         client_info = glide_sync_client.custom_command(["CLIENT", "INFO"])
         assert b"db=4" in client_info
         glide_sync_client.close()
@@ -581,24 +615,11 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    def test_sync_select(self, glide_sync_client: GlideClient):
-        assert glide_sync_client.select(0) == OK
-        key = get_random_string(10)
-        value = get_random_string(10)
-        assert glide_sync_client.set(key, value) == OK
-        assert glide_sync_client.get(key) == value.encode()
-        assert glide_sync_client.select(1) == OK
-        assert glide_sync_client.get(key) is None
-        assert glide_sync_client.select(0) == OK
-        assert glide_sync_client.get(key) == value.encode()
-
-    @pytest.mark.parametrize("cluster_mode", [False])
-    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_move(self, glide_sync_client: GlideClient):
         key = get_random_string(10)
         value = get_random_string(10)
 
-        assert glide_sync_client.select(0) == OK
+        assert glide_sync_client.custom_command(["SELECT", "0"]) == OK
         assert glide_sync_client.move(key, 1) is False
 
         assert glide_sync_client.set(key, value) == OK
@@ -606,7 +627,7 @@ class TestCommands:
 
         assert glide_sync_client.move(key, 1) is True
         assert glide_sync_client.get(key) is None
-        assert glide_sync_client.select(1) == OK
+        assert glide_sync_client.custom_command(["SELECT", "1"]) == OK
         assert glide_sync_client.get(key) == value.encode()
 
         with pytest.raises(RequestError):
@@ -618,7 +639,7 @@ class TestCommands:
         key = get_random_string(10)
         value = get_random_string(10)
 
-        assert glide_sync_client.select(0) == OK
+        assert glide_sync_client.custom_command(["SELECT", "0"]) == OK
 
         assert glide_sync_client.set(key, value) == OK
         assert glide_sync_client.get(key.encode()) == value.encode()
@@ -626,7 +647,7 @@ class TestCommands:
         assert glide_sync_client.move(key.encode(), 1) is True
         assert glide_sync_client.get(key) is None
         assert glide_sync_client.get(key.encode()) is None
-        assert glide_sync_client.select(1) == OK
+        assert glide_sync_client.custom_command(["SELECT", "1"]) == OK
         assert glide_sync_client.get(key) == value.encode()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -4910,9 +4931,7 @@ class TestCommands:
         if isinstance(
             glide_sync_client, GlideClusterClient
         ) and sync_check_if_server_version_lt(glide_sync_client, "8.0.0"):
-            return pytest.mark.skip(
-                reason="Valkey version required in cluster mode>= 8.0.0"
-            )
+            pytest.skip(reason="Valkey version required in cluster mode>= 8.0.0")
         key = "{user}" + get_random_string(10)
         store = "{user}" + get_random_string(10)
         user_key1, user_key2, user_key3, user_key4, user_key5 = (
@@ -5178,7 +5197,7 @@ class TestCommands:
             assert glide_sync_client.set(key, value) == OK
             assert glide_sync_client.dbsize(SlotKeyRoute(SlotType.PRIMARY, key)) == 1
         else:
-            assert glide_sync_client.select(1) == OK
+            assert glide_sync_client.custom_command(["SELECT", "1"]) == OK
             assert glide_sync_client.dbsize() == 0
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -8964,12 +8983,12 @@ class TestCommands:
         value = get_random_string(5)
 
         # fill DB 0 and check size non-empty
-        assert glide_sync_client.select(0) == OK
+        assert glide_sync_client.custom_command(["SELECT", "0"]) == OK
         glide_sync_client.set(key1, value)
         assert glide_sync_client.dbsize() > 0
 
         # fill DB 1 and check size non-empty
-        assert glide_sync_client.select(1) == OK
+        assert glide_sync_client.custom_command(["SELECT", "1"]) == OK
         glide_sync_client.set(key2, value)
         assert glide_sync_client.dbsize() > 0
 
@@ -8978,7 +8997,7 @@ class TestCommands:
         assert glide_sync_client.dbsize() == 0
 
         # swith to DB 0, flush, and check
-        assert glide_sync_client.select(0) == OK
+        assert glide_sync_client.custom_command(["SELECT", "0"]) == OK
         assert glide_sync_client.dbsize() > 0
         assert glide_sync_client.flushdb(FlushMode.ASYNC) == OK
         assert glide_sync_client.dbsize() == 0
@@ -9064,12 +9083,12 @@ class TestCommands:
         value2 = get_random_string(5)
         value1_encoded = value1.encode()
         value2_encoded = value2.encode()
-        index0 = 0
-        index1 = 1
-        index2 = 2
+        index0 = "0"
+        index1 = "1"
+        index2 = "2"
 
         try:
-            assert glide_sync_client.select(index0) == OK
+            assert glide_sync_client.custom_command(["SELECT", index0]) == OK
 
             # neither key exists
             assert (
@@ -9083,11 +9102,11 @@ class TestCommands:
                 glide_sync_client.copy(source, destination, index1, replace=False)
                 is True
             )
-            assert glide_sync_client.select(index1) == OK
+            assert glide_sync_client.custom_command(["SELECT", index1]) == OK
             assert glide_sync_client.get(destination) == value1_encoded
 
             # new value for source key
-            assert glide_sync_client.select(index0) == OK
+            assert glide_sync_client.custom_command(["SELECT", index0]) == OK
             glide_sync_client.set(source, value2)
 
             # no REPLACE, copying to existing key on DB 0 & 1, non-existing key on DB 2
@@ -9101,25 +9120,25 @@ class TestCommands:
             )
 
             # new value only gets copied to DB 2
-            assert glide_sync_client.select(index1) == OK
+            assert glide_sync_client.custom_command(["SELECT", index1]) == OK
             assert glide_sync_client.get(destination) == value1_encoded
-            assert glide_sync_client.select(index2) == OK
+            assert glide_sync_client.custom_command(["SELECT", index2]) == OK
             assert glide_sync_client.get(destination) == value2_encoded
 
             # both exists, with REPLACE, when value isn't the same, source always get copied to destination
-            assert glide_sync_client.select(index0) == OK
+            assert glide_sync_client.custom_command(["SELECT", index0]) == OK
             assert (
                 glide_sync_client.copy(source, destination, index1, replace=True)
                 is True
             )
-            assert glide_sync_client.select(index1) == OK
+            assert glide_sync_client.custom_command(["SELECT", index1]) == OK
             assert glide_sync_client.get(destination) == value2_encoded
 
             # invalid DB index
             with pytest.raises(RequestError):
                 glide_sync_client.copy(source, destination, -1, replace=True)
         finally:
-            assert glide_sync_client.select(0) == OK
+            assert glide_sync_client.custom_command(["SELECT", "0"]) == OK
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -9145,16 +9164,19 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_lolwut(self, glide_sync_client: TGlideClient):
+        server_version = sync_get_version(glide_sync_client)
+        server_version_bytes = server_version.encode()
+
         result = glide_sync_client.lolwut()
-        assert b"Redis ver. " in result
+        assert b"ver" in result and server_version_bytes in result
         result = glide_sync_client.lolwut(parameters=[])
-        assert b"Redis ver. " in result
+        assert b"ver" in result and server_version_bytes in result
         result = glide_sync_client.lolwut(parameters=[50, 20])
-        assert b"Redis ver. " in result
+        assert b"ver" in result and server_version_bytes in result
         result = glide_sync_client.lolwut(6)
-        assert b"Redis ver. " in result
+        assert b"ver" in result and server_version_bytes in result
         result = glide_sync_client.lolwut(5, [30, 4, 4])
-        assert b"Redis ver. " in result
+        assert b"ver" in result and server_version_bytes in result
 
         if isinstance(glide_sync_client, GlideClusterClient):
             # test with multi-node route
@@ -9163,23 +9185,23 @@ class TestCommands:
             result_decoded = cast(dict, convert_bytes_to_string_object(result))
             assert result_decoded is not None
             for node_result in result_decoded.values():
-                assert "Redis ver. " in node_result
+                assert "ver" in node_result and server_version in node_result
 
             result = glide_sync_client.lolwut(parameters=[10, 20], route=AllNodes())
             assert isinstance(result, dict)
             result_decoded = cast(dict, convert_bytes_to_string_object(result))
             assert result_decoded is not None
             for node_result in result_decoded.values():
-                assert "Redis ver. " in node_result
+                assert "ver" in node_result and server_version in node_result
 
             # test with single-node route
             result = glide_sync_client.lolwut(2, route=RandomNode())
             assert isinstance(result, bytes)
-            assert b"Redis ver. " in result
+            assert b"ver" in result and server_version_bytes in result
 
             result = glide_sync_client.lolwut(2, [10, 20], RandomNode())
             assert isinstance(result, bytes)
-            assert b"Redis ver. " in result
+            assert b"ver" in result and server_version_bytes in result
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -9205,9 +9227,9 @@ class TestCommands:
         key = get_random_string(10)
 
         # setup: delete all keys in DB 0 and DB 1
-        assert glide_sync_client.select(0) == OK
+        assert glide_sync_client.custom_command(["SELECT", "0"]) == OK
         assert glide_sync_client.flushdb(FlushMode.SYNC) == OK
-        assert glide_sync_client.select(1) == OK
+        assert glide_sync_client.custom_command(["SELECT", "1"]) == OK
         assert glide_sync_client.flushdb(FlushMode.SYNC) == OK
 
         # no keys exist so random_key returns None
@@ -9218,7 +9240,7 @@ class TestCommands:
         assert glide_sync_client.random_key() == key.encode()
 
         # switch back to DB 0
-        assert glide_sync_client.select(0) == OK
+        assert glide_sync_client.custom_command(["SELECT", "0"]) == OK
         # DB 0 should still have no keys, so random_key should still return None
         assert glide_sync_client.random_key() is None
 
@@ -10211,3 +10233,1659 @@ class TestClusterRoutes:
         # Negative count
         with pytest.raises(RequestError):
             glide_sync_client.hscan(key2, initial_cursor, count=-1)
+
+
+def script_kill_tests(
+    glide_sync_client: TGlideClient,
+    test_client: TGlideClient,
+    route: Optional[Route] = None,
+):
+    """
+    shared tests for SCRIPT KILL used in routed and non-routed variants, clients are created in
+    respective tests with different test matrices.
+    """
+    # Verify that script_kill raises an error when no script is running
+    with pytest.raises(RequestError) as e:
+        glide_sync_client.script_kill()
+    assert "No scripts in execution right now" in str(e)
+
+    # Create a long-running script
+    long_script = Script(create_long_running_lua_script(10))
+
+    def run_long_script():
+        with pytest.raises(RequestError) as e:
+            if route is not None:
+                test_client.invoke_script_route(long_script, route=route)
+            else:
+                test_client.invoke_script(long_script)
+        assert "Script killed by user" in str(e)
+
+    def wait_and_kill_script():
+        time.sleep(3)  # Give some time for the script to start
+        timeout = 0
+        while timeout <= 5:
+            # keep trying to kill until we get an "OK"
+            try:
+                if route is not None:
+                    result = cast(GlideClusterClient, glide_sync_client).script_kill(
+                        route=route
+                    )
+                else:
+                    result = glide_sync_client.script_kill()
+                #  we expect to get success
+                assert result == "OK"
+                break
+            except RequestError:
+                # a RequestError may occur if the script is not yet running
+                # sleep and try again
+                timeout += 0.5
+                time.sleep(0.5)
+
+    # Run the long script and kill it
+    script_thread = threading.Thread(target=run_long_script)
+    kill_thread = threading.Thread(target=wait_and_kill_script)
+
+    script_thread.start()
+    kill_thread.start()
+
+    script_thread.join()
+    kill_thread.join()
+
+    # Verify that script_kill raises an error when no script is running
+    with pytest.raises(RequestError) as e:
+        if route is not None:
+            cast(GlideClusterClient, glide_sync_client).script_kill(route=route)
+        else:
+            glide_sync_client.script_kill()
+    assert "No scripts in execution right now" in str(e)
+
+    test_client.close()
+
+
+class TestSyncScripts:
+    @pytest.mark.smoke_test
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_script(self, glide_sync_client: TGlideClient):
+        key1 = get_random_string(10)
+        key2 = get_random_string(10)
+        script = Script("return 'Hello'")
+        assert glide_sync_client.invoke_script(script) == "Hello".encode()
+
+        script = Script("return redis.call('SET', KEYS[1], ARGV[1])")
+        assert (
+            glide_sync_client.invoke_script(script, keys=[key1], args=["value1"])
+            == "OK"
+        )
+        # Reuse the same script with different parameters.
+        assert (
+            glide_sync_client.invoke_script(script, keys=[key2], args=["value2"])
+            == "OK"
+        )
+        script = Script("return redis.call('GET', KEYS[1])")
+        assert glide_sync_client.invoke_script(script, keys=[key1]) == "value1".encode()
+        assert glide_sync_client.invoke_script(script, keys=[key2]) == "value2".encode()
+
+    @pytest.mark.smoke_test
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_script_binary(self, glide_sync_client: TGlideClient):
+        key1 = bytes(get_random_string(10), "utf-8")
+        key2 = bytes(get_random_string(10), "utf-8")
+        script = Script(bytes("return 'Hello'", "utf-8"))
+        assert glide_sync_client.invoke_script(script) == "Hello".encode()
+
+        script = Script(bytes("return redis.call('SET', KEYS[1], ARGV[1])", "utf-8"))
+        assert (
+            glide_sync_client.invoke_script(
+                script, keys=[key1], args=[bytes("value1", "utf-8")]
+            )
+            == "OK"
+        )
+        # Reuse the same script with different parameters.
+        assert (
+            glide_sync_client.invoke_script(
+                script, keys=[key2], args=[bytes("value2", "utf-8")]
+            )
+            == "OK"
+        )
+        script = Script(bytes("return redis.call('GET', KEYS[1])", "utf-8"))
+        assert glide_sync_client.invoke_script(script, keys=[key1]) == "value1".encode()
+        assert glide_sync_client.invoke_script(script, keys=[key2]) == "value2".encode()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_script_large_keys_no_args(self, request, cluster_mode, protocol):
+        glide_sync_client = create_sync_client(
+            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=5000
+        )
+        length = 2**13  # 8kb
+        key = "0" * length
+        script = Script("return KEYS[1]")
+        assert glide_sync_client.invoke_script(script, keys=[key]) == key.encode()
+        glide_sync_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_script_large_args_no_keys(self, request, cluster_mode, protocol):
+        glide_sync_client = create_sync_client(
+            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=5000
+        )
+        length = 2**12  # 4kb
+        arg1 = "0" * length
+        arg2 = "1" * length
+
+        script = Script("return ARGV[2]")
+        assert (
+            glide_sync_client.invoke_script(script, args=[arg1, arg2]) == arg2.encode()
+        )
+        glide_sync_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_script_large_keys_and_args(self, request, cluster_mode, protocol):
+        glide_sync_client = create_sync_client(
+            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=5000
+        )
+        length = 2**12  # 4kb
+        key = "0" * length
+        arg = "1" * length
+
+        script = Script("return KEYS[1]")
+        assert (
+            glide_sync_client.invoke_script(script, keys=[key], args=[arg])
+            == key.encode()
+        )
+        glide_sync_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_script_exists(
+        self, glide_sync_client: TGlideClient, cluster_mode: bool
+    ):
+        cluster_mode = isinstance(glide_sync_client, GlideClusterClient)
+        script1 = Script("return 'Hello'")
+        script2 = Script("return 'World'")
+        script3 = Script("return 'Hello World'")
+
+        # Load script1 to all nodes, do not load script2 and load script3 with a SlotKeyRoute
+        glide_sync_client.invoke_script(script1)
+
+        if cluster_mode:
+            cast(GlideClusterClient, glide_sync_client).invoke_script_route(
+                script3, route=SlotKeyRoute(SlotType.PRIMARY, "1")
+            )
+        else:
+            glide_sync_client.invoke_script(script3)
+
+        # Get the SHA1 digests of the scripts
+        sha1_1 = script1.get_hash()
+        sha1_2 = script2.get_hash()
+        sha1_3 = script3.get_hash()
+        non_existent_sha1 = "0" * 40  # A SHA1 that doesn't exist
+        # Check existence of scripts
+        result = glide_sync_client.script_exists(
+            [sha1_1, sha1_2, sha1_3, non_existent_sha1]
+        )
+
+        # script1 is loaded and returns true.
+        # script2 is only cached and not loaded, returns false.
+        # script3 is invoked with a SlotKeyRoute. Despite SCRIPT EXIST uses LogicalAggregate AND on the results,
+        #   SCRIPT LOAD during internal execution so the script still gets loaded on all nodes, returns true.
+        # non-existing sha1 returns false.
+        assert result == [True, False, True, False]
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_script_flush(self, glide_sync_client: TGlideClient):
+        # Load a script
+        script = Script("return 'Hello'")
+        glide_sync_client.invoke_script(script)
+
+        # Check that the script exists
+        assert glide_sync_client.script_exists([script.get_hash()]) == [True]
+
+        # Flush the script cache
+        assert glide_sync_client.script_flush() == OK
+
+        # Check that the script no longer exists
+        assert glide_sync_client.script_exists([script.get_hash()]) == [False]
+
+        # Test with ASYNC mode
+        glide_sync_client.invoke_script(script)
+        assert glide_sync_client.script_flush(FlushMode.ASYNC) == OK
+        assert glide_sync_client.script_exists([script.get_hash()]) == [False]
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("single_route", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_script_kill_route(
+        self,
+        request,
+        cluster_mode,
+        protocol,
+        glide_sync_client: TGlideClient,
+        single_route: bool,
+    ):
+        route = SlotKeyRoute(SlotType.PRIMARY, "1") if single_route else AllPrimaries()
+
+        # Create a second client to run the script
+        test_client = create_sync_client(
+            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=30000
+        )
+
+        script_kill_tests(glide_sync_client, test_client, route)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_script_kill_no_route(
+        self,
+        request,
+        cluster_mode,
+        protocol,
+        glide_sync_client: TGlideClient,
+    ):
+        # Create a second client to run the script
+        test_client = create_sync_client(
+            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=30000
+        )
+
+        script_kill_tests(glide_sync_client, test_client)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_script_kill_unkillable(
+        self, request, cluster_mode, protocol, glide_sync_client: TGlideClient
+    ):
+        # Create a second client to run the script
+        test_client = create_sync_client(
+            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=30000
+        )
+
+        # Create a second client to kill the script
+        test_client2 = create_sync_client(
+            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=15000
+        )
+
+        # Add test for script_kill with writing script
+        writing_script = Script(
+            """
+            redis.call('SET', KEYS[1], 'value')
+            local start = redis.call('TIME')[1]
+            while redis.call('TIME')[1] - start < 15 do
+                redis.call('SET', KEYS[1], 'value')
+            end
+        """
+        )
+
+        def run_writing_script():
+            test_client.invoke_script(writing_script, keys=[get_random_string(5)])
+
+        def attempt_kill_writing_script():
+            time.sleep(3)  # Give some time for the script to start
+            foundUnkillable = False
+            while True:
+                try:
+                    test_client2.script_kill()
+                except RequestError as e:
+                    if "UNKILLABLE" in str(e):
+                        foundUnkillable = True
+                        break
+                    time.sleep(0.5)
+
+            assert foundUnkillable
+
+        # Run the writing script and attempt to kill it
+        script_thread = threading.Thread(target=run_writing_script)
+        kill_thread = threading.Thread(target=attempt_kill_writing_script)
+
+        script_thread.start()
+        kill_thread.start()
+
+        script_thread.join()
+        kill_thread.join()
+
+        test_client.close()
+        test_client2.close()
+
+        test_client.close()
+        test_client2.close()
+
+    @pytest.mark.skip_if_version_below("8.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_script_show(self, glide_sync_client: TGlideClient):
+        code = f"return '{get_random_string(5)}'"
+        script = Script(code)
+
+        # Load the scripts
+        glide_sync_client.invoke_script(script)
+
+        # Get the SHA1 digests of the script
+        sha1 = script.get_hash()
+
+        assert glide_sync_client.script_show(sha1) == code.encode()
+
+        with pytest.raises(RequestError):
+            glide_sync_client.script_show("non existing sha1")
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_script_isnt_removed_while_another_instance_exists(
+        self, glide_sync_client: TGlideClient
+    ):
+        """
+        Verifies that a script is retained in the local scripts container and not removed while another
+        instance with the same hash still exists, even after the original reference is released
+        and the server-side script cache is flushed.
+        """
+        random_str = get_random_string(10)
+
+        # Create two scripts with the same content
+        script_1 = Script(f"return '{random_str}'")
+        script_2 = Script(f"return '{random_str}'")
+        assert script_1.get_hash() == script_2.get_hash()
+
+        # Run first script and drop reference
+        assert glide_sync_client.invoke_script(script_1) == f"{random_str}".encode()
+        script_1.__del__()
+
+        # Flush the script from the server
+        assert glide_sync_client.script_flush() == OK
+
+        # Script should not exist on the server anymore
+        assert glide_sync_client.script_exists([script_1.get_hash()]) == [False]
+
+        # Run second script; it should not exist on the server but must be found in the local script cache
+        assert glide_sync_client.invoke_script(script_2) == f"{random_str}".encode()
+
+        # Release script_2 and flush again
+        script_2.__del__()
+        assert glide_sync_client.script_flush() == OK
+
+        # Should now raise NOSCRIPT
+        with pytest.raises(RequestError) as exc_info:
+            glide_sync_client.invoke_script(script_2)
+
+        assert "NOSCRIPT" in str(exc_info.value).upper()
+
+    @pytest.mark.skip_if_version_below("9.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_httl(self, glide_sync_client: TGlideClient):
+        key = get_random_string(10)
+        field1 = get_random_string(5)
+        field2 = get_random_string(5)
+        field3 = get_random_string(5)
+        non_existent_field = get_random_string(5)
+        non_existent_key = get_random_string(10)
+
+        # Test with non-existent key
+        assert glide_sync_client.httl(non_existent_key, [field1]) == [-2]
+
+        # Set up hash with fields - some with expiration, some without
+        field_value_map = {field1: "value1", field2: "value2", field3: "value3"}
+        assert glide_sync_client.hset(key, field_value_map) == 3
+
+        # Test HTTL on fields without expiration (should return -1)
+        result = glide_sync_client.httl(key, [field1, field2, field3])
+        assert result == [-1, -1, -1]
+
+        # Test HTTL on non-existent field (should return -2)
+        result = glide_sync_client.httl(key, [non_existent_field])
+        assert result == [-2]
+
+        # Test HTTL on mix of existing and non-existent fields
+        result = glide_sync_client.httl(key, [field1, non_existent_field, field2])
+        assert result == [-1, -2, -1]
+
+        # Test with empty fields list - should raise an error
+        with pytest.raises(RequestError, match="wrong number of arguments"):
+            glide_sync_client.httl(key, [])
+
+    @pytest.mark.skip_if_version_below("9.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_hpttl(self, glide_sync_client: TGlideClient):
+        key = get_random_string(10)
+        field1 = get_random_string(5)
+        field2 = get_random_string(5)
+        field3 = get_random_string(5)
+        non_existent_field = get_random_string(5)
+        non_existent_key = get_random_string(10)
+
+        # Test with non-existent key
+        assert glide_sync_client.hpttl(non_existent_key, [field1]) == [-2]
+
+        # Set up hash with fields - some with expiration, some without
+        field_value_map = {field1: "value1", field2: "value2", field3: "value3"}
+        assert glide_sync_client.hset(key, field_value_map) == 3
+
+        # Test HPTTL on fields without expiration (should return -1)
+        result = glide_sync_client.hpttl(key, [field1, field2, field3])
+        assert result == [-1, -1, -1]
+
+        # Test HPTTL on non-existent field (should return -2)
+        result = glide_sync_client.hpttl(key, [non_existent_field])
+        assert result == [-2]
+
+        # Test HPTTL on mix of existing and non-existent fields
+        result = glide_sync_client.hpttl(key, [field1, non_existent_field, field2])
+        assert result == [-1, -2, -1]
+
+        # Test with empty fields list - should raise an error
+        with pytest.raises(RequestError, match="wrong number of arguments"):
+            glide_sync_client.hpttl(key, [])
+
+    @pytest.mark.skip_if_version_below("9.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_hexpiretime(self, glide_sync_client: TGlideClient):
+        key = get_random_string(10)
+        field1 = get_random_string(5)
+        field2 = get_random_string(5)
+        field3 = get_random_string(5)
+        non_existent_field = get_random_string(5)
+        non_existent_key = get_random_string(10)
+
+        # Test with non-existent key
+        assert glide_sync_client.hexpiretime(non_existent_key, [field1]) == [-2]
+
+        # Set up hash with fields - some with expiration, some without
+        field_value_map = {field1: "value1", field2: "value2", field3: "value3"}
+        assert glide_sync_client.hset(key, field_value_map) == 3
+
+        # Test HEXPIRETIME on fields without expiration (should return -1)
+        result = glide_sync_client.hexpiretime(key, [field1, field2, field3])
+        assert result == [-1, -1, -1]
+
+        # Test HEXPIRETIME on non-existent field (should return -2)
+        result = glide_sync_client.hexpiretime(key, [non_existent_field])
+        assert result == [-2]
+
+        # Test HEXPIRETIME on mix of existing and non-existent fields
+        result = glide_sync_client.hexpiretime(
+            key, [field1, non_existent_field, field2]
+        )
+        assert result == [-1, -2, -1]
+
+        # Test with empty fields list - should raise an error
+        with pytest.raises(RequestError, match="wrong number of arguments"):
+            glide_sync_client.hexpiretime(key, [])
+
+        # Test HEXPIRETIME with actual expiration timestamps
+        import time
+
+        # Test with EXAT (absolute timestamp in seconds)
+        future_timestamp = int(time.time()) + 10
+        hsetex_result = glide_sync_client.hsetex(
+            key,
+            {field1: "value1_with_expiry"},
+            expiry=ExpirySet(ExpiryType.UNIX_SEC, future_timestamp),
+        )
+        assert hsetex_result == 1
+
+        # HEXPIRETIME should return the exact timestamp we set
+        expiry_result = glide_sync_client.hexpiretime(key, [field1])
+        assert expiry_result[0] == future_timestamp
+
+        # Test with PXAT (absolute timestamp in milliseconds) - should be converted to seconds
+        future_timestamp_ms = int(time.time() * 1000) + 8000
+        expected_timestamp_sec = future_timestamp_ms // 1000
+        hsetex_result = glide_sync_client.hsetex(
+            key,
+            {field2: "value2_with_expiry"},
+            expiry=ExpirySet(ExpiryType.UNIX_MILLSEC, future_timestamp_ms),
+        )
+        assert hsetex_result == 1
+
+        # HEXPIRETIME should return the timestamp in seconds (allow for 1-2 second timing difference)
+        expiry_result = glide_sync_client.hexpiretime(key, [field2])
+        assert abs(expiry_result[0] - expected_timestamp_sec) <= 2
+
+        # Test with EX (relative seconds) - should return future timestamp
+        current_time = int(time.time())
+        hsetex_result = glide_sync_client.hsetex(
+            key,
+            {field3: "value3_with_expiry"},
+            expiry=ExpirySet(ExpiryType.SEC, 5),
+        )
+        assert hsetex_result == 1
+
+        # HEXPIRETIME should return a timestamp approximately 5 seconds from now
+        expiry_result = glide_sync_client.hexpiretime(key, [field3])
+        assert current_time + 4 <= expiry_result[0] <= current_time + 6
+
+        # Test mixed fields: some with expiration, some without, some non-existent
+        result = glide_sync_client.hexpiretime(
+            key, [field1, field2, field3, non_existent_field]
+        )
+        assert result[0] == future_timestamp  # field1 with EXAT
+        assert (
+            abs(result[1] - expected_timestamp_sec) <= 2
+        )  # field2 with PXAT (allow timing difference)
+        assert current_time + 4 <= result[2] <= current_time + 6  # field3 with EX
+        assert result[3] == -2  # non-existent field
+
+    @pytest.mark.skip_if_version_below("9.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_hpexpiretime(self, glide_sync_client: TGlideClient):
+        key = get_random_string(10)
+        field1 = get_random_string(5)
+        field2 = get_random_string(5)
+        field3 = get_random_string(5)
+        non_existent_field = get_random_string(5)
+        non_existent_key = get_random_string(10)
+
+        # Test with non-existent key
+        assert glide_sync_client.hpexpiretime(non_existent_key, [field1]) == [-2]
+
+        # Set up hash with fields - some with expiration, some without
+        field_value_map = {field1: "value1", field2: "value2", field3: "value3"}
+        assert glide_sync_client.hset(key, field_value_map) == 3
+
+        # Test HPEXPIRETIME on fields without expiration (should return -1)
+        result = glide_sync_client.hpexpiretime(key, [field1, field2, field3])
+        assert result == [-1, -1, -1]
+
+        # Test HPEXPIRETIME on non-existent field (should return -2)
+        result = glide_sync_client.hpexpiretime(key, [non_existent_field])
+        assert result == [-2]
+
+        # Test HPEXPIRETIME on mix of existing and non-existent fields
+        result = glide_sync_client.hpexpiretime(
+            key, [field1, non_existent_field, field2]
+        )
+        assert result == [-1, -2, -1]
+
+        # Test with empty fields list - should raise an error
+        with pytest.raises(RequestError, match="wrong number of arguments"):
+            glide_sync_client.hpexpiretime(key, [])
+
+        # Test HPEXPIRETIME with actual expiration timestamps
+        import time
+
+        # Test with PXAT (absolute timestamp in milliseconds)
+        future_timestamp_ms = int(time.time() * 1000) + 10000
+        hsetex_result = glide_sync_client.hsetex(
+            key,
+            {field1: "value1_with_expiry"},
+            expiry=ExpirySet(ExpiryType.UNIX_MILLSEC, future_timestamp_ms),
+        )
+        assert hsetex_result == 1
+
+        # HPEXPIRETIME should return the exact timestamp we set
+        expiry_result = glide_sync_client.hpexpiretime(key, [field1])
+        assert expiry_result[0] == future_timestamp_ms
+
+        # Test with EXAT (absolute timestamp in seconds) - should be converted to milliseconds
+        future_timestamp_sec = int(time.time()) + 8
+        expected_timestamp_ms = future_timestamp_sec * 1000
+        hsetex_result = glide_sync_client.hsetex(
+            key,
+            {field2: "value2_with_expiry"},
+            expiry=ExpirySet(ExpiryType.UNIX_SEC, future_timestamp_sec),
+        )
+        assert hsetex_result == 1
+
+        # HPEXPIRETIME should return the timestamp in milliseconds
+        expiry_result = glide_sync_client.hpexpiretime(key, [field2])
+        assert expiry_result[0] == expected_timestamp_ms
+
+        # Test with PX (relative milliseconds) - should return future timestamp
+        current_time_ms = int(time.time() * 1000)
+        hsetex_result = glide_sync_client.hsetex(
+            key,
+            {field3: "value3_with_expiry"},
+            expiry=ExpirySet(ExpiryType.MILLSEC, 5000),
+        )
+        assert hsetex_result == 1
+
+        # HPEXPIRETIME should return a timestamp approximately 5000ms from now
+        expiry_result = glide_sync_client.hpexpiretime(key, [field3])
+        assert current_time_ms + 4000 <= expiry_result[0] <= current_time_ms + 6000
+
+        # Test mixed fields: some with expiration, some without, some non-existent
+        result = glide_sync_client.hpexpiretime(
+            key, [field1, field2, field3, non_existent_field]
+        )
+        assert result[0] == future_timestamp_ms  # field1 with PXAT
+        assert result[1] == expected_timestamp_ms  # field2 with EXAT
+        assert (
+            current_time_ms + 4000 <= result[2] <= current_time_ms + 6000
+        )  # field3 with PX
+        assert result[3] == -2  # non-existent field
+
+    @pytest.mark.skip_if_version_below("9.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_hsetex(self, glide_sync_client: TGlideClient):
+        key = get_random_string(10)
+        field1 = get_random_string(5)
+        field2 = get_random_string(5)
+        field3 = get_random_string(5)
+        non_existent_key = get_random_string(10)
+
+        # Test basic HSETEX with expiration
+        field_value_map = {field1: "value1", field2: "value2"}
+        result = glide_sync_client.hsetex(
+            key, field_value_map, expiry=ExpirySet(ExpiryType.SEC, 10)
+        )
+        assert result == 1
+
+        # Verify fields were set
+        assert glide_sync_client.hget(key, field1) == b"value1"
+        assert glide_sync_client.hget(key, field2) == b"value2"
+
+        # Verify expiration was set using HTTL
+        ttl_result = glide_sync_client.httl(key, [field1, field2])
+        assert all(0 < ttl <= 10 for ttl in ttl_result)
+
+        # Test HSETEX with ONLY_IF_ALL_EXIST (FXX) - should succeed since fields exist
+        result = glide_sync_client.hsetex(
+            key,
+            {field1: "new_value1"},
+            field_conditional_change=HashFieldConditionalChange.ONLY_IF_ALL_EXIST,
+            expiry=ExpirySet(ExpiryType.SEC, 5),
+        )
+        assert result == 1
+        assert glide_sync_client.hget(key, field1) == b"new_value1"
+
+        # Test HSETEX with ONLY_IF_ALL_EXIST (FXX) on non-existent field - should fail
+        result = glide_sync_client.hsetex(
+            key,
+            {field3: "value3"},
+            field_conditional_change=HashFieldConditionalChange.ONLY_IF_ALL_EXIST,
+        )
+        assert result == 0
+        assert glide_sync_client.hget(key, field3) is None
+
+        # Test HSETEX with ONLY_IF_NONE_EXIST (FNX) on existing field - should fail
+        result = glide_sync_client.hsetex(
+            key,
+            {field1: "another_value"},
+            field_conditional_change=HashFieldConditionalChange.ONLY_IF_NONE_EXIST,
+        )
+        assert result == 0
+        assert glide_sync_client.hget(key, field1) == b"new_value1"  # unchanged
+
+        # Test HSETEX with ONLY_IF_NONE_EXIST (FNX) on non-existent field - should succeed
+        result = glide_sync_client.hsetex(
+            key,
+            {field3: "value3"},
+            field_conditional_change=HashFieldConditionalChange.ONLY_IF_NONE_EXIST,
+            expiry=ExpirySet(ExpiryType.MILLSEC, 5000),
+        )
+        assert result == 1
+        assert glide_sync_client.hget(key, field3) == b"value3"
+
+        # Verify expiration was set in milliseconds
+        ttl_result = glide_sync_client.httl(key, [field3])
+        assert 0 < ttl_result[0] <= 5
+
+        # Test HSETEX with different expiry types
+        new_key = get_random_string(10)
+
+        # Test with EXAT (absolute timestamp in seconds)
+        import time
+
+        future_timestamp = int(time.time()) + 10
+        result = glide_sync_client.hsetex(
+            new_key,
+            {field1: "value1"},
+            expiry=ExpirySet(ExpiryType.UNIX_SEC, future_timestamp),
+        )
+        assert result == 1
+        ttl_result = glide_sync_client.httl(new_key, [field1])
+        assert 0 < ttl_result[0] <= 10
+
+        # Test with PXAT (absolute timestamp in milliseconds)
+        future_timestamp_ms = int(time.time() * 1000) + 8000
+        result = glide_sync_client.hsetex(
+            new_key,
+            {field2: "value2"},
+            expiry=ExpirySet(ExpiryType.UNIX_MILLSEC, future_timestamp_ms),
+        )
+        assert result == 1
+        ttl_result = glide_sync_client.httl(new_key, [field2])
+        assert 0 < ttl_result[0] <= 8
+
+        # Test with KEEPTTL - first set a field with expiration, then use KEEPTTL
+        glide_sync_client.hsetex(
+            new_key, {field3: "temp_value"}, expiry=ExpirySet(ExpiryType.SEC, 15)
+        )
+        result = glide_sync_client.hsetex(
+            new_key, {field3: "new_value"}, expiry=ExpirySet(ExpiryType.KEEP_TTL, None)
+        )
+        assert result == 1
+        assert glide_sync_client.hget(new_key, field3) == b"new_value"
+        # TTL should be preserved (around 15 seconds or less)
+        ttl_result = glide_sync_client.httl(new_key, [field3])
+        assert 0 < ttl_result[0] <= 15
+
+        # Test HSETEX on non-existent key with FXX - should fail
+        result = glide_sync_client.hsetex(
+            non_existent_key,
+            {field1: "value1"},
+            field_conditional_change=HashFieldConditionalChange.ONLY_IF_ALL_EXIST,
+        )
+        assert result == 0
+        assert glide_sync_client.hget(non_existent_key, field1) is None
+
+        # Test HSETEX on non-existent key with FNX - should succeed
+        result = glide_sync_client.hsetex(
+            non_existent_key,
+            {field1: "value1"},
+            field_conditional_change=HashFieldConditionalChange.ONLY_IF_NONE_EXIST,
+            expiry=ExpirySet(ExpiryType.SEC, 10),
+        )
+        assert result == 1
+        assert glide_sync_client.hget(non_existent_key, field1) == b"value1"
+
+        # Test with empty field_value_map - should raise error
+        with pytest.raises(RequestError):
+            glide_sync_client.hsetex(key, {})
+
+        # Test with multiple fields and mixed conditions
+        multi_key = get_random_string(10)
+        multi_fields = {f"field_{i}": f"value_{i}" for i in range(5)}
+        result = glide_sync_client.hsetex(
+            multi_key, multi_fields, expiry=ExpirySet(ExpiryType.SEC, 20)
+        )
+        assert result == 1
+
+        # Verify all fields were set with expiration
+        for field, expected_value in multi_fields.items():
+            assert glide_sync_client.hget(multi_key, field) == expected_value.encode()
+
+        ttl_results = glide_sync_client.httl(multi_key, list(multi_fields.keys()))
+        assert all(0 < ttl <= 20 for ttl in ttl_results)
+
+    @pytest.mark.skip_if_version_below("9.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_hgetex(self, glide_sync_client: TGlideClient):
+        key = get_random_string(10)
+        field1 = get_random_string(5)
+        field2 = get_random_string(5)
+        field3 = get_random_string(5)
+        non_existent_key = get_random_string(10)
+
+        # Set up initial hash with fields
+        glide_sync_client.hset(key, {field1: "value1", field2: "value2"})
+
+        # Test basic HGETEX without expiry options
+        result = glide_sync_client.hgetex(key, [field1, field2])
+        assert result == [b"value1", b"value2"]
+
+        # Test HGETEX with non-existent field
+        result = glide_sync_client.hgetex(key, [field1, field3])
+        assert result == [b"value1", None]
+
+        # Test HGETEX with EX option (expiration in seconds)
+        result = glide_sync_client.hgetex(
+            key, [field1], expiry=ExpiryGetEx(ExpiryTypeGetEx.SEC, 10)
+        )
+        assert result == [b"value1"]
+
+        # Verify expiration was set using HTTL
+        ttl_result = glide_sync_client.httl(key, [field1])
+        assert 0 < ttl_result[0] <= 10
+
+        # Test HGETEX with PX option (expiration in milliseconds)
+        result = glide_sync_client.hgetex(
+            key, [field2], expiry=ExpiryGetEx(ExpiryTypeGetEx.MILLSEC, 5000)
+        )
+        assert result == [b"value2"]
+
+        # Verify expiration was set (should be around 5 seconds)
+        ttl_result = glide_sync_client.httl(key, [field2])
+        assert 0 < ttl_result[0] <= 5
+
+        # Test HGETEX with EXAT option (absolute timestamp in seconds)
+        import time
+
+        future_timestamp = int(time.time()) + 8
+        result = glide_sync_client.hgetex(
+            key,
+            [field1],
+            expiry=ExpiryGetEx(ExpiryTypeGetEx.UNIX_SEC, future_timestamp),
+        )
+        assert result == [b"value1"]
+
+        # Verify expiration was set
+        ttl_result = glide_sync_client.httl(key, [field1])
+        assert 0 < ttl_result[0] <= 8
+
+        # Test HGETEX with PXAT option (absolute timestamp in milliseconds)
+        future_timestamp_ms = int(time.time() * 1000) + 6000
+        result = glide_sync_client.hgetex(
+            key,
+            [field2],
+            expiry=ExpiryGetEx(ExpiryTypeGetEx.UNIX_MILLSEC, future_timestamp_ms),
+        )
+        assert result == [b"value2"]
+
+        # Verify expiration was set
+        ttl_result = glide_sync_client.httl(key, [field2])
+        assert 0 < ttl_result[0] <= 6
+
+        # Test HGETEX with PERSIST option (remove expiration)
+        result = glide_sync_client.hgetex(
+            key, [field1], expiry=ExpiryGetEx(ExpiryTypeGetEx.PERSIST, None)
+        )
+        assert result == [b"value1"]
+
+        # Verify expiration was removed
+        ttl_result = glide_sync_client.httl(key, [field1])
+        assert ttl_result[0] == -1  # -1 indicates no expiration
+
+        # Test HGETEX on non-existent key
+        result = glide_sync_client.hgetex(non_existent_key, [field1, field2])
+        assert result == [None, None]
+
+        # Test HGETEX with multiple fields and mixed existence
+        glide_sync_client.hset(key, {field3: "value3"})
+        result = glide_sync_client.hgetex(
+            key, [field1, field2, field3], expiry=ExpiryGetEx(ExpiryTypeGetEx.SEC, 15)
+        )
+        assert result == [b"value1", b"value2", b"value3"]
+
+        # Verify all fields got the expiration
+        ttl_results = glide_sync_client.httl(key, [field1, field2, field3])
+        assert all(0 < ttl <= 15 for ttl in ttl_results)
+
+        # Test HGETEX with empty fields list - should raise error
+        with pytest.raises(RequestError):
+            glide_sync_client.hgetex(key, [])
+
+        # Test error handling for mutually exclusive options (this should be handled by ExpiryGetEx validation)
+        # The ExpiryGetEx class itself validates mutually exclusive options during construction
+
+    @pytest.mark.skip_if_version_below("9.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_hexpire(self, glide_sync_client: TGlideClient):
+        key = get_random_string(10)
+        field1 = get_random_string(5)
+        field2 = get_random_string(5)
+        field3 = get_random_string(5)
+        non_existent_field = get_random_string(5)
+        non_existent_key = get_random_string(10)
+
+        # Test HEXPIRE on non-existent key
+        result = glide_sync_client.hexpire(non_existent_key, 10, [field1])
+        assert result == [-2]
+
+        # Set up hash with fields
+        field_value_map = {field1: "value1", field2: "value2", field3: "value3"}
+        assert glide_sync_client.hset(key, field_value_map) == 3
+
+        # Test basic HEXPIRE - set expiration on existing fields
+        result = glide_sync_client.hexpire(key, 10, [field1, field2])
+        assert result == [1, 1]  # Both fields should have expiration set successfully
+
+        # Verify expiration was set using HTTL
+        ttl_result = glide_sync_client.httl(key, [field1, field2])
+        assert all(0 < ttl <= 10 for ttl in ttl_result)
+
+        # Test HEXPIRE on non-existent field
+        result = glide_sync_client.hexpire(key, 15, [non_existent_field])
+        assert result == [-2]  # Field doesn't exist
+
+        # Test HEXPIRE with mixed existing and non-existent fields
+        result = glide_sync_client.hexpire(
+            key, 20, [field1, non_existent_field, field3]
+        )
+        assert result == [
+            1,
+            -2,
+            1,
+        ]  # field1 and field3 updated, non_existent_field doesn't exist
+
+        # Verify the updated expiration times
+        ttl_result = glide_sync_client.httl(key, [field1, field3])
+        assert all(0 < ttl <= 20 for ttl in ttl_result)
+
+        # Test HEXPIRE with NX option (only set if no expiry exists)
+        # field1 already has expiration, so NX should fail
+        result = glide_sync_client.hexpire(
+            key, 30, [field1], option=ExpireOptions.HasNoExpiry
+        )
+        assert result == [0]  # Should fail because field1 already has expiration
+
+        # field2 has expiration, so NX should fail
+        result = glide_sync_client.hexpire(
+            key, 30, [field2], option=ExpireOptions.HasNoExpiry
+        )
+        assert result == [0]  # Should fail because field2 already has expiration
+
+        # Remove expiration from field2 and test NX again
+        glide_sync_client.hgetex(
+            key, [field2], expiry=ExpiryGetEx(ExpiryTypeGetEx.PERSIST, None)
+        )
+        result = glide_sync_client.hexpire(
+            key, 25, [field2], option=ExpireOptions.HasNoExpiry
+        )
+        assert result == [1]  # Should succeed because field2 now has no expiration
+
+        # Test HEXPIRE with XX option (only set if expiry exists)
+        # field1 has expiration, so XX should succeed
+        result = glide_sync_client.hexpire(
+            key, 35, [field1], option=ExpireOptions.HasExistingExpiry
+        )
+        assert result == [1]  # Should succeed because field1 has expiration
+
+        # field2 now has expiration, so XX should succeed
+        result = glide_sync_client.hexpire(
+            key, 40, [field2], option=ExpireOptions.HasExistingExpiry
+        )
+        assert result == [1]  # Should succeed because field2 has expiration
+
+        # Remove expiration from field3 and test XX
+        glide_sync_client.hgetex(
+            key, [field3], expiry=ExpiryGetEx(ExpiryTypeGetEx.PERSIST, None)
+        )
+        result = glide_sync_client.hexpire(
+            key, 45, [field3], option=ExpireOptions.HasExistingExpiry
+        )
+        assert result == [0]  # Should fail because field3 has no expiration
+
+        # Test HEXPIRE with GT option (only set if new expiry is greater than current)
+        # Set field1 to have 50 seconds expiration
+        glide_sync_client.hexpire(key, 50, [field1])
+
+        # Try to set it to 30 seconds with GT - should fail
+        result = glide_sync_client.hexpire(
+            key, 30, [field1], option=ExpireOptions.NewExpiryGreaterThanCurrent
+        )
+        assert result == [0]  # Should fail because 30 < 50
+
+        # Try to set it to 60 seconds with GT - should succeed
+        result = glide_sync_client.hexpire(
+            key, 60, [field1], option=ExpireOptions.NewExpiryGreaterThanCurrent
+        )
+        assert result == [1]  # Should succeed because 60 > 50
+
+        # Test HEXPIRE with LT option (only set if new expiry is less than current)
+        # field1 now has ~60 seconds expiration
+
+        # Try to set it to 70 seconds with LT - should fail
+        result = glide_sync_client.hexpire(
+            key, 70, [field1], option=ExpireOptions.NewExpiryLessThanCurrent
+        )
+        assert result == [0]  # Should fail because 70 > current
+
+        # Try to set it to 30 seconds with LT - should succeed
+        result = glide_sync_client.hexpire(
+            key, 30, [field1], option=ExpireOptions.NewExpiryLessThanCurrent
+        )
+        assert result == [1]  # Should succeed because 30 < current
+
+        # Test immediate deletion with 0 seconds
+        result = glide_sync_client.hexpire(key, 0, [field1])
+        assert result == [2]  # Field should be deleted immediately
+
+        # Verify field1 was deleted
+        assert glide_sync_client.hget(key, field1) is None
+
+        # Test with empty fields list - should raise error
+        with pytest.raises(RequestError):
+            glide_sync_client.hexpire(key, 10, [])
+
+        # Test with multiple fields and various conditions
+        multi_key = get_random_string(10)
+        multi_fields = {f"field_{i}": f"value_{i}" for i in range(5)}
+        glide_sync_client.hset(multi_key, multi_fields)
+
+        # Set expiration on all fields
+        field_names = list(multi_fields.keys())
+        result = glide_sync_client.hexpire(multi_key, 100, field_names)
+        assert result == [1] * len(field_names)  # All should succeed
+
+        # Verify all fields have expiration
+        ttl_results = glide_sync_client.httl(multi_key, field_names)
+        assert all(0 < ttl <= 100 for ttl in ttl_results)
+
+        # Test error handling - invalid seconds (negative)
+        # Note: The server might handle this differently, but let's test the behavior
+        try:
+            result = glide_sync_client.hexpire(key, -1, [field2])
+            # If no error is raised, check the result
+            # Negative seconds might be treated as immediate deletion or error
+            assert isinstance(result, list)
+        except RequestError:
+            # If server returns an error for negative seconds, that's also valid
+            pass
+
+    @pytest.mark.skip_if_version_below("9.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_hpexpire(self, glide_sync_client: TGlideClient):
+        key = get_random_string(10)
+        field1 = get_random_string(5)
+        field2 = get_random_string(5)
+        field3 = get_random_string(5)
+        non_existent_field = get_random_string(5)
+        non_existent_key = get_random_string(10)
+
+        # Test HPEXPIRE on non-existent key
+        result = glide_sync_client.hpexpire(non_existent_key, 10000, [field1])
+        assert result == [-2]
+
+        # Set up hash with fields
+        field_value_map = {field1: "value1", field2: "value2", field3: "value3"}
+        assert glide_sync_client.hset(key, field_value_map) == 3
+
+        # Test basic HPEXPIRE - set expiration on existing fields
+        result = glide_sync_client.hpexpire(key, 10000, [field1, field2])
+        assert result == [1, 1]  # Both fields should have expiration set successfully
+
+        # Verify expiration was set using HTTL (convert to seconds for comparison)
+        ttl_result = glide_sync_client.httl(key, [field1, field2])
+        assert all(0 < ttl <= 10 for ttl in ttl_result)
+
+        # Test HPEXPIRE on non-existent field
+        result = glide_sync_client.hpexpire(key, 15000, [non_existent_field])
+        assert result == [-2]  # Field doesn't exist
+
+        # Test HPEXPIRE with mixed existing and non-existent fields
+        result = glide_sync_client.hpexpire(
+            key, 20000, [field1, non_existent_field, field3]
+        )
+        assert result == [
+            1,
+            -2,
+            1,
+        ]  # field1 and field3 updated, non_existent_field doesn't exist
+
+        # Verify the updated expiration times
+        ttl_result = glide_sync_client.httl(key, [field1, field3])
+        assert all(0 < ttl <= 20 for ttl in ttl_result)
+
+        # Test HPEXPIRE with NX option (only set if no expiry exists)
+        # field1 already has expiration, so NX should fail
+        result = glide_sync_client.hpexpire(
+            key, 30000, [field1], option=ExpireOptions.HasNoExpiry
+        )
+        assert result == [0]  # Should fail because field1 already has expiration
+
+        # field2 has expiration, so NX should fail
+        result = glide_sync_client.hpexpire(
+            key, 30000, [field2], option=ExpireOptions.HasNoExpiry
+        )
+        assert result == [0]  # Should fail because field2 already has expiration
+
+        # Remove expiration from field2 and test NX again
+        glide_sync_client.hgetex(
+            key, [field2], expiry=ExpiryGetEx(ExpiryTypeGetEx.PERSIST, None)
+        )
+        result = glide_sync_client.hpexpire(
+            key, 25000, [field2], option=ExpireOptions.HasNoExpiry
+        )
+        assert result == [1]  # Should succeed because field2 now has no expiration
+
+        # Test HPEXPIRE with XX option (only set if expiry exists)
+        # field1 has expiration, so XX should succeed
+        result = glide_sync_client.hpexpire(
+            key, 35000, [field1], option=ExpireOptions.HasExistingExpiry
+        )
+        assert result == [1]  # Should succeed because field1 has expiration
+
+        # field2 now has expiration, so XX should succeed
+        result = glide_sync_client.hpexpire(
+            key, 40000, [field2], option=ExpireOptions.HasExistingExpiry
+        )
+        assert result == [1]  # Should succeed because field2 has expiration
+
+        # Remove expiration from field3 and test XX
+        glide_sync_client.hgetex(
+            key, [field3], expiry=ExpiryGetEx(ExpiryTypeGetEx.PERSIST, None)
+        )
+        result = glide_sync_client.hpexpire(
+            key, 45000, [field3], option=ExpireOptions.HasExistingExpiry
+        )
+        assert result == [0]  # Should fail because field3 has no expiration
+
+        # Test HPEXPIRE with GT option (only set if new expiry is greater than current)
+        # Set field1 to have 50000 milliseconds expiration
+        glide_sync_client.hpexpire(key, 50000, [field1])
+
+        # Try to set it to 30000 milliseconds with GT - should fail
+        result = glide_sync_client.hpexpire(
+            key, 30000, [field1], option=ExpireOptions.NewExpiryGreaterThanCurrent
+        )
+        assert result == [0]  # Should fail because 30000 < 50000
+
+        # Try to set it to 60000 milliseconds with GT - should succeed
+        result = glide_sync_client.hpexpire(
+            key, 60000, [field1], option=ExpireOptions.NewExpiryGreaterThanCurrent
+        )
+        assert result == [1]  # Should succeed because 60000 > 50000
+
+        # Test HPEXPIRE with LT option (only set if new expiry is less than current)
+        # field1 now has ~60000 milliseconds expiration
+
+        # Try to set it to 70000 milliseconds with LT - should fail
+        result = glide_sync_client.hpexpire(
+            key, 70000, [field1], option=ExpireOptions.NewExpiryLessThanCurrent
+        )
+        assert result == [0]  # Should fail because 70000 > current
+
+        # Try to set it to 30000 milliseconds with LT - should succeed
+        result = glide_sync_client.hpexpire(
+            key, 30000, [field1], option=ExpireOptions.NewExpiryLessThanCurrent
+        )
+        assert result == [1]  # Should succeed because 30000 < current
+
+        # Test immediate deletion with 0 milliseconds
+        result = glide_sync_client.hpexpire(key, 0, [field1])
+        assert result == [2]  # Field should be deleted immediately
+
+        # Verify field1 was deleted
+        assert glide_sync_client.hget(key, field1) is None
+
+        # Test immediate deletion with past timestamp (negative milliseconds)
+        # Note: HPEXPIRE uses relative milliseconds, but 0 should delete immediately
+        # Let's test with a very small positive value that might expire immediately
+        glide_sync_client.hset(key, {field1: "value1"})  # Re-add field1
+        result = glide_sync_client.hpexpire(key, 1000, [field1])  # 1000 milliseconds
+        assert result == [1]  # Should set expiration
+
+        # Wait a moment and check if it's still there or expired
+        import time
+
+        time.sleep(0.1)  # Small delay
+        ttl_result = glide_sync_client.httl(key, [field1])
+        assert (
+            ttl_result[0] == 1 or ttl_result[0] == -2
+        )  # Either 1 second left or already expired
+
+        # Test with empty fields list - should raise error
+        with pytest.raises(RequestError, match="wrong number of arguments"):
+            glide_sync_client.hpexpire(key, 10000, [])
+
+        # Test with multiple fields and various conditions
+        multi_key = get_random_string(10)
+        multi_fields = {f"field_{i}": f"value_{i}" for i in range(5)}
+        glide_sync_client.hset(multi_key, multi_fields)
+
+        # Set expiration on all fields
+        field_names = list(multi_fields.keys())
+        result = glide_sync_client.hpexpire(multi_key, 15000, field_names)
+        assert result == [1] * 5  # All fields should have expiration set
+
+        # Verify all fields have expiration using HTTL
+        ttl_results = glide_sync_client.httl(multi_key, field_names)
+        assert all(0 < ttl <= 15 for ttl in ttl_results)
+
+        # Test error handling with negative milliseconds
+        try:
+            result = glide_sync_client.hpexpire(key, -1000, [field2])
+            # If no error is raised, check the result
+            # Negative milliseconds might be treated as immediate deletion or error
+            assert isinstance(result, list)
+        except RequestError:
+            # If server returns an error for negative milliseconds, that's also valid
+            pass
+
+    @pytest.mark.skip_if_version_below("9.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_hexpireat(self, glide_sync_client: TGlideClient):
+        import time
+
+        key = get_random_string(10)
+        field1 = get_random_string(5)
+        field2 = get_random_string(5)
+        field3 = get_random_string(5)
+        non_existent_field = get_random_string(5)
+        non_existent_key = get_random_string(10)
+
+        # Test HEXPIREAT on non-existent key
+        future_timestamp = int(time.time()) + 60
+        result = glide_sync_client.hexpireat(
+            non_existent_key, future_timestamp, [field1]
+        )
+        assert result == [-2]
+
+        # Set up hash with fields
+        field_value_map = {field1: "value1", field2: "value2", field3: "value3"}
+        assert glide_sync_client.hset(key, field_value_map) == 3
+
+        # Test basic HEXPIREAT - set expiration at future timestamp
+        future_timestamp = int(time.time()) + 30
+        result = glide_sync_client.hexpireat(key, future_timestamp, [field1, field2])
+        assert result == [1, 1]  # Both fields should have expiration set successfully
+
+        # Verify expiration was set using HTTL
+        ttl_result = glide_sync_client.httl(key, [field1, field2])
+        assert all(0 < ttl <= 30 for ttl in ttl_result)
+
+        # Test HEXPIREAT on non-existent field
+        result = glide_sync_client.hexpireat(
+            key, future_timestamp, [non_existent_field]
+        )
+        assert result == [-2]  # Field doesn't exist
+
+        # Test HEXPIREAT with mixed existing and non-existent fields
+        future_timestamp2 = int(time.time()) + 45
+        result = glide_sync_client.hexpireat(
+            key, future_timestamp2, [field1, non_existent_field, field3]
+        )
+        assert result == [
+            1,
+            -2,
+            1,
+        ]  # field1 and field3 updated, non_existent_field doesn't exist
+
+        # Verify the updated expiration times
+        ttl_result = glide_sync_client.httl(key, [field1, field3])
+        assert all(0 < ttl <= 45 for ttl in ttl_result)
+
+        # Test HEXPIREAT with NX option (only set if no expiry exists)
+        # field1 already has expiration, so NX should fail
+        result = glide_sync_client.hexpireat(
+            key, future_timestamp2, [field1], option=ExpireOptions.HasNoExpiry
+        )
+        assert result == [0]  # Should fail because field1 already has expiration
+
+        # Remove expiration from field2 and test NX again
+        glide_sync_client.hgetex(
+            key, [field2], expiry=ExpiryGetEx(ExpiryTypeGetEx.PERSIST, None)
+        )
+        result = glide_sync_client.hexpireat(
+            key, future_timestamp2, [field2], option=ExpireOptions.HasNoExpiry
+        )
+        assert result == [1]  # Should succeed because field2 now has no expiration
+
+        # Test HEXPIREAT with XX option (only set if expiry exists)
+        # field1 has expiration, so XX should succeed
+        result = glide_sync_client.hexpireat(
+            key, future_timestamp2, [field1], option=ExpireOptions.HasExistingExpiry
+        )
+        assert result == [1]  # Should succeed because field1 has expiration
+
+        # Remove expiration from field3 and test XX
+        glide_sync_client.hgetex(
+            key, [field3], expiry=ExpiryGetEx(ExpiryTypeGetEx.PERSIST, None)
+        )
+        result = glide_sync_client.hexpireat(
+            key, future_timestamp2, [field3], option=ExpireOptions.HasExistingExpiry
+        )
+        assert result == [0]  # Should fail because field3 has no expiration
+
+        # Test HEXPIREAT with GT option (only set if new expiry is greater than current)
+        # Set field1 to have expiration at a specific timestamp
+        base_timestamp = int(time.time()) + 60
+        glide_sync_client.hexpireat(key, base_timestamp, [field1])
+
+        # Try to set it to an earlier timestamp with GT - should fail
+        earlier_timestamp = base_timestamp - 10
+        result = glide_sync_client.hexpireat(
+            key,
+            earlier_timestamp,
+            [field1],
+            option=ExpireOptions.NewExpiryGreaterThanCurrent,
+        )
+        assert result == [0]  # Should fail because earlier_timestamp < base_timestamp
+
+        # Try to set it to a later timestamp with GT - should succeed
+        later_timestamp = base_timestamp + 20
+        result = glide_sync_client.hexpireat(
+            key,
+            later_timestamp,
+            [field1],
+            option=ExpireOptions.NewExpiryGreaterThanCurrent,
+        )
+        assert result == [1]  # Should succeed because later_timestamp > base_timestamp
+
+        # Test HEXPIREAT with LT option (only set if new expiry is less than current)
+        # field1 now has expiration at later_timestamp
+
+        # Try to set it to an even later timestamp with LT - should fail
+        much_later_timestamp = later_timestamp + 30
+        result = glide_sync_client.hexpireat(
+            key,
+            much_later_timestamp,
+            [field1],
+            option=ExpireOptions.NewExpiryLessThanCurrent,
+        )
+        assert result == [0]  # Should fail because much_later_timestamp > current
+
+        # Try to set it to an earlier timestamp with LT - should succeed
+        earlier_timestamp = later_timestamp - 10
+        result = glide_sync_client.hexpireat(
+            key,
+            earlier_timestamp,
+            [field1],
+            option=ExpireOptions.NewExpiryLessThanCurrent,
+        )
+        assert result == [1]  # Should succeed because earlier_timestamp < current
+
+        # Test immediate deletion with past timestamp
+        past_timestamp = int(time.time()) - 60  # 60 seconds ago
+        result = glide_sync_client.hexpireat(key, past_timestamp, [field1])
+        assert result == [2]  # Field should be deleted immediately
+
+        # Verify field1 was deleted
+        assert glide_sync_client.hget(key, field1) is None
+
+        # Test with empty fields list - should raise error
+        with pytest.raises(RequestError):
+            glide_sync_client.hexpireat(key, future_timestamp, [])
+
+        # Test with multiple fields and various conditions
+        multi_key = get_random_string(10)
+        multi_fields = {f"field_{i}": f"value_{i}" for i in range(5)}
+        glide_sync_client.hset(multi_key, multi_fields)
+
+        # Set expiration on all fields to a future timestamp
+        field_names = list(multi_fields.keys())
+        future_timestamp = int(time.time()) + 120
+        result = glide_sync_client.hexpireat(multi_key, future_timestamp, field_names)
+        assert result == [1] * 5  # All fields should have expiration set
+
+        # Verify all fields have expiration using HTTL
+        ttl_results = glide_sync_client.httl(multi_key, field_names)
+        assert all(0 < ttl <= 120 for ttl in ttl_results)
+
+        # Test error handling with very large timestamp (should be valid)
+        far_future_timestamp = int(time.time()) + 86400 * 365  # 1 year from now
+        glide_sync_client.hset(key, {field1: "value1"})  # Re-add field1
+        result = glide_sync_client.hexpireat(key, far_future_timestamp, [field1])
+        assert result == [1]  # Should succeed
+
+    @pytest.mark.skip_if_version_below("9.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_hpexpireat(self, glide_sync_client: TGlideClient):
+        import time
+
+        key = get_random_string(10)
+        field1 = get_random_string(5)
+        field2 = get_random_string(5)
+        field3 = get_random_string(5)
+        non_existent_field = get_random_string(5)
+        non_existent_key = get_random_string(10)
+
+        # Test HPEXPIREAT on non-existent key
+        future_timestamp_ms = (
+            int(time.time() * 1000) + 60000
+        )  # 60 seconds from now in milliseconds
+        result = glide_sync_client.hpexpireat(
+            non_existent_key, future_timestamp_ms, [field1]
+        )
+        assert result == [-2]
+
+        # Set up hash with fields
+        field_value_map = {field1: "value1", field2: "value2", field3: "value3"}
+        assert glide_sync_client.hset(key, field_value_map) == 3
+
+        # Test basic HPEXPIREAT - set expiration at future timestamp in milliseconds
+        future_timestamp_ms = (
+            int(time.time() * 1000) + 30000
+        )  # 30 seconds from now in milliseconds
+        result = glide_sync_client.hpexpireat(
+            key, future_timestamp_ms, [field1, field2]
+        )
+        assert result == [1, 1]  # Both fields should have expiration set successfully
+
+        # Verify expiration was set using HTTL (should be around 30 seconds)
+        ttl_result = glide_sync_client.httl(key, [field1, field2])
+        assert all(0 < ttl <= 30 for ttl in ttl_result)
+
+        # Test HPEXPIREAT on non-existent field
+        result = glide_sync_client.hpexpireat(
+            key, future_timestamp_ms, [non_existent_field]
+        )
+        assert result == [-2]  # Field doesn't exist
+
+        # Test HPEXPIREAT with mixed existing and non-existent fields
+        future_timestamp_ms2 = (
+            int(time.time() * 1000) + 45000
+        )  # 45 seconds from now in milliseconds
+        result = glide_sync_client.hpexpireat(
+            key, future_timestamp_ms2, [field1, non_existent_field, field3]
+        )
+        assert result == [
+            1,
+            -2,
+            1,
+        ]  # field1 and field3 updated, non_existent_field doesn't exist
+
+        # Verify the updated expiration times
+        ttl_result = glide_sync_client.httl(key, [field1, field3])
+        assert all(0 < ttl <= 45 for ttl in ttl_result)
+
+        # Test HPEXPIREAT with NX option (only set if no expiry exists)
+        # field1 already has expiration, so NX should fail
+        result = glide_sync_client.hpexpireat(
+            key, future_timestamp_ms2, [field1], option=ExpireOptions.HasNoExpiry
+        )
+        assert result == [0]  # Should fail because field1 already has expiration
+
+        # Remove expiration from field2 and test NX again
+        glide_sync_client.hgetex(
+            key, [field2], expiry=ExpiryGetEx(ExpiryTypeGetEx.PERSIST, None)
+        )
+        result = glide_sync_client.hpexpireat(
+            key, future_timestamp_ms2, [field2], option=ExpireOptions.HasNoExpiry
+        )
+        assert result == [1]  # Should succeed because field2 now has no expiration
+
+        # Test HPEXPIREAT with XX option (only set if expiry exists)
+        # field1 has expiration, so XX should succeed
+        result = glide_sync_client.hpexpireat(
+            key, future_timestamp_ms2, [field1], option=ExpireOptions.HasExistingExpiry
+        )
+        assert result == [1]  # Should succeed because field1 has expiration
+
+        # Remove expiration from field3 and test XX
+        glide_sync_client.hgetex(
+            key, [field3], expiry=ExpiryGetEx(ExpiryTypeGetEx.PERSIST, None)
+        )
+        result = glide_sync_client.hpexpireat(
+            key, future_timestamp_ms2, [field3], option=ExpireOptions.HasExistingExpiry
+        )
+        assert result == [0]  # Should fail because field3 has no expiration
+
+        # Test HPEXPIREAT with GT option (only set if new expiry is greater than current)
+        # Set field1 to have expiration at a specific timestamp
+        base_timestamp_ms = (
+            int(time.time() * 1000) + 60000
+        )  # 60 seconds from now in milliseconds
+        glide_sync_client.hpexpireat(key, base_timestamp_ms, [field1])
+
+        # Try to set it to an earlier timestamp with GT - should fail
+        earlier_timestamp_ms = base_timestamp_ms - 10000  # 10 seconds earlier
+        result = glide_sync_client.hpexpireat(
+            key,
+            earlier_timestamp_ms,
+            [field1],
+            option=ExpireOptions.NewExpiryGreaterThanCurrent,
+        )
+        assert result == [
+            0
+        ]  # Should fail because earlier_timestamp_ms < base_timestamp_ms
+
+        # Try to set it to a later timestamp with GT - should succeed
+        later_timestamp_ms = base_timestamp_ms + 20000  # 20 seconds later
+        result = glide_sync_client.hpexpireat(
+            key,
+            later_timestamp_ms,
+            [field1],
+            option=ExpireOptions.NewExpiryGreaterThanCurrent,
+        )
+        assert result == [
+            1
+        ]  # Should succeed because later_timestamp_ms > base_timestamp_ms
+
+        # Test HPEXPIREAT with LT option (only set if new expiry is less than current)
+        # field1 now has expiration at later_timestamp_ms
+
+        # Try to set it to an even later timestamp with LT - should fail
+        much_later_timestamp_ms = later_timestamp_ms + 30000  # 30 seconds later
+        result = glide_sync_client.hpexpireat(
+            key,
+            much_later_timestamp_ms,
+            [field1],
+            option=ExpireOptions.NewExpiryLessThanCurrent,
+        )
+        assert result == [0]  # Should fail because much_later_timestamp_ms > current
+
+        # Try to set it to an earlier timestamp with LT - should succeed
+        earlier_timestamp_ms = later_timestamp_ms - 10000  # 10 seconds earlier
+        result = glide_sync_client.hpexpireat(
+            key,
+            earlier_timestamp_ms,
+            [field1],
+            option=ExpireOptions.NewExpiryLessThanCurrent,
+        )
+        assert result == [1]  # Should succeed because earlier_timestamp_ms < current
+
+        # Test immediate deletion with past timestamp
+        past_timestamp_ms = (
+            int(time.time() * 1000) - 60000
+        )  # 60 seconds ago in milliseconds
+        result = glide_sync_client.hpexpireat(key, past_timestamp_ms, [field1])
+        assert result == [2]  # Field should be deleted immediately
+
+        # Verify field1 was deleted
+        assert glide_sync_client.hget(key, field1) is None
+
+        # Test with empty fields list - should raise error
+        with pytest.raises(RequestError, match="wrong number of arguments"):
+            glide_sync_client.hpexpireat(key, future_timestamp_ms, [])
+
+        # Test with multiple fields and various conditions
+        multi_key = get_random_string(10)
+        multi_fields = {f"field_{i}": f"value_{i}" for i in range(5)}
+        glide_sync_client.hset(multi_key, multi_fields)
+
+        # Set expiration on all fields to a future timestamp in milliseconds
+        field_names = list(multi_fields.keys())
+        future_timestamp_ms = (
+            int(time.time() * 1000) + 120000
+        )  # 120 seconds from now in milliseconds
+        result = glide_sync_client.hpexpireat(
+            multi_key, future_timestamp_ms, field_names
+        )
+        assert result == [1] * 5  # All fields should have expiration set
+
+        # Verify all fields have expiration using HTTL
+        ttl_results = glide_sync_client.httl(multi_key, field_names)
+        assert all(0 < ttl <= 120 for ttl in ttl_results)
+
+        # Test error handling with very large timestamp (should be valid)
+        far_future_timestamp_ms = (
+            int(time.time() * 1000) + 86400 * 365 * 1000
+        )  # 1 year from now in milliseconds
+        glide_sync_client.hset(key, {field1: "value1"})  # Re-add field1
+        result = glide_sync_client.hpexpireat(key, far_future_timestamp_ms, [field1])
+        assert result == [1]  # Should succeed
+
+    @pytest.mark.skip_if_version_below("9.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_hpersist(self, glide_sync_client: TGlideClient):
+        key = get_random_string(10)
+        field1 = get_random_string(5)
+        field2 = get_random_string(5)
+        field3 = get_random_string(5)
+        non_existent_field = get_random_string(5)
+        non_existent_key = get_random_string(10)
+
+        # Test HPERSIST on non-existent key
+        result = glide_sync_client.hpersist(non_existent_key, [field1])
+        assert result == [-2]
+
+        # Set up hash with fields
+        field_value_map = {field1: "value1", field2: "value2", field3: "value3"}
+        assert glide_sync_client.hset(key, field_value_map) == 3
+
+        # Test HPERSIST on fields without expiration (should return -1)
+        result = glide_sync_client.hpersist(key, [field1, field2])
+        assert result == [-1, -1]  # Both fields have no expiration
+
+        # Set expiration on some fields using HSETEX
+        glide_sync_client.hsetex(
+            key,
+            {field1: "value1_updated", field2: "value2_updated"},
+            expiry=ExpirySet(ExpiryType.SEC, 10),
+        )
+
+        # Verify fields have expiration using HTTL
+        ttl_result = glide_sync_client.httl(key, [field1, field2, field3])
+        assert 0 < ttl_result[0] <= 10  # field1 has expiration
+        assert 0 < ttl_result[1] <= 10  # field2 has expiration
+        assert ttl_result[2] == -1  # field3 has no expiration
+
+        # Test HPERSIST on fields with expiration (should return 1)
+        result = glide_sync_client.hpersist(key, [field1, field2])
+        assert result == [1, 1]  # Both fields should become persistent
+
+        # Verify expiration was removed using HTTL
+        ttl_result = glide_sync_client.httl(key, [field1, field2])
+        assert ttl_result == [-1, -1]  # Both fields should now be persistent
+
+        # Test HPERSIST on already persistent fields (should return -1)
+        result = glide_sync_client.hpersist(key, [field1, field2])
+        assert result == [-1, -1]  # Both fields already persistent
+
+        # Test HPERSIST on non-existent field
+        result = glide_sync_client.hpersist(key, [non_existent_field])
+        assert result == [-2]  # Field doesn't exist
+
+        # Test HPERSIST with mixed existing and non-existent fields
+        result = glide_sync_client.hpersist(key, [field1, non_existent_field, field3])
+        assert result == [
+            -1,
+            -2,
+            -1,
+        ]  # field1 and field3 persistent, non_existent_field doesn't exist
+
+        # Set expiration on field3 and test mixed scenarios
+        glide_sync_client.hexpire(key, 15, [field3])
+
+        # Verify field3 now has expiration
+        ttl_result = glide_sync_client.httl(key, [field3])
+        assert 0 < ttl_result[0] <= 15
+
+        # Test HPERSIST with mixed persistent and expiring fields
+        result = glide_sync_client.hpersist(key, [field1, field2, field3])
+        assert result == [
+            -1,
+            -1,
+            1,
+        ]  # field1 and field2 already persistent, field3 made persistent
+
+        # Verify field3 is now persistent
+        ttl_result = glide_sync_client.httl(key, [field3])
+        assert ttl_result == [-1]
+
+        # Test with empty fields list - should raise error
+        with pytest.raises(RequestError, match="wrong number of arguments"):
+            glide_sync_client.hpersist(key, [])
+
+        # Test with multiple fields - set expiration on all and then persist all
+        multi_key = get_random_string(10)
+        multi_fields = {f"field_{i}": f"value_{i}" for i in range(5)}
+        glide_sync_client.hset(multi_key, multi_fields)
+
+        # Set expiration on all fields
+        field_names = list(multi_fields.keys())
+        glide_sync_client.hexpire(multi_key, 20, field_names)
+
+        # Verify all fields have expiration
+        ttl_results = glide_sync_client.httl(multi_key, field_names)
+        assert all(0 < ttl <= 20 for ttl in ttl_results)
+
+        # Make all fields persistent
+        result = glide_sync_client.hpersist(multi_key, field_names)
+        assert result == [1] * len(field_names)  # All should succeed
+
+        # Verify all fields are now persistent
+        ttl_results = glide_sync_client.httl(multi_key, field_names)
+        assert ttl_results == [-1] * len(field_names)

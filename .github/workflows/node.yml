@@ -40,6 +40,14 @@ on:
                 description: "Run the full engine, host, and language version matrix"
                 type: boolean
                 default: false
+            run-with-macos:
+                description: "Run with macos included (only when necessary)"
+                type: choice
+                options:
+                    - false
+                    - use-self-hosted
+                    - use-github
+                default: false
             name:
                 required: false
                 type: string
@@ -50,6 +58,11 @@ on:
                 default: false
 
     workflow_call:
+        inputs:
+            run-with-macos:
+                description: "Run with macos included (only when necessary)"
+                type: string
+                default: false
 
 concurrency:
     group: node-${{ github.head_ref || github.ref }}-${{ toJson(inputs) }}
@@ -77,6 +90,7 @@ jobs:
               with:
                   language-name: node
                   run-full-matrix: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
+                  run-with-macos: ${{ github.event.run-with-macos }}
 
     test-node:
         name: Node Tests - ${{ matrix.node }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
@@ -108,7 +122,7 @@ jobs:
 
             # Setup Node.js
             - name: Setup Node
-              uses: actions/setup-node@v4
+              uses: actions/setup-node@v5
               with:
                   node-version: ${{ matrix.node }}
 
@@ -172,7 +186,7 @@ jobs:
 
             # Setup Node.js
             - name: Setup Node
-              uses: actions/setup-node@v4
+              uses: actions/setup-node@v5
               with:
                   node-version: 23.x
 
@@ -340,7 +354,7 @@ jobs:
                   echo "Current PATH: $PATH"
 
             - name: Setup Node
-              uses: actions/setup-node@v4
+              uses: actions/setup-node@v5
               with:
                   node-version: ${{ matrix.node }}
 
@@ -404,7 +418,7 @@ jobs:
             - uses: actions/checkout@v4
 
             - name: Install Node.js
-              uses: actions/setup-node@v4
+              uses: actions/setup-node@v5
               with:
                   node-version: latest
 

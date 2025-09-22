@@ -9,7 +9,7 @@ import glide.api.commands.GenericClusterCommands;
  * <p>This interface is used in two ways:
  *
  * <ol>
- *   <li>An {@link #initalCursor()} is passed to {@link GenericClusterCommands#scan} to start a
+ *   <li>An {@link #initialCursor()} is passed to {@link GenericClusterCommands#scan} to start a
  *       cluster SCAN request.
  *   <li>The result of the {@link GenericClusterCommands#scan} call returns a cursor at index <code>
  *       0</code> of the returned <code>Object[]</code>. This cursor can be supplied again to a call
@@ -86,7 +86,17 @@ public interface ClusterScanCursor {
             };
 
     /** Creates an empty cursor to be used in the initial {@link GenericClusterCommands#scan} call. */
-    static ClusterScanCursor initalCursor() {
+    static ClusterScanCursor initialCursor() {
         return INITIAL_CURSOR_INSTANCE;
+    }
+
+    /**
+     * Creates an empty cursor to be used in the initial {@link GenericClusterCommands#scan} call.
+     *
+     * @deprecated Use {@link #initialCursor()} instead.
+     */
+    @Deprecated
+    static ClusterScanCursor initalCursor() {
+        return initialCursor();
     }
 }

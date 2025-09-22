@@ -149,7 +149,7 @@ jobs:
               id: load-platform-matrix
               shell: bash
               run: |
-                  # Filter entries with npm in PACKAGE_MANAGERS and use CD_RUNNER if available
+                  # Filter entries with npm in PACKAGE_MANAGERS and use CD_RUNNER if available, replace "ephemeral" with "persistent" in RUNNER
                   export PLATFORM_MATRIX=$(jq 'map(
                       select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains(["npm"])))
                       | .runner = (
@@ -187,7 +187,7 @@ jobs:
                   fetch-depth: 0
 
             - name: Setup Node.js
-              uses: actions/setup-node@v4
+              uses: actions/setup-node@v5
               with:
                   node-version: latest
 
@@ -271,7 +271,7 @@ jobs:
             - name: Upload Native Modules
               uses: actions/upload-artifact@v4
               with:
-                  name: bindings-${{ matrix.TARGET }}
+                  name: bindings-${{ matrix.TARGET }}-${{ matrix.RUNNER }}
                   path: ./node/${{ matrix.TARGET }}
                   retention-days: 1
                   if-no-files-found: error
@@ -321,7 +321,7 @@ jobs:
 
             # Setup Node.js for publishing to NPM and caching
             - name: Setup Node.js with npm cache
-              uses: actions/setup-node@v4
+              uses: actions/setup-node@v5
               with:
                   node-version: latest
                   registry-url: "https://registry.npmjs.org"
@@ -447,9 +447,9 @@ jobs:
               uses: geekyeggo/delete-artifact@v2
               with:
                   name: |
-                      npm-packages-${{ github.run_id }}
                       artifacts-*
                       js-files-${{ github.run_id }}
+                  failOnError: false
 
     test-published-release:
         needs: [get-build-parameters, prepare-and-publish]
@@ -494,7 +494,7 @@ jobs:
 
             - name: Setup Node.js
               if: ${{ !(matrix.build_type == 'musl') }}
-              uses: actions/setup-node@v4
+              uses: actions/setup-node@v5
               with:
                   node-version: latest
 
@@ -550,9 +550,9 @@ jobs:
               uses: geekyeggo/delete-artifact@v2
               with:
                   name: |
-                      npm-packages-${{ github.run_id }}
                       bindings-*
                       js-files-${{ github.run_id }}
+                  failOnError: false
 
     deprecate-on-failure:
         needs: [test-published-release, get-build-parameters]
@@ -560,7 +560,7 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - name: Setup Node.js
-              uses: actions/setup-node@v4
+              uses: actions/setup-node@v5
               with:
                   node-version: latest
                   registry-url: "https://registry.npmjs.org"

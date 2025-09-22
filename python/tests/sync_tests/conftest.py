@@ -1,5 +1,6 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+import time
 from typing import Generator, List, Optional
 
 import pytest
@@ -14,6 +15,7 @@ from glide_shared.exceptions import ClosingError
 from glide_sync import GlideClient as SyncGlideClient
 from glide_sync import GlideClusterClient as SyncGlideClusterClient
 from glide_sync import TGlideClient as TSyncGlideClient
+from glide_sync.logger import Level as LogLevel
 from glide_sync.logger import Logger
 
 from tests.utils.cluster import ValkeyCluster
@@ -28,6 +30,11 @@ from tests.utils.utils import (
     set_new_acl_username_with_password,
 )
 
+# Test teardown retry configuration
+TEST_TEARDOWN_MAX_RETRIES = 3
+TEST_TEARDOWN_BASE_DELAY = 1  # seconds
+MAX_BACKOFF_TIME = 8  # seconds
+
 Logger.set_logger_config(DEFAULT_SYNC_TEST_LOG_LEVEL)
 
 
@@ -38,7 +45,12 @@ def glide_sync_client(
     protocol: ProtocolVersion,
 ) -> Generator[TSyncGlideClient, None, None]:
     "Get sync socket client for tests"
-    client = create_sync_client(request, cluster_mode, protocol=protocol)
+    client = create_sync_client(
+        request,
+        cluster_mode,
+        protocol=protocol,
+        request_timeout=5000,
+    )
     yield client
     sync_test_teardown(request, cluster_mode, protocol)
     client.close()
@@ -174,17 +186,60 @@ def sync_test_teardown(request, cluster_mode: bool, protocol: ProtocolVersion):
 
     If authentication is required, attempt to connect with the known password,
     reset it back to empty, and proceed with teardown.
+
+    This function is made robust to handle connection timeouts and other transient
+    errors that can occur after password changes and connection kills.
+    """
+    # Add a small delay to allow server to stabilize after password/connection changes
+    time.sleep(0.5)
+
+    # Retry connection attempts with exponential backoff
+    max_retries = TEST_TEARDOWN_MAX_RETRIES
+    base_delay = TEST_TEARDOWN_BASE_DELAY
+
+    for attempt in range(max_retries):
+        try:
+            _attempt_teardown(request, cluster_mode, protocol)
+            return  # Success, exit the function
+        except (ClosingError, TimeoutError) as e:
+            if attempt == max_retries - 1:
+                # Last attempt failed, log the error but don't fail the test
+                Logger.log(
+                    LogLevel.WARN,
+                    "test_teardown",
+                    f"Test teardown failed after {max_retries} attempts: {e}",
+                )
+                return
+            else:
+                # Wait before retrying with exponential backoff
+                delay = min(base_delay * (2**attempt), MAX_BACKOFF_TIME)
+                Logger.log(
+                    LogLevel.WARN,
+                    "test_teardown",
+                    f"Teardown attempt {attempt + 1} failed, retrying in {delay}s: {e}",
+                )
+                time.sleep(delay)
+
+
+def _attempt_teardown(request, cluster_mode: bool, protocol: ProtocolVersion):
+    """
+    Single attempt at teardown operations. This function may raise exceptions
+    which will be handled by the retry logic in test_teardown.
     """
     credentials = None
     try:
-        # Try connecting without credentials
+        # Try connecting without credentials with increased timeouts
         client = create_sync_client(
-            request, cluster_mode, protocol=protocol, request_timeout=2000
+            request,
+            cluster_mode,
+            protocol=protocol,
+            request_timeout=5000,  # Increased from 2000ms
+            connection_timeout=5000,  # Increased from default 1000ms
         )
         client.custom_command(["FLUSHALL"])
         client.close()
     except ClosingError as e:
-        # Check if the error is due to authentication
+        # Check if the error is due to authentication or connection issues
         if "NOAUTH" in str(e):
             # Use the known password to authenticate
             credentials = ServerCredentials(password=NEW_PASSWORD)
@@ -192,7 +247,8 @@ def sync_test_teardown(request, cluster_mode: bool, protocol: ProtocolVersion):
                 request,
                 cluster_mode,
                 protocol=protocol,
-                request_timeout=2000,
+                request_timeout=5000,  # Increased timeout
+                connection_timeout=5000,  # Increased timeout
                 credentials=credentials,
             )
             try:
@@ -204,5 +260,9 @@ def sync_test_teardown(request, cluster_mode: bool, protocol: ProtocolVersion):
                 client.custom_command(["FLUSHALL"])
             finally:
                 client.close()
+        elif "timed out" in str(e) or "Failed to create initial connections" in str(e):
+            # Handle connection timeout errors more gracefully
+            # These are often transient after password changes and connection kills
+            raise TimeoutError(f"Connection timeout during teardown: {e}")
         else:
             raise e

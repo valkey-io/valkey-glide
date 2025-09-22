@@ -749,35 +749,46 @@ describe("GlideClusterClient", () => {
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
 
+            // Check for version string in LOLWUT output (dual string contains approach)
+            const serverVersion = cluster.getVersion().trim();
+
             // test with multi-node route
             const result1 = await client.lolwut({ route: "allNodes" });
-            expect(intoString(result1)).toEqual(
-                expect.stringContaining("Redis ver. "),
-            );
+            const result1Str = intoString(result1);
+            expect(
+                result1Str.includes("ver") &&
+                    result1Str.includes(serverVersion),
+            ).toBe(true);
 
             const result2 = await client.lolwut({
                 version: 2,
                 parameters: [10, 20],
                 route: "allNodes",
             });
-            expect(intoString(result2)).toEqual(
-                expect.stringContaining("Redis ver. "),
-            );
+            const result2Str = intoString(result2);
+            expect(
+                result2Str.includes("ver") &&
+                    result2Str.includes(serverVersion),
+            ).toBe(true);
 
             // test with single-node route
             const result3 = await client.lolwut({ route: "randomNode" });
-            expect(intoString(result3)).toEqual(
-                expect.stringContaining("Redis ver. "),
-            );
+            const result3Str = intoString(result3);
+            expect(
+                result3Str.includes("ver") &&
+                    result3Str.includes(serverVersion),
+            ).toBe(true);
 
             const result4 = await client.lolwut({
                 version: 2,
                 parameters: [10, 20],
                 route: "randomNode",
             });
-            expect(intoString(result4)).toEqual(
-                expect.stringContaining("Redis ver. "),
-            );
+            const result4Str = intoString(result4);
+            expect(
+                result4Str.includes("ver") &&
+                    result4Str.includes(serverVersion),
+            ).toBe(true);
 
             // batch tests
             for (const isAtomic of [true, false]) {
@@ -790,9 +801,11 @@ describe("GlideClusterClient", () => {
 
                 if (results) {
                     for (const element of results) {
-                        expect(intoString(element)).toEqual(
-                            expect.stringContaining("Redis ver. "),
-                        );
+                        const elementStr = intoString(element);
+                        expect(
+                            elementStr.includes("ver") &&
+                                elementStr.includes(serverVersion),
+                        ).toBe(true);
                     }
                 } else {
                     throw new Error("Invalid LOLWUT batch test results.");
@@ -2851,6 +2864,28 @@ describe("GlideClusterClient", () => {
                 );
             } finally {
                 lazyClient.close();
+            }
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "should pass database id for cluster client_%p",
+        async (protocol) => {
+            // Skip test if version is below 9.0.0 (Valkey 9)
+            if (cluster.checkIfServerVersionLessThan("9.0.0")) return;
+
+            const client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol, {
+                    databaseId: 1,
+                }),
+            );
+
+            try {
+                // Simple test to verify the client works with the database ID
+                expect(await client.ping()).toEqual("PONG");
+            } finally {
+                client.close();
             }
         },
         TIMEOUT,

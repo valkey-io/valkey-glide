@@ -1148,7 +1148,11 @@ func (suite *GlideTestSuite) TestClusterLolwut() {
 	result, err := client.Lolwut(context.Background())
 	suite.NoError(err)
 	suite.NotEmpty(result)
-	suite.Contains(result, "Redis ver.")
+	// Check for version string in LOLWUT output (dual contains approach)
+	hasVer := strings.Contains(result, "ver")
+	hasVersion := strings.Contains(result, suite.serverVersion)
+	suite.True(hasVer && hasVersion,
+		"Expected output to contain 'ver' and version '%s', got: %s", suite.serverVersion, result)
 }
 
 func (suite *GlideTestSuite) TestLolwutWithOptions_WithAllNodes() {
@@ -1167,7 +1171,11 @@ func (suite *GlideTestSuite) TestLolwutWithOptions_WithAllNodes() {
 	multiValue := result.MultiValue()
 
 	for _, value := range multiValue {
-		suite.Contains(value, "Redis ver.")
+		// Check for version string in LOLWUT output (dual contains approach)
+		hasVer := strings.Contains(value, "ver")
+		hasVersion := strings.Contains(value, suite.serverVersion)
+		assert.True(suite.T(), hasVer && hasVersion,
+			"Expected output to contain 'ver' and version '%s', got: %s", suite.serverVersion, value)
 	}
 }
 
@@ -1186,7 +1194,11 @@ func (suite *GlideTestSuite) TestLolwutWithOptions_WithAllPrimaries() {
 	multiValue := result.MultiValue()
 
 	for _, value := range multiValue {
-		assert.Contains(suite.T(), value, "Redis ver.")
+		// Check for version string in LOLWUT output (dual contains approach)
+		hasVer := strings.Contains(value, "ver")
+		hasVersion := strings.Contains(value, suite.serverVersion)
+		assert.True(suite.T(), hasVer && hasVersion,
+			"Expected output to contain 'ver' and version '%s', got: %s", suite.serverVersion, value)
 	}
 }
 
@@ -1203,7 +1215,11 @@ func (suite *GlideTestSuite) TestLolwutWithOptions_WithRandomRoute() {
 
 	assert.True(suite.T(), result.IsSingleValue())
 	singleValue := result.SingleValue()
-	assert.Contains(suite.T(), singleValue, "Redis ver.")
+	// Check for version string in LOLWUT output (dual contains approach)
+	hasVer := strings.Contains(singleValue, "ver")
+	hasVersion := strings.Contains(singleValue, suite.serverVersion)
+	assert.True(suite.T(), hasVer && hasVersion,
+		"Expected output to contain 'ver' and version '%s', got: %s", suite.serverVersion, singleValue)
 }
 
 func (suite *GlideTestSuite) TestClientIdCluster() {

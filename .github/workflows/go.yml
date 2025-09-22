@@ -41,6 +41,14 @@ on:
                 description: "Run the full engine, host, and language version matrix"
                 type: boolean
                 default: false
+            run-with-macos:
+                description: "Run with macos included (only when needed)"
+                type: choice
+                options:
+                    - false
+                    - use-self-hosted
+                    - use-github
+                default: false
             rc-version:
                 required: false
                 type: string
@@ -55,6 +63,11 @@ on:
                 default: false
 
     workflow_call:
+        inputs:
+            run-with-macos:
+                description: "Run with macos included (only when necessary)"
+                type: string
+                default: false
 
 concurrency:
     group: go-${{ github.head_ref || github.ref }}-${{ toJson(inputs) }}
@@ -83,6 +96,7 @@ jobs:
                   language-name: go
                   # Run full test matrix if job started by cron or it was explictly specified by a person who triggered the workflow
                   run-full-matrix: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
+                  run-with-macos: ${{ github.event.inputs.run-with-macos }}
 
     test-go:
         name: Go Tests - ${{ matrix.go }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
@@ -153,7 +167,7 @@ jobs:
 
             - name: Run Example Tests
               working-directory: go
-              if: ${{ contains(matrix.engine.version, '8') && !github.event.inputs.rc-version }}
+              if: ${{ contains(matrix.engine.version, '9') && !github.event.inputs.rc-version }}
               run: |
                   make -k example-test
 
@@ -245,10 +259,17 @@ jobs:
         steps:
             - name: Install git
               run: |
-                  yum update
-                  yum install -y git tar
-                  git config --global --add safe.directory "$GITHUB_WORKSPACE"
-                  echo IMAGE=amazonlinux:latest | sed -r 's/:/-/g' >> $GITHUB_ENV
+                  if [[ "${{ matrix.host.OS }}" == "amazon-linux" ]]; then
+                    yum update
+                    yum install -y git tar
+                    git config --global --add safe.directory "$GITHUB_WORKSPACE"
+                    echo IMAGE=amazonlinux:latest | sed -r 's/:/-/g' >> $GITHUB_ENV
+                  elif [[ "${{ matrix.host.TARGET }}" == *"musl"* ]]; then
+                    apk update
+                    apk add git bash tar
+                    git config --global --add safe.directory "$GITHUB_WORKSPACE"
+                  fi
+
             # Replace `:` in the variable otherwise it can't be used in `upload-artifact`
             - uses: actions/checkout@v4
               with:
@@ -267,6 +288,19 @@ jobs:
                   target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
+
+            - name: Install Musl Dependencies
+              if: ${{ contains(matrix.host.TARGET, 'musl') }}
+              run: |
+                  apk add clang lld compiler-rt
+                  # Ensure Rust is in PATH for container environments
+                  echo "$HOME/.cargo/bin:$PATH" >> $GITHUB_PATH
+
+            - name: Install zig
+              if: ${{ contains(matrix.host.TARGET, 'musl') }}
+              uses: ./.github/workflows/install-zig
+              with:
+                  target: ${{ matrix.host.TARGET }}
 
             - uses: actions/cache@v4
               with:

@@ -33,8 +33,6 @@ jobs:
             fail-fast: false
             matrix:
                 include:
-                    - language: csharp
-                      build-mode: manual
                     - language: go
                       build-mode: manual
                     - language: java-kotlin
@@ -122,21 +120,6 @@ jobs:
                   # Try to build but don't fail if it can't link with Rust library
                   echo "Attempting Go build for CodeQL analysis..."
                   go build ./... || echo "Go build failed due to missing Rust dependencies, but source code is available for CodeQL analysis"
-
-            # C# Build
-            - name: Setup .NET
-              if: matrix.language == 'csharp'
-              uses: actions/setup-dotnet@v4
-              with:
-                  dotnet-version: "8.0.x"
-
-            - name: Build C# components
-              if: matrix.language == 'csharp'
-              shell: bash
-              run: |
-                  cd csharp
-                  dotnet build sources/Valkey.Glide/Valkey.Glide.csproj --configuration Lint --framework net8.0
-                  dotnet build tests/Valkey.Glide.UnitTests/Valkey.Glide.UnitTests.csproj --configuration Debug --framework net8.0
 
             # Java/Kotlin Build
             - name: Build Java/Kotlin components

@@ -107,7 +107,7 @@ public class OpenTelemetry {
              * @return This builder
              */
             public Builder traces(TracesConfig traces) {
-                this.traces = traces;
+                this.traces = traces != null ? traces.copy() : null;
                 return this;
             }
 
@@ -118,7 +118,7 @@ public class OpenTelemetry {
              * @return This builder
              */
             public Builder metrics(MetricsConfig metrics) {
-                this.metrics = metrics;
+                this.metrics = metrics != null ? metrics.copy() : null;
                 return this;
             }
 
@@ -140,8 +140,8 @@ public class OpenTelemetry {
              */
             public OpenTelemetryConfig build() {
                 OpenTelemetryConfig config = new OpenTelemetryConfig();
-                config.traces = this.traces;
-                config.metrics = this.metrics;
+                config.traces = this.traces != null ? this.traces.copy() : null;
+                config.metrics = this.metrics != null ? this.metrics.copy() : null;
                 config.flushIntervalMs = this.flushIntervalMs;
                 return config;
             }
@@ -153,7 +153,7 @@ public class OpenTelemetry {
          * @return The traces configuration
          */
         public TracesConfig getTraces() {
-            return traces;
+            return traces == null ? null : traces.copy();
         }
 
         /**
@@ -162,7 +162,7 @@ public class OpenTelemetry {
          * @return The metrics configuration
          */
         public MetricsConfig getMetrics() {
-            return metrics;
+            return metrics == null ? null : metrics.copy();
         }
 
         /**
@@ -172,6 +172,15 @@ public class OpenTelemetry {
          */
         public Long getFlushIntervalMs() {
             return flushIntervalMs;
+        }
+
+        private void updateSamplePercentage(int samplePercentage) {
+            if (traces == null) {
+                throw new ConfigurationError("Traces configuration is not initialized");
+            }
+            TracesConfig updated = traces.copy();
+            updated.setSamplePercentage(samplePercentage);
+            traces = updated;
         }
     }
 
@@ -253,11 +262,18 @@ public class OpenTelemetry {
          * @param samplePercentage The sample percentage for traces
          * @throws ConfigurationError if the sample percentage is not between 0 and 100
          */
-        public void setSamplePercentage(Integer samplePercentage) {
+        void setSamplePercentage(Integer samplePercentage) {
             if (samplePercentage < 0 || samplePercentage > 100) {
                 throw new ConfigurationError("Sample percentage must be between 0 and 100");
             }
             this.samplePercentage = samplePercentage;
+        }
+
+        TracesConfig copy() {
+            TracesConfig clone = new TracesConfig();
+            clone.endpoint = this.endpoint;
+            clone.samplePercentage = this.samplePercentage;
+            return clone;
         }
     }
 
@@ -309,6 +325,12 @@ public class OpenTelemetry {
         public String getEndpoint() {
             return endpoint;
         }
+
+        MetricsConfig copy() {
+            MetricsConfig clone = new MetricsConfig();
+            clone.endpoint = this.endpoint;
+            return clone;
+        }
     }
 
     /**
@@ -359,23 +381,44 @@ public class OpenTelemetry {
                     Logger.Level.INFO, "GlideOpenTelemetry", "Error: Both traces and metrics are null");
             throw new ConfigurationError("At least one of traces or metrics must be provided");
         }
-        if (config.getTraces() != null) {
-            tracesEndpoint = config.getTraces().getEndpoint();
-            if (config.getTraces().getSamplePercentage() != null) {
-                tracesSamplePercentage = config.getTraces().getSamplePercentage();
+        TracesConfig tracesConfig = config.getTraces();
+        if (tracesConfig != null) {
+            tracesEndpoint = tracesConfig.getEndpoint();
+            if (tracesConfig.getSamplePercentage() != null) {
+                tracesSamplePercentage = tracesConfig.getSamplePercentage();
             }
         }
 
         String metricsEndpoint = null;
-        if (config.getMetrics() != null) {
-            metricsEndpoint = config.getMetrics().getEndpoint();
+        MetricsConfig metricsConfig = config.getMetrics();
+        if (metricsConfig != null) {
+            metricsEndpoint = metricsConfig.getEndpoint();
         }
 
         long flushIntervalMs =
                 config.getFlushIntervalMs() != null ? config.getFlushIntervalMs() : 5000L;
 
-        OpenTelemetryResolver.initOpenTelemetry(
-                tracesEndpoint, tracesSamplePercentage, metricsEndpoint, flushIntervalMs);
+        int rc =
+                OpenTelemetryResolver.initOpenTelemetry(
+                        tracesEndpoint, tracesSamplePercentage, metricsEndpoint, flushIntervalMs);
+        if (rc != 0) {
+            String msg;
+            switch (rc) {
+                case 1:
+                    msg = "Missing configuration";
+                    break;
+                case 2:
+                case 3:
+                    msg = "Parse error";
+                    break;
+                case 4:
+                case 5:
+                default:
+                    msg = "OpenTelemetry initialization failure";
+                    break;
+            }
+            throw new ConfigurationError(msg);
+        }
 
         openTelemetry = new OpenTelemetry();
     }
@@ -423,10 +466,10 @@ public class OpenTelemetry {
      *     reinitializing OpenTelemetry.
      */
     public static void setSamplePercentage(int percentage) {
-        if (openTelemetryConfig == null || openTelemetryConfig.getTraces() == null) {
+        if (openTelemetryConfig == null || openTelemetryConfig.traces == null) {
             throw new ConfigurationError("OpenTelemetry config traces not initialized");
         }
 
-        openTelemetryConfig.getTraces().setSamplePercentage(percentage);
+        openTelemetryConfig.updateSamplePercentage(percentage);
     }
 }
