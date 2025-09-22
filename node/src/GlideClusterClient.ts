@@ -4,17 +4,22 @@
 
 import * as net from "net";
 import { Writer } from "protobufjs/minimal";
+import { ClusterScanCursor, Script } from "../build-ts/native";
+import {
+    command_request,
+    connection_request,
+} from "../build-ts/ProtobufMessage";
 import {
     AdvancedBaseClientConfiguration,
     BaseClient,
     BaseClientConfiguration,
-    convertGlideRecordToRecord,
     Decoder,
     DecoderOption,
     GlideRecord,
     GlideReturnType,
     GlideString,
     PubSubMsg,
+    convertGlideRecordToRecord,
 } from "./BaseClient";
 import { ClusterBatch } from "./Batch";
 import {
@@ -63,11 +68,6 @@ import {
     createTime,
     createUnWatch,
 } from "./Commands";
-import { ClusterScanCursor, Script } from "../build-ts/native";
-import {
-    command_request,
-    connection_request,
-} from "../build-ts/ProtobufMessage";
 /** An extension to command option types with {@link Routes}. */
 export interface RouteOption {
     /**

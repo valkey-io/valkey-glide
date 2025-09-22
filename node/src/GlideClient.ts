@@ -3,6 +3,7 @@
  */
 
 import * as net from "net";
+import { connection_request } from "../build-ts/ProtobufMessage";
 import {
     AdvancedBaseClientConfiguration,
     BaseClient,
@@ -61,7 +62,6 @@ import {
     LolwutOptions,
     ScanOptions,
 } from "./Commands";
-import { connection_request } from "../build-ts/ProtobufMessage";
 
 /* eslint-disable-next-line @typescript-eslint/no-namespace */
 export namespace GlideClientConfiguration {
