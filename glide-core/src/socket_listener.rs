@@ -1112,8 +1112,10 @@ pub fn start_socket_listener_with_reference<InitCallback>(
         match result {
             Ok(socket_path) => {
                 // Use get_or_create to atomically get or create socket reference
-                let socket_ref = SocketReference::get_or_create(socket_path);
-                wrapper.call(Ok(socket_ref));
+                match SocketReference::get_or_create(socket_path) {
+                    Ok(socket_ref) => wrapper.call(Ok(socket_ref)),
+                    Err(validation_error) => wrapper.call(Err(validation_error)),
+                }
             }
             Err(err) => {
                 wrapper.call(Err(err));

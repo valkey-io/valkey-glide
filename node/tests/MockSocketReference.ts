@@ -13,7 +13,7 @@ export interface SocketReference {
 const mockSockets = new Map<string, { refCount: number; active: boolean }>();
 
 export async function StartSocketConnectionWithReference(
-    path?: string
+    path?: string,
 ): Promise<SocketReference> {
     const socketPath = path || `/tmp/test-socket-${Date.now()}.sock`;
 
@@ -28,9 +28,15 @@ export async function StartSocketConnectionWithReference(
     const socketData = mockSockets.get(socketPath)!;
 
     return {
-        get path() { return socketPath; },
-        get isActive() { return socketData.active; },
-        get referenceCount() { return socketData.refCount; }
+        get path() {
+            return socketPath;
+        },
+        get isActive() {
+            return socketData.active;
+        },
+        get referenceCount() {
+            return socketData.refCount;
+        },
     };
 }
 
@@ -40,7 +46,7 @@ export function IsSocketActive(path: string): boolean {
 }
 
 export function GetActiveSocketCount(): number {
-    return Array.from(mockSockets.values()).filter(s => s.active).length;
+    return Array.from(mockSockets.values()).filter((s) => s.active).length;
 }
 
 export function CleanupAllSockets(): void {
@@ -66,13 +72,16 @@ export class MockClient {
     close(): void {
         if (this.socketRef) {
             const socket = mockSockets.get(this.socketRef.path);
+
             if (socket) {
                 socket.refCount--;
+
                 if (socket.refCount <= 0) {
                     socket.active = false;
                     mockSockets.delete(this.socketRef.path);
                 }
             }
+
             this.socketRef = undefined;
         }
     }

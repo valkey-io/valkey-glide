@@ -10,6 +10,8 @@ use logger_core::{log_debug, log_error, log_info};
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::path::Path;
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, Weak};
 
 /// Internal socket data that tracks the socket state and cleanup information
@@ -17,8 +19,8 @@ use std::sync::{Arc, Mutex, Weak};
 struct SocketData {
     /// The file system path to the socket
     path: String,
-    /// Whether the socket has been marked for cleanup
-    cleanup_initiated: bool,
+    /// Whether the socket has been marked for cleanup (atomic for thread safety)
+    cleanup_initiated: AtomicBool,
 }
 
 /// A reference-counted handle to a socket
@@ -97,6 +99,53 @@ impl SocketManager {
 /// Global socket manager instance
 static SOCKET_MANAGER: Lazy<Mutex<SocketManager>> = Lazy::new(|| Mutex::new(SocketManager::new()));
 
+/// Maximum allowed socket path length
+const MAX_SOCKET_PATH_LENGTH: usize = 4096;
+
+/// Validates a socket path for basic safety
+fn validate_socket_path(path: &str) -> Result<PathBuf, String> {
+    // Check for empty path
+    if path.is_empty() {
+        return Err("Socket path cannot be empty".to_string());
+    }
+
+    // Check path length
+    if path.len() > MAX_SOCKET_PATH_LENGTH {
+        return Err(format!(
+            "Socket path too long: {} chars (max {})",
+            path.len(),
+            MAX_SOCKET_PATH_LENGTH
+        ));
+    }
+
+    // Check for null bytes
+    if path.contains('\0') {
+        return Err("Socket path contains null byte".to_string());
+    }
+
+    // Check for path traversal
+    if path.contains("..") {
+        return Err("Path traversal not allowed".to_string());
+    }
+
+    Ok(PathBuf::from(path))
+}
+
+/// Spawn cleanup task
+fn spawn_cleanup(path: String) {
+    // Try to use tokio's blocking pool if available
+    if let Ok(handle) = tokio::runtime::Handle::try_current() {
+        handle.spawn_blocking(move || {
+            cleanup_socket_deferred(path);
+        });
+    } else {
+        // Fallback: spawn a thread
+        std::thread::spawn(move || {
+            cleanup_socket_deferred(path);
+        });
+    }
+}
+
 impl SocketReference {
     /// Get or create a socket reference atomically
     ///
@@ -111,54 +160,66 @@ impl SocketReference {
     ///
     /// # Returns
     /// A SocketReference that will automatically clean up the socket when dropped
-    pub fn get_or_create(socket_path: String) -> Self {
-        let mut manager = match SOCKET_MANAGER.lock() {
-            Ok(m) => m,
-            Err(e) => {
+    pub fn get_or_create(socket_path: String) -> Result<Self, String> {
+        // Validate the socket path
+        let validated_path = match validate_socket_path(&socket_path) {
+            Ok(path) => path.to_string_lossy().to_string(),
+            Err(error_msg) => {
                 log_error(
                     "SocketReference::get_or_create",
-                    format!("Failed to lock socket manager: {}", e),
+                    format!(
+                        "Path validation failed for '{}': {}",
+                        socket_path, error_msg
+                    ),
                 );
-                // Recover from poisoned lock by creating new manager state
-                e.into_inner()
+                return Err(error_msg);
             }
         };
 
-        // Check for existing socket under lock
-        if let Some(weak_ref) = manager.sockets.get(&socket_path)
-            && let Some(arc_data) = weak_ref.upgrade()
-        {
-            log_debug(
+        let mut manager = SOCKET_MANAGER.lock().unwrap_or_else(|poisoned| {
+            log_error(
                 "SocketReference::get_or_create",
-                format!("Returning existing socket reference for {}", socket_path),
+                "Socket manager lock poisoned, recovering",
             );
-            return SocketReference { data: arc_data };
+            poisoned.into_inner()
+        });
+
+        // Check for existing socket under lock - atomic check and cleanup
+        if let Some(weak_ref) = manager.sockets.get(&validated_path) {
+            if let Some(arc_data) = weak_ref.upgrade() {
+                log_debug(
+                    "SocketReference::get_or_create",
+                    format!("Returning existing socket reference for {}", validated_path),
+                );
+                return Ok(SocketReference { data: arc_data });
+            } else {
+                // Remove stale weak reference before creating new one
+                log_debug(
+                    "SocketReference::get_or_create",
+                    format!("Removing stale reference for {}", validated_path),
+                );
+                manager.sockets.remove(&validated_path);
+            }
         }
 
-        // Create new socket under same lock
+        // Create new socket under same lock (no race condition possible)
         let socket_data = Arc::new(SocketData {
-            path: socket_path.clone(),
-            cleanup_initiated: false,
+            path: validated_path.clone(),
+            cleanup_initiated: AtomicBool::new(false),
         });
 
         manager
             .sockets
-            .insert(socket_path.clone(), Arc::downgrade(&socket_data));
+            .insert(validated_path.clone(), Arc::downgrade(&socket_data));
         log_info(
             "SocketReference::get_or_create",
-            format!("Registered new socket reference for {}", socket_path),
+            format!("Registered new socket reference for {}", validated_path),
         );
 
-        SocketReference { data: socket_data }
+        Ok(SocketReference { data: socket_data })
     }
 
     /// Get an existing socket reference for the given path
-    ///
-    /// Returns Some(SocketReference) if there are existing references to the socket.
-    /// Returns None if no active socket exists for this path.
-    ///
-    /// Note: This is kept for backward compatibility but get_or_create is preferred
-    /// for most use cases to avoid race conditions.
     pub fn get_existing(socket_path: &str) -> Option<Self> {
         let manager = SOCKET_MANAGER.lock().ok()?;
         if let Some(weak_ref) = manager.sockets.get(socket_path)
@@ -174,15 +235,10 @@ impl SocketReference {
     }
 
     /// Register a newly created socket
-    ///
-    /// This should be called after successfully binding a new socket.
-    /// This is separate from `get_existing()` to avoid holding locks during socket creation.
-    ///
-    /// Note: Consider using get_or_create instead to avoid race conditions.
     pub fn register_new_socket(socket_path: String) -> Self {
         let socket_data = Arc::new(SocketData {
             path: socket_path.clone(),
-            cleanup_initiated: false,
+            cleanup_initiated: AtomicBool::new(false),
         });
 
         // Store weak reference for tracking
@@ -193,11 +249,6 @@ impl SocketReference {
             log_info(
                 "SocketReference::register_new_socket",
                 format!("Registered new socket reference for {}", socket_path),
-            );
-        } else {
-            log_error(
-                "SocketReference::register_new_socket",
-                "Failed to lock socket manager",
             );
         }
 
@@ -211,7 +262,7 @@ impl SocketReference {
 
     /// Check if this socket is still active (for debugging/testing)
     pub fn is_active(&self) -> bool {
-        !self.data.cleanup_initiated
+        !self.data.cleanup_initiated.load(Ordering::Relaxed)
     }
 
     /// Get the current reference count (for debugging/testing)
@@ -224,11 +275,15 @@ impl SocketReference {
 impl Drop for SocketData {
     /// Automatic cleanup when the last reference is dropped
     fn drop(&mut self) {
-        // Mark cleanup as initiated to prevent double cleanup
-        if self.cleanup_initiated {
+        // Use atomic compare-and-swap to prevent double cleanup
+        if self
+            .cleanup_initiated
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::Relaxed)
+            .is_err()
+        {
+            // Cleanup was already initiated by another thread
             return;
         }
-        self.cleanup_initiated = true;
 
         let path = self.path.clone();
         log_info(
@@ -243,27 +298,8 @@ impl Drop for SocketData {
         if let Ok(mut manager) = SOCKET_MANAGER.try_lock() {
             manager.force_cleanup_socket(&path);
         } else {
-            // If we can't get the lock immediately, use Tokio's blocking thread pool
-            // for cleanup to avoid spawning new threads and improve performance
-            let path_clone = path.clone();
-
-            // Try to use tokio's blocking pool if available, otherwise fall back to thread spawn
-            if let Ok(handle) = tokio::runtime::Handle::try_current() {
-                // Use Tokio's blocking thread pool for better resource management
-                handle.spawn_blocking(move || {
-                    cleanup_socket_deferred(path_clone);
-                });
-            } else {
-                // Fallback: spawn a thread if not in Tokio context
-                std::thread::spawn(move || {
-                    cleanup_socket_deferred(path_clone);
-                });
-            }
-
-            log_info(
-                "SocketData::drop",
-                format!("Scheduled async cleanup for socket: {}", path),
-            );
+            // Spawn cleanup task
+            spawn_cleanup(path);
         }
     }
 }
@@ -357,12 +393,12 @@ mod tests {
         let socket_path = temp_file.path().to_str().unwrap().to_string();
 
         // First create a socket reference using get_or_create
-        let ref1 = SocketReference::get_or_create(socket_path.clone());
+        let ref1 = SocketReference::get_or_create(socket_path.clone()).unwrap();
         assert_eq!(ref1.path(), socket_path);
         assert_eq!(ref1.reference_count(), 1);
 
         // Second reference using get_or_create should reuse existing socket data
-        let ref2 = SocketReference::get_or_create(socket_path.clone());
+        let ref2 = SocketReference::get_or_create(socket_path.clone()).unwrap();
         assert_eq!(ref2.path(), socket_path);
         assert_eq!(ref1.reference_count(), 2);
         assert_eq!(ref2.reference_count(), 2);
@@ -386,7 +422,7 @@ mod tests {
 
         // Create a socket reference
         {
-            let _ref1 = SocketReference::get_or_create(socket_path.clone());
+            let _ref1 = SocketReference::get_or_create(socket_path.clone()).unwrap();
             assert!(is_socket_active(&socket_path));
         }
         // Reference dropped here - socket should be cleaned up
@@ -405,8 +441,8 @@ mod tests {
         let temp_file = NamedTempFile::new().unwrap();
         let socket_path = temp_file.path().to_str().unwrap().to_string();
 
-        let ref1 = SocketReference::get_or_create(socket_path.clone());
-        let ref2 = SocketReference::get_or_create(socket_path.clone());
+        let ref1 = SocketReference::get_or_create(socket_path.clone()).unwrap();
+        let ref2 = SocketReference::get_or_create(socket_path.clone()).unwrap();
         let ref3 = ref1.clone();
 
         assert_eq!(ref1.reference_count(), 3);
@@ -452,21 +488,21 @@ mod tests {
         let socket_path = "/tmp/test_socket_123.sock";
 
         // Create first reference
-        let _ref1 = SocketReference::get_or_create(socket_path.to_string());
+        let _ref1 = SocketReference::get_or_create(socket_path.to_string()).unwrap();
         let count_after_ref1 = active_socket_count();
         eprintln!("After creating ref1: {} active sockets", count_after_ref1);
         assert_eq!(count_after_ref1, initial_count + 1);
         assert!(is_socket_active(socket_path));
 
         // Create second reference to same socket - should find existing one
-        let _ref2 = SocketReference::get_or_create(socket_path.to_string());
+        let _ref2 = SocketReference::get_or_create(socket_path.to_string()).unwrap();
         let count_after_ref2 = active_socket_count();
         eprintln!("After creating ref2: {} active sockets", count_after_ref2);
         assert_eq!(count_after_ref2, initial_count + 1); // Still only one unique socket
 
         // Create reference to different socket
         let socket_path2 = "/tmp/test_socket_456.sock";
-        let _ref3 = SocketReference::get_or_create(socket_path2.to_string());
+        let _ref3 = SocketReference::get_or_create(socket_path2.to_string()).unwrap();
         let count_after_ref3 = active_socket_count();
         eprintln!("After creating ref3: {} active sockets", count_after_ref3);
         assert_eq!(count_after_ref3, initial_count + 2); // Now two unique sockets
@@ -475,5 +511,39 @@ mod tests {
         let final_count = active_socket_count();
         eprintln!("After cleanup: {} active sockets", final_count);
         assert_eq!(final_count, 0);
+    }
+
+    #[tokio::test]
+    async fn test_path_validation_empty_path() {
+        let result = SocketReference::get_or_create("".to_string());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("cannot be empty"));
+    }
+
+    #[tokio::test]
+    async fn test_path_validation_path_traversal() {
+        let result = SocketReference::get_or_create("../../../etc/passwd".to_string());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Path traversal"));
+    }
+
+    #[tokio::test]
+    async fn test_path_validation_unsafe_location() {
+        // Simplified validation - no longer restricts paths based on location
+        let result = SocketReference::get_or_create("/root/malicious.sock".to_string());
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_path_validation_valid_path() {
+        let result = SocketReference::get_or_create("/tmp/valid_socket.sock".to_string());
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_path_validation_invalid_characters() {
+        let result = SocketReference::get_or_create("/tmp/socket\0null.sock".to_string());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("null byte"));
     }
 }

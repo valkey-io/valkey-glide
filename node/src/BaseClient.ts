@@ -9232,7 +9232,7 @@ export class BaseClient {
                 socket.end();
                 throw err;
             }
-        } catch (refErr) {
+        } catch {
             // Fallback to the original method for backward compatibility
             const path = await StartSocketConnection();
             const socket = await this.GetSocket(path);

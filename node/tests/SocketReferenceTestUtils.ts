@@ -10,21 +10,21 @@
 
 import { promises as fs } from "fs";
 import { tmpdir } from "os";
-import { join, dirname } from "path";
-import { Worker } from "worker_threads";
+import { join } from "path";
 // Import from the built native module
-const native = require('../build-ts/valkey-glide.linux-x64-gnu.node');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const native = require("../build-ts/valkey-glide.linux-x64-gnu.node");
 const { CleanupAllSockets, GetActiveSocketCount } = native;
 
 /**
  * Comprehensive test utilities for socket reference testing
  */
 export class SocketReferenceTestUtils {
-    private tempDir: string = "";
-    private socketCounter: number = 0;
-    private createdSocketPaths: Set<string> = new Set();
-    private workerScripts: Set<string> = new Set();
-    private initialSocketCount: number = 0;
+    private tempDir = "";
+    private socketCounter = 0;
+    private createdSocketPaths = new Set<string>();
+    private workerScripts = new Set<string>();
+    private initialSocketCount = 0;
 
     /**
      * Set up test environment
@@ -60,9 +60,10 @@ export class SocketReferenceTestUtils {
 
             // Final socket count validation
             const finalSocketCount = await this.getActiveSocketCount();
+
             if (finalSocketCount !== this.initialSocketCount) {
                 console.warn(
-                    `Socket leak detected: started with ${this.initialSocketCount}, ended with ${finalSocketCount}`
+                    `Socket leak detected: started with ${this.initialSocketCount}, ended with ${finalSocketCount}`,
                 );
             }
         } catch (error) {
@@ -100,7 +101,10 @@ export class SocketReferenceTestUtils {
         const id = ++this.socketCounter;
         const timestamp = Date.now();
         const random = Math.random().toString(36).substring(2, 8);
-        const socketPath = join(this.tempDir, `test-socket-${id}-${timestamp}-${random}.sock`);
+        const socketPath = join(
+            this.tempDir,
+            `test-socket-${id}-${timestamp}-${random}.sock`,
+        );
 
         this.createdSocketPaths.add(socketPath);
         return socketPath;
@@ -111,6 +115,7 @@ export class SocketReferenceTestUtils {
      */
     socketFileExists(socketPath: string): boolean {
         try {
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
             require("fs").accessSync(socketPath);
             return true;
         } catch {
@@ -128,7 +133,9 @@ export class SocketReferenceTestUtils {
         }
 
         // Alternative: Create memory pressure to trigger GC
-        const memoryPressure = new Array(1000).fill(0).map(() => new Array(1000).fill(Math.random()));
+        const memoryPressure = new Array(1000)
+            .fill(0)
+            .map(() => new Array(1000).fill(Math.random()));
 
         // Brief delay to allow GC to run
         await this.sleep(10);
@@ -143,7 +150,7 @@ export class SocketReferenceTestUtils {
     /**
      * Wait for socket cleanup to complete
      */
-    async waitForCleanup(maxWaitMs: number = 1000): Promise<void> {
+    async waitForCleanup(maxWaitMs = 1000): Promise<void> {
         const startTime = Date.now();
 
         while (Date.now() - startTime < maxWaitMs) {
@@ -151,6 +158,7 @@ export class SocketReferenceTestUtils {
 
             // Check if cleanup is complete by verifying socket files are removed
             let allCleaned = true;
+
             for (const socketPath of this.createdSocketPaths) {
                 if (this.socketFileExists(socketPath)) {
                     allCleaned = false;
@@ -184,11 +192,14 @@ export class SocketReferenceTestUtils {
 
         if (currentSocketCount > expectedCount) {
             const leakCount = currentSocketCount - expectedCount;
-            throw new Error(`Socket leak detected: ${leakCount} sockets not cleaned up`);
+            throw new Error(
+                `Socket leak detected: ${leakCount} sockets not cleaned up`,
+            );
         }
 
         // Check for orphaned socket files
         const orphanedFiles: string[] = [];
+
         for (const socketPath of this.createdSocketPaths) {
             if (this.socketFileExists(socketPath)) {
                 orphanedFiles.push(socketPath);
@@ -196,7 +207,9 @@ export class SocketReferenceTestUtils {
         }
 
         if (orphanedFiles.length > 0) {
-            console.warn(`Orphaned socket files found: ${orphanedFiles.join(", ")}`);
+            console.warn(
+                `Orphaned socket files found: ${orphanedFiles.join(", ")}`,
+            );
             // Clean them up
             await this.cleanupOrphanedFiles(orphanedFiles);
         }
@@ -205,12 +218,12 @@ export class SocketReferenceTestUtils {
     /**
      * Simulate workload (for testing purposes)
      */
-    async simulateWorkload(durationMs: number = 100): Promise<void> {
+    async simulateWorkload(durationMs = 100): Promise<void> {
         const endTime = Date.now() + durationMs;
 
         while (Date.now() < endTime) {
             // Simulate CPU work
-            Math.random() * Math.random();
+            void (Math.random() * Math.random());
 
             // Yield control occasionally
             if (Math.random() < 0.1) {
@@ -223,13 +236,13 @@ export class SocketReferenceTestUtils {
      * Sleep for specified milliseconds
      */
     async sleep(ms: number): Promise<void> {
-        return new Promise(resolve => setTimeout(resolve, ms));
+        return new Promise((resolve) => setTimeout(resolve, ms));
     }
 
     /**
      * Get test server configuration for standalone client
      */
-    getStandaloneServerConfig(): any {
+    getStandaloneServerConfig(): Record<string, unknown> {
         return {
             addresses: [{ host: "localhost", port: 6379 }],
             protocol: "RESP2",
@@ -240,7 +253,7 @@ export class SocketReferenceTestUtils {
     /**
      * Get test server configuration for cluster client
      */
-    getClusterServerConfig(): any {
+    getClusterServerConfig(): Record<string, unknown> {
         return {
             addresses: [
                 { host: "localhost", port: 7000 },
@@ -255,7 +268,7 @@ export class SocketReferenceTestUtils {
     /**
      * Get generic test server configuration
      */
-    getTestServerConfig(): any {
+    getTestServerConfig(): Record<string, unknown> {
         return this.getStandaloneServerConfig();
     }
 
@@ -263,8 +276,12 @@ export class SocketReferenceTestUtils {
      * Create worker script for multi-threading tests
      */
     createWorkerScript(scriptContent: string): string {
-        const scriptPath = join(this.tempDir, `worker-${Date.now()}-${Math.random().toString(36).substring(2, 8)}.js`);
+        const scriptPath = join(
+            this.tempDir,
+            `worker-${Date.now()}-${Math.random().toString(36).substring(2, 8)}.js`,
+        );
 
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
         require("fs").writeFileSync(scriptPath, scriptContent);
         this.workerScripts.add(scriptPath);
 
@@ -314,7 +331,7 @@ export class SocketReferenceTestUtils {
         // Fallback: count socket files in temp directory
         try {
             const files = await fs.readdir(this.tempDir);
-            return files.filter(file => file.endsWith(".sock")).length;
+            return files.filter((file) => file.endsWith(".sock")).length;
         } catch {
             return 0;
         }
@@ -330,7 +347,7 @@ export class SocketReferenceTestUtils {
             cleanupPromises.push(
                 fs.unlink(socketPath).catch(() => {
                     // Ignore errors - file might already be cleaned up
-                })
+                }),
             );
         }
 
@@ -348,7 +365,7 @@ export class SocketReferenceTestUtils {
             cleanupPromises.push(
                 fs.unlink(scriptPath).catch(() => {
                     // Ignore errors
-                })
+                }),
             );
         }
 
@@ -363,12 +380,16 @@ export class SocketReferenceTestUtils {
         const cleanupPromises = filePaths.map(async (filePath) => {
             try {
                 // Restore permissions if needed
-                await fs.chmod(filePath, 0o644).catch(() => {});
+                await fs.chmod(filePath, 0o644).catch(() => {
+                    // Ignore chmod errors in tests
+                });
                 // Remove file
                 await fs.unlink(filePath);
                 console.log(`Cleaned up orphaned socket file: ${filePath}`);
             } catch (error) {
-                console.warn(`Failed to clean up orphaned file ${filePath}: ${error}`);
+                console.warn(
+                    `Failed to clean up orphaned file ${filePath}: ${error}`,
+                );
             }
         });
 
@@ -383,7 +404,7 @@ export class AdvancedSocketTestUtils extends SocketReferenceTestUtils {
     /**
      * Create memory pressure scenario
      */
-    async createMemoryPressure(targetMB: number = 100): Promise<() => void> {
+    async createMemoryPressure(targetMB = 100): Promise<() => void> {
         const arrays: number[][] = [];
         const bytesPerMB = 1024 * 1024;
         const intsPerMB = bytesPerMB / 4; // 4 bytes per integer
@@ -403,7 +424,7 @@ export class AdvancedSocketTestUtils extends SocketReferenceTestUtils {
      */
     async monitorResources<T>(
         testFunction: () => Promise<T>,
-        monitoringInterval: number = 100
+        monitoringInterval = 100,
     ): Promise<{
         result: T;
         resourceUsage: {
@@ -412,7 +433,7 @@ export class AdvancedSocketTestUtils extends SocketReferenceTestUtils {
             socketCount: number;
         }[];
     }> {
-        const resourceUsage: any[] = [];
+        const resourceUsage: Record<string, unknown>[] = [];
         let monitoring = true;
 
         // Start monitoring
@@ -448,16 +469,16 @@ export class AdvancedSocketTestUtils extends SocketReferenceTestUtils {
      */
     async createRaceCondition<T>(
         operations: (() => Promise<T>)[],
-        barrierDelayMs: number = 100
+        barrierDelayMs = 100,
     ): Promise<T[]> {
         // Create synchronization barrier
         let barrierResolve: () => void;
-        const barrier = new Promise<void>(resolve => {
+        const barrier = new Promise<void>((resolve) => {
             barrierResolve = resolve;
         });
 
         // Start all operations
-        const operationPromises = operations.map(async (operation, index) => {
+        const operationPromises = operations.map(async (operation) => {
             // Random small delay to increase race condition likelihood
             await this.sleep(Math.random() * 10);
 
@@ -478,9 +499,7 @@ export class AdvancedSocketTestUtils extends SocketReferenceTestUtils {
     /**
      * Test with controlled timing
      */
-    async testWithTiming<T>(
-        testFunction: () => Promise<T>
-    ): Promise<{
+    async testWithTiming<T>(testFunction: () => Promise<T>): Promise<{
         result: T;
         duration: number;
         memoryGrowth: number;
@@ -504,7 +523,7 @@ export class AdvancedSocketTestUtils extends SocketReferenceTestUtils {
     /**
      * Simulate network latency
      */
-    async simulateNetworkLatency(minMs: number = 10, maxMs: number = 100): Promise<void> {
+    async simulateNetworkLatency(minMs = 10, maxMs = 100): Promise<void> {
         const latency = Math.random() * (maxMs - minMs) + minMs;
         await this.sleep(latency);
     }
@@ -512,7 +531,7 @@ export class AdvancedSocketTestUtils extends SocketReferenceTestUtils {
     /**
      * Create deterministic pseudo-random sequence
      */
-    createDeterministicRandom(seed: number = 12345): () => number {
+    createDeterministicRandom(seed = 12345): () => number {
         let state = seed;
 
         return () => {
@@ -531,7 +550,7 @@ export class PerformanceTestUtils extends AdvancedSocketTestUtils {
      */
     async measureThroughput<T>(
         operation: () => Promise<T>,
-        durationMs: number = 1000
+        durationMs = 1000,
     ): Promise<{
         operationCount: number;
         throughput: number;
@@ -549,7 +568,7 @@ export class PerformanceTestUtils extends AdvancedSocketTestUtils {
             try {
                 await operation();
                 operationCount++;
-            } catch (error) {
+            } catch {
                 errors++;
             }
 
@@ -559,7 +578,8 @@ export class PerformanceTestUtils extends AdvancedSocketTestUtils {
 
         const actualDuration = Date.now() - startTime;
         const throughput = operationCount / (actualDuration / 1000);
-        const avgLatency = operationCount > 0 ? totalLatency / operationCount : 0;
+        const avgLatency =
+            operationCount > 0 ? totalLatency / operationCount : 0;
 
         return { operationCount, throughput, avgLatency, errors };
     }
@@ -567,16 +587,26 @@ export class PerformanceTestUtils extends AdvancedSocketTestUtils {
     /**
      * Generate performance report
      */
-    generatePerformanceReport(measurements: any[]): string {
+    generatePerformanceReport(measurements: Record<string, unknown>[]): string {
         const report = {
-            totalOperations: measurements.reduce((sum, m) => sum + m.operationCount, 0),
-            avgThroughput: measurements.reduce((sum, m) => sum + m.throughput, 0) / measurements.length,
-            avgLatency: measurements.reduce((sum, m) => sum + m.avgLatency, 0) / measurements.length,
+            totalOperations: measurements.reduce(
+                (sum, m) => sum + m.operationCount,
+                0,
+            ),
+            avgThroughput:
+                measurements.reduce((sum, m) => sum + m.throughput, 0) /
+                measurements.length,
+            avgLatency:
+                measurements.reduce((sum, m) => sum + m.avgLatency, 0) /
+                measurements.length,
             totalErrors: measurements.reduce((sum, m) => sum + m.errors, 0),
             errorRate: 0,
         };
 
-        report.errorRate = report.totalOperations > 0 ? report.totalErrors / report.totalOperations : 0;
+        report.errorRate =
+            report.totalOperations > 0
+                ? report.totalErrors / report.totalOperations
+                : 0;
 
         return JSON.stringify(report, null, 2);
     }

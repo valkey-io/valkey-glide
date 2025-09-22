@@ -22,17 +22,21 @@ import {
     expect,
     it,
 } from "@jest/globals";
-import { SocketReferenceTestUtils, AdvancedSocketTestUtils, PerformanceTestUtils } from "./SocketReferenceTestUtils";
+import {
+    SocketReferenceTestUtils,
+    AdvancedSocketTestUtils,
+    PerformanceTestUtils,
+} from "./SocketReferenceTestUtils";
 
 // Import from the built native module
-const native = require('../build-ts/valkey-glide.linux-x64-gnu.node');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const native = require("../build-ts/valkey-glide.linux-x64-gnu.node");
 const {
-    SocketReference,
     StartSocketConnectionWithReference,
     IsSocketActive,
     GetActiveSocketCount,
     CleanupAllSockets,
-    ForceCleanupSocket
+    ForceCleanupSocket,
 } = native;
 
 // Test utilities
@@ -78,7 +82,7 @@ describe("Socket Reference Counting", () => {
             const socketRef = await StartSocketConnectionWithReference();
 
             expect(socketRef).toBeDefined();
-            expect(typeof socketRef.path).toBe('string');
+            expect(typeof socketRef.path).toBe("string");
             expect(socketRef.path).toMatch(/\.sock$/);
             expect(socketRef.referenceCount).toBe(1);
             expect(socketRef.isActive).toBe(true);
@@ -87,7 +91,9 @@ describe("Socket Reference Counting", () => {
 
         it("should increment reference count for same socket path", async () => {
             const socketRef1 = await StartSocketConnectionWithReference();
-            const socketRef2 = await StartSocketConnectionWithReference(socketRef1.path);
+            const socketRef2 = await StartSocketConnectionWithReference(
+                socketRef1.path,
+            );
 
             expect(socketRef2.path).toBe(socketRef1.path);
             expect(socketRef2.referenceCount).toBe(2);
@@ -109,7 +115,7 @@ describe("Socket Reference Counting", () => {
             const socket1 = await StartSocketConnectionWithReference();
             expect(GetActiveSocketCount()).toBe(initialCount + 1);
 
-            const socket2 = await StartSocketConnectionWithReference();
+            await StartSocketConnectionWithReference();
             expect(GetActiveSocketCount()).toBe(initialCount + 2);
 
             // Adding reference to existing socket shouldn't increase count
@@ -122,8 +128,11 @@ describe("Socket Reference Counting", () => {
 
             // Create many references to same socket
             const references = [];
+
             for (let i = 0; i < 10; i++) {
-                references.push(await StartSocketConnectionWithReference(socketRef.path));
+                references.push(
+                    await StartSocketConnectionWithReference(socketRef.path),
+                );
             }
 
             // All should have same path and reference count
@@ -154,7 +163,9 @@ describe("Socket Reference Counting", () => {
             expect(IsSocketActive(socketRef.path)).toBe(true);
 
             // Socket should remain active with multiple references
-            const ref2 = await StartSocketConnectionWithReference(socketRef.path);
+            const ref2 = await StartSocketConnectionWithReference(
+                socketRef.path,
+            );
             expect(ref2.isActive).toBe(true);
             expect(IsSocketActive(socketRef.path)).toBe(true);
         });
@@ -162,8 +173,6 @@ describe("Socket Reference Counting", () => {
         it("should handle cleanup operations", async () => {
             const socket1 = await StartSocketConnectionWithReference();
             const socket2 = await StartSocketConnectionWithReference();
-
-            const initialCount = GetActiveSocketCount();
 
             CleanupAllSockets();
 
@@ -195,8 +204,12 @@ describe("Socket Reference Counting", () => {
 
     describe("Error Handling", () => {
         it("should reject invalid socket paths", async () => {
-            await expect(StartSocketConnectionWithReference("")).rejects.toThrow();
-            await expect(StartSocketConnectionWithReference("/invalid/path")).rejects.toThrow();
+            await expect(
+                StartSocketConnectionWithReference(""),
+            ).rejects.toThrow();
+            await expect(
+                StartSocketConnectionWithReference("/invalid/path"),
+            ).rejects.toThrow();
         });
 
         it("should handle filesystem permission errors", async () => {
@@ -207,7 +220,9 @@ describe("Socket Reference Counting", () => {
 
             try {
                 // Should still be able to reference existing socket
-                const ref2 = await StartSocketConnectionWithReference(socketRef.path);
+                const ref2 = await StartSocketConnectionWithReference(
+                    socketRef.path,
+                );
                 expect(ref2.path).toBe(socketRef.path);
             } finally {
                 await testUtils.restoreSocketPermissions(socketRef.path);
@@ -218,9 +233,13 @@ describe("Socket Reference Counting", () => {
             const socketRef = await StartSocketConnectionWithReference();
 
             // Concurrent cleanup calls should not cause issues
-            const cleanupPromises = Array(5).fill(0).map(() =>
-                Promise.resolve().then(() => ForceCleanupSocket(socketRef.path))
-            );
+            const cleanupPromises = Array(5)
+                .fill(0)
+                .map(() =>
+                    Promise.resolve().then(() =>
+                        ForceCleanupSocket(socketRef.path),
+                    ),
+                );
 
             await Promise.all(cleanupPromises);
             expect(IsSocketActive(socketRef.path)).toBe(false);
@@ -252,8 +271,11 @@ describe("Socket Reference Counting", () => {
             const sharedSocket = await StartSocketConnectionWithReference();
 
             const clientReferences = [];
+
             for (let i = 0; i < 5; i++) {
-                clientReferences.push(await StartSocketConnectionWithReference(sharedSocket.path));
+                clientReferences.push(
+                    await StartSocketConnectionWithReference(sharedSocket.path),
+                );
             }
 
             // All clients should see same socket with correct reference count
@@ -273,8 +295,12 @@ describe("Socket Reference Counting", () => {
 
             // Create shared socket with multiple references
             const shared = await StartSocketConnectionWithReference();
-            const sharedRef1 = await StartSocketConnectionWithReference(shared.path);
-            const sharedRef2 = await StartSocketConnectionWithReference(shared.path);
+            const sharedRef1 = await StartSocketConnectionWithReference(
+                shared.path,
+            );
+            const sharedRef2 = await StartSocketConnectionWithReference(
+                shared.path,
+            );
 
             // Verify all are tracked correctly
             expect(GetActiveSocketCount()).toBe(3); // 2 individual + 1 shared
@@ -302,17 +328,18 @@ describe("Socket Reference Counting", () => {
 
             // All operations should succeed
             expect(results).toHaveLength(20);
+
             for (const result of results) {
                 expect(result).toBeDefined();
-                expect(typeof result.path).toBe('string');
+                expect(typeof result.path).toBe("string");
                 expect(result.referenceCount).toBeGreaterThan(0);
             }
         });
 
         it("should handle cleanup during active references", async () => {
             const socket = await StartSocketConnectionWithReference();
-            const ref1 = await StartSocketConnectionWithReference(socket.path);
-            const ref2 = await StartSocketConnectionWithReference(socket.path);
+            await StartSocketConnectionWithReference(socket.path);
+            await StartSocketConnectionWithReference(socket.path);
 
             expect(socket.referenceCount).toBe(3);
 
@@ -344,7 +371,7 @@ describe("Socket Reference Counting", () => {
             expect(duration).toBeLessThan(5000); // Should complete within 5 seconds
 
             // Verify all sockets are unique and valid
-            const paths = new Set(sockets.map(s => s.path));
+            const paths = new Set(sockets.map((s) => s.path));
             expect(paths.size).toBe(100); // All unique paths
         });
 
@@ -356,7 +383,9 @@ describe("Socket Reference Counting", () => {
 
             // Create 100 references to same socket
             for (let i = 0; i < 100; i++) {
-                references.push(await StartSocketConnectionWithReference(baseSocket.path));
+                references.push(
+                    await StartSocketConnectionWithReference(baseSocket.path),
+                );
             }
 
             const duration = Date.now() - startTime;
@@ -382,6 +411,7 @@ describe("Socket Reference Counting", () => {
                 } else if (operation < 0.9) {
                     // 30% - Reference existing socket (if any)
                     const count = GetActiveSocketCount();
+
                     if (count > 0) {
                         return await StartSocketConnectionWithReference();
                     } else {
@@ -390,7 +420,7 @@ describe("Socket Reference Counting", () => {
                 } else {
                     // 10% - Check socket status
                     const count = GetActiveSocketCount();
-                    return { operation: 'status_check', count };
+                    return { operation: "status_check", count };
                 }
             }, 2000); // Run for 2 seconds
 
@@ -416,7 +446,6 @@ describe("Socket Reference Counting", () => {
 
                 expect(sockets).toHaveLength(50);
                 expect(duration).toBeLessThan(10000); // Should still complete reasonably fast
-
             } finally {
                 cleanupMemory();
             }
@@ -424,15 +453,17 @@ describe("Socket Reference Counting", () => {
 
         it("should handle concurrent socket operations", async () => {
             // Create concurrent operations
-            const operations = Array(20).fill(0).map(async (_, index) => {
-                if (index % 2 === 0) {
-                    return await StartSocketConnectionWithReference();
-                } else {
-                    // Wait a bit then reference the first socket created
-                    await advancedUtils.sleep(10);
-                    return await StartSocketConnectionWithReference();
-                }
-            });
+            const operations = Array(20)
+                .fill(0)
+                .map(async (_, index) => {
+                    if (index % 2 === 0) {
+                        return await StartSocketConnectionWithReference();
+                    } else {
+                        // Wait a bit then reference the first socket created
+                        await advancedUtils.sleep(10);
+                        return await StartSocketConnectionWithReference();
+                    }
+                });
 
             const results = await Promise.all(operations);
 
@@ -441,7 +472,7 @@ describe("Socket Reference Counting", () => {
             // All operations should succeed
             for (const result of results) {
                 expect(result).toBeDefined();
-                expect(typeof result.path).toBe('string');
+                expect(typeof result.path).toBe("string");
             }
 
             // Should have created multiple sockets
@@ -449,30 +480,43 @@ describe("Socket Reference Counting", () => {
         });
 
         it("should handle resource monitoring during operations", async () => {
-            const monitoringResult = await advancedUtils.monitorResources(async () => {
-                const sockets = [];
+            const monitoringResult = await advancedUtils.monitorResources(
+                async () => {
+                    const sockets = [];
 
-                // Create and reference sockets while monitoring
-                for (let i = 0; i < 30; i++) {
-                    sockets.push(await StartSocketConnectionWithReference());
+                    // Create and reference sockets while monitoring
+                    for (let i = 0; i < 30; i++) {
+                        sockets.push(
+                            await StartSocketConnectionWithReference(),
+                        );
 
-                    if (i % 5 === 0) {
-                        // Every 5th operation, reference an existing socket
-                        const existing = sockets[Math.floor(Math.random() * sockets.length)];
-                        await StartSocketConnectionWithReference(existing.path);
+                        if (i % 5 === 0) {
+                            // Every 5th operation, reference an existing socket
+                            const existing =
+                                sockets[
+                                    Math.floor(Math.random() * sockets.length)
+                                ];
+                            await StartSocketConnectionWithReference(
+                                existing.path,
+                            );
+                        }
+
+                        await advancedUtils.sleep(10); // Small delay for monitoring
                     }
 
-                    await advancedUtils.sleep(10); // Small delay for monitoring
-                }
-
-                return sockets.length;
-            }, 50); // Monitor every 50ms
+                    return sockets.length;
+                },
+                50,
+            ); // Monitor every 50ms
 
             expect(monitoringResult.result).toBe(30);
             expect(monitoringResult.resourceUsage.length).toBeGreaterThan(5);
 
             // Memory usage should be reasonable
-            const finalMemory = monitoringResult.resourceUsage[monitoringResult.resourceUsage.length - 1];
+            const finalMemory =
+                monitoringResult.resourceUsage[
+                    monitoringResult.resourceUsage.length - 1
+                ];
             expect(finalMemory.memory.heapUsed).toBeLessThan(100 * 1024 * 1024); // Less than 100MB
         });
     });
@@ -519,13 +563,18 @@ describe("Socket Reference Counting", () => {
 
                 // Create 10 references in this batch
                 for (let i = 0; i < 10; i++) {
-                    batchRefs.push(await StartSocketConnectionWithReference(baseSocket.path));
+                    batchRefs.push(
+                        await StartSocketConnectionWithReference(
+                            baseSocket.path,
+                        ),
+                    );
                 }
 
                 references.push(...batchRefs);
 
                 // Validate reference count is correct
                 const expectedCount = references.length;
+
                 for (const ref of batchRefs) {
                     expect(ref.referenceCount).toBe(expectedCount);
                 }
@@ -548,7 +597,7 @@ describe("Socket Reference Counting", () => {
                 "/tmp/",
                 "/tmp/nonexistent.sock",
                 "not-a-path",
-                "/dev/null"
+                "/dev/null",
             ];
 
             for (const invalidPath of invalidPaths) {
@@ -583,7 +632,7 @@ describe("Socket Reference Counting", () => {
 
             // At least the cleanup should succeed
             const cleanupResult = results[2];
-            expect(cleanupResult.status).toBe('fulfilled');
+            expect(cleanupResult.status).toBe("fulfilled");
         });
     });
 
@@ -597,9 +646,9 @@ describe("Socket Reference Counting", () => {
             const newSocket = await StartSocketConnectionWithReference();
 
             expect(newSocket).toBeDefined();
-            expect(typeof newSocket.path).toBe('string');
-            expect(typeof newSocket.referenceCount).toBe('number');
-            expect(typeof newSocket.isActive).toBe('boolean');
+            expect(typeof newSocket.path).toBe("string");
+            expect(typeof newSocket.referenceCount).toBe("number");
+            expect(typeof newSocket.isActive).toBe("boolean");
 
             expect(newSocket.referenceCount).toBe(1);
             expect(newSocket.isActive).toBe(true);
@@ -610,15 +659,15 @@ describe("Socket Reference Counting", () => {
             const socket = await StartSocketConnectionWithReference();
 
             // Verify all expected properties exist
-            expect(socket).toHaveProperty('path');
-            expect(socket).toHaveProperty('referenceCount');
-            expect(socket).toHaveProperty('isActive');
+            expect(socket).toHaveProperty("path");
+            expect(socket).toHaveProperty("referenceCount");
+            expect(socket).toHaveProperty("isActive");
 
             // Verify all expected functions work
-            expect(typeof IsSocketActive).toBe('function');
-            expect(typeof GetActiveSocketCount).toBe('function');
-            expect(typeof CleanupAllSockets).toBe('function');
-            expect(typeof ForceCleanupSocket).toBe('function');
+            expect(typeof IsSocketActive).toBe("function");
+            expect(typeof GetActiveSocketCount).toBe("function");
+            expect(typeof CleanupAllSockets).toBe("function");
+            expect(typeof ForceCleanupSocket).toBe("function");
 
             // Test function calls
             expect(IsSocketActive(socket.path)).toBe(true);
@@ -629,7 +678,7 @@ describe("Socket Reference Counting", () => {
             const testData = {
                 sockets: [],
                 paths: new Set(),
-                references: new Map()
+                references: new Map(),
             };
 
             // Create complex reference scenario
@@ -642,11 +691,17 @@ describe("Socket Reference Counting", () => {
                 // Add some references to existing sockets
                 if (i > 3) {
                     const existingPath = testData.sockets[i % 3].path;
-                    const ref = await StartSocketConnectionWithReference(existingPath);
-                    testData.references.set(existingPath, testData.references.get(existingPath)! + 1);
+                    const ref =
+                        await StartSocketConnectionWithReference(existingPath);
+                    testData.references.set(
+                        existingPath,
+                        testData.references.get(existingPath)! + 1,
+                    );
 
                     // Verify reference count matches our tracking
-                    expect(ref.referenceCount).toBe(testData.references.get(existingPath));
+                    expect(ref.referenceCount).toBe(
+                        testData.references.get(existingPath),
+                    );
                 }
             }
 
@@ -655,7 +710,7 @@ describe("Socket Reference Counting", () => {
             expect(GetActiveSocketCount()).toBe(10); // Correct socket count
 
             // Verify each socket's reference count
-            for (const [path, expectedCount] of testData.references) {
+            for (const [path] of testData.references) {
                 expect(IsSocketActive(path)).toBe(true);
             }
         });

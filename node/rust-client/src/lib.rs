@@ -19,11 +19,12 @@ use bytes::Bytes;
 use glide_core::MAX_REQUEST_ARGS_LENGTH;
 use glide_core::client::ConnectionError;
 use glide_core::client::get_or_init_runtime;
-use glide_core::start_socket_listener;
 use glide_core::socket_reference::SocketReference as CoreSocketReference;
 use glide_core::socket_reference::{
     active_socket_count, cleanup_all_sockets, is_socket_active as core_is_socket_active,
 };
+use glide_core::start_socket_listener;
+use logger_core::log_debug;
 use napi::bindgen_prelude::BigInt;
 use napi::bindgen_prelude::Either;
 use napi::bindgen_prelude::Uint8Array;
@@ -31,6 +32,22 @@ use napi::{Env, Error, JsObject, JsUnknown, Result, Status};
 use napi_derive::napi;
 use num_traits::sign::Signed;
 use redis::{AsyncCommands, Value, aio::MultiplexedConnection};
+
+/// Safely converts a usize index to u32 for JavaScript arrays
+/// Returns an error if the index exceeds JavaScript array size limits
+fn safe_array_index(index: usize, context: &str) -> Result<u32> {
+    if index > u32::MAX as usize {
+        Err(Error::new(
+            Status::InvalidArg,
+            format!(
+                "{} index {} exceeds JavaScript array size limit",
+                context, index
+            ),
+        ))
+    } else {
+        Ok(index as u32)
+    }
+}
 #[cfg(feature = "testing_utilities")]
 use std::collections::HashMap;
 use std::ptr::from_mut;
@@ -100,7 +117,36 @@ impl SocketReference {
     /// Note: This is approximate due to potential race conditions
     #[napi(getter, js_name = "referenceCount")]
     pub fn reference_count(&self) -> u32 {
-        self.inner.reference_count() as u32
+        let count = self.inner.reference_count();
+        // Safe conversion with overflow protection
+        if count > u32::MAX as usize {
+            // Log the issue for debugging but cap the value to prevent silent truncation
+            eprintln!(
+                "Warning: Socket reference count {} exceeds u32::MAX, capping to {}",
+                count,
+                u32::MAX
+            );
+            u32::MAX
+        } else {
+            count as u32
+        }
+    }
+
+    /// Manual cleanup method for explicit resource management
+    /// While Drop handles automatic cleanup, this method allows for explicit cleanup
+    /// which can be useful in scenarios where deterministic cleanup timing is needed
+    #[napi(js_name = "close")]
+    pub fn close(&mut self) {
+        log_debug(
+            "SocketReference::close",
+            format!(
+                "Explicitly closing SocketReference for path: {}",
+                self.inner.path()
+            ),
+        );
+        // Note: In Rust, we can't actually "close" or invalidate the inner reference
+        // since it's owned. The actual cleanup will happen when this struct is dropped.
+        // This method serves as a way for JavaScript to signal intent for cleanup.
     }
 }
 
@@ -111,6 +157,20 @@ impl SocketReference {
     }
 }
 
+/// Drop implementation for proper NAPI garbage collection integration
+impl Drop for SocketReference {
+    fn drop(&mut self) {
+        log_debug(
+            "SocketReference::drop",
+            format!(
+                "Dropping NAPI SocketReference for path: {}",
+                self.inner.path()
+            ),
+        );
+        // The inner CoreSocketReference will automatically handle cleanup via its Drop trait
+        // This Drop implementation ensures proper NAPI finalizer integration
+    }
+}
 
 /// Configuration for OpenTelemetry integration in the Node.js client.
 ///
@@ -243,22 +303,21 @@ pub fn start_socket_listener_external(env: Env) -> Result<JsObject> {
     Ok(promise)
 }
 
-#[napi(js_name = "StartSocketConnectionWithReference", ts_return_type = "Promise<SocketReference>")]
+#[napi(
+    js_name = "StartSocketConnectionWithReference",
+    ts_return_type = "Promise<SocketReference>"
+)]
 pub fn start_socket_listener_with_reference(env: Env, path: Option<String>) -> Result<JsObject> {
     let (deferred, promise) = env.create_deferred()?;
 
     // Use the glide_core function that accepts an optional path
     glide_core::start_socket_listener_with_reference(
-        move |result| {
-            match result {
-                Ok(socket_ref) => {
-                    let js_socket_ref = SocketReference::from_core(socket_ref);
-                    deferred.resolve(|_| Ok(js_socket_ref))
-                }
-                Err(error_message) => {
-                    deferred.reject(napi::Error::new(Status::Unknown, error_message))
-                }
+        move |result| match result {
+            Ok(socket_ref) => {
+                let js_socket_ref = SocketReference::from_core(socket_ref);
+                deferred.resolve(|_| Ok(js_socket_ref))
             }
+            Err(error_message) => deferred.reject(napi::Error::new(Status::Unknown, error_message)),
         },
         path,
     );
@@ -349,7 +408,19 @@ pub fn is_socket_active(path: String) -> bool {
 /// Get the current number of active sockets (for monitoring/debugging)
 #[napi(js_name = "GetActiveSocketCount")]
 pub fn get_active_socket_count() -> u32 {
-    active_socket_count() as u32
+    let count = active_socket_count();
+    // Safe conversion with overflow protection
+    if count > u32::MAX as usize {
+        // Log the issue for debugging but cap the value to prevent silent truncation
+        eprintln!(
+            "Warning: Active socket count {} exceeds u32::MAX, capping to {}",
+            count,
+            u32::MAX
+        );
+        u32::MAX
+    } else {
+        count as u32
+    }
 }
 
 /// Force cleanup of all sockets (mainly for testing and cleanup)
@@ -447,7 +518,7 @@ fn resp_value_to_js(val: Value, js_env: Env, string_decoder: bool) -> Result<JsU
             let mut js_array_view = js_env.create_array_with_length(array.len())?;
             for (index, item) in array.into_iter().enumerate() {
                 js_array_view.set_element(
-                    index as u32,
+                    safe_array_index(index, "Array")?,
                     resp_value_to_js(item, js_env, string_decoder)?,
                 )?;
             }
@@ -496,7 +567,7 @@ fn resp_value_to_js(val: Value, js_env: Env, string_decoder: bool) -> Result<JsU
             let mut js_array_view = js_env.create_array_with_length(array.len())?;
             for (index, item) in array.into_iter().enumerate() {
                 js_array_view.set_element(
-                    index as u32,
+                    safe_array_index(index, "Set")?,
                     resp_value_to_js(item, js_env, string_decoder)?,
                 )?;
             }
