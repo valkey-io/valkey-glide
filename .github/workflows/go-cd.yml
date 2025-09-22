@@ -109,7 +109,7 @@ jobs:
                     echo "No cleaning needed"
                   fi
             - uses: actions/checkout@v4
-            - uses: actions/setup-go@v5
+            - uses: actions/setup-go@v6
               with:
                   go-version: ${{ env.BASE_GO_VERSION }}
             - name: Install shared software dependencies
@@ -208,7 +208,7 @@ jobs:
             - uses: actions/checkout@v4
               with:
                   ref: "go/${{ needs.validate-release-version.outputs.RELEASE_VERSION }}"
-            - uses: actions/setup-go@v5
+            - uses: actions/setup-go@v6
               with:
                   go-version: ${{ env.BASE_GO_VERSION }}
             - name: Install shared software dependencies
