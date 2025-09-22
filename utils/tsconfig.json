@@ -13,6 +13,7 @@
         "pretty": true,
         "resolveJsonModule": true /* Enable importing .json files. */,
         "rootDir": "./" /* Specify the root folder within your source files. */,
+        "types": ["node"],
         "traceResolution": false /* true to have TypeScript print information about its resolution process for each processed file */
     },
     "compileOnSave": false,

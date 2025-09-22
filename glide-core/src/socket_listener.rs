@@ -26,27 +26,195 @@ use redis::{
     ClusterScanArgs, Cmd, PipelineRetryStrategy, PushInfo, RedisError, ScanStateRC, Value,
 };
 use std::cell::Cell;
-use std::collections::HashSet;
+use std::collections::HashMap;
+use std::env;
 use std::fs;
 use std::io;
 use std::os::unix::fs::PermissionsExt;
+use std::path::{Path, PathBuf};
 use std::ptr::from_mut;
 use std::rc::Rc;
 use std::str;
-use std::sync::{Arc, RwLock};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::{Arc, Condvar, Mutex as StdMutex, RwLock};
 use telemetrylib::{GlideSpan, GlideSpanStatus};
 use thiserror::Error;
 use tokio::net::{UnixListener, UnixStream};
-use tokio::sync::Mutex;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::{Sender, channel};
+use tokio::sync::{Mutex, Notify};
 use tokio::task;
 use tokio_util::task::LocalPoolHandle;
 use uuid::Uuid;
 
 /// The socket file name
 const SOCKET_FILE_NAME: &str = "glide-socket";
-const UNIX_SOCKER_DIR: &str = "/tmp";
+const SOCKET_DIRECTORY_ENV_VAR: &str = "GLIDE_SOCKET_DIR";
+
+struct CloseSignal {
+    completed: StdMutex<bool>,
+    condvar: Condvar,
+}
+
+impl CloseSignal {
+    fn new() -> Self {
+        Self {
+            completed: StdMutex::new(false),
+            condvar: Condvar::new(),
+        }
+    }
+
+    fn notify(&self) {
+        let mut completed = self
+            .completed
+            .lock()
+            .expect("Failed to lock close signal mutex");
+        *completed = true;
+        self.condvar.notify_all();
+    }
+
+    fn reset(&self) {
+        let mut completed = self
+            .completed
+            .lock()
+            .expect("Failed to lock close signal mutex");
+        *completed = false;
+    }
+
+    fn wait(&self) {
+        let mut completed = self
+            .completed
+            .lock()
+            .expect("Failed to lock close signal mutex");
+        while !*completed {
+            completed = self
+                .condvar
+                .wait(completed)
+                .expect("Failed to wait on close signal");
+        }
+    }
+}
+
+struct SocketState {
+    ref_count: AtomicUsize,
+    shutting_down: AtomicBool,
+    shutdown_notifier: Arc<Notify>,
+    close_signal: Arc<CloseSignal>,
+    owned_directory: Option<PathBuf>,
+}
+
+impl SocketState {
+    fn new(owned_directory: Option<PathBuf>) -> Arc<Self> {
+        Arc::new(Self {
+            ref_count: AtomicUsize::new(1),
+            shutting_down: AtomicBool::new(false),
+            shutdown_notifier: Arc::new(Notify::new()),
+            close_signal: Arc::new(CloseSignal::new()),
+            owned_directory,
+        })
+    }
+
+    fn increment(&self) {
+        self.ref_count.fetch_add(1, Ordering::Relaxed);
+    }
+
+    fn decrement(&self) -> usize {
+        self.ref_count.fetch_sub(1, Ordering::SeqCst)
+    }
+
+    fn start_shutdown(&self) {
+        self.shutting_down.store(true, Ordering::SeqCst);
+        self.shutdown_notifier.notify_waiters();
+    }
+
+    fn is_shutting_down(&self) -> bool {
+        self.shutting_down.load(Ordering::SeqCst)
+    }
+
+    fn notifier(&self) -> Arc<Notify> {
+        self.shutdown_notifier.clone()
+    }
+
+    fn close_signal(&self) -> Arc<CloseSignal> {
+        self.close_signal.clone()
+    }
+
+    fn reset(&self) {
+        self.ref_count.store(1, Ordering::SeqCst);
+        self.shutting_down.store(false, Ordering::SeqCst);
+        self.close_signal.reset();
+    }
+
+    fn owned_directory(&self) -> Option<PathBuf> {
+        self.owned_directory.as_ref().cloned()
+    }
+}
+
+static INITIALIZED_SOCKETS: Lazy<RwLock<HashMap<String, Arc<SocketState>>>> =
+    Lazy::new(|| RwLock::new(HashMap::new()));
+
+static SOCKET_NAME: Lazy<String> = Lazy::new(|| {
+    format!(
+        "{}-{}-{}.sock",
+        SOCKET_FILE_NAME,
+        std::process::id(),
+        Uuid::new_v4(),
+    )
+});
+
+fn determine_socket_root_directory() -> PathBuf {
+    if let Ok(custom_dir) = env::var(SOCKET_DIRECTORY_ENV_VAR) {
+        let trimmed = custom_dir.trim();
+        if !trimmed.is_empty() {
+            return Path::new(trimmed).to_path_buf();
+        }
+    }
+
+    if cfg!(windows) {
+        BaseDirs::new()
+            .map(|dirs| dirs.data_local_dir().to_path_buf())
+            .unwrap_or_else(env::temp_dir)
+    } else {
+        BaseDirs::new()
+            .and_then(|dirs| dirs.runtime_dir().map(|path| path.to_path_buf()))
+            .unwrap_or_else(env::temp_dir)
+    }
+}
+
+fn ensure_process_socket_directory() -> Result<PathBuf, String> {
+    let process_dir =
+        determine_socket_root_directory().join(format!("glide-sockets-{}", std::process::id()));
+
+    if let Err(err) = fs::create_dir_all(&process_dir) {
+        return Err(format!(
+            "Failed to create socket directory {}: {err}",
+            process_dir.display()
+        ));
+    }
+
+    #[cfg(unix)]
+    if let Err(err) = fs::set_permissions(&process_dir, fs::Permissions::from_mode(0o700)) {
+        log_warn(
+            "socket directory permissions",
+            format!(
+                "Failed to set permissions on socket directory {}: {err}",
+                process_dir.display()
+            ),
+        );
+    }
+
+    Ok(process_dir)
+}
+
+fn build_default_socket_path() -> Result<(String, Option<PathBuf>), String> {
+    let process_dir = ensure_process_socket_directory()?;
+    let socket_path = process_dir.join(SOCKET_NAME.clone());
+    let socket_path_string = socket_path
+        .into_os_string()
+        .into_string()
+        .map_err(|_| "Couldn't create socket path".to_string())?;
+    Ok((socket_path_string, Some(process_dir)))
+}
 
 /// The maximum length of a request's arguments to be passed as a vector of
 /// strings instead of a pointer
@@ -686,6 +854,38 @@ pub fn close_socket(socket_path: &String) {
     let _ = std::fs::remove_file(socket_path);
 }
 
+pub fn release_socket_listener(socket_path: &str) {
+    let socket_state = {
+        let sockets_guard = INITIALIZED_SOCKETS
+            .read()
+            .expect("Failed to acquire sockets db read guard");
+        sockets_guard.get(socket_path).cloned()
+    };
+
+    let Some(state) = socket_state else {
+        log_trace(
+            "release_socket_listener",
+            format!("Attempted to release unknown socket: {socket_path}"),
+        );
+        return;
+    };
+
+    let previous = state.decrement();
+
+    if previous == 0 {
+        log_warn(
+            "release_socket_listener",
+            format!("Socket ref-count underflow for {socket_path}. Ignoring release request."),
+        );
+        return;
+    }
+
+    if previous == 1 {
+        state.start_shutdown();
+        state.close_signal().wait();
+    }
+}
+
 async fn create_client(
     writer: &Rc<Writer>,
     request: ConnectionRequest,
@@ -902,13 +1102,9 @@ struct ClosingError {
 ///
 /// For Windows, the socket file will be saved to %AppData%\Local.
 pub fn get_socket_path_from_name(socket_name: String) -> String {
-    let base_dirs = BaseDirs::new().expect("Failed to create BaseDirs");
-    let folder = if cfg!(windows) {
-        base_dirs.data_local_dir()
-    } else {
-        std::path::Path::new(UNIX_SOCKER_DIR)
-    };
-    folder
+    let process_dir =
+        ensure_process_socket_directory().expect("Failed to create socket directory for process");
+    process_dir
         .join(socket_name)
         .into_os_string()
         .into_string()
@@ -917,17 +1113,9 @@ pub fn get_socket_path_from_name(socket_name: String) -> String {
 
 /// Get the socket path as a string
 pub fn get_socket_path() -> String {
-    // Ensure the socket name is unique by appending the process ID and a random UUID
-    // to the socket name. The UUID is used to ensure that the socket name is unique for situations in which PID can be resused such as with dockers.
-    static SOCKET_NAME: Lazy<String> = Lazy::new(|| {
-        format!(
-            "{}-{}-{}.sock",
-            SOCKET_FILE_NAME,
-            std::process::id(),
-            Uuid::new_v4(),
-        )
-    });
-    get_socket_path_from_name(SOCKET_NAME.clone())
+    build_default_socket_path()
+        .map(|(path, _)| path)
+        .expect("Failed to create default socket path")
 }
 
 /// This function is exposed only for the sake of testing with a nonstandard `socket_path`.
@@ -939,28 +1127,59 @@ pub fn start_socket_listener_internal<InitCallback>(
 ) where
     InitCallback: FnOnce(Result<String, String>) + Send + Clone + 'static,
 {
-    static INITIALIZED_SOCKETS: Lazy<RwLock<HashSet<String>>> =
-        Lazy::new(|| RwLock::new(HashSet::new()));
+    let (socket_path, owned_directory) = match socket_path {
+        Some(path) => (path, None),
+        None => match build_default_socket_path() {
+            Ok(result) => result,
+            Err(err) => {
+                init_callback(Err(err));
+                return;
+            }
+        },
+    };
 
-    let socket_path = socket_path.unwrap_or_else(get_socket_path);
+    if owned_directory.is_none()
+        && let Some(parent) = Path::new(&socket_path).parent()
+        && let Err(err) = fs::create_dir_all(parent)
+    {
+        init_callback(Err(format!(
+            "Failed to create socket directory {}: {err}",
+            parent.display()
+        )));
+        return;
+    }
 
     {
         // Optimize for already initialized
         let initialized_sockets = INITIALIZED_SOCKETS
             .read()
             .expect("Failed to acquire sockets db read guard");
-        if initialized_sockets.contains(&socket_path) {
-            init_callback(Ok(socket_path.clone()));
-            return;
+        if let Some(state) = initialized_sockets.get(&socket_path) {
+            if state.is_shutting_down() {
+                drop(initialized_sockets);
+            } else {
+                state.increment();
+                init_callback(Ok(socket_path.clone()));
+                return;
+            }
         }
     }
     // Retry with write lock, will be dropped upon the function completion
     let mut sockets_write_guard = INITIALIZED_SOCKETS
         .write()
         .expect("Failed to acquire sockets db write guard");
-    if sockets_write_guard.contains(&socket_path) {
-        init_callback(Ok(socket_path.clone()));
-        return;
+    if let Some(state) = sockets_write_guard.get(&socket_path) {
+        if state.is_shutting_down() {
+            // Wait for shutdown to complete before retrying initialization
+            let close_signal = state.close_signal();
+            drop(sockets_write_guard);
+            close_signal.wait();
+            return start_socket_listener_internal(init_callback, Some(socket_path));
+        } else {
+            state.increment();
+            init_callback(Ok(socket_path.clone()));
+            return;
+        }
     }
 
     let (tx, rx) = std::sync::mpsc::channel();
@@ -972,6 +1191,11 @@ pub fn start_socket_listener_internal<InitCallback>(
             return;
         }
     };
+
+    let socket_state = SocketState::new(owned_directory.clone());
+    let shutdown_notifier = socket_state.notifier();
+    let close_signal = socket_state.close_signal();
+    let socket_state_clone = socket_state.clone();
 
     glide_rt.runtime.spawn(async move {
         let listener_socket = match UnixListener::bind(socket_path_cloned.clone()) {
@@ -1012,16 +1236,24 @@ pub fn start_socket_listener_internal<InitCallback>(
 
         let local_set_pool = LocalPoolHandle::new(num_cpus::get());
         loop {
-            match listener_socket.accept().await {
-                Ok((stream, _addr)) => {
-                    local_set_pool.spawn_pinned(move || listen_on_client_stream(stream));
-                }
-                Err(err) => {
-                    log_error(
-                        "listen_on_socket",
-                        format!("Error accepting connection: {err}"),
-                    );
+            tokio::select! {
+                _ = shutdown_notifier.notified() => {
+                    log_trace("listen_on_socket", "Shutdown requested for socket listener");
                     break;
+                }
+                accept_result = listener_socket.accept() => {
+                    match accept_result {
+                        Ok((stream, _addr)) => {
+                            local_set_pool.spawn_pinned(move || listen_on_client_stream(stream));
+                        }
+                        Err(err) => {
+                            log_error(
+                                "listen_on_socket",
+                                format!("Error accepting connection: {err}"),
+                            );
+                            break;
+                        }
+                    }
                 }
             }
         }
@@ -1030,11 +1262,27 @@ pub fn start_socket_listener_internal<InitCallback>(
         drop(listener_socket);
         let _ = std::fs::remove_file(socket_path_cloned.clone());
 
-        // no more listening on socket - update the sockets db
         let mut sockets_write_guard = INITIALIZED_SOCKETS
             .write()
             .expect("Failed to acquire sockets db write guard");
         sockets_write_guard.remove(&socket_path_cloned);
+        drop(sockets_write_guard);
+
+        if let Some(directory) = socket_state_clone.owned_directory() {
+            match fs::remove_dir(&directory) {
+                Ok(_) => {}
+                Err(err) if err.kind() == io::ErrorKind::NotFound => {}
+                Err(err) => log_debug(
+                    "socket directory cleanup",
+                    format!(
+                        "Failed to remove socket directory {}: {err}",
+                        directory.display()
+                    ),
+                ),
+            }
+        }
+
+        close_signal.notify();
     });
 
     match rx.recv()
@@ -1042,7 +1290,8 @@ pub fn start_socket_listener_internal<InitCallback>(
         .and_then(|res| res.map_err(|e| e.to_string())) // inner thread error -> String
         {
             Ok(socket_path) => {
-                sockets_write_guard.insert(socket_path.clone());
+                socket_state.reset();
+                sockets_write_guard.insert(socket_path.clone(), socket_state);
                 init_callback(Ok(socket_path));
             }
             Err(err) => {

@@ -26,6 +26,7 @@ from glide.glide import (
     create_otel_span,
     drop_otel_span,
     get_statistics,
+    release_socket_listener_external,
     start_socket_listener_external,
     value_from_pointer,
 )
@@ -136,6 +137,8 @@ class BaseClient(CoreCommands):
 
         self._pending_tasks: Optional[Set[Awaitable[None]]] = None
         """asyncio-only to avoid gc on pending write tasks"""
+
+        self._socket_listener_released: bool = False
 
     def _create_task(self, task, *args, **kwargs):
         """framework agnostic free-floating task shim"""
@@ -277,6 +280,7 @@ class BaseClient(CoreCommands):
                     path=cast(str, self.socket_path)
                 )
         except Exception as e:
+            self._release_socket_listener()
             raise ClosingError("Failed to create UDS connection") from e
 
     async def close(self, err_message: Optional[str] = None) -> None:
@@ -303,7 +307,25 @@ class BaseClient(CoreCommands):
             finally:
                 self._pubsub_lock.release()
 
-            await self._stream.aclose()
+            try:
+                await self._stream.aclose()
+            except Exception as exc:  # pragma: no cover - best effort shutdown
+                ClientLogger.log(
+                    LogLevel.DEBUG,
+                    "client close",
+                    f"Failed to close UDS stream cleanly: {exc}",
+                )
+            finally:
+                self._release_socket_listener()
+
+    def _release_socket_listener(self) -> None:
+        if self._socket_listener_released:
+            return
+        if self.socket_path is None:
+            return
+        release_socket_listener_external(self.socket_path)
+        self._socket_listener_released = True
+        self.socket_path = None
 
     def _get_future(self, callback_idx: int) -> "TFuture":
         response_future: "TFuture" = _get_new_future_instance()

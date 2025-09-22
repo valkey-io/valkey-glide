@@ -58,6 +58,7 @@ import {
     RangeByIndex,
     RangeByLex,
     RangeByScore,
+    ReleaseSocketConnection,
     RequestError,
     RestoreOptions,
     RouteOption,
@@ -972,6 +973,8 @@ type WritePromiseOptions =
  */
 export class BaseClient {
     private socket: net.Socket;
+    private socketPath?: string;
+    private socketListenerReleased = false;
     protected readonly promiseCallbackFunctions:
         | [PromiseFunction, ErrorFunction, Decoder | undefined][]
         | [PromiseFunction, ErrorFunction][] = [];
@@ -1251,6 +1254,21 @@ export class BaseClient {
         this.defaultDecoder = options?.defaultDecoder ?? Decoder.String;
         this.inflightRequestsLimit =
             options?.inflightRequestsLimit ?? DEFAULT_INFLIGHT_REQUESTS_LIMIT;
+    }
+
+    protected setSocketPath(path: string): void {
+        this.socketPath = path;
+        this.socketListenerReleased = false;
+    }
+
+    protected releaseSocketListener(): void {
+        if (this.socketListenerReleased || !this.socketPath) {
+            return;
+        }
+
+        ReleaseSocketConnection(this.socketPath);
+        this.socketListenerReleased = true;
+        this.socketPath = undefined;
     }
 
     protected getCallbackIndex(): number {
@@ -9159,6 +9177,7 @@ export class BaseClient {
         });
         Logger.log("info", "Client lifetime", "disposing of client");
         this.socket.end();
+        this.releaseSocketListener();
     }
 
     /**
@@ -9204,17 +9223,27 @@ export class BaseClient {
         ) => TConnection,
     ): Promise<TConnection> {
         const path = await StartSocketConnection();
-        const socket = await this.GetSocket(path);
+        let socket: net.Socket;
 
         try {
-            return await this.__createClientInternal<TConnection>(
+            socket = await this.GetSocket(path);
+        } catch (err) {
+            ReleaseSocketConnection(path);
+            throw err;
+        }
+
+        try {
+            const connection = await this.__createClientInternal<TConnection>(
                 options,
                 socket,
                 constructor,
             );
+            connection.setSocketPath(path);
+            return connection;
         } catch (err) {
-            // Ensure socket is closed
+            // Ensure socket is closed and listener is released
             socket.end();
+            ReleaseSocketConnection(path);
             throw err;
         }
     }

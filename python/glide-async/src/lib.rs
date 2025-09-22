@@ -6,6 +6,7 @@ use glide_core::Telemetry;
 use glide_core::client::FINISHED_SCAN_CURSOR;
 use glide_core::client::get_or_init_runtime;
 use glide_core::errors::error_message;
+use glide_core::release_socket_listener;
 use glide_core::start_socket_listener;
 use glide_core::{
     DEFAULT_FLUSH_SIGNAL_INTERVAL_MS, DEFAULT_TRACE_SAMPLE_PERCENTAGE, GlideOpenTelemetry,
@@ -249,6 +250,7 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(py_log, m)?)?;
     m.add_function(wrap_pyfunction!(py_init, m)?)?;
     m.add_function(wrap_pyfunction!(start_socket_listener_external, m)?)?;
+    m.add_function(wrap_pyfunction!(release_socket_listener_external, m)?)?;
     m.add_function(wrap_pyfunction!(value_from_pointer, m)?)?;
     m.add_function(wrap_pyfunction!(create_leaked_value, m)?)?;
     m.add_function(wrap_pyfunction!(create_leaked_bytes_vec, m)?)?;
@@ -319,6 +321,12 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
                 .into_any()
                 .unbind()
         }))
+    }
+
+    #[pyfunction]
+    fn release_socket_listener_external(socket_path: &str) -> PyResult<()> {
+        release_socket_listener(socket_path);
+        Ok(())
     }
 
     fn iter_to_value<TIterator>(
