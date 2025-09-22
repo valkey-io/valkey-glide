@@ -89,7 +89,7 @@
         "@types/jest": "29",
         "@types/minimist": "1",
         "@types/semver": "7",
-        "@types/uuid": "10",
+        "@types/uuid": "11",
         "find-free-port": "2",
         "lint-staged": "16",
         "jest": "29",
