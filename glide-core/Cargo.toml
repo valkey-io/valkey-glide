@@ -25,7 +25,7 @@ tokio = { version = "1", features = ["macros", "time"] }
 logger_core = { path = "../logger_core" }
 tokio-util = { version = "^0.7", features = ["rt"], optional = true }
 num_cpus = { version = "^1", optional = true }
-tokio-retry2 = { version = "0.5", features = ["jitter"] }
+tokio-retry2 = { version = "0.6", features = ["jitter"] }
 aws-config = "1"
 aws-credential-types = "1"
 aws-sigv4 = "1"
@@ -67,11 +67,11 @@ iam_tests = []
 rsevents = "0.3.1"
 socket2 = "0.6"
 tempfile = "3.3.0"
-rstest = "^0.25"
+rstest = "^0.26"
 serial_test = "3"
 criterion = { version = "^0.6", features = ["html_reports", "async_tokio"] }
 which = "8"
-ctor = "0.4"
+ctor = "0.5"
 redis = { path = "./redis-rs/redis", features = ["tls-rustls-insecure"] }
 rustls = { version = "0.23", features = ["aws-lc-rs"]}
 iai-callgrind = "0.15"
