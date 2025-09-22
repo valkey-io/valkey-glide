@@ -56,6 +56,18 @@ enum PubSubChannelType {
     Sharded = 2;
 }
 
+enum CompressionBackend {
+    ZSTD = 0;
+    LZ4 = 1;
+}
+
+message CompressionConfig {
+    bool enabled = 1;
+    CompressionBackend backend = 2;
+    optional int32 compression_level = 3;
+    uint32 min_compression_size = 4;
+}
+
 message PubSubChannelsOrPatterns
 {
     repeated bytes channels_or_patterns = 1;
@@ -87,6 +99,7 @@ message ConnectionRequest {
     string client_az = 15;
     uint32 connection_timeout = 16;
     bool lazy_connect = 17;
+    optional CompressionConfig compression_config = 18;
 }
 
 message ConnectionRetryStrategy {
