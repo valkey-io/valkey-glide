@@ -24,6 +24,14 @@ public class PerformanceTestRunner {
                         tests.add(PerformanceTest.createJedisPooledTest(config));
                     }
                     break;
+                case "jedispooled":
+                    if (!config.isClusterMode()) {
+                        tests.add(PerformanceTest.createJedisPooledTest(config));
+                    } else {
+                        System.err.println("JedisPooled is not supported in cluster mode");
+                        System.exit(1);
+                    }
+                    break;
                 case "valkey":
                 case "glide":
                     tests.add(PerformanceTest.createValkeyGlideTest(config));
