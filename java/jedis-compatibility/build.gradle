@@ -32,7 +32,7 @@ dependencies {
     implementation group: 'org.apache.commons', name: 'commons-pool2', version: '2.12.1'
 
     // Test dependencies
-    testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter', version: '5.10.2'
+    testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter', version: '5.13.4'
     testImplementation group: 'org.mockito', name: 'mockito-inline', version: '5.2.0'
     testImplementation group: 'org.mockito', name: 'mockito-junit-jupiter', version: '5.2.0'
 
