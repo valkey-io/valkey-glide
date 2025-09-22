@@ -20,7 +20,7 @@ dependencies {
     testImplementation group: 'io.valkey', name: 'valkey-glide-jedis-compatibility', version: project.ext.defaultReleaseVersion, classifier: osdetector.classifier
 
     implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.13.0'
-    implementation 'com.google.code.gson:gson:2.10.1'
+    implementation 'com.google.code.gson:gson:2.13.2'
 
     // Add commons-pool2 as compile-time dependency for tests
     implementation group: 'org.apache.commons', name: 'commons-pool2', version: '2.12.1'
