@@ -73,7 +73,10 @@ struct AsyncClient {
 /// This class provides reference counting for socket management.
 /// When all SocketReference instances for a given socket path are dropped,
 /// the socket will be automatically cleaned up and removed from the filesystem.
-#[napi]
+///
+/// NAPI v3 Integration: Uses finalizer for automatic cleanup when JavaScript
+/// objects are garbage collected, ensuring proper resource management.
+#[napi(js_name = "SocketReference")]
 pub struct SocketReference {
     /// Internal reference to the Rust SocketReference
     inner: CoreSocketReference,
@@ -107,6 +110,7 @@ impl SocketReference {
         Self { inner }
     }
 }
+
 
 /// Configuration for OpenTelemetry integration in the Node.js client.
 ///
