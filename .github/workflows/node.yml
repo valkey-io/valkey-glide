@@ -122,7 +122,7 @@ jobs:
 
             # Setup Node.js
             - name: Setup Node
-              uses: actions/setup-node@v4
+              uses: actions/setup-node@v5
               with:
                   node-version: ${{ matrix.node }}
 
@@ -186,7 +186,7 @@ jobs:
 
             # Setup Node.js
             - name: Setup Node
-              uses: actions/setup-node@v4
+              uses: actions/setup-node@v5
               with:
                   node-version: 23.x
 
@@ -354,7 +354,7 @@ jobs:
                   echo "Current PATH: $PATH"
 
             - name: Setup Node
-              uses: actions/setup-node@v4
+              uses: actions/setup-node@v5
               with:
                   node-version: ${{ matrix.node }}
 
@@ -418,7 +418,7 @@ jobs:
             - uses: actions/checkout@v4
 
             - name: Install Node.js
-              uses: actions/setup-node@v4
+              uses: actions/setup-node@v5
               with:
                   node-version: latest
 
