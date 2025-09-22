@@ -60,13 +60,16 @@ public class PerformanceTest {
         ExecutorService executor = Executors.newFixedThreadPool(config.getConcurrentConnections());
         List<Future<?>> futures = new ArrayList<>();
 
-        RedisClient client = clientFactory.get();
-        client.connect();
-        client.ping();
+        // Test connectivity first
+        RedisClient testClient = clientFactory.get();
+        testClient.connect();
+        testClient.ping();
+        testClient.close();
+        
         try {
-            // Start worker threads
+            // Start worker threads - each gets its own client
             for (int i = 0; i < config.getConcurrentConnections(); i++) {
-                // RedisClient client = clientFactory.get();
+                RedisClient client = clientFactory.get();
                 PerformanceWorker worker = new PerformanceWorker(client, config, metrics, running, i);
                 Future<?> future = executor.submit(worker);
                 futures.add(future);
@@ -126,8 +129,6 @@ public class PerformanceTest {
         } finally {
             executor.shutdown();
         }
-
-        client.close();
 
         // Finalize metrics to capture final RPS before any delays
         metrics.finalizeMetrics();
