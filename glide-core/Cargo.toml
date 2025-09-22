@@ -25,7 +25,7 @@ tokio = { version = "1", features = ["macros", "time"] }
 logger_core = { path = "../logger_core" }
 tokio-util = { version = "^0.7", features = ["rt"], optional = true }
 num_cpus = { version = "^1", optional = true }
-tokio-retry2 = { version = "0.5", features = ["jitter"] }
+tokio-retry2 = { version = "0.6", features = ["jitter"] }
 aws-config = "1"
 aws-credential-types = "1"
 aws-sigv4 = "1"
@@ -48,8 +48,8 @@ async-trait = { version = "0.1" }
 serde_json = "1"
 serde = { version = "1", features = ["derive"] }
 versions = "7"
-strum = "0.26"       
-strum_macros = "0.26"
+strum = "0.27"       
+strum_macros = "0.27"
 
 [features]
 proto = ["protobuf"]
@@ -69,6 +69,7 @@ socket2 = "0.6"
 tempfile = "3.3.0"
 rstest = "^0.25"
 serial_test = "3"
+rand = "0.8"
 criterion = { version = "^0.6", features = ["html_reports", "async_tokio"] }
 which = "8"
 ctor = "0.4"

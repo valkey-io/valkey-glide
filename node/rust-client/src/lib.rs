@@ -20,6 +20,10 @@ use glide_core::MAX_REQUEST_ARGS_LENGTH;
 use glide_core::client::ConnectionError;
 use glide_core::client::get_or_init_runtime;
 use glide_core::start_socket_listener;
+use glide_core::socket_reference::SocketReference as CoreSocketReference;
+use glide_core::socket_reference::{
+    active_socket_count, cleanup_all_sockets, is_socket_active as core_is_socket_active,
+};
 use napi::bindgen_prelude::BigInt;
 use napi::bindgen_prelude::Either;
 use napi::bindgen_prelude::Uint8Array;
@@ -62,6 +66,46 @@ struct AsyncClient {
     #[allow(dead_code)]
     connection: MultiplexedConnection,
     runtime: Runtime,
+}
+
+/// NAPI wrapper for the Rust SocketReference
+///
+/// This class provides reference counting for socket management.
+/// When all SocketReference instances for a given socket path are dropped,
+/// the socket will be automatically cleaned up and removed from the filesystem.
+#[napi]
+pub struct SocketReference {
+    /// Internal reference to the Rust SocketReference
+    inner: CoreSocketReference,
+}
+
+#[napi]
+impl SocketReference {
+    /// Get the socket path
+    #[napi(getter)]
+    pub fn path(&self) -> String {
+        self.inner.path().to_string()
+    }
+
+    /// Check if this socket is still active (for debugging/testing)
+    #[napi(getter, js_name = "isActive")]
+    pub fn is_active(&self) -> bool {
+        self.inner.is_active()
+    }
+
+    /// Get the current reference count (for debugging/testing)
+    /// Note: This is approximate due to potential race conditions
+    #[napi(getter, js_name = "referenceCount")]
+    pub fn reference_count(&self) -> u32 {
+        self.inner.reference_count() as u32
+    }
+}
+
+impl SocketReference {
+    /// Create a new SocketReference from a CoreSocketReference
+    fn from_core(inner: CoreSocketReference) -> Self {
+        Self { inner }
+    }
 }
 
 /// Configuration for OpenTelemetry integration in the Node.js client.
@@ -195,6 +239,29 @@ pub fn start_socket_listener_external(env: Env) -> Result<JsObject> {
     Ok(promise)
 }
 
+#[napi(js_name = "StartSocketConnectionWithReference", ts_return_type = "Promise<SocketReference>")]
+pub fn start_socket_listener_with_reference(env: Env, path: Option<String>) -> Result<JsObject> {
+    let (deferred, promise) = env.create_deferred()?;
+
+    // Use the glide_core function that accepts an optional path
+    glide_core::start_socket_listener_with_reference(
+        move |result| {
+            match result {
+                Ok(socket_ref) => {
+                    let js_socket_ref = SocketReference::from_core(socket_ref);
+                    deferred.resolve(|_| Ok(js_socket_ref))
+                }
+                Err(error_message) => {
+                    deferred.reject(napi::Error::new(Status::Unknown, error_message))
+                }
+            }
+        },
+        path,
+    );
+
+    Ok(promise)
+}
+
 #[napi(js_name = "InitOpenTelemetry")]
 pub fn init_open_telemetry(open_telemetry_config: OpenTelemetryConfig) -> Result<()> {
     // At least one of traces or metrics must be provided
@@ -267,6 +334,48 @@ pub fn init_open_telemetry(open_telemetry_config: OpenTelemetryConfig) -> Result
     })?;
 
     Ok(())
+}
+
+/// Check if a socket is currently active (has live references)
+#[napi(js_name = "IsSocketActive")]
+pub fn is_socket_active(path: String) -> bool {
+    core_is_socket_active(&path)
+}
+
+/// Get the current number of active sockets (for monitoring/debugging)
+#[napi(js_name = "GetActiveSocketCount")]
+pub fn get_active_socket_count() -> u32 {
+    active_socket_count() as u32
+}
+
+/// Force cleanup of all sockets (mainly for testing and cleanup)
+#[napi(js_name = "CleanupAllSockets")]
+pub fn cleanup_all_sockets_external() {
+    cleanup_all_sockets();
+}
+
+/// Force cleanup of a specific socket (for testing)
+/// This is a direct file removal for testing purposes
+#[napi(js_name = "ForceCleanupSocket")]
+pub fn force_cleanup_socket(path: String) {
+    use std::path::Path;
+
+    // Remove the socket file directly for testing
+    if Path::new(&path).exists() {
+        if let Err(e) = std::fs::remove_file(&path) {
+            log(
+                Level::Error,
+                "ForceCleanupSocket".to_string(),
+                format!("Failed to remove socket file {}: {}", path, e),
+            );
+        } else {
+            log(
+                Level::Info,
+                "ForceCleanupSocket".to_string(),
+                format!("Force cleaned up socket file: {}", path),
+            );
+        }
+    }
 }
 
 impl From<logger_core::Level> for Level {

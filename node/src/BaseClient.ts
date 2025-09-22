@@ -66,8 +66,10 @@ import {
     Script,
     SearchOrigin,
     SetOptions,
+    SocketReference,
     SortOptions,
     StartSocketConnection,
+    StartSocketConnectionWithReference,
     StreamAddOptions,
     StreamClaimOptions,
     StreamGroupOptions,
@@ -972,6 +974,7 @@ type WritePromiseOptions =
  */
 export class BaseClient {
     private socket: net.Socket;
+    private socketRef?: SocketReference;
     protected readonly promiseCallbackFunctions:
         | [PromiseFunction, ErrorFunction, Decoder | undefined][]
         | [PromiseFunction, ErrorFunction][] = [];
@@ -1234,6 +1237,7 @@ export class BaseClient {
     protected constructor(
         socket: net.Socket,
         options?: BaseClientConfiguration,
+        socketRef?: SocketReference,
     ) {
         // if logger has been initialized by the external-user on info level this log will be shown
         Logger.log("info", "Client lifetime", `construct client`);
@@ -1242,6 +1246,7 @@ export class BaseClient {
         this.requestTimeout =
             options?.requestTimeout ?? DEFAULT_REQUEST_TIMEOUT_IN_MILLISECONDS;
         this.socket = socket;
+        this.socketRef = socketRef;
         this.socket
             .on("data", (data) => this.handleReadData(data))
             .on("error", (err) => {
@@ -9159,6 +9164,10 @@ export class BaseClient {
         });
         Logger.log("info", "Client lifetime", "disposing of client");
         this.socket.end();
+
+        // Clear the socket reference to allow proper cleanup
+        // The SocketReference will be automatically cleaned up when it goes out of scope
+        this.socketRef = undefined;
     }
 
     /**
@@ -9172,9 +9181,11 @@ export class BaseClient {
         constructor: (
             socket: net.Socket,
             options?: BaseClientConfiguration,
+            socketRef?: SocketReference,
         ) => TConnection,
+        socketRef?: SocketReference,
     ): Promise<TConnection> {
-        const connection = constructor(connectedSocket, options);
+        const connection = constructor(connectedSocket, options, socketRef);
         await connection.connectToServer(options);
         Logger.log("info", "Client lifetime", "connected to server");
         return connection;
@@ -9201,21 +9212,42 @@ export class BaseClient {
         constructor: (
             socket: net.Socket,
             options?: BaseClientConfiguration,
+            socketRef?: SocketReference,
         ) => TConnection,
     ): Promise<TConnection> {
-        const path = await StartSocketConnection();
-        const socket = await this.GetSocket(path);
-
+        // Try to use StartSocketConnectionWithReference for better socket management
         try {
-            return await this.__createClientInternal<TConnection>(
-                options,
-                socket,
-                constructor,
-            );
-        } catch (err) {
-            // Ensure socket is closed
-            socket.end();
-            throw err;
+            const socketRef = await StartSocketConnectionWithReference();
+            const socket = await this.GetSocket(socketRef.path);
+
+            try {
+                return await this.__createClientInternal<TConnection>(
+                    options,
+                    socket,
+                    constructor,
+                    socketRef,
+                );
+            } catch (err) {
+                // Ensure socket is closed
+                socket.end();
+                throw err;
+            }
+        } catch (refErr) {
+            // Fallback to the original method for backward compatibility
+            const path = await StartSocketConnection();
+            const socket = await this.GetSocket(path);
+
+            try {
+                return await this.__createClientInternal<TConnection>(
+                    options,
+                    socket,
+                    constructor,
+                );
+            } catch (err) {
+                // Ensure socket is closed
+                socket.end();
+                throw err;
+            }
         }
     }
 

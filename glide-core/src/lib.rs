@@ -8,7 +8,11 @@ pub mod rotating_buffer;
 #[cfg(feature = "socket-layer")]
 mod socket_listener;
 #[cfg(feature = "socket-layer")]
+pub mod socket_reference;
+#[cfg(feature = "socket-layer")]
 pub use socket_listener::*;
+#[cfg(feature = "socket-layer")]
+pub use socket_reference::*;
 pub mod errors;
 pub mod scripts_container;
 pub use client::ConnectionRequest;

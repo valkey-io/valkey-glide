@@ -22,11 +22,12 @@ from glide.glide import (
     DEFAULT_TIMEOUT_IN_MILLISECONDS,
     MAX_REQUEST_ARGS_LEN,
     ClusterScanCursor,
+    SocketReference,
     create_leaked_bytes_vec,
     create_otel_span,
     drop_otel_span,
     get_statistics,
-    start_socket_listener_external,
+    start_socket_listener_with_reference,
     value_from_pointer,
 )
 from glide_shared.commands.command_args import ObjectType
@@ -128,6 +129,7 @@ class BaseClient(CoreCommands):
         self._buffered_requests: List[TRequest] = list()
         self._writer_lock = threading.Lock()
         self.socket_path: Optional[str] = None
+        self._socket_reference: Optional[SocketReference] = None
         self._reader_task: Optional["TTask"] = None
         self._is_closed: bool = False
         self._pubsub_futures: List["TFuture"] = []
@@ -239,19 +241,20 @@ class BaseClient(CoreCommands):
 
         init_event: threading.Event = threading.Event()
 
-        def init_callback(socket_path: Optional[str], err: Optional[str]):
+        def init_callback(socket_ref: Optional[SocketReference], err: Optional[str]):
             if err is not None:
                 raise ClosingError(err)
-            elif socket_path is None:
+            elif socket_ref is None:
                 raise ClosingError(
-                    "Socket initialization error: Missing valid socket path."
+                    "Socket initialization error: Missing valid socket reference."
                 )
             else:
-                # Received socket path
-                self.socket_path = socket_path
+                # Received socket reference - store both the reference and path
+                self._socket_reference = socket_ref
+                self.socket_path = socket_ref.path()
                 init_event.set()
 
-        start_socket_listener_external(init_callback=init_callback)
+        start_socket_listener_with_reference(init_callback=init_callback)
 
         # will log if the logger was created (wrapper or costumer) on info
         # level or higher
@@ -304,6 +307,9 @@ class BaseClient(CoreCommands):
                 self._pubsub_lock.release()
 
             await self._stream.aclose()
+
+            # Release socket reference to allow proper cleanup
+            self._socket_reference = None
 
     def _get_future(self, callback_idx: int) -> "TFuture":
         response_future: "TFuture" = _get_new_future_instance()

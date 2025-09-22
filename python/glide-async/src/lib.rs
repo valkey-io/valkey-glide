@@ -6,10 +6,13 @@ use glide_core::Telemetry;
 use glide_core::client::FINISHED_SCAN_CURSOR;
 use glide_core::client::get_or_init_runtime;
 use glide_core::errors::error_message;
-use glide_core::start_socket_listener;
 use glide_core::{
     DEFAULT_FLUSH_SIGNAL_INTERVAL_MS, DEFAULT_TRACE_SAMPLE_PERCENTAGE, GlideOpenTelemetry,
     GlideOpenTelemetrySignalsExporter, GlideSpan,
+};
+use glide_core::{
+    socket_reference::SocketReference as CoreSocketReference, start_socket_listener,
+    start_socket_listener_ref,
 };
 use pyo3::Python;
 use pyo3::exceptions::PyTypeError;
@@ -228,12 +231,50 @@ impl Script {
     }
 }
 
+/// Python wrapper for the Rust SocketReference
+///
+/// This class provides reference counting for socket management.
+/// When all SocketReference instances for a given socket path are dropped,
+/// the socket will be automatically cleaned up and removed from the filesystem.
+#[pyclass]
+pub struct SocketReference {
+    /// Internal reference to the Rust SocketReference
+    inner: CoreSocketReference,
+}
+
+#[pymethods]
+impl SocketReference {
+    /// Get the socket path
+    fn path(&self) -> String {
+        self.inner.path().to_string()
+    }
+
+    /// Check if this socket is still active (for debugging/testing)
+    fn is_active(&self) -> bool {
+        self.inner.is_active()
+    }
+
+    /// Get the current reference count (for debugging/testing)
+    /// Note: This is approximate due to potential race conditions
+    fn reference_count(&self) -> usize {
+        self.inner.reference_count()
+    }
+}
+
+impl SocketReference {
+    /// Create a new SocketReference from a CoreSocketReference
+    fn from_core(inner: CoreSocketReference) -> Self {
+        Self { inner }
+    }
+}
+
 /// A Python module implemented in Rust.
 #[pymodule]
 fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<Level>()?;
     m.add_class::<Script>()?;
     m.add_class::<ClusterScanCursor>()?;
+    m.add_class::<SocketReference>()?;
     m.add_class::<OpenTelemetryConfig>()?;
     m.add_class::<OpenTelemetryTracesConfig>()?;
     m.add_class::<OpenTelemetryMetricsConfig>()?;
@@ -249,6 +290,7 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(py_log, m)?)?;
     m.add_function(wrap_pyfunction!(py_init, m)?)?;
     m.add_function(wrap_pyfunction!(start_socket_listener_external, m)?)?;
+    m.add_function(wrap_pyfunction!(start_socket_listener_with_reference, m)?)?;
     m.add_function(wrap_pyfunction!(value_from_pointer, m)?)?;
     m.add_function(wrap_pyfunction!(create_leaked_value, m)?)?;
     m.add_function(wrap_pyfunction!(create_leaked_bytes_vec, m)?)?;
@@ -305,6 +347,35 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
                     match socket_path {
                         Ok(path) => {
                             let _ = init_callback.call(py, (path, py.None()), None);
+                        }
+                        Err(error_message) => {
+                            let _ = init_callback.call(py, (py.None(), error_message), None);
+                        }
+                    };
+                });
+            }
+        });
+        Ok(Python::with_gil(|py| {
+            "OK".into_pyobject(py)
+                .expect("Expected a proper conversion of 'OK' into a Python string.")
+                .into_any()
+                .unbind()
+        }))
+    }
+
+    #[pyfunction]
+    fn start_socket_listener_with_reference(init_callback: PyObject) -> PyResult<PyObject> {
+        let init_callback = Arc::new(init_callback);
+        start_socket_listener_ref({
+            let init_callback = Arc::clone(&init_callback);
+            move |socket_ref_result| {
+                let init_callback = Arc::clone(&init_callback);
+                Python::with_gil(|py| {
+                    match socket_ref_result {
+                        Ok(socket_ref) => {
+                            let py_socket_ref = SocketReference::from_core(socket_ref);
+                            let py_socket_ref_obj = Py::new(py, py_socket_ref).unwrap();
+                            let _ = init_callback.call(py, (py_socket_ref_obj, py.None()), None);
                         }
                         Err(error_message) => {
                             let _ = init_callback.call(py, (py.None(), error_message), None);

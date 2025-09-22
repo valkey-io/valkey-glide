@@ -58,6 +58,7 @@ import {
     LolwutOptions,
     PubSubMsg,
     ScanOptions,
+    SocketReference,
 } from ".";
 import { connection_request } from "../build-ts/ProtobufMessage";
 
@@ -238,8 +239,8 @@ export class GlideClient extends BaseClient {
     ): Promise<GlideClient> {
         return super.createClientInternal<GlideClient>(
             options,
-            (socket: net.Socket, options?: GlideClientConfiguration) =>
-                new GlideClient(socket, options),
+            (socket: net.Socket, options?: GlideClientConfiguration, socketRef?: SocketReference) =>
+                new GlideClient(socket, options, socketRef),
         );
     }
     /**
@@ -252,7 +253,7 @@ export class GlideClient extends BaseClient {
         return this.__createClientInternal(
             options,
             connectedSocket,
-            (socket, options) => new GlideClient(socket, options),
+            (socket, options, socketRef) => new GlideClient(socket, options, socketRef),
         );
     }
 

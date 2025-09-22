@@ -11,6 +11,7 @@ use crate::connection_request::ConnectionRequest;
 use crate::errors::{RequestErrorType, error_message, error_type};
 use crate::response;
 use crate::response::Response;
+use crate::socket_reference::SocketReference;
 use ClosingReason::*;
 use PipeListeningResult::*;
 use bytes::Bytes;
@@ -1061,4 +1062,74 @@ where
     InitCallback: FnOnce(Result<String, String>) + Send + Clone + 'static,
 {
     start_socket_listener_internal(init_callback, None);
+}
+
+/// Creates a new socket listener with reference counting support.
+/// Returns a SocketReference that manages the socket lifecycle.
+/// When the last SocketReference is dropped, the socket is automatically cleaned up.
+///
+/// # Arguments
+/// * `init_callback` - called when the socket listener initialization completes
+/// * `socket_path` - optional custom socket path for testing
+///
+/// # Returns
+/// The callback receives Result<SocketReference, String> where:
+/// - Ok(SocketReference) - Socket was created or an existing reference was returned
+/// - Err(String) - Socket creation failed with error message
+pub fn start_socket_listener_with_reference<InitCallback>(
+    init_callback: InitCallback,
+    socket_path: Option<String>,
+) where
+    InitCallback: FnOnce(Result<SocketReference, String>) + Send + 'static,
+{
+    // Create a wrapper that doesn't need Clone
+    struct CallbackWrapper<F>(Option<F>);
+
+    impl<F> CallbackWrapper<F>
+    where
+        F: FnOnce(Result<SocketReference, String>),
+    {
+        fn new(f: F) -> Self {
+            Self(Some(f))
+        }
+
+        fn call(mut self, result: Result<SocketReference, String>) {
+            if let Some(f) = self.0.take() {
+                f(result);
+            }
+        }
+    }
+
+    impl<F> Clone for CallbackWrapper<F> {
+        fn clone(&self) -> Self {
+            panic!("CallbackWrapper should not be cloned after use");
+        }
+    }
+
+    let wrapper = CallbackWrapper::new(init_callback);
+
+    let original_callback = move |result: Result<String, String>| {
+        match result {
+            Ok(socket_path) => {
+                // Use get_or_create to atomically get or create socket reference
+                let socket_ref = SocketReference::get_or_create(socket_path);
+                wrapper.call(Ok(socket_ref));
+            }
+            Err(err) => {
+                wrapper.call(Err(err));
+            }
+        }
+    };
+
+    // Use the existing socket listener implementation
+    start_socket_listener_internal(original_callback, socket_path);
+}
+
+/// Public API that uses reference counting - this should be the preferred method
+/// for new code that wants proper socket lifecycle management
+pub fn start_socket_listener_ref<InitCallback>(init_callback: InitCallback)
+where
+    InitCallback: FnOnce(Result<SocketReference, String>) + Send + 'static,
+{
+    start_socket_listener_with_reference(init_callback, None);
 }
