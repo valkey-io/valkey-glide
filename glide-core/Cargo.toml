@@ -74,7 +74,7 @@ which = "8"
 ctor = "0.4"
 redis = { path = "./redis-rs/redis", features = ["tls-rustls-insecure"] }
 rustls = { version = "0.23", features = ["aws-lc-rs"]}
-iai-callgrind = "0.15"
+iai-callgrind = "0.16"
 tokio = { version = "1", features = ["rt-multi-thread"] }
 glide-core = { path = ".", features = [
     "socket-layer",
