@@ -834,15 +834,8 @@ pub(crate) mod shared_client_tests {
 
             let result = test_basics.client.send_command(&select_cmd, None).await;
 
-            if use_cluster {
-                // In cluster mode,  SELECT should succeed
-                assert!(result.is_ok());
-                assert_eq!(result.unwrap(), Value::Okay);
-            } else {
-                // In standalone mode, SELECT should succeed
-                assert!(result.is_ok());
-                assert_eq!(result.unwrap(), Value::Okay);
-            }
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap(), Value::Okay);
         });
     }
 
@@ -887,52 +880,6 @@ pub(crate) mod shared_client_tests {
                 ping_result.unwrap(),
                 Value::SimpleString("PONG".to_string())
             );
-        });
-    }
-
-    #[rstest]
-    #[serial_test::serial]
-    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
-    fn test_select_command_case_sensitivity(#[values(false, true)] use_cluster: bool) {
-        block_on_all(async {
-            if use_cluster {
-                // First create a basic client to check server version
-                let mut version_check_basics =
-                    utilities::setup_test_basics_internal(&TestConfiguration {
-                        shared_server: true,
-                        ..Default::default()
-                    })
-                    .await;
-
-                // Skip test if server version is less than 9.0 (database isolation not supported)
-                if !utilities::version_greater_or_equal(&mut version_check_basics.client, "9.0.0")
-                    .await
-                {
-                    return;
-                }
-            }
-
-            let mut test_basics = setup_test_basics(
-                use_cluster,
-                TestConfiguration {
-                    shared_server: true,
-                    ..Default::default()
-                },
-            )
-            .await;
-
-            // Test that SELECT command detection is case-sensitive
-            // Only uppercase "SELECT" should be intercepted
-
-            // Test uppercase SELECT (should be intercepted)
-            let mut select_upper_cmd = redis::Cmd::new();
-            select_upper_cmd.arg("SELECT").arg("1");
-            let result_upper = test_basics
-                .client
-                .send_command(&select_upper_cmd, None)
-                .await;
-
-            assert!(result_upper.is_ok());
         });
     }
 

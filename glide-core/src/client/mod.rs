@@ -494,24 +494,15 @@ impl Client {
                 }
                 .and_then(|value| convert_to_expected_type(value, expected_type))
             })
-            .await;
+            .await?;
 
             // Intercept SELECT commands after regular processing
             // Only handle SELECT commands if they executed successfully (no error)
             if self.is_select_command(cmd) {
-                match result {
-                    Ok(value) => {
-                        // SELECT command succeeded, handle database state update
-                        return self.handle_select_command(cmd, value).await;
-                    }
-                    Err(err) => {
-                        // SELECT command failed, let the error propagate without updating state
-                        return Err(err);
-                    }
-                }
+                return self.handle_select_command(cmd, result).await;
             }
 
-            result
+            Ok(result)
         })
     }
 
@@ -1449,6 +1440,22 @@ mod tests {
         let mut cmd = Cmd::new();
         cmd.arg("SELECT").arg("0");
         assert!(client.is_select_command(&cmd));
+    }
+
+    #[test]
+    fn test_extract_database_id_from_select() {
+        // Test detection of valid SELECT commands
+        let client = create_test_client();
+
+        // Test uppercase SELECT command
+        let mut cmd = Cmd::new();
+        cmd.arg("SELECT").arg("1");
+        assert_eq!(client.extract_database_id_from_select(&cmd), Ok(1));
+
+        // Test SELECT with different database IDs
+        let mut cmd = Cmd::new();
+        cmd.arg("SELECT").arg("0");
+        assert_eq!(client.extract_database_id_from_select(&cmd), Ok(0));
     }
 
     #[test]

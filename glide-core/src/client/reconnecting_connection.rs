@@ -315,7 +315,7 @@ impl ReconnectingConnection {
         // The reconnect task is spawned instead of awaited here, so that the reconnect attempt will continue in the
         // background, regardless of whether the calling task is dropped or not.
         task::spawn(async move {
-            // Get a clone of the client with the current connection info, including any database ID
+            // Get a clone of the client with the current connection info
             // updates made via update_connection_database(). This ensures reconnection uses the
             // correct database as selected by previous SELECT commands.
             let client = {
@@ -406,8 +406,6 @@ impl ReconnectingConnection {
     /// # Arguments
     /// * `new_database_id` - The database ID to store for future reconnections
     ///
-    /// # Thread Safety
-    /// This method is thread-safe and uses a write lock to update the connection info atomically.
     pub(crate) fn update_connection_database(&self, new_database_id: i64) {
         let mut client = self
             .inner

@@ -579,11 +579,6 @@ impl Client {
     ///
     /// * `database_id` - The database ID to use for connections (typically 0-15)
     ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// let mut client = redis::Client::open("redis://127.0.0.1/").unwrap();
-    /// client.update_database(1);
     /// ```
     pub fn update_database(&mut self, database_id: i64) {
         self.connection_info.redis.db = database_id;
