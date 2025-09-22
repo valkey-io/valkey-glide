@@ -1,6 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.configuration;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NonNull;
@@ -30,6 +31,9 @@ import lombok.ToString;
 @Getter
 @Builder
 @ToString
+@SuppressFBWarnings(
+        value = "CT_CONSTRUCTOR_THROW",
+        justification = "Builder enforces non-null invariants and throws before exposing instance")
 public class BackoffStrategy {
     /**
      * Number of retry attempts that the client should perform when disconnected from the server,
