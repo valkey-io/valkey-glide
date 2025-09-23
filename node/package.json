@@ -86,7 +86,6 @@
     },
     "devDependencies": {
         "@jest/globals": "29",
-        "@types/eslint__js": "9",
         "@types/jest": "29",
         "@types/minimist": "1",
         "@types/semver": "7",
