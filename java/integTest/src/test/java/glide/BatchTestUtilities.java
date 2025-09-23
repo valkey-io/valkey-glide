@@ -213,6 +213,14 @@ public class BatchTestUtilities {
                     .copy(genericKey3, genericKey4, true);
         }
 
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0")) {
+            batch
+                    .set(genericKey3, "value")
+                    .copy(genericKey3, genericKey4, 1)
+                    .copy(genericKey3, genericKey4, 1, false)
+                    .copy(genericKey3, genericKey4, 1, true);
+        }
+
         var expectedResults =
                 new Object[] {
                     OK, // set(genericKey1, value1)
@@ -266,6 +274,17 @@ public class BatchTestUtilities {
                                 OK, // set(genericKey4, "value2")
                                 false, // copy(genericKey3, genericKey4, false)
                                 true, // copy(genericKey3, genericKey4, true)
+                            });
+        }
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0")) {
+            expectedResults =
+                    concatenateArrays(
+                            expectedResults,
+                            new Object[] {
+                                OK, // set(genericKey3, "value1")
+                                true, // copy(genericKey3, genericKey4, 1)
+                                false, // copy(genericKey3, genericKey4, 1, false)
+                                true, // copy(genericKey3, genericKey4, 1, true)
                             });
         }
         return expectedResults;
