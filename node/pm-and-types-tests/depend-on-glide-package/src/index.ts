@@ -1,4 +1,9 @@
-import { GlideClient, GlideClientConfiguration } from "@valkey/valkey-glide";
+import {
+    ClusterScanCursor,
+    GlideClient,
+    GlideClientConfiguration,
+    Script,
+} from "@valkey/valkey-glide";
 import winston from "winston";
 
 /**
@@ -48,6 +53,9 @@ export class ValkeyWrapper {
         this.logger.info("Valkey client disconnected");
     }
 }
+
+// Export native APIs for testing
+export { ClusterScanCursor, Script };
 
 // Export other utilities
 export * from "./types";
