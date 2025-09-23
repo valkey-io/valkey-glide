@@ -50,6 +50,7 @@ use pipeline_routing::{
 };
 
 use logger_core::log_error;
+use rand::seq::IteratorRandom;
 
 use std::{
     collections::{HashMap, HashSet},
@@ -87,7 +88,10 @@ use crate::{
     Cmd, ConnectionInfo, ErrorKind, IntoConnectionInfo, RedisError, RedisFuture, RedisResult,
     Value,
 };
-use futures::stream::{FuturesUnordered, StreamExt};
+use futures::{
+    future::Shared,
+    stream::{FuturesUnordered, StreamExt},
+};
 use std::time::Duration;
 
 #[cfg(feature = "tokio-comp")]
@@ -3369,6 +3373,76 @@ where
     }
 }
 
+// Retrieves random connections from initial seed nodes after resolving their addresses.
+async fn get_random_connections_from_seed_nodes<C>(
+    inner: &Core<C>,
+    num_of_nodes_to_query: usize,
+) -> RedisResult<Vec<(String, Shared<Pin<Box<dyn Future<Output = C> + Send>>>)>>
+where
+    C: ConnectionLike + Connect + Clone + Send + Sync + 'static,
+{
+    // Resolve initial nodes to get their addresses.
+    // The resolved addresses are tuples of (host, Option<IpAddr>).
+    // Representing the host and its resolved IP address (if available).
+    let resolved_addresses =
+        ClusterConnInner::<C>::try_to_expand_initial_nodes(&inner.initial_nodes).await;
+
+    // Filter the resolved addresses to keep only those with valid IP addresses.
+    let valid_hosts: Vec<String> = resolved_addresses
+        .into_iter()
+        .map(|(host, socket_addr)| {
+            if let Some(addr) = socket_addr {
+                addr.to_string()
+            } else {
+                host
+            }
+        })
+        .collect();
+
+    if valid_hosts.is_empty() {
+        return Err(RedisError::from((
+            ErrorKind::AllConnectionsUnavailable,
+            "No valid addresses found",
+        )));
+    }
+
+    let selected_hosts: Vec<String> = {
+        let mut rng = rand::rng();
+        valid_hosts
+            .clone()
+            .into_iter()
+            .choose_multiple(&mut rng, num_of_nodes_to_query)
+    };
+
+    // Run refresh_and_update_connections with a timeout of 1 second
+    // If selected hosts do not have active connections, this will initiate connections to them and will add them to the connection map.
+    let _ = tokio::time::timeout(
+        std::time::Duration::from_secs(1),
+        ClusterConnInner::refresh_and_update_connections(
+            inner.clone(),
+            selected_hosts.iter().cloned().collect(),
+            RefreshConnectionType::OnlyManagementConnection,
+            true,
+        ),
+    )
+    .await;
+
+    // Create a future for each selected host to establish a connection.
+    let connections = selected_hosts
+        .into_iter()
+        .filter_map(|host| {
+            let conn = inner
+                .conn_lock
+                .read()
+                .expect(MUTEX_READ_ERR)
+                .management_connection_for_address(&host);
+            conn
+        })
+        .collect::<Vec<_>>();
+
+    Ok(connections)
+}
+
 async fn calculate_topology_from_random_nodes<C>(
     inner: &Core<C>,
     num_of_nodes_to_query: usize,
@@ -3383,22 +3457,38 @@ async fn calculate_topology_from_random_nodes<C>(
 where
     C: ConnectionLike + Connect + Clone + Send + Sync + 'static,
 {
-    let requested_nodes = if let Some(random_conns) = inner
-        .conn_lock
-        .read()
-        .expect(MUTEX_READ_ERR)
-        .random_connections(num_of_nodes_to_query, ConnectionType::PreferManagement)
-    {
-        random_conns
-    } else {
-        return (
-            Err(RedisError::from((
-                ErrorKind::AllConnectionsUnavailable,
-                "No available connections to refresh slots from",
-            ))),
-            std::collections::HashSet::new(),
-        );
+    let refresh_topology_from_seed_nodes = inner
+        .get_cluster_param(|p| p.refresh_topology_from_seed_nodes)
+        .unwrap_or(false);
+
+    // Get connections either from seed nodes or random existing connections, along with any failed addresses.
+    let requested_nodes = match refresh_topology_from_seed_nodes {
+        true => match get_random_connections_from_seed_nodes(inner, num_of_nodes_to_query).await {
+            Ok(connections_futures) => connections_futures,
+            Err(err) => {
+                return (Err(err), std::collections::HashSet::new());
+            }
+        },
+        false => {
+            if let Some(random_conns) = inner
+                .conn_lock
+                .read()
+                .expect(MUTEX_READ_ERR)
+                .random_connections(num_of_nodes_to_query, ConnectionType::PreferManagement)
+            {
+                random_conns
+            } else {
+                return (
+                    Err(RedisError::from((
+                        ErrorKind::AllConnectionsUnavailable,
+                        "No available connections to refresh slots from",
+                    ))),
+                    std::collections::HashSet::new(),
+                );
+            }
+        }
     };
+
     let topology_join_results =
         futures::future::join_all(requested_nodes.into_iter().map(|(addr, conn)| async move {
             let mut conn: C = conn.await;
@@ -3406,6 +3496,8 @@ where
             (addr, res)
         }))
         .await;
+
+    // Add topology command failures (with unrecoverable errors) to the existing connection failures set.
     let failed_addresses = topology_join_results
         .iter()
         .filter_map(|(address, res)| match res {
@@ -3413,6 +3505,7 @@ where
             _ => None,
         })
         .collect::<std::collections::HashSet<String>>();
+
     let topology_values = topology_join_results.iter().filter_map(|(addr, res)| {
         res.as_ref()
             .ok()
