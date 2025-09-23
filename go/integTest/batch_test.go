@@ -986,7 +986,17 @@ func CreateGenericCommandTests(batch *pipeline.ClusterBatch, isAtomic bool, serv
 			ExpectedResponse: true,
 			TestName:         "CopyWithOptions(slotHashedKey1, slotHashedKey2, ReplaceDestination)",
 		},
-	)
+		)
+	if serverVer >= "9.0.0" {
+		batch.CopyWithOptions(slotHashedKey1, slotHashedKey2, *options.NewCopyOptions().SetDBDestination(1))
+		testData = append(
+			testData,
+			CommandTestData{
+				ExpectedResponse: true,
+				TestName:         "CopyWithOptions(slotHashedKey1, slotHashedKey2, DBDestination)",
+			},
+		)
+	}	
 	batch.Get(slotHashedKey2)
 	testData = append(
 		testData,
