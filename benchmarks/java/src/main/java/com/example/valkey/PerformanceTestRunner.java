@@ -36,13 +36,7 @@ public class PerformanceTestRunner {
                 case "glide":
                     tests.add(PerformanceTest.createValkeyGlideTest(config));
                     break;
-                case "compatibility":
-                    tests.add(PerformanceTest.createJedisCompatibilityTest(config));
-                    tests.add(PerformanceTest.createUnifiedJedisTest(config));
-                    break;
                 case "all":
-                    tests.add(PerformanceTest.createJedisCompatibilityTest(config));
-                    tests.add(PerformanceTest.createUnifiedJedisTest(config));
                     tests.add(PerformanceTest.createJedisTest(config));
                     if (!config.isClusterMode()) {
                         tests.add(PerformanceTest.createJedisPooledTest(config));

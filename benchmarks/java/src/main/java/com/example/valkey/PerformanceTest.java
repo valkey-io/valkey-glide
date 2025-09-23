@@ -161,14 +161,6 @@ public class PerformanceTest {
         return new PerformanceTest(config, () -> new ValkeyGlideClient(config), "Valkey-Glide");
     }
 
-    public static PerformanceTest createJedisCompatibilityTest(TestConfiguration config) {
-        return new PerformanceTest(config, () -> new JedisCompatibilityClient(config), "Jedis Compatibility");
-    }
-
-    public static PerformanceTest createUnifiedJedisTest(TestConfiguration config) {
-        return new PerformanceTest(config, () -> new UnifiedJedisClient(config), "UnifiedJedis");
-    }
-
     public String getClientName() {
         return clientName;
     }
