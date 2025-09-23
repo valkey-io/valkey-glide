@@ -32,6 +32,7 @@ public class PerformanceWorker implements Runnable {
         try {
             // Connect the client
             logger.debug("Worker {} attempting to connect using {}", workerId, client.getClientName());
+            client.connect();
             client.ping();
             connected = true;
             logger.debug("Worker {} connected successfully", workerId);
