@@ -41,13 +41,13 @@ public class PerformanceTestRunner {
                     tests.add(PerformanceTest.createUnifiedJedisTest(config));
                     break;
                 case "all":
+                    tests.add(PerformanceTest.createJedisCompatibilityTest(config));
+                    tests.add(PerformanceTest.createUnifiedJedisTest(config));
                     tests.add(PerformanceTest.createJedisTest(config));
                     if (!config.isClusterMode()) {
                         tests.add(PerformanceTest.createJedisPooledTest(config));
                     }
                     tests.add(PerformanceTest.createValkeyGlideTest(config));
-                    tests.add(PerformanceTest.createJedisCompatibilityTest(config));
-                    tests.add(PerformanceTest.createUnifiedJedisTest(config));
                     break;
                 case "both":
                 default:
