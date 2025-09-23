@@ -32,6 +32,16 @@ const SOCKET_GLOB_PREFIX = "glide-socket-";
 
 type EndpointTuple = [string, number];
 
+/**
+ * Helper function to extract socketPath from client objects.
+ * Reduces repetitive type casting and improves maintainability.
+ */
+function getSocketPath(
+    client: GlideClient | GlideClusterClient,
+): string | undefined {
+    return (client as unknown as { socketPath?: string }).socketPath;
+}
+
 function mapToClientAddresses(
     addresses?: EndpointTuple[],
 ): { host: string; port: number }[] {
@@ -146,8 +156,7 @@ describe("Socket lifecycle contracts", () => {
 
     it("removes socket on standalone close", async () => {
         const client = await createStandaloneClient();
-        const socketPath = (client as unknown as { socketPath?: string })
-            .socketPath;
+        const socketPath = getSocketPath(client);
         expect(typeof socketPath).toBe("string");
         await client.ping();
         await client.close();
@@ -163,9 +172,7 @@ describe("Socket lifecycle contracts", () => {
 
     it("does not leak sockets across sequential clients", async () => {
         const seedClient = await createStandaloneClient();
-        const seedSocketPath = (
-            seedClient as unknown as { socketPath?: string }
-        ).socketPath;
+        const seedSocketPath = getSocketPath(seedClient);
         expect(typeof seedSocketPath).toBe("string");
         const socketDir = seedSocketPath
             ? path.dirname(seedSocketPath)
@@ -178,8 +185,7 @@ describe("Socket lifecycle contracts", () => {
 
         for (let i = 0; i < 3; i++) {
             const client = await createStandaloneClient();
-            const socketPath = (client as unknown as { socketPath?: string })
-                .socketPath;
+            const socketPath = getSocketPath(client);
 
             if (socketPath) {
                 created.push(socketPath);
@@ -201,10 +207,8 @@ describe("Socket lifecycle contracts", () => {
         const clientA = await createStandaloneClient();
         const clientB = await createStandaloneClient();
 
-        const socketPathA = (clientA as unknown as { socketPath?: string })
-            .socketPath;
-        const socketPathB = (clientB as unknown as { socketPath?: string })
-            .socketPath;
+        const socketPathA = getSocketPath(clientA);
+        const socketPathB = getSocketPath(clientB);
 
         expect(socketPathA && socketPathB).toBeTruthy();
         expect(socketPathA).toEqual(socketPathB);
@@ -230,8 +234,7 @@ describe("Socket lifecycle contracts", () => {
 
     it("cluster client recreates listener after cleanup", async () => {
         const client = await createClusterClient();
-        const socketPath = (client as unknown as { socketPath?: string })
-            .socketPath;
+        const socketPath = getSocketPath(client);
         expect(typeof socketPath).toBe("string");
         await client.ping();
 
