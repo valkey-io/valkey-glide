@@ -2,9 +2,15 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
+/**
+ * Note: 'eslint-disable-line @typescript-eslint/no-unused-vars' is used intentionally
+ * to suppress unused import errors for types referenced only in JSDoc.
+ */
+
 import Long from "long";
 import {
     BaseClient, // eslint-disable-line @typescript-eslint/no-unused-vars
+    BaseClientConfiguration, // eslint-disable-line @typescript-eslint/no-unused-vars
     convertRecordToGlideRecord,
     ElementAndScore,
     GlideRecord,
