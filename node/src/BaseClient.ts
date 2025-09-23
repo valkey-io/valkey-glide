@@ -1266,9 +1266,16 @@ export class BaseClient {
             return;
         }
 
-        ReleaseSocketConnection(this.socketPath);
-        this.socketListenerReleased = true;
-        this.socketPath = undefined;
+        try {
+            ReleaseSocketConnection(this.socketPath);
+        } catch (error) {
+            // Log the error but don't throw - we still need to clear local state
+            console.warn("Error releasing socket connection:", error);
+        } finally {
+            // Always clear local state to ensure idempotency and prevent inconsistent state
+            this.socketListenerReleased = true;
+            this.socketPath = undefined;
+        }
     }
 
     protected getCallbackIndex(): number {
@@ -9177,7 +9184,16 @@ export class BaseClient {
         });
         Logger.log("info", "Client lifetime", "disposing of client");
         this.socket.end();
-        this.releaseSocketListener();
+
+        try {
+            this.releaseSocketListener();
+        } catch (error) {
+            Logger.log(
+                "debug",
+                "Client lifetime",
+                `Error releasing socket listener during close: ${error}`,
+            );
+        }
     }
 
     /**
@@ -9241,9 +9257,22 @@ export class BaseClient {
             connection.setSocketPath(path);
             return connection;
         } catch (err) {
-            // Ensure socket is closed and listener is released
-            socket.end();
-            ReleaseSocketConnection(path);
+            // Ensure socket is fully closed and listener is released
+            try {
+                socket.end();
+                socket.destroy();
+            } catch {
+                // Ignore socket cleanup errors to avoid masking the original error
+            }
+
+            try {
+                if (ReleaseSocketConnection) {
+                    ReleaseSocketConnection(path);
+                }
+            } catch {
+                // Ignore release errors to avoid masking the original error
+            }
+
             throw err;
         }
     }

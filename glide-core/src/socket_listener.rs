@@ -115,7 +115,7 @@ impl SocketState {
     }
 
     fn increment(&self) {
-        self.ref_count.fetch_add(1, Ordering::Relaxed);
+        self.ref_count.fetch_add(1, Ordering::SeqCst);
     }
 
     fn decrement(&self) -> usize {
@@ -1149,38 +1149,47 @@ pub fn start_socket_listener_internal<InitCallback>(
         return;
     }
 
-    {
-        // Optimize for already initialized
-        let initialized_sockets = INITIALIZED_SOCKETS
-            .read()
-            .expect("Failed to acquire sockets db read guard");
-        if let Some(state) = initialized_sockets.get(&socket_path) {
+    // Retry loop to handle shutdown states without recursion
+    let mut sockets_write_guard = loop {
+        {
+            // Optimize for already initialized
+            let initialized_sockets = INITIALIZED_SOCKETS
+                .read()
+                .expect("Failed to acquire sockets db read guard");
+            if let Some(state) = initialized_sockets.get(&socket_path) {
+                if state.is_shutting_down() {
+                    drop(initialized_sockets);
+                } else {
+                    state.increment();
+                    init_callback(Ok(socket_path.clone()));
+                    return;
+                }
+            }
+        }
+
+        // Retry with write lock, will be dropped upon the function completion
+        let sockets_write_guard = INITIALIZED_SOCKETS
+            .write()
+            .expect("Failed to acquire sockets db write guard");
+        if let Some(state) = sockets_write_guard.get(&socket_path) {
             if state.is_shutting_down() {
-                drop(initialized_sockets);
+                // Wait for shutdown to complete before retrying initialization
+                let close_signal = state.close_signal();
+                drop(sockets_write_guard);
+                close_signal.wait();
+                // Continue the loop to retry initialization
+                continue;
             } else {
                 state.increment();
                 init_callback(Ok(socket_path.clone()));
                 return;
             }
         }
-    }
-    // Retry with write lock, will be dropped upon the function completion
-    let mut sockets_write_guard = INITIALIZED_SOCKETS
-        .write()
-        .expect("Failed to acquire sockets db write guard");
-    if let Some(state) = sockets_write_guard.get(&socket_path) {
-        if state.is_shutting_down() {
-            // Wait for shutdown to complete before retrying initialization
-            let close_signal = state.close_signal();
-            drop(sockets_write_guard);
-            close_signal.wait();
-            return start_socket_listener_internal(init_callback, Some(socket_path));
-        } else {
-            state.increment();
-            init_callback(Ok(socket_path.clone()));
-            return;
-        }
-    }
+
+        // If we reach here, no existing state was found, break out of the loop
+        // to proceed with socket creation
+        break sockets_write_guard;
+    };
 
     let (tx, rx) = std::sync::mpsc::channel();
     let socket_path_cloned = socket_path.clone();

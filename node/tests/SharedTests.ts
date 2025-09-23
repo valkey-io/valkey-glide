@@ -13072,7 +13072,7 @@ export function runBaseTests(config: {
                             await Promise.race([
                                 promise.finally(() => {
                                     throw new Error(
-                                        `${name} didn't block infintely`,
+                                        `${name} didn't block infinitely`,
                                     );
                                 }),
                                 timeoutPromise,
@@ -13530,27 +13530,14 @@ export function runBaseTests(config: {
                     "no such key",
                 );
 
-                try {
-                    if (isCluster) {
-                        await (client as GlideClusterClient).exec(
-                            batch as ClusterBatch,
-                            true,
-                        );
-                    } else {
-                        await (client as GlideClient).exec(
-                            batch as Batch,
-                            true,
-                        );
-                    }
-
-                    // to make sure we are raising an error and not getting into this part
-                    throw new Error("Expected an error to be thrown");
-                } catch (error) {
-                    expect(error).toBeInstanceOf(RequestError);
-                    expect((error as RequestError).message).toContain(
-                        "WRONGTYPE",
-                    );
-                }
+                const execPromise = isCluster
+                    ? (client as GlideClusterClient).exec(
+                          batch as ClusterBatch,
+                          true,
+                      )
+                    : (client as GlideClient).exec(batch as Batch, true);
+                await expect(execPromise).rejects.toBeInstanceOf(RequestError);
+                await expect(execPromise).rejects.toThrow(/WRONGTYPE/);
             }, protocol);
         },
         config.timeout,
