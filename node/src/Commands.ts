@@ -2,24 +2,30 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
+/**
+ * Note: 'eslint-disable-line @typescript-eslint/no-unused-vars' is used intentionally
+ * to suppress unused import errors for types referenced only in JSDoc.
+ */
+
 import Long from "long";
 import {
     BaseClient, // eslint-disable-line @typescript-eslint/no-unused-vars
     BaseClientConfiguration, // eslint-disable-line @typescript-eslint/no-unused-vars
     convertRecordToGlideRecord,
-    createLeakedStringVec,
     ElementAndScore,
-    GlideClient, // eslint-disable-line @typescript-eslint/no-unused-vars
-    GlideClusterClient, // eslint-disable-line @typescript-eslint/no-unused-vars
     GlideRecord,
     GlideString,
     HashDataType,
-    MAX_REQUEST_ARGS_LEN,
     ObjectType,
     Score,
-    SingleNodeRoute,
     SortedSetDataType,
-} from ".";
+} from "./BaseClient";
+import { GlideClient } from "./GlideClient"; // eslint-disable-line @typescript-eslint/no-unused-vars
+import { GlideClusterClient, SingleNodeRoute } from "./GlideClusterClient"; // eslint-disable-line @typescript-eslint/no-unused-vars
+import {
+    createLeakedStringVec,
+    MAX_REQUEST_ARGS_LEN,
+} from "../build-ts/native";
 
 import { command_request } from "../build-ts/ProtobufMessage";
 import RequestType = command_request.RequestType;
