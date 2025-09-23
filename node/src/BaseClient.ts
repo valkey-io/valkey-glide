@@ -1270,7 +1270,7 @@ export class BaseClient {
             ReleaseSocketConnection(this.socketPath);
         } catch (error) {
             // Log the error but don't throw - we still need to clear local state
-            console.warn("Error releasing socket connection:", error);
+            Logger.log("warn", "Socket cleanup", `Error releasing socket connection: ${error}`);
         } finally {
             // Always clear local state to ensure idempotency and prevent inconsistent state
             this.socketListenerReleased = true;
