@@ -64,6 +64,9 @@ tasks.register('runCompatibilityTest', JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'com.example.valkey.PerformanceTestRunner'
     args = ['--client=compatibility']
+    if (project.hasProperty('args')) {
+        args.addAll(project.property('args').toString().split(' '))
+    }
 }
 
 tasks.register('runAllTests', JavaExec) {
