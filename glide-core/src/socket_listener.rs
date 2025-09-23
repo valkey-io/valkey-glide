@@ -873,7 +873,7 @@ pub fn release_socket_listener(socket_path: &str) {
     let previous = state.decrement();
 
     if previous == 0 {
-        log_warn(
+        log_error(
             "release_socket_listener",
             format!("Socket ref-count underflow for {socket_path}. Ignoring release request."),
         );
