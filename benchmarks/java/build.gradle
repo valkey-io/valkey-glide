@@ -54,6 +54,12 @@ tasks.register('runValkeyTest', JavaExec) {
     args = ['--client=valkey']
 }
 
+tasks.register('runUnifiedJedisTest', JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'com.example.valkey.PerformanceTestRunner'
+    args = ['--client=unified']
+}
+
 tasks.register('runBothTests', JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'com.example.valkey.PerformanceTestRunner'

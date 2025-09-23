@@ -154,11 +154,15 @@ public class PerformanceTest {
     }
 
     public static PerformanceTest createJedisPooledTest(TestConfiguration config) {
-        return new PerformanceTest(config, () -> new JedisClient(config, true), "Jedis (Pooled)");
+        return new PerformanceTest(config, () -> new JedisPooledClient(config), "JedisPooled");
     }
 
     public static PerformanceTest createValkeyGlideTest(TestConfiguration config) {
         return new PerformanceTest(config, () -> new ValkeyGlideClient(config), "Valkey-Glide");
+    }
+
+    public static PerformanceTest createUnifiedJedisTest(TestConfiguration config) {
+        return new PerformanceTest(config, () -> new UnifiedJedisClient(config), "UnifiedJedis");
     }
 
     public String getClientName() {

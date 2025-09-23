@@ -8,7 +8,7 @@ public class TestConfiguration {
     private int minDataSize = 25600; // 25KB
     // private int maxDataSize = 51200; // 50KB
     private int maxDataSize = 25600; // 25KB
-    private int testDurationSeconds = 300;
+    private int testDurationSeconds = 30;
      private String redisHost = "localhost";
     // private String redisHost = "improving-elasticache-01-nra7gl.serverless.use1.cache.amazonaws.com";
 //    private String redisHost = "clustercfg.glide-perf-test-cache-2025-2.nra7gl.use1.cache.amazonaws.com";

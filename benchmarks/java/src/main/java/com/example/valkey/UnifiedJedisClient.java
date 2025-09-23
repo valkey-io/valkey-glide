@@ -2,7 +2,10 @@ package com.example.valkey;
 
 import redis.clients.jedis.UnifiedJedis;
 import redis.clients.jedis.JedisPooled;
-import redis.clients.jedis.ConnectionPoolConfig;
+import redis.clients.jedis.JedisCluster;
+import redis.clients.jedis.HostAndPort;
+import java.util.HashSet;
+import java.util.Set;
 
 public class UnifiedJedisClient extends RedisClient {
     private UnifiedJedis unifiedJedis;
@@ -14,13 +17,21 @@ public class UnifiedJedisClient extends RedisClient {
     @Override
     public void connect() throws Exception {
         try {
-            ConnectionPoolConfig poolConfig = new ConnectionPoolConfig();
-            poolConfig.setMaxTotal(config.getConcurrentConnections() * 2);
-            poolConfig.setMaxIdle(config.getConcurrentConnections());
-            poolConfig.setMinIdle(5);
+            if (config.isClusterMode()) {
+                // UnifiedJedis interface implemented by JedisCluster
+                Set<HostAndPort> nodes = new HashSet<>();
+                nodes.add(new HostAndPort(config.getRedisHost(), config.getRedisPort()));
+                unifiedJedis = new JedisCluster(nodes);
+            } else {
+                // UnifiedJedis interface implemented by JedisPooled  
+                unifiedJedis = new JedisPooled(config.getRedisHost(), config.getRedisPort());
+            }
             
-            unifiedJedis = new JedisPooled(poolConfig, config.getRedisHost(), config.getRedisPort());
-            unifiedJedis.ping();
+            // Test connection using UnifiedJedis interface
+            String pingResult = unifiedJedis.ping();
+            if (!"PONG".equals(pingResult)) {
+                throw new Exception("Connection test failed - PING returned: " + pingResult);
+            }
         } catch (Exception e) {
             throw new Exception("Failed to connect using UnifiedJedis: " + e.getMessage(), e);
         }
@@ -35,26 +46,48 @@ public class UnifiedJedisClient extends RedisClient {
     
     @Override
     public boolean set(String key, String value) throws Exception {
-        return "OK".equals(unifiedJedis.set(key, value));
+        try {
+            // Using UnifiedJedis interface method
+            String result = unifiedJedis.set(key, value);
+            return "OK".equals(result);
+        } catch (Exception e) {
+            throw new Exception("SET operation failed: " + e.getMessage(), e);
+        }
     }
     
     @Override
     public String get(String key) throws Exception {
-        return unifiedJedis.get(key);
+        try {
+            // Using UnifiedJedis interface method
+            return unifiedJedis.get(key);
+        } catch (Exception e) {
+            throw new Exception("GET operation failed: " + e.getMessage(), e);
+        }
     }
     
     @Override
     public String getClientName() {
-        return "UnifiedJedis";
+        String mode = config.isClusterMode() ? "Cluster" : "Standalone";
+        String tls = config.isTlsEnabled() ? "TLS" : "Plain";
+        return String.format("UnifiedJedis (%s, %s)", mode, tls);
     }
     
     @Override
     public boolean isConnected() {
-        return unifiedJedis != null;
+        try {
+            return unifiedJedis != null && "PONG".equals(unifiedJedis.ping());
+        } catch (Exception e) {
+            return false;
+        }
     }
     
     @Override
     public boolean ping() throws Exception {
-        return "PONG".equals(unifiedJedis.ping());
+        try {
+            String result = unifiedJedis.ping();
+            return "PONG".equals(result);
+        } catch (Exception e) {
+            throw new Exception("PING operation failed: " + e.getMessage(), e);
+        }
     }
 }
