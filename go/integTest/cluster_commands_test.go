@@ -1523,6 +1523,7 @@ func (suite *GlideTestSuite) TestConfigRewriteWithOptions() {
 		}
 	}
 }
+
 func (suite *GlideTestSuite) TestCopyWithOptionsDBDestination() {
 	suite.SkipIfServerVersionLowerThan("9.0.0", suite.T())
 	client := suite.defaultClusterClient()
@@ -1543,7 +1544,7 @@ func (suite *GlideTestSuite) TestCopyWithOptionsDBDestination() {
 	client.CustomCommand(context.Background(), []string{"SELECT", "1"})
 	resultGet, err := client.Get(context.Background(), key2)
 	assert.Nil(t, err)
-	assert.Equal(t, value, resultGet.Value())	
+	assert.Equal(t, value, resultGet.Value())
 }
 
 func (suite *GlideTestSuite) TestClusterRandomKey() {
