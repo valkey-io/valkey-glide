@@ -2,7 +2,14 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import { afterAll, afterEach, beforeAll, describe } from "@jest/globals";
+import {
+    afterAll,
+    afterEach,
+    beforeAll,
+    describe,
+    expect,
+    it,
+} from "@jest/globals";
 import * as fs from "fs";
 import ValkeyCluster from "../../utils/TestUtils";
 import {
@@ -237,7 +244,7 @@ describe("OpenTelemetry GlideClusterClient", () => {
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `GlideClusterClient test span memory leak_%p`,
-        async (protocol) => {
+        async (protocol: ProtocolVersion) => {
             if (global.gc) {
                 global.gc(); // Run garbage collection
             }
@@ -272,7 +279,7 @@ describe("OpenTelemetry GlideClusterClient", () => {
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `GlideClusterClient test percentage requests config_%p`,
-        async (protocol) => {
+        async (protocol: ProtocolVersion) => {
             const client = await GlideClusterClient.createClient({
                 ...getClientConfigurationOption(
                     cluster.getAddresses(),
@@ -327,7 +334,7 @@ describe("OpenTelemetry GlideClusterClient", () => {
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `GlideClusterClient test otel global config not reinitialize_%p`,
-        async (protocol) => {
+        async (protocol: ProtocolVersion) => {
             const openTelemetryConfig: OpenTelemetryConfig = {
                 traces: {
                     endpoint: "wrong.endpoint",
@@ -361,7 +368,7 @@ describe("OpenTelemetry GlideClusterClient", () => {
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `GlideClusterClient test span transaction memory leak_%p`,
-        async (protocol) => {
+        async (protocol: ProtocolVersion) => {
             if (global.gc) {
                 global.gc(); // Run garbage collection
             }
@@ -402,7 +409,7 @@ describe("OpenTelemetry GlideClusterClient", () => {
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `GlideClusterClient test number of clients with same config_%p`,
-        async (protocol) => {
+        async (protocol: ProtocolVersion) => {
             const client1 = await GlideClusterClient.createClient({
                 ...getClientConfigurationOption(
                     cluster.getAddresses(),
@@ -437,7 +444,7 @@ describe("OpenTelemetry GlideClusterClient", () => {
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `GlideClusterClient test span batch file_%p`,
-        async (protocol) => {
+        async (protocol: ProtocolVersion) => {
             if (global.gc) {
                 global.gc(); // Run garbage collection
             }
@@ -522,7 +529,7 @@ describe("OpenTelemetry GlideClient", () => {
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `GlideClient test automatic span lifecycle_%p`,
-        async (protocol) => {
+        async (protocol: ProtocolVersion) => {
             if (global.gc) {
                 global.gc(); // Run garbage collection
             }
@@ -555,7 +562,7 @@ describe("OpenTelemetry GlideClient", () => {
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "GlideClient test otel global config not reinitialize_%p",
-        async (protocol) => {
+        async (protocol: ProtocolVersion) => {
             client = await GlideClient.createClient({
                 ...getClientConfigurationOption(
                     cluster.getAddresses(),
@@ -576,7 +583,7 @@ describe("OpenTelemetry GlideClient", () => {
 
     it.each([ProtocolVersion.RESP3, ProtocolVersion.RESP2])(
         `GlideClient test concurrent commands span lifecycle_%p`,
-        async (protocol) => {
+        async (protocol: ProtocolVersion) => {
             if (global.gc) {
                 global.gc(); // Run garbage collection
             }

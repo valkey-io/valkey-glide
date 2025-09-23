@@ -672,11 +672,11 @@ export function checkFunctionStatsResponse(
     functionCount: number,
 ) {
     if (response.running_script === null && runningFunction.length > 0) {
-        fail("No running function info");
+        throw new Error("No running function info");
     }
 
     if (response.running_script !== null && runningFunction.length == 0) {
-        fail(
+        throw new Error(
             "Unexpected running function info: " +
                 (response.running_script.command as string[]).join(" "),
         );

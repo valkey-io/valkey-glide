@@ -2,7 +2,14 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import { afterAll, afterEach, beforeAll, describe } from "@jest/globals";
+import {
+    afterAll,
+    afterEach,
+    beforeAll,
+    describe,
+    expect,
+    it,
+} from "@jest/globals";
 import { ValkeyCluster } from "../../utils/TestUtils.js";
 import {
     GlideClient,
@@ -67,7 +74,7 @@ describe("tls GlideClusterClient", () => {
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "clusterClient connect with insecure TLS (protocol: %p)",
-        async (protocol) => {
+        async (protocol: ProtocolVersion) => {
             const config = {
                 ...getClientConfigurationOption(
                     cluster.getAddresses(),
@@ -129,7 +136,7 @@ describe("tls GlideClient", () => {
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "Standalone client connect with insecure TLS (protocol: %p)",
-        async (protocol) => {
+        async (protocol: ProtocolVersion) => {
             const config = {
                 ...getClientConfigurationOption(
                     cluster.getAddresses(),

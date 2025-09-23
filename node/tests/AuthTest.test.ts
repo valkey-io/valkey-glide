@@ -600,11 +600,14 @@ describe("Auth tests", () => {
     );
 });
 
-// Skip IAM Auth tests in CI/CD environments
+// Skip IAM Auth tests unless explicitly enabled (and never run them in CI by default)
 const describeIamTests =
-    process.env.CI || process.env.GITHUB_ACTIONS || process.env.JENKINS_URL
-        ? describe.skip
-        : describe;
+    process.env.ENABLE_IAM_AUTH_TESTS === "true" &&
+    !process.env.CI &&
+    !process.env.GITHUB_ACTIONS &&
+    !process.env.JENKINS_URL
+        ? describe
+        : describe.skip;
 
 describeIamTests("IAM Auth: Elasticache Cluster", () => {
     it("test_iam_authentication_elasticache_cluster", async () => {

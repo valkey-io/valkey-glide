@@ -2,6 +2,7 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
+import { afterAll, beforeAll, describe, expect, it } from "@jest/globals";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -14,16 +15,40 @@ import {
     GlideClusterClient,
     GlideClusterClientConfiguration,
     Logger,
-} from "../src";
-import { flushAndCloseClient, parseEndpoints } from "./TestUtilities";
+} from "../build-ts";
+import {
+    flushAndCloseClient,
+    getServerVersion,
+    parseEndpoints,
+} from "./TestUtilities";
 import ValkeyCluster from "../../utils/TestUtils";
 
 const unlinkAsync = promisify(fs.unlink);
 const accessAsync = promisify(fs.access);
 
-Logger.setLevel("error");
+Logger.setLoggerConfig("error");
 
 const SOCKET_GLOB_PREFIX = "glide-socket-";
+
+type EndpointTuple = [string, number];
+
+function mapToClientAddresses(
+    addresses?: EndpointTuple[],
+): { host: string; port: number }[] {
+    return (addresses ?? [["127.0.0.1", 6379]]).map(([host, port]) => ({
+        host,
+        port,
+    }));
+}
+
+function parseEnvEndpoints(name: string): EndpointTuple[] | undefined {
+    const value = process.env[name];
+    return value ? parseEndpoints(value) : undefined;
+}
+
+function formatAddressesForEnv(addresses: EndpointTuple[]): string {
+    return addresses.map(([host, port]) => `${host}:${port}`).join(",");
+}
 
 async function collectSockets(directory: string): Promise<string[]> {
     try {
@@ -67,29 +92,21 @@ async function removeIfExists(filePath: string) {
 }
 
 async function createStandaloneClient(): Promise<GlideClient> {
-    const standaloneEndpoints = process.env.STAND_ALONE_ENDPOINT as
-        | string
-        | undefined;
-    const addresses = standaloneEndpoints
-        ? parseEndpoints(standaloneEndpoints)
-        : undefined;
+    const addresses = parseEnvEndpoints("STAND_ALONE_ENDPOINT");
 
     const config: GlideClientConfiguration = {
-        addresses: addresses ?? [{ host: "127.0.0.1", port: 6379 }],
+        addresses: mapToClientAddresses(addresses),
     };
-    return GlideClient.create(config);
+    return GlideClient.createClient(config);
 }
 
 async function createClusterClient(): Promise<GlideClusterClient> {
-    const clusterEndpoints = process.env.CLUSTER_ENDPOINT as string | undefined;
-    const addresses = clusterEndpoints
-        ? parseEndpoints(clusterEndpoints)
-        : undefined;
+    const addresses = parseEnvEndpoints("CLUSTER_ENDPOINT");
 
     const config: GlideClusterClientConfiguration = {
-        addresses: addresses ?? [{ host: "127.0.0.1", port: 6379 }],
+        addresses: mapToClientAddresses(addresses),
     };
-    return GlideClusterClient.create(config);
+    return GlideClusterClient.createClient(config);
 }
 
 describe("Socket lifecycle contracts", () => {
@@ -98,17 +115,27 @@ describe("Socket lifecycle contracts", () => {
 
     beforeAll(async () => {
         if (!process.env.STAND_ALONE_ENDPOINT) {
-            standaloneCluster = await ValkeyCluster.createCluster(false, 1, 1);
-            process.env.STAND_ALONE_ENDPOINT = standaloneCluster
-                .getAddresses()
-                .join(",");
+            standaloneCluster = await ValkeyCluster.createCluster(
+                false,
+                1,
+                1,
+                getServerVersion,
+            );
+            process.env.STAND_ALONE_ENDPOINT = formatAddressesForEnv(
+                standaloneCluster.getAddresses(),
+            );
         }
 
         if (!process.env.CLUSTER_ENDPOINT) {
-            clusterCluster = await ValkeyCluster.createCluster(true, 2, 1);
-            process.env.CLUSTER_ENDPOINT = clusterCluster
-                .getAddresses()
-                .join(",");
+            clusterCluster = await ValkeyCluster.createCluster(
+                true,
+                3,
+                1,
+                getServerVersion,
+            );
+            process.env.CLUSTER_ENDPOINT = formatAddressesForEnv(
+                clusterCluster.getAddresses(),
+            );
         }
     }, 60000);
 
@@ -189,11 +216,8 @@ describe("Socket lifecycle contracts", () => {
         await sleep(0);
         await expect(clientB.ping()).resolves.toEqual("PONG");
 
-        await flushAndCloseClient(
-            false,
-            (process.env.STAND_ALONE_ENDPOINT as string).split(","),
-            clientB,
-        );
+        const envStandalone = parseEnvEndpoints("STAND_ALONE_ENDPOINT");
+        await flushAndCloseClient(false, envStandalone, clientB);
 
         if (socketPathA) {
             await sleep(0);
@@ -213,14 +237,15 @@ describe("Socket lifecycle contracts", () => {
 
         if (socketPath) {
             await removeIfExists(socketPath);
+            await assertFileDoesNotExist(
+                socketPath,
+                "Expected cluster socket to be removed before recreation",
+            );
         }
 
-        await expect(client.ping()).rejects.toThrow();
+        await expect(client.ping()).resolves.toEqual("PONG");
 
-        await flushAndCloseClient(
-            true,
-            (process.env.CLUSTER_ENDPOINT as string).split(","),
-            client,
-        );
+        const envCluster = parseEnvEndpoints("CLUSTER_ENDPOINT");
+        await flushAndCloseClient(true, envCluster, client);
     }, 30000);
 });
