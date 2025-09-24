@@ -96,6 +96,7 @@ jobs:
         needs: get-matrices
         if: contains(toJson(fromJson(needs.get-matrices.outputs.host-matrix-output).*.OS), 'windows')
         steps:
+            - uses: actions/checkout@v4
             - uses: ./.github/workflows/start-self-hosted-runner-windows
               with:
                   aws-region: ${{ secrets.WINDOWS_RUNNER_AWS_REGION }}
