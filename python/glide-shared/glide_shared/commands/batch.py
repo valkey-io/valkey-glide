@@ -407,6 +407,9 @@ class BaseBatch:
         """
         Move `key` from the currently selected database to the database specified by `db_index`.
 
+        Note:
+            For cluster mode move command is supported since Valkey 9.0.0
+
         See [valkey.io](https://valkey.io/commands/move/) for more details.
 
         Args:
