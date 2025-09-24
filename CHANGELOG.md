@@ -1,3 +1,11 @@
+## 2.1.1
+
+#### Changes
+
+* GO: Add cluster support for Move command ([#4748](https://github.com/valkey-io/valkey-glide/pull/4748))
+
+#### Fixes 
+
 ## 2.1
 
 #### Changes
