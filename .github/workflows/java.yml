@@ -175,6 +175,14 @@ jobs:
                   echo "GLIDE_WINDOWS_BUILD=true" >> $env:GITHUB_ENV
                   echo "CARGO_TERM_COLOR=always" >> $env:GITHUB_ENV
 
+                  # Ensure Rust Windows MSVC target is available
+                  Write-Host "Adding Rust Windows MSVC target..."
+                  rustup target add x86_64-pc-windows-msvc
+
+                  # Verify target installation
+                  Write-Host "Installed Rust targets:"
+                  rustup target list --installed
+
             - name: Install protoc (protobuf) (Windows)
               if: matrix.host.OS == 'windows'
               shell: powershell
@@ -320,6 +328,14 @@ jobs:
               run: |
                   echo "GLIDE_WINDOWS_BUILD=true" >> $env:GITHUB_ENV
                   echo "CARGO_TERM_COLOR=always" >> $env:GITHUB_ENV
+
+                  # Ensure Rust Windows MSVC target is available
+                  Write-Host "Adding Rust Windows MSVC target..."
+                  rustup target add x86_64-pc-windows-msvc
+
+                  # Verify target installation
+                  Write-Host "Installed Rust targets:"
+                  rustup target list --installed
 
             - name: Install protoc (protobuf) (Windows)
               if: matrix.host.OS == 'windows'
@@ -480,6 +496,14 @@ jobs:
               run: |
                   echo "GLIDE_WINDOWS_BUILD=true" >> $env:GITHUB_ENV
                   echo "CARGO_TERM_COLOR=always" >> $env:GITHUB_ENV
+
+                  # Ensure Rust Windows MSVC target is available
+                  Write-Host "Adding Rust Windows MSVC target..."
+                  rustup target add x86_64-pc-windows-msvc
+
+                  # Verify target installation
+                  Write-Host "Installed Rust targets:"
+                  rustup target list --installed
 
             - name: Install protoc (protobuf) (Windows)
               if: matrix.host.OS == 'windows'
