@@ -222,6 +222,18 @@ script2 = Script("return 'Hello'")
 assert script.get_hash() == script2.get_hash()
 ```
 
+### Viewing Script Source (Valkey 8.0+)
+
+```python
+# Load a script
+script = Script("return 'Hello World'")
+await client.invoke_script(script)
+
+# Show the original source code
+source = await client.script_show(script.get_hash())
+print(source)  # b"return 'Hello World'"
+```
+
 ### Checking Script Existence
 
 ```python
@@ -251,25 +263,42 @@ await client.invoke_script(script)
 exists = await client.script_exists([script.get_hash()])
 print(exists)  # [True]
 
-# Flush all scripts from cache
+# Flush the script cache on the server
 await client.script_flush()
 
-# Verify it's gone
+# Verify script is gone from server
 exists = await client.script_exists([script.get_hash()])
 print(exists)  # [False]
 
 # Flush with ASYNC mode (non-blocking)
 await client.script_flush(FlushMode.ASYNC)
+
+# Verify script still exist from client
+print(f"Can still access hash: {script.get_hash()}")
+
+# Explicit cleanup of client-side Script object
+del script
 ```
 
 ### Killing Running Scripts
+A script can be safely killed if it has only performed read-only operations. However, once it executes any write operation, it becomes uninterruptible and must either run to completion or reach a timeout.
 
 ```python
-# Create a long-running script
-long_script = Script("""
+# This long-running script CAN be killed (read-only)
+killable_long_script = Script("""
     local start = redis.call('TIME')[1]
     while redis.call('TIME')[1] - start < 10 do
-        -- Do nothing for 10 seconds
+        redis.call('GET', 'some_key')  -- Read-only operations
+    end
+    return 'Done'
+""")
+
+# This long-running script CANNOT be killed (performs writes)
+unkillable_script = Script("""
+    redis.call('SET', 'temp', 'value')  -- Write operation
+    local start = redis.call('TIME')[1]
+    while redis.call('TIME')[1] - start < 10 do
+        -- Long operation after write
     end
     return 'Done'
 """)
@@ -277,7 +306,7 @@ long_script = Script("""
 # In one task, run the script
 async def run_script():
     try:
-        await client.invoke_script(long_script)
+        await client.invoke_script(killable_long_script)
     except RequestError as e:
         if "Script killed" in str(e):
             print("Script was killed")
@@ -290,18 +319,6 @@ async def kill_script():
 
 # Run both tasks concurrently
 await asyncio.gather(run_script(), kill_script())
-```
-
-### Viewing Script Source (Valkey 8.0+)
-
-```python
-# Load a script
-script = Script("return 'Hello World'")
-await client.invoke_script(script)
-
-# Show the original source code
-source = await client.script_show(script.get_hash())
-print(source)  # b"return 'Hello World'"
 ```
 
 ## Cluster Mode Considerations
@@ -350,20 +367,32 @@ result = await cluster_client.invoke_script_route(
 
 ### Multi-Slot Scripts
 
-Be careful with scripts that access multiple keys in different slots:
+Scripts that access multiple keys **must** ensure all keys belong to the same slot in cluster mode:
 
 ```python
-# This might fail in cluster mode if keys are in different slots
+# This WILL ALWAYS FAIL in cluster mode if keys are in different slots
+# The server rejects the request immediately with CROSSSLOT error
 script = Script("""
     redis.call('SET', KEYS[1], ARGV[1])
     redis.call('SET', KEYS[2], ARGV[2])
     return 'OK'
 """)
 
-# Ensure keys are in the same slot using hash tags
+# This will be rejected before execution
+try:
+    result = await cluster_client.invoke_script(
+        script,
+        keys=["key1", "key2"],  # Different slots - ALWAYS fails
+        args=["value1", "value2"]
+    )
+except RequestError as e:
+    if "CrossSlot" in str(e):
+        print("Keys are in different slots - script rejected")
+
+# Keys must be in the same slot using hash tags
 result = await cluster_client.invoke_script(
     script,
-    keys=["user:{1000}:name", "user:{1000}:email"],  # Same slot
+    keys=["user:{1000}:name", "user:{1000}:email"],  # Same slot due to {1000}
     args=["John", "john@example.com"]
 )
 ```
@@ -427,36 +456,32 @@ for i in range(100):
 ```
 
 ## Best Practices
-
-### 1. Use Scripts for Atomic Operations
+### 1. Use Scripts for Atomic Non-primitive Operations
 
 ```python
-# Good: Atomic increment with expiration
-atomic_increment = Script("""
+# Good: Conditional update with multiple data structures
+conditional_update = Script("""
     local current = redis.call('GET', KEYS[1])
-    local new_val = (current and current + ARGV[1]) or ARGV[1]
-    redis.call('SET', KEYS[1], new_val)
-    redis.call('EXPIRE', KEYS[1], ARGV[2])
-    return new_val
+    local threshold = tonumber(ARGV[2])
+    
+    if current and tonumber(current) >= threshold then
+        redis.call('SET', KEYS[1], ARGV[1])
+        redis.call('LPUSH', KEYS[2], ARGV[1])
+        redis.call('EXPIRE', KEYS[2], ARGV[3])
+        return 1
+    else
+        return 0
+    end
 """)
 
 result = await client.invoke_script(
-    atomic_increment,
-    keys=["page_views"],
-    args=["1", "3600"]  # increment by 1, expire in 1 hour
+    conditional_update,
+    keys=["user:score", "user:history"],
+    args=["100", "50", "86400"]  # new score, threshold, expire in 1 day
 )
 ```
 
-### 2. Minimize Script Complexity
-
-```python
-# Good: Simple, focused script
-simple_script = Script("return redis.call('INCR', KEYS[1])")
-
-# Avoid: Overly complex scripts that could be multiple commands
-```
-
-### 3. Handle Nil Values Properly
+### 2. Handle Nil Values Properly
 
 ```python
 # Good: Proper nil handling
@@ -470,17 +495,17 @@ safe_script = Script("""
 """)
 ```
 
-### 4. Use Appropriate Data Types
+### 3. Use Appropriate Data Types
 
 ```python
 # Good: Return appropriate types
 typed_script = Script("""
-    local count = redis.call('LLEN', KEYS[1])
-    return tonumber(count)  -- Ensure numeric return
+    local value = redis.call('GET', KEYS[1])
+    return tonumber(value) or 0  -- Ensure numeric return, default to 0 if nil
 """)
 ```
 
-### 5. Consider Cluster Constraints
+### 4. Consider Cluster Constraints
 
 ```python
 # Good: Use hash tags for related keys
@@ -514,8 +539,10 @@ try:
 except RequestError as e:
     if "WRONGTYPE" in str(e) or "not an integer" in str(e):
         print("Type error in script")
-    elif "NOSCRIPT" in str(e):
-        print("Script not found in cache")
+    elif "syntax error" in str(e).lower():
+        print("Lua syntax error in script")
+    elif "unknown command" in str(e).lower():
+        print("Invalid Redis command in script")
     else:
         print(f"Script error: {e}")
 ```
@@ -523,20 +550,38 @@ except RequestError as e:
 ### Script Timeout Handling
 
 ```python
+# Configure client timeout for long-running scripts
+config = GlideClientConfiguration(
+    addresses=[NodeAddress("localhost", 6379)],
+    request_timeout=30000  # 30 seconds for long scripts (default is usually 5000ms)
+)
+client = await GlideClient.create(config)
+
 # Handle long-running scripts
 long_script = Script("""
     local start = redis.call('TIME')[1]
-    while redis.call('TIME')[1] - start < 30 do
-        -- Long operation
+    while redis.call('TIME')[1] - start < 25 do
+        redis.call('GET', 'dummy_key')  -- Read-only operation
     end
     return 'Done'
 """)
 
 try:
     result = await client.invoke_script(long_script)
+    print(f"Script completed: {result.decode('utf-8')}")
 except RequestError as e:
-    if "Script killed" in str(e):
-        print("Script was killed due to timeout")
+    if "timeout" in str(e).lower():
+        print("Client timeout - script may still be running on server!")
+        print("Consider increasing request_timeout in client configuration")
+    elif "Script killed" in str(e):
+        print("Script was killed by server (only possible for read-only scripts)")
+    else:
+        print(f"Script error: {e}")
+
+# Important: Client timeout != Script termination
+# - Client stops waiting for response
+# - Script continues running on server
+# - Use SCRIPT KILL to stop read-only scripts if needed
 ```
 
 ### Cluster-Specific Errors
@@ -553,6 +598,53 @@ except RequestError as e:
         print("Keys are in different slots")
         # Use hash tags or route explicitly
 ```
+
+## Batch Operations and Transactions
+
+Currently, `invoke_script` is not supported in batch operations (pipelines/transactions). To use Lua scripts within an atomic batch (MULTI/EXEC transaction), you must use the `EVAL` command with `custom_command`.
+
+**Note**: The `Transaction` class is deprecated. Use `Batch(is_atomic=True)` instead.
+
+### Using EVAL in Atomic Batches
+
+```python
+from glide import Batch
+
+# Create an atomic batch (transaction)
+batch = Batch(is_atomic=True)
+batch.set("batch-key", "batch-value")
+batch.get("batch-key")
+batch.custom_command(["EVAL", "return 'Hello from Lua!'", "0"])
+
+# Execute the batch
+results = await client.exec(batch=batch, raise_on_error=False)
+
+print("Batch executed:")
+print(f"SET result: {results[0]}")      # b'OK'
+print(f"GET result: {results[1]}")      # b'batch-value'
+print(f"EVAL result: {results[2]}")     # b'Hello from Lua!'
+```
+
+### EVAL with Keys and Arguments in Atomic Batches
+
+```python
+# Script with keys and arguments
+batch = Batch(is_atomic=True)
+batch.custom_command([
+    "EVAL",
+    "return redis.call('SET', KEYS[1], ARGV[1])",
+    "1",           # Number of keys
+    "script-key",  # Key
+    "script-value" # Argument
+])
+batch.get("script-key")
+
+results = await client.exec(batch, raise_on_error=False)
+print(f"EVAL result: {results[0]}")  # b'OK'
+print(f"GET result: {results[1]}")   # b'script-value'
+```
+
+**Note**: Once `invoke_script` support is added to batch operations, it will be the preferred method over direct `EVAL` usage.
 
 ## Migration from Direct EVAL
 
