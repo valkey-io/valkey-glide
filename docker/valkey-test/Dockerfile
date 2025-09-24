@@ -25,9 +25,7 @@ RUN useradd -r -s /bin/false valkey \
     && mkdir -p /var/lib/valkey /var/log/valkey /etc/valkey \
     && chown valkey:valkey /var/lib/valkey /var/log/valkey
 
-# Copy configuration templates
-COPY valkey.conf /etc/valkey/valkey.conf
-COPY valkey-cluster.conf /etc/valkey/valkey-cluster.conf
+# Configuration will be generated dynamically by entrypoint script
 
 # Expose ports for standalone and cluster
 EXPOSE 6379 7000 7001 7002 7003 7004 7005

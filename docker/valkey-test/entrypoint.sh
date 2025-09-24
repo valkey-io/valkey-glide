@@ -3,25 +3,36 @@ set -e
 
 # Function to start valkey with custom configuration
 start_valkey() {
-    local config_file="/etc/valkey/valkey.conf"
     local port=${VALKEY_PORT:-6379}
     local tls=${VALKEY_TLS:-false}
 
-    # Use cluster config if CLUSTER_MODE is set
+    # Generate dynamic configuration
+    cat > /tmp/valkey.conf << EOF
+# Basic Valkey configuration
+port $port
+bind 0.0.0.0
+protected-mode no
+save 900 1
+save 300 10
+save 60 10000
+rdbcompression yes
+dbfilename dump.rdb
+dir /var/lib/valkey
+maxmemory-policy allkeys-lru
+timeout 0
+tcp-keepalive 300
+EOF
+
+    # Add cluster configuration if needed
     if [ "$CLUSTER_MODE" = "true" ]; then
-        config_file="/etc/valkey/valkey-cluster.conf"
-    fi
-
-    # Copy config to writable location
-    cp "$config_file" /tmp/valkey.conf
-
-    # Update port in config
-    sed -i "s/port 6379/port $port/" /tmp/valkey.conf
-
-    # Configure cluster announce port if in cluster mode
-    if [ "$CLUSTER_MODE" = "true" ]; then
-        echo "cluster-announce-port $port" >> /tmp/valkey.conf
-        echo "cluster-announce-bus-port $((port + 10000))" >> /tmp/valkey.conf
+        cat >> /tmp/valkey.conf << EOF
+cluster-enabled yes
+cluster-config-file nodes.conf
+cluster-node-timeout 15000
+cluster-announce-hostname-on-startup no
+cluster-announce-port $port
+cluster-announce-bus-port $((port + 10000))
+EOF
     fi
 
     # Configure TLS if enabled
