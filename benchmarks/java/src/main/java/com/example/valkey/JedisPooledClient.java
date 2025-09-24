@@ -5,7 +5,8 @@ import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.exceptions.JedisException;
 
 public class JedisPooledClient extends RedisClient {
-    private JedisPool jedisPool;
+    private static volatile JedisPool sharedPool;
+    private static final Object poolLock = new Object();
     
     public JedisPooledClient(TestConfiguration config) {
         super(config);
@@ -18,12 +19,18 @@ public class JedisPooledClient extends RedisClient {
                 throw new Exception("JedisPooled is not supported in cluster mode");
             }
             
-            // Simple JedisPool without complex configuration for compatibility layer
-            jedisPool = new JedisPool(config.getRedisHost(), config.getRedisPort());
-            
-            // Test connection
-            try (Jedis testJedis = jedisPool.getResource()) {
-                testJedis.ping();
+            // Create shared pool only once for all worker threads
+            if (sharedPool == null) {
+                synchronized (poolLock) {
+                    if (sharedPool == null) {
+                        sharedPool = new JedisPool(config.getRedisHost(), config.getRedisPort());
+                        
+                        // Test connection
+                        try (Jedis testJedis = sharedPool.getResource()) {
+                            testJedis.ping();
+                        }
+                    }
+                }
             }
         } catch (Exception e) {
             throw new Exception("Failed to connect using JedisPool: " + e.getMessage(), e);
@@ -32,14 +39,13 @@ public class JedisPooledClient extends RedisClient {
     
     @Override
     public void close() throws Exception {
-        if (jedisPool != null) {
-            jedisPool.close();
-        }
+        // Don't close the shared pool here - let it be closed when all workers are done
+        // The pool will be cleaned up when the JVM exits
     }
     
     @Override
     public boolean set(String key, String value) throws Exception {
-        try (Jedis jedis = jedisPool.getResource()) {
+        try (Jedis jedis = sharedPool.getResource()) {
             String result = jedis.set(key, value);
             return "OK".equals(result);
         } catch (JedisException e) {
@@ -49,7 +55,7 @@ public class JedisPooledClient extends RedisClient {
     
     @Override
     public String get(String key) throws Exception {
-        try (Jedis jedis = jedisPool.getResource()) {
+        try (Jedis jedis = sharedPool.getResource()) {
             return jedis.get(key);
         } catch (JedisException e) {
             throw new Exception("GET operation failed: " + e.getMessage(), e);
@@ -64,7 +70,7 @@ public class JedisPooledClient extends RedisClient {
     @Override
     public boolean isConnected() {
         try {
-            return jedisPool != null && !jedisPool.isClosed();
+            return sharedPool != null && !sharedPool.isClosed();
         } catch (Exception e) {
             return false;
         }
@@ -72,7 +78,7 @@ public class JedisPooledClient extends RedisClient {
     
     @Override
     public boolean ping() throws Exception {
-        try (Jedis jedis = jedisPool.getResource()) {
+        try (Jedis jedis = sharedPool.getResource()) {
             String result = jedis.ping();
             return "PONG".equals(result);
         } catch (JedisException e) {
