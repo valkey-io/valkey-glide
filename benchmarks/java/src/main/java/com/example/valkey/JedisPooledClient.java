@@ -2,7 +2,6 @@ package com.example.valkey;
 
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
-import redis.clients.jedis.JedisPoolConfig;
 import redis.clients.jedis.exceptions.JedisException;
 
 public class JedisPooledClient extends RedisClient {
@@ -19,15 +18,8 @@ public class JedisPooledClient extends RedisClient {
                 throw new Exception("JedisPooled is not supported in cluster mode");
             }
             
-            JedisPoolConfig poolConfig = new JedisPoolConfig();
-            poolConfig.setMaxTotal(config.getConcurrentConnections() * 2);
-            poolConfig.setMaxIdle(config.getConcurrentConnections());
-            poolConfig.setMinIdle(5);
-            poolConfig.setTestOnBorrow(true);
-            poolConfig.setTestOnReturn(true);
-            poolConfig.setTestWhileIdle(true);
-            
-            jedisPool = new JedisPool(poolConfig, config.getRedisHost(), config.getRedisPort());
+            // Simple JedisPool without complex configuration for compatibility layer
+            jedisPool = new JedisPool(config.getRedisHost(), config.getRedisPort());
             
             // Test connection
             try (Jedis testJedis = jedisPool.getResource()) {
@@ -66,8 +58,7 @@ public class JedisPooledClient extends RedisClient {
     
     @Override
     public String getClientName() {
-        String tls = config.isTlsEnabled() ? "TLS" : "Plain";
-        return String.format("JedisPooled (%s)", tls);
+        return "JedisPooled";
     }
     
     @Override

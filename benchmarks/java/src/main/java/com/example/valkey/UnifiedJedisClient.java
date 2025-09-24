@@ -68,8 +68,7 @@ public class UnifiedJedisClient extends RedisClient {
     @Override
     public String getClientName() {
         String mode = config.isClusterMode() ? "Cluster" : "Standalone";
-        String tls = config.isTlsEnabled() ? "TLS" : "Plain";
-        return String.format("UnifiedJedis (%s, %s)", mode, tls);
+        return String.format("UnifiedJedis (%s)", mode);
     }
     
     @Override

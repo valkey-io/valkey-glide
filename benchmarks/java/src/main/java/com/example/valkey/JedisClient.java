@@ -92,8 +92,7 @@ public class JedisClient extends RedisClient {
     @Override
     public String getClientName() {
         String mode = config.isClusterMode() ? "Cluster" : "Standalone";
-        String tls = config.isTlsEnabled() ? "TLS" : "Plain";
-        return String.format("Jedis (%s, %s)", mode, tls);
+        return String.format("Jedis (%s)", mode);
     }
     
     @Override
@@ -102,7 +101,7 @@ public class JedisClient extends RedisClient {
             if (config.isClusterMode()) {
                 return jedisCluster != null;
             } else {
-                return jedis != null && jedis.isConnected();
+                return jedis != null;
             }
         } catch (Exception e) {
             return false;
