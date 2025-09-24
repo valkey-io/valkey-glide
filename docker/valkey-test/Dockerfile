@@ -27,8 +27,7 @@ RUN useradd -r -s /bin/false valkey \
 
 # Configuration will be generated dynamically by entrypoint script
 
-# Expose ports for standalone and cluster
-EXPOSE 6379 7000 7001 7002 7003 7004 7005
+# Ports are exposed dynamically by Docker Compose based on environment variables
 
 # Create entrypoint script
 COPY entrypoint.sh /entrypoint.sh
