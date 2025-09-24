@@ -1060,6 +1060,7 @@ public interface GenericBaseCommands {
      * Move <code>key</code> from the currently selected database to the database specified by <code>
      * dbIndex</code>.
      *
+     * @apiNote For Cluster mode the move is supported since Valkey 9.0.0 and above.
      * @see <a href="https://valkey.io/commands/move/">valkey.io</a> for more details.
      * @param key The key to move.
      * @param dbIndex The index of the database to move <code>key</code> to.
@@ -1078,6 +1079,7 @@ public interface GenericBaseCommands {
      * Move <code>key</code> from the currently selected database to the database specified by <code>
      * dbIndex</code>.
      *
+     * @apiNote For Cluster mode the move is supported since Valkey 9.0.0 and above.
      * @see <a href="https://valkey.io/commands/move/">valkey.io</a> for more details.
      * @param key The key to move.
      * @param dbIndex The index of the database to move <code>key</code> to.
