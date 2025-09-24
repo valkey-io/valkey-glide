@@ -96,7 +96,6 @@ jobs:
         environment: AWS_ACTIONS
         permissions:
             id-token: write
-            contents: read
         needs: get-matrices
         if: contains(toJson(fromJson(needs.get-matrices.outputs.host-matrix-output).*.OS), 'windows')
         steps:
