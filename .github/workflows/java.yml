@@ -100,8 +100,8 @@ jobs:
             - uses: actions/checkout@v4
             - uses: ./.github/workflows/start-self-hosted-runner-windows
               with:
-                  aws-region: ${{ secrets.WINDOWS_RUNNER_AWS_REGION }}
-                  role-to-assume: ${{ secrets.WINDOWS_RUNNER_ROLE_TO_ASSUME }}
+                  aws-region: ${{ secrets.AWS_REGION }}
+                  role-to-assume: ${{ secrets.ROLE_TO_ASSUME }}
                   ec2-instance-id: ${{ secrets.WINDOWS_RUNNER_EC2_INSTANCE_ID }}
 
     test-java:
