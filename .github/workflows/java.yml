@@ -175,7 +175,43 @@ jobs:
                   echo "GLIDE_WINDOWS_BUILD=true" >> $env:GITHUB_ENV
                   echo "CARGO_TERM_COLOR=always" >> $env:GITHUB_ENV
 
-            - name: Install protoc (protobuf)
+            - name: Install protoc (protobuf) (Windows)
+              if: matrix.host.OS == 'windows'
+              shell: powershell
+              run: |
+                  $version = "25.1"
+                  $downloadUrl = "https://github.com/protocolbuffers/protobuf/releases/download/v$version/protoc-$version-win64.zip"
+                  $tempDir = "$env:TEMP\protoc-install"
+                  $zipFile = "$tempDir\protoc.zip"
+                  $extractDir = "$tempDir\protoc"
+                  $installDir = "C:\protoc"
+
+                  Write-Host "Creating directories..."
+                  New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
+                  New-Item -ItemType Directory -Path $installDir -Force | Out-Null
+
+                  Write-Host "Downloading protoc v$version from $downloadUrl"
+                  [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+                  Invoke-WebRequest -Uri $downloadUrl -OutFile $zipFile -UseBasicParsing
+
+                  Write-Host "Extracting using .NET Framework..."
+                  Add-Type -AssemblyName System.IO.Compression.FileSystem
+                  [System.IO.Compression.ZipFile]::ExtractToDirectory($zipFile, $extractDir)
+
+                  Write-Host "Installing to $installDir"
+                  Copy-Item -Path "$extractDir\*" -Destination $installDir -Recurse -Force
+
+                  Write-Host "Adding to PATH..."
+                  Add-Content -Path $env:GITHUB_PATH -Value "$installDir\bin"
+
+                  Write-Host "Verifying installation..."
+                  & "$installDir\bin\protoc.exe" --version
+
+                  Write-Host "Cleaning up..."
+                  Remove-Item -Path $tempDir -Recurse -Force
+
+            - name: Install protoc (protobuf) (Unix)
+              if: matrix.host.OS != 'windows'
               uses: arduino/setup-protoc@v3
               with:
                   version: "25.1"
@@ -285,7 +321,43 @@ jobs:
                   echo "GLIDE_WINDOWS_BUILD=true" >> $env:GITHUB_ENV
                   echo "CARGO_TERM_COLOR=always" >> $env:GITHUB_ENV
 
-            - name: Install protoc (protobuf)
+            - name: Install protoc (protobuf) (Windows)
+              if: matrix.host.OS == 'windows'
+              shell: powershell
+              run: |
+                  $version = "25.1"
+                  $downloadUrl = "https://github.com/protocolbuffers/protobuf/releases/download/v$version/protoc-$version-win64.zip"
+                  $tempDir = "$env:TEMP\protoc-install"
+                  $zipFile = "$tempDir\protoc.zip"
+                  $extractDir = "$tempDir\protoc"
+                  $installDir = "C:\protoc"
+
+                  Write-Host "Creating directories..."
+                  New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
+                  New-Item -ItemType Directory -Path $installDir -Force | Out-Null
+
+                  Write-Host "Downloading protoc v$version from $downloadUrl"
+                  [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+                  Invoke-WebRequest -Uri $downloadUrl -OutFile $zipFile -UseBasicParsing
+
+                  Write-Host "Extracting using .NET Framework..."
+                  Add-Type -AssemblyName System.IO.Compression.FileSystem
+                  [System.IO.Compression.ZipFile]::ExtractToDirectory($zipFile, $extractDir)
+
+                  Write-Host "Installing to $installDir"
+                  Copy-Item -Path "$extractDir\*" -Destination $installDir -Recurse -Force
+
+                  Write-Host "Adding to PATH..."
+                  Add-Content -Path $env:GITHUB_PATH -Value "$installDir\bin"
+
+                  Write-Host "Verifying installation..."
+                  & "$installDir\bin\protoc.exe" --version
+
+                  Write-Host "Cleaning up..."
+                  Remove-Item -Path $tempDir -Recurse -Force
+
+            - name: Install protoc (protobuf) (Unix)
+              if: matrix.host.OS != 'windows'
               uses: arduino/setup-protoc@v3
               with:
                   version: "25.1"
@@ -409,7 +481,43 @@ jobs:
                   echo "GLIDE_WINDOWS_BUILD=true" >> $env:GITHUB_ENV
                   echo "CARGO_TERM_COLOR=always" >> $env:GITHUB_ENV
 
-            - name: Install protoc (protobuf)
+            - name: Install protoc (protobuf) (Windows)
+              if: matrix.host.OS == 'windows'
+              shell: powershell
+              run: |
+                  $version = "25.1"
+                  $downloadUrl = "https://github.com/protocolbuffers/protobuf/releases/download/v$version/protoc-$version-win64.zip"
+                  $tempDir = "$env:TEMP\protoc-install"
+                  $zipFile = "$tempDir\protoc.zip"
+                  $extractDir = "$tempDir\protoc"
+                  $installDir = "C:\protoc"
+
+                  Write-Host "Creating directories..."
+                  New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
+                  New-Item -ItemType Directory -Path $installDir -Force | Out-Null
+
+                  Write-Host "Downloading protoc v$version from $downloadUrl"
+                  [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+                  Invoke-WebRequest -Uri $downloadUrl -OutFile $zipFile -UseBasicParsing
+
+                  Write-Host "Extracting using .NET Framework..."
+                  Add-Type -AssemblyName System.IO.Compression.FileSystem
+                  [System.IO.Compression.ZipFile]::ExtractToDirectory($zipFile, $extractDir)
+
+                  Write-Host "Installing to $installDir"
+                  Copy-Item -Path "$extractDir\*" -Destination $installDir -Recurse -Force
+
+                  Write-Host "Adding to PATH..."
+                  Add-Content -Path $env:GITHUB_PATH -Value "$installDir\bin"
+
+                  Write-Host "Verifying installation..."
+                  & "$installDir\bin\protoc.exe" --version
+
+                  Write-Host "Cleaning up..."
+                  Remove-Item -Path $tempDir -Recurse -Force
+
+            - name: Install protoc (protobuf) (Unix)
+              if: matrix.host.OS != 'windows'
               uses: arduino/setup-protoc@v3
               with:
                   version: "25.1"
@@ -503,7 +611,43 @@ jobs:
                   distribution: "temurin"
                   java-version: 17
 
-            - name: Install protoc (protobuf)
+            - name: Install protoc (protobuf) (Windows)
+              if: matrix.host.OS == 'windows'
+              shell: powershell
+              run: |
+                  $version = "25.1"
+                  $downloadUrl = "https://github.com/protocolbuffers/protobuf/releases/download/v$version/protoc-$version-win64.zip"
+                  $tempDir = "$env:TEMP\protoc-install"
+                  $zipFile = "$tempDir\protoc.zip"
+                  $extractDir = "$tempDir\protoc"
+                  $installDir = "C:\protoc"
+
+                  Write-Host "Creating directories..."
+                  New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
+                  New-Item -ItemType Directory -Path $installDir -Force | Out-Null
+
+                  Write-Host "Downloading protoc v$version from $downloadUrl"
+                  [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+                  Invoke-WebRequest -Uri $downloadUrl -OutFile $zipFile -UseBasicParsing
+
+                  Write-Host "Extracting using .NET Framework..."
+                  Add-Type -AssemblyName System.IO.Compression.FileSystem
+                  [System.IO.Compression.ZipFile]::ExtractToDirectory($zipFile, $extractDir)
+
+                  Write-Host "Installing to $installDir"
+                  Copy-Item -Path "$extractDir\*" -Destination $installDir -Recurse -Force
+
+                  Write-Host "Adding to PATH..."
+                  Add-Content -Path $env:GITHUB_PATH -Value "$installDir\bin"
+
+                  Write-Host "Verifying installation..."
+                  & "$installDir\bin\protoc.exe" --version
+
+                  Write-Host "Cleaning up..."
+                  Remove-Item -Path $tempDir -Recurse -Force
+
+            - name: Install protoc (protobuf) (Unix)
+              if: matrix.host.OS != 'windows'
               uses: arduino/setup-protoc@v3
               with:
                   version: "25.1"
