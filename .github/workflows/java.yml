@@ -98,10 +98,37 @@ jobs:
         if: contains(toJson(fromJson(needs.get-matrices.outputs.host-matrix-output).*.OS), 'windows')
         steps:
             - uses: actions/checkout@v4
+
+            - name: Debug Environment and Secrets
+              shell: bash
+              run: |
+                  echo "=== Environment Debug ==="
+                  echo "GitHub environment: ${{ github.environment }}"
+                  echo "Runner environment: $GITHUB_ENV"
+                  echo "Job environment: AWS_ACTIONS"
+
+                  echo "=== Secret Resolution Debug ==="
+                  echo "WINDOWS_RUNNER_AWS_REGION length: ${#REGION_VAL}"
+                  echo "WINDOWS_RUNNER_ROLE_TO_ASSUME length: ${#ROLE_VAL}"
+                  echo "WINDOWS_RUNNER_EC2_INSTANCE_ID length: ${#INSTANCE_VAL}"
+
+                  echo "WINDOWS_RUNNER_AWS_REGION is_empty: $([ -z "$REGION_VAL" ] && echo 'YES' || echo 'NO')"
+                  echo "WINDOWS_RUNNER_ROLE_TO_ASSUME is_empty: $([ -z "$ROLE_VAL" ] && echo 'YES' || echo 'NO')"
+                  echo "WINDOWS_RUNNER_EC2_INSTANCE_ID is_empty: $([ -z "$INSTANCE_VAL" ] && echo 'YES' || echo 'NO')"
+
+                  echo "=== Context Information ==="
+                  echo "secrets context available: ${{ toJSON(secrets) != '{}' }}"
+                  echo "github.repository: ${{ github.repository }}"
+                  echo "github.repository_owner: ${{ github.repository_owner }}"
+              env:
+                  REGION_VAL: ${{ secrets.WINDOWS_RUNNER_AWS_REGION }}
+                  ROLE_VAL: ${{ secrets.WINDOWS_RUNNER_ROLE_TO_ASSUME }}
+                  INSTANCE_VAL: ${{ secrets.WINDOWS_RUNNER_EC2_INSTANCE_ID }}
+
             - uses: ./.github/workflows/start-self-hosted-runner-windows
               with:
-                  aws-region: ${{ secrets.AWS_REGION }}
-                  role-to-assume: ${{ secrets.ROLE_TO_ASSUME }}
+                  aws-region: ${{ secrets.WINDOWS_RUNNER_AWS_REGION }}
+                  role-to-assume: ${{ secrets.WINDOWS_RUNNER_ROLE_TO_ASSUME }}
                   ec2-instance-id: ${{ secrets.WINDOWS_RUNNER_EC2_INSTANCE_ID }}
 
     test-java:
