@@ -133,8 +133,7 @@ jobs:
 
     test-java:
         name: Java Tests - ${{ matrix.java }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
-        needs: [get-matrices, start-windows-runner]
-        if: always() && !cancelled() && needs.get-matrices.result == 'success'
+        needs: get-matrices
         timeout-minutes: ${{ matrix.host.OS == 'windows' && 45 || 35 }}
         strategy:
             fail-fast: false
