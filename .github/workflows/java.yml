@@ -123,12 +123,11 @@ jobs:
                   echo "Role secret (direct): '${{ secrets.WINDOWS_RUNNER_ROLE_TO_ASSUME }}'"
                   echo "Instance secret (direct): '${{ secrets.WINDOWS_RUNNER_EC2_INSTANCE_ID }}'"
 
-            - name: Test with hardcoded values (temporary)
-              uses: ./.github/workflows/start-self-hosted-runner-windows
+            - uses: ./.github/workflows/start-self-hosted-runner-windows
               with:
-                  aws-region: us-east-1
-                  role-to-assume: arn:aws:iam::507286591552:role/github-actions-role
-                  ec2-instance-id: i-0347417be61113708
+                  aws-region: ${{ secrets.WINDOWS_RUNNER_AWS_REGION }}
+                  role-to-assume: ${{ secrets.WINDOWS_RUNNER_ROLE_TO_ASSUME }}
+                  ec2-instance-id: ${{ secrets.WINDOWS_RUNNER_EC2_INSTANCE_ID }}
 
     test-java:
         name: Java Tests - ${{ matrix.java }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
