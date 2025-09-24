@@ -180,7 +180,6 @@ jobs:
               with:
                   version: "25.1"
                   repo-token: ${{ secrets.GITHUB_TOKEN }}
-                  repo-token: ${{ secrets.GITHUB_TOKEN }}
 
             - uses: actions/cache@v4
               with:
@@ -290,7 +289,6 @@ jobs:
               uses: arduino/setup-protoc@v3
               with:
                   version: "25.1"
-                  repo-token: ${{ secrets.GITHUB_TOKEN }}
                   repo-token: ${{ secrets.GITHUB_TOKEN }}
 
             - uses: actions/cache@v4
@@ -416,7 +414,6 @@ jobs:
               with:
                   version: "25.1"
                   repo-token: ${{ secrets.GITHUB_TOKEN }}
-                  repo-token: ${{ secrets.GITHUB_TOKEN }}
 
             # Ensure Rust is in PATH for container environments
             - name: Setup Rust Build
@@ -510,7 +507,6 @@ jobs:
               uses: arduino/setup-protoc@v3
               with:
                   version: "25.1"
-                  repo-token: ${{ secrets.GITHUB_TOKEN }}
                   repo-token: ${{ secrets.GITHUB_TOKEN }}
 
             - uses: actions/cache@v4
