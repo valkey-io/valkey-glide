@@ -117,14 +117,6 @@ jobs:
         runs-on: ${{ matrix.host.RUNNER }}
 
         steps:
-            - name: Start Windows Runner
-              if: matrix.host.OS == 'windows'
-              uses: ./.github/workflows/start-self-hosted-runner-windows
-              with:
-                  aws-region: us-east-1
-                  role-to-assume: arn:aws:iam::507286591552:role/valkey-glide-windows-runner-role
-                  ec2-instance-id: i-0347417be61113708
-
             - uses: actions/checkout@v4
 
             - name: Output Matrix Parameters for this job
@@ -237,14 +229,6 @@ jobs:
         runs-on: ${{ matrix.host.RUNNER }}
 
         steps:
-            - name: Start Windows Runner
-              if: matrix.host.OS == 'windows'
-              uses: ./.github/workflows/start-self-hosted-runner-windows
-              with:
-                  aws-region: us-east-1
-                  role-to-assume: arn:aws:iam::507286591552:role/valkey-glide-windows-runner-role
-                  ec2-instance-id: i-0347417be61113708
-
             - uses: actions/checkout@v4
 
             - name: Output Matrix Parameters for this job
