@@ -1,5 +1,6 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+# flake8: noqa: E402
 import warnings
 
 # Issue deprecation warning for direct module imports

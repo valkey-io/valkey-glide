@@ -1,6 +1,7 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 # isort:skip_file
+# flake8: noqa: F401
 
 import pytest
 
