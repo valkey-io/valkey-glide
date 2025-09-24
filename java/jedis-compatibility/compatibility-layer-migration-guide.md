@@ -158,18 +158,6 @@ try (GlideClient client = GlideClient.createClient(config).get()) {
 - Check [integration tests](./integTest/src/test/java/glide) for examples
 - Report compatibility issues through the project's issue tracker
 
-## Known Challenges and Limitations
-
-### Version Compatibility Issues
-- **Jedis version incompatibility**: The compatibility layer targets latest Jedis versions, but many projects use older versions (e.g., 4.4.3)
-- **Backward compatibility**: Jedis itself is not backward compatible across major versions
-- **Multiple version support**: No clear strategy for supporting multiple Jedis versions simultaneously
-
-### Implementation Gaps
-- **Generic command support**: `sendCommand()` is implemented but only supports `Protocol.Command` types
-- **Stub implementations**: Many classes exist but lack full functionality, creating false expectations
-- **Runtime failures**: Build-time success doesn't guarantee runtime compatibility
-
 ## Migration Warnings
 
 ### Before You Start
@@ -187,7 +175,7 @@ try (GlideClient client = GlideClient.createClient(config).get()) {
 
 ## Appendix: Detailed Configuration Mapping
 
-### Successfully Mapped Parameters
+###  Mapped Parameters
 - `user` → `ServerCredentials.username`
 - `password` → `ServerCredentials.password`
 - `clientName` → `BaseClientConfiguration.clientName`
@@ -202,32 +190,8 @@ try (GlideClient client = GlideClient.createClient(config).get()) {
 - `sslParameters` → Limited mapping; custom protocols/ciphers not supported
 - `hostnameVerifier` → Standard verification works; custom verifiers require `useInsecureTLS`
 
-### Not Mapped Parameters
+### Unsupported Parameters
 - `blockingSocketTimeoutMillis` → No equivalent (GLIDE uses async I/O model)
-
-### SSL/TLS Configuration Complexity
-
-#### Internal SSL Fields Analysis (21 sub-fields total):
-- **SSLParameters**: 3/9 fields partially mapped
-- **SSLSocketFactory**: 1/8 fields directly mapped
-- **HostnameVerifier**: 2/4 verification types mapped
-
-#### Migration Requirements by Complexity:
-
-**Low Complexity**: Direct parameter mapping, No code changes required
-- Examples: Basic auth, timeouts, protocol selection
-
-**Medium Complexity**: SSL/TLS certificate migration required, System certificate store installation needed, Custom SSL configurations → GLIDE secure defaults
-
-**High Complexity**: No GLIDE equivalent, Architectural differences (async vs blocking I/O), Requires application redesign
-
-### Overall Migration Success Rate
-
-**Including SSL/TLS Internal Fields:**
-- **Total analyzable fields**: 33 (12 main + 21 SSL internal)
-- **Successfully mapped**: 9/33
-- **Partially mapped with migration**: 11/33
-- **Not mappable**: 13/33
 
 ### Key Migration Insights
 
