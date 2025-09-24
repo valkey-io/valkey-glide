@@ -99,37 +99,36 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
-            - name: Debug Environment and Secrets
+            - name: Debug Repository and Context
               shell: bash
               run: |
-                  echo "=== Environment Debug ==="
-                  echo "GitHub environment: ${{ github.environment }}"
-                  echo "Runner environment: $GITHUB_ENV"
-                  echo "Job environment: AWS_ACTIONS"
+                  echo "=== Repository Context ==="
+                  echo "Current repository: ${{ github.repository }}"
+                  echo "Repository owner: ${{ github.repository_owner }}"
+                  echo "Event name: ${{ github.event_name }}"
+                  echo "Ref: ${{ github.ref }}"
+                  echo "Actor: ${{ github.actor }}"
 
-                  echo "=== Secret Resolution Debug ==="
-                  echo "WINDOWS_RUNNER_AWS_REGION length: ${#REGION_VAL}"
-                  echo "WINDOWS_RUNNER_ROLE_TO_ASSUME length: ${#ROLE_VAL}"
-                  echo "WINDOWS_RUNNER_EC2_INSTANCE_ID length: ${#INSTANCE_VAL}"
+                  echo "=== Environment Context ==="
+                  echo "Environment URL: ${{ github.environment_url || 'not set' }}"
+                  echo "Environment name from context: ${{ github.environment || 'not set' }}"
 
-                  echo "WINDOWS_RUNNER_AWS_REGION is_empty: $([ -z "$REGION_VAL" ] && echo 'YES' || echo 'NO')"
-                  echo "WINDOWS_RUNNER_ROLE_TO_ASSUME is_empty: $([ -z "$ROLE_VAL" ] && echo 'YES' || echo 'NO')"
-                  echo "WINDOWS_RUNNER_EC2_INSTANCE_ID is_empty: $([ -z "$INSTANCE_VAL" ] && echo 'YES' || echo 'NO')"
+                  echo "=== Secret Access Test ==="
+                  echo "Testing secret access patterns:"
+                  # Test if we can access any secrets at all
+                  echo "GITHUB_TOKEN available: $([ -n "$GITHUB_TOKEN" ] && echo 'YES' || echo 'NO')"
 
-                  echo "=== Context Information ==="
-                  echo "secrets context available: ${{ toJSON(secrets) != '{}' }}"
-                  echo "github.repository: ${{ github.repository }}"
-                  echo "github.repository_owner: ${{ github.repository_owner }}"
-              env:
-                  REGION_VAL: ${{ secrets.WINDOWS_RUNNER_AWS_REGION }}
-                  ROLE_VAL: ${{ secrets.WINDOWS_RUNNER_ROLE_TO_ASSUME }}
-                  INSTANCE_VAL: ${{ secrets.WINDOWS_RUNNER_EC2_INSTANCE_ID }}
+                  # Test each secret individually
+                  echo "Region secret (direct): '${{ secrets.WINDOWS_RUNNER_AWS_REGION }}'"
+                  echo "Role secret (direct): '${{ secrets.WINDOWS_RUNNER_ROLE_TO_ASSUME }}'"
+                  echo "Instance secret (direct): '${{ secrets.WINDOWS_RUNNER_EC2_INSTANCE_ID }}'"
 
-            - uses: ./.github/workflows/start-self-hosted-runner-windows
+            - name: Test with hardcoded values (temporary)
+              uses: ./.github/workflows/start-self-hosted-runner-windows
               with:
-                  aws-region: ${{ secrets.WINDOWS_RUNNER_AWS_REGION }}
-                  role-to-assume: ${{ secrets.WINDOWS_RUNNER_ROLE_TO_ASSUME }}
-                  ec2-instance-id: ${{ secrets.WINDOWS_RUNNER_EC2_INSTANCE_ID }}
+                  aws-region: us-east-1
+                  role-to-assume: arn:aws:iam::507286591552:role/github-actions-role
+                  ec2-instance-id: i-0347417be61113708
 
     test-java:
         name: Java Tests - ${{ matrix.java }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
