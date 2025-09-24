@@ -1,0 +1,163 @@
+version: '3.8'
+
+services:
+  # Standalone Valkey server (template - will be dynamically created)
+  valkey-standalone:
+    build:
+      context: ./valkey-test
+      args:
+        VALKEY_VERSION: "${VALKEY_VERSION:-8.0}"
+    ports:
+      - "${VALKEY_PORT:-6379}:${VALKEY_PORT:-6379}"
+    environment:
+      - VALKEY_PORT=${VALKEY_PORT:-6379}
+      - VALKEY_TLS=${TLS:-false}
+    volumes:
+      - ${TLS_FOLDER:-./tls}:/tls:ro
+    networks:
+      - valkey-test-${NETWORK_SUFFIX:-default}
+    profiles:
+      - standalone
+
+  # Valkey cluster - 6 nodes (3 masters, 3 replicas)
+  valkey-cluster-1:
+    build:
+      context: ./valkey-test
+      args:
+        VALKEY_VERSION: "${VALKEY_VERSION:-8.0}"
+    container_name: valkey-cluster-1
+    ports:
+      - "7000:7000"
+      - "17000:17000"
+    environment:
+      - CLUSTER_MODE=true
+      - VALKEY_PORT=7000
+      - VALKEY_TLS=${TLS:-false}
+    volumes:
+      - ${TLS_FOLDER:-./tls}:/tls:ro
+    profiles:
+      - cluster
+
+  valkey-cluster-2:
+    build:
+      context: ./valkey-test
+      args:
+        VALKEY_VERSION: "${VALKEY_VERSION:-8.0}"
+    container_name: valkey-cluster-2
+    ports:
+      - "7001:7001"
+      - "17001:17001"
+    environment:
+      - CLUSTER_MODE=true
+      - VALKEY_PORT=7001
+      - VALKEY_TLS=${TLS:-false}
+    volumes:
+      - ${TLS_FOLDER:-./tls}:/tls:ro
+    profiles:
+      - cluster
+
+  valkey-cluster-3:
+    build:
+      context: ./valkey-test
+      args:
+        VALKEY_VERSION: "${VALKEY_VERSION:-8.0}"
+    container_name: valkey-cluster-3
+    ports:
+      - "7002:7002"
+      - "17002:17002"
+    environment:
+      - CLUSTER_MODE=true
+      - VALKEY_PORT=7002
+      - VALKEY_TLS=${TLS:-false}
+    volumes:
+      - ${TLS_FOLDER:-./tls}:/tls:ro
+    profiles:
+      - cluster
+
+  valkey-cluster-4:
+    build:
+      context: ./valkey-test
+      args:
+        VALKEY_VERSION: "${VALKEY_VERSION:-8.0}"
+    container_name: valkey-cluster-4
+    ports:
+      - "7003:7003"
+      - "17003:17003"
+    environment:
+      - CLUSTER_MODE=true
+      - VALKEY_PORT=7003
+      - VALKEY_TLS=${TLS:-false}
+    volumes:
+      - ${TLS_FOLDER:-./tls}:/tls:ro
+    profiles:
+      - cluster
+
+  valkey-cluster-5:
+    build:
+      context: ./valkey-test
+      args:
+        VALKEY_VERSION: "${VALKEY_VERSION:-8.0}"
+    container_name: valkey-cluster-5
+    ports:
+      - "7004:7004"
+      - "17004:17004"
+    environment:
+      - CLUSTER_MODE=true
+      - VALKEY_PORT=7004
+      - VALKEY_TLS=${TLS:-false}
+    volumes:
+      - ${TLS_FOLDER:-./tls}:/tls:ro
+    profiles:
+      - cluster
+
+  valkey-cluster-6:
+    build:
+      context: ./valkey-test
+      args:
+        VALKEY_VERSION: "${VALKEY_VERSION:-8.0}"
+    container_name: valkey-cluster-6
+    ports:
+      - "7005:7005"
+      - "17005:17005"
+    environment:
+      - CLUSTER_MODE=true
+      - VALKEY_PORT=7005
+      - VALKEY_TLS=${TLS:-false}
+    volumes:
+      - ${TLS_FOLDER:-./tls}:/tls:ro
+    profiles:
+      - cluster
+
+  # Cluster initialization service
+  cluster-init:
+    build:
+      context: ./valkey-test
+      args:
+        VALKEY_VERSION: "${VALKEY_VERSION:-8.0}"
+    container_name: valkey-cluster-init
+    depends_on:
+      - valkey-cluster-1
+      - valkey-cluster-2
+      - valkey-cluster-3
+      - valkey-cluster-4
+      - valkey-cluster-5
+      - valkey-cluster-6
+    command: >
+      sh -c "
+        sleep 10 &&
+        valkey-cli --cluster create
+        valkey-cluster-1:7000
+        valkey-cluster-2:7001
+        valkey-cluster-3:7002
+        valkey-cluster-4:7003
+        valkey-cluster-5:7004
+        valkey-cluster-6:7005
+        --cluster-replicas 1
+        --cluster-yes
+      "
+    profiles:
+      - cluster
+
+networks:
+  default:
+    name: valkey-test-network

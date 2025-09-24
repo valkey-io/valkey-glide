@@ -8,6 +8,23 @@ repositories {
     mavenLocal()
 }
 
+// Platform detection
+def isWindows = System.getProperty("os.name").toLowerCase().contains("windows") ||
+                System.getenv("GLIDE_WINDOWS_BUILD") == "true"
+def pythonCmd = isWindows ? "python" : "python3"
+
+// Helper function to build cluster manager command
+def buildClusterManagerCommand(List<String> baseArgs) {
+    def localIsWindows = System.getProperty("os.name").toLowerCase().contains("windows") ||
+                         System.getenv("GLIDE_WINDOWS_BUILD") == "true"
+    def localPythonCmd = localIsWindows ? "python" : "python3"
+    def args = [localPythonCmd, 'cluster_manager.py'] + baseArgs
+    if (localIsWindows) {
+        args.add('--use-docker')
+    }
+    return args
+}
+
 tasks.withType(JavaCompile) {
     options.encoding = 'UTF-8'
 }
@@ -57,7 +74,7 @@ ext {
 
 tasks.register('stopAllAfterTests', Exec) {
     workingDir "${project.rootDir}/../utils"
-    commandLine 'python3', 'cluster_manager.py', 'stop', '--prefix', 'cluster', '--keep-folder'
+    commandLine buildClusterManagerCommand(['stop', '--prefix', 'cluster', '--keep-folder'])
 }
 
 // We need to call for stop before and after the test, but gradle doesn't support executing a task
@@ -65,7 +82,7 @@ tasks.register('stopAllAfterTests', Exec) {
 // We need to call for stop in case if previous test run was interrupted/crashed and didn't stop.
 tasks.register('stopAllBeforeTests', Exec) {
     workingDir "${project.rootDir}/../utils"
-    commandLine 'python3', 'cluster_manager.py', 'stop', '--prefix', 'cluster'
+    commandLine buildClusterManagerCommand(['stop', '--prefix', 'cluster'])
     ignoreExitValue true // ignore fail if servers are stopped before
 }
 
@@ -80,7 +97,7 @@ tasks.register('startCluster') {
             new ByteArrayOutputStream().withStream { os ->
                 exec {
                     workingDir "${project.rootDir}/../utils"
-                    def args = ['python3', 'cluster_manager.py', 'start', '--cluster-mode']
+                    def args = buildClusterManagerCommand(['start', '--cluster-mode'])
                     if (System.getProperty("tls") == 'true') args.add(2, '--tls')
                     commandLine args
                     standardOutput = os
@@ -99,7 +116,7 @@ tasks.register('startClusterForAz') {
             new ByteArrayOutputStream().withStream { os ->
                 exec {
                     workingDir "${project.rootDir}/../utils"
-                    def args = ['python3', 'cluster_manager.py', 'start', '--cluster-mode', '-r', '4']
+                    def args = buildClusterManagerCommand(['start', '--cluster-mode', '-r', '4'])
                     if (System.getProperty("tls") == 'true') args.add(2, '--tls')
                     commandLine args
                     standardOutput = os
@@ -120,7 +137,7 @@ tasks.register('startStandalone') {
             new ByteArrayOutputStream().withStream { os ->
                 exec {
                     workingDir "${project.rootDir}/../utils"
-                    def args = ['python3', 'cluster_manager.py', 'start', '-r', '0']
+                    def args = buildClusterManagerCommand(['start', '-r', '0'])
                     if (System.getProperty("tls") == 'true') args.add(2, '--tls')
                     commandLine args
                     standardOutput = os

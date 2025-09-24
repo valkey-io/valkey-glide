@@ -94,7 +94,7 @@ jobs:
     test-java:
         name: Java Tests - ${{ matrix.java }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
         needs: get-matrices
-        timeout-minutes: 35
+        timeout-minutes: ${{ matrix.host.OS == 'windows' && 60 || 35 }}
         strategy:
             fail-fast: false
             matrix:
@@ -120,12 +120,176 @@ jobs:
                   java-version: ${{ matrix.java }}
 
             - name: Install shared software dependencies
+              if: ${{ matrix.host.OS != 'windows' }}
               uses: ./.github/workflows/install-shared-dependencies
               with:
                   os: ${{ matrix.host.OS }}
                   target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
+
+            - name: Setup Windows environment
+              if: ${{ matrix.host.OS == 'windows' }}
+              shell: powershell
+              run: |
+                  Write-Host "=== Setting up Windows environment for Java build ===" -ForegroundColor Green
+
+                  # Enhanced error handling function
+                  function Test-Command {
+                      param([string]$Command, [string]$Name)
+                      try {
+                          Write-Host "Checking $Name..." -ForegroundColor Yellow
+                          Invoke-Expression $Command | Out-Host
+                          Write-Host "$Name is available and working" -ForegroundColor Green
+                          return $true
+                      } catch {
+                          Write-Error "$Name check failed: $($_.Exception.Message)"
+                          return $false
+                      }
+                  }
+
+                  # System information
+                  Write-Host "=== System Information ===" -ForegroundColor Cyan
+                  Write-Host "OS: $env:OS"
+                  Write-Host "Architecture: $env:PROCESSOR_ARCHITECTURE"
+                  Write-Host "PowerShell Version: $($PSVersionTable.PSVersion)"
+                  Write-Host "Current Path: $PWD"
+
+                  # Docker verification with enhanced startup logic
+                  Write-Host "`n=== Docker Verification ===" -ForegroundColor Cyan
+                  $dockerSuccess = $false
+                  try {
+                      # First check if Docker service is running
+                      $dockerService = Get-Service -Name "*docker*" -ErrorAction SilentlyContinue | Where-Object {$_.Status -eq "Running"}
+                      if (-not $dockerService) {
+                          Write-Host "Starting Docker service..." -ForegroundColor Yellow
+                          Start-Service -Name "Docker Desktop Service" -ErrorAction SilentlyContinue
+                          Start-Sleep -Seconds 10
+                      }
+
+                      # Check Docker daemon availability with retry logic
+                      $retryCount = 0
+                      $maxRetries = 5
+                      while ($retryCount -lt $maxRetries -and -not $dockerSuccess) {
+                          try {
+                              Write-Host "Attempting Docker connection (attempt $($retryCount + 1)/$maxRetries)..." -ForegroundColor Yellow
+                              docker version | Out-Host
+                              docker info | Select-String "Server Version", "Operating System", "Total Memory" | Out-Host
+                              $dockerSuccess = $true
+                              Write-Host "Docker is available and running" -ForegroundColor Green
+                          } catch {
+                              $retryCount++
+                              if ($retryCount -lt $maxRetries) {
+                                  Write-Host "Docker not ready, waiting 15 seconds..." -ForegroundColor Yellow
+                                  Start-Sleep -Seconds 15
+                              }
+                          }
+                      }
+
+                      if (-not $dockerSuccess) {
+                          throw "Docker failed to start after $maxRetries attempts"
+                      }
+
+                      # Test Docker functionality
+                      Write-Host "Testing Docker functionality..." -ForegroundColor Yellow
+                      docker run --rm hello-world | Out-Host
+                      Write-Host "Docker functionality test completed" -ForegroundColor Green
+
+                  } catch {
+                      Write-Error "Docker setup failed: $($_.Exception.Message)"
+                      Write-Host "Docker troubleshooting information:" -ForegroundColor Red
+                      Get-Service -Name "*docker*" -ErrorAction SilentlyContinue | Format-Table -AutoSize | Out-Host
+                      exit 1
+                  }
+
+                  # Rust toolchain verification with detailed info
+                  Write-Host "`n=== Rust Toolchain Verification ===" -ForegroundColor Cyan
+                  $rustSuccess = Test-Command "rustc --version" "Rust compiler"
+                  $cargoSuccess = Test-Command "cargo --version" "Cargo"
+
+                  if ($rustSuccess -and $cargoSuccess) {
+                      # Get detailed Rust information
+                      Write-Host "Rust toolchain details:" -ForegroundColor Yellow
+                      rustup show | Out-Host
+                      rustup target list --installed | Out-Host
+
+                      # Verify MSVC target
+                      $msvcTarget = "x86_64-pc-windows-msvc"
+                      if (rustup target list --installed | Select-String $msvcTarget) {
+                          Write-Host "MSVC target ($msvcTarget) is installed" -ForegroundColor Green
+                      } else {
+                          Write-Host "Installing MSVC target ($msvcTarget)..." -ForegroundColor Yellow
+                          rustup target add $msvcTarget
+                      }
+                  } else {
+                      Write-Error "Rust toolchain verification failed"
+                      exit 1
+                  }
+
+                  # Visual Studio Build Tools environment setup
+                  Write-Host "`n=== Visual Studio Build Tools Setup ===" -ForegroundColor Cyan
+                  try {
+                      # Look for VS Build Tools installation
+                      $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+                      if (Test-Path $vswhere) {
+                          Write-Host "Detecting Visual Studio installations..." -ForegroundColor Yellow
+                          & $vswhere -products * -format json | Out-Host
+
+                          # Find and setup MSVC environment
+                          $vsInstallations = & $vswhere -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -format json | ConvertFrom-Json
+                          if ($vsInstallations -and $vsInstallations.Count -gt 0) {
+                              $vsInstallPath = $vsInstallations[0].installationPath
+                              $vcvarsPath = Join-Path $vsInstallPath "VC\Auxiliary\Build\vcvars64.bat"
+
+                              if (Test-Path $vcvarsPath) {
+                                  Write-Host "Setting up MSVC environment from: $vcvarsPath" -ForegroundColor Green
+                                  echo "VCVARS_PATH=$vcvarsPath" >> $env:GITHUB_ENV
+
+                                  # Set MSVC environment variables
+                                  cmd /c "`"$vcvarsPath`" && set" | ForEach-Object {
+                                      if ($_ -match "^([^=]+)=(.*)$") {
+                                          $name = $matches[1]
+                                          $value = $matches[2]
+                                          if ($name -match "^(LIB|LIBPATH|INCLUDE|PATH|VCINSTALLDIR|WindowsSdkDir)") {
+                                              echo "$name=$value" >> $env:GITHUB_ENV
+                                              Write-Host "Set environment variable: $name" -ForegroundColor Gray
+                                          }
+                                      }
+                                  }
+                              } else {
+                                  Write-Warning "vcvars64.bat not found at expected location: $vcvarsPath"
+                              }
+                          } else {
+                              Write-Warning "No Visual Studio installation with C++ build tools found"
+                          }
+                      } else {
+                          Write-Warning "Visual Studio Installer not found at: $vswhere"
+                      }
+                  } catch {
+                      Write-Warning "Visual Studio Build Tools setup failed: $($_.Exception.Message)"
+                  }
+
+                  # Windows-specific environment variables for Gradle
+                  Write-Host "`n=== Windows Environment Configuration ===" -ForegroundColor Cyan
+                  echo "GLIDE_WINDOWS_BUILD=true" >> $env:GITHUB_ENV
+                  echo "GRADLE_OPTS=-Dorg.gradle.daemon=false -Dorg.gradle.parallel=true -Dorg.gradle.workers.max=4" >> $env:GITHUB_ENV
+                  echo "JAVA_TOOL_OPTIONS=-Dfile.encoding=UTF-8" >> $env:GITHUB_ENV
+                  echo "RUST_BACKTRACE=1" >> $env:GITHUB_ENV
+
+                  # Windows path handling
+                  $currentPath = $env:PATH
+                  $gradlePath = "$PWD\java"
+                  $cargoPath = "$env:USERPROFILE\.cargo\bin"
+                  echo "PATH=$cargoPath;$gradlePath;$currentPath" >> $env:GITHUB_ENV
+
+                  Write-Host "Environment variables set:" -ForegroundColor Yellow
+                  Write-Host "- GLIDE_WINDOWS_BUILD=true"
+                  Write-Host "- GRADLE_OPTS configured for Windows"
+                  Write-Host "- JAVA_TOOL_OPTIONS configured for UTF-8"
+                  Write-Host "- RUST_BACKTRACE enabled"
+                  Write-Host "- PATH updated with Cargo and Gradle"
+
+                  Write-Host "`n=== Windows Setup Complete ===" -ForegroundColor Green
 
             - name: Install protoc (protobuf)
               uses: arduino/setup-protoc@v3
@@ -138,28 +302,100 @@ jobs:
                   path: |
                       java/target
                       glide-core/src/generated
-                  key: ${{ matrix.host.TARGET }}-java
+                  key: ${{ matrix.host.TARGET }}-java-${{ hashFiles('java/**/*.gradle*', 'glide-core/Cargo.toml') }}
                   restore-keys: |
+                      ${{ matrix.host.TARGET }}-java
                       ${{ matrix.host.TARGET }}-glide-core
                       ${{ matrix.host.TARGET }}
 
-            - name: Cache Gradle dependencies
+            # Windows-specific Gradle cache with enhanced paths
+            - name: Cache Gradle dependencies (Windows)
+              if: ${{ matrix.host.OS == 'windows' }}
+              uses: actions/cache@v4
+              with:
+                  path: |
+                      ~\.gradle\caches
+                      ~\.gradle\wrapper
+                      ~\.gradle\native
+                      java\.gradle
+                      java\build\tmp\.cache
+                  key: ${{ runner.os }}-gradle-windows-${{ hashFiles('java/**/*.gradle*', 'java/**/gradle-wrapper.properties') }}
+                  restore-keys: |
+                      ${{ runner.os }}-gradle-windows-
+                      ${{ runner.os }}-gradle-
+
+            # Unix-specific Gradle cache
+            - name: Cache Gradle dependencies (Unix)
+              if: ${{ matrix.host.OS != 'windows' }}
               uses: actions/cache@v4
               with:
                   path: |
                       ~/.gradle/caches
                       ~/.gradle/wrapper
-                  key: ${{ runner.os }}-gradle-${{ hashFiles('java/**/*.gradle*', 'java/**/gradle-wrapper.properties') }}
+                      ~/.gradle/native
+                      java/.gradle
+                      java/build/tmp/.cache
+                  key: ${{ runner.os }}-gradle-unix-${{ hashFiles('java/**/*.gradle*', 'java/**/gradle-wrapper.properties') }}
                   restore-keys: |
+                      ${{ runner.os }}-gradle-unix-
                       ${{ runner.os }}-gradle-
+
+            # Windows-specific Rust build cache
+            - name: Cache Rust build cache (Windows)
+              if: ${{ matrix.host.OS == 'windows' }}
+              uses: actions/cache@v4
+              with:
+                  path: |
+                      ~\.cargo\registry
+                      ~\.cargo\git
+                      glide-core\target
+                      java\target
+                  key: ${{ runner.os }}-rust-windows-${{ matrix.host.TARGET }}-${{ hashFiles('glide-core/Cargo.lock', 'java/Cargo.toml') }}
+                  restore-keys: |
+                      ${{ runner.os }}-rust-windows-${{ matrix.host.TARGET }}-
+                      ${{ runner.os }}-rust-windows-
+                      ${{ runner.os }}-rust-
+
+            # Unix-specific Rust build cache
+            - name: Cache Rust build cache (Unix)
+              if: ${{ matrix.host.OS != 'windows' }}
+              uses: actions/cache@v4
+              with:
+                  path: |
+                      ~/.cargo/registry
+                      ~/.cargo/git
+                      glide-core/target
+                      java/target
+                  key: ${{ runner.os }}-rust-unix-${{ matrix.host.TARGET }}-${{ hashFiles('glide-core/Cargo.lock', 'java/Cargo.toml') }}
+                  restore-keys: |
+                      ${{ runner.os }}-rust-unix-${{ matrix.host.TARGET }}-
+                      ${{ runner.os }}-rust-unix-
+                      ${{ runner.os }}-rust-
+
+            # Windows Docker cache (if layers can be cached)
+            - name: Cache Docker layers (Windows)
+              if: ${{ matrix.host.OS == 'windows' }}
+              uses: actions/cache@v4
+              with:
+                  path: |
+                      ~\AppData\Local\Docker
+                      C:\ProgramData\docker\windowsfilter
+                  key: ${{ runner.os }}-docker-windows-${{ hashFiles('utils/cluster_manager.py') }}
+                  restore-keys: |
+                      ${{ runner.os }}-docker-windows-
+              continue-on-error: true
 
             - name: Build java client
               working-directory: java
-              run: ./gradlew --build-cache --continue build -x javadoc
+              shell: ${{ matrix.host.OS == 'windows' && 'powershell' || 'bash' }}
+              run: |
+                  ${{ matrix.host.OS == 'windows' && 'if ($env:VCVARS_PATH) { cmd /c "`"$env:VCVARS_PATH`" && .\gradlew.bat --build-cache --continue build -x javadoc" } else { .\gradlew.bat --build-cache --continue build -x javadoc }' || './gradlew --build-cache --continue build -x javadoc' }}
 
             - name: Ensure no skipped files by linter
               working-directory: java
-              run: ./gradlew --build-cache spotlessDiagnose | grep 'All formatters are well behaved for all files'
+              shell: ${{ matrix.host.OS == 'windows' && 'powershell' || 'bash' }}
+              run: |
+                  ${{ matrix.host.OS == 'windows' && '.\gradlew.bat --build-cache spotlessDiagnose | Select-String "All formatters are well behaved for all files"' || './gradlew --build-cache spotlessDiagnose | grep "All formatters are well behaved for all files"' }}
 
             - uses: ./.github/workflows/test-benchmark
               if: ${{ matrix.engine.version == '8.0' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.java == '17' }}
@@ -182,7 +418,7 @@ jobs:
     test-pubsub:
         name: Java PubSubTests - ${{ matrix.java }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
         needs: get-matrices
-        timeout-minutes: 35
+        timeout-minutes: ${{ matrix.host.OS == 'windows' && 60 || 35 }}
         strategy:
             fail-fast: false
             matrix:
@@ -206,12 +442,97 @@ jobs:
                   java-version: ${{ matrix.java }}
 
             - name: Install shared software dependencies
+              if: ${{ matrix.host.OS != 'windows' }}
               uses: ./.github/workflows/install-shared-dependencies
               with:
                   os: ${{ matrix.host.OS }}
                   target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
+
+            - name: Setup Windows environment (PubSub)
+              if: ${{ matrix.host.OS == 'windows' }}
+              shell: powershell
+              run: |
+                  Write-Host "=== Setting up Windows environment for Java PubSub tests ===" -ForegroundColor Green
+
+                  # Enhanced error handling function
+                  function Test-Command {
+                      param([string]$Command, [string]$Name)
+                      try {
+                          Write-Host "Checking $Name..." -ForegroundColor Yellow
+                          Invoke-Expression $Command | Out-Host
+                          Write-Host "$Name is available and working" -ForegroundColor Green
+                          return $true
+                      } catch {
+                          Write-Error "$Name check failed: $($_.Exception.Message)"
+                          return $false
+                      }
+                  }
+
+                  # System information
+                  Write-Host "=== System Information ===" -ForegroundColor Cyan
+                  Write-Host "OS: $env:OS"
+                  Write-Host "Architecture: $env:PROCESSOR_ARCHITECTURE"
+                  Write-Host "PowerShell Version: $($PSVersionTable.PSVersion)"
+                  Write-Host "Current Path: $PWD"
+
+                  # Docker verification with enhanced startup logic
+                  Write-Host "`n=== Docker Verification ===" -ForegroundColor Cyan
+                  $dockerSuccess = $false
+                  try {
+                      # Check Docker daemon availability with retry logic
+                      $retryCount = 0
+                      $maxRetries = 3
+                      while ($retryCount -lt $maxRetries -and -not $dockerSuccess) {
+                          try {
+                              Write-Host "Attempting Docker connection (attempt $($retryCount + 1)/$maxRetries)..." -ForegroundColor Yellow
+                              docker version | Out-Host
+                              docker info | Select-String "Server Version", "Operating System" | Out-Host
+                              $dockerSuccess = $true
+                              Write-Host "Docker is available and running" -ForegroundColor Green
+                          } catch {
+                              $retryCount++
+                              if ($retryCount -lt $maxRetries) {
+                                  Write-Host "Docker not ready, waiting 10 seconds..." -ForegroundColor Yellow
+                                  Start-Sleep -Seconds 10
+                              }
+                          }
+                      }
+
+                      if (-not $dockerSuccess) {
+                          throw "Docker failed to start after $maxRetries attempts"
+                      }
+
+                  } catch {
+                      Write-Error "Docker setup failed: $($_.Exception.Message)"
+                      exit 1
+                  }
+
+                  # Rust toolchain verification
+                  Write-Host "`n=== Rust Toolchain Verification ===" -ForegroundColor Cyan
+                  $rustSuccess = Test-Command "rustc --version" "Rust compiler"
+                  $cargoSuccess = Test-Command "cargo --version" "Cargo"
+
+                  if (-not ($rustSuccess -and $cargoSuccess)) {
+                      Write-Error "Rust toolchain verification failed"
+                      exit 1
+                  }
+
+                  # Windows-specific environment variables for Gradle
+                  Write-Host "`n=== Windows Environment Configuration ===" -ForegroundColor Cyan
+                  echo "GLIDE_WINDOWS_BUILD=true" >> $env:GITHUB_ENV
+                  echo "GRADLE_OPTS=-Dorg.gradle.daemon=false -Dorg.gradle.parallel=true -Dorg.gradle.workers.max=4" >> $env:GITHUB_ENV
+                  echo "JAVA_TOOL_OPTIONS=-Dfile.encoding=UTF-8" >> $env:GITHUB_ENV
+                  echo "RUST_BACKTRACE=1" >> $env:GITHUB_ENV
+
+                  # Windows path handling
+                  $currentPath = $env:PATH
+                  $gradlePath = "$PWD\java"
+                  $cargoPath = "$env:USERPROFILE\.cargo\bin"
+                  echo "PATH=$cargoPath;$gradlePath;$currentPath" >> $env:GITHUB_ENV
+
+                  Write-Host "`n=== Windows PubSub Setup Complete ===" -ForegroundColor Green
 
             - name: Install protoc (protobuf)
               uses: arduino/setup-protoc@v3
@@ -224,24 +545,52 @@ jobs:
                   path: |
                       java/target
                       glide-core/src/generated
-                  key: ${{ matrix.host.TARGET }}-java
+                  key: ${{ matrix.host.TARGET }}-java-pubsub-${{ hashFiles('java/**/*.gradle*', 'glide-core/Cargo.toml') }}
                   restore-keys: |
+                      ${{ matrix.host.TARGET }}-java-pubsub
+                      ${{ matrix.host.TARGET }}-java
                       ${{ matrix.host.TARGET }}-glide-core
                       ${{ matrix.host.TARGET }}
 
-            - name: Cache Gradle dependencies
+            # Windows-specific Gradle cache for PubSub tests
+            - name: Cache Gradle dependencies (Windows PubSub)
+              if: ${{ matrix.host.OS == 'windows' }}
+              uses: actions/cache@v4
+              with:
+                  path: |
+                      ~\.gradle\caches
+                      ~\.gradle\wrapper
+                      ~\.gradle\native
+                      java\.gradle
+                      java\build\tmp\.cache
+                  key: ${{ runner.os }}-gradle-windows-pubsub-${{ hashFiles('java/**/*.gradle*', 'java/**/gradle-wrapper.properties') }}
+                  restore-keys: |
+                      ${{ runner.os }}-gradle-windows-pubsub-
+                      ${{ runner.os }}-gradle-windows-
+                      ${{ runner.os }}-gradle-
+
+            # Unix-specific Gradle cache for PubSub tests
+            - name: Cache Gradle dependencies (Unix PubSub)
+              if: ${{ matrix.host.OS != 'windows' }}
               uses: actions/cache@v4
               with:
                   path: |
                       ~/.gradle/caches
                       ~/.gradle/wrapper
-                  key: ${{ runner.os }}-gradle-${{ hashFiles('java/**/*.gradle*', 'java/**/gradle-wrapper.properties') }}
+                      ~/.gradle/native
+                      java/.gradle
+                      java/build/tmp/.cache
+                  key: ${{ runner.os }}-gradle-unix-pubsub-${{ hashFiles('java/**/*.gradle*', 'java/**/gradle-wrapper.properties') }}
                   restore-keys: |
+                      ${{ runner.os }}-gradle-unix-pubsub-
+                      ${{ runner.os }}-gradle-unix-
                       ${{ runner.os }}-gradle-
 
             - name: Test pubsub
               working-directory: java
-              run: ./gradlew --build-cache :integTest:pubsubTest
+              shell: ${{ matrix.host.OS == 'windows' && 'powershell' || 'bash' }}
+              run: |
+                  ${{ matrix.host.OS == 'windows' && '.\gradlew.bat --build-cache :integTest:pubsubTest' || './gradlew --build-cache :integTest:pubsubTest' }}
 
             - name: Upload test & spotbugs reports
               if: always()
