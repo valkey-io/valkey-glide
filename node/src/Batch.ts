@@ -567,6 +567,8 @@ export class BaseBatch<T extends BaseBatch<T>> {
     /**
      * Move `key` from the currently selected database to the database specified by `dbIndex`.
      *
+     * @remarks Move is available for cluster mode since Valkey 9.0.0 and above.
+     *
      * @see {@link https://valkey.io/commands/move/|valkey.io} for details.
      *
      * @param key - The key to move.
