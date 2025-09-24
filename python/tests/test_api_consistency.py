@@ -70,6 +70,12 @@ EXCLUDED_TESTS = {
         "test_statistics",
         "test_select",
         "test_UDS_socket_connection_failure",
+        "test_client_socket_is_removed_on_close",
+        "test_repeated_clients_do_not_leave_stale_sockets",
+        "test_client_survives_tmp_socket_cleanup",
+        "test_closing_one_client_does_not_break_other",
+        "ping_loop",
+        "cleanup_loop",
     ],
     "sync_only": ["test_sync_fork"],
 }
