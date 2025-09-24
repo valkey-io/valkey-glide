@@ -93,6 +93,7 @@ jobs:
 
     start-windows-runner:
         runs-on: ubuntu-latest
+        environment: AWS_ACTIONS
         needs: get-matrices
         if: contains(toJson(fromJson(needs.get-matrices.outputs.host-matrix-output).*.OS), 'windows')
         steps:
