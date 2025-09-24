@@ -42,7 +42,9 @@ public class PerformanceTestRunner {
                     break;
                 case "all":
                     tests.add(PerformanceTest.createJedisTest(config));
+                    // Skip JedisPooled for compatibility layer due to threading issues
                     if (!config.isClusterMode()) {
+                        System.out.println("Note: JedisPooled may have issues with GLIDE compatibility layer");
                         tests.add(PerformanceTest.createJedisPooledTest(config));
                     }
                     tests.add(PerformanceTest.createUnifiedJedisTest(config));
