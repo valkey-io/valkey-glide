@@ -14,18 +14,6 @@ inputs:
 runs:
     using: "composite"
     steps:
-        - name: Debug inputs
-          shell: bash
-          run: |
-              echo "AWS Region input: '${{ inputs.aws-region }}'"
-              echo "Role to assume input: '${{ inputs.role-to-assume }}'"
-              echo "EC2 Instance ID input: '${{ inputs.ec2-instance-id }}'"
-              echo "Input lengths - Region: ${#AWS_REGION}, Role: ${#ROLE}, Instance: ${#INSTANCE}"
-          env:
-              AWS_REGION: ${{ inputs.aws-region }}
-              ROLE: ${{ inputs.role-to-assume }}
-              INSTANCE: ${{ inputs.ec2-instance-id }}
-
         - name: Configure AWS Credentials
           uses: aws-actions/configure-aws-credentials@v4
           with:
