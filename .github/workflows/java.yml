@@ -161,15 +161,29 @@ jobs:
                   restore-keys: |
                       ${{ runner.os }}-gradle-
 
-            - name: Build java client
+            - name: Build java client (Windows)
+              if: matrix.host.OS == 'windows'
               working-directory: java
-              shell: ${{ matrix.host.OS == 'windows' && 'powershell' || 'bash' }}
-              run: ${{ matrix.host.OS == 'windows' && '.\gradlew.bat --build-cache --continue build -x javadoc' || './gradlew --build-cache --continue build -x javadoc' }}
+              shell: powershell
+              run: .\gradlew.bat --build-cache --continue build -x javadoc
 
-            - name: Ensure no skipped files by linter
+            - name: Build java client (Unix)
+              if: matrix.host.OS != 'windows'
               working-directory: java
-              shell: ${{ matrix.host.OS == 'windows' && 'powershell' || 'bash' }}
-              run: ${{ matrix.host.OS == 'windows' && '.\gradlew.bat --build-cache spotlessDiagnose | Select-String "All formatters are well behaved for all files"' || './gradlew --build-cache spotlessDiagnose | grep "All formatters are well behaved for all files"' }}
+              shell: bash
+              run: ./gradlew --build-cache --continue build -x javadoc
+
+            - name: Ensure no skipped files by linter (Windows)
+              if: matrix.host.OS == 'windows'
+              working-directory: java
+              shell: powershell
+              run: .\gradlew.bat --build-cache spotlessDiagnose | Select-String "All formatters are well behaved for all files"
+
+            - name: Ensure no skipped files by linter (Unix)
+              if: matrix.host.OS != 'windows'
+              working-directory: java
+              shell: bash
+              run: ./gradlew --build-cache spotlessDiagnose | grep "All formatters are well behaved for all files"
 
             - uses: ./.github/workflows/test-benchmark
               if: ${{ matrix.engine.version == '8.0' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.java == '17' }}
@@ -257,10 +271,17 @@ jobs:
                   restore-keys: |
                       ${{ runner.os }}-gradle-
 
-            - name: Test pubsub
+            - name: Test pubsub (Windows)
+              if: matrix.host.OS == 'windows'
               working-directory: java
-              shell: ${{ matrix.host.OS == 'windows' && 'powershell' || 'bash' }}
-              run: ${{ matrix.host.OS == 'windows' && '.\gradlew.bat --build-cache :integTest:pubsubTest' || './gradlew --build-cache :integTest:pubsubTest' }}
+              shell: powershell
+              run: .\gradlew.bat --build-cache :integTest:pubsubTest
+
+            - name: Test pubsub (Unix)
+              if: matrix.host.OS != 'windows'
+              working-directory: java
+              shell: bash
+              run: ./gradlew --build-cache :integTest:pubsubTest
 
             - name: Upload test & spotbugs reports
               if: always()
