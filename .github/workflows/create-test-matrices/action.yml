@@ -78,8 +78,8 @@ runs:
               echo 'Select runners (VMs) to run tests on'
 
               if [[ "$EVENT_NAME" == "pull_request" || "$EVENT_NAME" == "push" || "$RUN_FULL_MATRIX" == "false" ]]; then
-                echo 'Getting "always run" runners'
-                BASE_MATRIX=$(jq -c '[.[] | select(.run == "always")]' < .github/json_matrices/build-matrix.json)
+                echo 'Getting "always run" runners for specific language'
+                BASE_MATRIX=$(jq --arg lang "$LANGUAGE_NAME" -c '[.[] | select(.run == "always" and .languages? and any(.languages[] == $lang; .) and '"$CONDITION"')]' < .github/json_matrices/build-matrix.json)
               else
                 echo 'Getting full matrix for language excluding macOS'
                 BASE_MATRIX=$(jq --arg lang "$LANGUAGE_NAME" -c '[.[] | select(.languages? and any(.languages[] == $lang; .) and '"$CONDITION"' and .TARGET != "aarch64-apple-darwin")]' < .github/json_matrices/build-matrix.json)
