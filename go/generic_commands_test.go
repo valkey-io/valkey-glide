@@ -40,6 +40,22 @@ func ExampleClient_Move() {
 	// Output: true
 }
 
+func ExampleClusterClient_Move() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
+	key := uuid.New().String()
+	_, err := client.Set(context.Background(), key, "hello")
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	result, err := client.Move(context.Background(), key, 2)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+
+	// Output: true
+}
+
 func ExampleClient_Scan() {
 	var client *Client = getExampleClient() // example helper function
 	client.CustomCommand(context.Background(), []string{"FLUSHALL"})
