@@ -91,9 +91,21 @@ jobs:
                   run-full-matrix: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
                   run-with-macos: ${{ (github.event.inputs.run-with-macos) }}
 
+    start-windows-runner:
+        runs-on: ubuntu-latest
+        needs: get-matrices
+        if: contains(toJson(fromJson(needs.get-matrices.outputs.host-matrix-output).*.OS), 'windows')
+        steps:
+            - uses: ./.github/workflows/start-self-hosted-runner-windows
+              with:
+                  aws-region: ${{ secrets.WINDOWS_RUNNER_AWS_REGION }}
+                  role-to-assume: ${{ secrets.WINDOWS_RUNNER_ROLE_TO_ASSUME }}
+                  ec2-instance-id: ${{ secrets.WINDOWS_RUNNER_EC2_INSTANCE_ID }}
+
     test-java:
         name: Java Tests - ${{ matrix.java }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
-        needs: get-matrices
+        needs: [get-matrices, start-windows-runner]
+        if: always() && !cancelled() && needs.get-matrices.result == 'success'
         timeout-minutes: ${{ matrix.host.OS == 'windows' && 45 || 35 }}
         strategy:
             fail-fast: false
