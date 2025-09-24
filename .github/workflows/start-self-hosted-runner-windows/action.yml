@@ -14,6 +14,23 @@ inputs:
 runs:
     using: "composite"
     steps:
+        - name: Check inputs
+          shell: bash
+          run: |
+              if [ -z "${{ inputs.aws-region }}" ]; then
+                echo "ERROR: aws-region input is empty"
+                exit 1
+              fi
+              if [ -z "${{ inputs.role-to-assume }}" ]; then
+                echo "ERROR: role-to-assume input is empty"
+                exit 1
+              fi
+              if [ -z "${{ inputs.ec2-instance-id }}" ]; then
+                echo "ERROR: ec2-instance-id input is empty"
+                exit 1
+              fi
+              echo "All inputs provided successfully"
+
         - name: Configure AWS Credentials
           uses: aws-actions/configure-aws-credentials@v4
           with:
