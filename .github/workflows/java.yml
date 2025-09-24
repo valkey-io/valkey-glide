@@ -178,7 +178,8 @@ jobs:
             - name: Install protoc (protobuf)
               uses: arduino/setup-protoc@v3
               with:
-                  version: "29.1"
+                  version: "25.1"
+                  repo-token: ${{ secrets.GITHUB_TOKEN }}
                   repo-token: ${{ secrets.GITHUB_TOKEN }}
 
             - uses: actions/cache@v4
@@ -288,7 +289,8 @@ jobs:
             - name: Install protoc (protobuf)
               uses: arduino/setup-protoc@v3
               with:
-                  version: "29.1"
+                  version: "25.1"
+                  repo-token: ${{ secrets.GITHUB_TOKEN }}
                   repo-token: ${{ secrets.GITHUB_TOKEN }}
 
             - uses: actions/cache@v4
@@ -412,7 +414,8 @@ jobs:
             - name: Install protoc (protobuf)
               uses: arduino/setup-protoc@v3
               with:
-                  version: "29.1"
+                  version: "25.1"
+                  repo-token: ${{ secrets.GITHUB_TOKEN }}
                   repo-token: ${{ secrets.GITHUB_TOKEN }}
 
             # Ensure Rust is in PATH for container environments
@@ -506,7 +509,8 @@ jobs:
             - name: Install protoc (protobuf)
               uses: arduino/setup-protoc@v3
               with:
-                  version: "29.1"
+                  version: "25.1"
+                  repo-token: ${{ secrets.GITHUB_TOKEN }}
                   repo-token: ${{ secrets.GITHUB_TOKEN }}
 
             - uses: actions/cache@v4
