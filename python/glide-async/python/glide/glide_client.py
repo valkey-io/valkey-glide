@@ -316,7 +316,7 @@ class BaseClient(CoreCommands):
                     f"Failed to close UDS stream cleanly: {exc}",
                 )
             finally:
-                self._release_socket_listener()
+                await to_thread.run_sync(self._release_socket_listener)
 
     def _release_socket_listener(self) -> None:
         if self._socket_listener_released:
