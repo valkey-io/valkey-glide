@@ -1241,3 +1241,22 @@ func ExampleClusterClient_CopyWithOptions() {
 
 	// Output: someValue
 }
+
+func ExampleClusterClient_CopyWithOptions_dbDestination() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
+
+	client.Set(context.Background(), "{key}1", "someValue")
+
+	opts := options.NewCopyOptions().SetDBDestination(1)
+	client.CopyWithOptions(context.Background(), "{key}1", "{key}2", *opts)
+
+	client.CustomCommand(context.Background(), []string{"SELECT", "1"})
+	result, err := client.Get(context.Background(), "{key}2")
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+
+	fmt.Println(result.Value())
+
+	// Output: someValue
+}
