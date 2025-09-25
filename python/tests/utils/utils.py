@@ -604,6 +604,12 @@ def create_sync_client_config(
     protocol: ProtocolVersion = ProtocolVersion.RESP3,
     timeout: Optional[int] = 1000,
     connection_timeout: Optional[int] = 1000,
+    cluster_mode_pubsub: Optional[
+        GlideClusterClientConfiguration.PubSubSubscriptions
+    ] = None,
+    standalone_mode_pubsub: Optional[
+        GlideClientConfiguration.PubSubSubscriptions
+    ] = None,
     read_from: ReadFrom = ReadFrom.PRIMARY,
     client_az: Optional[str] = None,
     reconnect_strategy: Optional[BackoffStrategy] = None,
@@ -630,6 +636,7 @@ def create_sync_client_config(
             client_name=client_name,
             protocol=protocol,
             request_timeout=timeout,
+            pubsub_subscriptions=cluster_mode_pubsub,
             read_from=read_from,
             client_az=client_az,
             advanced_config=AdvancedGlideClusterClientConfiguration(
@@ -648,6 +655,7 @@ def create_sync_client_config(
             client_name=client_name,
             protocol=protocol,
             request_timeout=timeout,
+            pubsub_subscriptions=standalone_mode_pubsub,
             read_from=read_from,
             client_az=client_az,
             advanced_config=AdvancedGlideClientConfiguration(

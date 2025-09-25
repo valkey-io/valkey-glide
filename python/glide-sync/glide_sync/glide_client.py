@@ -2,9 +2,11 @@
 
 import os
 import sys
+import threading
 from typing import Any, List, Optional, Tuple, Union
 
 from glide_shared.commands.command_args import ObjectType
+from glide_shared.commands.core_options import PubSubMsg
 from glide_shared.config import BaseClientConfiguration
 from glide_shared.constants import OK, TEncodable, TResult
 from glide_shared.exceptions import (
@@ -58,6 +60,11 @@ class BaseClient(CoreCommands):
         self._ffi = _glide_ffi.ffi
         self._lib = _glide_ffi.lib
         self._config: BaseClientConfiguration = config
+        self._pubsub_queue: List[PubSubMsg] = []
+        self._pubsub_lock = threading.Lock()
+        self._pubsub_condition = threading.Condition(self._pubsub_lock)
+        self._pubsub_callback_ref = None  # Keep callback alive
+
         self._is_closed: bool = False
 
     @classmethod
@@ -89,9 +96,15 @@ class BaseClient(CoreCommands):
                 "_type": self._ffi.cast("ClientTypeEnum", FFIClientTypeEnum.Sync),
             },
         )
-        pubsub_callback = self._ffi.cast(
-            "PubSubCallback", 0
-        )  # PubSub not yet implementet for Sync Python
+
+        if self._config._is_pubsub_configured():
+            python_callback = self._create_pubsub_callback()
+            pubsub_callback = self._ffi.callback("PubSubCallback", python_callback)
+            # Store reference to prevent garbage collection
+            self._pubsub_callback_ref = pubsub_callback
+        else:
+            pubsub_callback = self._ffi.cast("PubSubCallback", 0)
+
         client_response_ptr = self._lib.create_client(
             conn_req_bytes,
             len(conn_req_bytes),
@@ -122,6 +135,89 @@ class BaseClient(CoreCommands):
             self._lib.free_connection_response(client_response_ptr)
         else:
             raise ClosingError("Failed to create client, response pointer is NULL.")
+
+    def _create_pubsub_callback(self):
+        """Create the FFI pubsub callback function"""
+
+        def _pubsub_callback(
+            client_ptr,
+            kind,
+            message_ptr,
+            message_len,
+            channel_ptr,
+            channel_len,
+            pattern_ptr,
+            pattern_len,
+        ):
+            try:
+                # Convert C pointers to Python bytes using ffi.buffer
+                message = self._ffi.buffer(message_ptr, message_len)[:]
+                channel = self._ffi.buffer(channel_ptr, channel_len)[:]
+                pattern = (
+                    self._ffi.buffer(pattern_ptr, pattern_len)[:]
+                    if pattern_ptr != self._ffi.NULL
+                    else None
+                )
+
+                push_kind_map = {
+                    0: "Disconnection",
+                    1: "Other",
+                    2: "Invalidate",
+                    3: "Message",
+                    4: "PMessage",
+                    5: "SMessage",
+                    6: "Unsubscribe",
+                    7: "PUnsubscribe",
+                    8: "SUnsubscribe",
+                    9: "Subscribe",
+                    10: "PSubscribe",
+                    11: "SSubscribe",
+                }
+
+                message_kind = push_kind_map.get(kind)
+
+                if message_kind == "Disconnection":
+                    Logger.log(
+                        Level.WARN,
+                        "disconnect notification",
+                        "Transport disconnected, messages might be lost",
+                    )
+                elif message_kind in ["Message", "PMessage", "SMessage"]:
+                    pubsub_msg = PubSubMsg(
+                        message=message, channel=channel, pattern=pattern
+                    )
+
+                    with self._pubsub_condition:
+                        user_callback, context = (
+                            self._config._get_pubsub_callback_and_context()
+                        )
+                        if user_callback:
+                            user_callback(pubsub_msg, context)
+                        else:
+                            self._pubsub_queue.append(pubsub_msg)
+                            self._pubsub_condition.notify()
+                elif message_kind in [
+                    "PSubscribe",
+                    "Subscribe",
+                    "SSubscribe",
+                    "Unsubscribe",
+                    "PUnsubscribe",
+                    "SUnsubscribe",
+                ]:
+                    pass  # Ignore subscription confirmations
+                else:
+                    Logger.log(
+                        Level.WARN,
+                        "unknown notification",
+                        f"Unknown notification message: '{message_kind}'",
+                    )
+
+            except Exception as e:
+                Logger.log(
+                    Level.ERROR, "pubsub_callback", f"Error in pubsub callback: {e}"
+                )
+
+        return _pubsub_callback
 
     def _handle_response(self, message):
         if message == self._ffi.NULL:
@@ -623,11 +719,59 @@ class BaseClient(CoreCommands):
         )
         return self._handle_cmd_result(result)
 
+    def try_get_pubsub_message(self) -> Optional[PubSubMsg]:
+        """Try to get a pubsub message without blocking"""
+        if self._is_closed:
+            raise ClosingError("Client is closed")
+
+        with self._pubsub_condition:
+            if not self._config._is_pubsub_configured():
+                raise ConfigurationError("No pubsub subscriptions configured")
+
+            user_callback, _ = self._config._get_pubsub_callback_and_context()
+            if user_callback is not None:
+                raise ConfigurationError(
+                    "Messages are being passed to configured callback"
+                )
+
+            if self._pubsub_queue:
+                return self._pubsub_queue.pop(0)
+            else:
+                return None
+
+    def get_pubsub_message(self) -> PubSubMsg:
+        """Get a pubsub message, blocking until one is available"""
+        if self._is_closed:
+            raise ClosingError("Client is closed")
+
+        with self._pubsub_condition:
+            if not self._config._is_pubsub_configured():
+                raise ConfigurationError("No pubsub subscriptions configured")
+
+            user_callback, _ = self._config._get_pubsub_callback_and_context()
+            if user_callback is not None:
+                raise ConfigurationError(
+                    "Messages are being passed to configured callback"
+                )
+
+            while not self._pubsub_queue:
+                if self._is_closed:
+                    raise ClosingError("Client was closed while waiting for message")
+
+                # Block indefinitely until notify() is called
+                self._pubsub_condition.wait()
+
+            return self._pubsub_queue.pop(0)
+
     def close(self):
         if not self._is_closed:
+            with self._pubsub_condition:
+                self._is_closed = True
+                self._pubsub_condition.notify_all()
             self._lib.close_client(self._core_client)
             self._core_client = self._ffi.NULL
             self._is_closed = True
+            self._pubsub_callback_ref = None
 
 
 class GlideClusterClient(BaseClient, ClusterCommands):
