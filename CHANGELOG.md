@@ -2,6 +2,14 @@
 
 #### Changes
 
+* GO: Add DBDestination option tests to CopyWithOptions command ([#4802](https://github.com/valkey-io/valkey-glide/pull/4802))
+
+#### Fixes
+
+## 2.1
+
+#### Changes
+
 * GO: Hash Field Expiration commands for Valkey 9 ([#4554](https://github.com/valkey-io/valkey-glide/pull/4554))
 * JAVA: Valkey 9 new commands HASH items expiration ([#4556](https://github.com/valkey-io/valkey-glide/pull/4556))
 * NODE: Valkey 9 support - Add Hash Field Expiration Commands Support ([#4598](https://github.com/valkey-io/valkey-glide/pull/4598))
@@ -10,7 +18,6 @@
 * Java: Multi-Database Support for Cluster Mode Valkey 9.0 ([#4658](https://github.com/valkey-io/valkey-glide/pull/4658))
 * Go: Add Multi-Database Support for Cluster Mode Valkey 9.0 ([#4660](https://github.com/valkey-io/valkey-glide/pull/4660))
 * Python: Add Multi-Database Support for Cluster Mode Valkey 9.0 ([#4659](https://github.com/valkey-io/valkey-glide/pull/4659))
-* GO: Add DBDestination option tests to CopyWithOptions command ([#4802](https://github.com/valkey-io/valkey-glide/pull/4802))
 
 #### Fixes
 
