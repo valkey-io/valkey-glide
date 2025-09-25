@@ -14,15 +14,6 @@ TESTS_SYNC_DIR = PYTHON_DIR / "tests" / "sync_tests"
 
 EXCLUDED_API_FUNCTIONS = {
     "async_only": [
-        # PubSub
-        "pubsub_shardchannels",
-        "pubsub_shardnumsub",
-        "pubsub_numsub",
-        "pubsub_numpat",
-        "publish",
-        "pubsub_channels",
-        "get_pubsub_message",
-        "try_get_pubsub_message",
         # cluster scan
         "scan",
         "get_cursor",
@@ -77,7 +68,6 @@ EXCLUDED_TESTS = {
 EXCLUDED_TESTS_FILENAMES = {
     "async_only": [
         "test_opentelemetry.py",
-        "test_pubsub.py",
         "test_scan.py",
     ],
     "sync_only": [],
