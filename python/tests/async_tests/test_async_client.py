@@ -9205,7 +9205,7 @@ class TestCommands:
     @pytest.mark.skip_if_version_below("9.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_copy_cluster_database(self, glide_client: GlideClusterClient):
+    async def test_cluster_copy_database(self, glide_client: GlideClusterClient):
         source = f"{{testKey}}-{get_random_string(10)}"
         destination = f"{{testKey}}-{get_random_string(10)}"
         value1 = get_random_string(5)
