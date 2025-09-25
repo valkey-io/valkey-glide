@@ -1,3 +1,11 @@
+## 2.1.1
+
+#### Changes
+
+* NODE: add MOVE command support for cluster clients ([#4750](https://github.com/valkey-io/valkey-glide/pull/4750))
+
+#### Fixes
+
 ## 2.1
 
 #### Changes

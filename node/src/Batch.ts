@@ -564,6 +564,23 @@ export class BaseBatch<T extends BaseBatch<T>> {
         );
     }
 
+    /**
+     * Move `key` from the currently selected database to the database specified by `dbIndex`.
+     *
+     * @remarks Move is available for cluster mode since Valkey 9.0.0 and above.
+     *
+     * @see {@link https://valkey.io/commands/move/|valkey.io} for details.
+     *
+     * @param key - The key to move.
+     * @param dbIndex - The index of the database to move `key` to.
+     *
+     * Command Response - `true` if `key` was moved, or `false` if the `key` already exists in the destination
+     *     database or does not exist in the source database.
+     */
+    public move(key: GlideString, dbIndex: number): T {
+        return this.addAndReturn(createMove(key, dbIndex));
+    }
+
     /** Increments the number stored at `key` by one. If `key` does not exist, it is set to 0 before performing the operation.
      * @see {@link https://valkey.io/commands/incr/|valkey.io} for details.
      *
@@ -4426,21 +4443,6 @@ export class Batch extends BaseBatch<Batch> {
         options?: { destinationDB?: number; replace?: boolean },
     ): Batch {
         return this.addAndReturn(createCopy(source, destination, options));
-    }
-
-    /**
-     * Move `key` from the currently selected database to the database specified by `dbIndex`.
-     *
-     * @see {@link https://valkey.io/commands/move/|valkey.io} for details.
-     *
-     * @param key - The key to move.
-     * @param dbIndex - The index of the database to move `key` to.
-     *
-     * Command Response - `true` if `key` was moved, or `false` if the `key` already exists in the destination
-     *     database or does not exist in the source database.
-     */
-    public move(key: GlideString, dbIndex: number): Batch {
-        return this.addAndReturn(createMove(key, dbIndex));
     }
 
     /** Publish a message on pubsub channel.
