@@ -4,6 +4,7 @@ import os
 import sys
 from typing import Any, List, Optional, Tuple, Union
 
+from glide_shared.commands.command_args import ObjectType
 from glide_shared.config import BaseClientConfiguration
 from glide_shared.constants import OK, TEncodable, TResult
 from glide_shared.exceptions import (
@@ -29,6 +30,7 @@ from ._glide_ffi import _GlideFFI
 from .config import GlideClientConfiguration, GlideClusterClientConfiguration
 from .logger import Level, Logger
 from .sync_commands.cluster_commands import ClusterCommands
+from .sync_commands.cluster_scan_cursor import ClusterScanCursor
 from .sync_commands.core import CoreCommands
 from .sync_commands.standalone_commands import StandaloneCommands
 
@@ -634,6 +636,125 @@ class GlideClusterClient(BaseClient, ClusterCommands):
     For full documentation, see
     https://github.com/valkey-io/valkey-glide/wiki/Python-wrapper#cluster
     """
+
+    def _build_cluster_scan_args(self, match, count, type, allow_non_covered_slots):
+        args = []
+        if match is not None:
+            # Inline _encode_arg logic
+            if isinstance(match, str):
+                encoded_match = match.encode(ENCODING)
+            elif isinstance(match, bytes):
+                encoded_match = match
+            else:
+                encoded_match = str(match).encode(ENCODING)
+            args.extend([b"MATCH", encoded_match])
+
+        if count is not None:
+            args.extend([b"COUNT", str(count).encode(ENCODING)])
+        if type is not None:
+            args.extend([b"TYPE", type.value.encode(ENCODING)])
+        if allow_non_covered_slots:
+            args.extend([b"ALLOW_NON_COVERED_SLOTS", b"true"])
+
+        return args
+
+    def _cluster_scan(
+        self,
+        cursor: ClusterScanCursor,
+        match: Optional[TEncodable] = None,
+        count: Optional[int] = None,
+        type: Optional[ObjectType] = None,
+        allow_non_covered_slots: bool = False,
+    ) -> List[Union[ClusterScanCursor, List[bytes]]]:
+        if self._is_closed:
+            raise ClosingError(
+                "Unable to execute requests; the client is closed. Please create a new client."
+            )
+
+        client_adapter_ptr = self._core_client
+        if client_adapter_ptr == self._ffi.NULL:
+            raise ValueError("Invalid client pointer.")
+
+        # Use helper method to build args
+        args = self._build_cluster_scan_args(
+            match, count, type, allow_non_covered_slots
+        )
+        # Convert cursor to C string
+        cursor_string = cursor.get_cursor()
+        cursor_bytes = cursor_string.encode(ENCODING) + b"\0"  # Null terminate for C
+
+        # Keep references to prevent GC
+        temp_buffers: List[Any] = [cursor_bytes]
+        cursor_buffer = self._ffi.from_buffer(cursor_bytes)
+
+        # Prepare FFI arguments
+        if args:
+            arg_buffers = []
+            arg_ptrs = []
+            arg_lens = []
+
+            for arg in args:
+                if isinstance(arg, str):
+                    arg = arg.encode(ENCODING)
+                temp_buffers.append(arg)  # Keep reference
+                arg_buffer = self._ffi.from_buffer(arg)
+                arg_buffers.append(arg_buffer)
+                arg_ptrs.append(self._ffi.cast("size_t", arg_buffer))
+                arg_lens.append(len(arg))
+
+            args_array = self._ffi.new("const size_t[]", arg_ptrs)
+            args_len_array = self._ffi.new("const unsigned long[]", arg_lens)
+            temp_buffers.extend([args_array, args_len_array, arg_buffers])
+            arg_count = len(args)
+        else:
+            args_array = self._ffi.NULL
+            args_len_array = self._ffi.NULL
+            arg_count = 0
+
+        try:
+            result_ptr = self._lib.request_cluster_scan(
+                client_adapter_ptr,
+                0,
+                cursor_buffer,
+                arg_count,
+                args_array,
+                args_len_array,
+            )
+
+            if result_ptr == self._ffi.NULL:
+                raise RequestError("Cluster scan returned null result")
+
+            command_result = result_ptr[0]
+
+            if command_result.command_error != self._ffi.NULL:
+                error = command_result.command_error[0]
+                error_message = self._ffi.string(error.command_error_message).decode(
+                    ENCODING
+                )
+                error_class = get_request_error_class(error.command_error_type)
+                raise error_class(error_message)
+
+            if command_result.response == self._ffi.NULL:
+                raise RequestError("Cluster scan returned null response")
+
+            response_data = self._handle_response(command_result.response)
+
+            if not isinstance(response_data, list) or len(response_data) != 2:
+                raise RequestError(
+                    f"Unexpected cluster scan response format: {response_data}"
+                )
+
+            new_cursor = response_data[0]
+            if isinstance(new_cursor, bytes):
+                new_cursor = new_cursor.decode(ENCODING)
+
+            keys_list = response_data[1] if response_data[1] is not None else []
+
+            return [ClusterScanCursor(new_cursor), keys_list]
+
+        finally:
+            if result_ptr != self._ffi.NULL:
+                self._lib.free_command_result(result_ptr)
 
 
 class GlideClient(BaseClient, StandaloneCommands):
