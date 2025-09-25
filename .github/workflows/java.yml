@@ -150,6 +150,26 @@ jobs:
                   $env:PATH += ";$env:USERPROFILE\.cargo\bin"
                   echo "$env:USERPROFILE\.cargo\bin" >> $env:GITHUB_PATH
 
+                  Write-Host "Setting up MSVC environment..."
+                  # Find and set up Visual Studio Build Tools environment
+                  $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+                  if (Test-Path $vswhere) {
+                      $vsInstall = & $vswhere -latest -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+                      if ($vsInstall) {
+                          $vcvarsPath = "$vsInstall\VC\Auxiliary\Build\vcvars64.bat"
+                          if (Test-Path $vcvarsPath) {
+                              Write-Host "Found MSVC tools, setting up environment..."
+                              # Add MSVC tools to PATH for the current session
+                              $msvcTools = Get-ChildItem -Path "$vsInstall\VC\Tools\MSVC\*\bin\Hostx64\x64" -ErrorAction SilentlyContinue | Select-Object -First 1
+                              if ($msvcTools) {
+                                  $env:PATH += ";$($msvcTools.FullName)"
+                                  echo "$($msvcTools.FullName)" >> $env:GITHUB_PATH
+                                  Write-Host "Added MSVC tools to PATH: $($msvcTools.FullName)"
+                              }
+                          }
+                      }
+                  }
+
                   Write-Host "Verifying Rust installation..."
                   & "$env:USERPROFILE\.cargo\bin\rustup.exe" --version
                   & "$env:USERPROFILE\.cargo\bin\cargo.exe" --version
@@ -329,6 +349,26 @@ jobs:
                   Write-Host "Adding Rust to PATH..."
                   $env:PATH += ";$env:USERPROFILE\.cargo\bin"
                   echo "$env:USERPROFILE\.cargo\bin" >> $env:GITHUB_PATH
+
+                  Write-Host "Setting up MSVC environment..."
+                  # Find and set up Visual Studio Build Tools environment
+                  $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+                  if (Test-Path $vswhere) {
+                      $vsInstall = & $vswhere -latest -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+                      if ($vsInstall) {
+                          $vcvarsPath = "$vsInstall\VC\Auxiliary\Build\vcvars64.bat"
+                          if (Test-Path $vcvarsPath) {
+                              Write-Host "Found MSVC tools, setting up environment..."
+                              # Add MSVC tools to PATH for the current session
+                              $msvcTools = Get-ChildItem -Path "$vsInstall\VC\Tools\MSVC\*\bin\Hostx64\x64" -ErrorAction SilentlyContinue | Select-Object -First 1
+                              if ($msvcTools) {
+                                  $env:PATH += ";$($msvcTools.FullName)"
+                                  echo "$($msvcTools.FullName)" >> $env:GITHUB_PATH
+                                  Write-Host "Added MSVC tools to PATH: $($msvcTools.FullName)"
+                              }
+                          }
+                      }
+                  }
 
                   Write-Host "Verifying Rust installation..."
                   & "$env:USERPROFILE\.cargo\bin\rustup.exe" --version
@@ -523,6 +563,26 @@ jobs:
                   Write-Host "Adding Rust to PATH..."
                   $env:PATH += ";$env:USERPROFILE\.cargo\bin"
                   echo "$env:USERPROFILE\.cargo\bin" >> $env:GITHUB_PATH
+
+                  Write-Host "Setting up MSVC environment..."
+                  # Find and set up Visual Studio Build Tools environment
+                  $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+                  if (Test-Path $vswhere) {
+                      $vsInstall = & $vswhere -latest -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+                      if ($vsInstall) {
+                          $vcvarsPath = "$vsInstall\VC\Auxiliary\Build\vcvars64.bat"
+                          if (Test-Path $vcvarsPath) {
+                              Write-Host "Found MSVC tools, setting up environment..."
+                              # Add MSVC tools to PATH for the current session
+                              $msvcTools = Get-ChildItem -Path "$vsInstall\VC\Tools\MSVC\*\bin\Hostx64\x64" -ErrorAction SilentlyContinue | Select-Object -First 1
+                              if ($msvcTools) {
+                                  $env:PATH += ";$($msvcTools.FullName)"
+                                  echo "$($msvcTools.FullName)" >> $env:GITHUB_PATH
+                                  Write-Host "Added MSVC tools to PATH: $($msvcTools.FullName)"
+                              }
+                          }
+                      }
+                  }
 
                   Write-Host "Verifying Rust installation..."
                   & "$env:USERPROFILE\.cargo\bin\rustup.exe" --version
