@@ -1,3 +1,11 @@
+## 2.1.1
+
+#### Changes
+
+* JAVA: Move COPY command with database ID from standalone to base client ([#4804](https://github.com/valkey-io/valkey-glide/pull/4804))
+
+#### Fixes
+
 ## 2.1
 
 #### Changes
