@@ -9,7 +9,7 @@ from glide_shared.commands.bitmap import (
     _create_bitfield_args,
     _create_bitfield_read_only_args,
 )
-from glide_shared.commands.command_args import Limit, ListDirection, OrderBy
+from glide_shared.commands.command_args import Limit, ListDirection, ObjectType, OrderBy
 from glide_shared.commands.core_options import (
     ConditionalChange,
     ExpireOptions,
@@ -61,6 +61,8 @@ from glide_shared.exceptions import RequestError
 from glide_shared.protobuf.command_request_pb2 import RequestType
 from glide_shared.routes import Route
 
+from .cluster_scan_cursor import ClusterScanCursor
+
 
 class CoreCommands(Protocol):
     def _execute_command(
@@ -87,6 +89,15 @@ class CoreCommands(Protocol):
         keys: Optional[List[TEncodable]] = None,
         args: Optional[List[TEncodable]] = None,
         route: Optional[Route] = None,
+    ) -> TResult: ...
+
+    def _cluster_scan(
+        self,
+        cursor: ClusterScanCursor,
+        match: Optional[TEncodable] = ...,
+        count: Optional[int] = ...,
+        type: Optional[ObjectType] = ...,
+        allow_non_covered_slots: bool = ...,
     ) -> TResult: ...
 
     def _update_connection_password(
