@@ -1112,8 +1112,8 @@ public interface GenericBaseCommands {
      * <code>destinationDB</code>. When <code>replace</code> is true, removes the <code>destination
      * </code> key first if it already exists, otherwise performs no action.
      *
+     * @apiNote copy command for cluster mode is supported since Valkey 9.0.0 and above
      * @since Valkey 6.2.0 and above for standalone Client.
-     * @since Valkey 9.0.0 and above for standaloneClient.
      * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
      * @param source The key to the source value.
      * @param destination The key where the value should be copied to.
@@ -1135,8 +1135,8 @@ public interface GenericBaseCommands {
      * <code>destinationDB</code>. When <code>replace</code> is true, removes the <code>destination
      * </code> key first if it already exists, otherwise performs no action.
      *
+     * @apiNote copy command for cluster mode is supported since Valkey 9.0.0 and above
      * @since Valkey 6.2.0 and above for standalone Client.
-     * @since Valkey 9.0.0 and above for standaloneClient.
      * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
      * @param source The key to the source value.
      * @param destination The key where the value should be copied to.
@@ -1158,8 +1158,8 @@ public interface GenericBaseCommands {
      * <code>destinationDB</code>. When <code>replace</code> is true, removes the <code>destination
      * </code> key first if it already exists, otherwise performs no action.
      *
+     * @apiNote copy command for cluster mode is supported since Valkey 9.0.0 and above
      * @since Valkey 6.2.0 and above for standalone Client.
-     * @since Valkey 9.0.0 and above for standaloneClient.
      * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
      * @param source The key to the source value.
      * @param destination The key where the value should be copied to.
@@ -1179,8 +1179,8 @@ public interface GenericBaseCommands {
      * <code>destinationDB</code>. When <code>replace</code> is true, removes the <code>destination
      * </code> key first if it already exists, otherwise performs no action.
      *
+     * @apiNote copy command for cluster mode is supported since Valkey 9.0.0 and above
      * @since Valkey 6.2.0 and above for standalone Client.
-     * @since Valkey 9.0.0 and above for standaloneClient.
      * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
      * @param source The key to the source value.
      * @param destination The key where the value should be copied to.
