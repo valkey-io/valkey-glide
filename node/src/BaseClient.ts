@@ -2137,7 +2137,7 @@ export class BaseClient {
      * no action.
      *
      * @see {@link https://valkey.io/commands/copy/|valkey.io} for more details.
-     * @remarks Since Valkey version 6.2.0.
+     * @remarks Since Valkey version 6.2.0. destinationDB parameter for cluster mode is supported since Valkey 9.0.0 and above
      *
      * @param source - The key to the source value.
      * @param destination - The key where the value should be copied to.
