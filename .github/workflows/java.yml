@@ -209,9 +209,31 @@ jobs:
 
             - name: Install Rust (Windows)
               if: ${{ matrix.host.OS == 'windows' }}
-              uses: dtolnay/rust-toolchain@stable
-              with:
-                  targets: x86_64-pc-windows-msvc
+              shell: powershell
+              run: |
+                  Write-Host "Installing Rust for Windows..."
+
+                  # Download and install rustup
+                  $rustupUrl = "https://win.rustup.rs/x86_64"
+                  $installerPath = "$env:TEMP\rustup-init.exe"
+
+                  Write-Host "Downloading rustup installer..."
+                  [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+                  Invoke-WebRequest -Uri $rustupUrl -OutFile $installerPath -UseBasicParsing
+
+                  Write-Host "Installing Rust toolchain..."
+                  & $installerPath --default-toolchain stable --target x86_64-pc-windows-msvc -y
+
+                  Write-Host "Adding Rust to PATH..."
+                  $env:PATH += ";$env:USERPROFILE\.cargo\bin"
+                  echo "$env:USERPROFILE\.cargo\bin" >> $env:GITHUB_PATH
+
+                  Write-Host "Verifying Rust installation..."
+                  & "$env:USERPROFILE\.cargo\bin\rustup.exe" --version
+                  & "$env:USERPROFILE\.cargo\bin\cargo.exe" --version
+
+                  Write-Host "Installed targets:"
+                  & "$env:USERPROFILE\.cargo\bin\rustup.exe" target list --installed
 
             - name: Setup Windows environment
               if: ${{ matrix.host.OS == 'windows' }}
@@ -220,12 +242,7 @@ jobs:
                   echo "GLIDE_WINDOWS_BUILD=true" >> $env:GITHUB_ENV
                   echo "CARGO_TERM_COLOR=always" >> $env:GITHUB_ENV
 
-                  # Verify Rust installation
-                  Write-Host "Verifying Rust installation..."
-                  rustup --version
-                  cargo --version
-                  Write-Host "Installed targets:"
-                  rustup target list --installed
+                  Write-Host "Windows environment configured for Glide build"
 
                   # Verify target installation
                   Write-Host "Installed Rust targets:"
@@ -372,9 +389,31 @@ jobs:
 
             - name: Install Rust (Windows)
               if: ${{ matrix.host.OS == 'windows' }}
-              uses: dtolnay/rust-toolchain@stable
-              with:
-                  targets: x86_64-pc-windows-msvc
+              shell: powershell
+              run: |
+                  Write-Host "Installing Rust for Windows..."
+
+                  # Download and install rustup
+                  $rustupUrl = "https://win.rustup.rs/x86_64"
+                  $installerPath = "$env:TEMP\rustup-init.exe"
+
+                  Write-Host "Downloading rustup installer..."
+                  [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+                  Invoke-WebRequest -Uri $rustupUrl -OutFile $installerPath -UseBasicParsing
+
+                  Write-Host "Installing Rust toolchain..."
+                  & $installerPath --default-toolchain stable --target x86_64-pc-windows-msvc -y
+
+                  Write-Host "Adding Rust to PATH..."
+                  $env:PATH += ";$env:USERPROFILE\.cargo\bin"
+                  echo "$env:USERPROFILE\.cargo\bin" >> $env:GITHUB_PATH
+
+                  Write-Host "Verifying Rust installation..."
+                  & "$env:USERPROFILE\.cargo\bin\rustup.exe" --version
+                  & "$env:USERPROFILE\.cargo\bin\cargo.exe" --version
+
+                  Write-Host "Installed targets:"
+                  & "$env:USERPROFILE\.cargo\bin\rustup.exe" target list --installed
 
             - name: Setup Windows environment
               if: ${{ matrix.host.OS == 'windows' }}
@@ -383,12 +422,7 @@ jobs:
                   echo "GLIDE_WINDOWS_BUILD=true" >> $env:GITHUB_ENV
                   echo "CARGO_TERM_COLOR=always" >> $env:GITHUB_ENV
 
-                  # Verify Rust installation
-                  Write-Host "Verifying Rust installation..."
-                  rustup --version
-                  cargo --version
-                  Write-Host "Installed targets:"
-                  rustup target list --installed
+                  Write-Host "Windows environment configured for Glide build"
 
                   # Verify target installation
                   Write-Host "Installed Rust targets:"
@@ -549,9 +583,31 @@ jobs:
 
             - name: Install Rust (Windows)
               if: ${{ matrix.host.OS == 'windows' }}
-              uses: dtolnay/rust-toolchain@stable
-              with:
-                  targets: x86_64-pc-windows-msvc
+              shell: powershell
+              run: |
+                  Write-Host "Installing Rust for Windows..."
+
+                  # Download and install rustup
+                  $rustupUrl = "https://win.rustup.rs/x86_64"
+                  $installerPath = "$env:TEMP\rustup-init.exe"
+
+                  Write-Host "Downloading rustup installer..."
+                  [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+                  Invoke-WebRequest -Uri $rustupUrl -OutFile $installerPath -UseBasicParsing
+
+                  Write-Host "Installing Rust toolchain..."
+                  & $installerPath --default-toolchain stable --target x86_64-pc-windows-msvc -y
+
+                  Write-Host "Adding Rust to PATH..."
+                  $env:PATH += ";$env:USERPROFILE\.cargo\bin"
+                  echo "$env:USERPROFILE\.cargo\bin" >> $env:GITHUB_PATH
+
+                  Write-Host "Verifying Rust installation..."
+                  & "$env:USERPROFILE\.cargo\bin\rustup.exe" --version
+                  & "$env:USERPROFILE\.cargo\bin\cargo.exe" --version
+
+                  Write-Host "Installed targets:"
+                  & "$env:USERPROFILE\.cargo\bin\rustup.exe" target list --installed
 
             - name: Setup Windows environment
               if: ${{ matrix.host.OS == 'windows' }}
@@ -560,12 +616,7 @@ jobs:
                   echo "GLIDE_WINDOWS_BUILD=true" >> $env:GITHUB_ENV
                   echo "CARGO_TERM_COLOR=always" >> $env:GITHUB_ENV
 
-                  # Verify Rust installation
-                  Write-Host "Verifying Rust installation..."
-                  rustup --version
-                  cargo --version
-                  Write-Host "Installed targets:"
-                  rustup target list --installed
+                  Write-Host "Windows environment configured for Glide build"
 
                   # Verify target installation
                   Write-Host "Installed Rust targets:"
