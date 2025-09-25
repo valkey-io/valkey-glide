@@ -887,6 +887,101 @@ describe("GlideClusterClient", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "copy with DB test_%p",
+        async (protocol) => {
+            if (cluster.checkIfServerVersionLessThan("9.0.0")) return;
+
+            const client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            const source = `{key}-${getRandomKey()}`;
+            const destination = `{key}-${getRandomKey()}`;
+            const value1 = getRandomKey();
+            const value2 = getRandomKey();
+            const index1 = 1;
+            const index2 = 2;
+
+            // neither key exists
+            expect(
+                await client.copy(source, destination, {
+                    destinationDB: index1,
+                    replace: false,
+                }),
+            ).toEqual(false);
+
+            // source exists, destination does not
+            expect(await client.set(source, value1)).toEqual("OK");
+            expect(
+                await client.copy(source, destination, {
+                    destinationDB: index1,
+                    replace: false,
+                }),
+            ).toEqual(true);
+            expect(await client.customCommand(["SELECT", "1"])).toEqual("OK");
+            expect(await client.get(destination)).toEqual(value1);
+
+            // new value for source key
+            expect(await client.customCommand(["SELECT", "0"])).toEqual("OK");
+            expect(await client.set(source, value2)).toEqual("OK");
+
+            // no REPLACE, copying to existing key on DB 1, non-existing key on DB 2
+            expect(
+                await client.copy(Buffer.from(source), destination, {
+                    destinationDB: index1,
+                    replace: false,
+                }),
+            ).toEqual(false);
+            expect(
+                await client.copy(source, Buffer.from(destination), {
+                    destinationDB: index2,
+                    replace: false,
+                }),
+            ).toEqual(true);
+
+            // new value only gets copied to DB 2
+            expect(await client.customCommand(["SELECT", "1"])).toEqual("OK");
+            expect(await client.get(destination)).toEqual(value1);
+            expect(await client.customCommand(["SELECT", "2"])).toEqual("OK");
+            expect(await client.get(destination)).toEqual(value2);
+
+            // both exists, with REPLACE, when value isn't the same, source always get copied to
+            // destination
+            expect(await client.customCommand(["SELECT", "0"])).toEqual("OK");
+            expect(
+                await client.copy(
+                    Buffer.from(source),
+                    Buffer.from(destination),
+                    {
+                        destinationDB: index1,
+                        replace: true,
+                    },
+                ),
+            ).toEqual(true);
+            expect(await client.customCommand(["SELECT", "1"])).toEqual("OK");
+            expect(await client.get(destination)).toEqual(value2);
+
+            // batch tests
+            for (const isAtomic of [true, false]) {
+                const batch = new ClusterBatch(isAtomic);
+                batch.customCommand(["SELECT", "1"]);
+                batch.set(source, value1);
+                batch.copy(source, destination, {
+                    destinationDB: index1,
+                    replace: true,
+                });
+                batch.get(destination);
+                const results = await client.exec(batch, true);
+
+                expect(results).toEqual(["OK", "OK", true, value1]);
+            }
+
+            client.close();
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "flushdb flushall dbsize test_%p",
         async (protocol) => {
             const client = await GlideClusterClient.createClient(
