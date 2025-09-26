@@ -81,5 +81,16 @@
         "IMAGE": "amazonlinux:latest",
         "PACKAGE_MANAGERS": [],
         "languages": ["python", "node", "java", "go"]
+    },
+    {
+        "OS": "windows",
+        "NAMED_OS": "windows",
+        "RUNNER": ["self-hosted", "Windows", "X64", "ephemeral"],
+        "ARCH": "x64",
+        "TARGET": "x86_64-pc-windows-msvc",
+        "PACKAGE_MANAGERS": ["maven"],
+        "run": "always",
+        "languages": ["java"],
+        "comment": "Windows runner with Docker support for Valkey containerization"
     }
 ]

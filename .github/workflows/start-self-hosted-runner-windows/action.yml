@@ -1,0 +1,82 @@
+name: Start self hosted Windows EC2 runner
+
+inputs:
+    aws-region:
+        description: AWS Region, e.g. us-east-1
+        required: true
+    role-to-assume:
+        description: AWS Role for which to fetch credentials.
+        required: true
+    ec2-instance-id:
+        description: AWS EC2 instance ID for the self hosted Windows runner
+        required: true
+
+runs:
+    using: "composite"
+    steps:
+        - name: Configure AWS Credentials
+          uses: aws-actions/configure-aws-credentials@v4
+          with:
+              role-to-assume: ${{ inputs.role-to-assume }}
+              aws-region: ${{ inputs.aws-region }}
+
+        - name: Start Windows EC2 self hosted runner
+          shell: bash
+          env:
+              EC2_INSTANCE_ID: ${{ inputs.ec2-instance-id }}
+          run: |
+              echo "Starting Windows runner on instance $EC2_INSTANCE_ID"
+
+              # Install AWS CLI if not available
+              if ! command -v aws &> /dev/null; then
+                  curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+                  unzip awscliv2.zip
+                  sudo ./aws/install
+              fi
+
+              # Send command to start GitHub runner
+              command_id=$(aws ssm send-command \
+                  --instance-ids "$EC2_INSTANCE_ID" \
+                  --document-name StartGithubSelfHostedRunnerWindows \
+                  --query Command.CommandId \
+                  --output text)
+
+              echo "Command ID: $command_id"
+
+              # Wait for command completion
+              retry_counter=0
+              invoke_status=""
+
+              while [[ "$invoke_status" != "Success" && "$invoke_status" != "Failed" ]]; do
+                invoke_status=$(aws ssm list-command-invocations \
+                    --command-id $command_id \
+                    --query 'CommandInvocations[0].Status' \
+                    --output text)
+
+                echo "Current Status: $invoke_status"
+
+                if [[ "$invoke_status" != "Success" && "$invoke_status" != "Failed" ]]; then
+                    echo "Waiting for command to complete... Command ID: $command_id"
+                    sleep 10
+                    retry_counter=$((retry_counter+1))
+                fi
+
+                if (( retry_counter >= 100 )); then
+                    echo "Reached maximum retries, status is: $invoke_status. Exiting..."
+                    exit 1
+                fi
+              done
+
+              echo "Final Command Status: $invoke_status"
+
+              if [[ "$invoke_status" == "Failed" ]]; then
+                  echo "Runner startup failed. Checking command output..."
+                  aws ssm list-command-invocations \
+                      --command-id $command_id \
+                      --details \
+                      --query 'CommandInvocations[0].CommandPlugins[*].Output' \
+                      --output text
+                  exit 1
+              fi
+
+              echo "Windows runner started successfully"
