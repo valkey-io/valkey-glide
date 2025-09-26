@@ -13,8 +13,15 @@ tasks.withType(JavaCompile) {
 }
 
 dependencies {
+    def classifier 
+    if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
+        classifier = "linux_musl-${osdetector.arch}"
+    }
+    else {
+        classifier = osdetector.classifier
+    }
     // Use published GLIDE artifact
-    implementation group: 'io.valkey', name: 'valkey-glide', version: project.ext.defaultReleaseVersion, classifier: osdetector.classifier
+    implementation group: 'io.valkey', name: 'valkey-glide', version: project.ext.defaultReleaseVersion, classifier: classifier
     
     // Use published jedis-compatibility artifact
     testImplementation group: 'io.valkey', name: 'valkey-glide-jedis-compatibility', version: project.ext.defaultReleaseVersion, classifier: osdetector.classifier
