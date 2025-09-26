@@ -582,42 +582,6 @@ class BaseBatch:
         argument = [] if message is None else [message]
         return self.append_command(RequestType.Ping, argument)
 
-    def copy(
-        self: TBatch,
-        source: TEncodable,
-        destination: TEncodable,
-        destinationDB: Optional[int] = None,
-        replace: Optional[bool] = None,
-    ) -> "TBatch":
-        """
-        Copies the value stored at the `source` to the `destination` key. If `destinationDB`
-        is specified, the value will be copied to the database specified by `destinationDB`,
-        otherwise the current database will be used. When `replace` is True, removes the
-        `destination` key first if it already exists, otherwise performs no action.
-
-        See [valkey.io](https://valkey.io/commands/copy) for more details.
-
-        Args:
-            source (TEncodable): The key to the source value.
-            destination (TEncodable): The key where the value should be copied to.
-            destinationDB (Optional[int]): The alternative logical database index for the destination key.
-            replace (Optional[bool]): If the destination key should be removed before copying the value to it.
-
-        Command response:
-            bool: True if the source was copied.
-
-            Otherwise, return False.
-
-        Since: Valkey version 6.2.0.
-        """
-        args = [source, destination]
-        if destinationDB is not None:
-            args.extend(["DB", str(destinationDB)])
-        if replace is not None:
-            args.append("REPLACE")
-
-        return self.append_command(RequestType.Copy, args)
-
     def decr(self: TBatch, key: TEncodable) -> TBatch:
         """
         Decrements the number stored at `key` by one. If the key does not exist, it is set to 0 before performing the
@@ -5823,6 +5787,42 @@ class Batch(BaseBatch):
         """
         return self.append_command(RequestType.Select, [str(index)])
 
+    def copy(
+        self,
+        source: TEncodable,
+        destination: TEncodable,
+        destinationDB: Optional[int] = None,
+        replace: Optional[bool] = None,
+    ) -> "Batch":
+        """
+        Copies the value stored at the `source` to the `destination` key. If `destinationDB`
+        is specified, the value will be copied to the database specified by `destinationDB`,
+        otherwise the current database will be used. When `replace` is True, removes the
+        `destination` key first if it already exists, otherwise performs no action.
+
+        See [valkey.io](https://valkey.io/commands/copy) for more details.
+
+        Args:
+            source (TEncodable): The key to the source value.
+            destination (TEncodable): The key where the value should be copied to.
+            destinationDB (Optional[int]): The alternative logical database index for the destination key.
+            replace (Optional[bool]): If the destination key should be removed before copying the value to it.
+
+        Command response:
+            bool: True if the source was copied.
+
+            Otherwise, return False.
+
+        Since: Valkey version 6.2.0.
+        """
+        args = [source, destination]
+        if destinationDB is not None:
+            args.extend(["DB", str(destinationDB)])
+        if replace is not None:
+            args.append("REPLACE")
+
+        return self.append_command(RequestType.Copy, args)
+
     def publish(self, message: TEncodable, channel: TEncodable) -> "Batch":
         """
         Publish a message on pubsub channel.
@@ -5878,6 +5878,42 @@ class ClusterBatch(BaseBatch):
         [OK, OK, b"value1", b"value2"]
 
     """
+
+    def copy(
+        self,
+        source: TEncodable,
+        destination: TEncodable,
+        # TODO next major release the arguments replace and destinationDB must have their order
+        # swapped to align with the standalone order.
+        # At the moment of the patch release 2.1.1. we can't have a breaking change
+        replace: Optional[bool] = None,
+        destinationDB: Optional[int] = None,
+    ) -> "ClusterBatch":
+        """
+        Copies the value stored at the `source` to the `destination` key. When `replace` is True,
+        removes the `destination` key first if it already exists, otherwise performs no action.
+
+        See [valkey.io](https://valkey.io/commands/copy) for more details.
+
+        Args:
+            source (TEncodable): The key to the source value.
+            destination (TEncodable): The key where the value should be copied to.
+            replace (Optional[bool]): If the destination key should be removed before copying the value to it.
+            destinationDB (Optional[int]): The alternative logical database index for the destination key.
+        Command response:
+            bool: True if the source was copied.
+
+            Otherwise, return False.
+
+        Since: Valkey version 9.0.0.
+        """
+        args = [source, destination]
+        if destinationDB is not None:
+            args.extend(["DB", str(destinationDB)])
+        if replace is not None:
+            args.append("REPLACE")
+
+        return self.append_command(RequestType.Copy, args)
 
     def publish(
         self, message: str, channel: str, sharded: bool = False

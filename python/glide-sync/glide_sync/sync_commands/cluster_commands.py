@@ -985,8 +985,11 @@ class ClusterCommands(CoreCommands):
         self,
         source: TEncodable,
         destination: TEncodable,
+        # TODO next major release the arguments replace and destinationDB must have their order
+        # swapped to align with the standalone order.
+        # At the moment of the patch release 2.1.1. we can't have a breaking change
         replace: Optional[bool] = None,
-        destinationDB: Optional[Union[int, str]] = None,
+        destinationDB: Optional[int] = None,
     ) -> bool:
         """
         Copies the value stored at the `source` to the `destination` key.
