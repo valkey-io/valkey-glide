@@ -9159,14 +9159,18 @@ class TestCommands:
 
             # neither key exists
             assert (
-                glide_sync_client.copy(source, destination, index1, replace=False)
+                glide_sync_client.copy(
+                    source, destination, destinationDB=index1, replace=False
+                )
                 is False
             )
 
             # source exists, destination does not
             glide_sync_client.set(source, value1)
             assert (
-                glide_sync_client.copy(source, destination, index1, replace=False)
+                glide_sync_client.copy(
+                    source, destination, destinationDB=index1, replace=False
+                )
                 is True
             )
             assert glide_sync_client.custom_command(["SELECT", index1]) == OK
@@ -9178,11 +9182,15 @@ class TestCommands:
 
             # no REPLACE, copying to existing key on DB 0 & 1, non-existing key on DB 2
             assert (
-                glide_sync_client.copy(source, destination, index1, replace=False)
+                glide_sync_client.copy(
+                    source, destination, destinationDB=index1, replace=False
+                )
                 is False
             )
             assert (
-                glide_sync_client.copy(source, destination, index2, replace=False)
+                glide_sync_client.copy(
+                    source, destination, destinationDB=index2, replace=False
+                )
                 is True
             )
 
@@ -9195,7 +9203,9 @@ class TestCommands:
             # both exists, with REPLACE, when value isn't the same, source always get copied to destination
             assert glide_sync_client.custom_command(["SELECT", index0]) == OK
             assert (
-                glide_sync_client.copy(source, destination, index1, replace=True)
+                glide_sync_client.copy(
+                    source, destination, destinationDB=index1, replace=True
+                )
                 is True
             )
             assert glide_sync_client.custom_command(["SELECT", index1]) == OK
@@ -9203,7 +9213,9 @@ class TestCommands:
 
             # invalid DB index
             with pytest.raises(RequestError):
-                glide_sync_client.copy(source, destination, -1, replace=True)
+                glide_sync_client.copy(
+                    source, destination, destinationDB=-1, replace=True
+                )
         finally:
             assert glide_sync_client.custom_command(["SELECT", "0"]) == OK
 

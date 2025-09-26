@@ -9220,14 +9220,18 @@ class TestCommands:
 
             # neither key exists
             assert (
-                await glide_client.copy(source, destination, index1, replace=False)
+                await glide_client.copy(
+                    source, destination, destinationDB=index1, replace=False
+                )
                 is False
             )
 
             # source exists, destination does not
             await glide_client.set(source, value1)
             assert (
-                await glide_client.copy(source, destination, index1, replace=False)
+                await glide_client.copy(
+                    source, destination, destinationDB=index1, replace=False
+                )
                 is True
             )
             assert await glide_client.custom_command(["SELECT", "1"]) == OK
@@ -9239,11 +9243,15 @@ class TestCommands:
 
             # no REPLACE, copying to existing key on DB 0 & 1, non-existing key on DB 2
             assert (
-                await glide_client.copy(source, destination, index1, replace=False)
+                await glide_client.copy(
+                    source, destination, destinationDB=index1, replace=False
+                )
                 is False
             )
             assert (
-                await glide_client.copy(source, destination, index2, replace=False)
+                await glide_client.copy(
+                    source, destination, destinationDB=index2, replace=False
+                )
                 is True
             )
 
@@ -9256,7 +9264,9 @@ class TestCommands:
             # both exists, with REPLACE, when value isn't the same, source always get copied to destination
             assert await glide_client.custom_command(["SELECT", "0"]) == OK
             assert (
-                await glide_client.copy(source, destination, index1, replace=True)
+                await glide_client.copy(
+                    source, destination, destinationDB=index1, replace=True
+                )
                 is True
             )
             assert await glide_client.custom_command(["SELECT", "1"]) == OK
@@ -9264,7 +9274,9 @@ class TestCommands:
 
             # invalid DB index
             with pytest.raises(RequestError):
-                await glide_client.copy(source, destination, -1, replace=True)
+                await glide_client.copy(
+                    source, destination, destinationDB=-1, replace=True
+                )
         finally:
             assert await glide_client.custom_command(["SELECT", "0"]) == OK
 

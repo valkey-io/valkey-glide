@@ -689,6 +689,52 @@ class StandaloneCommands(CoreCommands):
             self._execute_command(RequestType.FlushDB, args),
         )
 
+    def copy(
+        self,
+        source: TEncodable,
+        destination: TEncodable,
+        destinationDB: Optional[int] = None,
+        replace: Optional[bool] = None,
+    ) -> bool:
+        """
+        Copies the value stored at the `source` to the `destination` key. If `destinationDB`
+        is specified, the value will be copied to the database specified by `destinationDB`,
+        otherwise the current database will be used. When `replace` is True, removes the
+        `destination` key first if it already exists, otherwise performs no action.
+
+        See [valkey.io](https://valkey.io/commands/copy) for more details.
+
+        Args:
+            source (TEncodable): The key to the source value.
+            destination (TEncodable): The key where the value should be copied to.
+            destinationDB (Optional[int]): The alternative logical database index for the destination key.
+            replace (Optional[bool]): If the destination key should be removed before copying the value to it.
+
+        Returns:
+            bool: True if the source was copied.
+
+            Otherwise, return False.
+
+        Examples:
+            >>> client.set("source", "sheep")
+            >>> client.copy(b"source", b"destination", 1, False)
+                True # Source was copied
+            >>> client.select(1)
+            >>> client.get("destination")
+                b"sheep"
+
+        Since: Valkey version 6.2.0.
+        """
+        args: List[TEncodable] = [source, destination]
+        if destinationDB is not None:
+            args.extend(["DB", str(destinationDB)])
+        if replace is True:
+            args.append("REPLACE")
+        return cast(
+            bool,
+            self._execute_command(RequestType.Copy, args),
+        )
+
     def lolwut(
         self,
         version: Optional[int] = None,
