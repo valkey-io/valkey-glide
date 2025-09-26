@@ -80,6 +80,21 @@ public interface ConnectionManagementCommands {
     CompletableFuture<String> clientGetName();
 
     /**
+     * Sets the name of the current connection.<br>
+     * The command will be routed to all nodes.
+     *
+     * @see <a href="https://valkey.io/commands/client-setname/">valkey.io</a> for details.
+     * @param name The name to set for the client connection.
+     * @return A simple <code>OK</code> response.
+     * @example
+     *     <pre>{@code
+     * String result = client.clientSetName("GLIDE").get();
+     * assert result.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> clientSetName(String name);
+
+    /**
      * Echoes the provided <code>message</code> back.
      *
      * @see <a href="https://valkey.io/commands/echo/>valkey.io</a> for details.
