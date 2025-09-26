@@ -1,8 +1,8 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import sys
-import warnings
 import types
+import warnings
 
 from glide.glide import (
     ClusterScanCursor,
@@ -168,7 +168,7 @@ _glide_module = sys.modules[__name__]
 _legacy_modules = [
     "glide.exceptions",
     "glide.config",
-    "glide.constants", 
+    "glide.constants",
     "glide.routes",
     "glide.async_commands",
     "glide.async_commands.batch",
@@ -185,12 +185,14 @@ _legacy_modules = [
     "glide.async_commands.stream",
 ]
 
+
 class _LegacyModule(types.ModuleType):
     """Proxy for a deprecated module that warns when first accessed."""
+
     def __init__(self, name):
         super().__init__(name)
         self._warned = False
-        
+
     def __getattr__(self, name):
         if not self._warned:
             warnings.warn(
@@ -203,6 +205,7 @@ class _LegacyModule(types.ModuleType):
 
         # Access the attribute from the real top-level glide module
         return getattr(_glide_module, name)
+
 
 # Replace old modules with lazy proxy modules
 for old_name in _legacy_modules:
