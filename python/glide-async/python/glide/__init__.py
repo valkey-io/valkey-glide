@@ -175,7 +175,6 @@ _legacy_modules = [
     "glide.async_commands.batch_options",
     "glide.async_commands.bitmap",
     "glide.async_commands.command_args",
-    "glide.async_commands.core",
     "glide.async_commands.server_modules",
     "glide.async_commands.server_modules.ft_options",
     "glide.async_commands.server_modules.ft_options.ft_aggregate_options",
