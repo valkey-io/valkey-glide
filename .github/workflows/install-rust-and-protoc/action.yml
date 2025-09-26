@@ -23,6 +23,7 @@ runs:
           uses: dtolnay/rust-toolchain@stable
           with:
               targets: ${{ inputs.target }}
+              components: rustfmt, clippy
 
         - name: Install protoc (protobuf)
           uses: arduino/setup-protoc@v3
