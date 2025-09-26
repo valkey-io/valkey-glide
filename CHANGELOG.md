@@ -1,4 +1,10 @@
-## 2.1
+## 2.1.1
+
+#### Changes
+
+* PYTHON: Consolidate COPY command implementation to CoreCommands ([#4806](https://github.com/valkey-io/valkey-glide/pull/4659))
+
+#### Fixes
 
 #### Changes
 
