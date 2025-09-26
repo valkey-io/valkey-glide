@@ -1,3 +1,11 @@
+## 2.1.1
+
+#### Changes
+
+* JAVA: Add cluster support for Move command ([#4749])(https://github.com/valkey-io/valkey-glide/pull/4749)
+
+#### Fixes 
+
 ## 2.1
 
 #### Changes
