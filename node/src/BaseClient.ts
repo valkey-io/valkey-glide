@@ -64,6 +64,7 @@ import {
     RangeByIndex,
     RangeByLex,
     RangeByScore,
+    ReleaseSocketConnection,
     RequestError,
     RestoreOptions,
     RouteOption,
@@ -978,6 +979,8 @@ type WritePromiseOptions =
  */
 export class BaseClient {
     private socket: net.Socket;
+    private socketPath?: string;
+    private socketListenerReleased = false;
     protected readonly promiseCallbackFunctions:
         | [PromiseFunction, ErrorFunction, Decoder | undefined][]
         | [PromiseFunction, ErrorFunction][] = [];
@@ -1257,6 +1260,32 @@ export class BaseClient {
         this.defaultDecoder = options?.defaultDecoder ?? Decoder.String;
         this.inflightRequestsLimit =
             options?.inflightRequestsLimit ?? DEFAULT_INFLIGHT_REQUESTS_LIMIT;
+    }
+
+    protected setSocketPath(path: string): void {
+        this.socketPath = path;
+        this.socketListenerReleased = false;
+    }
+
+    protected releaseSocketListener(): void {
+        if (this.socketListenerReleased || !this.socketPath) {
+            return;
+        }
+
+        try {
+            ReleaseSocketConnection(this.socketPath);
+        } catch (error) {
+            // Log the error but don't throw - we still need to clear local state
+            Logger.log(
+                "warn",
+                "Socket cleanup",
+                `Error releasing socket connection: ${error}`,
+            );
+        } finally {
+            // Always clear local state to ensure idempotency and prevent inconsistent state
+            this.socketListenerReleased = true;
+            this.socketPath = undefined;
+        }
     }
 
     protected getCallbackIndex(): number {
@@ -9165,6 +9194,16 @@ export class BaseClient {
         });
         Logger.log("info", "Client lifetime", "disposing of client");
         this.socket.end();
+
+        try {
+            this.releaseSocketListener();
+        } catch (error) {
+            Logger.log(
+                "debug",
+                "Client lifetime",
+                `Error releasing socket listener during close: ${error}`,
+            );
+        }
     }
 
     /**
@@ -9210,17 +9249,40 @@ export class BaseClient {
         ) => TConnection,
     ): Promise<TConnection> {
         const path = await StartSocketConnection();
-        const socket = await this.GetSocket(path);
+        let socket: net.Socket;
 
         try {
-            return await this.__createClientInternal<TConnection>(
+            socket = await this.GetSocket(path);
+        } catch (err) {
+            ReleaseSocketConnection(path);
+            throw err;
+        }
+
+        try {
+            const connection = await this.__createClientInternal<TConnection>(
                 options,
                 socket,
                 constructor,
             );
+            connection.setSocketPath(path);
+            return connection;
         } catch (err) {
-            // Ensure socket is closed
-            socket.end();
+            // Ensure socket is fully closed and listener is released
+            try {
+                socket.end();
+                socket.destroy();
+            } catch {
+                // Ignore socket cleanup errors to avoid masking the original error
+            }
+
+            try {
+                if (ReleaseSocketConnection) {
+                    ReleaseSocketConnection(path);
+                }
+            } catch {
+                // Ignore release errors to avoid masking the original error
+            }
+
             throw err;
         }
     }
