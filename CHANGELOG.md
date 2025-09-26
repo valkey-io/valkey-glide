@@ -2,6 +2,8 @@
 
 #### Changes
 
+* Added in documentation to how to use Lua scripts with Glide 
+
 #### Fixes
 
 * Node: Resolved circular import dependency between `BaseClient.ts`, `GlideClient.ts`, and `GlideClusterClient.ts.` ([#4607](https://github.com/valkey-io/valkey-glide/issues/4607))
