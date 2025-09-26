@@ -412,6 +412,29 @@ class TestGlideClients:
         # Clean up the main client
         await client.close()
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_UDS_socket_connection_failure(self, glide_client: TGlideClient):
+        """Test that the client's error handling during UDS socket connection failure"""
+        assert await glide_client.set("test_key", "test_value") == OK
+        assert await glide_client.get("test_key") == b"test_value"
+
+        # Force close the UDS connection to simulate socket failure
+        await glide_client._stream.aclose()
+
+        # Verify a ClosingError is raised
+        with pytest.raises(
+            ClosingError, match="The communication layer was unexpectedly closed"
+        ):
+            await glide_client.get("test_key")
+
+        # Verify the client is closed
+        with pytest.raises(
+            ClosingError,
+            match="Unable to execute requests; the client is closed. Please create a new client.",
+        ):
+            await glide_client.get("test_key")
+
 
 @pytest.mark.anyio
 class TestCommands:

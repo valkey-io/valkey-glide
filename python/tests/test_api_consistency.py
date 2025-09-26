@@ -69,6 +69,7 @@ EXCLUDED_TESTS = {
         "test_inflight_request_limit",
         "test_statistics",
         "test_select",
+        "test_UDS_socket_connection_failure",
     ],
     "sync_only": ["test_sync_fork"],
 }

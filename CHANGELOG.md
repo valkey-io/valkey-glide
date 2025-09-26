@@ -3,8 +3,9 @@
 #### Changes
 
 * PYTHON: Add MOVE command support for cluster clients ([#4751](https://github.com/valkey-io/valkey-glide/pull/4751))
+* JAVA: Add cluster support for Move command ([#4749])(https://github.com/valkey-io/valkey-glide/pull/4749)
 
-#### Fixes
+#### Fixes 
 
 ## 2.1
 

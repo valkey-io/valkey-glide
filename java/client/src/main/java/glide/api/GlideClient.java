@@ -24,7 +24,6 @@ import static command_request.CommandRequestOuterClass.RequestType.FunctionStats
 import static command_request.CommandRequestOuterClass.RequestType.Info;
 import static command_request.CommandRequestOuterClass.RequestType.LastSave;
 import static command_request.CommandRequestOuterClass.RequestType.Lolwut;
-import static command_request.CommandRequestOuterClass.RequestType.Move;
 import static command_request.CommandRequestOuterClass.RequestType.Ping;
 import static command_request.CommandRequestOuterClass.RequestType.RandomKey;
 import static command_request.CommandRequestOuterClass.RequestType.Scan;
@@ -352,18 +351,6 @@ public class GlideClient extends BaseClient
                         : new GlideString[] {libraryCode};
         return commandManager.submitNewCommand(
                 FunctionLoad, arguments, this::handleGlideStringResponse);
-    }
-
-    @Override
-    public CompletableFuture<Boolean> move(@NonNull String key, long dbIndex) {
-        return commandManager.submitNewCommand(
-                Move, new String[] {key, Long.toString(dbIndex)}, this::handleBooleanResponse);
-    }
-
-    @Override
-    public CompletableFuture<Boolean> move(@NonNull GlideString key, long dbIndex) {
-        return commandManager.submitNewCommand(
-                Move, new GlideString[] {key, gs(Long.toString(dbIndex))}, this::handleBooleanResponse);
     }
 
     @Override
