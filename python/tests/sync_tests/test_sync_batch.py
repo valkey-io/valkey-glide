@@ -310,6 +310,20 @@ class TestSyncBatch:
         assert result[2] is True
         assert result[3] == value.encode()
 
+    @pytest.mark.skip_if_version_below("9.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_cluster_move_transaction(self, glide_sync_client: GlideClusterClient):
+        keyslot = get_random_string(3)
+        key = "{{{}}}:{}".format(keyslot, get_random_string(10))  # to get the same slot
+        value = get_random_string(5)
+        transaction = ClusterBatch(is_atomic=True)
+        transaction.set(key, value)
+        transaction.move(key, 1)
+        result = glide_sync_client.exec(transaction, raise_on_error=True)
+        assert result is not None
+        assert result[1] is True
+
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_transaction_chaining_calls(self, glide_sync_client: TGlideClient):

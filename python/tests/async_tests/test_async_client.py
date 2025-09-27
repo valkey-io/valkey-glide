@@ -651,13 +651,19 @@ class TestCommands:
         assert await glide_client.select(0) == OK
         assert await glide_client.get(key) == value.encode()
 
-    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_move(self, glide_client: GlideClient):
+    async def test_move(self, glide_client: TGlideClient, cluster_mode):
+        if cluster_mode:
+            if await check_if_server_version_lt(glide_client, "9.0.0"):
+                return pytest.mark.skip(
+                    reason="Database ID selection in cluster mode requires Valkey >= 9.0.0"
+                )
+
         key = get_random_string(10)
         value = get_random_string(10)
 
-        assert await glide_client.select(0) == OK
+        assert await glide_client.custom_command(["SELECT", "0"]) == OK
         assert await glide_client.move(key, 1) is False
 
         assert await glide_client.set(key, value) == OK
@@ -665,7 +671,7 @@ class TestCommands:
 
         assert await glide_client.move(key, 1) is True
         assert await glide_client.get(key) is None
-        assert await glide_client.select(1) == OK
+        assert await glide_client.custom_command(["SELECT", "1"]) == OK
         assert await glide_client.get(key) == value.encode()
 
         with pytest.raises(RequestError):
