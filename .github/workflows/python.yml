@@ -166,7 +166,7 @@ jobs:
               env:
                   TEST_NAME_ARG: ${{ inputs.name && format('-k {0}', inputs.name) || '' }}
               run: |
-                  python3 dev.py test --args --async-backend=asyncio --html=pytest_report.html --self-contained-html "$TEST_NAME_ARG"
+                  python3 dev.py test --args -s --async-backend=asyncio --html=pytest_report.html --self-contained-html "$TEST_NAME_ARG"
 
             - name: Test with pytest (full matrix, all async backends)
               if: ${{ env.RUN_FULL_MATRIX == 'true' }}
