@@ -308,14 +308,14 @@ jobs:
 
             # Put the native.js and native.d.ts files in the src directory
             - name: Download Module js files
-              uses: actions/download-artifact@v4
+              uses: actions/download-artifact@v5
               with:
                   name: js-files-${{ github.run_id }}
                   path: ./node/build-ts
 
             # Download all native modules
             - name: Download all native modules
-              uses: actions/download-artifact@v4
+              uses: actions/download-artifact@v5
               with:
                   path: ./node/artifacts
 
