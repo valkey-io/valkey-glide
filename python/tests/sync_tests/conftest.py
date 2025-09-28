@@ -52,8 +52,8 @@ def glide_sync_client(
         request_timeout=5000,
     )
     yield client
-    sync_test_teardown(request, cluster_mode, protocol)
     client.close()
+    sync_test_teardown(request, cluster_mode, protocol)
 
 
 @pytest.fixture(scope="function")
