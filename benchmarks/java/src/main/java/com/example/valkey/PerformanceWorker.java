@@ -59,7 +59,7 @@ public class PerformanceWorker implements Runnable {
                     // Determine operation type based on read/write ratio
                     boolean isRead = random.nextInt(100) < config.getReadWriteRatio();
                     
-                    long startTime = System.currentTimeMillis();
+                    long startTime = System.nanoTime();
                     boolean success = false;
                     String operation;
                     
@@ -77,8 +77,8 @@ public class PerformanceWorker implements Runnable {
                         success = client.set(key, value);
                     }
                     
-                    long endTime = System.currentTimeMillis();
-                    long latency = endTime - startTime;
+                    long endTime = System.nanoTime();
+                    long latency = (endTime - startTime) / 1_000_000; // Convert to milliseconds
                     
                     metrics.recordRequest(operation, latency, success);
                     
