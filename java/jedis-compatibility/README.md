@@ -35,7 +35,7 @@ The Jedis compatibility layer is implemented as a separate Gradle sub-module tha
 
 ```gradle
 dependencies {
-    implementation group: 'io.valkey', name: 'valkey-glide-jedis-compatibility', version: '2.+', classifier: 'osx-aarch_64'
+    implementation group: 'io.valkey', name: 'valkey-glide-jedis-compatibility', version: '2.1.0', classifier: 'osx-aarch_64'
 }
 ```
 
@@ -45,8 +45,8 @@ dependencies {
 <dependency>
     <groupId>io.valkey</groupId>
     <artifactId>valkey-glide-jedis-compatibility</artifactId>
-    <version>${valkey-glide.version}</version>
-    <classifier>${valkey-glide.classifier}</classifier>
+    <version>2.1.0</version>
+    <classifier>osx-aarch_64</classifier>
 </dependency>
 ```
 
