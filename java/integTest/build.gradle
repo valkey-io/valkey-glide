@@ -19,7 +19,7 @@ dependencies {
     // Use published jedis-compatibility artifact
     testImplementation group: 'io.valkey', name: 'valkey-glide-jedis-compatibility', version: project.ext.defaultReleaseVersion, classifier: osdetector.classifier
 
-    implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.13.0'
+    implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.19.0'
     implementation 'com.google.code.gson:gson:2.13.2'
 
     // Add commons-pool2 as compile-time dependency for tests
@@ -29,7 +29,7 @@ dependencies {
 
     // junit
     testImplementation 'org.mockito:mockito-junit-jupiter:3.12.4'
-    testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter', version: '5.10.2'
+    testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter', version: '5.13.4'
 
     // semver4j for semantic versioning
     implementation group: 'org.semver4j', name: 'semver4j', version: '5.6.0'

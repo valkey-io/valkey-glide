@@ -20,14 +20,14 @@ dependencies {
             prefer '4.29.1'
         }
     }
-    implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.13.0'
+    implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.19.0'
 
-    compileOnly 'com.github.spotbugs:spotbugs-annotations:4.8.6'
+    compileOnly 'com.github.spotbugs:spotbugs-annotations:4.9.6'
 
     // junit
     testImplementation group: 'org.mockito', name: 'mockito-inline', version: '5.2.0'
     testImplementation group: 'org.mockito', name: 'mockito-junit-jupiter', version: '5.2.0'
-    testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter', version: '5.10.2'
+    testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter', version: '5.13.4'
 
     //lombok
     compileOnly 'org.projectlombok:lombok:1.18.42'

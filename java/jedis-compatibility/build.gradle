@@ -19,7 +19,7 @@ dependencies {
     implementation project(':client')
 
     // Transitive dependencies needed by GLIDE client
-    implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.13.0'
+    implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.19.0'
 
     implementation('com.google.protobuf:protobuf-java') {
         version {
@@ -32,7 +32,7 @@ dependencies {
     implementation group: 'org.apache.commons', name: 'commons-pool2', version: '2.12.1'
 
     // Test dependencies
-    testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter', version: '5.10.2'
+    testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter', version: '5.13.4'
     testImplementation group: 'org.mockito', name: 'mockito-inline', version: '5.2.0'
     testImplementation group: 'org.mockito', name: 'mockito-junit-jupiter', version: '5.2.0'
 
@@ -43,7 +43,7 @@ dependencies {
     testAnnotationProcessor 'org.projectlombok:lombok:1.18.42'
 
     // SpotBugs annotations for static analysis (compile-only to avoid IDE errors)
-    compileOnly 'com.github.spotbugs:spotbugs-annotations:4.8.0'
+    compileOnly 'com.github.spotbugs:spotbugs-annotations:4.9.6'
 }
 
 java {
