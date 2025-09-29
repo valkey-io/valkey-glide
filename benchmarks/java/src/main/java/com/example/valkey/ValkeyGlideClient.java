@@ -33,61 +33,30 @@ public class ValkeyGlideClient extends RedisClient {
     }
     
     private void connectStandalone() throws Exception {
-        // NodeAddress nodeAddress = NodeAddress.builder()
-        //     .host(config.getRedisHost())
-        //     .port(config.getRedisPort())
-        //     .build();
-        
-        // GlideClientConfiguration.GlideClientConfigurationBuilder configBuilder = GlideClientConfiguration.builder()
-        //     .address(nodeAddress)
-        //     .requestTimeout(10000); // 10 second timeout
-        
-        // if (config.isTlsEnabled()) {
-        //     // TLS configuration - this may need adjustment based on actual API
-        //     // configBuilder.useTLS(true);
-        // }
-        
         GlideClientConfiguration clientConfig = GlideClientConfiguration.builder()
                 .address(NodeAddress.builder()
                     .host(config.getRedisHost())
                     .port(config.getRedisPort())
                     .build())
                 .useTLS(config.isTlsEnabled())
+                .requestTimeout(1000) // 1 second request timeout
                 .build();
         
         CompletableFuture<GlideClient> clientFuture = GlideClient.createClient(clientConfig);
-        glideClient = clientFuture.get(10, TimeUnit.SECONDS); // 10 second connection timeout
+        glideClient = clientFuture.get(2, TimeUnit.SECONDS); // 2 second connection timeout
     }
     
     private void connectCluster() throws Exception {
-        // NodeAddress nodeAddress = NodeAddress.builder()
-        //     .host(config.getRedisHost())
-        //     .port(config.getRedisPort())
-        //     .build();
-        
-        // List<NodeAddress> addresses = Arrays.asList(nodeAddress);
-        
-        // GlideClusterClientConfiguration.GlideClusterClientConfigurationBuilder configBuilder = GlideClusterClientConfiguration.builder()
-        //     .addresses(addresses)
-        //     .requestTimeout(10000); // 10 second timeout
-        
-        // // Note: TLS configuration may vary by version - using basic configuration for now
-        // if (config.isTlsEnabled()) {
-        //     // TLS configuration - this may need adjustment based on actual API
-        //     configBuilder.useTLS(true);
-        // }
-        
-        // GlideClusterClientConfiguration clusterConfig = configBuilder.build();
-
         GlideClusterClientConfiguration glideClusterClientConfig = GlideClusterClientConfiguration.builder()
                 .address(NodeAddress.builder()
                     .host(config.getRedisHost())
                     .port(config.getRedisPort())
                     .build())
                 .useTLS(config.isTlsEnabled())
+                .requestTimeout(1000) // 1 second request timeout
                 .build();
         
-        glideClusterClient = GlideClusterClient.createClient(glideClusterClientConfig).get();
+        glideClusterClient = GlideClusterClient.createClient(glideClusterClientConfig).get(2, TimeUnit.SECONDS);
     }
     
     @Override
@@ -112,7 +81,7 @@ public class ValkeyGlideClient extends RedisClient {
             } else {
                 future = glideClient.set(key, value);
             }
-            String result = future.get(5, TimeUnit.SECONDS);
+            String result = future.get(500, TimeUnit.MILLISECONDS);
             return "OK".equals(result);
         } catch (Exception e) {
             throw new Exception("SET operation failed: " + e.getMessage(), e);
@@ -128,7 +97,7 @@ public class ValkeyGlideClient extends RedisClient {
             } else {
                 future = glideClient.get(key);
             }
-            return future.get(5, TimeUnit.SECONDS);
+            return future.get(500, TimeUnit.MILLISECONDS);
         } catch (Exception e) {
             throw new Exception("GET operation failed: " + e.getMessage(), e);
         }
@@ -159,7 +128,7 @@ public class ValkeyGlideClient extends RedisClient {
             } else {
                 future = glideClient.ping();
             }
-            String result = future.get(5, TimeUnit.SECONDS);
+            String result = future.get(500, TimeUnit.MILLISECONDS);
             return "PONG".equals(result);
         } catch (Exception e) {
             throw new Exception("PING failed: " + e.getMessage(), e);
