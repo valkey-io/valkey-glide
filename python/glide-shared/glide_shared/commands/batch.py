@@ -403,6 +403,27 @@ class BaseBatch:
         """
         return self.append_command(RequestType.ConfigResetStat, [])
 
+    def move(self: TBatch, key: TEncodable, db_index: int) -> "TBatch":
+        """
+        Move `key` from the currently selected database to the database specified by `db_index`.
+
+        Note:
+            For cluster mode move command is supported since Valkey 9.0.0
+
+        See [valkey.io](https://valkey.io/commands/move/) for more details.
+
+        Args:
+            key (TEncodable): The key to move.
+            db_index (int): The index of the database to move `key` to.
+
+        Commands response:
+            bool: True if `key` was moved.
+
+            False if the `key` already exists in the destination database
+            or does not exist in the source database.
+        """
+        return self.append_command(RequestType.Move, [key, str(db_index)])
+
     def mset(self: TBatch, key_value_map: Mapping[TEncodable, TEncodable]) -> TBatch:
         """
         Set multiple keys to multiple values in a single atomic operation.
@@ -5753,25 +5774,6 @@ class Batch(BaseBatch):
         [OK, OK, b"value1", b"value2"]
 
     """
-
-    # TODO: add SLAVEOF and all SENTINEL commands
-    def move(self, key: TEncodable, db_index: int) -> "Batch":
-        """
-        Move `key` from the currently selected database to the database specified by `db_index`.
-
-        See [valkey.io](https://valkey.io/commands/move/) for more details.
-
-        Args:
-            key (TEncodable): The key to move.
-            db_index (int): The index of the database to move `key` to.
-
-        Commands response:
-            bool: True if `key` was moved.
-
-            False if the `key` already exists in the destination database
-            or does not exist in the source database.
-        """
-        return self.append_command(RequestType.Move, [key, str(db_index)])
 
     def select(self, index: int) -> "Batch":
         """

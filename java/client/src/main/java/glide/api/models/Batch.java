@@ -2,7 +2,6 @@
 package glide.api.models;
 
 import static command_request.CommandRequestOuterClass.RequestType.Copy;
-import static command_request.CommandRequestOuterClass.RequestType.Move;
 import static command_request.CommandRequestOuterClass.RequestType.Scan;
 import static command_request.CommandRequestOuterClass.RequestType.Select;
 import static glide.api.commands.GenericBaseCommands.REPLACE_VALKEY_API;
@@ -86,25 +85,6 @@ public class Batch extends BaseBatch<Batch> {
      */
     public Batch select(long index) {
         protobufBatch.addCommands(buildCommand(Select, newArgsBuilder().add(index)));
-        return this;
-    }
-
-    /**
-     * Move <code>key</code> from the currently selected database to the database specified by <code>
-     * dbIndex</code>.
-     *
-     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
-     *     will throw {@link IllegalArgumentException}.
-     * @see <a href="https://valkey.io/commands/move/">valkey.io</a> for more details.
-     * @param key The key to move.
-     * @param dbIndex The index of the database to move <code>key</code> to.
-     * @return Command Response - <code>true</code> if <code>key</code> was moved, or <code>false
-     *     </code> if the <code>key</code> already exists in the destination database or does not
-     *     exist in the source database.
-     */
-    public <ArgType> Batch move(ArgType key, long dbIndex) {
-        checkTypeOrThrow(key);
-        protobufBatch.addCommands(buildCommand(Move, newArgsBuilder().add(key).add(dbIndex)));
         return this;
     }
 
