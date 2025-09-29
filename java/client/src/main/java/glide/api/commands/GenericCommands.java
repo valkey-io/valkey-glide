@@ -53,42 +53,6 @@ public interface GenericCommands {
     CompletableFuture<Object> customCommand(GlideString[] args);
 
     /**
-     * Move <code>key</code> from the currently selected database to the database specified by <code>
-     * dbIndex</code>.
-     *
-     * @see <a href="https://valkey.io/commands/move/">valkey.io</a> for more details.
-     * @param key The key to move.
-     * @param dbIndex The index of the database to move <code>key</code> to.
-     * @return <code>true</code> if <code>key</code> was moved, or <code>false</code> if the <code>key
-     *     </code> already exists in the destination database or does not exist in the source
-     *     database.
-     * @example
-     *     <pre>{@code
-     * Boolean moved = client.move("some_key", 1L).get();
-     * assert moved;
-     * }</pre>
-     */
-    CompletableFuture<Boolean> move(String key, long dbIndex);
-
-    /**
-     * Move <code>key</code> from the currently selected database to the database specified by <code>
-     * dbIndex</code>.
-     *
-     * @see <a href="https://valkey.io/commands/move/">valkey.io</a> for more details.
-     * @param key The key to move.
-     * @param dbIndex The index of the database to move <code>key</code> to.
-     * @return <code>true</code> if <code>key</code> was moved, or <code>false</code> if the <code>key
-     *     </code> already exists in the destination database or does not exist in the source
-     *     database.
-     * @example
-     *     <pre>{@code
-     * Boolean moved = client.move(gs("some_key"), 1L).get();
-     * assert moved;
-     * }</pre>
-     */
-    CompletableFuture<Boolean> move(GlideString key, long dbIndex);
-
-    /**
      * Copies the value stored at the <code>source</code> to the <code>destination</code> key on
      * <code>destinationDB</code>. When <code>replace</code> is true, removes the <code>destination
      * </code> key first if it already exists, otherwise performs no action.

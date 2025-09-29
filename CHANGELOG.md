@@ -3,8 +3,13 @@
 #### Changes
 
 * GO: Add cluster support for Move command ([#4748](https://github.com/valkey-io/valkey-glide/pull/4748))
+* NODE: add MOVE command support for cluster clients ([#4750](https://github.com/valkey-io/valkey-glide/pull/4750))
+* PYTHON: Add MOVE command support for cluster clients ([#4751](https://github.com/valkey-io/valkey-glide/pull/4751))
+* JAVA: Add cluster support for Move command ([#4749])(https://github.com/valkey-io/valkey-glide/pull/4749)
 
 #### Fixes 
+
+* Rust: Updates the `install-rust-and-protoc` action to explicitly include the `rustfmt` and `clippy` components. ([#4816](https://github.com/valkey-io/valkey-glide/issues/4816))
 
 ## 2.1
 
