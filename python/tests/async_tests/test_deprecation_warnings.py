@@ -9,7 +9,7 @@ import pytest
 
 _legacy_modules_and_symbols = {
     "glide.exceptions": "RequestError",
-    "glide.config": "GlideClientConfiguration", 
+    "glide.config": "GlideClientConfiguration",
     "glide.constants": "OK",
     "glide.routes": "AllNodes",
     "glide.async_commands.batch": "Batch",
@@ -30,16 +30,18 @@ _legacy_modules_and_symbols = {
 class TestDeprecationWarnings:
     """Test deprecation warnings for backward compatibility modules."""
 
-    @pytest.mark.parametrize("module_name,symbol_name", _legacy_modules_and_symbols.items())
+    @pytest.mark.parametrize(
+        "module_name,symbol_name", _legacy_modules_and_symbols.items()
+    )
     def test_legacy_module_deprecation_warning(self, module_name, symbol_name):
         """Test that importing from legacy modules shows deprecation warning."""
         # Reset the _warned flag to ensure warning is triggered
         # This is necessary to reliably trigger the warning in tests
         if module_name in sys.modules:
             legacy_module = sys.modules[module_name]
-            if hasattr(legacy_module, '_warned'):
+            if hasattr(legacy_module, "_warned"):
                 legacy_module._warned = False
-                
+
         with pytest.warns(
             DeprecationWarning, match=f"Importing from '{module_name}' is deprecated"
         ):
@@ -52,10 +54,11 @@ class TestDeprecationWarnings:
             # Import from deprecated path
             deprecated_module = importlib.import_module(module_name)
             deprecated_symbol = getattr(deprecated_module, symbol_name)
-            
+
             # Import from preferred path
             from glide import __dict__ as glide_dict
+
             preferred_symbol = glide_dict[symbol_name]
-            
+
             # Verify they're the same classes
             assert deprecated_symbol is preferred_symbol
