@@ -49,7 +49,7 @@ jobs:
                   fi
 
             - name: Checkout target branch
-              uses: actions/checkout@v4
+              uses: actions/checkout@v5
               with:
                   ref: ${{ env.TARGET_BRANCH }}
                   repository: ${{ github.event.pull_request.head.repo.full_name }}
@@ -78,7 +78,7 @@ jobs:
 
             - name: Checkout ORT Repository
               if: steps.cache-ort.outputs.cache-hit != 'true'
-              uses: actions/checkout@v4
+              uses: actions/checkout@v5
               with:
                   repository: "oss-review-toolkit/ort"
                   path: "./ort"

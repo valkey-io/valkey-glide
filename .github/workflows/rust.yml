@@ -84,7 +84,7 @@ jobs:
             # language version matrix is omitted
 
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v5
             - id: get-matrices
               uses: ./.github/workflows/create-test-matrices
               with:
@@ -104,7 +104,7 @@ jobs:
                 host: ${{ fromJson(needs.get-matrices.outputs.host-matrix-output) }}
 
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v5
 
             - name: Install shared software dependencies
               uses: ./.github/workflows/install-shared-dependencies
@@ -174,7 +174,7 @@ jobs:
         runs-on: ubuntu-latest
         timeout-minutes: 30
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v5
 
             - uses: ./.github/workflows/lint-rust
               with:

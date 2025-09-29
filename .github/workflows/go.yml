@@ -89,7 +89,7 @@ jobs:
             host-matrix-output: ${{ steps.get-matrices.outputs.host-matrix-output }}
             version-matrix-output: ${{ steps.get-matrices.outputs.version-matrix-output }}
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v5
             - id: get-matrices
               uses: ./.github/workflows/create-test-matrices
               with:
@@ -111,7 +111,7 @@ jobs:
         runs-on: ${{ matrix.host.RUNNER }}
 
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v5
 
             - name: Output Matrix Parameters for this job
               run: |
@@ -192,7 +192,7 @@ jobs:
         runs-on: ubuntu-latest
         if: ${{ !github.event.inputs.rc-version }}
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v5
 
             - name: Set up Go
               uses: actions/setup-go@v5
@@ -235,7 +235,7 @@ jobs:
             version-matrix-output: ${{ steps.get-matrices.outputs.version-matrix-output }}
 
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v5
             - id: get-matrices
               uses: ./.github/workflows/create-test-matrices
               with:
@@ -271,7 +271,7 @@ jobs:
                   fi
 
             # Replace `:` in the variable otherwise it can't be used in `upload-artifact`
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v5
               with:
                   submodules: recursive
 
@@ -353,7 +353,7 @@ jobs:
             - name: Setup self-hosted runner access
               run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
 
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v5
 
             - name: Set up Go
               uses: actions/setup-go@v5
@@ -416,7 +416,7 @@ jobs:
         runs-on: ${{ matrix.host.RUNNER }}
 
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v5
 
             - name: Output Matrix Parameters for this job
               run: |

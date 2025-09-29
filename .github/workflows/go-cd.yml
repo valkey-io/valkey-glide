@@ -34,7 +34,7 @@ jobs:
             PLATFORM_MATRIX: ${{ steps.load-platform-matrix.outputs.PLATFORM_MATRIX }}
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@v5
 
             - name: load-platform-matrix
               id: load-platform-matrix
@@ -63,7 +63,7 @@ jobs:
         steps:
             - name: Checkout for tag check
               if: ${{ github.event_name == 'workflow_dispatch' }}
-              uses: actions/checkout@v4
+              uses: actions/checkout@v5
 
             - name: Validate version agaisnt tags
               if: ${{ github.event_name == 'workflow_dispatch' }}
@@ -108,7 +108,7 @@ jobs:
                   else
                     echo "No cleaning needed"
                   fi
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v5
             - uses: actions/setup-go@v5
               with:
                   go-version: ${{ env.BASE_GO_VERSION }}
@@ -147,7 +147,7 @@ jobs:
         permissions:
             contents: write
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v5
             - uses: actions/download-artifact@v4
               with:
                   path: artifacts
@@ -205,7 +205,7 @@ jobs:
                   else
                     echo "No cleaning needed"
                   fi
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v5
               with:
                   ref: "go/${{ needs.validate-release-version.outputs.RELEASE_VERSION }}"
             - uses: actions/setup-go@v5
