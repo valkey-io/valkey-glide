@@ -965,3 +965,88 @@ describe("SocketConnectionInternals", () => {
         });
     });
 });
+
+describe("Circular Dependency Fix", () => {
+    /* eslint-disable @typescript-eslint/no-require-imports */
+    it("should import GlideClient without circular dependency errors", () => {
+        expect(() => {
+            const { GlideClient } = require("../build-ts");
+            expect(GlideClient).toBeDefined();
+            expect(typeof GlideClient).toBe("function");
+        }).not.toThrow();
+    });
+
+    it("should import GlideClusterClient without circular dependency errors", () => {
+        expect(() => {
+            const { GlideClusterClient } = require("../build-ts");
+            expect(GlideClusterClient).toBeDefined();
+            expect(typeof GlideClusterClient).toBe("function");
+        }).not.toThrow();
+    });
+
+    it("should support Jest requireActual pattern without circular dependency errors", () => {
+        expect(() => {
+            const actualModule = require("../build-ts");
+
+            const mockModule = {
+                ...actualModule,
+                GlideClusterClient: {
+                    createClient: jest.fn(),
+                },
+            };
+
+            expect(mockModule.GlideClusterClient).toBeDefined();
+            expect(actualModule.GlideClient).toBeDefined();
+            expect(actualModule.BaseClient).toBeDefined();
+        }).not.toThrow();
+    });
+
+    it("should import TimeoutError without circular dependency errors", () => {
+        expect(() => {
+            const { TimeoutError } = require("../build-ts");
+            expect(TimeoutError).toBeDefined();
+            expect(typeof TimeoutError).toBe("function");
+        }).not.toThrow();
+    });
+
+    it("should handle the Jest mock pattern without throwing TypeError", () => {
+        expect(() => {
+            const actualModule = jest.requireActual("@valkey/valkey-glide");
+            const mockDefinition = {
+                ...actualModule,
+                GlideClusterClient: {
+                    createClient: jest.fn(),
+                },
+            };
+
+            expect(mockDefinition).toBeDefined();
+            expect(mockDefinition.GlideClusterClient).toBeDefined();
+            expect(
+                mockDefinition.GlideClusterClient.createClient,
+            ).toBeDefined();
+            expect(typeof mockDefinition.GlideClusterClient.createClient).toBe(
+                "function",
+            );
+            expect(mockDefinition.GlideClient).toBeDefined();
+            expect(mockDefinition.BaseClient).toBeDefined();
+            expect(mockDefinition.TimeoutError).toBeDefined();
+            expect(typeof actualModule.GlideClusterClient).toBe("function");
+            expect(typeof actualModule.BaseClient).toBe("function");
+        }).not.toThrow();
+    });
+
+    it("should handle import destructuring without circular dependency errors", () => {
+        expect(() => {
+            const {
+                GlideClusterClient,
+                TimeoutError,
+            } = require("@valkey/valkey-glide");
+
+            expect(GlideClusterClient).toBeDefined();
+            expect(TimeoutError).toBeDefined();
+            expect(typeof GlideClusterClient).toBe("function");
+            expect(typeof TimeoutError).toBe("function");
+        }).not.toThrow();
+    });
+    /* eslint-enable @typescript-eslint/no-require-imports */
+});

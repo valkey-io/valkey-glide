@@ -1,3 +1,15 @@
+## 2.2
+
+#### Changes
+
+#### Fixes
+
+* Node: Resolved circular import dependency between `BaseClient.ts`, `GlideClient.ts`, and `GlideClusterClient.ts.` ([#4607](https://github.com/valkey-io/valkey-glide/issues/4607))
+
+#### Operational Enhancements
+
+* Rust: Updates the `install-rust-and-protoc` action to explicitly include the `rustfmt` and `clippy` components. ([#4816](https://github.com/valkey-io/valkey-glide/issues/4816))
+
 ## 2.1
 
 #### Changes
