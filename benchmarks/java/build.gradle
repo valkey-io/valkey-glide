@@ -90,3 +90,23 @@ tasks.register('GlideExample', JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'com.example.valkey.GlideExample'
 }
+
+tasks.register('runMinimalLatencyTest', JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'com.example.valkey.MinimalLatencyTestRunner'
+    if (project.hasProperty('args')) {
+        args = project.property('args').toString().split(' ')
+    }
+}
+
+tasks.register('runMinimalJedisTest', JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'com.example.valkey.MinimalLatencyTestRunner'
+    args = ['--client=jedis', '--operations=1000']
+}
+
+tasks.register('runMinimalValkeyTest', JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'com.example.valkey.MinimalLatencyTestRunner'
+    args = ['--client=valkey', '--operations=1000']
+}
