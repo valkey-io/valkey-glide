@@ -2,7 +2,7 @@ plugins {
     id 'java'
     id 'java-library'
     id 'io.freefair.lombok' version '8.6'
-    id 'com.diffplug.spotless' version '7.2.1'
+    id 'com.diffplug.spotless' version '8.0.0'
     id 'jacoco'
 }
 
