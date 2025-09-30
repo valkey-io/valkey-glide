@@ -97,6 +97,34 @@ async def create_and_run_concurrent_tasks(
             )
 
 
+async def warmup_connections_with_threads(clients, num_of_concurrent_tasks, is_cluster):
+    """
+    Pre-warm all connections to eliminate lazy creation overhead during benchmarking.
+
+    Creates one thread per desired connection, each executing a blocking WAIT command
+    targeting all cluster primaries simultaneously. Since WAIT blocks each connection,
+    the connection pool is forced to create new connections rather than reuse existing ones.
+    This ensures every benchmark thread has a dedicated, pre-established connection to
+    each cluster node, eliminating connection setup latency from timing measurements.
+    """
+    print(f"Starting redis-py warm-up with {num_of_concurrent_tasks} tasks...")
+
+    async def open_connection_to_all_nodes_and_block_it(client):
+        if is_cluster:
+            await client.wait(
+                num_replicas=999, timeout=60000, target_nodes=RedisCluster.PRIMARIES
+            )
+        else:
+            await client.wait(num_replicas=999, timeout=60000)
+
+    for client in clients:
+        async with anyio.create_task_group() as tg:
+            for _ in range(num_of_concurrent_tasks):
+                tg.start_soon(open_connection_to_all_nodes_and_block_it, client)
+
+    print("Warm-up completed. All connections established.")
+
+
 async def create_clients(client_count, action):
     return [await action() for _ in range(client_count)]
 
@@ -173,6 +201,10 @@ async def main(
             lambda: client_class(
                 host=host, port=port, decode_responses=True, ssl=use_tls
             ),
+        )
+
+        await warmup_connections_with_threads(
+            clients, num_of_concurrent_tasks, is_cluster
         )
 
         await run_clients(
