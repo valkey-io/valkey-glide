@@ -432,7 +432,7 @@ impl Client {
                 Err(err) => return Err(err),
             };
 
-            let value = run_with_timeout(request_timeout, async move {
+            let result = run_with_timeout(request_timeout, async move {
                 match client {
                     ClientWrapper::Standalone(mut client) => client.send_command(cmd).await,
                     ClientWrapper::Cluster {mut client } => {
@@ -466,8 +466,9 @@ impl Client {
                     ClientWrapper::Lazy(_) => unreachable!("Lazy client should have been initialized"),
                 }
                 .and_then(|value| convert_to_expected_type(value, expected_type))
-            })
-            .await?;
+            });
+
+            let value = result.await?;
 
             Ok(value)
         })
