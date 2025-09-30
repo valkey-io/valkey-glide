@@ -77,6 +77,8 @@ class BaseClient(CoreCommands):
         return self
 
     def _create_core_client(self):
+        if self._is_closed:
+            return
         print("Creating core client...")
         conn_req = self._config._create_a_protobuf_conn_request(
             cluster_mode=type(self._config) is GlideClusterClientConfiguration
