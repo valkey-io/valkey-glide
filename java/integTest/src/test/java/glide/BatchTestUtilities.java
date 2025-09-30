@@ -164,6 +164,7 @@ public class BatchTestUtilities {
         String genericKey2 = generateKeySameSlot(genericKey1);
         String genericKey3 = generateKey("GenericKey", isAtomic);
         String genericKey4 = generateKeySameSlot(genericKey3);
+        String genericKey5 = generateKeySameSlot(genericKey3);
         String[] ascendingList = new String[] {"1", "2", "3"};
         String[] descendingList = new String[] {"3", "2", "1"};
 
@@ -219,6 +220,7 @@ public class BatchTestUtilities {
                     .copy(genericKey3, genericKey4, 1)
                     .copy(genericKey3, genericKey4, 1, false)
                     .copy(genericKey3, genericKey4, 1, true);
+            batch.set(genericKey5, "value").move(genericKey5, 1);
         }
 
         var expectedResults =
@@ -276,6 +278,7 @@ public class BatchTestUtilities {
                                 true, // copy(genericKey3, genericKey4, true)
                             });
         }
+
         if (SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0")) {
             expectedResults =
                     concatenateArrays(
@@ -285,6 +288,8 @@ public class BatchTestUtilities {
                                 true, // copy(genericKey3, genericKey4, 1)
                                 false, // copy(genericKey3, genericKey4, 1, false)
                                 true, // copy(genericKey3, genericKey4, 1, true)
+                                OK, // set(genericKey5, "value")
+                                true, // move(genericKey5, 1)
                             });
         }
         return expectedResults;

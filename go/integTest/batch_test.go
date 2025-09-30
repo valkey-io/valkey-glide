@@ -20,11 +20,11 @@ import (
 	"github.com/valkey-io/valkey-glide/go/v2/pipeline"
 )
 
-func (suite *GlideTestSuite) runBatchTest(test func(client interfaces.BaseClientCommands, isAtomic bool)) {
+func (suite *GlideTestSuite) runBatchTest(test func(client interfaces.BaseClientCommands, isAtomic bool, t *testing.T)) {
 	for _, client := range suite.getDefaultClients() {
 		for _, isAtomic := range []bool{true, false} {
 			suite.T().Run(makeFullTestName(client, "", isAtomic), func(t *testing.T) {
-				test(client, isAtomic)
+				test(client, isAtomic, t)
 			})
 		}
 	}
@@ -32,7 +32,7 @@ func (suite *GlideTestSuite) runBatchTest(test func(client interfaces.BaseClient
 
 // Note: test may cause others to fail, because they run in parallel and DEBUG command locks the server
 func (suite *GlideTestSuite) TestBatchTimeout() {
-	suite.runBatchTest(func(client interfaces.BaseClientCommands, isAtomic bool) {
+	suite.runBatchTest(func(client interfaces.BaseClientCommands, isAtomic bool, t *testing.T) {
 		switch c := client.(type) {
 		case *glide.ClusterClient:
 			batch := pipeline.NewClusterBatch(isAtomic).CustomCommand([]string{"DEBUG", "sleep", "0.5"})
@@ -69,7 +69,7 @@ func (suite *GlideTestSuite) TestBatchTimeout() {
 }
 
 func (suite *GlideTestSuite) TestBatchRaiseOnError() {
-	suite.runBatchTest(func(client interfaces.BaseClientCommands, isAtomic bool) {
+	suite.runBatchTest(func(client interfaces.BaseClientCommands, isAtomic bool, t *testing.T) {
 		key1 := "{BatchRaiseOnError}" + uuid.NewString()
 		key2 := "{BatchRaiseOnError}" + uuid.NewString()
 
@@ -123,11 +123,18 @@ func (suite *GlideTestSuite) TestBatchDumpRestore() {
 }
 
 func (suite *GlideTestSuite) TestBatchMove() {
-	suite.runBatchTest(func(client interfaces.BaseClientCommands, isAtomic bool) {
+	suite.runBatchTest(func(client interfaces.BaseClientCommands, isAtomic bool, t *testing.T) {
 		key := "{prefix}-" + uuid.NewString()
 		switch c := client.(type) {
 		case *glide.ClusterClient:
-			return // Move is not supported in cluster client
+			suite.SkipIfServerVersionLowerThan("9.0.0", t)
+			batch := pipeline.NewClusterBatch(isAtomic).
+				Set(key, "val").
+				Move(key, 2)
+
+			res, err := c.Exec(context.Background(), *batch, true)
+			suite.verifyOK(res[0].(string), err)
+			suite.True(res[1].(bool))
 		case *glide.Client:
 			batch := pipeline.NewStandaloneBatch(isAtomic).
 				Set(key, "val").
@@ -349,7 +356,7 @@ func (suite *GlideTestSuite) TestBatchConvertersHandleServerError() {
 }
 
 func (suite *GlideTestSuite) TestBatchGeoSpatial() {
-	suite.runBatchTest(func(client interfaces.BaseClientCommands, isAtomic bool) {
+	suite.runBatchTest(func(client interfaces.BaseClientCommands, isAtomic bool, t *testing.T) {
 		prefix := "{GeoKey}-"
 		atomicPrefix := prefix
 		if !isAtomic {
@@ -429,7 +436,7 @@ func (suite *GlideTestSuite) TestBatchGeoSpatial() {
 
 func (suite *GlideTestSuite) TestBatchStandaloneAndClusterPubSub() {
 	// Just test that the execution works
-	suite.runBatchTest(func(client interfaces.BaseClientCommands, isAtomic bool) {
+	suite.runBatchTest(func(client interfaces.BaseClientCommands, isAtomic bool, t *testing.T) {
 		switch c := client.(type) {
 		case *glide.ClusterClient:
 			batch := pipeline.NewClusterBatch(isAtomic).

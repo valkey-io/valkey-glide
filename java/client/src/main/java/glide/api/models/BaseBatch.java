@@ -103,6 +103,7 @@ import static command_request.CommandRequestOuterClass.RequestType.Lolwut;
 import static command_request.CommandRequestOuterClass.RequestType.MGet;
 import static command_request.CommandRequestOuterClass.RequestType.MSet;
 import static command_request.CommandRequestOuterClass.RequestType.MSetNX;
+import static command_request.CommandRequestOuterClass.RequestType.Move;
 import static command_request.CommandRequestOuterClass.RequestType.ObjectEncoding;
 import static command_request.CommandRequestOuterClass.RequestType.ObjectFreq;
 import static command_request.CommandRequestOuterClass.RequestType.ObjectIdleTime;
@@ -629,6 +630,25 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
     public T msetnx(@NonNull Map<?, ?> keyValueMap) {
         GlideString[] args = flattenMapToGlideStringArray(keyValueMap);
         protobufBatch.addCommands(buildCommand(MSetNX, newArgsBuilder().add(args)));
+        return getThis();
+    }
+
+    /**
+     * Move <code>key</code> from the currently selected database to the database specified by <code>
+     * dbIndex</code>.
+     *
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
+     * @see <a href="https://valkey.io/commands/move/">valkey.io</a> for more details.
+     * @param key The key to move.
+     * @param dbIndex The index of the database to move <code>key</code> to.
+     * @return Command Response - <code>true</code> if <code>key</code> was moved, or <code>false
+     *     </code> if the <code>key</code> already exists in the destination database or does not
+     *     exist in the source database.
+     */
+    public <ArgType> T move(ArgType key, long dbIndex) {
+        checkTypeOrThrow(key);
+        protobufBatch.addCommands(buildCommand(Move, newArgsBuilder().add(key).add(dbIndex)));
         return getThis();
     }
 
