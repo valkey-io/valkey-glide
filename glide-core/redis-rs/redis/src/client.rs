@@ -569,6 +569,11 @@ impl Client {
     pub fn update_password(&mut self, password: Option<String>) {
         self.connection_info.redis.password = password;
     }
+
+    /// Updates the client_name in connection_info.
+    pub fn update_client_name(&mut self, client_name: Option<String>) {
+        self.connection_info.redis.client_name = client_name;
+    }
 }
 
 #[cfg(feature = "aio")]

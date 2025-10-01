@@ -394,6 +394,17 @@ impl ReconnectingConnection {
         client.update_password(new_password);
     }
 
+    /// Updates the client name that's saved inside connection_info, that will be used in case of disconnection from the server.
+    pub(crate) fn update_connection_client_name(&self, new_client_name: Option<String>) {
+        let mut client = self
+            .inner
+            .backend
+            .connection_info
+            .write()
+            .expect(WRITE_LOCK_ERR);
+        client.update_client_name(new_client_name);
+    }
+
     /// Returns the username if one was configured during client creation. Otherwise, returns None.
     pub(crate) fn get_username(&self) -> Option<String> {
         let client = self.inner.backend.get_backend_client();

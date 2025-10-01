@@ -332,6 +332,15 @@ where
             .await
     }
 
+    /// Update the name used for all cluster connections
+    pub async fn update_connection_client_name(
+        &mut self,
+        client_name: Option<String>,
+    ) -> RedisResult<Value> {
+        self.route_operation_request(Operation::UpdateConnectionClientName(client_name))
+            .await
+    }
+
     /// Get the username used to authenticate with all cluster servers
     pub async fn get_username(&mut self) -> RedisResult<Value> {
         self.route_operation_request(Operation::GetUsername).await
@@ -655,6 +664,7 @@ enum CmdArg<C> {
 #[derive(Clone)]
 enum Operation {
     UpdateConnectionPassword(Option<String>),
+    UpdateConnectionClientName(Option<String>),
     GetUsername,
 }
 
@@ -2589,6 +2599,11 @@ where
             CmdArg::OperationRequest(operation_request) => match operation_request {
                 Operation::UpdateConnectionPassword(password) => {
                     core.set_cluster_param(|params| params.password = password)
+                        .expect(MUTEX_WRITE_ERR);
+                    Ok(Response::Single(Value::Okay))
+                }
+                Operation::UpdateConnectionClientName(client_name) => {
+                    core.set_cluster_param(|params| params.client_name = client_name)
                         .expect(MUTEX_WRITE_ERR);
                     Ok(Response::Single(Value::Okay))
                 }
