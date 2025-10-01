@@ -7,7 +7,6 @@ import static command_request.CommandRequestOuterClass.RequestType.ConfigGet;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigResetStat;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigRewrite;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigSet;
-import static command_request.CommandRequestOuterClass.RequestType.Copy;
 import static command_request.CommandRequestOuterClass.RequestType.CustomCommand;
 import static command_request.CommandRequestOuterClass.RequestType.DBSize;
 import static command_request.CommandRequestOuterClass.RequestType.Echo;
@@ -24,7 +23,6 @@ import static command_request.CommandRequestOuterClass.RequestType.FunctionStats
 import static command_request.CommandRequestOuterClass.RequestType.Info;
 import static command_request.CommandRequestOuterClass.RequestType.LastSave;
 import static command_request.CommandRequestOuterClass.RequestType.Lolwut;
-import static command_request.CommandRequestOuterClass.RequestType.Move;
 import static command_request.CommandRequestOuterClass.RequestType.Ping;
 import static command_request.CommandRequestOuterClass.RequestType.RandomKey;
 import static command_request.CommandRequestOuterClass.RequestType.Scan;
@@ -355,18 +353,6 @@ public class GlideClient extends BaseClient
     }
 
     @Override
-    public CompletableFuture<Boolean> move(@NonNull String key, long dbIndex) {
-        return commandManager.submitNewCommand(
-                Move, new String[] {key, Long.toString(dbIndex)}, this::handleBooleanResponse);
-    }
-
-    @Override
-    public CompletableFuture<Boolean> move(@NonNull GlideString key, long dbIndex) {
-        return commandManager.submitNewCommand(
-                Move, new GlideString[] {key, gs(Long.toString(dbIndex))}, this::handleBooleanResponse);
-    }
-
-    @Override
     public CompletableFuture<Map<String, Object>[]> functionList(boolean withCode) {
         return commandManager.submitNewCommand(
                 FunctionList,
@@ -469,51 +455,6 @@ public class GlideClient extends BaseClient
     @Override
     public CompletableFuture<Object> fcallReadOnly(@NonNull GlideString function) {
         return fcallReadOnly(function, new GlideString[0], new GlideString[0]);
-    }
-
-    @Override
-    public CompletableFuture<Boolean> copy(
-            @NonNull String source, @NonNull String destination, long destinationDB) {
-        String[] arguments =
-                new String[] {source, destination, DB_VALKEY_API, Long.toString(destinationDB)};
-        return commandManager.submitNewCommand(Copy, arguments, this::handleBooleanResponse);
-    }
-
-    @Override
-    public CompletableFuture<Boolean> copy(
-            @NonNull GlideString source, @NonNull GlideString destination, long destinationDB) {
-        GlideString[] arguments =
-                new GlideString[] {
-                    source, destination, gs(DB_VALKEY_API), gs(Long.toString(destinationDB))
-                };
-        return commandManager.submitNewCommand(Copy, arguments, this::handleBooleanResponse);
-    }
-
-    @Override
-    public CompletableFuture<Boolean> copy(
-            @NonNull String source, @NonNull String destination, long destinationDB, boolean replace) {
-        String[] arguments =
-                new String[] {source, destination, DB_VALKEY_API, Long.toString(destinationDB)};
-        if (replace) {
-            arguments = ArrayUtils.add(arguments, REPLACE_VALKEY_API);
-        }
-        return commandManager.submitNewCommand(Copy, arguments, this::handleBooleanResponse);
-    }
-
-    @Override
-    public CompletableFuture<Boolean> copy(
-            @NonNull GlideString source,
-            @NonNull GlideString destination,
-            long destinationDB,
-            boolean replace) {
-        GlideString[] arguments =
-                new GlideString[] {
-                    source, destination, gs(DB_VALKEY_API), gs(Long.toString(destinationDB))
-                };
-        if (replace) {
-            arguments = ArrayUtils.add(arguments, gs(REPLACE_VALKEY_API));
-        }
-        return commandManager.submitNewCommand(Copy, arguments, this::handleBooleanResponse);
     }
 
     @Override

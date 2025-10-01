@@ -18,6 +18,9 @@ public interface GenericBaseCommands {
     /** Valkey API keyword used to replace the destination key. */
     String REPLACE_VALKEY_API = "REPLACE";
 
+    /** Valkey API keyword used to denote the destination db index. */
+    String DB_VALKEY_API = "DB";
+
     /**
      * Removes the specified <code>keys</code> from the database. A key is ignored if it does not
      * exist.
@@ -1057,6 +1060,44 @@ public interface GenericBaseCommands {
     CompletableFuture<Boolean> copy(GlideString source, GlideString destination);
 
     /**
+     * Move <code>key</code> from the currently selected database to the database specified by <code>
+     * dbIndex</code>.
+     *
+     * @apiNote For Cluster mode the move is supported since Valkey 9.0.0 and above.
+     * @see <a href="https://valkey.io/commands/move/">valkey.io</a> for more details.
+     * @param key The key to move.
+     * @param dbIndex The index of the database to move <code>key</code> to.
+     * @return <code>true</code> if <code>key</code> was moved, or <code>false</code> if the <code>key
+     *     </code> already exists in the destination database or does not exist in the source
+     *     database.
+     * @example
+     *     <pre>{@code
+     * Boolean moved = client.move("some_key", 1L).get();
+     * assert moved;
+     * }</pre>
+     */
+    CompletableFuture<Boolean> move(String key, long dbIndex);
+
+    /**
+     * Move <code>key</code> from the currently selected database to the database specified by <code>
+     * dbIndex</code>.
+     *
+     * @apiNote For Cluster mode the move is supported since Valkey 9.0.0 and above.
+     * @see <a href="https://valkey.io/commands/move/">valkey.io</a> for more details.
+     * @param key The key to move.
+     * @param dbIndex The index of the database to move <code>key</code> to.
+     * @return <code>true</code> if <code>key</code> was moved, or <code>false</code> if the <code>key
+     *     </code> already exists in the destination database or does not exist in the source
+     *     database.
+     * @example
+     *     <pre>{@code
+     * Boolean moved = client.move(gs("some_key"), 1L).get();
+     * assert moved;
+     * }</pre>
+     */
+    CompletableFuture<Boolean> move(GlideString key, long dbIndex);
+
+    /**
      * Copies the value stored at the <code>source</code> to the <code>destination</code> key. When
      * <code>replace</code> is true, removes the <code>destination</code> key first if it already
      * exists, otherwise performs no action.
@@ -1103,6 +1144,94 @@ public interface GenericBaseCommands {
      * }</pre>
      */
     CompletableFuture<Boolean> copy(GlideString source, GlideString destination, boolean replace);
+
+    /**
+     * Copies the value stored at the <code>source</code> to the <code>destination</code> key on
+     * <code>destinationDB</code>. When <code>replace</code> is true, removes the <code>destination
+     * </code> key first if it already exists, otherwise performs no action.
+     *
+     * @apiNote copy command for cluster mode is supported since Valkey 9.0.0 and above
+     * @since Valkey 6.2.0 and above for standalone Client.
+     * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
+     * @param source The key to the source value.
+     * @param destination The key where the value should be copied to.
+     * @param destinationDB The alternative logical database index for the destination key.
+     * @param replace If the destination key should be removed before copying the value to it.
+     * @return <code>true</code> if <code>source</code> was copied, <code>false</code> if <code>source
+     * </code> was not copied.
+     * @example
+     *     <pre>{@code
+     * client.set("test1", "one").get();
+     * assert client.copy("test1", "test2", 1, false).get();
+     * }</pre>
+     */
+    CompletableFuture<Boolean> copy(
+            String source, String destination, long destinationDB, boolean replace);
+
+    /**
+     * Copies the value stored at the <code>source</code> to the <code>destination</code> key on
+     * <code>destinationDB</code>. When <code>replace</code> is true, removes the <code>destination
+     * </code> key first if it already exists, otherwise performs no action.
+     *
+     * @apiNote copy command for cluster mode is supported since Valkey 9.0.0 and above
+     * @since Valkey 6.2.0 and above for standalone Client.
+     * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
+     * @param source The key to the source value.
+     * @param destination The key where the value should be copied to.
+     * @param destinationDB The alternative logical database index for the destination key.
+     * @param replace If the destination key should be removed before copying the value to it.
+     * @return <code>true</code> if <code>source</code> was copied, <code>false</code> if <code>source
+     * </code> was not copied.
+     * @example
+     *     <pre>{@code
+     * client.set(gs("test1"), gs("one")).get();
+     * assert client.copy(gs("test1"), gs("test2"), 1, false).get();
+     * }</pre>
+     */
+    CompletableFuture<Boolean> copy(
+            GlideString source, GlideString destination, long destinationDB, boolean replace);
+
+    /**
+     * Copies the value stored at the <code>source</code> to the <code>destination</code> key on
+     * <code>destinationDB</code>. When <code>replace</code> is true, removes the <code>destination
+     * </code> key first if it already exists, otherwise performs no action.
+     *
+     * @apiNote copy command for cluster mode is supported since Valkey 9.0.0 and above
+     * @since Valkey 6.2.0 and above for standalone Client.
+     * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
+     * @param source The key to the source value.
+     * @param destination The key where the value should be copied to.
+     * @param destinationDB The alternative logical database index for the destination key.
+     * @return <code>true</code> if <code>source</code> was copied, <code>false</code> if <code>source
+     * </code> was not copied.
+     * @example
+     *     <pre>{@code
+     * client.set("test1", "one").get();
+     * assert client.copy("test1", "test2", 1).get();
+     * }</pre>
+     */
+    CompletableFuture<Boolean> copy(String source, String destination, long destinationDB);
+
+    /**
+     * Copies the value stored at the <code>source</code> to the <code>destination</code> key on
+     * <code>destinationDB</code>. When <code>replace</code> is true, removes the <code>destination
+     * </code> key first if it already exists, otherwise performs no action.
+     *
+     * @apiNote copy command for cluster mode is supported since Valkey 9.0.0 and above
+     * @since Valkey 6.2.0 and above for standalone Client.
+     * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
+     * @param source The key to the source value.
+     * @param destination The key where the value should be copied to.
+     * @param destinationDB The alternative logical database index for the destination key.
+     * @return <code>true</code> if <code>source</code> was copied, <code>false</code> if <code>source
+     * </code> was not copied.
+     * @example
+     *     <pre>{@code
+     * client.set(gs("test1"), gs("one")).get();
+     * assert client.copy(gs("test1"), gs("test2"), 1).get();
+     * }</pre>
+     */
+    CompletableFuture<Boolean> copy(GlideString source, GlideString destination, long destinationDB);
 
     /**
      * Serialize the value stored at <code>key</code> in a Valkey-specific format and return it to the
