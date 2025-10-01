@@ -1560,11 +1560,8 @@ pub(crate) mod shared_client_tests {
             .await;
 
             if use_cluster {
-
                 // Skip test if server version is less than 9.0 (database isolation not supported in cluster)
-                if !utilities::version_greater_or_equal(&mut test_basics.client, "9.0.0")
-                    .await
-                {
+                if !utilities::version_greater_or_equal(&mut test_basics.client, "9.0.0").await {
                     return;
                 }
             }
