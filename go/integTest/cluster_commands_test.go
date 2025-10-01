@@ -1535,6 +1535,29 @@ func (suite *GlideTestSuite) TestConfigRewriteWithOptions() {
 	}
 }
 
+func (suite *GlideTestSuite) TestCopyWithOptionsDBDestination() {
+	suite.SkipIfServerVersionLowerThan("9.0.0", suite.T())
+	client := suite.defaultClusterClient()
+	key := "{key}" + uuid.New().String()
+	key2 := "{key}" + uuid.New().String()
+	value := "hello"
+	t := suite.T()
+	suite.verifyOK(client.Set(context.Background(), key, value))
+	suite.verifyOK(client.Set(context.Background(), key2, "World"))
+
+	// Test 1: Check the copy command with options
+	optsCopy := options.NewCopyOptions().SetDBDestination(1)
+	resultCopy, err := client.CopyWithOptions(context.Background(), key, key2, *optsCopy)
+	assert.Nil(t, err)
+	assert.True(t, resultCopy)
+
+	// Test 2: Check if the value stored at the source is same with destination key.
+	client.CustomCommand(context.Background(), []string{"SELECT", "1"})
+	resultGet, err := client.Get(context.Background(), key2)
+	assert.Nil(t, err)
+	assert.Equal(t, value, resultGet.Value())
+}
+
 func (suite *GlideTestSuite) TestClusterRandomKey() {
 	client := suite.defaultClusterClient()
 	// Test 1: Check if the command return random key

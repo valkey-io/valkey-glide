@@ -2,6 +2,7 @@
 
 #### Changes
 
+* GO: Add DBDestination option tests to CopyWithOptions command ([#4802](https://github.com/valkey-io/valkey-glide/pull/4802))
 * JAVA: Move COPY command with database ID from standalone to base client ([#4804](https://github.com/valkey-io/valkey-glide/pull/4804))
 * GO: Add cluster support for Move command ([#4748](https://github.com/valkey-io/valkey-glide/pull/4748))
 * NODE: add MOVE command support for cluster clients ([#4750](https://github.com/valkey-io/valkey-glide/pull/4750))
