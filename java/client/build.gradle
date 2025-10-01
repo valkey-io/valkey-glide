@@ -262,7 +262,10 @@ tasks.withType(Test) {
 }
 
 jar {
-    if (project.hasProperty('target') && project.target.contains("musl")) {
+    if (
+        (project.hasProperty('target') && project.target.contains("musl")) ||
+        (osdetector.os == 'linux' && osdetector.release.id == 'alpine')
+        ) {
         archiveClassifier = "linux_musl-${osdetector.arch}"
     } else {
         archiveClassifier = osdetector.classifier
