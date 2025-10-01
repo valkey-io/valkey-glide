@@ -204,6 +204,7 @@ import static command_request.CommandRequestOuterClass.RequestType.ZScan;
 import static command_request.CommandRequestOuterClass.RequestType.ZScore;
 import static command_request.CommandRequestOuterClass.RequestType.ZUnion;
 import static command_request.CommandRequestOuterClass.RequestType.ZUnionStore;
+import static glide.api.commands.GenericBaseCommands.DB_VALKEY_API;
 import static glide.api.commands.GenericBaseCommands.REPLACE_VALKEY_API;
 import static glide.api.commands.HashBaseCommands.FIELDS_VALKEY_API;
 import static glide.api.commands.HashBaseCommands.WITH_VALUES_VALKEY_API;
@@ -5678,6 +5679,59 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     public <ArgType> T copy(@NonNull ArgType source, @NonNull ArgType destination) {
         return copy(source, destination, false);
+    }
+
+    /**
+     * Copies the value stored at the <code>source</code> to the <code>destination</code> key on
+     * <code>destinationDB</code>. When <code>replace</code> is true, removes the <code>destination
+     * </code> key first if it already exists, otherwise performs no action.
+     *
+     * @since Valkey 6.2.0 and above for standalone Client.
+     * @since Valkey 9.0.0 and above for standaloneClient.
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
+     * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
+     * @param source The key to the source value.
+     * @param destination The key where the value should be copied to.
+     * @param destinationDB The alternative logical database index for the destination key.
+     * @return Command Response - <code>true</code> if <code>source</code> was copied, <code>false
+     *     </code> if <code>source</code> was not copied.
+     */
+    public <ArgType> T copy(
+            @NonNull ArgType source, @NonNull ArgType destination, long destinationDB) {
+        return copy(source, destination, destinationDB, false);
+    }
+
+    /**
+     * Copies the value stored at the <code>source</code> to the <code>destination</code> key on
+     * <code>destinationDB</code>. When <code>replace</code> is true, removes the <code>destination
+     * </code> key first if it already exists, otherwise performs no action.
+     *
+     * @since Valkey 6.2.0 and above for standalone Client.
+     * @since Valkey 9.0.0 and above for standaloneClient.
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
+     * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
+     * @param source The key to the source value.
+     * @param destination The key where the value should be copied to.
+     * @param destinationDB The alternative logical database index for the destination key.
+     * @param replace If the destination key should be removed before copying the value to it.
+     * @return Command Response - <code>true</code> if <code>source</code> was copied, <code>false
+     *     </code> if <code>source</code> was not copied.
+     */
+    public <ArgType> T copy(
+            @NonNull ArgType source, @NonNull ArgType destination, long destinationDB, boolean replace) {
+        checkTypeOrThrow(source);
+        protobufBatch.addCommands(
+                buildCommand(
+                        Copy,
+                        newArgsBuilder()
+                                .add(source)
+                                .add(destination)
+                                .add(DB_VALKEY_API)
+                                .add(destinationDB)
+                                .addIf(REPLACE_VALKEY_API, replace)));
+        return getThis();
     }
 
     /**
