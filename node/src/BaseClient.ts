@@ -163,6 +163,7 @@ import {
     createMGet,
     createMSet,
     createMSetNX,
+    createMove,
     createObjectEncoding,
     createObjectFreq,
     createObjectIdletime,
@@ -2064,6 +2065,28 @@ export class BaseClient {
         return this.createWritePromise(
             createMSetNX(convertGlideRecord(keysAndValues)),
         );
+    }
+
+    /**
+     * Move `key` from the currently selected database to the database specified by `dbIndex`.
+     *
+     * @remarks Move is available for cluster mode since Valkey 9.0.0 and above.
+     *
+     * @see {@link https://valkey.io/commands/move/|valkey.io} for more details.
+     *
+     * @param key - The key to move.
+     * @param dbIndex - The index of the database to move `key` to.
+     * @returns `true` if `key` was moved, or `false` if the `key` already exists in the destination
+     *     database or does not exist in the source database.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.move("key", 1);
+     * console.log(result); // Output: true
+     * ```
+     */
+    public async move(key: GlideString, dbIndex: number): Promise<boolean> {
+        return this.createWritePromise(createMove(key, dbIndex));
     }
 
     /** Increments the number stored at `key` by one. If `key` does not exist, it is set to 0 before performing the operation.

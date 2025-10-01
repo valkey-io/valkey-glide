@@ -2985,4 +2985,68 @@ describe("GlideClusterClient", () => {
         },
         TIMEOUT,
     );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "move test_%p",
+        async (protocol) => {
+            // Skip test if version is below 9.0.0 (Valkey 9)
+            if (cluster.checkIfServerVersionLessThan("9.0.0")) return;
+
+            const client_db0 = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol, {
+                    databaseId: 0,
+                }),
+            );
+            const client_db1 = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol, {
+                    databaseId: 1,
+                }),
+            );
+
+            try {
+                const key1 = "{key}-1" + getRandomKey();
+                const key2 = "{key}-2" + getRandomKey();
+                const value = getRandomKey();
+
+                // Test moving non-existent key
+                expect(await client_db0.move(key1, 1)).toEqual(false);
+
+                // Set a key in database 0 and move it to database 1
+                expect(await client_db0.set(key1, value)).toEqual("OK");
+                expect(await client_db0.get(key1)).toEqual(value);
+                expect(await client_db0.move(Buffer.from(key1), 1)).toEqual(
+                    true,
+                );
+                expect(await client_db0.get(key1)).toEqual(null);
+                expect(await client_db1.get(key1)).toEqual(value);
+
+                // Test error with invalid database number
+                await expect(client_db0.move(key1, -1)).rejects.toThrow(
+                    RequestError,
+                );
+
+                // batch tests
+                for (const isAtomic of [true, false]) {
+                    expect(await client_db0.flushall()).toEqual("OK");
+                    expect(await client_db1.flushall()).toEqual("OK");
+
+                    const batch = new ClusterBatch(isAtomic);
+                    batch.move(key2, 1);
+                    batch.set(key2, value);
+                    batch.move(key2, 1);
+                    batch.get(key2);
+                    const results = await client_db0.exec(batch, true);
+
+                    expect(results).toEqual([false, "OK", true, null]);
+
+                    // Verify key exists in database 1
+                    expect(await client_db1.get(key2)).toEqual(value);
+                }
+            } finally {
+                client_db0.close();
+                client_db1.close();
+            }
+        },
+        TIMEOUT,
+    );
 });
