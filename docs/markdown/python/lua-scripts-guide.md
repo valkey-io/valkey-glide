@@ -1,6 +1,6 @@
-# Using Lua Scripts with Valkey GLIDE
+# Using Lua Scripts with Valkey GLIDE for Python
 
-This guide covers how to use Lua scripts with Valkey GLIDE, including the `Script` class, script execution, management, and best practices.
+This guide covers how to use Lua scripts with Valkey GLIDE for Python, including the `Script` class, script execution, management, and best practices.
 
 ## Table of Contents
 
@@ -22,16 +22,16 @@ This guide covers how to use Lua scripts with Valkey GLIDE, including the `Scrip
 ```python
 import asyncio
 from glide import (
-    Script, 
-    GlideClient, 
-    GlideClientConfiguration, 
+    Script,
+    GlideClient,
+    GlideClientConfiguration,
     NodeAddress
 )
 
 # For script management examples
 from glide import FlushMode
 
-# For error handling examples  
+# For error handling examples
 from glide import RequestError
 
 # For cluster examples
@@ -463,7 +463,7 @@ for i in range(100):
 conditional_update = Script("""
     local current = redis.call('GET', KEYS[1])
     local threshold = tonumber(ARGV[2])
-    
+
     if current and tonumber(current) >= threshold then
         redis.call('SET', KEYS[1], ARGV[1])
         redis.call('LPUSH', KEYS[2], ARGV[1])
@@ -643,8 +643,6 @@ results = await client.exec(batch, raise_on_error=False)
 print(f"EVAL result: {results[0]}")  # b'OK'
 print(f"GET result: {results[1]}")   # b'script-value'
 ```
-
-**Note**: Once `invoke_script` support is added to batch operations, it will be the preferred method over direct `EVAL` usage.
 
 ## Migration from Direct EVAL
 
