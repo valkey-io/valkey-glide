@@ -331,7 +331,7 @@ fn get_request_timeout(cmd: &Cmd, default_timeout: Duration) -> RedisResult<Opti
 
 impl Client {
     /// Checks if the given command is a SELECT command.
-    /// Returns true if the command is "SELECT" (case-sensitive), false otherwise.
+    /// Returns true if the command is "SELECT", false otherwise.
     /// Handles cases where command() returns None gracefully.
     /// Note: The underlying redis-rs library normalizes commands to uppercase.
     fn is_select_command(&self, cmd: &Cmd) -> bool {
