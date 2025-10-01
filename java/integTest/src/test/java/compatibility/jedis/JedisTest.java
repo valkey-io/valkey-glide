@@ -150,6 +150,14 @@ public class JedisTest {
     }
 
     @Test
+    void register_client_name_and_version() {
+        Object result = jedis.sendCommand(Protocol.Command.CLIENT, "INFO");
+        String info = result.toString();
+        assertTrue(info.contains("lib-name=GlideJedisAdapter"), "Client info should contain GlideJedisAdapter lib name");
+        assertTrue(info.contains("lib-ver=unknown"), "Client info should contain unknown lib version");
+    }
+
+    @Test
     void jedis_constructor_with_glide_client() {
         // Test the protected constructor that takes GlideClient directly
         // This constructor is used internally by the pool factory
