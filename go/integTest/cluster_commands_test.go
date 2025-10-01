@@ -1424,6 +1424,17 @@ func (suite *GlideTestSuite) TestClientSetGetNameWithRoute() {
 	}
 }
 
+func (suite *GlideTestSuite) TestMoveCluster() {
+	suite.SkipIfServerVersionLowerThan("9.0.0", suite.T())
+	client := suite.defaultClusterClient()
+	t := suite.T()
+	key := uuid.New().String()
+	suite.verifyOK(client.Set(context.Background(), key, "hello"))
+	result, err := client.Move(context.Background(), key, 2)
+	assert.Nil(t, err)
+	assert.True(suite.T(), result)
+}
+
 func (suite *GlideTestSuite) TestConfigRewriteCluster() {
 	client := suite.defaultClusterClient()
 	t := suite.T()
