@@ -1549,25 +1549,6 @@ pub(crate) mod shared_client_tests {
         #[values(false, true)] use_cluster: bool,
     ) {
         block_on_all(async move {
-            if use_cluster {
-                // First create a basic client to check server version
-                let mut version_check_basics = setup_test_basics(
-                    use_cluster,
-                    TestConfiguration {
-                        shared_server: true,
-                        ..Default::default()
-                    },
-                )
-                .await;
-
-                // Skip test if server version is less than 9.0 (database isolation not supported in cluster)
-                if !utilities::version_greater_or_equal(&mut version_check_basics.client, "9.0.0")
-                    .await
-                {
-                    return;
-                }
-            }
-
             let mut test_basics = setup_test_basics(
                 use_cluster,
                 TestConfiguration {
@@ -1577,6 +1558,13 @@ pub(crate) mod shared_client_tests {
                 },
             )
             .await;
+
+            if use_cluster {
+                // Skip test if server version is less than 9.0 (database isolation not supported in cluster)
+                if !utilities::version_greater_or_equal(&mut test_basics.client, "9.0.0").await {
+                    return;
+                }
+            }
 
             let mut client_info_cmd = redis::Cmd::new();
             client_info_cmd.arg("CLIENT").arg("INFO");
