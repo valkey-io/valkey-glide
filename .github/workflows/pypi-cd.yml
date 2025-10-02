@@ -46,7 +46,7 @@ jobs:
             TESTS_PLATFORM_MATRIX: ${{ steps.load-platform-matrix.outputs.TESTS_PLATFORM_MATRIX }}
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@v5
 
             - name: load-platform-matrix
               id: load-platform-matrix
@@ -76,7 +76,7 @@ jobs:
         environment: AWS_ACTIONS
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@v5
               with:
                   fetch-depth: 0
 
@@ -105,7 +105,7 @@ jobs:
               run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
 
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@v5
               with:
                   submodules: "true"
 
@@ -412,7 +412,7 @@ jobs:
         needs: publish-binaries
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@v5
 
             - name: Set the release version
               shell: bash
@@ -543,7 +543,7 @@ jobs:
               run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
 
             - name: checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@v5
 
             - name: Set up Python
               uses: actions/setup-python@v5
