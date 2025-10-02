@@ -1,0 +1,35 @@
+[package]
+name = "glide-jedis-rs"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+authors = ["Valkey GLIDE Maintainers"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+redis = { path = "../../glide-core/redis-rs/redis", features = ["aio", "tokio-comp", "connection-manager", "tokio-rustls-comp"] }
+glide-core = { path = "../../glide-core", features = [ "proto"] }
+protobuf = "3.7"
+tokio = { version = "^1", features = ["rt", "macros", "rt-multi-thread", "time"] }
+logger_core = { path = "../../logger_core" }
+tracing-subscriber = "0.3.16"
+jni = "0.21.1"
+log = "0.4.20"
+bytes = { version = "1.6.0" }
+serde = "1.0.225"
+# Additional dependencies for JNI implementation
+anyhow = "1.0"
+dashmap = "6.1.0"
+parking_lot = "0.12"
+scopeguard = "1.2"
+telemetrylib = { path = "../../glide-core/telemetry"}
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true
