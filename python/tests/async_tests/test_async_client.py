@@ -277,8 +277,8 @@ class TestGlideClients:
         assert b"db=4" in client_info
         await glide_client.close()
 
-    @pytest.mark.parametrize("cluster_mode", [True])
-    async def test_select_database_id_custom_command(self, request, cluster_mode):
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_select_database_id(self, request, cluster_mode):
         if cluster_mode:
             # Check version using a temporary standalone client
             temp_client = await create_client(request, cluster_mode=False)
@@ -290,7 +290,7 @@ class TestGlideClients:
             await temp_client.close()
 
         glide_client = await create_client(request, cluster_mode=cluster_mode)
-        assert await glide_client.custom_command(["SELECT", "4"]) == OK
+        assert await glide_client.select(4) == OK
         client_info = await glide_client.custom_command(["CLIENT", "INFO"])
         assert b"db=4" in client_info
         await glide_client.close()
@@ -663,7 +663,7 @@ class TestCommands:
         key = get_random_string(10)
         value = get_random_string(10)
 
-        assert await glide_client.custom_command(["SELECT", "0"]) == OK
+        assert await glide_client.select(0) == OK
         assert await glide_client.move(key, 1) is False
 
         assert await glide_client.set(key, value) == OK
@@ -671,7 +671,7 @@ class TestCommands:
 
         assert await glide_client.move(key, 1) is True
         assert await glide_client.get(key) is None
-        assert await glide_client.custom_command(["SELECT", "1"]) == OK
+        assert await glide_client.select(1) == OK
         assert await glide_client.get(key) == value.encode()
 
         with pytest.raises(RequestError):
