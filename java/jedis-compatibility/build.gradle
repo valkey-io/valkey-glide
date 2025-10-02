@@ -115,9 +115,9 @@ tasks.withType(Test) {
     }
     // Native library path for tests
     if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
-        jvmArgs "-Djava.library.path=${projectDir}/../target/${arch}-unknown-linux-musl/release"
+        jvmArgs "-Djava.library.path=${project.rootDir}/target/${arch}-unknown-linux-musl/release"
     } else {
-        jvmArgs "-Djava.library.path=${projectDir}/../target/release"
+        jvmArgs "-Djava.library.path=${project.rootDir}/target/release"
     }
 }
 
