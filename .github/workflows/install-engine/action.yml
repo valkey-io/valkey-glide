@@ -69,7 +69,12 @@ runs:
               fi
               # Remove existing binaries to prevent version mismatches on persistent self-hosted runners
               $SUDO rm -f /usr/local/bin/valkey-server /usr/local/bin/valkey-cli /usr/local/bin/redis-server /usr/local/bin/redis-cli
-              $SUDO cp valkey-server valkey-cli redis-server redis-cli /usr/local/bin/
+              # Copy files individually, as valkey and redis usually won't exist at the same time
+              for file in valkey-server valkey-cli redis-server redis-cli; do
+                  if [[ -f $file ]]; then
+                      $SUDO cp $file /usr/local/bin/
+                  fi
+              done
               if [[ ! -e /usr/local/bin/redis-server ]]; then
                   $SUDO cp valkey-server /usr/local/bin/redis-server
               fi
