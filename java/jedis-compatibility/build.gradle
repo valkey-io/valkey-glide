@@ -72,30 +72,11 @@ tasks.register('buildRust', Exec) {
     }
 
     print("Building Rust for jedis-compatibility with target: '$target'\n")
-    
-    // Check if zigbuild is available, fallback to regular cargo build
-    def hasZigbuild = false
-    try {
-        exec {
-            commandLine 'cargo', 'zigbuild', '--version'
-            standardOutput = new ByteArrayOutputStream()
-            errorOutput = new ByteArrayOutputStream()
-        }
-        hasZigbuild = true
-    } catch (Exception e) {
-        hasZigbuild = false
-    }
-    
-    if (target.contains("linux") && !target.contains("musl") && hasZigbuild) {
+    if (target.contains("linux") && !target.contains("musl")) {
         commandLine 'cargo', 'zigbuild', '--target', "$target", '--release'
-    } else if (target.contains("musl") && hasZigbuild) {
+    } else if (target.contains("musl")) {
         commandLine 'cargo', 'zigbuild', '--target', "$target", '--release'
         environment RUSTFLAGS: '-C target-feature=-crt-static'
-    } else if (target.contains("linux")) {
-        commandLine 'cargo', 'build', '--target', "$target", '--release'
-        if (target.contains("musl")) {
-            environment RUSTFLAGS: '-C target-feature=-crt-static'
-        }
     } else {
         commandLine 'cargo', 'build', '--release'
     }
