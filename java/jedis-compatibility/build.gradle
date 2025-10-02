@@ -85,17 +85,30 @@ tasks.register('buildRust', Exec) {
 
 tasks.register('copyNativeLib', Copy) {
     def target
+    def sourceDir
     if (project.hasProperty('target')) {
         target = project.target
-        from "${projectDir}/target/${target}/release/"
+        sourceDir = "${projectDir}/target/${target}/release/"
     } else if (osdetector.os == 'linux' && osdetector.release.id != 'alpine') {
-        from "${projectDir}/target/${arch}-unknown-linux-gnu/release/"
+        sourceDir = "${projectDir}/target/${arch}-unknown-linux-gnu/release/"
     } else if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
-        from "${projectDir}/target/${arch}-unknown-linux-musl/release/"
+        sourceDir = "${projectDir}/target/${arch}-unknown-linux-musl/release/"
     } else {
-        from "${projectDir}/target/release/"
+        sourceDir = "${projectDir}/target/release/"
     }
-    include "*.dylib", "*.so", "*.dll"
+    
+    // Try release directory first, then deps directory
+    from(sourceDir) {
+        include "*glide_jedis_rs*"
+    }
+    from("${sourceDir}/deps/") {
+        include "*glide_jedis_rs*"
+    }
+    
+    rename { filename ->
+        // Rename libglide_jedis_rs.dylib to libglide_rs.dylib for compatibility
+        filename.replace("glide_jedis_rs", "glide_rs")
+    }
     into sourceSets.main.output.resourcesDir
 }
 
