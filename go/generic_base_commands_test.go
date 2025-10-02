@@ -1250,7 +1250,7 @@ func ExampleClusterClient_CopyWithOptions_dbDestination() {
 	opts := options.NewCopyOptions().SetDBDestination(1)
 	client.CopyWithOptions(context.Background(), "{key}1", "{key}2", *opts)
 
-	client.CustomCommand(context.Background(), []string{"SELECT", "1"})
+	client.Select(1)
 	result, err := client.Get(context.Background(), "{key}2")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
