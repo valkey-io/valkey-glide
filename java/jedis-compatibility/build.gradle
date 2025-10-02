@@ -81,19 +81,20 @@ tasks.register('buildRust', Exec) {
         commandLine 'cargo', 'build', '--release'
     }
     workingDir project.rootDir
+    environment CARGO_TARGET_DIR: "${project.rootDir}/jedis-compatibility-target"
 }
 
 tasks.register('copyNativeLib', Copy) {
     def target
     if (project.hasProperty('target')) {
         target = project.target
-        from "${project.rootDir}/target/${target}/release/"
+        from "${project.rootDir}/jedis-compatibility-target/${target}/release/"
     } else if (osdetector.os == 'linux' && osdetector.release.id != 'alpine') {
-        from "${project.rootDir}/target/${arch}-unknown-linux-gnu/release/"
+        from "${project.rootDir}/jedis-compatibility-target/${arch}-unknown-linux-gnu/release/"
     } else if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
-        from "${project.rootDir}/target/${arch}-unknown-linux-musl/release/"
+        from "${project.rootDir}/jedis-compatibility-target/${arch}-unknown-linux-musl/release/"
     } else {
-        from "${project.rootDir}/target/release/"
+        from "${project.rootDir}/jedis-compatibility-target/release/"
     }
     include "*.dylib", "*.so", "*.dll"
     into sourceSets.main.output.resourcesDir
@@ -115,9 +116,9 @@ tasks.withType(Test) {
     }
     // Native library path for tests
     if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
-        jvmArgs "-Djava.library.path=${project.rootDir}/target/${arch}-unknown-linux-musl/release"
+        jvmArgs "-Djava.library.path=${project.rootDir}/jedis-compatibility-target/${arch}-unknown-linux-musl/release"
     } else {
-        jvmArgs "-Djava.library.path=${project.rootDir}/target/release"
+        jvmArgs "-Djava.library.path=${project.rootDir}/jedis-compatibility-target/release"
     }
 }
 
