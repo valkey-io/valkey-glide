@@ -57,6 +57,32 @@ javadoc {
     failOnError = false // Disable javadoc errors for compatibility layer
 }
 
+tasks.register('buildRust', Exec) {
+    def target
+    if (project.hasProperty('target')) {
+        target = project.target
+    } else {
+        if (osdetector.os == 'linux' && osdetector.release.id != 'alpine') {
+            target = "${arch}-unknown-linux-gnu.2.17"
+        } else if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
+            target = "${arch}-unknown-linux-musl"
+        } else {
+            target = ""
+        }
+    }
+
+    print("Building Rust for jedis-compatibility with target: '$target'\n")
+    if (target.contains("linux") && !target.contains("musl")) {
+        commandLine 'cargo', 'zigbuild', '--target', "$target", '--release'
+    } else if (target.contains("musl")) {
+        commandLine 'cargo', 'zigbuild', '--target', "$target", '--release'
+        environment RUSTFLAGS: '-C target-feature=-crt-static'
+    } else {
+        commandLine 'cargo', 'build', '--release'
+    }
+    workingDir project.rootDir.parent
+}
+
 tasks.register('copyNativeLib', Copy) {
     def target
     if (project.hasProperty('target')) {
@@ -77,7 +103,7 @@ jar.dependsOn('copyNativeLib')
 javadoc.dependsOn('copyNativeLib')
 compileTestJava.dependsOn('copyNativeLib')
 delombok.dependsOn('compileJava')
-copyNativeLib.dependsOn(':client:buildRust')
+copyNativeLib.dependsOn('buildRust')
 compileJava.dependsOn(':client:jar')
 
 tasks.withType(Test) {

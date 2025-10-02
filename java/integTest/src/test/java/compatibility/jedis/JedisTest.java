@@ -153,7 +153,10 @@ public class JedisTest {
     void register_client_name_and_version() {
         Object result = jedis.sendCommand(Protocol.Command.CLIENT, "INFO");
         String info = result.toString();
-        assertTrue(info.contains("lib-name=GlideJedisAdapter"), "Client info should contain GlideJedisAdapter lib name");
+        System.out.println("CLIENT INFO result: " + info);
+        assertTrue(
+                info.contains("lib-name=GlideJedisAdapter"),
+                "Client info should contain GlideJedisAdapter lib name");
         assertTrue(info.contains("lib-ver=unknown"), "Client info should contain unknown lib version");
     }
 
