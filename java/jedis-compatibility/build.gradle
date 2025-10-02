@@ -99,7 +99,7 @@ tasks.register('buildRust', Exec) {
     } else {
         commandLine 'cargo', 'build', '--release'
     }
-    workingDir project.rootDir.parent
+    workingDir project.rootDir
 }
 
 tasks.register('copyNativeLib', Copy) {
