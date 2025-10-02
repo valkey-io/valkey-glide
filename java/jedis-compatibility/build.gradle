@@ -87,13 +87,13 @@ tasks.register('copyNativeLib', Copy) {
     def target
     if (project.hasProperty('target')) {
         target = project.target
-        from "${projectDir}/../target/${target}/release/"
+        from "${project.rootDir}/target/${target}/release/"
     } else if (osdetector.os == 'linux' && osdetector.release.id != 'alpine') {
-        from "${projectDir}/../target/${arch}-unknown-linux-gnu/release/"
+        from "${project.rootDir}/target/${arch}-unknown-linux-gnu/release/"
     } else if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
-        from "${projectDir}/../target/${arch}-unknown-linux-musl/release/"
+        from "${project.rootDir}/target/${arch}-unknown-linux-musl/release/"
     } else {
-        from "${projectDir}/../target/release/"
+        from "${project.rootDir}/target/release/"
     }
     include "*.dylib", "*.so", "*.dll"
     into sourceSets.main.output.resourcesDir
