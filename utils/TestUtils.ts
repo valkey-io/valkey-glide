@@ -21,9 +21,9 @@ function parseOutput(input: string): {
         .split(",")
         .map((address) => address.split(":"))
         .map((address) => [address[0], Number(address[1])]) as [
-            string,
-            number,
-        ][];
+        string,
+        number,
+    ][];
 
     if (clusterFolder === undefined || ports === undefined) {
         throw new Error(`Insufficient data in input: ${input}`);
@@ -35,13 +35,11 @@ function parseOutput(input: string): {
     };
 }
 
-export type TestTLSConfig = {
-    useTLS: boolean; advancedConfiguration?: {
-        tlsAdvancedConfiguration?: {
-            insecure?: boolean,
-        },
-    },
-};
+export type TestTLSConfig = {useTLS: boolean; advancedConfiguration?: {
+                    tlsAdvancedConfiguration?: {
+                        insecure?: boolean,
+                    },
+                },};
 
 export class ValkeyCluster {
     private addresses: [string, number][];
@@ -79,7 +77,7 @@ export class ValkeyCluster {
             }
 
             command += `start -r ${replicaCount} -n ${shardCount}`;
-
+            
             if (cluster_mode) {
                 command += " --cluster-mode";
             }
