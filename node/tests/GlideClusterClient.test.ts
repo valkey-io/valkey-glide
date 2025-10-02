@@ -887,6 +887,31 @@ describe("GlideClusterClient", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "select test %p",
+        async (protocol) => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+            expect(await client.select(0)).toEqual("OK");
+
+            const key = getRandomKey();
+            const value = getRandomKey();
+            const result = await client.set(key, value);
+            expect(result).toEqual("OK");
+
+            expect(await client.select(1)).toEqual("OK");
+            expect(await client.get(key)).toEqual(null);
+            expect(await client.flushdb()).toEqual("OK");
+            expect(await client.dbsize()).toEqual(0);
+
+            expect(await client.select(0)).toEqual("OK");
+            expect(await client.get(key)).toEqual(value);
+
+            client.close();
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "copy with DB test_%p",
         async (protocol) => {
             if (cluster.checkIfServerVersionLessThan("9.0.0")) return;
@@ -918,11 +943,11 @@ describe("GlideClusterClient", () => {
                     replace: false,
                 }),
             ).toEqual(true);
-            expect(await client.customCommand(["SELECT", "1"])).toEqual("OK");
+            expect(await client.select(1)).toEqual("OK");
             expect(await client.get(destination)).toEqual(value1);
 
             // new value for source key
-            expect(await client.customCommand(["SELECT", "0"])).toEqual("OK");
+            expect(await client.select(0)).toEqual("OK");
             expect(await client.set(source, value2)).toEqual("OK");
 
             // no REPLACE, copying to existing key on DB 1, non-existing key on DB 2
@@ -940,14 +965,14 @@ describe("GlideClusterClient", () => {
             ).toEqual(true);
 
             // new value only gets copied to DB 2
-            expect(await client.customCommand(["SELECT", "1"])).toEqual("OK");
+            expect(await client.select(1)).toEqual("OK");
             expect(await client.get(destination)).toEqual(value1);
             expect(await client.customCommand(["SELECT", "2"])).toEqual("OK");
             expect(await client.get(destination)).toEqual(value2);
 
             // both exists, with REPLACE, when value isn't the same, source always get copied to
             // destination
-            expect(await client.customCommand(["SELECT", "0"])).toEqual("OK");
+            expect(await client.select(0)).toEqual("OK");
             expect(
                 await client.copy(
                     Buffer.from(source),
@@ -958,7 +983,7 @@ describe("GlideClusterClient", () => {
                     },
                 ),
             ).toEqual(true);
-            expect(await client.customCommand(["SELECT", "1"])).toEqual("OK");
+            expect(await client.select(1)).toEqual("OK");
             expect(await client.get(destination)).toEqual(value2);
 
             // batch tests
