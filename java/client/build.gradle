@@ -119,6 +119,8 @@ tasks.register('buildRust', Exec) {
     }
     workingDir project.rootDir
     environment CARGO_TERM_COLOR: 'always'
+    environment GLIDE_NAME: 'GlideJava'
+    environment GLIDE_VERSION: 'unknown'
 }
 
 tasks.register('buildWithRust') {
