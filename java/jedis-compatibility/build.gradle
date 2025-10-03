@@ -81,7 +81,6 @@ tasks.register('buildRust', Exec) {
         commandLine 'cargo', 'build', '--release'
     }
     workingDir projectDir
-    environment CARGO_TARGET_DIR: "${projectDir}/target"
 }
 
 tasks.register('copyNativeLib', Copy) {
@@ -98,15 +97,11 @@ tasks.register('copyNativeLib', Copy) {
         sourceDir = "${projectDir}/target/release/"
     }
     
-    // Copy the jedis-compatibility library from release directory
+    // Copy the main glide library (built with jedis-compatibility environment)
     from(sourceDir) {
-        include "*glide_jedis_rs*"
+        include "*glide_rs*"
     }
     
-    rename { filename ->
-        // Rename libglide_jedis_rs.dylib to libglide_rs.dylib for Java compatibility
-        filename.replace("glide_jedis_rs", "glide_rs")
-    }
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     into sourceSets.main.output.resourcesDir
 }
