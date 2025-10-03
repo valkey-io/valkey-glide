@@ -71,6 +71,13 @@ tasks.register('buildRust', Exec) {
         }
     }
 
+    doFirst {
+        // Clean all targets to force complete rebuild with new environment
+        delete "${projectDir}/target"
+        delete "${project.rootDir}/target"
+        delete "${project.rootDir}/../target"
+    }
+
     print("Building Rust for jedis-compatibility with target: '$target'\n")
     if (target.contains("linux") && !target.contains("musl")) {
         commandLine 'cargo', 'zigbuild', '--target', "$target", '--release'
@@ -81,8 +88,9 @@ tasks.register('buildRust', Exec) {
         commandLine 'cargo', 'build', '--release'
     }
     workingDir projectDir
-    // Force GLIDE_NAME environment variable to override any config
-    environment CARGO_CONFIG_ENV_GLIDE_NAME: 'GlideJedisAdapter'
+    // Set environment variables for the entire build process
+    environment GLIDE_NAME: 'GlideJedisAdapter'
+    environment GLIDE_VERSION: 'unknown'
 }
 
 tasks.register('copyNativeLib', Copy) {
