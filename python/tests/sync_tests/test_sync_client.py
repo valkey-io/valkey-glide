@@ -289,7 +289,7 @@ class TestGlideClients:
         glide_sync_client.close()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    def test_sync_select_database_id_select_command(self, request, cluster_mode):
+    def test_sync_select_database_id_custom_command(self, request, cluster_mode):
         if cluster_mode:
             # Check version using a temporary standalone client
             temp_client = create_sync_client(request, cluster_mode=False)
@@ -301,10 +301,23 @@ class TestGlideClients:
             temp_client.close()
 
         glide_sync_client = create_sync_client(request, cluster_mode=cluster_mode)
-        assert glide_sync_client.select(4) == OK
+        assert glide_sync_client.custom_command(["SELECT", "4"]) == OK
         client_info = glide_sync_client.custom_command(["CLIENT", "INFO"])
         assert b"db=4" in client_info
         glide_sync_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_select(self, glide_sync_client: GlideClient):
+        assert glide_sync_client.select(0) == OK
+        key = get_random_string(10)
+        value = get_random_string(10)
+        assert glide_sync_client.set(key, value) == OK
+        assert glide_sync_client.get(key) == value.encode()
+        assert glide_sync_client.select(1) == OK
+        assert glide_sync_client.get(key) is None
+        assert glide_sync_client.select(0) == OK
+        assert glide_sync_client.get(key) == value.encode()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

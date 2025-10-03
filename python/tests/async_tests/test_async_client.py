@@ -278,7 +278,7 @@ class TestGlideClients:
         await glide_client.close()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    async def test_select_database_id_select_command(self, request, cluster_mode):
+    async def test_select_database_id_custom_command(self, request, cluster_mode):
         if cluster_mode:
             # Check version using a temporary standalone client
             temp_client = await create_client(request, cluster_mode=False)
@@ -290,7 +290,7 @@ class TestGlideClients:
             await temp_client.close()
 
         glide_client = await create_client(request, cluster_mode=cluster_mode)
-        assert await glide_client.select(4) == OK
+        assert await glide_sync_client.custom_command(["SELECT", "4"]) == OK
         client_info = await glide_client.custom_command(["CLIENT", "INFO"])
         assert b"db=4" in client_info
         await glide_client.close()
@@ -638,7 +638,7 @@ class TestCommands:
         info_result = get_first_result(info_result)
         assert b"# Memory" in info_result
 
-    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_select(self, glide_client: GlideClient):
         assert await glide_client.select(0) == OK
