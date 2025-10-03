@@ -14030,6 +14030,145 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void copy_with_database_id(BaseClient client) {
+        boolean isCluster = client instanceof GlideClusterClient;
+        if (isCluster) {
+            assumeTrue(
+                    SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0"), "This feature added in version 6.2.0");
+        } else {
+            assumeTrue(
+                    SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in version 6.2.0");
+        }
+
+        // setup
+        String source = "{key}-1" + UUID.randomUUID();
+        String destination = "{key}-2" + UUID.randomUUID();
+
+        // neither key exists, returns false
+        assertFalse(client.copy(source, destination, 1, false).get());
+        assertFalse(client.copy(source, destination, 1).get());
+
+        // source exists, destination does not
+        client.set(source, "one");
+        assertTrue(client.copy(source, destination, 1, false).get());
+        if (isCluster) {
+            ((GlideClusterClient) client).customCommand(new String[] {"select", "1"}).get();
+        } else {
+            ((GlideClient) client).customCommand(new String[] {"select", "1"}).get();
+        }
+
+        assertEquals("one", client.get(destination).get());
+        if (isCluster) {
+            ((GlideClusterClient) client).customCommand(new String[] {"select", "0"}).get();
+        } else {
+            ((GlideClient) client).customCommand(new String[] {"select", "0"}).get();
+        }
+
+        // setting new value for source
+        client.set(source, "two");
+
+        // both exists, no REPLACE
+        assertFalse(client.copy(source, destination, 1).get());
+        assertFalse(client.copy(source, destination, 1, false).get());
+        if (isCluster) {
+            ((GlideClusterClient) client).customCommand(new String[] {"select", "1"}).get();
+        } else {
+            ((GlideClient) client).customCommand(new String[] {"select", "1"}).get();
+        }
+        assertEquals("one", client.get(destination).get());
+        if (isCluster) {
+            ((GlideClusterClient) client).customCommand(new String[] {"select", "0"}).get();
+        } else {
+            ((GlideClient) client).customCommand(new String[] {"select", "0"}).get();
+        }
+
+        // both exists, with REPLACE
+        assertTrue(client.copy(source, destination, 1, true).get());
+        if (isCluster) {
+            ((GlideClusterClient) client).customCommand(new String[] {"select", "1"}).get();
+        } else {
+            ((GlideClient) client).customCommand(new String[] {"select", "1"}).get();
+        }
+        assertEquals("two", client.get(destination).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void copy_binary_with_database_id(BaseClient client) {
+        boolean isCluster = client instanceof GlideClusterClient;
+        if (isCluster) {
+            assumeTrue(
+                    SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0"), "This feature added in version 6.2.0");
+        } else {
+            assumeTrue(
+                    SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in version 6.2.0");
+        }
+
+        // setup
+        GlideString source = gs("{key}-1" + UUID.randomUUID());
+        GlideString destination = gs("{key}-2" + UUID.randomUUID());
+
+        // neither key exists, returns false
+        assertFalse(client.copy(source, destination, 1, false).get());
+        if (isCluster) {
+            ((GlideClusterClient) client).customCommand(new String[] {"select", "1"}).get();
+        } else {
+            ((GlideClient) client).customCommand(new String[] {"select", "1"}).get();
+        }
+        assertFalse(client.copy(source, destination).get());
+        if (isCluster) {
+            ((GlideClusterClient) client).customCommand(new String[] {"select", "0"}).get();
+        } else {
+            ((GlideClient) client).customCommand(new String[] {"select", "0"}).get();
+        }
+
+        // source exists, destination does not
+        client.set(source, gs("one"));
+        assertTrue(client.copy(source, destination, 1, false).get());
+        if (isCluster) {
+            ((GlideClusterClient) client).customCommand(new String[] {"select", "1"}).get();
+        } else {
+            ((GlideClient) client).customCommand(new String[] {"select", "1"}).get();
+        }
+        assertEquals(gs("one"), client.get(destination).get());
+        if (isCluster) {
+            ((GlideClusterClient) client).customCommand(new String[] {"select", "0"}).get();
+        } else {
+            ((GlideClient) client).customCommand(new String[] {"select", "0"}).get();
+        }
+
+        // setting new value for source
+        client.set(source, gs("two"));
+
+        // both exists, no REPLACE
+        assertFalse(client.copy(source, destination, 1).get());
+        assertFalse(client.copy(source, destination, 1, false).get());
+        if (isCluster) {
+            ((GlideClusterClient) client).customCommand(new String[] {"select", "1"}).get();
+        } else {
+            ((GlideClient) client).customCommand(new String[] {"select", "1"}).get();
+        }
+        assertEquals(gs("one"), client.get(destination).get());
+        if (isCluster) {
+            ((GlideClusterClient) client).customCommand(new String[] {"select", "0"}).get();
+        } else {
+            ((GlideClient) client).customCommand(new String[] {"select", "0"}).get();
+        }
+
+        // both exists, with REPLACE
+        assertTrue(client.copy(source, destination, 1, true).get());
+        if (isCluster) {
+            ((GlideClusterClient) client).customCommand(new String[] {"select", "1"}).get();
+        } else {
+            ((GlideClient) client).customCommand(new String[] {"select", "1"}).get();
+        }
+        assertEquals(gs("two"), client.get(destination).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void copy(BaseClient client) {
         assumeTrue(
                 SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in version 6.2.0");

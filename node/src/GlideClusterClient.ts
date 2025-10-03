@@ -33,7 +33,6 @@ import {
     createConfigResetStat,
     createConfigRewrite,
     createConfigSet,
-    createCopy,
     createCustomCommand,
     createDBSize,
     createEcho,
@@ -1192,37 +1191,6 @@ export class GlideClusterClient extends BaseClient {
             createTime(),
             options,
         ).then((res) => convertClusterGlideRecord(res, true, options?.route));
-    }
-
-    /**
-     * Copies the value stored at the `source` to the `destination` key. When `replace` is `true`,
-     * removes the `destination` key first if it already exists, otherwise performs no action.
-     *
-     * @see {@link https://valkey.io/commands/copy/|valkey.io} for details.
-     * @remarks When in cluster mode, `source` and `destination` must map to the same hash slot.
-     * @remarks Since Valkey version 6.2.0.
-     *
-     * @param source - The key to the source value.
-     * @param destination - The key where the value should be copied to.
-     * @param options - (Optional) Additional parameters:
-     * - (Optional) `replace`: if `true`, the `destination` key should be removed before copying the
-     *     value to it. If not provided, no action will be performed if the key already exists.
-     * @returns `true` if `source` was copied, `false` if the `source` was not copied.
-     *
-     * @example
-     * ```typescript
-     * const result = await client.copy("set1", "set2", { replace: true });
-     * console.log(result); // Output: true - "set1" was copied to "set2".
-     * ```
-     */
-    public async copy(
-        source: GlideString,
-        destination: GlideString,
-        options?: { replace?: boolean },
-    ): Promise<boolean> {
-        return this.createWritePromise(
-            createCopy(source, destination, options),
-        );
     }
 
     /**
