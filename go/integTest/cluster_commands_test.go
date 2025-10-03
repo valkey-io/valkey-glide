@@ -2453,6 +2453,7 @@ func (suite *GlideTestSuite) TestScriptExistsWithRoute() {
 }
 
 func (suite *GlideTestSuite) TestSelect_ClusterSwitchBetweenDatabases() {
+	suite.SkipIfServerVersionLowerThan("9.0.0", suite.T())
 	client := suite.defaultClusterClient()
 
 	key1 := uuid.New().String()
