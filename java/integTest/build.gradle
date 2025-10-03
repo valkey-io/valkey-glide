@@ -172,8 +172,15 @@ tasks.withType(Test) {
     minHeapSize = "2048m" // Initial heap size. Needed for max size tests.
     maxHeapSize = "2048m" // Maximum heap size. Needed for max size tests.
     
-    // Native library path for GLIDE FFI - needed for Jedis compatibility tests
-    jvmArgs "-Djava.library.path=${project.rootDir}/../target/release"
+    // Native library path for GLIDE FFI
+    if (name.contains('jedis') || name.contains('compatibility') || 
+        filter.includePatterns.any { it.contains('jedis') || it.contains('compatibility') }) {
+        // Use jedis-compatibility library for jedis compatibility tests
+        jvmArgs "-Djava.library.path=${project.rootDir}/jedis-compatibility/target/release"
+    } else {
+        // Use client library for regular tests
+        jvmArgs "-Djava.library.path=${project.rootDir}/../target/release"
+    }
     
     // Disable modularity for jedis compatibility tests
     if (name.contains('jedis') || filter.includePatterns.any { it.contains('jedis') }) {
