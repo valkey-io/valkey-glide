@@ -308,7 +308,13 @@ class TestGlideClients:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    def test_sync_select(self, glide_sync_client: GlideClient):
+    def test_sync_select(self, glide_sync_client: GlideClient, cluster_mode):
+        if cluster_mode:
+            if sync_check_if_server_version_lt(glide_sync_client, "9.0.0"):
+                return pytest.mark.skip(
+                    reason="Database ID selection in cluster mode requires Valkey >= 9.0.0"
+                )
+
         assert glide_sync_client.select(0) == OK
         key = get_random_string(10)
         value = get_random_string(10)
