@@ -81,6 +81,7 @@ tasks.register('buildRust', Exec) {
         commandLine 'cargo', 'build', '--release'
     }
     workingDir projectDir
+    environment GLIDE_NAME: 'GlideJedisAdapter'
 }
 
 tasks.register('copyNativeLib', Copy) {
