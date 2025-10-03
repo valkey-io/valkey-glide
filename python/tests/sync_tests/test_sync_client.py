@@ -289,7 +289,7 @@ class TestGlideClients:
         glide_sync_client.close()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    def test_sync_select_database_id(self, request, cluster_mode):
+    def test_sync_select_database_id_select_command(self, request, cluster_mode):
         if cluster_mode:
             # Check version using a temporary standalone client
             temp_client = create_sync_client(request, cluster_mode=False)
