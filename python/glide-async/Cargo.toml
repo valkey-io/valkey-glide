@@ -19,7 +19,7 @@ redis = { path = "../../glide-core/redis-rs/redis", features = [
     "connection-manager",
     "tokio-rustls-comp",
 ] }
-glide-core = { path = "../../glide-core", features = ["socket-layer"] }
+glide-core = { path = "../../glide-core", features = ["socket-layer", "compression"] }
 logger_core = { path = "../../logger_core" }
 
 [profile.release]
