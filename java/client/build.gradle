@@ -159,6 +159,7 @@ delombok.dependsOn('compileJava')
 jar.dependsOn('copyNativeLib')
 javadoc.dependsOn('copyNativeLib')
 copyNativeLib.dependsOn('buildRust')
+buildRust.dependsOn(':jedis-compatibility:buildRust')
 compileTestJava.dependsOn('copyNativeLib')
 test.dependsOn('buildRust')
 
