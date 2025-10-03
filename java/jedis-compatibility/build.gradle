@@ -81,7 +81,8 @@ tasks.register('buildRust', Exec) {
         commandLine 'cargo', 'build', '--release'
     }
     workingDir projectDir
-    environment GLIDE_NAME: 'GlideJedisAdapter'
+    // Force GLIDE_NAME environment variable to override any config
+    environment CARGO_CONFIG_ENV_GLIDE_NAME: 'GlideJedisAdapter'
 }
 
 tasks.register('copyNativeLib', Copy) {

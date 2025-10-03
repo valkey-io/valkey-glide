@@ -7,7 +7,7 @@ authors = ["Valkey GLIDE Maintainers"]
 
 [lib]
 crate-type = ["cdylib"]
-path = "rust-src/lib.rs"
+path = "../src/lib.rs"
 
 [dependencies]
 redis = { path = "../../glide-core/redis-rs/redis", features = ["aio", "tokio-comp", "connection-manager", "tokio-rustls-comp"] }
