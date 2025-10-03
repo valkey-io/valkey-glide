@@ -1552,7 +1552,7 @@ func (suite *GlideTestSuite) TestCopyWithOptionsDBDestination() {
 	assert.True(t, resultCopy)
 
 	// Test 2: Check if the value stored at the source is same with destination key.
-	client.Select(1)
+	client.Select(context.Background(), 1)
 	resultGet, err := client.Get(context.Background(), key2)
 	assert.Nil(t, err)
 	assert.Equal(t, value, resultGet.Value())
