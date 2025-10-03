@@ -14,7 +14,7 @@ jobs:
             pull-requests: write
         steps:
             - name: Close Stale Issues
-              uses: actions/stale@v9.1.0
+              uses: actions/stale@v10.0.0
               with:
                   repo-token: ${{ github.token }}
                   stale-issue-message: "This issue is inactive for 90 days, hence marked as stale, if the issue is still relevant please perform some activity"
