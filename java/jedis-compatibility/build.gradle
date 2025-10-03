@@ -81,6 +81,7 @@ tasks.register('buildRust', Exec) {
         commandLine 'cargo', 'build', '--release'
     }
     workingDir projectDir
+    environment CARGO_TARGET_DIR: "${projectDir}/target"
 }
 
 tasks.register('copyNativeLib', Copy) {
