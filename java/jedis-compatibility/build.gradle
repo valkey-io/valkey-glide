@@ -98,13 +98,13 @@ tasks.register('copyNativeLib', Copy) {
         sourceDir = "${projectDir}/target/release/"
     }
     
-    // Copy from deps directory where the library actually exists
-    from("${sourceDir}/deps/") {
+    // Copy the jedis-compatibility library from release directory
+    from(sourceDir) {
         include "*glide_jedis_rs*"
     }
     
     rename { filename ->
-        // Rename libglide_jedis_rs.so to libglide_rs.so for compatibility
+        // Rename libglide_jedis_rs.dylib to libglide_rs.dylib for Java compatibility
         filename.replace("glide_jedis_rs", "glide_rs")
     }
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
