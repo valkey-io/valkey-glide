@@ -889,6 +889,8 @@ describe("GlideClusterClient", () => {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "select test %p",
         async (protocol) => {
+            if (cluster.checkIfServerVersionLessThan("9.0.0")) return;
+
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
