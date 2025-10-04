@@ -6,6 +6,7 @@ import argparse
 import json
 import logging
 import os
+import platform
 import random
 import re
 import signal
@@ -34,6 +35,77 @@ TLS_FOLDER = os.path.abspath(f"{GLIDE_HOME_DIR}/tls_crts")
 CA_CRT = f"{TLS_FOLDER}/ca.crt"
 SERVER_CRT = f"{TLS_FOLDER}/server.crt"
 SERVER_KEY = f"{TLS_FOLDER}/server.key"
+
+
+class PortAllocator:
+    """Utility for reserving TCP ports on the loopback interface."""
+
+    def __init__(self, host: str = "127.0.0.1") -> None:
+        self.host = host
+
+    def _bind(self, port: int) -> None:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            sock.bind((self.host, port))
+        finally:
+            sock.close()
+
+    def reserve_random_port(
+        self,
+        *,
+        min_port: int = 6379,
+        max_port: int = 55535,
+        timeout: int = 60,
+    ) -> int:
+        start = time.time()
+        while time.time() < start + timeout:
+            port = random.randint(min_port, max_port)
+            try:
+                self._bind(port)
+                logging.debug(
+                    "PortAllocator reserved random port %s in %.4f seconds",
+                    port,
+                    time.time() - start,
+                )
+                return port
+            except OSError as err:
+                logging.debug("PortAllocator random port %s failed: %s", port, err)
+                time.sleep(random.randint(0, 9) / 10000 + 0.01)
+        raise Exception("Timeout Expired: No free port found")
+
+    def reserve_contiguous_ports(
+        self,
+        *,
+        start_port: int,
+        count: int,
+        max_offset: int = 1000,
+    ) -> List[int]:
+        upper_bound = start_port + max_offset
+        base_port = start_port
+        while base_port <= upper_bound:
+            ports: List[int] = []
+            for offset in range(count):
+                candidate = base_port + offset
+                if candidate > upper_bound:
+                    raise Exception(
+                        f"Could not find {count} available ports starting from {start_port}"
+                    )
+                try:
+                    self._bind(candidate)
+                    ports.append(candidate)
+                except OSError:
+                    ports = []
+                    break
+            if len(ports) == count:
+                logging.debug(
+                    "PortAllocator reserved contiguous ports: %s",
+                    ",".join(str(p) for p in ports),
+                )
+                return ports
+            base_port += 1
+        raise Exception(
+            f"Could not find {count} available ports starting from {start_port}"
+        )
 
 
 def get_command(commands: List[str]) -> str:
@@ -73,6 +145,247 @@ def get_cli_command() -> str:
     return _CLI_COMMAND
 
 
+def check_docker_available() -> bool:
+    """Check if Docker is available and running"""
+    try:
+        result = subprocess.run(
+            ["docker", "info"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        return result.returncode == 0
+    except Exception:
+        return False
+
+
+def is_windows() -> bool:
+    """Check if running on Windows"""
+    return platform.system().lower() == "windows"
+
+
+def get_docker_compose_command() -> str:
+    """Get docker-compose command, checking docker compose first, then docker-compose"""
+    commands = ["docker compose", "docker-compose"]
+    for command in commands:
+        try:
+            result = subprocess.run(
+                command.split() + ["--version"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            if result.returncode == 0:
+                return command
+        except Exception:
+            continue
+    raise Exception("Neither 'docker compose' nor 'docker-compose' found in the system.")
+
+
+def generate_docker_compose_config(
+    instance_id: str,
+    use_cluster_mode: bool,
+    ports: List[int],
+    valkey_version: str = "8.0",
+    use_tls: bool = False
+) -> str:
+    """Generate dynamic Docker Compose configuration"""
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    project_dir = os.path.dirname(script_dir)
+    docker_dir = os.path.join(project_dir, "docker")
+    template_path = os.path.join(docker_dir, "docker-compose.template.yml")
+
+    if not os.path.exists(template_path):
+        raise Exception(f"docker-compose.template.yml not found in {docker_dir}")
+
+    with open(template_path, "r") as f:
+        template_content = f.read()
+
+    # Replace template variables
+    replacements = {
+        "${INSTANCE_ID}": instance_id,
+        "${VALKEY_VERSION:-8.0}": valkey_version,
+        "${TLS:-false}": "true" if use_tls else "false",
+    }
+
+    if use_cluster_mode:
+        # Assign ports for cluster nodes (6 nodes + 6 bus ports)
+        for i in range(6):
+            port_key = f"${{CLUSTER_PORT_{i+1}}}"
+            bus_port_key = f"${{CLUSTER_BUS_PORT_{i+1}}}"
+            replacements[port_key] = str(ports[i])
+            replacements[bus_port_key] = str(ports[i] + 10000)
+    else:
+        # Single port for standalone
+        replacements["${VALKEY_PORT}"] = str(ports[0])
+
+    # Apply replacements
+    config_content = template_content
+    for placeholder, value in replacements.items():
+        config_content = config_content.replace(placeholder, value)
+
+    return config_content
+
+
+def start_docker_cluster(
+    use_cluster_mode: bool,
+    use_tls: bool,
+    valkey_version: str = "8.0",
+    instance_id: Optional[str] = None
+) -> Tuple[List[str], str]:
+    """Start Valkey cluster using Docker with dynamic port allocation"""
+    if instance_id is None:
+        instance_id = f"test-{random.randint(1000, 9999)}-{int(time.time())}"
+
+    logging.info(f"Starting Valkey cluster using Docker (instance: {instance_id})...")
+
+    # Determine project directory
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    project_dir = os.path.dirname(script_dir)
+    docker_dir = os.path.join(project_dir, "docker")
+
+    allocator = PortAllocator()
+
+    # Find available ports
+    if use_cluster_mode:
+        # Need 6 ports for cluster nodes
+        start_port = 7000 + (random.randint(0, 100) * 100)  # Random starting range
+        ports = allocator.reserve_contiguous_ports(start_port=start_port, count=6)
+        logging.info(f"Using cluster ports: {ports}")
+    else:
+        # Need 1 port for standalone
+        start_port = 6379 + (random.randint(0, 100) * 10)  # Random starting range
+        ports = [
+            allocator.reserve_random_port(
+                min_port=start_port, max_port=start_port + 1000
+            )
+        ]
+        logging.info(f"Using standalone port: {ports[0]}")
+
+    # Generate dynamic Docker Compose config
+    config_content = generate_docker_compose_config(
+        instance_id, use_cluster_mode, ports, valkey_version, use_tls
+    )
+
+    # Write temporary Docker Compose file
+    temp_compose_file = os.path.join(docker_dir, f"docker-compose-{instance_id}.yml")
+    with open(temp_compose_file, "w") as f:
+        f.write(config_content)
+
+    # Set environment variables
+    env = os.environ.copy()
+    env["TLS_FOLDER"] = TLS_FOLDER
+    env["COMPOSE_PROJECT_NAME"] = f"valkey-test-{instance_id}"
+
+    try:
+        docker_compose_cmd = get_docker_compose_command()
+
+        # Start containers
+        start_cmd = docker_compose_cmd.split() + [
+            "-f", temp_compose_file,
+            "up", "-d"
+        ]
+
+        subprocess.run(start_cmd, cwd=docker_dir, env=env, check=True)
+
+        if use_cluster_mode:
+            # Wait for cluster initialization
+            logging.info("Waiting for cluster initialization...")
+            time.sleep(15)
+            server_list = [f"127.0.0.1:{port}" for port in ports]
+        else:
+            # Wait for standalone server
+            time.sleep(5)
+            server_list = [f"127.0.0.1:{ports[0]}"]
+
+        return server_list, instance_id
+
+    except subprocess.CalledProcessError as e:
+        # Cleanup temp file on failure
+        if os.path.exists(temp_compose_file):
+            os.remove(temp_compose_file)
+        raise Exception(f"Failed to start Docker cluster: {e}")
+
+
+def stop_docker_cluster(instance_id: str):
+    """Stop Docker cluster by instance ID"""
+    logging.info(f"Stopping Docker cluster (instance: {instance_id})...")
+
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    project_dir = os.path.dirname(script_dir)
+    docker_dir = os.path.join(project_dir, "docker")
+    temp_compose_file = os.path.join(docker_dir, f"docker-compose-{instance_id}.yml")
+
+    try:
+        docker_compose_cmd = get_docker_compose_command()
+
+        # Set environment variables
+        env = os.environ.copy()
+        env["COMPOSE_PROJECT_NAME"] = f"valkey-test-{instance_id}"
+
+        if os.path.exists(temp_compose_file):
+            # Stop using the temporary compose file
+            stop_cmd = docker_compose_cmd.split() + [
+                "-f", temp_compose_file,
+                "down", "-v"  # Remove volumes as well
+            ]
+            subprocess.run(stop_cmd, cwd=docker_dir, env=env, check=True)
+
+            # Remove temporary compose file
+            os.remove(temp_compose_file)
+            logging.info(f"Docker cluster {instance_id} stopped successfully")
+        else:
+            # Fallback: stop containers by project name
+            logging.warning(f"Compose file not found for {instance_id}, trying to stop by project name")
+            stop_cmd = ["docker", "container", "stop"]
+            # Get containers for this project
+            list_cmd = ["docker", "container", "ls", "-q", "--filter", f"name=valkey-test-{instance_id}"]
+            result = subprocess.run(list_cmd, capture_output=True, text=True)
+            if result.returncode == 0 and result.stdout.strip():
+                container_ids = result.stdout.strip().split('\n')
+                stop_cmd.extend(container_ids)
+                subprocess.run(stop_cmd, check=False)  # Don't fail if containers don't exist
+
+                # Remove containers
+                remove_cmd = ["docker", "container", "rm"] + container_ids
+                subprocess.run(remove_cmd, check=False)
+
+            # Remove network
+            remove_network_cmd = ["docker", "network", "rm", f"valkey-test-{instance_id}"]
+            subprocess.run(remove_network_cmd, check=False)
+
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Failed to stop Docker cluster {instance_id}: {e}")
+    except Exception as e:
+        logging.error(f"Error stopping Docker cluster {instance_id}: {e}")
+
+
+def cleanup_old_docker_resources():
+    """Clean up old Docker resources from previous test runs"""
+    try:
+        # Remove old containers
+        list_cmd = ["docker", "container", "ls", "-q", "--filter", "name=valkey-"]
+        result = subprocess.run(list_cmd, capture_output=True, text=True)
+        if result.returncode == 0 and result.stdout.strip():
+            container_ids = result.stdout.strip().split('\n')
+            stop_cmd = ["docker", "container", "stop"] + container_ids
+            subprocess.run(stop_cmd, check=False)
+            remove_cmd = ["docker", "container", "rm"] + container_ids
+            subprocess.run(remove_cmd, check=False)
+
+        # Remove old networks
+        list_networks_cmd = ["docker", "network", "ls", "-q", "--filter", "name=valkey-test"]
+        result = subprocess.run(list_networks_cmd, capture_output=True, text=True)
+        if result.returncode == 0 and result.stdout.strip():
+            network_ids = result.stdout.strip().split('\n')
+            for network_id in network_ids:
+                subprocess.run(["docker", "network", "rm", network_id], check=False)
+
+        logging.info("Cleaned up old Docker resources")
+    except Exception as e:
+        logging.warning(f"Warning: Could not clean up old Docker resources: {e}")
+
+
 def init_logger(logfile: str):
     print(f"LOG_FILE={logfile}")
     root_logger = logging.getLogger()
@@ -105,9 +418,11 @@ def should_generate_new_tls_certs() -> bool:
         Path(TLS_FOLDER).mkdir(exist_ok=False)
     except FileExistsError:
         files_list = [CA_CRT, SERVER_KEY, SERVER_CRT]
-        for file in files_list:
-            if check_if_tls_cert_exist(file) and check_if_tls_cert_is_valid(file):
-                return False
+        if all(
+            check_if_tls_cert_exist(file) and check_if_tls_cert_is_valid(file)
+            for file in files_list
+        ):
+            return False
     return True
 
 
@@ -300,30 +615,6 @@ def print_servers_json(servers: List[Server]):
     print("SERVERS_JSON={}".format(json.dumps(arr)))
 
 
-def next_free_port(
-    min_port: int = 6379, max_port: int = 55535, timeout: int = 60
-) -> int:
-    tic = time.perf_counter()
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    timeout_start = time.time()
-    while time.time() < timeout_start + timeout:
-        try:
-            port = random.randint(min_port, max_port)
-            logging.debug(f"Trying port {port}")
-            sock.bind(("127.0.0.1", port))
-            sock.close()
-            toc = time.perf_counter()
-            logging.debug(f"next_free_port() is {port} Elapsed time: {toc - tic:0.4f}")
-            return port
-        except OSError as e:
-            logging.warning(f"next_free_port error for port {port}: {e}")
-            # Sleep so we won't spam the system with sockets
-            time.sleep(random.randint(0, 9) / 10000 + 0.01)
-            continue
-    logging.error("Timeout Expired: No free port found")
-    raise Exception("Timeout Expired: No free port found")
-
-
 def create_cluster_folder(path: str, prefix: str) -> str:
     """Create the cluster's main folder
 
@@ -351,7 +642,8 @@ def start_server(
     cluster_mode: bool,
     load_module: Optional[List[str]] = None,
 ) -> Tuple[Server, str]:
-    port = port if port else next_free_port()
+    if port is None:
+        port = PortAllocator().reserve_random_port()
     logging.debug(f"Creating server {host}:{port}")
 
     # Create sub-folder for each node
@@ -471,10 +763,11 @@ def create_servers(
         if replica_count > 0:
             tls_args.append("--tls-replication")
             tls_args.append("yes")
+    allocator = PortAllocator() if ports is None else None
     servers_to_check = set()
     # Start all servers
     for i in range(nodes_count):
-        port = ports[i] if ports else None
+        port = ports[i] if ports else allocator.reserve_random_port()
         servers_to_check.add(
             start_server(
                 host, port, cluster_folder, tls, tls_args, cluster_mode, load_module
@@ -492,10 +785,11 @@ def create_servers(
                     f"Couldn't start server on {server.host}:{server.port}, address already in use"
                 )
             # The port was already taken, try to find a new free one
+            new_port = allocator.reserve_random_port() if ports is None else None
             servers_to_check.add(
                 start_server(
                     server.host,
-                    None,
+                    new_port,
                     cluster_folder,
                     tls,
                     tls_args,
@@ -1013,6 +1307,26 @@ def stop_cluster(
     logfile = f"{cluster_folder}/cluster_manager.log" if not logfile else logfile
     init_logger(logfile)
     logging.debug(f"## Stopping cluster in path {cluster_folder}")
+
+    # Check if this is a Docker cluster
+    docker_info_file = os.path.join(cluster_folder, "docker_info.json")
+    if os.path.exists(docker_info_file):
+        logging.debug("Detected Docker cluster - stopping Docker containers")
+        try:
+            with open(docker_info_file, "r") as f:
+                docker_info = json.load(f)
+
+            if docker_info.get("use_docker", False):
+                instance_id = docker_info.get("instance_id", "unknown")
+                stop_docker_cluster(instance_id)
+                logging.debug("Docker cluster stopped successfully")
+                if not keep_folder:
+                    remove_folder(cluster_folder)
+                return
+        except Exception as e:
+            logging.error(f"Error stopping Docker cluster: {e}")
+
+    # Traditional cluster stopping
     all_stopped = True
     for it in os.scandir(cluster_folder):
         if it.is_dir() and it.name.isdigit():
@@ -1064,6 +1378,13 @@ def main():
     parser.add_argument(
         "--logfile",
         help="Provide path to log file. (defaults to the cluster folder)",
+    )
+
+    parser.add_argument(
+        "--use-docker",
+        action="store_true",
+        default=False,
+        help="Use Docker containers for Valkey servers (required for Windows runners)",
     )
 
     subparsers = parser.add_subparsers(
@@ -1185,61 +1506,113 @@ def main():
     logging.info(f"## Executing cluster_manager.py with the following args:\n  {args}")
 
     if args.action == "start":
-        if not args.cluster_mode:
-            args.shard_count = 1
-        if args.ports and len(args.ports) != args.shard_count * (
-            1 + args.replica_count
-        ):
-            raise parser.error(
-                f"The number of ports must be equal to the total number of nodes. "
-                f"Number of passed ports == {len(args.ports)}, "
-                f"number of nodes == {args.shard_count * (1 + args.replica_count)}"
-            )
+        # Auto-enable Docker on Windows
+        if is_windows() and not args.use_docker:
+            logging.info("Windows detected - automatically enabling Docker mode")
+            args.use_docker = True
+
+        # Validate Docker setup if required
+        if args.use_docker:
+            if not check_docker_available():
+                raise Exception("Docker is required but not available. Please ensure Docker is installed and running.")
+
         tic = time.perf_counter()
-        cluster_prefix = f"tls-{args.prefix}" if args.tls else args.prefix
-        cluster_folder = create_cluster_folder(args.folder_path, cluster_prefix)
-        logging.info(
-            f"{datetime.now(timezone.utc)} Starting script for cluster {cluster_folder}"
-        )
-        logfile = (
-            f"{cluster_folder}/cluster_manager.log"
-            if not args.logfile
-            else args.logfile
-        )
-        init_logger(logfile)
-        servers = create_servers(
-            args.host,
-            args.shard_count,
-            args.replica_count,
-            args.ports,
-            cluster_folder,
-            args.tls,
-            args.cluster_mode,
-            args.load_module,
-        )
-        if args.cluster_mode:
-            # Create a cluster
-            create_cluster(
-                servers,
+
+        if args.use_docker:
+            # Docker mode - dynamic port allocation
+            logging.info("Using Docker mode for Valkey cluster")
+
+            # Clean up any old Docker resources first
+            cleanup_old_docker_resources()
+
+            # Generate TLS certificates if needed
+            if args.tls and should_generate_new_tls_certs():
+                generate_tls_certs()
+
+            # Start Docker cluster with dynamic ports
+            servers_list, instance_id = start_docker_cluster(args.cluster_mode, args.tls)
+            servers_str = ",".join(servers_list)
+
+            # Create a minimal folder for consistency
+            cluster_prefix = f"docker-tls-{args.prefix}" if args.tls else f"docker-{args.prefix}"
+            cluster_folder = create_cluster_folder(args.folder_path, cluster_prefix)
+
+            # Write Docker info to folder for stop command
+            docker_info_file = os.path.join(cluster_folder, "docker_info.json")
+            with open(docker_info_file, "w") as f:
+                json.dump({
+                    "use_docker": True,
+                    "cluster_mode": args.cluster_mode,
+                    "tls": args.tls,
+                    "servers": servers_list,
+                    "instance_id": instance_id,
+                    "ports": [int(server.split(":")[1]) for server in servers_list]
+                }, f)
+
+            toc = time.perf_counter()
+            logging.info(
+                f"Created {'Cluster' if args.cluster_mode else 'Standalone'} Docker Valkey in {toc - tic:0.4f} seconds"
+            )
+            logging.info(f"Instance ID: {instance_id}")
+            logging.info(f"Allocated ports: {[int(server.split(':')[1]) for server in servers_list]}")
+            print(f"CLUSTER_FOLDER={cluster_folder}")
+            print(f"CLUSTER_NODES={servers_str}")
+        else:
+            # Traditional mode
+            if not args.cluster_mode:
+                args.shard_count = 1
+            if args.ports and len(args.ports) != args.shard_count * (
+                1 + args.replica_count
+            ):
+                raise parser.error(
+                    f"The number of ports must be equal to the total number of nodes. "
+                    f"Number of passed ports == {len(args.ports)}, "
+                    f"number of nodes == {args.shard_count * (1 + args.replica_count)}"
+                )
+            cluster_prefix = f"tls-{args.prefix}" if args.tls else args.prefix
+            cluster_folder = create_cluster_folder(args.folder_path, cluster_prefix)
+            logging.info(
+                f"{datetime.now(timezone.utc)} Starting script for cluster {cluster_folder}"
+            )
+            logfile = (
+                f"{cluster_folder}/cluster_manager.log"
+                if not args.logfile
+                else args.logfile
+            )
+            init_logger(logfile)
+            servers = create_servers(
+                args.host,
                 args.shard_count,
                 args.replica_count,
+                args.ports,
                 cluster_folder,
                 args.tls,
+                args.cluster_mode,
+                args.load_module,
             )
-        elif args.replica_count > 0:
-            # Create a standalone replication group
-            create_standalone_replication(
-                servers,
-                cluster_folder,
-                args.tls,
+            if args.cluster_mode:
+                # Create a cluster
+                create_cluster(
+                    servers,
+                    args.shard_count,
+                    args.replica_count,
+                    cluster_folder,
+                    args.tls,
+                )
+            elif args.replica_count > 0:
+                # Create a standalone replication group
+                create_standalone_replication(
+                    servers,
+                    cluster_folder,
+                    args.tls,
+                )
+            servers_str = ",".join(str(server) for server in servers)
+            toc = time.perf_counter()
+            logging.info(
+                f"Created {'Cluster Redis' if args.cluster_mode else 'Standalone Redis'} in {toc - tic:0.4f} seconds"
             )
-        servers_str = ",".join(str(server) for server in servers)
-        toc = time.perf_counter()
-        logging.info(
-            f"Created {'Cluster Redis' if args.cluster_mode else 'Standalone Redis'} in {toc - tic:0.4f} seconds"
-        )
-        print(f"CLUSTER_FOLDER={cluster_folder}")
-        print(f"CLUSTER_NODES={servers_str}")
+            print(f"CLUSTER_FOLDER={cluster_folder}")
+            print(f"CLUSTER_NODES={servers_str}")
 
     elif args.action == "stop":
         if args.cluster_folder and args.prefix:

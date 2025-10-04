@@ -1,3 +1,35 @@
+# Cargo configuration for Valkey GLIDE Java client cross-compilation
+
+[target.x86_64-pc-windows-msvc]
+# Windows-specific configuration for MSVC toolchain
+rustflags = [
+    # Enable optimizations for Windows
+    "-C", "target-cpu=native",
+    # Link statically with the Windows runtime to avoid DLL dependencies
+    "-C", "target-feature=+crt-static",
+]
+
+[target.x86_64-pc-windows-gnu]
+# Alternative Windows toolchain (MinGW)
+rustflags = [
+    "-C", "target-cpu=native",
+]
+
+[build]
+# Default target when none is specified
+# This can be overridden by environment variables or command line
+target-dir = "../target"
+
 [env]
+# Environment variables for Windows builds
+# These are automatically set when GLIDE_WINDOWS_BUILD=true
+# CC_x86_64-pc-windows-msvc = "cl.exe"
+# CXX_x86_64-pc-windows-msvc = "cl.exe"
+# AR_x86_64-pc-windows-msvc = "lib.exe"
+# LINK_x86_64-pc-windows-msvc = "link.exe"
 GLIDE_NAME = { value = "GlideJava", force = true }
 GLIDE_VERSION = "unknown"
+
+[registry]
+# Use sparse protocol for faster dependency resolution
+protocol = "sparse"

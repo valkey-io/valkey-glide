@@ -1,0 +1,163 @@
+version: '3.8'
+
+services:
+  # Standalone Valkey server
+  valkey-standalone-${INSTANCE_ID}:
+    build:
+      context: ./valkey-test
+      args:
+        VALKEY_VERSION: "${VALKEY_VERSION:-8.0}"
+    container_name: valkey-standalone-${INSTANCE_ID}
+    ports:
+      - "${VALKEY_PORT}:${VALKEY_PORT}"
+    environment:
+      - VALKEY_PORT=${VALKEY_PORT}
+      - VALKEY_TLS=${TLS:-false}
+    volumes:
+      - ${TLS_FOLDER:-./tls}:/tls:ro
+    networks:
+      - valkey-test-${INSTANCE_ID}
+
+  # Valkey cluster nodes
+  valkey-cluster-1-${INSTANCE_ID}:
+    build:
+      context: ./valkey-test
+      args:
+        VALKEY_VERSION: "${VALKEY_VERSION:-8.0}"
+    container_name: valkey-cluster-1-${INSTANCE_ID}
+    ports:
+      - "${CLUSTER_PORT_1}:${CLUSTER_PORT_1}"
+      - "${CLUSTER_BUS_PORT_1}:${CLUSTER_BUS_PORT_1}"
+    environment:
+      - CLUSTER_MODE=true
+      - VALKEY_PORT=${CLUSTER_PORT_1}
+      - VALKEY_TLS=${TLS:-false}
+    volumes:
+      - ${TLS_FOLDER:-./tls}:/tls:ro
+    networks:
+      - valkey-test-${INSTANCE_ID}
+
+  valkey-cluster-2-${INSTANCE_ID}:
+    build:
+      context: ./valkey-test
+      args:
+        VALKEY_VERSION: "${VALKEY_VERSION:-8.0}"
+    container_name: valkey-cluster-2-${INSTANCE_ID}
+    ports:
+      - "${CLUSTER_PORT_2}:${CLUSTER_PORT_2}"
+      - "${CLUSTER_BUS_PORT_2}:${CLUSTER_BUS_PORT_2}"
+    environment:
+      - CLUSTER_MODE=true
+      - VALKEY_PORT=${CLUSTER_PORT_2}
+      - VALKEY_TLS=${TLS:-false}
+    volumes:
+      - ${TLS_FOLDER:-./tls}:/tls:ro
+    networks:
+      - valkey-test-${INSTANCE_ID}
+
+  valkey-cluster-3-${INSTANCE_ID}:
+    build:
+      context: ./valkey-test
+      args:
+        VALKEY_VERSION: "${VALKEY_VERSION:-8.0}"
+    container_name: valkey-cluster-3-${INSTANCE_ID}
+    ports:
+      - "${CLUSTER_PORT_3}:${CLUSTER_PORT_3}"
+      - "${CLUSTER_BUS_PORT_3}:${CLUSTER_BUS_PORT_3}"
+    environment:
+      - CLUSTER_MODE=true
+      - VALKEY_PORT=${CLUSTER_PORT_3}
+      - VALKEY_TLS=${TLS:-false}
+    volumes:
+      - ${TLS_FOLDER:-./tls}:/tls:ro
+    networks:
+      - valkey-test-${INSTANCE_ID}
+
+  valkey-cluster-4-${INSTANCE_ID}:
+    build:
+      context: ./valkey-test
+      args:
+        VALKEY_VERSION: "${VALKEY_VERSION:-8.0}"
+    container_name: valkey-cluster-4-${INSTANCE_ID}
+    ports:
+      - "${CLUSTER_PORT_4}:${CLUSTER_PORT_4}"
+      - "${CLUSTER_BUS_PORT_4}:${CLUSTER_BUS_PORT_4}"
+    environment:
+      - CLUSTER_MODE=true
+      - VALKEY_PORT=${CLUSTER_PORT_4}
+      - VALKEY_TLS=${TLS:-false}
+    volumes:
+      - ${TLS_FOLDER:-./tls}:/tls:ro
+    networks:
+      - valkey-test-${INSTANCE_ID}
+
+  valkey-cluster-5-${INSTANCE_ID}:
+    build:
+      context: ./valkey-test
+      args:
+        VALKEY_VERSION: "${VALKEY_VERSION:-8.0}"
+    container_name: valkey-cluster-5-${INSTANCE_ID}
+    ports:
+      - "${CLUSTER_PORT_5}:${CLUSTER_PORT_5}"
+      - "${CLUSTER_BUS_PORT_5}:${CLUSTER_BUS_PORT_5}"
+    environment:
+      - CLUSTER_MODE=true
+      - VALKEY_PORT=${CLUSTER_PORT_5}
+      - VALKEY_TLS=${TLS:-false}
+    volumes:
+      - ${TLS_FOLDER:-./tls}:/tls:ro
+    networks:
+      - valkey-test-${INSTANCE_ID}
+
+  valkey-cluster-6-${INSTANCE_ID}:
+    build:
+      context: ./valkey-test
+      args:
+        VALKEY_VERSION: "${VALKEY_VERSION:-8.0}"
+    container_name: valkey-cluster-6-${INSTANCE_ID}
+    ports:
+      - "${CLUSTER_PORT_6}:${CLUSTER_PORT_6}"
+      - "${CLUSTER_BUS_PORT_6}:${CLUSTER_BUS_PORT_6}"
+    environment:
+      - CLUSTER_MODE=true
+      - VALKEY_PORT=${CLUSTER_PORT_6}
+      - VALKEY_TLS=${TLS:-false}
+    volumes:
+      - ${TLS_FOLDER:-./tls}:/tls:ro
+    networks:
+      - valkey-test-${INSTANCE_ID}
+
+  # Cluster initialization service
+  cluster-init-${INSTANCE_ID}:
+    build:
+      context: ./valkey-test
+      args:
+        VALKEY_VERSION: "${VALKEY_VERSION:-8.0}"
+    container_name: valkey-cluster-init-${INSTANCE_ID}
+    depends_on:
+      - valkey-cluster-1-${INSTANCE_ID}
+      - valkey-cluster-2-${INSTANCE_ID}
+      - valkey-cluster-3-${INSTANCE_ID}
+      - valkey-cluster-4-${INSTANCE_ID}
+      - valkey-cluster-5-${INSTANCE_ID}
+      - valkey-cluster-6-${INSTANCE_ID}
+    command: >
+      sh -c "
+        sleep 10 &&
+        valkey-cli --cluster create
+        valkey-cluster-1-${INSTANCE_ID}:${CLUSTER_PORT_1}
+        valkey-cluster-2-${INSTANCE_ID}:${CLUSTER_PORT_2}
+        valkey-cluster-3-${INSTANCE_ID}:${CLUSTER_PORT_3}
+        valkey-cluster-4-${INSTANCE_ID}:${CLUSTER_PORT_4}
+        valkey-cluster-5-${INSTANCE_ID}:${CLUSTER_PORT_5}
+        valkey-cluster-6-${INSTANCE_ID}:${CLUSTER_PORT_6}
+        --cluster-replicas 1
+        --cluster-yes
+      "
+    networks:
+      - valkey-test-${INSTANCE_ID}
+
+networks:
+  valkey-test-${INSTANCE_ID}:
+    name: valkey-test-${INSTANCE_ID}
+    driver: bridge
