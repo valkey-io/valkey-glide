@@ -14052,16 +14052,16 @@ public class SharedCommandTests {
         client.set(source, "one");
         assertTrue(client.copy(source, destination, 1, false).get());
         if (isCluster) {
-            ((GlideClusterClient) client).customCommand(new String[] {"select", "1"}).get();
+            ((GlideClusterClient) client).select(1).get();
         } else {
-            ((GlideClient) client).customCommand(new String[] {"select", "1"}).get();
+            ((GlideClient) client).select(1).get();
         }
 
         assertEquals("one", client.get(destination).get());
         if (isCluster) {
-            ((GlideClusterClient) client).customCommand(new String[] {"select", "0"}).get();
+            ((GlideClusterClient) client).select(0).get();
         } else {
-            ((GlideClient) client).customCommand(new String[] {"select", "0"}).get();
+            ((GlideClient) client).select(0).get();
         }
 
         // setting new value for source
@@ -14071,23 +14071,23 @@ public class SharedCommandTests {
         assertFalse(client.copy(source, destination, 1).get());
         assertFalse(client.copy(source, destination, 1, false).get());
         if (isCluster) {
-            ((GlideClusterClient) client).customCommand(new String[] {"select", "1"}).get();
+            ((GlideClusterClient) client).select(1).get();
         } else {
-            ((GlideClient) client).customCommand(new String[] {"select", "1"}).get();
+            ((GlideClient) client).select(1).get();
         }
         assertEquals("one", client.get(destination).get());
         if (isCluster) {
-            ((GlideClusterClient) client).customCommand(new String[] {"select", "0"}).get();
+            ((GlideClusterClient) client).select(0).get();
         } else {
-            ((GlideClient) client).customCommand(new String[] {"select", "0"}).get();
+            ((GlideClient) client).select(0).get();
         }
 
         // both exists, with REPLACE
         assertTrue(client.copy(source, destination, 1, true).get());
         if (isCluster) {
-            ((GlideClusterClient) client).customCommand(new String[] {"select", "1"}).get();
+            ((GlideClusterClient) client).select(1).get();
         } else {
-            ((GlideClient) client).customCommand(new String[] {"select", "1"}).get();
+            ((GlideClient) client).select(1).get();
         }
         assertEquals("two", client.get(destination).get());
     }
@@ -14112,30 +14112,30 @@ public class SharedCommandTests {
         // neither key exists, returns false
         assertFalse(client.copy(source, destination, 1, false).get());
         if (isCluster) {
-            ((GlideClusterClient) client).customCommand(new String[] {"select", "1"}).get();
+            ((GlideClusterClient) client).select(1).get();
         } else {
-            ((GlideClient) client).customCommand(new String[] {"select", "1"}).get();
+            ((GlideClient) client).select(1).get();
         }
         assertFalse(client.copy(source, destination).get());
         if (isCluster) {
-            ((GlideClusterClient) client).customCommand(new String[] {"select", "0"}).get();
+            ((GlideClusterClient) client).select(0).get();
         } else {
-            ((GlideClient) client).customCommand(new String[] {"select", "0"}).get();
+            ((GlideClient) client).select(0).get();
         }
 
         // source exists, destination does not
         client.set(source, gs("one"));
         assertTrue(client.copy(source, destination, 1, false).get());
         if (isCluster) {
-            ((GlideClusterClient) client).customCommand(new String[] {"select", "1"}).get();
+            ((GlideClusterClient) client).select(1).get();
         } else {
-            ((GlideClient) client).customCommand(new String[] {"select", "1"}).get();
+            ((GlideClient) client).select(1).get();
         }
         assertEquals(gs("one"), client.get(destination).get());
         if (isCluster) {
-            ((GlideClusterClient) client).customCommand(new String[] {"select", "0"}).get();
+            ((GlideClusterClient) client).select(0).get();
         } else {
-            ((GlideClient) client).customCommand(new String[] {"select", "0"}).get();
+            ((GlideClient) client).select(0).get();
         }
 
         // setting new value for source
@@ -14145,23 +14145,23 @@ public class SharedCommandTests {
         assertFalse(client.copy(source, destination, 1).get());
         assertFalse(client.copy(source, destination, 1, false).get());
         if (isCluster) {
-            ((GlideClusterClient) client).customCommand(new String[] {"select", "1"}).get();
+            ((GlideClusterClient) client).select(1).get();
         } else {
-            ((GlideClient) client).customCommand(new String[] {"select", "1"}).get();
+            ((GlideClient) client).select(1).get();
         }
         assertEquals(gs("one"), client.get(destination).get());
         if (isCluster) {
-            ((GlideClusterClient) client).customCommand(new String[] {"select", "0"}).get();
+            ((GlideClusterClient) client).select(0).get();
         } else {
-            ((GlideClient) client).customCommand(new String[] {"select", "0"}).get();
+            ((GlideClient) client).select(0).get();
         }
 
         // both exists, with REPLACE
         assertTrue(client.copy(source, destination, 1, true).get());
         if (isCluster) {
-            ((GlideClusterClient) client).customCommand(new String[] {"select", "1"}).get();
+            ((GlideClusterClient) client).select(1).get();
         } else {
-            ((GlideClient) client).customCommand(new String[] {"select", "1"}).get();
+            ((GlideClient) client).select(1).get();
         }
         assertEquals(gs("two"), client.get(destination).get());
     }

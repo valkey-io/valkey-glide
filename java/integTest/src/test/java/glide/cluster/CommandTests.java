@@ -3640,6 +3640,28 @@ public class CommandTests {
                 "Expected NOSCRIPT error after script is fully released and flushed");
     }
 
+    @ParameterizedTest
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void simple_select_test(GlideClusterClient clusterClient) {
+        // Skip test if Valkey version is less than 9.0.0
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0"),
+                "SELECT command in cluster mode requires Valkey 9.0.0 or higher");
+
+        assertEquals(OK, clusterClient.select(0).get());
+
+        String key = UUID.randomUUID().toString();
+        String value = UUID.randomUUID().toString();
+        assertEquals(OK, clusterClient.set(key, value).get());
+
+        assertEquals(OK, clusterClient.select(1).get());
+        assertNull(clusterClient.get(key).get());
+
+        assertEquals(OK, clusterClient.select(0).get());
+        assertEquals(value, clusterClient.get(key).get());
+    }
+
     @SneakyThrows
     @Test
     public void move_cluster_mode() {
