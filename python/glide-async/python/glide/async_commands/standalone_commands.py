@@ -162,42 +162,6 @@ class StandaloneCommands(CoreCommands):
             timeout=timeout,
         )
 
-    async def select(self, index: int) -> TOK:
-        """
-        Change the currently selected database.
-
-        **WARNING**: This command is NOT RECOMMENDED for production use.
-        Upon reconnection, the client will revert to the database_id specified
-        in the client configuration (default: 0), NOT the database selected
-        via this command.
-
-        **RECOMMENDED APPROACH**: Use the database_id parameter in client
-        configuration instead:
-
-        ```python
-        client = await GlideClient.create_client(
-            GlideClientConfiguration(
-                addresses=[NodeAddress("localhost", 6379)],
-                database_id=5  # Recommended: persists across reconnections
-            )
-        )
-        ```
-
-        **RECONNECTION BEHAVIOR**: After any reconnection (due to network issues,
-        timeouts, etc.), the client will automatically revert to the database_id
-        specified during client creation, losing any database selection made via
-        this SELECT command.
-
-        See [valkey.io](https://valkey.io/commands/select/) for details.
-
-        Args:
-            index (int): The index of the database to select.
-
-        Returns:
-            A simple OK response.
-        """
-        return cast(TOK, await self._execute_command(RequestType.Select, [str(index)]))
-
     async def config_resetstat(self) -> TOK:
         """
         Resets the statistics reported by the server using the INFO and LATENCY HISTOGRAM commands.
