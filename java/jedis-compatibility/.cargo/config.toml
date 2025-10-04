@@ -1,0 +1,3 @@
+[env]
+GLIDE_NAME = { value = "GlideJedisAdapter", force = false }
+GLIDE_VERSION = "unknown"

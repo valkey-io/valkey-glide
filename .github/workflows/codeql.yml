@@ -143,7 +143,7 @@ jobs:
               run: |
                   # Build all Java components (skip Rust build for CodeQL analysis)
                   cd java
-                  ./gradlew --build-cache assemble --exclude-task :client:buildRust
+                  ./gradlew --build-cache assemble --exclude-task :client:buildRust --exclude-task :jedis-compatibility:buildRust
 
             - name: Debug - Verify .class files are produced
               if: matrix.language == 'java-kotlin'
