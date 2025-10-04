@@ -108,6 +108,20 @@ tasks.register('buildRust', Exec) {
         }
     }
 
+    doFirst {
+        // Debug: Print environment variables that will be used
+        println "=== CLIENT BUILD DEBUG ==="
+        println "Working directory: ${project.rootDir}"
+        println "GLIDE_NAME environment variable: ${environment.GLIDE_NAME}"
+        println "GLIDE_VERSION environment variable: ${environment.GLIDE_VERSION}"
+        println "Config file exists: ${file("${project.rootDir}/.cargo/config.toml").exists()}"
+        if (file("${project.rootDir}/.cargo/config.toml").exists()) {
+            println "Config file contents:"
+            println file("${project.rootDir}/.cargo/config.toml").text
+        }
+        println "=========================="
+    }
+
     print("Building Rust with target: '$target'\n")
     if (target.contains("linux") && !target.contains("musl")) {
         commandLine 'cargo', 'zigbuild', '--target', "$target", '--release'

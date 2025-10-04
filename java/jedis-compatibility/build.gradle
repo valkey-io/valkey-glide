@@ -76,6 +76,18 @@ tasks.register('buildRust', Exec) {
         delete "${projectDir}/target"
         delete "${project.rootDir}/target"
         delete "${project.rootDir}/../target"
+        
+        // Debug: Print environment variables that will be used
+        println "=== JEDIS-COMPATIBILITY BUILD DEBUG ==="
+        println "Working directory: ${projectDir}"
+        println "GLIDE_NAME environment variable: ${environment.GLIDE_NAME}"
+        println "GLIDE_VERSION environment variable: ${environment.GLIDE_VERSION}"
+        println "Config file exists: ${file("${projectDir}/.cargo/config.toml").exists()}"
+        if (file("${projectDir}/.cargo/config.toml").exists()) {
+            println "Config file contents:"
+            println file("${projectDir}/.cargo/config.toml").text
+        }
+        println "========================================="
     }
 
     print("Building Rust for jedis-compatibility with target: '$target'\n")
