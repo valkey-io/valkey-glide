@@ -41,7 +41,7 @@ class TestLogger:
     def test_log_writes_to_file(self):
         filename = get_random_string(10) + ".log"
         Logger.set_logger_config(Level.INFO, filename)
-        Logger.log(Level.INFO, "test", "test log message")
+        Logger.log(Level.WARN, "test", "test log message")
 
         matched_files = find_log_files(filename)
         assert (
@@ -77,7 +77,7 @@ class TestLogger:
     def test_sync_log_writes_to_file(self):
         filename = get_random_string(10) + ".log"
         SyncLogger.set_logger_config(SyncLogLevel.INFO, filename)
-        SyncLogger.log(SyncLogLevel.INFO, "test", "test log message")
+        SyncLogger.log(SyncLogLevel.WARN, "test", "test log message")
 
         matched_files = find_log_files(filename)
         assert (
