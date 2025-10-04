@@ -1552,7 +1552,7 @@ func (suite *GlideTestSuite) TestCopyWithOptionsDBDestination() {
 	assert.True(t, resultCopy)
 
 	// Test 2: Check if the value stored at the source is same with destination key.
-	client.CustomCommand(context.Background(), []string{"SELECT", "1"})
+	client.Select(context.Background(), 1)
 	resultGet, err := client.Get(context.Background(), key2)
 	assert.Nil(t, err)
 	assert.Equal(t, value, resultGet.Value())
@@ -2450,6 +2450,35 @@ func (suite *GlideTestSuite) TestScriptExistsWithRoute() {
 	script1.Close()
 	script2.Close()
 	script3.Close()
+}
+
+func (suite *GlideTestSuite) TestSelect_ClusterSwitchBetweenDatabases() {
+	suite.SkipIfServerVersionLowerThan("9.0.0", suite.T())
+	client := suite.defaultClusterClient()
+
+	key1 := uuid.New().String()
+	value1 := uuid.New().String()
+	suite.verifyOK(client.Select(context.Background(), 0))
+	suite.verifyOK(client.Set(context.Background(), key1, value1))
+
+	key2 := uuid.New().String()
+	value2 := uuid.New().String()
+	suite.verifyOK(client.Select(context.Background(), 1))
+	suite.verifyOK(client.Set(context.Background(), key2, value2))
+
+	result, err := client.Get(context.Background(), key1)
+	suite.NoError(err)
+	assert.Equal(suite.T(), "", result.Value())
+
+	suite.verifyOK(client.Select(context.Background(), 0))
+	result, err = client.Get(context.Background(), key2)
+	suite.NoError(err)
+	assert.Equal(suite.T(), "", result.Value())
+
+	suite.verifyOK(client.Select(context.Background(), 1))
+	result, err = client.Get(context.Background(), key2)
+	suite.NoError(err)
+	assert.Equal(suite.T(), value2, result.Value())
 }
 
 func (suite *GlideTestSuite) TestScriptFlushClusterClient() {
