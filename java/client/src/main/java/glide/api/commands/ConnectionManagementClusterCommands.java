@@ -175,6 +175,27 @@ public interface ConnectionManagementClusterCommands {
     CompletableFuture<ClusterValue<String>> clientGetName(Route route);
 
     /**
+     * Sets the name of the current connection.<br>
+     * The command will be routed to all nodes.
+     *
+     * @see <a href="https://valkey.io/commands/client-setname/">valkey.io</a> for details.
+     * @param name The name to set for the client connection.
+     * @return A simple <code>OK</code> response.
+     */
+    CompletableFuture<String> clientSetName(String name);
+
+    /**
+     * Sets the name of the current connection.
+     *
+     * @see <a href="https://valkey.io/commands/client-setname/">valkey.io</a> for details.
+     * @param name The name to set for the client connection.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return A simple <code>OK</code> response.
+     */
+    CompletableFuture<String> clientSetName(String name, Route route);
+
+    /**
      * Echoes the provided <code>message</code> back.<br>
      * The command will be routed a random node.
      *
