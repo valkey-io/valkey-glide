@@ -1062,39 +1062,70 @@ class ClusterCommands(CoreCommands):
             await self._execute_command(RequestType.FlushDB, args, route),
         )
 
-    async def copy(
-        self,
-        source: TEncodable,
-        destination: TEncodable,
-        replace: Optional[bool] = None,
-    ) -> bool:
         """
-        Copies the value stored at the `source` to the `destination` key. When `replace` is True,
-        removes the `destination` key first if it already exists, otherwise performs no action.
+        Copies the value stored at the `source` to the `destination` key. If `destinationDB`
+        is specified, the value will be copied to the database specified by `destinationDB`,
+        otherwise the current database will be used. When `replace` is True, removes the
+        `destination` key first if it already exists, otherwise performs no action.
 
         See [valkey.io](https://valkey.io/commands/copy) for more details.
-
-        Note:
-            Both `source` and `destination` must map to the same hash slot.
 
         Args:
             source (TEncodable): The key to the source value.
             destination (TEncodable): The key where the value should be copied to.
+            destinationDB (Optional[Union[int, str]]): The alternative logical database index for the destination key.
             replace (Optional[bool]): If the destination key should be removed before copying the value to it.
 
         Returns:
-            bool: True if the source was copied. Otherwise, returns False.
+            bool: True if the source was copied. Otherwise, return False.
 
         Examples:
             >>> await client.set("source", "sheep")
-            >>> await client.copy(b"source", b"destination")
-                True # Source was copied
+            >>> await client.copy(b"source", b"destination", destinationDB=1)
+                True # Source was copied to DB 1
+            >>> await client.select(1)
             >>> await client.get("destination")
                 b"sheep"
 
-        Since: Valkey version 6.2.0.
+        Since: Valkey version 9.0.0.
         """
+        ...
+
+    async def copy(
+        self,
+        source: TEncodable,
+        destination: TEncodable,
+        # TODO next major release the arguments replace and destinationDB must have their order
+        # swapped to align with the standalone order.
+        # At the moment of the patch release 2.1.1. we can't have a breaking change
+        replace: Optional[bool] = None,
+        destinationDB: Optional[int] = None,
+    ) -> bool:
+        """
+        Copies the value stored at the `source` to the `destination` key.
+
+        This method supports two signatures:
+        1. copy(source, destination, replace=None) - original API
+        2. copy(source, destination, replace=None, destinationDB=None) - new API with DB support
+
+        When `replace` is True, removes the `destination` key first if it already exists,
+        otherwise performs no action.
+
+        See [valkey.io](https://valkey.io/commands/copy) for more details.
+
+        Note:
+            When `destinationDB` is not provided, both `source` and `destination` must map to the same hash slot.
+        """
+        # Handle backward compatibility for positional arguments
+        # If destinationDB is a boolean, it's likely the old API: copy(source, destination, replace)
+        if isinstance(destinationDB, bool):
+            replace = destinationDB
+            destinationDB = None
+
+        # Build command arguments
         args: List[TEncodable] = [source, destination]
+        if destinationDB is not None:
+            args.extend(["DB", str(destinationDB)])
         if replace is True:
             args.append("REPLACE")
         return cast(
