@@ -397,6 +397,9 @@ def start_server(
     ]
     if server_version >= (7, 0, 0):
         cmd_args.extend(["--enable-debug-command", "yes"])
+    # Enable multi-database support in cluster mode for Valkey 9.0+
+    if cluster_mode and server_version >= (9, 0, 0):
+        cmd_args.extend(["--cluster-databases", "16"])
     if load_module:
         if len(load_module) == 0:
             raise ValueError(
@@ -812,7 +815,7 @@ def wait_for_regex_in_log(
 def is_address_already_in_use(
     server: Server,
     log_file: str,
-    timeout: int = 5,
+    timeout: int = 10,
 ):
     logging.debug(f"checking is address already bind for: {server}")
     timeout_start = time.time()
@@ -822,6 +825,10 @@ def is_address_already_in_use(
         "address in use",
     ]
     while time.time() < timeout_start + timeout:
+        if not os.path.exists(log_file):
+            time.sleep(0.1)
+            continue
+        
         with open(log_file, "r") as f:
             server_log = f.read()
             # Check for known error message variants because different C libraries

@@ -43,6 +43,7 @@ jobs:
         runs-on: ubuntu-latest
         outputs:
             PLATFORM_MATRIX: ${{ steps.load-platform-matrix.outputs.PLATFORM_MATRIX }}
+            TESTS_PLATFORM_MATRIX: ${{ steps.load-platform-matrix.outputs.TESTS_PLATFORM_MATRIX }}
         steps:
             - name: Checkout
               uses: actions/checkout@v4
@@ -51,16 +52,22 @@ jobs:
               id: load-platform-matrix
               shell: bash
               run: |
-                  # Filter entries with pypi in PACKAGE_MANAGERS and replace "ephemeral" with "persistent" in RUNNER
-                  export PLATFORM_MATRIX=$(jq 'map(
+
+                  # For testing, Filter entries with pypi in PACKAGE_MANAGERS
+                  export TESTS_PLATFORM_MATRIX=$(jq 'map(
                       select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains(["pypi"])))
-                      | .RUNNER = (
+                  )' < .github/json_matrices/build-matrix.json | jq -c .)
+                  echo "TESTS_PLATFORM_MATRIX=${TESTS_PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
+
+                  # For building and publishing, replace "ephemeral" with "persistent" in RUNNER
+                  export PLATFORM_MATRIX=$(echo "${TESTS_PLATFORM_MATRIX}" | jq 'map(
+                      .RUNNER = (
                           if (.RUNNER | type == "array") 
                           then (.RUNNER | map(if . == "ephemeral" then "persistent" else . end)) 
                           else (if .RUNNER == "ephemeral" then "persistent" else .RUNNER end) 
                           end
                       )
-                  )' < .github/json_matrices/build-matrix.json | jq -c .)
+                  )' | jq -c .)
                   echo "PLATFORM_MATRIX=${PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
 
     start-self-hosted-runner:
@@ -85,7 +92,7 @@ jobs:
         if: github.repository_owner == 'valkey-io'
         name: Publish packages to PyPi
         runs-on: ${{ matrix.build.RUNNER }}
-        timeout-minutes: 60
+        timeout-minutes: 120
         strategy:
             fail-fast: false
             matrix:
@@ -134,7 +141,22 @@ jobs:
                   # List of packages to update
                   for package in glide-async glide-sync glide-shared; do
                     echo "Patching version in $package/pyproject.toml"
-                    sed -i $SED_FOR_MACOS "s/^dynamic = \[\s*\"version\"\s*\]/version = \"${{ env.RELEASE_VERSION }}\"/" "./$package/pyproject.toml"
+                    # Remove "version" from dynamic array (handles all positions and comma combinations)
+                    sed -i $SED_FOR_MACOS '/^dynamic = /s/"version",\s*//g' "./$package/pyproject.toml"  # Remove "version", 
+                    sed -i $SED_FOR_MACOS '/^dynamic = /s/,\s*"version"//g' "./$package/pyproject.toml"  # Remove ,"version"
+                    sed -i $SED_FOR_MACOS '/^dynamic = /s/"version"//g' "./$package/pyproject.toml"      # Remove "version"
+                    
+                    # Add version field after [project] line (handle macOS vs Linux differently)
+                    if [[ "${{ matrix.build.OS }}" =~ .*"macos".*  ]]; then
+                      # macOS requires backslash and newline
+                      sed -i '' '/^\[project\]/a\
+                  version = "${{ env.RELEASE_VERSION }}"
+                  ' "./$package/pyproject.toml"
+                    else
+                      # Linux syntax
+                      sed -i '/^\[project\]/a version = "${{ env.RELEASE_VERSION }}"' "./$package/pyproject.toml"
+                    fi
+
                     # Log the updated file
                     cat "./$package/pyproject.toml"
                   done
@@ -405,10 +427,31 @@ jobs:
                   # List of packages to update
                   for package in glide-async glide-sync glide-shared; do
                     echo "Patching version in $package/pyproject.toml"
-                    sed -i $SED_FOR_MACOS "s/^dynamic = \[\s*\"version\"\s*\]/version = \"${{ env.RELEASE_VERSION }}\"/" "./$package/pyproject.toml"
+                    # Remove "version" from dynamic array (handles all positions and comma combinations)
+                    sed -i $SED_FOR_MACOS '/^dynamic = /s/"version",\s*//g' "./$package/pyproject.toml"  # Remove "version", 
+                    sed -i $SED_FOR_MACOS '/^dynamic = /s/,\s*"version"//g' "./$package/pyproject.toml"  # Remove ,"version"
+                    sed -i $SED_FOR_MACOS '/^dynamic = /s/"version"//g' "./$package/pyproject.toml"      # Remove "version"
+                    
+                    # Add version field after [project] line (handle macOS vs Linux differently)
+                    if [[ "${{ matrix.build.OS }}" =~ .*"macos".*  ]]; then
+                      # macOS requires backslash and newline
+                      sed -i '' '/^\[project\]/a\
+                  version = "${{ env.RELEASE_VERSION }}"
+                  ' "./$package/pyproject.toml"
+                    else
+                      # Linux syntax
+                      sed -i '/^\[project\]/a version = "${{ env.RELEASE_VERSION }}"' "./$package/pyproject.toml"
+                    fi
+
                     # Log the updated file
                     cat "./$package/pyproject.toml"
                   done
+
+            - name: Copy README file into package directories
+              working-directory: ./python
+              run: |
+                  cp README.md glide-sync/README.md
+                  cp README.md glide-async/README.md
 
             ### ASYNC CLIENT ###
 
@@ -422,6 +465,7 @@ jobs:
             - name: Async client - Download binaries
               uses: actions/download-artifact@v4
               with:
+                  pattern: wheels-*-async
                   path: python/glide-async/wheels
                   merge-multiple: true
 
@@ -459,6 +503,7 @@ jobs:
             - name: Sync client - Download binaries
               uses: actions/download-artifact@v4
               with:
+                  pattern: wheels-*-sync
                   path: python/glide-sync/wheels
                   merge-multiple: true
 
@@ -491,7 +536,7 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                build: ${{ fromJson(needs.load-platform-matrix.outputs.PLATFORM_MATRIX) }}
+                build: ${{ fromJson(needs.load-platform-matrix.outputs.TESTS_PLATFORM_MATRIX) }}
         steps:
             - name: Setup self-hosted runner access
               if: ${{ matrix.build.TARGET == 'aarch64-unknown-linux-gnu' }}

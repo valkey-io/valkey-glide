@@ -992,7 +992,7 @@ pub(crate) fn get_connection_info(
             username: cluster_params.username,
             client_name: cluster_params.client_name,
             protocol: cluster_params.protocol,
-            db: 0,
+            db: cluster_params.database_id,
             pubsub_subscriptions: cluster_params.pubsub_subscriptions,
         },
     })

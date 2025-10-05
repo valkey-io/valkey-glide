@@ -44,7 +44,11 @@ on:
                 default: false
             run-with-macos:
                 description: "Run with macos included (only when necessary)"
-                type: boolean
+                type: choice
+                options:
+                    - false
+                    - use-self-hosted
+                    - use-github
                 default: false
             name:
                 required: false
@@ -59,7 +63,7 @@ on:
         inputs:
             run-with-macos:
                 description: "Run with macos included (only when necessary)"
-                type: boolean
+                type: string
                 default: false
 
 concurrency:
@@ -85,7 +89,7 @@ jobs:
                   language-name: java
                   # Run full test matrix if job started by cron or it was explictly specified by a person who triggered the workflow
                   run-full-matrix: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
-                  run-with-macos: ${{ (github.event.inputs.run-with-macos == 'true') }}
+                  run-with-macos: ${{ (github.event.inputs.run-with-macos) }}
 
     test-java:
         name: Java Tests - ${{ matrix.java }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
@@ -327,7 +331,12 @@ jobs:
             - name: Setup Rust Build
               if: ${{ contains(matrix.host.TARGET, 'musl') }}
               run: |
+                  export PATH="$HOME/.cargo/bin:$PATH"
                   echo "PATH=$HOME/.cargo/bin:$PATH" >> $GITHUB_ENV
+
+                  # Install ziglang and zigbuild
+                  pip3 install ziglang --break-system-packages
+                  cargo install --locked cargo-zigbuild
 
             - uses: actions/cache@v4
               with:

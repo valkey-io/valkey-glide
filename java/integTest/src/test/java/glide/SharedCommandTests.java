@@ -11754,8 +11754,9 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void objectEncoding_binary_returns_string_embstr(BaseClient client) {
-        GlideString stringEmbstrKey = gs(UUID.randomUUID().toString());
-        assertEquals(OK, client.set(stringEmbstrKey, gs("value")).get());
+        // Use shorter key and value to ensure embstr encoding (total < 44 bytes)
+        GlideString stringEmbstrKey = gs("k" + UUID.randomUUID().toString().substring(0, 8));
+        assertEquals(OK, client.set(stringEmbstrKey, gs("abc")).get());
         String encoding = client.objectEncoding(stringEmbstrKey).get();
         // Valkey 9.0.0+ may return "raw" instead of "embstr" for short strings with long key names
         assertTrue(
@@ -13169,11 +13170,13 @@ public class SharedCommandTests {
                 SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in version 6.2.0");
         String key1 = "{key}-1" + UUID.randomUUID();
         String key2 = "{key}-2" + UUID.randomUUID();
-        // create new client with default request timeout (250 millis)
+        // create new client with extended request timeout (2000 millis) to allow for blocking commands
         try (var testClient =
                 client instanceof GlideClient
-                        ? GlideClient.createClient(commonClientConfig().build()).get()
-                        : GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
+                        ? GlideClient.createClient(commonClientConfig().requestTimeout(2000).build()).get()
+                        : GlideClusterClient.createClient(
+                                        commonClusterClientConfig().requestTimeout(2000).build())
+                                .get()) {
 
             // ensure that commands doesn't time out even if timeout > request timeout
             assertNull(testClient.blmove(key1, key2, ListDirection.LEFT, ListDirection.LEFT, 1).get());
@@ -13197,11 +13200,13 @@ public class SharedCommandTests {
                 SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in version 6.2.0");
         GlideString key1 = gs("{key}-1" + UUID.randomUUID());
         GlideString key2 = gs("{key}-2" + UUID.randomUUID());
-        // create new client with default request timeout (250 millis)
+        // create new client with extended request timeout (2000 millis) to allow for blocking commands
         try (var testClient =
                 client instanceof GlideClient
-                        ? GlideClient.createClient(commonClientConfig().build()).get()
-                        : GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
+                        ? GlideClient.createClient(commonClientConfig().requestTimeout(2000).build()).get()
+                        : GlideClusterClient.createClient(
+                                        commonClusterClientConfig().requestTimeout(2000).build())
+                                .get()) {
 
             // ensure that commands doesn't time out even if timeout > request timeout
             assertNull(testClient.blmove(key1, key2, ListDirection.LEFT, ListDirection.LEFT, 1).get());
@@ -14940,8 +14945,8 @@ public class SharedCommandTests {
         assertEquals(0L, result.get("len"));
 
         // setting string values
-        client.set(key1, "abcdefghijk");
-        client.set(key2, "defjkjuighijk");
+        assertEquals(OK, client.set(key1, "abcdefghijk").get());
+        assertEquals(OK, client.set(key2, "defjkjuighijk").get());
 
         // LCS with only IDX
         Object expectedMatchesObject = new Long[][][] {{{6L, 10L}, {8L, 12L}}, {{3L, 5L}, {0L, 2L}}};
@@ -15023,8 +15028,8 @@ public class SharedCommandTests {
         assertEquals(0L, result.get("len"));
 
         // setting string values
-        client.set(key1, gs("abcdefghijk"));
-        client.set(key2, gs("defjkjuighijk"));
+        assertEquals(OK, client.set(key1, gs("abcdefghijk")).get());
+        assertEquals(OK, client.set(key2, gs("defjkjuighijk")).get());
 
         // LCS with only IDX
         Object expectedMatchesObject = new Long[][][] {{{6L, 10L}, {8L, 12L}}, {{3L, 5L}, {0L, 2L}}};

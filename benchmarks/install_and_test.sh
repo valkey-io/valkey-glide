@@ -21,7 +21,8 @@ fi
 resultFiles=
 writeResultsCSV=1
 runAllBenchmarks=1
-runPython=0
+runAsyncPython=0
+runSyncPython=0
 runNode=0
 runCsharp=0
 runJava=0
@@ -36,22 +37,38 @@ port=6379
 tlsFlag="--tls"
 dotnetFramework="net6.0"
 
-function runPythonBenchmark(){
+function runAsyncPythonBenchmark(){
   # generate protobuf files
   protoc -Iprotobuf=${GLIDE_HOME_FOLDER}/glide-core/src/protobuf/ --python_out=${PYTHON_FOLDER}/python/glide ${GLIDE_HOME_FOLDER}/glide-core/src/protobuf/*.proto
   cd ${PYTHON_FOLDER}
   $pythonCommand -m venv .env
   source .env/bin/activate
   $pythonCommand -m pip install --upgrade --quiet pip
-  $pythonCommand -m pip install --quiet -r requirements.txt
-  maturin develop --release
-  echo "Starting Python benchmarks"
+  python dev.py build --client async --mode release
+  echo "starting Python async benchmark"
   cd ${BENCH_FOLDER}/python
   $pythonCommand -m pip install --quiet -r requirements.txt
-  $pythonCommand python_benchmark.py --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host --clientCount $clientCount $tlsFlag $clusterFlag $portFlag $minimalFlag
+  $pythonCommand python_async_benchmark.py --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host --clientCount $clientCount $tlsFlag $clusterFlag $portFlag $minimalFlag
   # exit python virtualenv
   deactivate
-  echo "done python benchmark"
+  echo "done python async benchmark"
+}
+
+function runSyncPythonBenchmark(){
+  # generate protobuf files
+  protoc -Iprotobuf=${GLIDE_HOME_FOLDER}/glide-core/src/protobuf/ --python_out=${PYTHON_FOLDER}/python/glide ${GLIDE_HOME_FOLDER}/glide-core/src/protobuf/*.proto
+  cd ${PYTHON_FOLDER}
+  $pythonCommand -m venv .env
+  source .env/bin/activate
+  $pythonCommand -m pip install --upgrade --quiet pip
+  python dev.py build --client sync --mode release
+  echo "Starting Python Sync benchmarks"
+  cd ${BENCH_FOLDER}/python
+  $pythonCommand -m pip install --quiet -r requirements.txt
+  $pythonCommand python_sync_benchmark.py --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host --clientCount $clientCount $tlsFlag $clusterFlag $portFlag $minimalFlag
+  # exit python virtualenv
+  deactivate
+  echo "done python sync benchmark"
 }
 
 function runNodeBenchmark(){
@@ -66,10 +83,10 @@ function runNodeBenchmark(){
 }
 
 function runCSharpBenchmark(){
-  cd ${CSHARP_BENCH_FOLDER}
+  cd ${GLIDE_HOME_FOLDER}/../benchmarks
   dotnet clean
   dotnet build --configuration Release /warnaserror
-  dotnet run --framework $dotnetFramework --configuration Release --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host --clientCount $clientCount $tlsFlag $portFlag $minimalFlag
+  dotnet run --framework $dotnetFramework --configuration Release --resultsFile=$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host --clientCount $clientCount $tlsFlag $portFlag $minimalFlag
 }
 
 function runJavaBenchmark(){
@@ -191,7 +208,16 @@ do
             ;;
         -python)
             runAllBenchmarks=0
-            runPython=1
+            runAsyncPython=1
+            runSyncPython=1
+            ;;
+        -python-async)
+            runAllBenchmarks=0
+            runAsyncPython=1
+            ;;
+        -python-sync)
+            runAllBenchmarks=0
+            runSyncPython=1
             ;;
         -node)
             runAllBenchmarks=0
@@ -262,11 +288,17 @@ do
         fillDB $currentDataSize
     fi
 
-    if [ $runAllBenchmarks == 1 ] || [ $runPython == 1 ];
+    if [ $runAllBenchmarks == 1 ] || [ $runAsyncPython == 1 ];
     then
-        pythonResults=$(resultFileName python $currentDataSize)
+        pythonResults=$(resultFileName python-async $currentDataSize)
         resultFiles+=$pythonResults" "
-        runPythonBenchmark $pythonResults $currentDataSize
+        runAsyncPythonBenchmark $pythonResults $currentDataSize
+    fi
+    if [ $runAllBenchmarks == 1 ] || [ $runSyncPython == 1 ];
+    then
+        pythonResults=$(resultFileName python-sync $currentDataSize)
+        resultFiles+=$pythonResults" "
+        runSyncPythonBenchmark $pythonResults $currentDataSize
     fi
 
     if [ $runAllBenchmarks == 1 ] || [ $runNode == 1 ];

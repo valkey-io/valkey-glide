@@ -45,7 +45,11 @@ on:
                 default: false
             run-with-macos:
                 description: "Run with macos included (only when necessary)"
-                type: boolean
+                type: choice
+                options:
+                    - false
+                    - use-self-hosted
+                    - use-github
                 default: false
             name:
                 required: false
@@ -70,7 +74,7 @@ on:
         inputs:
             run-with-macos:
                 description: "Run with macos included (only when necessary)"
-                type: boolean
+                type: string
                 default: false
 
 concurrency:
@@ -89,7 +93,7 @@ run-name:
 env:
     # Run full test matrix if job started by cron or it was explictly specified by a person who triggered the workflow
     RUN_FULL_MATRIX: ${{ (github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule') }}
-    RUN_WITH_MACOS: ${{ (github.event.inputs.run-with-macos == 'true') }}
+    RUN_WITH_MACOS: ${{ (github.event.inputs.run-with-macos) }}
     RUN_SYNC_ONLY: ${{ (github.event.inputs.run_sync_tests == 'true' && github.event.inputs.run_async_tests == 'false') }}
     RUN_ASYNC_ONLY: ${{ (github.event.inputs.run_async_tests == 'true' && github.event.inputs.run_sync_tests == 'false') }}
 
@@ -107,7 +111,7 @@ jobs:
               with:
                   language-name: python
                   run-full-matrix: ${{ env.RUN_FULL_MATRIX == 'true' }}
-                  run-with-macos: ${{ env.RUN_WITH_MACOS == 'true' }}
+                  run-with-macos: ${{ env.RUN_WITH_MACOS }}
 
     test-python:
         name: Python Tests - ${{ matrix.python }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}

@@ -44,7 +44,11 @@ on:
                 default: false
             run-with-macos:
                 description: "Run with macos included (only when necessary)"
-                type: boolean
+                type: choice
+                options:
+                    - false
+                    - use-self-hosted
+                    - use-github
                 default: false
             name:
                 required: false
@@ -55,7 +59,7 @@ on:
         inputs:
             run-with-macos:
                 description: "Run with macos included (only when necessary)"
-                type: boolean
+                type: string
                 default: false
 
 concurrency:
@@ -87,7 +91,7 @@ jobs:
                   language-name: rust
                   # Run full test matrix if job started by cron or it was explictly specified by a person who triggered the workflow
                   run-full-matrix: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
-                  run-with-macos: ${{ github.event.inputs.run-with-macos == 'true' }}
+                  run-with-macos: ${{ github.event.inputs.run-with-macos }}
 
     tests:
         runs-on: ${{ matrix.host.RUNNER }}
@@ -120,7 +124,7 @@ jobs:
 
             - name: Run glide-core tests
               working-directory: ./glide-core
-              run: cargo test --all-features
+              run: cargo test --features "proto,socket-layer,standalone_heartbeat"
 
             - name: Run glide-core telemetry tests
               working-directory: ./glide-core/telemetry

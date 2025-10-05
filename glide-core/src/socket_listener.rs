@@ -571,7 +571,6 @@ fn handle_request(request: CommandRequest, mut client: Client, writer: Rc<Writer
                             Err(e) => Err(e),
                         }
                     }
-
                     command_request::Command::ScriptInvocation(script) => {
                         match get_route(request.route.0, None) {
                             Ok(routes) => {
@@ -611,6 +610,12 @@ fn handle_request(request: CommandRequest, mut client: Client, writer: Rc<Writer
                             update_connection_password_command.immediate_auth,
                         )
                         .await
+                        .map_err(|err| err.into()),
+
+                    command_request::Command::RefreshIamToken(_refresh) => client
+                        .refresh_iam_token()
+                        .await
+                        .map(|_| Value::SimpleString("OK".into()))
                         .map_err(|err| err.into()),
                 },
                 None => {

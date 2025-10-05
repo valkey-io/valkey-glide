@@ -2,6 +2,11 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
+/**
+ * Note: 'eslint-disable-line @typescript-eslint/no-unused-vars' is used intentionally
+ * to suppress unused import errors for types referenced only in JSDoc.
+ */
+
 import {
     AggregationType,
     BaseScanOptions,
@@ -4383,6 +4388,14 @@ export class BaseBatch<T extends BaseBatch<T>> {
 export class Batch extends BaseBatch<Batch> {
     /**
      * Change the currently selected database.
+     *
+     * **WARNING**: This command is NOT RECOMMENDED for production use.
+     * Upon reconnection, the client will revert to the database_id specified
+     * in the client configuration (default: 0), NOT the database selected
+     * via this command.
+     *
+     * **RECOMMENDED APPROACH**: Use the `databaseId` parameter in client
+     * configuration instead of using SELECT in batch operations.
      *
      * @see {@link https://valkey.io/commands/select/|valkey.io} for details.
      *

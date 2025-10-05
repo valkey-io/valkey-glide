@@ -3,13 +3,22 @@
  */
 
 import * as net from "net";
+import { connection_request } from "../build-ts/ProtobufMessage";
 import {
     AdvancedBaseClientConfiguration,
     BaseClient,
     BaseClientConfiguration,
-    Batch,
-    BatchOptions,
     convertGlideRecordToRecord,
+    Decoder,
+    DecoderOption,
+    GlideRecord,
+    GlideReturnType,
+    GlideString,
+    PubSubMsg,
+} from "./BaseClient";
+import { Batch } from "./Batch";
+import {
+    BatchOptions,
     createClientGetName,
     createClientId,
     createConfigGet,
@@ -44,22 +53,15 @@ import {
     createSelect,
     createTime,
     createUnWatch,
-    Decoder,
-    DecoderOption,
     FlushMode,
     FunctionListOptions,
     FunctionListResponse,
     FunctionRestorePolicy,
     FunctionStatsFullResponse,
-    GlideRecord,
-    GlideReturnType,
-    GlideString,
     InfoOptions,
     LolwutOptions,
-    PubSubMsg,
     ScanOptions,
-} from ".";
-import { connection_request } from "../build-ts/ProtobufMessage";
+} from "./Commands";
 
 /* eslint-disable-next-line @typescript-eslint/no-namespace */
 export namespace GlideClientConfiguration {
@@ -102,19 +104,19 @@ export namespace GlideClientConfiguration {
 /**
  * Configuration options for creating a {@link GlideClient | GlideClient}.
  *
- * Extends `BaseClientConfiguration` with properties specific to `GlideClient`, such as database selection,
+ * Extends `BaseClientConfiguration` with properties specific to `GlideClient`, such as
  * reconnection strategies, and Pub/Sub subscription settings.
  *
  * @remarks
  * This configuration allows you to tailor the client's behavior when connecting to a standalone Valkey Glide server.
  *
- * - **Database Selection**: Use `databaseId` to specify which logical database to connect to.
+ * - **Database Selection**: Use `databaseId` (inherited from BaseClientConfiguration) to specify which logical database to connect to.
  * - **Pub/Sub Subscriptions**: Predefine Pub/Sub channels and patterns to subscribe to upon connection establishment.
  *
  * @example
  * ```typescript
  * const config: GlideClientConfiguration = {
- *   databaseId: 1,
+ *   databaseId: 1, // Inherited from BaseClientConfiguration
  *   pubsubSubscriptions: {
  *     channelsAndPatterns: {
  *       [GlideClientConfiguration.PubSubChannelModes.Pattern]: new Set(['news.*']),
@@ -127,10 +129,6 @@ export namespace GlideClientConfiguration {
  * ```
  */
 export type GlideClientConfiguration = BaseClientConfiguration & {
-    /**
-     * index of the logical database to connect to.
-     */
-    databaseId?: number;
     /**
      * PubSub subscriptions to be used for the client.
      * Will be applied via SUBSCRIBE/PSUBSCRIBE commands during connection establishment.
@@ -173,7 +171,6 @@ export class GlideClient extends BaseClient {
         options: GlideClientConfiguration,
     ): connection_request.IConnectionRequest {
         const configuration = super.createClientRequest(options);
-        configuration.databaseId = options.databaseId;
 
         this.configurePubsub(options, configuration);
 
@@ -409,6 +406,21 @@ export class GlideClient extends BaseClient {
     /**
      * Changes the currently selected database.
      *
+     * **WARNING**: This command is NOT RECOMMENDED for production use.
+     * Upon reconnection, the client will revert to the database_id specified
+     * in the client configuration (default: 0), NOT the database selected
+     * via this command.
+     *
+     * **RECOMMENDED APPROACH**: Use the `databaseId` parameter in client
+     * configuration instead:
+     *
+     * ```typescript
+     * const client = await GlideClient.createClient({
+     *     addresses: [{ host: "localhost", port: 6379 }],
+     *     databaseId: 5  // Recommended: persists across reconnections
+     * });
+     * ```
+     *
      * @see {@link https://valkey.io/commands/select/|valkey.io} for details.
      *
      * @param index - The index of the database to select.
@@ -416,9 +428,10 @@ export class GlideClient extends BaseClient {
      *
      * @example
      * ```typescript
-     * // Example usage of select method
+     * // Example usage of select method (NOT RECOMMENDED)
      * const result = await client.select(2);
      * console.log(result); // Output: 'OK'
+     * // Note: Database selection will be lost on reconnection!
      * ```
      */
     public async select(index: number): Promise<"OK"> {

@@ -45,6 +45,7 @@ struct BuilderParams {
     pubsub_subscriptions: Option<PubSubSubscriptionInfo>,
     reconnect_retry_strategy: Option<RetryStrategy>,
     refresh_topology_from_initial_nodes: bool,
+    database_id: i64,
 }
 
 #[derive(Clone)]
@@ -146,6 +147,7 @@ pub struct ClusterParams {
     pub(crate) pubsub_subscriptions: Option<PubSubSubscriptionInfo>,
     pub(crate) reconnect_retry_strategy: Option<RetryStrategy>,
     pub(crate) refresh_topology_from_initial_nodes: bool,
+    pub(crate) database_id: i64,
 }
 
 impl ClusterParams {
@@ -176,6 +178,7 @@ impl ClusterParams {
             pubsub_subscriptions: value.pubsub_subscriptions,
             reconnect_retry_strategy: value.reconnect_retry_strategy,
             refresh_topology_from_initial_nodes: value.refresh_topology_from_initial_nodes,
+            database_id: value.database_id,
         })
     }
 }
@@ -502,6 +505,15 @@ impl ClusterClientBuilder {
     /// Sets the protocol with which the client should communicate with the server.
     pub fn use_protocol(mut self, protocol: ProtocolVersion) -> ClusterClientBuilder {
         self.builder_params.protocol = protocol;
+        self
+    }
+
+    /// Sets the database ID for the new ClusterClient.
+    ///
+    /// Note: Database selection in cluster mode requires server support for multiple databases.
+    /// Most cluster configurations only support database 0.
+    pub fn database_id(mut self, database_id: i64) -> ClusterClientBuilder {
+        self.builder_params.database_id = database_id;
         self
     }
 

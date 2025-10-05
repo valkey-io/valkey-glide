@@ -2868,4 +2868,26 @@ describe("GlideClusterClient", () => {
         },
         TIMEOUT,
     );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "should pass database id for cluster client_%p",
+        async (protocol) => {
+            // Skip test if version is below 9.0.0 (Valkey 9)
+            if (cluster.checkIfServerVersionLessThan("9.0.0")) return;
+
+            const client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol, {
+                    databaseId: 1,
+                }),
+            );
+
+            try {
+                // Simple test to verify the client works with the database ID
+                expect(await client.ping()).toEqual("PONG");
+            } finally {
+                client.close();
+            }
+        },
+        TIMEOUT,
+    );
 });

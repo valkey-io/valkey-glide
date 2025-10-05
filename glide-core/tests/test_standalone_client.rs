@@ -247,7 +247,7 @@ mod standalone_client_tests {
         let mut addresses = get_mock_addresses(&servers);
         for i in 4 - config.number_of_missing_replicas..4 {
             addresses.push(redis::ConnectionAddr::Tcp(
-                "foo".to_string(),
+                "192.0.2.1".to_string(), // Use non-routable IP for fast connection failure
                 6379 + i as u16,
             ));
         }
@@ -256,7 +256,7 @@ mod standalone_client_tests {
         connection_request.read_from = config.read_from.into();
 
         block_on_all(async {
-            let mut client = StandaloneClient::create_client(connection_request.into(), None)
+            let mut client = StandaloneClient::create_client(connection_request.into(), None, None)
                 .await
                 .unwrap();
             logger_core::log_info(
@@ -402,7 +402,7 @@ mod standalone_client_tests {
         let connection_request =
             create_connection_request(addresses.as_slice(), &Default::default());
         block_on_all(async {
-            let client_res = StandaloneClient::create_client(connection_request.into(), None)
+            let client_res = StandaloneClient::create_client(connection_request.into(), None, None)
                 .await
                 .map_err(ConnectionError::Standalone);
             assert!(client_res.is_err());
@@ -441,7 +441,7 @@ mod standalone_client_tests {
             create_connection_request(addresses.as_slice(), &Default::default());
 
         block_on_all(async {
-            let mut client = StandaloneClient::create_client(connection_request.into(), None)
+            let mut client = StandaloneClient::create_client(connection_request.into(), None, None)
                 .await
                 .unwrap();
 
@@ -522,14 +522,6 @@ mod standalone_client_tests {
                 }
             }
         });
-    }
-
-    fn extract_client_id(client_info: &str) -> Option<String> {
-        client_info
-            .split_whitespace()
-            .find(|part| part.starts_with("id="))
-            .and_then(|id_part| id_part.strip_prefix("id="))
-            .map(|id| id.to_string())
     }
 
     #[rstest]
