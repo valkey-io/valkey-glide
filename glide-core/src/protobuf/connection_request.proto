@@ -74,7 +74,7 @@ message ConnectionRequest {
     string client_az = 15;
     uint32 connection_timeout = 16;
     bool lazy_connect = 17;
-    bool refresh_topology_from_seed_nodes = 18;
+    bool refresh_topology_from_initial_nodes = 18;
 }
 
 message ConnectionRetryStrategy {

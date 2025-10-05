@@ -314,18 +314,6 @@ mod cluster_async {
         metric["data_points"][0]["value"].as_u64().unwrap_or(0)
     }
 
-    fn generate_key_in_range(range: Vec<u16>) -> String {
-        for _ in 0..1000 {
-            let key = generate_random_string(10);
-            let slot = get_slot(key.as_bytes());
-
-            if slot >= range[0] && slot <= range[1] {
-                return key;
-            }
-        }
-        panic!("Failed to generate key in range after 1000 attempts");
-    }
-
     #[test]
     #[serial_test::serial]
     fn test_async_cluster_basic_cmd() {
@@ -1854,7 +1842,7 @@ mod cluster_async {
 
             let i = requests.fetch_add(1, atomic::Ordering::SeqCst);
 
-            let is_get_cmd = contains_slice(cmd, b"GET");
+            let is_get_cmd = contains_slice(cmd, "GET".as_bytes());
             let get_response = Err(Ok(Value::BulkString(b"123".to_vec())));
             match i {
                 // Respond that the key exists on a node that does not yet have a connection:
@@ -2218,10 +2206,10 @@ mod cluster_async {
 
     #[test]
     #[serial_test::serial]
-    /// This test verifies the behavior of refreshing topology from seed nodes.
+    /// This test verifies the behavior of refreshing topology from initial nodes.
     ///
     /// This test simulates a network partition in a 3-node cluster to verify how
-    /// `refresh_topology_from_seed_nodes` affects cluster topology discovery:
+    /// `refresh_topology_from_initial_nodes` affects cluster topology discovery:
     ///
     /// Test flow:
     /// 1. Creates a 3-node cluster and connects via node_0
@@ -2233,18 +2221,20 @@ mod cluster_async {
     /// 5. Verifies final cluster view based on refresh mode
     ///
     /// Expected outcomes:
-    /// - When refresh_from_seed = true:
-    ///   * Only sees node_0 (seed node)
+    /// - When refresh_from_initial = true:
+    ///   * Only sees node_0 (initial node)
     ///   * PING returns 1 response
-    /// - When refresh_from_seed = false:
+    ///   * Reason: refreshes topology solely from initial node, which only knows itself.
+    /// - When refresh_from_initial = false:
     ///   * Sees nodes 1 & 2 (majority)
     ///   * PING returns 2 responses
+    ///   * Reason: refreshes topology from internal cluster view (all 3 nodes), which reflects majority decision.
     ///
     /// This test ensures the client correctly follows either:
-    /// - Seed node's view (when refresh_from_seed = true)
-    /// - Internal cluster view (when refresh_from_seed = false)
-    fn test_refresh_topology_from_seed_nodes() {
-        for refresh_topology_from_seed_nodes in [false, true] {
+    /// - initial node's view (when refresh_from_initial = true)
+    /// - Internal cluster view (when refresh_from_initial = false)
+    fn test_refresh_topology_from_initial_nodes() {
+        for refresh_topology_from_initial_nodes in [false, true] {
             let cluster = TestClusterContext::new(3, 0);
 
             let _ = block_on_all(async move {
@@ -2269,14 +2259,12 @@ mod cluster_async {
                 let node_0_id = node_0_info[0].0.clone();
                 let rest_ids: Vec<_> = rest.iter().map(|(id, _, _, _)| id.clone()).collect();
 
-                // Connect through node0 (use node0 as seed node)
+                // Connect through node0 (use node0 as initial node)
                 let client = redis::cluster::ClusterClientBuilder::new(vec![cluster.nodes[0].clone()])
                         .use_protocol(use_protocol())
                         // Force slots refresh to be immediate after MOVED error
                         .slots_refresh_rate_limit(Duration::from_secs(0), 0)
-                        .refresh_topology_from_seed_nodes(refresh_topology_from_seed_nodes)
-                        .retries(1)
-                        .response_timeout(Duration::from_millis(2000))
+                        .refresh_topology_from_initial_nodes(refresh_topology_from_initial_nodes)
                         .build()
                         .unwrap();
 
@@ -2341,26 +2329,20 @@ mod cluster_async {
                         .expect("Failed to make node 0 forget");
                 }
 
-                // Pick two keys from the remaining nodes
-                let rest_nodes_and_slots: Vec<_> = rest
-                    .iter()
-                    .map(|(node_id, _, _, slots)| (node_id, slots[0].clone()))
-                    .collect();
-
-                let key1 = generate_key_in_range(rest_nodes_and_slots[0].1.clone());
-                let key2 = generate_key_in_range(rest_nodes_and_slots[1].1.clone());
-
-                // Force a MOVED error by routing key1 through the wrong slot
+                // Force a MOVED error by routing key1 through the wrong slot, this should trigger refresh slots immediately
+                // key1 -> 9189 (node 1)
+                // key2 -> 12539 (node 2)
                 let _ = conn
                     .route_command(
-                        &cmd("GET").arg(&key1),
+                        &cmd("GET").arg("key1"),
                         RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(Route::new(
-                            get_slot(key2.as_bytes()),
+                            get_slot("key".as_bytes()),
                             SlotAddr::Master,
                         ))),
                     )
                     .await;
 
+                // Allow some time for the topology to refresh
                 sleep(Duration::from_secs(1).into()).await;
 
                 let ping = conn
@@ -2376,7 +2358,7 @@ mod cluster_async {
                     _ => panic!("Unexpected PING response: {:?}", ping),
                 };
 
-                let res_size = if refresh_topology_from_seed_nodes {
+                let res_size = if refresh_topology_from_initial_nodes {
                     1
                 } else {
                     2 // since both node 1 and node 2 forgot about node 0, and we do follow majority decisions
@@ -2388,7 +2370,7 @@ mod cluster_async {
                     res_size
                 );
 
-                if refresh_topology_from_seed_nodes {
+                if refresh_topology_from_initial_nodes {
                     assert!(
                         res.iter().any(|(k, _)| k
                             == &Value::BulkString(
@@ -2401,6 +2383,189 @@ mod cluster_async {
                 Ok(())
             });
         }
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_shoham() {
+        // let cluster = TestClusterContext::new_with_cluster_client_builder(
+        //     1,
+        //     0,
+        //     |builder| {
+        //         builder.retries(2)
+        //         // Disable the rate limiter to refresh slots immediately
+        //         .slots_refresh_rate_limit(Duration::from_secs(0), 0)
+        //     },
+        //     false,
+        //     None,
+        // );
+
+        let _ = block_on_all(async move {
+            // let initial_nodes: Vec<ConnectionInfo> = vec![ConnectionInfo {
+            //     addr: ConnectionAddr::TcpTls {
+            //         host: "cluster.glide.zone".to_string(),
+            //         port: 6379,
+            //         insecure: true,
+            //         tls_params: None,
+            //     },
+            //     redis: Default::default(),
+            // }];
+
+            let initial_nodes = vec![redis::ConnectionInfo {
+                addr: ConnectionAddr::Tcp("cluster.glide.zone".into(), 6379),
+                redis: Default::default(),
+            }];
+
+            let builder = redis::cluster::ClusterClientBuilder::new(initial_nodes.clone())
+                .use_protocol(use_protocol())
+                .refresh_topology_from_initial_nodes(true)
+                .slots_refresh_rate_limit(Duration::from_secs(0), 0);
+            // .tls(redis::TlsMode::Insecure);
+
+            let client = builder.build().unwrap();
+
+            let mut conn = client
+                .get_async_generic_connection::<MultiplexedConnection>()
+                .await
+                .unwrap();
+
+            println!(
+                "Connected to cluster with nodes: {:?}",
+                conn.route_command(
+                    &redis::cmd("PING"),
+                    RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)
+                )
+                .await
+                .unwrap()
+            );
+
+            // print cluster nodes
+            let cluster_nodes = conn
+                .route_command(
+                    &redis::cmd("CLUSTER").arg("NODES"),
+                    RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random),
+                )
+                .await
+                .unwrap();
+
+            println!("Cluster Nodes:\n {:?}", cluster_nodes);
+
+            // Add 5 min sleep
+            tokio::time::sleep(Duration::from_secs(200)).await;
+
+            // let (moved_key, key2) = generate_two_keys_in_the_same_node(nodes_and_slots);
+            // let key_slot = get_slot(moved_key.as_bytes());
+
+            // cluster
+            //     .move_specific_slot(key_slot, slot_distribution)
+            //     .await;
+
+            conn.route_command(
+                cmd("GET").arg("key"),
+                RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(Route::new(
+                    0,
+                    SlotAddr::Master,
+                ))),
+            )
+            .await
+            .unwrap();
+
+            // sleep for one minute to allow the cluster to refresh slots
+            tokio::time::sleep(Duration::from_secs(60)).await;
+
+            let cluster_nodes = conn
+                .route_command(
+                    cmd("CLUSTER").arg("NODES"),
+                    RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random),
+                )
+                .await
+                .unwrap();
+
+            println!("Cluster Nodes:\n {:?}", cluster_nodes);
+
+            Ok(())
+        });
+
+        // let cluster2 = TestClusterContext::new_with_cluster_client_builder(
+        //     3,
+        //     0,
+        //     |builder| {
+        //         builder.retries(2)
+        //         // Disable the rate limiter to refresh slots immediately
+        //         .slots_refresh_rate_limit(Duration::from_secs(0), 0)
+        //     },
+        //     false,
+        //     Some(7006),
+        // );
+
+        // let dns = MockDns::new();
+
+        // // Cluster A nodes
+        // let cluster_a_nodes = vec![
+        //     "127.0.0.1:7000".to_string(),
+        //     "127.0.0.1:7001".to_string(),
+        //     "127.0.0.1:7002".to_string(),
+        // ];
+        // // Cluster B nodes
+        // let cluster_b_nodes = vec![
+        //     "127.0.0.1:7006".to_string(),
+        //     "127.0.0.1:7007".to_string(),
+        //     "127.0.0.1:7008".to_string(),
+        // ];
+
+        // // Initial DNS points to cluster A
+        // dns.set_mapping("fake.cluster.local", cluster_a_nodes.clone());
+
+        // block_on_all(async move {
+        //     let mut connection = cluster.async_connection(None).await;
+
+        //     let mut connection2 = cluster2.async_connection(None).await;
+
+        //     let dns_endpoint = format!("{:?}", cluster.cluster.servers[0].addr);
+        //     let dns_endpoint2 = format!("{:?}", cluster2.cluster.servers[0].addr);
+        //     println!("DNS Endpoint: {}", dns_endpoint);
+        //     println!("DNS Endpoint2: {}", dns_endpoint2);
+
+        //     let cluster_nodes = cluster.get_cluster_nodes().await;
+        //     let slot_distribution = cluster.get_slots_ranges_distribution(&cluster_nodes);
+
+        //     let nodes_and_slots = slot_distribution
+        //         .iter()
+        //         .map(|(node_id, _, _, v)| (node_id, v[0].clone()))
+        //         .collect::<Vec<_>>();
+
+        //     let (moved_key, key2) = generate_two_keys_in_the_same_node(nodes_and_slots);
+        //     let key_slot = get_slot(moved_key.as_bytes());
+
+        //     cluster
+        //         .move_specific_slot(key_slot, slot_distribution)
+        //         .await;
+
+        //     dns.set_mapping("fake.cluster.local", cluster_b_nodes.clone());
+
+        //     connection
+        //         .route_command(
+        //             cmd("GET").arg(moved_key),
+        //             RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(Route::new(
+        //                 key_slot,
+        //                 SlotAddr::Master,
+        //             ))),
+        //         )
+        //         .await
+        //         .unwrap();
+
+        //     let cluster_nodes = connection
+        //         .route_command(
+        //             cmd("CLUSTER").arg("NODES"),
+        //             RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random),
+        //         )
+        //         .await
+        //         .unwrap();
+
+        //     println!("Cluster Nodes: {:?}", cluster_nodes);
+
+        //     Ok(())
+        // });
     }
 
     #[test]
@@ -2736,7 +2901,7 @@ mod cluster_async {
                     return Err(Ok(slots));
                 }
 
-                if contains_slice(cmd, b"SET") {
+                if contains_slice(cmd, "SET".as_bytes()) {
                     if port == moved_to_port {
                         // Simulate primary OK response
                         Err(Ok(Value::SimpleString("OK".into())))
@@ -2750,7 +2915,7 @@ mod cluster_async {
                         panic!("unexpected port for SET command: {port:?}.\n
                             Expected one of: moved_to_port={moved_to_port}, moved_from_port={moved_from_port}");
                     }
-                } else if contains_slice(cmd, b"GET") {
+                } else if contains_slice(cmd, "GET".as_bytes()) {
                     if new_shard_replica_port == port {
                         // Simulate replica response for GET after slot migration
                         replica_requests.fetch_add(1, Ordering::Relaxed);
