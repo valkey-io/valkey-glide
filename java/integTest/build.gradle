@@ -176,7 +176,19 @@ tasks.withType(Test) {
     if (name.contains('jedis') || name.contains('compatibility') || 
         filter.includePatterns.any { it.contains('jedis') || it.contains('compatibility') }) {
         // Use jedis-compatibility library from resources directory
-        jvmArgs "-Djava.library.path=${project.rootDir}/jedis-compatibility/build/resources/main"
+        def libPath = "${project.rootDir}/jedis-compatibility/build/resources/main"
+        jvmArgs "-Djava.library.path=${libPath}"
+        println "=== JEDIS TEST DEBUG ==="
+        println "Test name: ${name}"
+        println "Using jedis-compatibility library path: ${libPath}"
+        println "Library exists: ${file(libPath + '/libglide_rs.dylib').exists() || file(libPath + '/libglide_rs.so').exists()}"
+        if (file(libPath + '/libglide_rs.dylib').exists()) {
+            println "Found libglide_rs.dylib"
+        }
+        if (file(libPath + '/libglide_rs.so').exists()) {
+            println "Found libglide_rs.so"
+        }
+        println "========================"
     } else {
         // Use client library for regular tests
         jvmArgs "-Djava.library.path=${project.rootDir}/../target/release"
