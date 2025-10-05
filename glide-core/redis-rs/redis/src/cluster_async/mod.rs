@@ -3390,13 +3390,11 @@ where
     // Filter the resolved addresses to keep only those with valid IP addresses.
     let valid_addresses: Vec<String> = resolved_addresses
         .into_iter()
-        .filter_map(|(host, socket_addr)| {
-            match socket_addr {
-                Some(addr) => Some(addr.to_string()),
-                None => {
-                    log_warn("No valid IP address found for host: {}", host);
-                    None
-                }
+        .filter_map(|(host, socket_addr)| match socket_addr {
+            Some(addr) => Some(addr.to_string()),
+            None => {
+                log_warn("No valid IP address found for host: {}", host);
+                None
             }
         })
         .collect();
