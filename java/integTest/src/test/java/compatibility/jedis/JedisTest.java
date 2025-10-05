@@ -151,6 +151,32 @@ public class JedisTest {
 
     @Test
     void register_client_name_and_version() {
+        // Debug: Print library path and check what library is loaded
+        String libraryPath = System.getProperty("java.library.path");
+        System.out.println("=== JEDIS TEST DEBUG ===");
+        System.out.println("java.library.path: " + libraryPath);
+        
+        // Check if jedis-compatibility library exists
+        if (libraryPath != null) {
+            String[] paths = libraryPath.split(System.getProperty("path.separator"));
+            for (String path : paths) {
+                System.out.println("Checking path: " + path);
+                java.io.File dylibFile = new java.io.File(path, "libglide_rs.dylib");
+                java.io.File soFile = new java.io.File(path, "libglide_rs.so");
+                if (dylibFile.exists()) {
+                    System.out.println("Found libglide_rs.dylib in: " + path);
+                    System.out.println("File size: " + dylibFile.length() + " bytes");
+                    System.out.println("Last modified: " + new java.util.Date(dylibFile.lastModified()));
+                }
+                if (soFile.exists()) {
+                    System.out.println("Found libglide_rs.so in: " + path);
+                    System.out.println("File size: " + soFile.length() + " bytes");
+                    System.out.println("Last modified: " + new java.util.Date(soFile.lastModified()));
+                }
+            }
+        }
+        System.out.println("========================");
+        
         Object result = jedis.sendCommand(Protocol.Command.CLIENT, "INFO");
         String info = result.toString();
         System.out.println("CLIENT INFO result: " + info);
