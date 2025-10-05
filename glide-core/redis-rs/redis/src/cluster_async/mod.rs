@@ -49,7 +49,7 @@ use pipeline_routing::{
     route_for_pipeline, PipelineResponses, ResponsePoliciesMap,
 };
 
-use logger_core::log_error;
+use logger_core::{log_error, log_warn};
 use rand::seq::IteratorRandom;
 
 use std::{
@@ -3390,7 +3390,15 @@ where
     // Filter the resolved addresses to keep only those with valid IP addresses.
     let valid_addresses: Vec<String> = resolved_addresses
         .into_iter()
-        .filter_map(|(_host, socket_addr)| socket_addr.map(|addr| addr.to_string()))
+        .filter_map(|(host, socket_addr)| {
+            match socket_addr {
+                Some(addr) => Some(addr.to_string()),
+                None => {
+                    log_warn("No valid IP address found for host: {}", host);
+                    None
+                }
+            }
+        })
         .collect();
 
     if valid_addresses.is_empty() {

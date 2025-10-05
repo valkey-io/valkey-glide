@@ -1842,7 +1842,7 @@ mod cluster_async {
 
             let i = requests.fetch_add(1, atomic::Ordering::SeqCst);
 
-            let is_get_cmd = contains_slice(cmd, "GET".as_bytes());
+            let is_get_cmd = contains_slice(cmd, b"GET");
             let get_response = Err(Ok(Value::BulkString(b"123".to_vec())));
             match i {
                 // Respond that the key exists on a node that does not yet have a connection:
@@ -2718,7 +2718,7 @@ mod cluster_async {
                     return Err(Ok(slots));
                 }
 
-                if contains_slice(cmd, "SET".as_bytes()) {
+                if contains_slice(cmd, b"SET") {
                     if port == moved_to_port {
                         // Simulate primary OK response
                         Err(Ok(Value::SimpleString("OK".into())))
