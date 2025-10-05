@@ -1075,6 +1075,9 @@ async fn create_cluster_client(
     };
     builder = builder.reconnect_retry_strategy(retry_strategy);
 
+    builder =
+        builder.refresh_topology_from_initial_nodes(request.refresh_topology_from_initial_nodes);
+
     // Always use with Glide
     builder = builder.periodic_connections_checks(Some(CONNECTION_CHECKS_INTERVAL));
 
