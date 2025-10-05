@@ -277,3 +277,12 @@ def test_database_id_protobuf_inclusion():
     config = GlideClientConfiguration([NodeAddress("127.0.0.1")])
     request = config._create_a_protobuf_conn_request()
     assert request.database_id == 0
+    
+def test_refresh_topology_from_initial_nodes_in_cluster_config():
+    """Test refresh_topology_from_initial_nodes configuration in GlideClusterClientConfiguration."""
+    config = GlideClusterClientConfiguration(
+        [NodeAddress("127.0.0.1")],
+        advanced_config=AdvancedGlideClusterClientConfiguration(refresh_topology_from_initial_nodes=True)
+    )
+    request = config._create_a_protobuf_conn_request(cluster_mode=True)
+    assert request.refresh_topology_from_initial_nodes is True

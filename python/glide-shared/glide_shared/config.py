@@ -581,14 +581,31 @@ class GlideClientConfiguration(BaseClientConfiguration):
 class AdvancedGlideClusterClientConfiguration(AdvancedBaseClientConfiguration):
     """
     Represents the advanced configuration settings for a Glide Cluster client.
+    
+    Attributes:
+        refresh_topology_from_initial_nodes (bool): Enables refreshing the cluster topology using only the initial nodes. 
+            When this option is enabled, all topology updates (both the periodic checks and on-demand refreshes
+            triggered by topology changes) will query only the initial nodes provided when creating the client, rather than random existing connections.
     """
 
     def __init__(
         self,
         connection_timeout: Optional[int] = None,
         tls_config: Optional[TlsAdvancedConfiguration] = None,
+        refresh_topology_from_initial_nodes: bool = False,
     ):
         super().__init__(connection_timeout, tls_config)
+        self.refresh_topology_from_initial_nodes = refresh_topology_from_initial_nodes
+        
+    def _create_a_protobuf_conn_request(
+        self, request: ConnectionRequest
+    ) -> ConnectionRequest:
+        super()._create_a_protobuf_conn_request(request)
+        
+        if self.refresh_topology_from_initial_nodes:
+            request.refresh_topology_from_initial_nodes = True
+
+        return request
 
 
 class GlideClusterClientConfiguration(BaseClientConfiguration):
