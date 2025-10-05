@@ -44,6 +44,7 @@ struct BuilderParams {
     protocol: ProtocolVersion,
     pubsub_subscriptions: Option<PubSubSubscriptionInfo>,
     reconnect_retry_strategy: Option<RetryStrategy>,
+    refresh_topology_from_initial_nodes: bool,
     database_id: i64,
 }
 
@@ -145,6 +146,7 @@ pub struct ClusterParams {
     pub(crate) protocol: ProtocolVersion,
     pub(crate) pubsub_subscriptions: Option<PubSubSubscriptionInfo>,
     pub(crate) reconnect_retry_strategy: Option<RetryStrategy>,
+    pub(crate) refresh_topology_from_initial_nodes: bool,
     pub(crate) database_id: i64,
 }
 
@@ -175,6 +177,7 @@ impl ClusterParams {
             protocol: value.protocol,
             pubsub_subscriptions: value.pubsub_subscriptions,
             reconnect_retry_strategy: value.reconnect_retry_strategy,
+            refresh_topology_from_initial_nodes: value.refresh_topology_from_initial_nodes,
             database_id: value.database_id,
         })
     }
@@ -467,6 +470,19 @@ impl ClusterClientBuilder {
             interval_duration,
             max_jitter_milli,
         };
+        self
+    }
+
+    /// Enables refreshing the cluster topology from seed nodes.
+    ///
+    /// When enabled, the client will periodically query the seed nodes (the nodes provided when
+    /// creating the client) to update its internal view of the cluster topology.
+    pub fn refresh_topology_from_initial_nodes(
+        mut self,
+        refresh_topology_from_initial_nodes: bool,
+    ) -> ClusterClientBuilder {
+        self.builder_params.refresh_topology_from_initial_nodes =
+            refresh_topology_from_initial_nodes;
         self
     }
 
