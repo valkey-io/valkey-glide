@@ -173,25 +173,30 @@ tasks.withType(Test) {
     maxHeapSize = "2048m" // Maximum heap size. Needed for max size tests.
     
     // Native library path for GLIDE FFI
-    if (name.contains('jedis') || name.contains('compatibility') || 
-        filter.includePatterns.any { it.contains('jedis') || it.contains('compatibility') }) {
+    def isJedisTest = name.contains('jedis') || name.contains('compatibility') || 
+                     filter.includePatterns.any { it.contains('jedis') || it.contains('compatibility') || it.contains('JedisTest') } ||
+                     systemProperties.containsKey('test.single') && systemProperties['test.single'].contains('JedisTest')
+    
+    // Force jedis library for any test containing JedisTest
+    if (isJedisTest || System.getProperty('test.single')?.contains('JedisTest')) {
         // Use jedis-compatibility library from target directory
         def libPath = "${project.rootDir}/jedis-compatibility/target/release"
         jvmArgs "-Djava.library.path=${libPath}"
         println "=== JEDIS TEST DEBUG ==="
         println "Test name: ${name}"
-        println "Using jedis-compatibility library path: ${libPath}"
-        println "Library exists: ${file(libPath + '/libglide_rs.dylib').exists() || file(libPath + '/libglide_rs.so').exists()}"
-        if (file(libPath + '/libglide_rs.dylib').exists()) {
-            println "Found libglide_rs.dylib"
-        }
-        if (file(libPath + '/libglide_rs.so').exists()) {
-            println "Found libglide_rs.so"
-        }
+        println "java.library.path: ${libPath}"
+        println "Checking path: ${libPath}"
+        println "Is Jedis Test: true"
         println "========================"
     } else {
         // Use client library for regular tests
-        jvmArgs "-Djava.library.path=${project.rootDir}/../target/release"
+        def libPath = "${project.rootDir}/../target/release"
+        jvmArgs "-Djava.library.path=${libPath}"
+        println "=== REGULAR TEST DEBUG ==="
+        println "Test name: ${name}"
+        println "java.library.path: ${libPath}"
+        println "Is Jedis Test: false"
+        println "========================"
     }
     
     // Disable modularity for jedis compatibility tests
