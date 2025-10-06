@@ -5885,7 +5885,11 @@ class ClusterBatch(BaseBatch):
         self,
         source: TEncodable,
         destination: TEncodable,
+        # TODO next major release the arguments replace and destinationDB must have their order
+        # swapped to align with the standalone order.
+        # At the moment of the patch release 2.1.1. we can't have a breaking change
         replace: Optional[bool] = None,
+        destinationDB: Optional[int] = None,
     ) -> "ClusterBatch":
         """
         Copies the value stored at the `source` to the `destination` key. When `replace` is True,
@@ -5897,15 +5901,17 @@ class ClusterBatch(BaseBatch):
             source (TEncodable): The key to the source value.
             destination (TEncodable): The key where the value should be copied to.
             replace (Optional[bool]): If the destination key should be removed before copying the value to it.
-
+            destinationDB (Optional[int]): The alternative logical database index for the destination key.
         Command response:
             bool: True if the source was copied.
 
             Otherwise, return False.
 
-        Since: Valkey version 6.2.0.
+        Since: Valkey version 9.0.0.
         """
         args = [source, destination]
+        if destinationDB is not None:
+            args.extend(["DB", str(destinationDB)])
         if replace is not None:
             args.append("REPLACE")
 
