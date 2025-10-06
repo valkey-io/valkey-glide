@@ -1424,15 +1424,16 @@ mod socket_listener {
     fn test_batch_response_decompression_with_magic_header_detection() {
         // Test that batch responses are processed correctly using magic header detection
         // instead of command type tracking
-        let mut test_basics = setup_test_basics(Tls::NoTls, TestServer::Shared, RedisType::Standalone);
-        
+        let mut test_basics =
+            setup_test_basics(Tls::NoTls, TestServer::Shared, RedisType::Standalone);
+
         const CALLBACK_INDEX: u32 = 200;
         const VALUE_LENGTH: usize = 10;
         let key1 = generate_random_string(KEY_LENGTH);
         let key2 = generate_random_string(KEY_LENGTH);
         let value1 = generate_random_string(VALUE_LENGTH);
         let value2 = generate_random_string(VALUE_LENGTH);
-        
+
         // First set up some values
         let mut buffer = Vec::with_capacity(VALUE_LENGTH + KEY_LENGTH + APPROX_RESP_HEADER_LEN);
         write_set(
@@ -1444,7 +1445,7 @@ mod socket_listener {
             false,
         );
         assert_ok_response(&mut buffer, &mut test_basics.socket, CALLBACK_INDEX);
-        
+
         buffer.clear();
         write_set(
             &mut buffer,
@@ -1455,7 +1456,7 @@ mod socket_listener {
             false,
         );
         assert_ok_response(&mut buffer, &mut test_basics.socket, CALLBACK_INDEX + 1);
-        
+
         // Now test batch operations (pipeline)
         buffer.clear();
         let commands_components = vec![
@@ -1470,7 +1471,7 @@ mod socket_listener {
                 args_pointer: false,
             },
         ];
-        
+
         write_batch_request(
             &mut buffer,
             &mut test_basics.socket,
@@ -1479,10 +1480,10 @@ mod socket_listener {
             false, // not atomic (pipeline)
             false, // don't raise on error
         );
-        
+
         let response = get_response(&mut buffer, Some(&mut test_basics.socket));
         assert_eq!(response.callback_idx, CALLBACK_INDEX + 2);
-        
+
         let Some(response::Value::RespPointer(pointer)) = response.value else {
             panic!("Unexpected response {:?}", response.value);
         };
@@ -1490,7 +1491,7 @@ mod socket_listener {
         let Value::Array(values) = *received_value else {
             panic!("Expected array response, got {received_value:?}");
         };
-        
+
         assert_eq!(values.len(), 2);
         assert_eq!(values[0], Value::BulkString(value1.into_bytes()));
         assert_eq!(values[1], Value::BulkString(value2.into_bytes()));

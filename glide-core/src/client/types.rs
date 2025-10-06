@@ -6,11 +6,13 @@ use logger_core::log_warn;
 use std::collections::HashSet;
 use std::time::Duration;
 
+#[cfg(feature = "compression")]
+use crate::compression::{CompressionBackendType, CompressionConfig};
 #[cfg(feature = "proto")]
 use crate::connection_request as protobuf;
 use crate::iam::ServiceType;
-use crate::compression::{CompressionConfig, CompressionBackendType};
 #[cfg(feature = "proto")]
+#[allow(unused_imports)]
 use ::protobuf::EnumOrUnknown;
 
 #[derive(Default, Clone, Debug)]
@@ -31,6 +33,7 @@ pub struct ConnectionRequest {
     pub inflight_requests_limit: Option<u32>,
     pub lazy_connect: bool,
     pub refresh_topology_from_initial_nodes: bool,
+    #[cfg(feature = "compression")]
     pub compression_config: Option<CompressionConfig>,
 }
 
@@ -278,8 +281,9 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
         let inflight_requests_limit = none_if_zero(value.inflight_requests_limit);
         let lazy_connect = value.lazy_connect;
         let refresh_topology_from_initial_nodes = value.refresh_topology_from_initial_nodes;
-        
+
         // Convert protobuf compression config to internal compression config
+        #[cfg(feature = "compression")]
         let compression_config = value.compression_config.as_ref().map(|proto_config| {
             let backend = match proto_config.backend.enum_value() {
                 Ok(protobuf::CompressionBackend::ZSTD) => CompressionBackendType::Zstd,
@@ -321,15 +325,14 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             inflight_requests_limit,
             lazy_connect,
             refresh_topology_from_initial_nodes,
+            #[cfg(feature = "compression")]
             compression_config,
         }
     }
 }
 #[cfg(test)]
 mod tests {
-    use super::*;
-
-    #[cfg(feature = "proto")]
+    #[cfg(all(feature = "proto", feature = "compression"))]
     mod protobuf_conversion_tests {
         use super::*;
         use crate::connection_request as protobuf;
@@ -367,7 +370,7 @@ mod tests {
 
             let request: ConnectionRequest = proto_request.into();
             assert!(request.compression_config.is_some());
-            
+
             let config = request.compression_config.unwrap();
             assert!(config.enabled);
             assert_eq!(config.backend, CompressionBackendType::Zstd);
@@ -394,7 +397,7 @@ mod tests {
 
             let request: ConnectionRequest = proto_request.into();
             assert!(request.compression_config.is_some());
-            
+
             let config = request.compression_config.unwrap();
             assert!(!config.enabled);
             assert_eq!(config.backend, CompressionBackendType::Lz4);
@@ -421,7 +424,7 @@ mod tests {
 
             let request: ConnectionRequest = proto_request.into();
             assert!(request.compression_config.is_some());
-            
+
             let config = request.compression_config.unwrap();
             // Should fall back to Zstd for unknown backends
             assert_eq!(config.backend, CompressionBackendType::Zstd);

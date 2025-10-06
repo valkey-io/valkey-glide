@@ -3,12 +3,14 @@
 mod types;
 
 use crate::cluster_scan_container::insert_cluster_scan_cursor;
-use crate::scripts_container::get_script;
-use crate::compression::{CompressionManager, CompressionConfig, CompressionBackendType};
 #[cfg(feature = "compression")]
-use crate::compression::zstd_backend::ZstdBackend;
+use crate::compression::CompressionBackendType;
 #[cfg(feature = "compression")]
 use crate::compression::lz4_backend::Lz4Backend;
+#[cfg(feature = "compression")]
+use crate::compression::zstd_backend::ZstdBackend;
+use crate::compression::{CompressionConfig, CompressionManager};
+use crate::scripts_container::get_script;
 use futures::FutureExt;
 use logger_core::{log_debug, log_error, log_info, log_warn};
 use once_cell::sync::OnceCell;
@@ -36,11 +38,11 @@ use self::value_conversion::{convert_to_expected_type, expected_type_for_cmd, ge
 mod reconnecting_connection;
 mod standalone_client;
 mod value_conversion;
+use crate::request_type::RequestType;
 use redis::InfoDict;
 use telemetrylib::GlideOpenTelemetry;
 use tokio::sync::{Notify, RwLock, mpsc, oneshot};
 use versions::Versioning;
-use crate::request_type::RequestType;
 
 pub const HEARTBEAT_SLEEP_DURATION: Duration = Duration::from_secs(1);
 pub const DEFAULT_RETRIES: u32 = 3;
@@ -74,7 +76,7 @@ fn extract_request_type_from_cmd(cmd: &Cmd) -> Option<RequestType> {
     // Get the command name (first argument)
     let command_name = cmd.command()?;
     let command_str = String::from_utf8_lossy(&command_name).to_uppercase();
-    
+
     // Map command names to RequestType - only basic SET/GET supported
     match command_str.as_str() {
         "GET" => Some(RequestType::Get),
@@ -243,6 +245,7 @@ pub enum ClientWrapper {
 pub struct LazyClient {
     config: ConnectionRequest,
     push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
+    #[allow(dead_code)]
     compression_manager: Option<Arc<CompressionManager>>,
 }
 
@@ -1332,16 +1335,12 @@ fn create_compression_manager(
     #[cfg(feature = "compression")]
     {
         let backend: Box<dyn crate::compression::CompressionBackend> = match config.backend {
-            CompressionBackendType::Zstd => {
-                Box::new(ZstdBackend::new().map_err(|e| {
-                    ConnectionError::Configuration(format!("Failed to create zstd backend: {}", e))
-                })?)
-            }
-            CompressionBackendType::Lz4 => {
-                Box::new(Lz4Backend::new().map_err(|e| {
-                    ConnectionError::Configuration(format!("Failed to create lz4 backend: {}", e))
-                })?)
-            }
+            CompressionBackendType::Zstd => Box::new(ZstdBackend::new().map_err(|e| {
+                ConnectionError::Configuration(format!("Failed to create zstd backend: {}", e))
+            })?),
+            CompressionBackendType::Lz4 => Box::new(Lz4Backend::new().map_err(|e| {
+                ConnectionError::Configuration(format!("Failed to create lz4 backend: {}", e))
+            })?),
         };
 
         let manager = CompressionManager::new(backend, config).map_err(|e| {
@@ -1354,7 +1353,8 @@ fn create_compression_manager(
     #[cfg(not(feature = "compression"))]
     {
         Err(ConnectionError::Configuration(
-            "Compression is not enabled in this build. Please rebuild with --features compression".to_string(),
+            "Compression is not enabled in this build. Please rebuild with --features compression"
+                .to_string(),
         ))
     }
 }
@@ -1379,7 +1379,10 @@ impl Client {
         ));
 
         // Create compression manager from configuration
+        #[cfg(feature = "compression")]
         let compression_manager = create_compression_manager(request.compression_config.clone())?;
+        #[cfg(not(feature = "compression"))]
+        let compression_manager = create_compression_manager(None)?;
 
         tokio::time::timeout(DEFAULT_CLIENT_CREATION_TIMEOUT, async move {
             // Create shared, thread-safe wrapper for the internal client that starts as lazy
@@ -1458,7 +1461,7 @@ impl Client {
     }
 
     /// Get the compression manager if compression is enabled
-    /// 
+    ///
     /// # Returns
     /// * `Some(Arc<CompressionManager>)` - If compression is enabled and configured
     /// * `None` - If compression is disabled or not configured
@@ -1467,7 +1470,7 @@ impl Client {
     }
 
     /// Check if compression is enabled for this client
-    /// 
+    ///
     /// # Returns
     /// * `true` if compression is enabled and configured
     /// * `false` if compression is disabled or not configured
@@ -1482,7 +1485,7 @@ impl Client {
 #[cfg(test)]
 mod compression_integration_tests {
     use super::*;
-    use crate::compression::{CompressionConfig, CompressionBackendType};
+    use crate::compression::{CompressionBackendType, CompressionConfig};
 
     #[test]
     fn test_create_compression_manager_disabled() {
@@ -1543,17 +1546,22 @@ mod compression_integration_tests {
 
     #[tokio::test]
     async fn test_client_compression_manager_access() {
-        // Test with compression disabled
-        let mut request = ConnectionRequest::default();
-        request.addresses = vec![NodeAddress {
-            host: "localhost".to_string(),
-            port: 6379,
-        }];
-        request.compression_config = None;
-
         // We can't actually create a client without a running server,
         // but we can test the compression manager creation logic
-        let compression_manager = create_compression_manager(request.compression_config.clone());
+        #[cfg(feature = "compression")]
+        let compression_manager = {
+            let request = ConnectionRequest {
+                addresses: vec![NodeAddress {
+                    host: "localhost".to_string(),
+                    port: 6379,
+                }],
+                compression_config: None,
+                ..Default::default()
+            };
+            create_compression_manager(request.compression_config.clone())
+        };
+        #[cfg(not(feature = "compression"))]
+        let compression_manager = create_compression_manager(None);
         assert!(compression_manager.is_ok());
         assert!(compression_manager.unwrap().is_none());
     }
@@ -1561,12 +1569,14 @@ mod compression_integration_tests {
     #[cfg(feature = "compression")]
     #[tokio::test]
     async fn test_client_compression_manager_enabled() {
-        let mut request = ConnectionRequest::default();
-        request.addresses = vec![NodeAddress {
-            host: "localhost".to_string(),
-            port: 6379,
-        }];
-        request.compression_config = Some(CompressionConfig::new(CompressionBackendType::Zstd));
+        let request = ConnectionRequest {
+            addresses: vec![NodeAddress {
+                host: "localhost".to_string(),
+                port: 6379,
+            }],
+            compression_config: Some(CompressionConfig::new(CompressionBackendType::Zstd)),
+            ..Default::default()
+        };
 
         let compression_manager = create_compression_manager(request.compression_config.clone());
         assert!(compression_manager.is_ok());
@@ -1577,22 +1587,29 @@ mod compression_integration_tests {
         assert_eq!(manager.backend_name(), "zstd");
     }
 
+    #[cfg(feature = "compression")]
     #[test]
     fn test_connection_request_with_compression_config() {
-        let mut request = ConnectionRequest::default();
+        let request = ConnectionRequest::default();
         assert!(request.compression_config.is_none());
 
         let config = CompressionConfig::new(CompressionBackendType::Zstd);
-        request.compression_config = Some(config.clone());
+        let request = ConnectionRequest {
+            compression_config: Some(config.clone()),
+            ..Default::default()
+        };
         assert!(request.compression_config.is_some());
-        assert_eq!(request.compression_config.unwrap().backend, CompressionBackendType::Zstd);
+        assert_eq!(
+            request.compression_config.unwrap().backend,
+            CompressionBackendType::Zstd
+        );
     }
 
     #[test]
     fn test_lazy_client_with_compression_manager() {
         let config = ConnectionRequest::default();
         let compression_manager = None;
-        
+
         let lazy_client = LazyClient {
             config: config.clone(),
             push_sender: None,
@@ -1605,41 +1622,43 @@ mod compression_integration_tests {
     #[cfg(feature = "compression")]
     #[test]
     fn test_batch_compression_integration() {
-        use crate::compression::{CompressionConfig, CompressionBackendType};
+        use crate::compression::{CompressionBackendType, CompressionConfig};
         use crate::request_type::RequestType;
-        
+
         // Test that batch operations can handle compression-enabled clients
         let config = CompressionConfig::new(CompressionBackendType::Zstd);
         let compression_manager = create_compression_manager(Some(config));
-        
+
         assert!(compression_manager.is_ok());
         let manager = compression_manager.unwrap();
         assert!(manager.is_some());
-        
+
         let manager = manager.unwrap();
         assert!(manager.is_enabled());
         assert_eq!(manager.backend_name(), "zstd");
-        
+
         // Test command types in simplified version - only SET should compress
-        let compress_commands = vec![
-            RequestType::Set,
-        ];
-        
+        let compress_commands = vec![RequestType::Set];
+
         for cmd_type in compress_commands {
             let behavior = crate::compression::get_command_compression_behavior(cmd_type);
-            assert_eq!(behavior, crate::compression::CommandCompressionBehavior::CompressValues);
+            assert_eq!(
+                behavior,
+                crate::compression::CommandCompressionBehavior::CompressValues
+            );
         }
-        
+
         // Test command types in simplified version - only GET should decompress
-        let decompress_commands = vec![
-            RequestType::Get,
-        ];
-        
+        let decompress_commands = vec![RequestType::Get];
+
         for cmd_type in decompress_commands {
             let behavior = crate::compression::get_command_compression_behavior(cmd_type);
-            assert_eq!(behavior, crate::compression::CommandCompressionBehavior::DecompressValues);
+            assert_eq!(
+                behavior,
+                crate::compression::CommandCompressionBehavior::DecompressValues
+            );
         }
-        
+
         // Test that other commands return NoCompression in simplified version
         let no_compression_commands = vec![
             RequestType::MSet,
@@ -1653,21 +1672,27 @@ mod compression_integration_tests {
             RequestType::SMembers,
             RequestType::ZRange,
         ];
-        
+
         for cmd_type in no_compression_commands {
             let behavior = crate::compression::get_command_compression_behavior(cmd_type);
-            assert_eq!(behavior, crate::compression::CommandCompressionBehavior::NoCompression);
+            assert_eq!(
+                behavior,
+                crate::compression::CommandCompressionBehavior::NoCompression
+            );
         }
     }
 
     #[cfg(feature = "compression")]
     #[test]
     fn test_lazy_client_with_compression_manager_enabled() {
-        let mut config = ConnectionRequest::default();
-        config.compression_config = Some(CompressionConfig::new(CompressionBackendType::Zstd));
-        
-        let compression_manager = create_compression_manager(config.compression_config.clone()).unwrap();
-        
+        let config = ConnectionRequest {
+            compression_config: Some(CompressionConfig::new(CompressionBackendType::Zstd)),
+            ..Default::default()
+        };
+
+        let compression_manager =
+            create_compression_manager(config.compression_config.clone()).unwrap();
+
         let lazy_client = LazyClient {
             config: config.clone(),
             push_sender: None,

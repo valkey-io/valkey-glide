@@ -23,8 +23,12 @@ impl std::fmt::Display for CompressionError {
             CompressionError::CompressionFailed => write!(f, "Compression operation failed"),
             CompressionError::DecompressionFailed => write!(f, "Decompression operation failed"),
             CompressionError::UnsupportedBackend => write!(f, "Unsupported compression backend"),
-            CompressionError::InvalidConfiguration => write!(f, "Invalid compression configuration"),
-            CompressionError::BackendInitializationFailed => write!(f, "Backend initialization failed"),
+            CompressionError::InvalidConfiguration => {
+                write!(f, "Invalid compression configuration")
+            }
+            CompressionError::BackendInitializationFailed => {
+                write!(f, "Backend initialization failed")
+            }
         }
     }
 }
@@ -182,8 +186,12 @@ pub enum CommandCompressionBehavior {
 impl CommandCompressionBehavior {
     pub fn description(&self) -> &'static str {
         match self {
-            CommandCompressionBehavior::CompressValues => "Compress values before sending to server",
-            CommandCompressionBehavior::DecompressValues => "Decompress values after receiving from server",
+            CommandCompressionBehavior::CompressValues => {
+                "Compress values before sending to server"
+            }
+            CommandCompressionBehavior::DecompressValues => {
+                "Decompress values after receiving from server"
+            }
             CommandCompressionBehavior::NoCompression => "No compression processing required",
         }
     }
@@ -280,8 +288,6 @@ impl CompressionManager {
         self.config.enabled
     }
 
-
-
     /// Attempts to decompress the value with graceful fallback to original data
     pub fn try_decompress_value(&self, value: &[u8]) -> Vec<u8> {
         match self.decompress_value(value) {
@@ -302,9 +308,7 @@ pub mod zstd_backend {
 
     impl ZstdBackend {
         pub fn new() -> CompressionResult<Self> {
-            Ok(Self {
-                default_level: 3,
-            })
+            Ok(Self { default_level: 3 })
         }
     }
 
@@ -317,18 +321,18 @@ pub mod zstd_backend {
     impl CompressionBackend for ZstdBackend {
         fn compress(&self, data: &[u8], level: Option<i32>) -> CompressionResult<Vec<u8>> {
             let compression_level = level.unwrap_or(self.default_level);
-            
+
             self.validate_compression_level(Some(compression_level))?;
 
             let compressed_data = zstd::encode_all(data, compression_level)
                 .map_err(|_| CompressionError::compression_failed())?;
 
             let header = create_header(self.backend_id());
-            
+
             let mut result = Vec::with_capacity(header.len() + compressed_data.len());
             result.extend_from_slice(&header);
             result.extend_from_slice(&compressed_data);
-            
+
             Ok(result)
         }
 
@@ -338,7 +342,7 @@ pub mod zstd_backend {
             }
 
             let compressed_data = &data[HEADER_SIZE..];
-            
+
             let decompressed_data = zstd::decode_all(compressed_data)
                 .map_err(|_| CompressionError::decompression_failed())?;
 
@@ -346,8 +350,7 @@ pub mod zstd_backend {
         }
 
         fn is_compressed(&self, data: &[u8]) -> bool {
-            has_magic_header(data) 
-                && extract_backend_id(data) == Some(self.backend_id())
+            has_magic_header(data) && extract_backend_id(data) == Some(self.backend_id())
         }
 
         fn backend_name(&self) -> &'static str {
@@ -363,10 +366,10 @@ pub mod zstd_backend {
         }
 
         fn validate_compression_level(&self, level: Option<i32>) -> CompressionResult<()> {
-            if let Some(level) = level {
-                if !zstd::compression_level_range().contains(&level) {
-                    return Err(CompressionError::invalid_configuration());
-                }
+            if let Some(level) = level
+                && !zstd::compression_level_range().contains(&level)
+            {
+                return Err(CompressionError::invalid_configuration());
             }
             Ok(())
         }
@@ -384,9 +387,7 @@ pub mod lz4_backend {
 
     impl Lz4Backend {
         pub fn new() -> CompressionResult<Self> {
-            Ok(Self {
-                _placeholder: (),
-            })
+            Ok(Self { _placeholder: () })
         }
     }
 
@@ -404,20 +405,20 @@ pub mod lz4_backend {
 
             let original_size = data.len() as u32;
             let size_bytes = original_size.to_le_bytes();
-            
+
             let compressed_block = lz4::block::compress(data, None, false)
                 .map_err(|_| CompressionError::compression_failed())?;
-            
+
             let mut compressed_data = Vec::with_capacity(4 + compressed_block.len());
             compressed_data.extend_from_slice(&size_bytes);
             compressed_data.extend_from_slice(&compressed_block);
 
             let header = create_header(self.backend_id());
-            
+
             let mut result = Vec::with_capacity(header.len() + compressed_data.len());
             result.extend_from_slice(&header);
             result.extend_from_slice(&compressed_data);
-            
+
             Ok(result)
         }
 
@@ -427,15 +428,17 @@ pub mod lz4_backend {
             }
 
             let compressed_data = &data[HEADER_SIZE..];
-            
+
             if compressed_data.len() < 4 {
                 return Err(CompressionError::decompression_failed());
             }
-            
+
             let size_bytes = &compressed_data[0..4];
-            let original_size = u32::from_le_bytes([size_bytes[0], size_bytes[1], size_bytes[2], size_bytes[3]]) as i32;
+            let original_size =
+                u32::from_le_bytes([size_bytes[0], size_bytes[1], size_bytes[2], size_bytes[3]])
+                    as i32;
             let compressed_block = &compressed_data[4..];
-            
+
             let decompressed_data = lz4::block::decompress(compressed_block, Some(original_size))
                 .map_err(|_| CompressionError::decompression_failed())?;
 
@@ -443,8 +446,7 @@ pub mod lz4_backend {
         }
 
         fn is_compressed(&self, data: &[u8]) -> bool {
-            has_magic_header(data) 
-                && extract_backend_id(data) == Some(self.backend_id())
+            has_magic_header(data) && extract_backend_id(data) == Some(self.backend_id())
         }
 
         fn backend_name(&self) -> &'static str {
@@ -466,12 +468,10 @@ pub mod lz4_backend {
             Ok(())
         }
     }
-
-
 }
 
 pub fn process_command_args_for_compression(
-    args: &mut Vec<Vec<u8>>,
+    args: &mut [Vec<u8>],
     request_type: RequestType,
     compression_manager: Option<&CompressionManager>,
 ) -> CompressionResult<()> {
@@ -489,28 +489,24 @@ pub fn process_command_args_for_compression(
     }
 
     match request_type {
-        RequestType::Set => {
-            compress_single_value_command(args, manager, 1)
-        }
+        RequestType::Set => compress_single_value_command(args, manager, 1),
         _ => Ok(()),
     }
 }
 
 fn compress_single_value_command(
-    args: &mut Vec<Vec<u8>>,
+    args: &mut [Vec<u8>],
     manager: &CompressionManager,
     value_index: usize,
 ) -> CompressionResult<()> {
     if args.len() <= value_index {
         return Ok(());
     }
-    
+
     let compressed_value = manager.compress_value(&args[value_index]);
     args[value_index] = compressed_value;
     Ok(())
 }
-
-
 
 pub fn process_response_for_decompression(
     value: redis::Value,
@@ -537,9 +533,7 @@ pub fn process_response_for_decompression(
     }
 
     match request_type {
-        RequestType::Get => {
-            decompress_single_value_response(value, manager)
-        }
+        RequestType::Get => decompress_single_value_response(value, manager),
         _ => Ok(value),
     }
 }
@@ -549,7 +543,7 @@ pub fn decompress_single_value_response(
     manager: &CompressionManager,
 ) -> CompressionResult<redis::Value> {
     use redis::Value;
-    
+
     match value {
         Value::BulkString(bytes) => {
             let decompressed = manager.try_decompress_value(&bytes);
@@ -559,7 +553,9 @@ pub fn decompress_single_value_response(
             let decompressed = manager.try_decompress_value(s.as_bytes());
             match String::from_utf8(decompressed) {
                 Ok(decompressed_string) => Ok(Value::SimpleString(decompressed_string)),
-                Err(_) => Ok(Value::BulkString(manager.try_decompress_value(s.as_bytes()))),
+                Err(_) => Ok(Value::BulkString(
+                    manager.try_decompress_value(s.as_bytes()),
+                )),
             }
         }
         _ => Ok(value),
