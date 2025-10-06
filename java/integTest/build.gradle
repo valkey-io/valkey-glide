@@ -172,14 +172,47 @@ tasks.withType(Test) {
     minHeapSize = "2048m" // Initial heap size. Needed for max size tests.
     maxHeapSize = "2048m" // Maximum heap size. Needed for max size tests.
     
-    // Always use jedis-compatibility library for all tests to ensure JedisTest works
-    def jedisLibPath = "${project.rootDir}/jedis-compatibility/target/release"
+    // Use correct target-specific library path for jedis-compatibility
+    def arch = osdetector.arch == 'aarch_64' ? 'aarch64' : osdetector.arch
+    def jedisLibPath
+    if (osdetector.os == 'linux' && osdetector.release.id != 'alpine') {
+        jedisLibPath = "${project.rootDir}/jedis-compatibility/target/${arch}-unknown-linux-gnu/release"
+    } else if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
+        jedisLibPath = "${project.rootDir}/jedis-compatibility/target/${arch}-unknown-linux-musl/release"
+    } else {
+        jedisLibPath = "${project.rootDir}/jedis-compatibility/target/release"
+    }
+    
     jvmArgs "-Djava.library.path=${jedisLibPath}"
     
-    println "=== TEST LIBRARY PATH DEBUG ==="
+    println "=== LIBRARY DEBUG ==="
     println "Test name: ${name}"
-    println "Using library path: ${jedisLibPath}"
-    println "==============================="
+    println "OS: ${osdetector.os}, Release: ${osdetector.release.id}, Arch: ${arch}"
+    println "Library path: ${jedisLibPath}"
+    println "Path exists: ${file(jedisLibPath).exists()}"
+    if (file(jedisLibPath).exists()) {
+        println "Directory contents:"
+        file(jedisLibPath).listFiles()?.each { f ->
+            println "  - ${f.name} (${f.length()} bytes)"
+        }
+    }
+    
+    // Check alternative paths
+    def altPath1 = "${project.rootDir}/jedis-compatibility/target/release"
+    def altPath2 = "${project.rootDir}/jedis-compatibility/build/resources/main"
+    println "Alt path 1 (${altPath1}): ${file(altPath1).exists()}"
+    if (file(altPath1).exists()) {
+        file(altPath1).listFiles()?.each { f ->
+            println "  - ${f.name}"
+        }
+    }
+    println "Alt path 2 (${altPath2}): ${file(altPath2).exists()}"
+    if (file(altPath2).exists()) {
+        file(altPath2).listFiles()?.each { f ->
+            println "  - ${f.name}"
+        }
+    }
+    println "======================"
     
     // Disable modularity for jedis compatibility tests
     if (name.contains('jedis') || filter.includePatterns.any { it.contains('jedis') }) {
