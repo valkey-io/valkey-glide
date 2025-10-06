@@ -353,17 +353,13 @@ impl Client {
 
     /// Handles CLIENT SETNAME command processing after successful execution.
     /// Updates connection name state for standalone, cluster, and lazy clients.
-    async fn handle_client_set_name_command(
-        &mut self,
-        cmd: &Cmd,
-        value: Value,
-    ) -> RedisResult<Value> {
+    async fn handle_client_set_name_command(&mut self, cmd: &Cmd) -> RedisResult<()> {
         // Extract client name from the CLIENT SETNAME command
         let client_name = self.extract_client_name_from_client_set_name(cmd);
 
         // Update client name state for all client types
         self.update_stored_client_name(client_name).await?;
-        Ok(value)
+        Ok(())
     }
 
     /// Updates the stored client name for different client types.
@@ -486,7 +482,7 @@ impl Client {
             // Intercept CLIENT SETNAME commands after regular processing
             // Only handle CLIENT SETNAME commands if they executed successfully (no error)
             if self.is_client_set_name_command(cmd) {
-                return self.handle_client_set_name_command(cmd, value).await;
+                self.handle_client_set_name_command(cmd).await?;
             }
 
             Ok(value)

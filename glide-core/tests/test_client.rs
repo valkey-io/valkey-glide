@@ -1545,34 +1545,27 @@ pub(crate) mod shared_client_tests {
     ///    - Fails due to the dropped connection, then retries and verifies reconnection has the name "2ndName" set
     ///    - Succeeds with a new client ID (indicating reconnection) and verifies still has the name "2ndName" set
     /// This ensures that client name via CLIENT SETNAME command persists across reconnections.
-    fn test_client_set_name_command_database_persistence_after_reconnection(
+    fn test_client_set_name_command_persistence_after_reconnection(
         #[values(false, true)] use_cluster: bool,
     ) {
         block_on_all(async move {
             let mut test_basics = setup_test_basics(
                 use_cluster,
                 TestConfiguration {
-                    client_name: Some("1stName".to_string()), // Start with default database
+                    client_name: Some("1stName".to_string()),
                     shared_server: true,
                     ..Default::default()
                 },
             )
             .await;
 
-            if use_cluster {
-                // Skip test if server version is less than 9.0 (database isolation not supported in cluster)
-                if !utilities::version_greater_or_equal(&mut test_basics.client, "9.0.0").await {
-                    return;
-                }
-            }
-
             let mut client_info_cmd = redis::Cmd::new();
             client_info_cmd.arg("CLIENT").arg("INFO");
 
-            let mut select_cmd = redis::Cmd::new();
-            select_cmd.arg("Client").arg("SETNAME").arg("2ndName");
+            let mut client_setname_cmd = redis::Cmd::new();
+            client_setname_cmd.arg("Client").arg("SETNAME").arg("2ndName");
 
-            // Verify initial connection is to database 0
+            // Verify initial connection client name
             let initial_client_info_response = test_basics
                 .client
                 .send_command(&client_info_cmd, None)
@@ -1594,29 +1587,29 @@ pub(crate) mod shared_client_tests {
                 .expect("Failed to extract initial client ID");
 
             // Execute CLIENT SETNAME command to change to 2ndName
-            let select_result = test_basics
+            let client_setname_result = test_basics
                 .client
-                .send_command(&select_cmd, None)
+                .send_command(&client_setname_cmd, None)
                 .await
                 .unwrap();
-            assert_eq!(select_result, Value::Okay);
+            assert_eq!(client_setname_result, Value::Okay);
 
-            // Verify we're now on database 5
-            let post_select_client_info_response = test_basics
+            // Verify we're now on 2ndName
+            let post_client_setname_client_info_response = test_basics
                 .client
                 .send_command(&client_info_cmd, None)
                 .await
                 .unwrap();
 
-            let post_select_client_info = match post_select_client_info_response {
+            let post_client_setname_client_info = match post_client_setname_client_info_response {
                 Value::BulkString(bytes) => String::from_utf8_lossy(&bytes).to_string(),
                 Value::VerbatimString { text, .. } => text,
                 _ => panic!(
                     "Unexpected CLIENT INFO response type: {:?}",
-                    post_select_client_info_response
+                    post_client_setname_client_info_response
                 ),
             };
-            assert!(post_select_client_info.contains("name=2ndName"));
+            assert!(post_client_setname_client_info.contains("name=2ndName"));
 
             // Kill the connection to simulate a network drop
             kill_connection(&mut test_basics.client).await;
