@@ -92,14 +92,16 @@ tasks.register('buildRust', Exec) {
 
     print("Building Rust for jedis-compatibility with target: '$target'\n")
     if (target.contains("linux") && !target.contains("musl")) {
-        commandLine 'cargo', 'zigbuild', '--target', "$target", '--release'
+        // Remove version suffix for standard Rust target
+        def rustTarget = target.replaceAll('\\.2\\.17$', '')
+        commandLine 'cargo', 'zigbuild', '--target', "$rustTarget", '--release'
     } else if (target.contains("musl")) {
         commandLine 'cargo', 'zigbuild', '--target', "$target", '--release'
         environment RUSTFLAGS: '-C target-feature=-crt-static'
     } else {
         commandLine 'cargo', 'build', '--release'
     }
-    workingDir projectDir
+    workingDir project.rootDir
     // Set environment variables for the entire build process
     environment GLIDE_NAME: 'GlideJedisAdapter'
     environment GLIDE_VERSION: 'unknown'
@@ -110,7 +112,9 @@ tasks.register('copyNativeLib', Copy) {
     def sourceDir
     if (project.hasProperty('target')) {
         target = project.target
-        sourceDir = "${projectDir}/target/${target}/release/"
+        // Remove version suffix for directory path
+        def rustTarget = target.replaceAll('\\.2\\.17$', '')
+        sourceDir = "${projectDir}/target/${rustTarget}/release/"
     } else if (osdetector.os == 'linux' && osdetector.release.id != 'alpine') {
         sourceDir = "${projectDir}/target/${arch}-unknown-linux-gnu/release/"
     } else if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
