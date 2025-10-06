@@ -583,6 +583,13 @@ class AdvancedGlideClusterClientConfiguration(AdvancedBaseClientConfiguration):
     Represents the advanced configuration settings for a Glide Cluster client.
 
     Attributes:
+        connection_timeout (Optional[int]): The duration in milliseconds to wait for a TCP/TLS connection to complete.
+            This applies both during initial client creation and any reconnection that may occur during request processing.
+            **Note**: A high connection timeout may lead to prolonged blocking of the entire command pipeline.
+            If not explicitly set, a default value of 2000 milliseconds will be used.
+        tls_config (Optional[TlsAdvancedConfiguration]): The advanced TLS configuration settings.
+            This allows for more granular control of TLS behavior, such as enabling an insecure mode
+            that bypasses certificate validation.
         refresh_topology_from_initial_nodes (bool): Enables refreshing the cluster topology using only the initial nodes.
             When this option is enabled, all topology updates (both the periodic checks and on-demand refreshes
             triggered by topology changes) will query only the initial nodes provided when creating the client, rather using internal cluster view.
