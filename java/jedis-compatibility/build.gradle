@@ -104,16 +104,19 @@ tasks.register('buildRust', Exec) {
         // Remove version suffix for standard Rust target
         def rustTarget = target.replaceAll('\\.2\\.17$', '')
         commandLine 'cargo', 'zigbuild', '--target', "$rustTarget", '--release'
+        environment GLIDE_NAME: 'GlideJedisAdapter'
+        environment GLIDE_VERSION: 'unknown'
     } else if (target.contains("musl")) {
         commandLine 'cargo', 'zigbuild', '--target', "$target", '--release'
         environment RUSTFLAGS: '-C target-feature=-crt-static'
+        environment GLIDE_NAME: 'GlideJedisAdapter'
+        environment GLIDE_VERSION: 'unknown'
     } else {
         commandLine 'cargo', 'build', '--release'
+        environment GLIDE_NAME: 'GlideJedisAdapter'
+        environment GLIDE_VERSION: 'unknown'
     }
     workingDir project.rootDir
-    // Set environment variables for the entire build process
-    environment GLIDE_NAME: 'GlideJedisAdapter'
-    environment GLIDE_VERSION: 'unknown'
 }
 
 tasks.register('copyNativeLib', Copy) {
