@@ -175,8 +175,8 @@ tasks.withType(Test) {
     // Native library path for GLIDE FFI
     if (name.contains('jedis') || name.contains('compatibility') || 
         filter.includePatterns.any { it.contains('jedis') || it.contains('compatibility') }) {
-        // Use jedis-compatibility library from resources directory
-        def libPath = "${project.rootDir}/jedis-compatibility/build/resources/main"
+        // Use jedis-compatibility library from target directory
+        def libPath = "${project.rootDir}/jedis-compatibility/target/release"
         jvmArgs "-Djava.library.path=${libPath}"
         println "=== JEDIS TEST DEBUG ==="
         println "Test name: ${name}"
