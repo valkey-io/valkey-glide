@@ -330,6 +330,75 @@ fn get_request_timeout(cmd: &Cmd, default_timeout: Duration) -> RedisResult<Opti
 }
 
 impl Client {
+    /// Checks if the given command is a SELECT command.
+    /// Returns true if the command is "SELECT", false otherwise.
+    /// Handles cases where command() returns None gracefully.
+    /// Note: The underlying redis-rs library normalizes commands to uppercase.
+    fn is_select_command(&self, cmd: &Cmd) -> bool {
+        cmd.command().is_some_and(|bytes| bytes == b"SELECT")
+    }
+
+    /// Extracts the database ID from a SELECT command.
+    /// Parses the first argument of the SELECT command as an i64 database ID.
+    /// Returns appropriate errors for invalid formats or missing arguments.
+    fn extract_database_id_from_select(&self, cmd: &Cmd) -> RedisResult<i64> {
+        // For both redis::cmd("SELECT").arg("5") and redis::Cmd::new().arg("SELECT").arg("5")
+        // the database ID is at arg_idx(1)
+        cmd.arg_idx(1)
+            .ok_or_else(|| {
+                RedisError::from((
+                    ErrorKind::ResponseError,
+                    "SELECT command missing database argument",
+                ))
+            })
+            .and_then(|db_bytes| {
+                std::str::from_utf8(db_bytes)
+                    .map_err(|_| {
+                        RedisError::from((ErrorKind::ResponseError, "Invalid database ID format"))
+                    })
+                    .and_then(|db_str| {
+                        db_str.parse::<i64>().map_err(|_| {
+                            RedisError::from((
+                                ErrorKind::ResponseError,
+                                "Database ID must be a valid integer",
+                            ))
+                        })
+                    })
+            })
+    }
+
+    /// Handles SELECT command processing after successful execution.
+    /// Updates database state for standalone, cluster, and lazy clients.
+    async fn handle_select_command(&mut self, cmd: &Cmd) -> RedisResult<()> {
+        // Extract database ID from the SELECT command
+        let database_id = self.extract_database_id_from_select(cmd)?;
+
+        // Update database state for all client types
+        self.update_stored_database_id(database_id).await?;
+        Ok(())
+    }
+
+    /// Updates the stored database ID for different client types.
+    /// Handles standalone, cluster, and lazy clients appropriately.
+    /// Ensures thread-safe updates using existing synchronization mechanisms.
+    async fn update_stored_database_id(&self, database_id: i64) -> RedisResult<()> {
+        let mut guard = self.internal_client.write().await;
+        match &mut *guard {
+            ClientWrapper::Standalone(client) => {
+                client.update_connection_database(database_id).await?;
+                Ok(())
+            }
+            ClientWrapper::Cluster { client } => {
+                // Update cluster connection database configuration
+                client.update_connection_database(database_id).await?;
+                Ok(())
+            }
+            ClientWrapper::Lazy(_) => {
+                unreachable!("Lazy client should have been initialized")
+            }
+        }
+    }
+
     async fn get_or_initialize_client(&self) -> RedisResult<ClientWrapper> {
         {
             let guard = self.internal_client.read().await;
@@ -390,7 +459,7 @@ impl Client {
                 Err(err) => return Err(err),
             };
 
-            let value = run_with_timeout(request_timeout, async move {
+            let result = run_with_timeout(request_timeout, async move {
                 match client {
                     ClientWrapper::Standalone(mut client) => client.send_command(cmd).await,
                     ClientWrapper::Cluster {mut client } => {
@@ -427,7 +496,13 @@ impl Client {
             })
             .await?;
 
-            Ok(value)
+            // Intercept SELECT commands after regular processing
+            // Only handle SELECT commands if they executed successfully (no error)
+            if self.is_select_command(cmd) {
+                self.handle_select_command(cmd).await?;
+            }
+
+            Ok(result)
         })
     }
 
@@ -1196,11 +1271,12 @@ mod tests {
 
     use redis::Cmd;
 
+    use crate::client::types::{ConnectionRequest, NodeAddress};
     use crate::client::{
         BLOCKING_CMD_TIMEOUT_EXTENSION, RequestTimeoutOption, TimeUnit, get_request_timeout,
     };
 
-    use super::get_timeout_from_cmd_arg;
+    use super::{Client, ClientWrapper, LazyClient, get_timeout_from_cmd_arg};
 
     #[test]
     fn test_get_timeout_from_cmd_returns_correct_duration_int() {
@@ -1348,5 +1424,102 @@ mod tests {
         let result = get_request_timeout(&cmd, Duration::from_millis(100));
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), Some(Duration::from_millis(100)));
+    }
+
+    #[test]
+    fn test_is_select_command_detects_valid_select_commands() {
+        // Test detection of valid SELECT commands
+        let client = create_test_client();
+
+        // Test uppercase SELECT command
+        let mut cmd = Cmd::new();
+        cmd.arg("SELECT").arg("1");
+        assert!(client.is_select_command(&cmd));
+
+        // Test SELECT with different database IDs
+        let mut cmd = Cmd::new();
+        cmd.arg("SELECT").arg("0");
+        assert!(client.is_select_command(&cmd));
+    }
+
+    #[test]
+    fn test_extract_database_id_from_select() {
+        // Test detection of valid SELECT commands
+        let client = create_test_client();
+
+        // Test uppercase SELECT command
+        let mut cmd = Cmd::new();
+        cmd.arg("SELECT").arg("1");
+        assert_eq!(client.extract_database_id_from_select(&cmd), Ok(1));
+
+        // Test SELECT with different database IDs
+        let mut cmd = Cmd::new();
+        cmd.arg("SELECT").arg("0");
+        assert_eq!(client.extract_database_id_from_select(&cmd), Ok(0));
+    }
+
+    #[test]
+    fn test_is_select_command_rejects_non_select_commands() {
+        // Test rejection of non-SELECT commands
+        let client = create_test_client();
+
+        // Test common Redis commands
+        let mut cmd = Cmd::new();
+        cmd.arg("GET").arg("key");
+        assert!(!client.is_select_command(&cmd));
+
+        let mut cmd = Cmd::new();
+        cmd.arg("SET").arg("key").arg("value");
+        assert!(!client.is_select_command(&cmd));
+    }
+
+    #[test]
+    fn test_is_select_command_case_normalization() {
+        // Test that redis-rs normalizes commands to uppercase
+        let client = create_test_client();
+
+        // Test lowercase select (redis-rs normalizes to uppercase, so this works too)
+        let mut cmd = Cmd::new();
+        cmd.arg("select").arg("1");
+        assert!(client.is_select_command(&cmd));
+    }
+
+    #[test]
+    fn test_is_select_command_handles_empty_command() {
+        // Test handling of empty or malformed commands
+        let client = create_test_client();
+
+        // Test empty command
+        let cmd = Cmd::new();
+        assert!(!client.is_select_command(&cmd));
+    }
+
+    /// Helper function to create a test client for unit tests
+    fn create_test_client() -> Client {
+        use std::sync::Arc;
+        use std::sync::atomic::AtomicIsize;
+        use tokio::sync::RwLock;
+
+        let config = ConnectionRequest {
+            database_id: 0,
+            cluster_mode_enabled: false,
+            addresses: vec![NodeAddress {
+                host: "127.0.0.1".to_string(),
+                port: 6379,
+            }],
+            lazy_connect: true,
+            ..Default::default()
+        };
+
+        let lazy_client = LazyClient {
+            config,
+            push_sender: None,
+        };
+
+        Client {
+            internal_client: Arc::new(RwLock::new(ClientWrapper::Lazy(Box::new(lazy_client)))),
+            request_timeout: Duration::from_millis(250),
+            inflight_requests_allowed: Arc::new(AtomicIsize::new(1000)),
+        }
     }
 }
