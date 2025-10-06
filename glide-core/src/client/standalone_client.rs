@@ -623,6 +623,15 @@ impl StandaloneClient {
         Ok(Value::Okay)
     }
 
+    /// Update the database id used to establish connection with the servers.
+    pub async fn update_connection_database(&self, database_id: i64) -> RedisResult<Value> {
+        for node in self.inner.nodes.iter() {
+            node.update_connection_database(database_id);
+        }
+
+        Ok(Value::Okay)
+    }
+
     /// Update the client_name used to create the connection.
     pub async fn update_connection_client_name(
         &self,

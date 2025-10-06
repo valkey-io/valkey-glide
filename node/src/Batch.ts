@@ -424,6 +424,31 @@ export class BaseBatch<T extends BaseBatch<T>> {
     }
 
     /**
+     * Copies the value stored at the `source` to the `destination` key. If `destinationDB` is specified,
+     * the value will be copied to the database specified, otherwise the current database will be used.
+     * When `replace` is true, removes the `destination` key first if it already exists, otherwise performs
+     * no action.
+     *
+     * @see {@link https://valkey.io/commands/copy/|valkey.io} for details.
+     * @remarks Since Valkey version 6.2.0. destinationDB parameter for cluster mode is supported since Valkey 9.0.0 and above
+     *
+     * @param source - The key to the source value.
+     * @param destination - The key where the value should be copied to.
+     * @param destinationDB - (Optional) The alternative logical database index for the destination key.
+     *     If not provided, the current database will be used.
+     * @param replace - (Optional) If `true`, the `destination` key should be removed before copying the
+     *     value to it. If not provided, no action will be performed if the key already exists.
+     *
+     * Command Response - `true` if `source` was copied, `false` if the `source` was not copied.
+     */
+    public copy(
+        source: GlideString,
+        destination: GlideString,
+        options?: { destinationDB?: number; replace?: boolean },
+    ): T {
+        return this.addAndReturn(createCopy(source, destination, options));
+    }
+    /**
      * Gets information and statistics about the server.
      *
      * Starting from server version 7, command supports multiple section arguments.
@@ -4419,32 +4444,6 @@ export class Batch extends BaseBatch<Batch> {
         return this.addAndReturn(createSelect(index));
     }
 
-    /**
-     * Copies the value stored at the `source` to the `destination` key. If `destinationDB` is specified,
-     * the value will be copied to the database specified, otherwise the current database will be used.
-     * When `replace` is true, removes the `destination` key first if it already exists, otherwise performs
-     * no action.
-     *
-     * @see {@link https://valkey.io/commands/copy/|valkey.io} for details.
-     * @remarks Since Valkey version 6.2.0.
-     *
-     * @param source - The key to the source value.
-     * @param destination - The key where the value should be copied to.
-     * @param destinationDB - (Optional) The alternative logical database index for the destination key.
-     *     If not provided, the current database will be used.
-     * @param replace - (Optional) If `true`, the `destination` key should be removed before copying the
-     *     value to it. If not provided, no action will be performed if the key already exists.
-     *
-     * Command Response - `true` if `source` was copied, `false` if the `source` was not copied.
-     */
-    public copy(
-        source: GlideString,
-        destination: GlideString,
-        options?: { destinationDB?: number; replace?: boolean },
-    ): Batch {
-        return this.addAndReturn(createCopy(source, destination, options));
-    }
-
     /** Publish a message on pubsub channel.
      *
      * @see {@link https://valkey.io/commands/publish/|valkey.io} for more details.
@@ -4500,28 +4499,6 @@ export class Batch extends BaseBatch<Batch> {
  */
 export class ClusterBatch extends BaseBatch<ClusterBatch> {
     /// TODO: add all CLUSTER commands
-
-    /**
-     * Copies the value stored at the `source` to the `destination` key. When `replace` is true,
-     * removes the `destination` key first if it already exists, otherwise performs no action.
-     *
-     * @see {@link https://valkey.io/commands/copy/|valkey.io} for details.
-     * @remarks Since Valkey version 6.2.0.
-     *
-     * @param source - The key to the source value.
-     * @param destination - The key where the value should be copied to.
-     * @param replace - (Optional) If `true`, the `destination` key should be removed before copying the
-     *     value to it. If not provided, no action will be performed if the key already exists.
-     *
-     * Command Response - `true` if `source` was copied, `false` if the `source` was not copied.
-     */
-    public copy(
-        source: GlideString,
-        destination: GlideString,
-        options?: { replace?: boolean },
-    ): ClusterBatch {
-        return this.addAndReturn(createCopy(source, destination, options));
-    }
 
     /** Publish a message on pubsub channel.
      * This command aggregates PUBLISH and SPUBLISH commands functionalities.

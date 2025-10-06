@@ -215,6 +215,11 @@ public class BatchTestUtilities {
         }
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("9.0.0")) {
+            batch
+                    .set(genericKey3, "value")
+                    .copy(genericKey3, genericKey4, 1)
+                    .copy(genericKey3, genericKey4, 1, false)
+                    .copy(genericKey3, genericKey4, 1, true);
             batch.set(genericKey5, "value").move(genericKey5, 1);
         }
 
@@ -279,6 +284,10 @@ public class BatchTestUtilities {
                     concatenateArrays(
                             expectedResults,
                             new Object[] {
+                                OK, // set(genericKey3, "value1")
+                                true, // copy(genericKey3, genericKey4, 1)
+                                false, // copy(genericKey3, genericKey4, 1, false)
+                                true, // copy(genericKey3, genericKey4, 1, true)
                                 OK, // set(genericKey5, "value")
                                 true, // move(genericKey5, 1)
                             });

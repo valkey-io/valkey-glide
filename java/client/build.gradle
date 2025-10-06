@@ -20,7 +20,7 @@ configurations {
 
 dependencies {
     implementation group: 'com.google.protobuf', name: 'protobuf-java', version: '4.29.1'
-    shadow group: 'org.apache.commons', name: 'commons-lang3', version: '3.13.0'
+    shadow group: 'org.apache.commons', name: 'commons-lang3', version: '3.18.0'
 
     implementation group: 'io.netty', name: 'netty-handler', version: '4.1.121.Final'
     // https://github.com/netty/netty/wiki/Native-transports
