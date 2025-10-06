@@ -149,7 +149,7 @@ afterTests.finalizedBy 'stopAllAfterTests'
 compileTestJava.dependsOn ':client:publishToMavenLocal', ':jedis-compatibility:publishToMavenLocal'
 
 tasks.withType(Test) {
-    dependsOn ':client:publishToMavenLocal', ':jedis-compatibility:publishToMavenLocal'
+    dependsOn ':client:publishToMavenLocal', ':jedis-compatibility:publishToMavenLocal', ':jedis-compatibility:copyNativeLib'
     useJUnitPlatform()
     if (!project.gradle.startParameter.taskNames.contains(':integTest:modulesTest')) {
         dependsOn 'beforeTests'
@@ -172,44 +172,18 @@ tasks.withType(Test) {
     minHeapSize = "2048m" // Initial heap size. Needed for max size tests.
     maxHeapSize = "2048m" // Maximum heap size. Needed for max size tests.
     
-    // Use correct target-specific library path for jedis-compatibility
-    def arch = osdetector.arch == 'aarch_64' ? 'aarch64' : osdetector.arch
-    def jedisLibPath
-    if (osdetector.os == 'linux' && osdetector.release.id != 'alpine') {
-        jedisLibPath = "${project.rootDir}/jedis-compatibility/target/${arch}-unknown-linux-gnu/release"
-    } else if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
-        jedisLibPath = "${project.rootDir}/jedis-compatibility/target/${arch}-unknown-linux-musl/release"
-    } else {
-        jedisLibPath = "${project.rootDir}/jedis-compatibility/target/release"
-    }
-    
+    // Use the resources directory where copyNativeLib places the renamed library
+    def jedisLibPath = "${project.rootDir}/jedis-compatibility/build/resources/main"
     jvmArgs "-Djava.library.path=${jedisLibPath}"
     
     println "=== LIBRARY DEBUG ==="
     println "Test name: ${name}"
-    println "OS: ${osdetector.os}, Release: ${osdetector.release.id}, Arch: ${arch}"
     println "Library path: ${jedisLibPath}"
     println "Path exists: ${file(jedisLibPath).exists()}"
     if (file(jedisLibPath).exists()) {
         println "Directory contents:"
         file(jedisLibPath).listFiles()?.each { f ->
             println "  - ${f.name} (${f.length()} bytes)"
-        }
-    }
-    
-    // Check alternative paths
-    def altPath1 = "${project.rootDir}/jedis-compatibility/target/release"
-    def altPath2 = "${project.rootDir}/jedis-compatibility/build/resources/main"
-    println "Alt path 1 (${altPath1}): ${file(altPath1).exists()}"
-    if (file(altPath1).exists()) {
-        file(altPath1).listFiles()?.each { f ->
-            println "  - ${f.name}"
-        }
-    }
-    println "Alt path 2 (${altPath2}): ${file(altPath2).exists()}"
-    if (file(altPath2).exists()) {
-        file(altPath2).listFiles()?.each { f ->
-            println "  - ${f.name}"
         }
     }
     println "======================"
