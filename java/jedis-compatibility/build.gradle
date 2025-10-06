@@ -23,7 +23,7 @@ dependencies {
 
     implementation('com.google.protobuf:protobuf-java') {
         version {
-            require '[4.29.1,5.0)'
+            require '[4.29.3,5.0)'
             prefer '4.29.1'
         }
     }
@@ -114,23 +114,19 @@ tasks.register('copyNativeLib', Copy) {
         target = project.target
         // Remove version suffix for directory path
         def rustTarget = target.replaceAll('\\.2\\.17$', '')
-        sourceDir = "${projectDir}/target/${rustTarget}/release/"
+        sourceDir = "${project.rootDir}/target/${rustTarget}/release/"
     } else if (osdetector.os == 'linux' && osdetector.release.id != 'alpine') {
-        sourceDir = "${projectDir}/target/${arch}-unknown-linux-gnu/release/"
+        sourceDir = "${project.rootDir}/target/${arch}-unknown-linux-gnu/release/"
     } else if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
-        sourceDir = "${projectDir}/target/${arch}-unknown-linux-musl/release/"
+        sourceDir = "${project.rootDir}/target/${arch}-unknown-linux-musl/release/"
     } else {
-        sourceDir = "${projectDir}/target/release/"
+        sourceDir = "${project.rootDir}/target/release/"
     }
     
     from(sourceDir) {
-        include "libglide_jedis_rs.*"
+        include "libglide_rs.*"
     }
     
-    rename { filename ->
-        // Rename libglide_jedis_rs.dylib to libglide_rs.dylib for Java compatibility
-        filename.replace("glide_jedis_rs", "glide_rs")
-    }
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     into sourceSets.main.output.resourcesDir
 }
