@@ -132,6 +132,22 @@ tasks.register('copyNativeLib', Copy) {
         sourceDir = "${project.rootDir}/target/release/"
     }
     
+    doFirst {
+        println "=== COPY NATIVE LIB DEBUG ==="
+        println "Source directory: ${sourceDir}"
+        println "Target directory: ${sourceSets.main.output.resourcesDir}"
+        println "Source directory exists: ${file(sourceDir).exists()}"
+        if (file(sourceDir).exists()) {
+            println "Source directory contents:"
+            file(sourceDir).listFiles().each { f ->
+                if (f.name.startsWith("libglide")) {
+                    println "  - ${f.name} (${f.length()} bytes, modified: ${new Date(f.lastModified())})"
+                }
+            }
+        }
+        println "=============================="
+    }
+    
     // Force this task to always run by making outputs depend on buildRust
     outputs.upToDateWhen { false }
     
