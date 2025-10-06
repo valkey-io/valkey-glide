@@ -72,10 +72,12 @@ tasks.register('buildRust', Exec) {
     }
 
     doFirst {
-        // Clean all targets to force complete rebuild with new environment
-        delete "${projectDir}/target"
-        delete "${project.rootDir}/target"
-        delete "${project.rootDir}/../target"
+        // Clean Rust build to ensure fresh compilation with correct GLIDE_NAME
+        exec {
+            workingDirectory project.rootDir
+            commandLine 'cargo', 'clean'
+            ignoreExitValue true
+        }
         
         // Debug: Print environment variables that will be used
         println "=== JEDIS-COMPATIBILITY BUILD DEBUG ==="
