@@ -132,6 +132,9 @@ tasks.register('copyNativeLib', Copy) {
         sourceDir = "${project.rootDir}/target/release/"
     }
     
+    // Force this task to always run by making outputs depend on buildRust
+    outputs.upToDateWhen { false }
+    
     from(sourceDir) {
         include "libglide_rs.*"
     }
