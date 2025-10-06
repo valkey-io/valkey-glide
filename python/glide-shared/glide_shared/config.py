@@ -592,7 +592,7 @@ class AdvancedGlideClusterClientConfiguration(AdvancedBaseClientConfiguration):
             that bypasses certificate validation.
         refresh_topology_from_initial_nodes (bool): Enables refreshing the cluster topology using only the initial nodes.
             When this option is enabled, all topology updates (both the periodic checks and on-demand refreshes
-            triggered by topology changes) will query only the initial nodes provided when creating the client, rather using internal cluster view.
+            triggered by topology changes) will query only the initial nodes provided when creating the client, rather than using internal cluster view.
     """
 
     def __init__(
@@ -609,9 +609,9 @@ class AdvancedGlideClusterClientConfiguration(AdvancedBaseClientConfiguration):
     ) -> ConnectionRequest:
         super()._create_a_protobuf_conn_request(request)
 
-        if self.refresh_topology_from_initial_nodes:
-            request.refresh_topology_from_initial_nodes = True
-
+        request.refresh_topology_from_initial_nodes = (
+            self.refresh_topology_from_initial_nodes
+        )
         return request
 
 
