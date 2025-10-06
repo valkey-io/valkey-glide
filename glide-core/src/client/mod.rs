@@ -369,13 +369,13 @@ impl Client {
 
     /// Handles SELECT command processing after successful execution.
     /// Updates database state for standalone, cluster, and lazy clients.
-    async fn handle_select_command(&mut self, cmd: &Cmd, value: Value) -> RedisResult<Value> {
+    async fn handle_select_command(&mut self, cmd: &Cmd) -> RedisResult<()> {
         // Extract database ID from the SELECT command
         let database_id = self.extract_database_id_from_select(cmd)?;
 
         // Update database state for all client types
         self.update_stored_database_id(database_id).await?;
-        Ok(value)
+        Ok(())
     }
 
     /// Updates the stored database ID for different client types.
@@ -499,7 +499,7 @@ impl Client {
             // Intercept SELECT commands after regular processing
             // Only handle SELECT commands if they executed successfully (no error)
             if self.is_select_command(cmd) {
-                return self.handle_select_command(cmd, result).await;
+                self.handle_select_command(cmd).await?;
             }
 
             Ok(result)
