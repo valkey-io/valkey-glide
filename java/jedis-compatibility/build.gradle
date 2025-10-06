@@ -74,7 +74,7 @@ tasks.register('buildRust', Exec) {
     doFirst {
         // Clean Rust build to ensure fresh compilation with correct GLIDE_NAME
         exec {
-            workingDirectory project.rootDir
+            workingDir project.rootDir
             commandLine 'cargo', 'clean'
             ignoreExitValue true
         }
