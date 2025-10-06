@@ -155,7 +155,7 @@ public class JedisTest {
         String libraryPath = System.getProperty("java.library.path");
         System.out.println("=== JEDIS TEST DEBUG ===");
         System.out.println("java.library.path: " + libraryPath);
-        
+
         // Check if jedis-compatibility library exists
         if (libraryPath != null) {
             String[] paths = libraryPath.split(System.getProperty("path.separator"));
@@ -176,7 +176,7 @@ public class JedisTest {
             }
         }
         System.out.println("========================");
-        
+
         Object result = jedis.sendCommand(Protocol.Command.CLIENT, "INFO");
         String info = result.toString();
         System.out.println("CLIENT INFO result: " + info);

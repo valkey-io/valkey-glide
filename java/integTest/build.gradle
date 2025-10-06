@@ -156,33 +156,11 @@ tasks.withType(Test) {
         finalizedBy 'afterTests'
     }
 
-    // Set library path during test execution based on test class
     doFirst {
         systemProperty 'test.server.standalone', standaloneHosts
         systemProperty 'test.server.cluster', clusterHosts
         systemProperty 'test.server.azcluster', azClusterHosts
         systemProperty 'test.server.tls', System.getProperty("tls")
-        
-        // Set native library path based on test patterns
-        def isJedisTest = filter.includePatterns.any { pattern ->
-            pattern.contains('jedis') || pattern.contains('compatibility') || pattern.contains('JedisTest')
-        }
-        
-        if (isJedisTest) {
-            def jedisLibPath = "${project.rootDir}/jedis-compatibility/target/release"
-            systemProperty 'java.library.path', jedisLibPath
-            println "=== JEDIS TEST EXECUTION DEBUG ==="
-            println "Setting java.library.path to: ${jedisLibPath}"
-            println "Test patterns: ${filter.includePatterns}"
-            println "================================="
-        } else {
-            def clientLibPath = "${project.rootDir}/../target/release"
-            systemProperty 'java.library.path', clientLibPath
-            println "=== REGULAR TEST EXECUTION DEBUG ==="
-            println "Setting java.library.path to: ${clientLibPath}"
-            println "Test patterns: ${filter.includePatterns}"
-            println "==================================="
-        }
     }
 
     testLogging {
@@ -193,6 +171,15 @@ tasks.withType(Test) {
 
     minHeapSize = "2048m" // Initial heap size. Needed for max size tests.
     maxHeapSize = "2048m" // Maximum heap size. Needed for max size tests.
+    
+    // Always use jedis-compatibility library for all tests to ensure JedisTest works
+    def jedisLibPath = "${project.rootDir}/jedis-compatibility/target/release"
+    jvmArgs "-Djava.library.path=${jedisLibPath}"
+    
+    println "=== TEST LIBRARY PATH DEBUG ==="
+    println "Test name: ${name}"
+    println "Using library path: ${jedisLibPath}"
+    println "==============================="
     
     // Disable modularity for jedis compatibility tests
     if (name.contains('jedis') || filter.includePatterns.any { it.contains('jedis') }) {
