@@ -581,14 +581,38 @@ class GlideClientConfiguration(BaseClientConfiguration):
 class AdvancedGlideClusterClientConfiguration(AdvancedBaseClientConfiguration):
     """
     Represents the advanced configuration settings for a Glide Cluster client.
+
+    Attributes:
+        connection_timeout (Optional[int]): The duration in milliseconds to wait for a TCP/TLS connection to complete.
+            This applies both during initial client creation and any reconnection that may occur during request processing.
+            **Note**: A high connection timeout may lead to prolonged blocking of the entire command pipeline.
+            If not explicitly set, a default value of 2000 milliseconds will be used.
+        tls_config (Optional[TlsAdvancedConfiguration]): The advanced TLS configuration settings.
+            This allows for more granular control of TLS behavior, such as enabling an insecure mode
+            that bypasses certificate validation.
+        refresh_topology_from_initial_nodes (bool): Enables refreshing the cluster topology using only the initial nodes.
+            When this option is enabled, all topology updates (both the periodic checks and on-demand refreshes
+            triggered by topology changes) will query only the initial nodes provided when creating the client, rather than using internal cluster view.
     """
 
     def __init__(
         self,
         connection_timeout: Optional[int] = None,
         tls_config: Optional[TlsAdvancedConfiguration] = None,
+        refresh_topology_from_initial_nodes: bool = False,
     ):
         super().__init__(connection_timeout, tls_config)
+        self.refresh_topology_from_initial_nodes = refresh_topology_from_initial_nodes
+
+    def _create_a_protobuf_conn_request(
+        self, request: ConnectionRequest
+    ) -> ConnectionRequest:
+        super()._create_a_protobuf_conn_request(request)
+
+        request.refresh_topology_from_initial_nodes = (
+            self.refresh_topology_from_initial_nodes
+        )
+        return request
 
 
 class GlideClusterClientConfiguration(BaseClientConfiguration):
