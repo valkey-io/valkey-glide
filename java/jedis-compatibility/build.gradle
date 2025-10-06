@@ -79,6 +79,13 @@ tasks.register('buildRust', Exec) {
             ignoreExitValue true
         }
         
+        // Also clean zigbuild cache if it exists
+        exec {
+            workingDir project.rootDir
+            commandLine 'rm', '-rf', 'target'
+            ignoreExitValue true
+        }
+        
         // Debug: Print environment variables that will be used
         println "=== JEDIS-COMPATIBILITY BUILD DEBUG ==="
         println "Working directory: ${projectDir}"
