@@ -1563,7 +1563,10 @@ pub(crate) mod shared_client_tests {
             client_info_cmd.arg("CLIENT").arg("INFO");
 
             let mut client_setname_cmd = redis::Cmd::new();
-            client_setname_cmd.arg("Client").arg("SETNAME").arg("2ndName");
+            client_setname_cmd
+                .arg("Client")
+                .arg("SETNAME")
+                .arg("2ndName");
 
             // Verify initial connection client name
             let initial_client_info_response = test_basics
