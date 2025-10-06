@@ -29,7 +29,9 @@ function build_docs() {
 
     # Python - should be last, since Python docs are generated using mkdocs plugin
     # Set PYTHONPATH so python classes are found
-    export PYTHONPATH=${BASE_DIR}/python/python:$PYTHONPATH
+    export PYTHONPATH=${BASE_DIR}/python/glide-shared:$PYTHONPATH
+    export PYTHONPATH=${BASE_DIR}/python/glide-async/python:$PYTHONPATH
+    export PYTHONPATH=${BASE_DIR}/python/glide-sync:$PYTHONPATH
     (cd ${BASE_DIR}/docs && python3 -m mkdocs ${TARGET})
 }
 
