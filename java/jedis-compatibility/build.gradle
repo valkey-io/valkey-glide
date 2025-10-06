@@ -103,20 +103,14 @@ tasks.register('buildRust', Exec) {
     if (target.contains("linux") && !target.contains("musl")) {
         // Remove version suffix for standard Rust target
         def rustTarget = target.replaceAll('\\.2\\.17$', '')
-        commandLine 'cargo', 'zigbuild', '--target', "$rustTarget", '--release'
-        environment GLIDE_NAME: 'GlideJedisAdapter'
-        environment GLIDE_VERSION: 'unknown'
+        commandLine 'cargo', 'zigbuild', '--target', "$rustTarget", '--release', '--manifest-path', '../Cargo.toml'
     } else if (target.contains("musl")) {
-        commandLine 'cargo', 'zigbuild', '--target', "$target", '--release'
+        commandLine 'cargo', 'zigbuild', '--target', "$target", '--release', '--manifest-path', '../Cargo.toml'
         environment RUSTFLAGS: '-C target-feature=-crt-static'
-        environment GLIDE_NAME: 'GlideJedisAdapter'
-        environment GLIDE_VERSION: 'unknown'
     } else {
-        commandLine 'cargo', 'build', '--release'
-        environment GLIDE_NAME: 'GlideJedisAdapter'
-        environment GLIDE_VERSION: 'unknown'
+        commandLine 'cargo', 'build', '--release', '--manifest-path', '../Cargo.toml'
     }
-    workingDir project.rootDir
+    workingDir projectDir  // Use jedis-compatibility directory to pick up its .cargo/config.toml
 }
 
 tasks.register('copyNativeLib', Copy) {
