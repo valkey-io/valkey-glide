@@ -1327,7 +1327,6 @@ impl GlideClientForTests for StandaloneClient {
 mod tests {
     use std::time::Duration;
 
-    use crate::client::types::{ConnectionRequest, NodeAddress};
     use redis::Cmd;
 
     use crate::client::types::{ConnectionRequest, NodeAddress};
