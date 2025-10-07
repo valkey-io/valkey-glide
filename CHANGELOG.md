@@ -2,6 +2,7 @@
 
 #### Changes
 
+* JAVA: Add SELECT command support for cluster mode ([#4846](https://github.com/valkey-io/valkey-glide/pull/4846))
 * NODE: move COPY command to BaseClient and add comprehensive tests([#4805](https://github.com/valkey-io/valkey-glide/pull/4805))
 * GO: Add DBDestination option tests to CopyWithOptions command ([#4802](https://github.com/valkey-io/valkey-glide/pull/4802))
 * JAVA: Move COPY command with database ID from standalone to base client ([#4804](https://github.com/valkey-io/valkey-glide/pull/4804))
