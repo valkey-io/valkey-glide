@@ -42235,7 +42235,7 @@ NO DATA PROVIDER SHALL HAVE ANY LIABILITY FOR ANY DIRECT, INDIRECT, INCIDENTAL, 
 
 ----
 
-Package: windows-core:0.62.1
+Package: windows-core:0.62.2
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -42464,7 +42464,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: windows-implement:0.60.1
+Package: windows-implement:0.60.2
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -42693,7 +42693,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: windows-interface:0.59.2
+Package: windows-interface:0.59.3
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -42922,7 +42922,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: windows-link:0.2.0
+Package: windows-link:0.2.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -43151,7 +43151,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: windows-result:0.4.0
+Package: windows-result:0.4.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -43380,7 +43380,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: windows-strings:0.5.0
+Package: windows-strings:0.5.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -44296,7 +44296,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: windows-sys:0.61.1
+Package: windows-sys:0.61.2
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -44983,7 +44983,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: windows-targets:0.53.4
+Package: windows-targets:0.53.5
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -45670,7 +45670,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: windows_aarch64_gnullvm:0.53.0
+Package: windows_aarch64_gnullvm:0.53.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -46357,7 +46357,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: windows_aarch64_msvc:0.53.0
+Package: windows_aarch64_msvc:0.53.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -47044,7 +47044,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: windows_i686_gnu:0.53.0
+Package: windows_i686_gnu:0.53.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -47502,7 +47502,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: windows_i686_gnullvm:0.53.0
+Package: windows_i686_gnullvm:0.53.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -48189,7 +48189,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: windows_i686_msvc:0.53.0
+Package: windows_i686_msvc:0.53.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -48876,7 +48876,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: windows_x86_64_gnu:0.53.0
+Package: windows_x86_64_gnu:0.53.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -49563,7 +49563,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: windows_x86_64_gnullvm:0.53.0
+Package: windows_x86_64_gnullvm:0.53.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -50250,7 +50250,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: windows_x86_64_msvc:0.53.0
+Package: windows_x86_64_msvc:0.53.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -52204,7 +52204,7 @@ THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ----
 
-Package: undici-types:7.13.0
+Package: undici-types:7.14.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -52539,7 +52539,7 @@ THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ----
 
-Package: @types:node:24.6.2
+Package: @types:node:24.7.0
 
 The following copyrights and licenses were found in the source code of this package:
 
