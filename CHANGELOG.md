@@ -2,6 +2,7 @@
 
 #### Changes
 
+* Node: Move SELECT command from GlideClient to BaseClient ([#4849](https://github.com/valkey-io/valkey-glide/pull/4849))
 * JAVA: Add SELECT command support for cluster mode ([#4846](https://github.com/valkey-io/valkey-glide/pull/4846))
 * Go: Add Select command support for ClusterClient ([#4850](https://github.com/valkey-io/valkey-glide/pull/4850))
 * PYTHON: Move SELECT command from StandaloneCommands to CoreCommands([#4851](https://github.com/valkey-io/valkey-glide/pull/4851))

@@ -203,6 +203,7 @@ import {
     createSUnion,
     createSUnionStore,
     createScriptShow,
+    createSelect,
     createSet,
     createSetBit,
     createSetRange,
@@ -4059,6 +4060,28 @@ export class BaseClient {
         members: GlideString[],
     ): Promise<number> {
         return this.createWritePromise(createSAdd(key, members));
+    }
+
+    /**
+     * Changes the currently selected database.
+     *
+     * @see {@link https://valkey.io/commands/select/|valkey.io} for details.
+     *
+     * @param index - The index of the database to select.
+     * @returns A simple `"OK"` response.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of select method (NOT RECOMMENDED)
+     * const result = await client.select(2);
+     * console.log(result); // Output: 'OK'
+     * // Note: Database selection will be lost on reconnection!
+     * ```
+     */
+    public async select(index: number): Promise<"OK"> {
+        return this.createWritePromise(createSelect(index), {
+            decoder: Decoder.String,
+        });
     }
 
     /** Removes the specified members from the set stored at `key`. Specified members that are not a member of this set are ignored.
