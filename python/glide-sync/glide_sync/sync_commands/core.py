@@ -2219,6 +2219,20 @@ class CoreCommands(Protocol):
         """
         return cast(int, self._execute_command(RequestType.SAdd, [key] + members))
 
+    def select(self, index: int) -> TOK:
+        """
+        Change the currently selected database.
+
+        See [valkey.io](https://valkey.io/commands/select/) for details.
+
+        Args:
+            index (int): The index of the database to select.
+
+        Returns:
+            A simple OK response.
+        """
+        return cast(TOK, self._execute_command(RequestType.Select, [str(index)]))
+
     def srem(self, key: TEncodable, members: List[TEncodable]) -> int:
         """
         Remove specified members from the set stored at `key`.
