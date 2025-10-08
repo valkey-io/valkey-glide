@@ -399,6 +399,58 @@ impl Client {
         }
     }
 
+    /// Checks if the given command is a CLIENT SETNAME command.
+    /// Returns true if the command is "CLIENT SETNAME", false otherwise.
+    fn is_client_set_name_command(&self, cmd: &Cmd) -> bool {
+        // Check if the command is "CLIENT SETNAME"
+        cmd.command()
+            .is_some_and(|bytes| bytes == b"CLIENT SETNAME")
+    }
+
+    /// Extracts the client name from a CLIENT SETNAME command.
+    /// Parses the client name argument from the CLIENT SETNAME command.
+    /// Returns None if the argument is missing or invalid.
+    fn extract_client_name_from_client_set_name(&self, cmd: &Cmd) -> Option<String> {
+        // For redis::cmd("CLIENT").arg("SETNAME").arg("name")
+        // the client name is at arg_idx(2) (after "SETNAME")
+        cmd.arg_idx(2).and_then(|name_bytes| {
+            std::str::from_utf8(name_bytes)
+                .ok()
+                .map(|name_str| name_str.to_string())
+        })
+    }
+
+    /// Handles CLIENT SETNAME command processing after successful execution.
+    /// Updates connection name state for standalone, cluster, and lazy clients.
+    async fn handle_client_set_name_command(&mut self, cmd: &Cmd) -> RedisResult<()> {
+        // Extract client name from the CLIENT SETNAME command
+        let client_name = self.extract_client_name_from_client_set_name(cmd);
+
+        // Update client name state for all client types
+        self.update_stored_client_name(client_name).await?;
+        Ok(())
+    }
+
+    /// Updates the stored client name for different client types.
+    /// Handles standalone, cluster, and lazy clients appropriately.
+    /// Ensures thread-safe updates using existing synchronization mechanisms.
+    async fn update_stored_client_name(&self, client_name: Option<String>) -> RedisResult<()> {
+        let mut guard = self.internal_client.write().await;
+        match &mut *guard {
+            ClientWrapper::Standalone(client) => {
+                client.update_connection_client_name(client_name).await?;
+                Ok(())
+            }
+            ClientWrapper::Cluster { client } => {
+                // Update cluster connection database configuration
+                client.update_connection_client_name(client_name).await?;
+                Ok(())
+            }
+            ClientWrapper::Lazy(_) => {
+                unreachable!("Lazy client should have been initialized")
+            }
+        }
+    }
     async fn get_or_initialize_client(&self) -> RedisResult<ClientWrapper> {
         {
             let guard = self.internal_client.read().await;
@@ -495,6 +547,12 @@ impl Client {
                 .and_then(|value| convert_to_expected_type(value, expected_type))
             })
             .await?;
+
+            // Intercept CLIENT SETNAME commands after regular processing
+            // Only handle CLIENT SETNAME commands if they executed successfully (no error)
+            if self.is_client_set_name_command(cmd) {
+                self.handle_client_set_name_command(cmd).await?;
+            }
 
             // Intercept SELECT commands after regular processing
             // Only handle SELECT commands if they executed successfully (no error)
@@ -1521,5 +1579,55 @@ mod tests {
             request_timeout: Duration::from_millis(250),
             inflight_requests_allowed: Arc::new(AtomicIsize::new(1000)),
         }
+    }
+
+    #[test]
+    fn test_is_client_set_name_command() {
+        // Create a mock client for testing
+        let client = create_test_client();
+
+        // Test valid CLIENT SETNAME command
+        let mut cmd = Cmd::new();
+        cmd.arg("CLIENT").arg("SETNAME").arg("test_client");
+        assert!(client.is_client_set_name_command(&cmd));
+
+        // Test CLIENT SETNAME with different case (should work due to case-insensitive comparison)
+        let mut cmd = Cmd::new();
+        cmd.arg("client").arg("setname").arg("test_client");
+        assert!(client.is_client_set_name_command(&cmd));
+
+        // Test CLIENT command without SETNAME
+        let mut cmd = Cmd::new();
+        cmd.arg("CLIENT").arg("INFO");
+        assert!(!client.is_client_set_name_command(&cmd));
+
+        // Test non-CLIENT command
+        let mut cmd = Cmd::new();
+        cmd.arg("SET").arg("key").arg("value");
+        assert!(!client.is_client_set_name_command(&cmd));
+
+        // Test CLIENT SETNAME without client name argument
+        let mut cmd = Cmd::new();
+        cmd.arg("CLIENT").arg("SETNAME");
+        assert!(client.is_client_set_name_command(&cmd));
+
+        // Test CLIENT only
+        let mut cmd = Cmd::new();
+        cmd.arg("CLIENT");
+        assert!(!client.is_client_set_name_command(&cmd));
+    }
+
+    #[test]
+    fn test_extract_client_name_from_client_set_name() {
+        // Test detection of valid CLIENT SETNAME commands
+        let client = create_test_client();
+
+        // Test uppercase CLIENT SETNAME command
+        let mut cmd = Cmd::new();
+        cmd.arg("CLIENT").arg("SETNAME").arg("test_name");
+        assert_eq!(
+            client.extract_client_name_from_client_set_name(&cmd),
+            Some("test_name".to_string())
+        );
     }
 }

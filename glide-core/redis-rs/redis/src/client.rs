@@ -583,6 +583,11 @@ impl Client {
     pub fn update_database(&mut self, database_id: i64) {
         self.connection_info.redis.db = database_id;
     }
+
+    /// Updates the client_name in connection_info.
+    pub fn update_client_name(&mut self, client_name: Option<String>) {
+        self.connection_info.redis.client_name = client_name;
+    }
 }
 
 #[cfg(feature = "aio")]
