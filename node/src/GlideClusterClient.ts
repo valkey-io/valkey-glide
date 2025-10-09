@@ -217,11 +217,30 @@ export type GlideClusterClientConfiguration = BaseClientConfiguration & {
  *   tlsAdvancedConfiguration: {
  *     insecure: true, // Skip TLS certificate verification (use only in development)
  *   },
+ *   refreshTopologyFromInitialNodes: true, // Refresh topology from initial seed nodes
  * };
  * ```
  */
 export type AdvancedGlideClusterClientConfiguration =
-    AdvancedBaseClientConfiguration & {};
+    AdvancedBaseClientConfiguration & {
+        /**
+         * Enables refreshing the cluster topology using only the initial nodes.
+         *
+         * When this option is enabled, all topology updates (both the periodic checks and on-demand
+         * refreshes triggered by topology changes) will query only the initial nodes provided when
+         * creating the client, rather than using the internal cluster view.
+         *
+         * This is useful in scenarios where:
+         * - You connect via DNS that resolves to multiple cluster nodes and want to re-resolve DNS
+         *   on each topology refresh
+         * - You're in dynamic IP environments (e.g., Kubernetes) where node IPs change but seed
+         *   addresses remain stable
+         * - You want the client to always see the cluster from the initial nodes' perspective
+         *
+         * If not set, defaults to `false` (uses internal cluster view for topology refresh).
+         */
+        refreshTopologyFromInitialNodes?: boolean;
+    };
 
 /**
  * If the command's routing is to one node we will get T as a response type,
@@ -542,6 +561,15 @@ export class GlideClusterClient extends BaseClient {
                 options.advancedConfiguration,
                 configuration,
             );
+
+            // Set refresh topology from initial nodes
+            if (
+                options.advancedConfiguration
+                    .refreshTopologyFromInitialNodes !== undefined
+            ) {
+                configuration.refreshTopologyFromInitialNodes =
+                    options.advancedConfiguration.refreshTopologyFromInitialNodes;
+            }
         }
 
         return configuration;
