@@ -25,6 +25,9 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class ConnectionManager {
 
+    /** Default library name for Java clients */
+    private static final String DEFAULT_LIB_NAME = "GlideJava";
+
     /** Native client handle for operations */
     private long nativeClientHandle = 0;
 
@@ -230,6 +233,8 @@ public class ConnectionManager {
                         }
                         if (configuration.getLibName() != null) {
                             requestBuilder.setLibName(configuration.getLibName());
+                        } else {
+                            requestBuilder.setLibName(DEFAULT_LIB_NAME);
                         }
                         requestBuilder.setLazyConnect(configuration.isLazyConnect());
 

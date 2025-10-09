@@ -1056,6 +1056,9 @@ async fn create_cluster_client(
     if let Some(client_name) = valkey_connection_info.client_name {
         builder = builder.client_name(client_name);
     }
+    if let Some(lib_name) = valkey_connection_info.lib_name {
+        builder = builder.lib_name(lib_name);
+    }
     if tls_mode != TlsMode::NoTls {
         let tls = if tls_mode == TlsMode::SecureTls {
             redis::cluster::TlsMode::Secure

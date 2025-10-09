@@ -40,6 +40,7 @@ struct BuilderParams {
     #[cfg(feature = "cluster-async")]
     slots_refresh_rate_limit: SlotsRefreshRateLimit,
     client_name: Option<String>,
+    lib_name: Option<String>,
     response_timeout: Option<Duration>,
     protocol: ProtocolVersion,
     pubsub_subscriptions: Option<PubSubSubscriptionInfo>,
@@ -141,6 +142,7 @@ pub struct ClusterParams {
     pub(crate) connections_validation_interval: Option<Duration>,
     pub(crate) tls_params: Option<TlsConnParams>,
     pub(crate) client_name: Option<String>,
+    pub(crate) lib_name: Option<String>,
     pub(crate) connection_timeout: Duration,
     pub(crate) response_timeout: Duration,
     pub(crate) protocol: ProtocolVersion,
@@ -173,6 +175,7 @@ impl ClusterParams {
             connections_validation_interval: value.connections_validation_interval,
             tls_params,
             client_name: value.client_name,
+            lib_name: value.lib_name,
             response_timeout: value.response_timeout.unwrap_or(Duration::MAX),
             protocol: value.protocol,
             pubsub_subscriptions: value.pubsub_subscriptions,
@@ -305,6 +308,12 @@ impl ClusterClientBuilder {
     /// Sets client name for the new ClusterClient.
     pub fn client_name(mut self, client_name: String) -> ClusterClientBuilder {
         self.builder_params.client_name = Some(client_name);
+        self
+    }
+
+    /// Sets library name for the new ClusterClient.
+    pub fn lib_name(mut self, lib_name: String) -> ClusterClientBuilder {
+        self.builder_params.lib_name = Some(lib_name);
         self
     }
 
