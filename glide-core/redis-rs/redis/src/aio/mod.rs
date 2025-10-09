@@ -227,9 +227,10 @@ where
 
     // result is ignored, as per the command's instructions.
     // https://redis.io/commands/client-setinfo/
-    let _: RedisResult<()> = crate::connection::client_set_info_pipeline(connection_info.lib_name.as_deref())
-        .query_async(con)
-        .await;
+    let _: RedisResult<()> =
+        crate::connection::client_set_info_pipeline(connection_info.lib_name.as_deref())
+            .query_async(con)
+            .await;
 
     // resubscribe
     if connection_info.protocol != ProtocolVersion::RESP3 {
