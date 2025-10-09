@@ -397,6 +397,7 @@ func (config *ClusterClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequ
 	if config.subscriptionConfig != nil && len(config.subscriptionConfig.subscriptions) > 0 {
 		request.PubsubSubscriptions = config.subscriptionConfig.toProtobuf()
 	}
+	request.RefreshTopologyFromInitialNodes = config.AdvancedClusterClientConfiguration.refreshTopologyFromInitialNodes
 	return request, nil
 }
 
@@ -543,7 +544,8 @@ func (config *AdvancedClientConfiguration) WithConnectionTimeout(
 // Represents advanced configuration settings for a Cluster client used in
 // [ClusterClientConfiguration].
 type AdvancedClusterClientConfiguration struct {
-	connectionTimeout time.Duration
+	connectionTimeout               time.Duration
+	refreshTopologyFromInitialNodes bool
 }
 
 // NewAdvancedClusterClientConfiguration returns a new [AdvancedClusterClientConfiguration] with default settings.
@@ -559,5 +561,26 @@ func (config *AdvancedClusterClientConfiguration) WithConnectionTimeout(
 	connectionTimeout time.Duration,
 ) *AdvancedClusterClientConfiguration {
 	config.connectionTimeout = connectionTimeout
+	return config
+}
+
+// WithRefreshTopologyFromInitialNodes enables refreshing the cluster topology using only the initial nodes.
+//
+// When this option is enabled, all topology updates (both the periodic checks and on-demand
+// refreshes triggered by topology changes) will query only the initial nodes provided when
+// creating the client, rather than using the internal cluster view.
+//
+// This is useful in scenarios where:
+//   - You connect via DNS that resolves to multiple cluster nodes and want to re-resolve DNS
+//     on each topology refresh
+//   - You're in dynamic IP environments (e.g., Kubernetes) where node IPs change but seed
+//     addresses remain stable
+//   - You want the client to always see the cluster from the initial nodes' perspective
+//
+// If not set, defaults to false (uses internal cluster view for topology refresh).
+func (config *AdvancedClusterClientConfiguration) WithRefreshTopologyFromInitialNodes(
+	refreshTopologyFromInitialNodes bool,
+) *AdvancedClusterClientConfiguration {
+	config.refreshTopologyFromInitialNodes = refreshTopologyFromInitialNodes
 	return config
 }
