@@ -145,6 +145,7 @@ pub async fn get_valkey_connection_info(
     let protocol = connection_request.protocol.unwrap_or_default();
     let db = connection_request.database_id;
     let client_name = connection_request.client_name.clone();
+    let lib_name = connection_request.lib_name.clone();
     let pubsub_subscriptions = connection_request.pubsub_subscriptions.clone();
 
     match &connection_request.authentication_info {
@@ -164,6 +165,7 @@ pub async fn get_valkey_connection_info(
                     password: Some(token),
                     protocol,
                     client_name,
+                    lib_name,
                     pubsub_subscriptions,
                 }
             } else {
@@ -174,6 +176,7 @@ pub async fn get_valkey_connection_info(
                     password: info.password.clone(),
                     protocol,
                     client_name,
+                    lib_name,
                     pubsub_subscriptions,
                 }
             }
@@ -182,6 +185,7 @@ pub async fn get_valkey_connection_info(
             db,
             protocol,
             client_name,
+            lib_name,
             pubsub_subscriptions,
             ..Default::default()
         },

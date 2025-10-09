@@ -228,6 +228,9 @@ public class ConnectionManager {
                         if (configuration.getClientName() != null) {
                             requestBuilder.setClientName(configuration.getClientName());
                         }
+                        if (configuration.getLibName() != null) {
+                            requestBuilder.setLibName(configuration.getLibName());
+                        }
                         requestBuilder.setLazyConnect(configuration.isLazyConnect());
 
                         // Set database ID

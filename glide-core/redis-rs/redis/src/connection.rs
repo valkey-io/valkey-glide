@@ -232,6 +232,8 @@ pub struct RedisConnectionInfo {
     pub protocol: ProtocolVersion,
     /// Optionally a client name that should be used for connection
     pub client_name: Option<String>,
+    /// Optionally a library name that should be used for connection
+    pub lib_name: Option<String>,
     /// Optionally a pubsub subscriptions that should be used for connection
     pub pubsub_subscriptions: Option<PubSubSubscriptionInfo>,
 }
@@ -391,6 +393,7 @@ fn url_to_tcp_connection_info(url: url::Url) -> RedisResult<ConnectionInfo> {
                 _ => ProtocolVersion::RESP2,
             },
             client_name: None,
+            lib_name: None,
             pubsub_subscriptions: None,
         },
     })
@@ -424,6 +427,7 @@ fn url_to_unix_connection_info(url: url::Url) -> RedisResult<ConnectionInfo> {
                 _ => ProtocolVersion::RESP2,
             },
             client_name: None,
+            lib_name: None,
             pubsub_subscriptions: None,
         },
     })
@@ -925,13 +929,14 @@ pub fn connect(
     setup_connection(con, &connection_info.redis)
 }
 
-pub(crate) fn client_set_info_pipeline() -> Pipeline {
+pub(crate) fn client_set_info_pipeline(lib_name: Option<&str>) -> Pipeline {
     let mut pipeline = crate::pipe();
+    let lib_name_value = lib_name.unwrap_or("UnknownClient");
     pipeline
         .cmd("CLIENT")
         .arg("SETINFO")
         .arg("LIB-NAME")
-        .arg(std::env!("GLIDE_NAME"))
+        .arg(lib_name_value)
         .ignore();
     pipeline
         .cmd("CLIENT")
@@ -993,7 +998,7 @@ fn setup_connection(
 
     // result is ignored, as per the command's instructions.
     // https://redis.io/commands/client-setinfo/
-    let _: RedisResult<()> = client_set_info_pipeline().query(&mut rv);
+    let _: RedisResult<()> = client_set_info_pipeline(connection_info.lib_name.as_deref()).query(&mut rv);
 
     Ok(rv)
 }
@@ -1840,6 +1845,7 @@ mod tests {
                         password: None,
                         protocol: ProtocolVersion::RESP2,
                         client_name: None,
+                        lib_name: None,
                         pubsub_subscriptions: None,
                     },
                 },

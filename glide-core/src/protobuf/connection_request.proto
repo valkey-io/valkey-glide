@@ -78,6 +78,7 @@ message ConnectionRequest {
     uint32 database_id = 8;
     ProtocolVersion protocol = 9;
     string client_name = 10;
+    string lib_name = 19;
     oneof periodic_checks {
         PeriodicChecksManualInterval periodic_checks_manual_interval = 11;
         PeriodicChecksDisabled periodic_checks_disabled = 12;
