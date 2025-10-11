@@ -2,8 +2,8 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import { RedisClientType, RedisClusterType } from "redis";
-import { createRedisClient, receivedOptions } from "./utils";
+import { GlideClient, GlideClusterClient } from "@valkey/valkey-glide";
+import { createGlideClient, receivedOptions } from "./utils";
 
 async function flush_database(
     host: string,
@@ -11,30 +11,17 @@ async function flush_database(
     tls: boolean,
     port: number,
 ) {
+    const client = await createGlideClient(host, isCluster, tls, port);
+
     if (isCluster) {
-        const client = (await createRedisClient(
-            host,
-            isCluster,
-            tls,
-            port,
-        )) as RedisClusterType;
-        await Promise.all(
-            client.masters.map((master) => {
-                return flush_database(master.host, false, tls, master.port);
-            }),
-        );
-        await client.quit();
+        // For cluster mode, use FLUSHALL on all nodes
+        await (client as GlideClusterClient).flushall();
     } else {
-        const client = (await createRedisClient(
-            host,
-            isCluster,
-            tls,
-            port,
-        )) as RedisClientType;
-        await client.connect();
-        await client.flushAll();
-        await client.quit();
+        // For standalone mode, use FLUSHALL
+        await (client as GlideClient).flushall();
     }
+
+    client.close();
 }
 
 Promise.resolve()
