@@ -1,0 +1,12 @@
+::: glide_sync.sync_commands.CoreCommands
+::: glide_shared.commands.core_options.ConditionalChange
+::: glide_shared.commands.core_options.ExpiryType
+::: glide_shared.commands.core_options.ExpiryTypeGetEx
+::: glide_shared.commands.core_options.InfoSection
+::: glide_shared.commands.core_options.ExpireOptions
+::: glide_shared.commands.core_options.UpdateOptions
+::: glide_shared.commands.core_options.ExpirySet
+::: glide_shared.commands.core_options.ExpiryGetEx
+::: glide_shared.commands.core_options.InsertPosition
+::: glide_shared.commands.core_options.FlushMode
+::: glide_shared.commands.core_options.FunctionRestorePolicy
