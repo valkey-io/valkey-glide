@@ -926,16 +926,16 @@ class TestPubSub:
 
             # Create dictionaries of channels and their corresponding messages
             exact_channels_and_messages = {
-                "{{{}}}:{}".format("channel", get_random_string(5)): get_random_string(
+                "{{{}}}:{}:{}".format("channel", get_random_string(5), i): get_random_string(
                     10
                 )
-                for _ in range(NUM_CHANNELS)
+                for i in range(NUM_CHANNELS)
             }
             pattern_channels_and_messages = {
-                "{{{}}}:{}".format("pattern", get_random_string(5)): get_random_string(
+                "{{{}}}:{}:{}".format("pattern", get_random_string(5), i): get_random_string(
                     5
                 )
-                for _ in range(NUM_CHANNELS)
+                for i in range(NUM_CHANNELS)
             }
 
             all_channels_and_messages = {
