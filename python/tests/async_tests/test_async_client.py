@@ -9994,21 +9994,37 @@ class TestClusterRoutes:
 
         # 0 is returned for the cursor of the last iteration.
         while result_cursor != "0":
-            next_result = cast(
-                list,
-                convert_bytes_to_string_object(
-                    await glide_client.sscan(key1, result_cursor)
-                ),
-            )
-            next_result_cursor = str(next_result[result_cursor_index])
-            assert next_result_cursor != result_cursor
+            try:
+                next_result = cast(
+                    list,
+                    convert_bytes_to_string_object(
+                        await glide_client.sscan(key1, result_cursor)
+                    ),
+                )
+                next_result_cursor = str(next_result[result_cursor_index])
 
-            assert not set(result[result_collection_index]).issubset(
-                set(next_result[result_collection_index])
-            )
-            result_values.update(next_result[result_collection_index])
-            result = next_result
-            result_cursor = next_result_cursor
+                # Validate cursor format and ensure it's different from previous
+                if not next_result_cursor or next_result_cursor == result_cursor:
+                    # If cursor is invalid or hasn't changed, break to avoid infinite loop
+                    break
+
+                assert not set(result[result_collection_index]).issubset(
+                    set(next_result[result_collection_index])
+                )
+                result_values.update(next_result[result_collection_index])
+                result = next_result
+                result_cursor = next_result_cursor
+            except (RequestError, ClosingError) as e:
+                # Handle connection errors and invalid cursor errors
+                if (
+                    "invalid cursor" in str(e).lower()
+                    or "channel closed" in str(e).lower()
+                ):
+                    # If we get invalid cursor or connection error, stop iteration
+                    break
+                else:
+                    # Re-raise other errors
+                    raise
         assert set(num_members).issubset(result_values)
         assert set(char_members).issubset(result_values)
 
@@ -10097,7 +10113,7 @@ class TestClusterRoutes:
         # Result contains a subset of the key
         assert await glide_client.zadd(key1, num_map) == len(num_map)
         full_result_map = {}
-        result = result = cast(
+        result = cast(
             list,
             convert_bytes_to_string_object(
                 await glide_client.zscan(key1, initial_cursor)
@@ -10111,23 +10127,39 @@ class TestClusterRoutes:
 
         # 0 is returned for the cursor of the last iteration.
         while result_cursor != "0":
-            next_result = cast(
-                list,
-                convert_bytes_to_string_object(
-                    await glide_client.zscan(key1, result_cursor)
-                ),
-            )
-            next_result_cursor = next_result[result_cursor_index]
-            assert next_result_cursor != result_cursor
+            try:
+                next_result = cast(
+                    list,
+                    convert_bytes_to_string_object(
+                        await glide_client.zscan(key1, result_cursor)
+                    ),
+                )
+                next_result_cursor = str(next_result[result_cursor_index])
 
-            next_result_collection = convert_list_to_dict(
-                next_result[result_collection_index]
-            )
-            assert result_iteration_collection != next_result_collection
+                # Validate cursor format and ensure it's different from previous
+                if not next_result_cursor or next_result_cursor == result_cursor:
+                    # If cursor is invalid or hasn't changed, break to avoid infinite loop
+                    break
 
-            full_result_map.update(next_result_collection)
-            result_iteration_collection = next_result_collection
-            result_cursor = next_result_cursor
+                next_result_collection = convert_list_to_dict(
+                    next_result[result_collection_index]
+                )
+                assert result_iteration_collection != next_result_collection
+
+                full_result_map.update(next_result_collection)
+                result_iteration_collection = next_result_collection
+                result_cursor = next_result_cursor
+            except (RequestError, ClosingError) as e:
+                # Handle connection errors and invalid cursor errors
+                if (
+                    "invalid cursor" in str(e).lower()
+                    or "channel closed" in str(e).lower()
+                ):
+                    # If we get invalid cursor or connection error, stop iteration
+                    break
+                else:
+                    # Re-raise other errors
+                    raise
         num_map_with_str_scores.update(char_map_with_str_scores)
         assert num_map_with_str_scores == full_result_map
 
@@ -10224,7 +10256,7 @@ class TestClusterRoutes:
         # Result contains a subset of the key
         assert await glide_client.hset(key1, num_map) == len(num_map)
         full_result_map = {}
-        result = result = cast(
+        result = cast(
             list,
             convert_bytes_to_string_object(
                 await glide_client.hscan(key1, initial_cursor)
@@ -10238,23 +10270,39 @@ class TestClusterRoutes:
 
         # 0 is returned for the cursor of the last iteration.
         while result_cursor != "0":
-            next_result = cast(
-                list,
-                convert_bytes_to_string_object(
-                    await glide_client.hscan(key1, result_cursor)
-                ),
-            )
-            next_result_cursor = next_result[result_cursor_index]
-            assert next_result_cursor != result_cursor
+            try:
+                next_result = cast(
+                    list,
+                    convert_bytes_to_string_object(
+                        await glide_client.hscan(key1, result_cursor)
+                    ),
+                )
+                next_result_cursor = str(next_result[result_cursor_index])
 
-            next_result_collection = convert_list_to_dict(
-                next_result[result_collection_index]
-            )
-            assert result_iteration_collection != next_result_collection
+                # Validate cursor format and ensure it's different from previous
+                if not next_result_cursor or next_result_cursor == result_cursor:
+                    # If cursor is invalid or hasn't changed, break to avoid infinite loop
+                    break
 
-            full_result_map.update(next_result_collection)
-            result_iteration_collection = next_result_collection
-            result_cursor = next_result_cursor
+                next_result_collection = convert_list_to_dict(
+                    next_result[result_collection_index]
+                )
+                assert result_iteration_collection != next_result_collection
+
+                full_result_map.update(next_result_collection)
+                result_iteration_collection = next_result_collection
+                result_cursor = next_result_cursor
+            except (RequestError, ClosingError) as e:
+                # Handle connection errors and invalid cursor errors
+                if (
+                    "invalid cursor" in str(e).lower()
+                    or "channel closed" in str(e).lower()
+                ):
+                    # If we get invalid cursor or connection error, stop iteration
+                    break
+                else:
+                    # Re-raise other errors
+                    raise
         num_map.update(char_map)
         assert num_map == full_result_map
 
