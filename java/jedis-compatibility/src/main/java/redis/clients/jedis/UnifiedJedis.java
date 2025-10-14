@@ -691,14 +691,12 @@ public class UnifiedJedis implements Closeable {
         checkNotClosed();
         try {
             Object result;
+            String[] infoCommands = new String[] {"CLIENT", "INFO"};
             if (isClusterMode) {
-                ClusterValue<Object> clusterResult =
-                        glideClusterClient.customCommand(new String[] {"CLIENT", "INFO"}).get();
-                result = clusterResult.getSingleValue();
+                return (String) glideClusterClient.customCommand(infoCommands).get().getSingleValue();
             } else {
-                result = glideClient.customCommand(new String[] {"CLIENT", "INFO"}).get();
+                return (String) glideClient.customCommand(infoCommands).get();
             }
-            return (String) result;
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("CLIENT INFO operation failed", e);
         }

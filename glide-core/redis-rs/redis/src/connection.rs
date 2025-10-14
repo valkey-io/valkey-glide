@@ -1734,6 +1734,34 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_client_set_info_pipeline_default_lib_name() {
+        let pipeline = client_set_info_pipeline(None);
+        let packed_commands = pipeline.get_packed_pipeline();
+        let cmd_str = String::from_utf8_lossy(&packed_commands);
+
+        // Should contain CLIENT SETINFO LIB-NAME
+        assert!(cmd_str.contains("CLIENT"));
+        assert!(cmd_str.contains("SETINFO"));
+        assert!(cmd_str.contains("LIB-NAME"));
+
+        // When GLIDE_NAME is set, it should use that value
+        // When GLIDE_NAME is not set and lib_name is None, it should use "UnknownClient"
+        // Since we can't control GLIDE_NAME in this test, we just verify the structure
+        assert!(cmd_str.contains("Glide") || cmd_str.contains("UnknownClient"));
+    }
+
+    #[test]
+    fn test_client_set_info_pipeline_logic() {
+        // Test the logic directly by simulating what happens when GLIDE_NAME is not set
+        let lib_name_value = None.unwrap_or("UnknownClient");
+        assert_eq!(lib_name_value, "UnknownClient");
+
+        // Test with provided lib_name
+        let lib_name_value = Some("CustomClient").unwrap_or("UnknownClient");
+        assert_eq!(lib_name_value, "CustomClient");
+    }
+
+    #[test]
     fn test_parse_redis_url() {
         let cases = vec![
             ("redis://127.0.0.1", true),

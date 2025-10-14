@@ -78,7 +78,6 @@ message ConnectionRequest {
     uint32 database_id = 8;
     ProtocolVersion protocol = 9;
     string client_name = 10;
-    string lib_name = 19;
     oneof periodic_checks {
         PeriodicChecksManualInterval periodic_checks_manual_interval = 11;
         PeriodicChecksDisabled periodic_checks_disabled = 12;
@@ -89,6 +88,7 @@ message ConnectionRequest {
     uint32 connection_timeout = 16;
     bool lazy_connect = 17;
     bool refresh_topology_from_initial_nodes = 18;
+    string lib_name = 19;
 }
 
 message ConnectionRetryStrategy {
