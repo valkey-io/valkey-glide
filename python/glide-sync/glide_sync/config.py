@@ -1,4 +1,5 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+from __future__ import annotations
 
 from typing import List, Optional, Union
 
@@ -53,9 +54,6 @@ class GlideClientConfiguration(SharedGlideClientConfiguration):
         client_name (Optional[str]): Client name to be used for the client. Will be used with CLIENT SETNAME command during
             connection establishment.
         protocol (ProtocolVersion): The version of the RESP protocol to communicate with the server.
-        pubsub_subscriptions (Optional[GlideClientConfiguration.PubSubSubscriptions]): Pubsub subscriptions to be used for the
-                client.
-                Will be applied via SUBSCRIBE/PSUBSCRIBE commands during connection establishment.
         client_az (Optional[str]): Availability Zone of the client.
             If ReadFrom strategy is AZAffinity, this setting ensures that readonly commands are directed to replicas within
             the specified AZ if exits.
@@ -63,6 +61,9 @@ class GlideClientConfiguration(SharedGlideClientConfiguration):
             nodes (first replicas then primary) within the specified AZ if they exist.
         advanced_config (Optional[AdvancedGlideClientConfiguration]): Advanced configuration settings for the client,
             see `AdvancedGlideClientConfiguration`.
+        pubsub_subscriptions (Optional[GlideClientConfiguration.PubSubSubscriptions]): Pubsub subscriptions to be used for the
+            client.
+            Will be applied via SUBSCRIBE/PSUBSCRIBE commands during connection establishment.
 
         Note:
             PubSub and inflight_requests_limit are not yet supported for the sync client.
@@ -79,12 +80,12 @@ class GlideClientConfiguration(SharedGlideClientConfiguration):
         database_id: Optional[int] = None,
         client_name: Optional[str] = None,
         protocol: ProtocolVersion = ProtocolVersion.RESP3,
-        pubsub_subscriptions: Optional[
-            SharedGlideClientConfiguration.PubSubSubscriptions
-        ] = None,
         client_az: Optional[str] = None,
         advanced_config: Optional[AdvancedGlideClientConfiguration] = None,
         lazy_connect: Optional[bool] = None,
+        pubsub_subscriptions: Optional[
+            GlideClientConfiguration.PubSubSubscriptions
+        ] = None,
     ):
         super().__init__(
             addresses=addresses,
@@ -138,9 +139,6 @@ class GlideClusterClientConfiguration(SharedGlideClusterClientConfiguration):
             These checks evaluate changes in the cluster's topology, triggering a slot refresh when detected.
             Periodic checks ensure a quick and efficient process by querying a limited number of nodes.
             Defaults to PeriodicChecksStatus.ENABLED_DEFAULT_CONFIGS.
-        pubsub_subscriptions (Optional[GlideClusterClientConfiguration.PubSubSubscriptions]): Pubsub subscriptions to be used
-            for the client.
-            Will be applied via SUBSCRIBE/PSUBSCRIBE/SSUBSCRIBE commands during connection establishment.
         client_az (Optional[str]): Availability Zone of the client.
             If ReadFrom strategy is AZAffinity, this setting ensures that readonly commands are directed to replicas within
             the specified AZ if exits.
@@ -148,6 +146,9 @@ class GlideClusterClientConfiguration(SharedGlideClusterClientConfiguration):
             nodes (first replicas then primary) within the specified AZ if they exist.
         advanced_config (Optional[AdvancedGlideClusterClientConfiguration]) : Advanced configuration settings for the client,
             see `AdvancedGlideClusterClientConfiguration`.
+        pubsub_subscriptions (Optional[GlideClusterClientConfiguration.PubSubSubscriptions]): Pubsub subscriptions to be used
+            for the client.
+            Will be applied via SUBSCRIBE/PSUBSCRIBE/SSUBSCRIBE commands during connection establishment.
 
 
     Notes:
@@ -170,12 +171,12 @@ class GlideClusterClientConfiguration(SharedGlideClusterClientConfiguration):
         periodic_checks: Union[
             PeriodicChecksStatus, PeriodicChecksManualInterval
         ] = PeriodicChecksStatus.ENABLED_DEFAULT_CONFIGS,
-        pubsub_subscriptions: Optional[
-            SharedGlideClusterClientConfiguration.PubSubSubscriptions
-        ] = None,
         client_az: Optional[str] = None,
         advanced_config: Optional[AdvancedGlideClusterClientConfiguration] = None,
         lazy_connect: Optional[bool] = None,
+        pubsub_subscriptions: Optional[
+            GlideClusterClientConfiguration.PubSubSubscriptions
+        ] = None,
     ):
         super().__init__(
             addresses=addresses,
