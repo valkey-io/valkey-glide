@@ -3,6 +3,7 @@ package glide.cluster;
 
 import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestUtilities.assertDeepEquals;
+import static glide.TestUtilities.cleanupLocalSocketsMac;
 import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.TestUtilities.concatenateArrays;
 import static glide.TestUtilities.generateLuaLibCode;
@@ -175,6 +176,7 @@ public class ClusterBatchTests {
     @ParameterizedTest
     @MethodSource("getClientsWithAtomic")
     public void test_batch_large_values(GlideClusterClient clusterClient, boolean isAtomic) {
+        cleanupLocalSocketsMac();
         int length = 1 << 25; // 33mb
         String key = "0".repeat(length);
         String value = "0".repeat(length);

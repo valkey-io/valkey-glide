@@ -96,6 +96,7 @@ from tests.utils.utils import (
     check_function_list_response,
     check_function_stats_response,
     check_if_server_version_lt,
+    cleanup_local_sockets_mac,
     compare_maps,
     convert_bytes_to_string_object,
     convert_string_to_bytes_object,
@@ -125,6 +126,7 @@ class TestGlideClients:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_send_and_receive_large_values(self, request, cluster_mode, protocol):
+        cleanup_local_sockets_mac()
         glide_client = await create_client(
             request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=5000
         )

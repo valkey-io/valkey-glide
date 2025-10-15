@@ -426,27 +426,21 @@ class TestGlideClients:
     def test_sync_fork(self, glide_sync_client: TGlideClient):
         parent_pid = os.getpid()
         try:
-            print("Forking process from parent PID:", parent_pid)
             pid = os.fork()
         except OSError as e:
             pytest.fail(f"Fork failed: {e}")
 
         current_pid = os.getpid()
-        print("Current PID:", current_pid, "Parent PID:", parent_pid)
         if current_pid != parent_pid:
             # Child process
-            print("Child process executing with PID:", current_pid)
             glide_sync_client.set("key", "value")
-            print("Child process set key to value")
             assert glide_sync_client.get("key") == "value".encode()
-            print("Child process verified key value")
             os._exit(0)
         else:
             # Parent process
             glide_sync_client.set("key", "value")
             assert glide_sync_client.get("key") == "value".encode()
             _, status = os.waitpid(pid, 0)
-            print("Parent process waited for child PID:", pid, "with status:", status)
             if not os.WIFEXITED(status) or os.WEXITSTATUS(status) != 0:
                 pytest.fail(f"Child process failed with status {status}")
 

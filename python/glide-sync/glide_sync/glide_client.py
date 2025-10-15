@@ -79,7 +79,6 @@ class BaseClient(CoreCommands):
     def _create_core_client(self):
         if self._is_closed:
             return
-        print("Creating core client...")
         conn_req = self._config._create_a_protobuf_conn_request(
             cluster_mode=type(self._config) is GlideClusterClientConfiguration
         )
@@ -93,15 +92,13 @@ class BaseClient(CoreCommands):
         pubsub_callback = self._ffi.cast(
             "PubSubCallback", 0
         )  # PubSub not yet implementet for Sync Python
-        
-        print("Calling create_client...")
+
         client_response_ptr = self._lib.create_client(
             conn_req_bytes,
             len(conn_req_bytes),
             client_type,
             pubsub_callback,
         )
-        print("create_client call completed.")
 
         Logger.log(Level.INFO, "connection info", "new connection established")
 
@@ -110,7 +107,6 @@ class BaseClient(CoreCommands):
             client_response = self._try_ffi_cast(
                 "ConnectionResponse*", client_response_ptr
             )
-            print("Client response received.")
             if client_response.conn_ptr != self._ffi.NULL:
                 self._core_client = client_response.conn_ptr
             else:
@@ -125,7 +121,6 @@ class BaseClient(CoreCommands):
 
             # Free the connection response to avoid memory leaks
             self._lib.free_connection_response(client_response_ptr)
-            print("Connection response freed.")
         else:
             raise ClosingError("Failed to create client, response pointer is NULL.")
 

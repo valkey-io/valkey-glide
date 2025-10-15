@@ -42,6 +42,7 @@ from tests.async_tests.conftest import create_client
 from tests.utils.utils import (
     batch_test,
     check_if_server_version_lt,
+    cleanup_local_sockets_mac,
     convert_bytes_to_string_object,
     generate_lua_lib_code,
     get_random_string,
@@ -218,6 +219,7 @@ class TestBatch:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     @pytest.mark.parametrize("is_atomic", [True, False])
     async def test_batch_large_values(self, request, cluster_mode, protocol, is_atomic):
+        cleanup_local_sockets_mac()
         glide_client = await create_client(
             request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=5000
         )

@@ -3,6 +3,7 @@ package glide.standalone;
 
 import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestUtilities.assertDeepEquals;
+import static glide.TestUtilities.cleanupLocalSocketsMac;
 import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.generateLuaLibCode;
 import static glide.api.BaseClient.OK;
@@ -201,6 +202,7 @@ public class BatchTests {
     @ParameterizedTest
     @MethodSource("getClientsWithAtomic")
     public void test_batch_large_values(GlideClient client, boolean isAtomic) {
+        cleanupLocalSocketsMac();
         int length = 1 << 25; // 33mb
         String key = "0".repeat(length);
         String value = "0".repeat(length);

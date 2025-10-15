@@ -616,4 +616,51 @@ public class TestUtilities {
             Thread.currentThread().interrupt();
         }
     }
+
+    /**
+     * Performs a cleanup of local TCP sockets on macOS by temporarily resetting the loopback
+     * interface (`lo0`). This is needed for tests containing large values on the macOS self hosted
+     * runners, where because of resource limits on these runners causing tests to fail on a "no
+     * buffer space available" error.
+     */
+    public static void cleanupLocalSocketsMac() {
+        String os = System.getProperty("os.name").toLowerCase();
+
+        if (!os.contains("mac")) {
+            return;
+        }
+
+        String githubActions = System.getenv("GITHUB_ACTIONS");
+        String runnerOS = System.getenv("RUNNER_OS");
+        String runnerName = System.getenv("RUNNER_NAME");
+
+        // Only run if this is a github actions test running on a self hosted runner
+        boolean isSelfHostedCirrusMac = false;
+        if (githubActions != null && runnerOS != null && runnerName != null) {
+            isSelfHostedCirrusMac =
+                    "true".equalsIgnoreCase(githubActions)
+                            && "macOS".equalsIgnoreCase(runnerOS)
+                            && runnerName.startsWith("cirrus-");
+        }
+
+        if (!isSelfHostedCirrusMac) {
+            System.out.println("⚠️ Skipping loopback cleanup: not a self-hosted macOS runner.");
+            return;
+        }
+
+        try {
+            ProcessBuilder[] commands =
+                    new ProcessBuilder[] {
+                        new ProcessBuilder("sudo", "ifconfig", "lo0", "down"),
+                        new ProcessBuilder("sudo", "ifconfig", "lo0", "up"),
+                    };
+
+            commands[0].inheritIO().start().waitFor(10, java.util.concurrent.TimeUnit.SECONDS);
+            Thread.sleep(1000);
+            commands[1].inheritIO().start().waitFor(10, java.util.concurrent.TimeUnit.SECONDS);
+
+        } catch (Exception e) {
+            System.err.println("⚠️  Warning: pre-test cleanup failed: " + e.getMessage());
+        }
+    }
 }

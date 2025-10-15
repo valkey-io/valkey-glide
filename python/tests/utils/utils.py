@@ -1,6 +1,10 @@
 import json
+import os
+import platform
 import random
 import string
+import subprocess
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import (
@@ -1630,3 +1634,39 @@ def helper1(
 
     transaction.renamenx(key, key2)
     args.append(False)
+
+
+def cleanup_local_sockets_mac():
+    """
+    Performs a cleanup of local TCP sockets on macOS by temporarily resetting the loopback interface (`lo0`).
+    This is needed for tests containing large values on the macOS self-hosted runners,
+    where resource limits can cause tests to fail with a "no buffer space available" error.
+    """
+    system = platform.system().lower()
+    if "darwin" not in system:
+        return
+
+    github_actions = os.getenv("GITHUB_ACTIONS")
+    runner_os = os.getenv("RUNNER_OS")
+    runner_name = os.getenv("RUNNER_NAME")
+
+    # Only run if this is a github actions test running on a self hosted runner
+    if github_actions and runner_os and runner_name:
+        is_self_hosted_cirrus_mac = (
+            github_actions.lower() == "true"
+            and runner_os.lower() == "macos"
+            and runner_name.startswith("cirrus-")
+        )
+    else:
+        is_self_hosted_cirrus_mac = False
+
+    if not is_self_hosted_cirrus_mac:
+        print("⚠️ Skipping loopback cleanup: not a self-hosted macOS runner.")
+        return
+
+    try:
+        subprocess.run(["sudo", "ifconfig", "lo0", "down"], check=True)
+        time.sleep(1)
+        subprocess.run(["sudo", "ifconfig", "lo0", "up"], check=True)
+    except Exception as e:
+        print(f"⚠️ Warning: pre-test cleanup failed: {e}")
