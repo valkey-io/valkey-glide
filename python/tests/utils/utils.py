@@ -38,6 +38,7 @@ from glide_shared.commands.core_options import (
     FlushMode,
     InfoSection,
     InsertPosition,
+    PubSubMsg,
 )
 from glide_shared.commands.sorted_set import (
     AggregationType,
@@ -1638,3 +1639,42 @@ def helper1(
 
     transaction.renamenx(key, key2)
     args.append(False)
+
+
+def decode_pubsub_msg(msg: Optional[PubSubMsg]) -> PubSubMsg:
+    if not msg:
+        return PubSubMsg("", "", None)
+    string_msg = cast(bytes, msg.message).decode()
+    string_channel = cast(bytes, msg.channel).decode()
+    string_pattern = cast(bytes, msg.pattern).decode() if msg.pattern else None
+    decoded_msg = PubSubMsg(string_msg, string_channel, string_pattern)
+    return decoded_msg
+
+
+def create_pubsub_subscription(
+    cluster_mode,
+    cluster_channels_and_patterns: Dict[
+        GlideClusterClientConfiguration.PubSubChannelModes, Set[str]
+    ],
+    standalone_channels_and_patterns: Dict[
+        GlideClientConfiguration.PubSubChannelModes, Set[str]
+    ],
+    callback=None,
+    context=None,
+):
+    if cluster_mode:
+        return GlideClusterClientConfiguration.PubSubSubscriptions(
+            channels_and_patterns=cluster_channels_and_patterns,
+            callback=callback,
+            context=context,
+        )
+    return GlideClientConfiguration.PubSubSubscriptions(
+        channels_and_patterns=standalone_channels_and_patterns,
+        callback=callback,
+        context=context,
+    )
+
+
+def new_message(msg: PubSubMsg, context: Any):
+    received_messages: List[PubSubMsg] = context
+    received_messages.append(msg)

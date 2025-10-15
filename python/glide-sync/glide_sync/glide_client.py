@@ -98,7 +98,10 @@ class BaseClient(CoreCommands):
         )
 
         if self._config._is_pubsub_configured():
-            python_callback = self._create_pubsub_callback()
+            # If in subscribed mode, create a callback that will be called by the FFI layer
+            # for handling push notifications. This callback would either call the user callback (if provided),
+            # or append the messaged to the the `_pubsub_queue`
+            python_callback = self._create_push_handle_callback()
             pubsub_callback = self._ffi.callback("PubSubCallback", python_callback)
             # Store reference to prevent garbage collection
             self._pubsub_callback_ref = pubsub_callback
@@ -136,7 +139,7 @@ class BaseClient(CoreCommands):
         else:
             raise ClosingError("Failed to create client, response pointer is NULL.")
 
-    def _create_pubsub_callback(self):
+    def _create_push_handle_callback(self):
         """Create the FFI pubsub callback function"""
 
         def _pubsub_callback(
@@ -187,6 +190,9 @@ class BaseClient(CoreCommands):
                         message=message, channel=channel, pattern=pattern
                     )
 
+                    # This aquires the underlying `_pubsub_lock` and allows for calling `notify()` on the variable
+                    # If a callback is registered, call it with the message and the provided context
+                    # Otherwise, append the message to the queue and notify threads that are waiting for a message.
                     with self._pubsub_condition:
                         user_callback, context = (
                             self._config._get_pubsub_callback_and_context()
@@ -722,18 +728,21 @@ class BaseClient(CoreCommands):
     def try_get_pubsub_message(self) -> Optional[PubSubMsg]:
         """Try to get a pubsub message without blocking"""
         if self._is_closed:
-            raise ClosingError("Client is closed")
+            raise ClosingError(
+                "Unable to execute requests; the client is closed. Please create a new client."
+            )
+
+        if not self._config._is_pubsub_configured():
+            raise ConfigurationError(
+                "The operation will never succeed since there was no pubsbub subscriptions applied to the client."
+            )
+
+        if self._config._get_pubsub_callback_and_context()[0] is not None:
+            raise ConfigurationError(
+                "The operation will never succeed since messages will be passed to the configured callback."
+            )
 
         with self._pubsub_condition:
-            if not self._config._is_pubsub_configured():
-                raise ConfigurationError("No pubsub subscriptions configured")
-
-            user_callback, _ = self._config._get_pubsub_callback_and_context()
-            if user_callback is not None:
-                raise ConfigurationError(
-                    "Messages are being passed to configured callback"
-                )
-
             if self._pubsub_queue:
                 return self._pubsub_queue.pop(0)
             else:
@@ -742,18 +751,19 @@ class BaseClient(CoreCommands):
     def get_pubsub_message(self) -> PubSubMsg:
         """Get a pubsub message, blocking until one is available"""
         if self._is_closed:
-            raise ClosingError("Client is closed")
+            raise ClosingError(
+                "Unable to execute requests; the client is closed. Please create a new client."
+            )
+
+        if not self._config._is_pubsub_configured():
+            raise ConfigurationError("No pubsub subscriptions configured")
+
+        if self._config._get_pubsub_callback_and_context()[0] is not None:
+            raise ConfigurationError(
+                "The operation will never complete since messages will be passed to the configured callback."
+            )
 
         with self._pubsub_condition:
-            if not self._config._is_pubsub_configured():
-                raise ConfigurationError("No pubsub subscriptions configured")
-
-            user_callback, _ = self._config._get_pubsub_callback_and_context()
-            if user_callback is not None:
-                raise ConfigurationError(
-                    "Messages are being passed to configured callback"
-                )
-
             while not self._pubsub_queue:
                 if self._is_closed:
                     raise ClosingError("Client was closed while waiting for message")
@@ -765,12 +775,11 @@ class BaseClient(CoreCommands):
 
     def close(self):
         if not self._is_closed:
+            self._is_closed = True
             with self._pubsub_condition:
-                self._is_closed = True
                 self._pubsub_condition.notify_all()
             self._lib.close_client(self._core_client)
             self._core_client = self._ffi.NULL
-            self._is_closed = True
             self._pubsub_callback_ref = None
 
 
