@@ -378,6 +378,71 @@ public class GlideCoreClient implements AutoCloseable {
         return isConnected() && AsyncRegistry.getPendingCount() < 1000;
     }
 
+    // ==================== CLIENT-SIDE CACHING ====================
+
+    /** Enable client-side caching with tracking */
+    public boolean enableClientTracking(
+            boolean enabled, int maxSize, long ttlSeconds, int trackingMode) {
+        long handle = nativeClientHandle.get();
+        if (handle == 0) {
+            return false;
+        }
+        return GlideNativeBridge.enableClientTracking(handle, enabled, maxSize, ttlSeconds, trackingMode);
+    }
+
+    /** Disable client-side caching */
+    public boolean disableClientTracking() {
+        long handle = nativeClientHandle.get();
+        if (handle == 0) {
+            return false;
+        }
+        return GlideNativeBridge.disableClientTracking(handle);
+    }
+
+    /** Get value with client-side caching */
+    public CompletableFuture<Object> getWithCache(String key) {
+        try {
+            long handle = nativeClientHandle.get();
+            if (handle == 0) {
+                CompletableFuture<Object> future = new CompletableFuture<>();
+                future.completeExceptionally(new RuntimeException("Client is closed"));
+                return future;
+            }
+
+            CompletableFuture<Object> future = new CompletableFuture<>();
+            long correlationId;
+            try {
+                correlationId = AsyncRegistry.register(future, this.maxInflightRequests, handle);
+            } catch (glide.api.models.exceptions.RequestException e) {
+                future.completeExceptionally(e);
+                return future;
+            }
+
+            GlideNativeBridge.getWithCacheAsync(handle, key, correlationId);
+            return future;
+        } catch (Exception e) {
+            CompletableFuture<Object> future = new CompletableFuture<>();
+            future.completeExceptionally(e);
+            return future;
+        }
+    }
+
+    /** Handle invalidation messages from server */
+    public void handleInvalidation(String[] keys) {
+        long handle = nativeClientHandle.get();
+        if (handle != 0) {
+            GlideNativeBridge.handleInvalidation(handle, keys);
+        }
+    }
+
+    /** Clear entire cache */
+    public void clearCache() {
+        long handle = nativeClientHandle.get();
+        if (handle != 0) {
+            GlideNativeBridge.clearCache(handle);
+        }
+    }
+
     // ==================== RESOURCE MANAGEMENT ====================
 
     /** Close the client and cleanup all resources */

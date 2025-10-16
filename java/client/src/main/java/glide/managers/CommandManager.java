@@ -52,6 +52,15 @@ public class CommandManager {
     /** Core client connection. */
     private final GlideCoreClient coreClient;
 
+    /**
+     * Get the underlying GlideCoreClient for direct access to native methods.
+     *
+     * @return The GlideCoreClient instance
+     */
+    public GlideCoreClient getGlideCoreClient() {
+        return coreClient;
+    }
+
     /** Internal interface for exposing implementation details about a ClusterScanCursor. */
     public interface ClusterScanCursorDetail extends ClusterScanCursor {
         /**

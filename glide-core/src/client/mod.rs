@@ -2,6 +2,7 @@
 
 mod types;
 
+use crate::client_cache::{ClientCache, ClientCacheConfig, TrackingMode};
 use crate::cluster_scan_container::insert_cluster_scan_cursor;
 use crate::scripts_container::get_script;
 use futures::FutureExt;
@@ -235,6 +236,9 @@ pub struct Client {
     inflight_requests_allowed: Arc<AtomicIsize>,
     // IAM token manager for automatic credential refresh
     iam_token_manager: Option<Arc<crate::iam::IAMTokenManager>>,
+    // Client-side cache
+    cache: Arc<RwLock<Option<Arc<ClientCache>>>>,
+    tracking_enabled: Arc<std::sync::atomic::AtomicBool>,
 }
 
 async fn run_with_timeout<T>(
@@ -1303,6 +1307,8 @@ impl Client {
                 request_timeout,
                 inflight_requests_allowed,
                 iam_token_manager: None,
+                cache: Arc::new(RwLock::new(None)),
+                tracking_enabled: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             };
 
             let client_arc = Arc::new(RwLock::new(client));
@@ -1359,6 +1365,92 @@ impl Client {
         })
         .await
         .map_err(|_| ConnectionError::Timeout)?
+    }
+
+    /// Enable client-side caching with tracking
+    pub async fn enable_client_tracking(&mut self, config: ClientCacheConfig) -> RedisResult<()> {
+        // Build CLIENT TRACKING command
+        let mut cmd = redis::cmd("CLIENT");
+        cmd.arg("TRACKING").arg("ON");
+        
+        match config.tracking_mode {
+            TrackingMode::OptIn => { cmd.arg("OPTIN"); },
+            TrackingMode::OptOut => { cmd.arg("OPTOUT"); },
+            TrackingMode::Default => {},
+        }
+
+        // Send command to server
+        self.send_command(&cmd, None).await?;
+        
+        // Create and store cache
+        let mut cache_guard = self.cache.write().await;
+        *cache_guard = Some(Arc::new(ClientCache::new(config)));
+        self.tracking_enabled.store(true, Ordering::Relaxed);
+        
+        Ok(())
+    }
+
+    /// Disable client-side caching
+    pub async fn disable_client_tracking(&mut self) -> RedisResult<()> {
+        self.send_command(&redis::cmd("CLIENT").arg("TRACKING").arg("OFF"), None).await?;
+        
+        // Clear cache
+        let mut cache_guard = self.cache.write().await;
+        if let Some(cache) = cache_guard.as_ref() {
+            cache.clear();
+        }
+        *cache_guard = None;
+        self.tracking_enabled.store(false, Ordering::Relaxed);
+        
+        Ok(())
+    }
+
+    /// Get value with client-side caching
+    pub async fn get_with_cache(&mut self, key: &str) -> RedisResult<Option<Value>> {
+        // Check cache first
+        {
+            let cache_guard = self.cache.read().await;
+            if let Some(cache) = cache_guard.as_ref() {
+                if let Some(cached_value) = cache.get(key) {
+                    return Ok(Some(cached_value));
+                }
+            }
+        }
+
+        // Cache miss - fetch from server
+        let value = self.send_command(&redis::cmd("GET").arg(key), None).await?;
+        
+        // Store in cache if not null
+        {
+            let cache_guard = self.cache.read().await;
+            if let Some(cache) = cache_guard.as_ref() {
+                if !matches!(value, Value::Nil) {
+                    cache.set(key.to_string(), value.clone());
+                }
+            }
+        }
+
+        // Convert Value to Option<Value>
+        match value {
+            Value::Nil => Ok(None),
+            v => Ok(Some(v)),
+        }
+    }
+
+    /// Handle invalidation messages from server
+    pub async fn handle_invalidation(&self, keys: Vec<String>) {
+        let cache_guard = self.cache.read().await;
+        if let Some(cache) = cache_guard.as_ref() {
+            cache.invalidate(&keys);
+        }
+    }
+
+    /// Clear entire cache (useful for connection recovery)
+    pub async fn clear_cache(&self) {
+        let cache_guard = self.cache.read().await;
+        if let Some(cache) = cache_guard.as_ref() {
+            cache.clear();
+        }
     }
 }
 

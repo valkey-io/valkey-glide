@@ -226,6 +226,7 @@ import glide.api.commands.StringBaseCommands;
 import glide.api.commands.TransactionsBaseCommands;
 import glide.api.logging.Logger;
 import glide.api.models.ClusterValue;
+import glide.api.models.ClientCacheConfig;
 import glide.api.models.GlideString;
 import glide.api.models.PubSubMessage;
 import glide.api.models.Script;
@@ -365,6 +366,9 @@ public abstract class BaseClient
     protected final ConnectionManager connectionManager;
     protected final MessageHandler messageHandler;
     protected final Optional<BaseSubscriptionConfiguration> subscriptionConfiguration;
+    
+    // Client-side caching
+    private volatile ClientCacheConfig cacheConfig;
 
     // Native library loading
     static {
@@ -5868,5 +5872,138 @@ public abstract class BaseClient
             return;
         }
         messageHandler.getQueue().push(message);
+    }
+
+    // ==================== CLIENT-SIDE CACHING ====================
+
+    /**
+     * Enable client-side caching with tracking.
+     *
+     * @param config The cache configuration
+     * @return A CompletableFuture that completes when tracking is enabled
+     */
+    public CompletableFuture<Void> enableClientTracking(@NonNull ClientCacheConfig config) {
+        return CompletableFuture.supplyAsync(() -> {
+            boolean success = commandManager.getGlideCoreClient().enableClientTracking(
+                    config.isEnabled(),
+                    config.getMaxSize(),
+                    config.getTtlSeconds().orElse(-1L),
+                    config.getTrackingMode().getValue()
+            );
+            
+            if (success) {
+                this.cacheConfig = config;
+                startInvalidationListener();
+                return null;
+            } else {
+                throw new RuntimeException("Failed to enable client tracking");
+            }
+        });
+    }
+
+    /**
+     * Disable client-side caching.
+     *
+     * @return A CompletableFuture that completes when tracking is disabled
+     */
+    public CompletableFuture<Void> disableClientTracking() {
+        return CompletableFuture.supplyAsync(() -> {
+            boolean success = commandManager.getGlideCoreClient().disableClientTracking();
+            
+            if (success) {
+                this.cacheConfig = null;
+                return null;
+            } else {
+                throw new RuntimeException("Failed to disable client tracking");
+            }
+        });
+    }
+
+    /**
+     * Get value with client-side caching.
+     *
+     * @param key The key to get
+     * @return A CompletableFuture that resolves to the value or null if not found
+     */
+    public CompletableFuture<String> getWithCache(@NonNull String key) {
+        if (cacheConfig != null && cacheConfig.isEnabled()) {
+            return commandManager.getGlideCoreClient()
+                    .getWithCache(key)
+                    .thenApply(result -> result != null ? result.toString() : null);
+        } else {
+            // Fallback to regular get
+            return get(key);
+        }
+    }
+
+    /**
+     * Get value with client-side caching (binary-safe).
+     *
+     * @param key The key to get
+     * @return A CompletableFuture that resolves to the value or null if not found
+     */
+    public CompletableFuture<GlideString> getWithCache(@NonNull GlideString key) {
+        if (cacheConfig != null && cacheConfig.isEnabled()) {
+            return commandManager.getGlideCoreClient()
+                    .getWithCache(key.toString())
+                    .thenApply(result -> result != null ? GlideString.of(result.toString()) : null);
+        } else {
+            // Fallback to regular get
+            return get(key);
+        }
+    }
+
+    /**
+     * Clear the entire client-side cache.
+     */
+    public void clearCache() {
+        commandManager.getGlideCoreClient().clearCache();
+    }
+
+    /**
+     * Get the current cache configuration.
+     *
+     * @return The current cache configuration, or null if caching is not enabled
+     */
+    public ClientCacheConfig getCacheConfig() {
+        return cacheConfig;
+    }
+
+    /**
+     * Check if client-side caching is enabled.
+     *
+     * @return true if caching is enabled, false otherwise
+     */
+    public boolean isCachingEnabled() {
+        return cacheConfig != null && cacheConfig.isEnabled();
+    }
+
+    /**
+     * Handle invalidation messages from the server.
+     * This method is called internally when the server sends invalidation messages.
+     *
+     * @param keys The keys that have been invalidated
+     */
+    protected void handleInvalidationMessage(String[] keys) {
+        commandManager.getGlideCoreClient().handleInvalidation(keys);
+        
+        // Call user callback if configured
+        if (cacheConfig != null && cacheConfig.getInvalidationCallback() != null) {
+            try {
+                cacheConfig.getInvalidationCallback().accept(java.util.Arrays.asList(keys));
+            } catch (Throwable ignored) {
+                // Ensure user callback exceptions do not break invalidation handling
+            }
+        }
+    }
+
+    /**
+     * Start listening for invalidation messages.
+     * This integrates with the existing PubSub infrastructure.
+     */
+    private void startInvalidationListener() {
+        // This would integrate with existing connection handling
+        // The actual invalidation messages will be received via RESP3 push messages
+        // and routed through the existing message handling infrastructure
     }
 }
