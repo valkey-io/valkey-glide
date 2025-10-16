@@ -1457,22 +1457,9 @@ pub unsafe extern "C-unwind" fn request_cluster_scan(
                         return unsafe { client_adapter.handle_redis_error(err, request_id) };
                     }
                 },
-                b"ALLOW_NON_COVERED_SLOTS" => match iter.next() {
-                    Some(allow_val) => {
-                        allow_non_covered_slots = match str::from_utf8(allow_val) {
-                            Ok("true") | Ok("1") => true,
-                            Ok("false") | Ok("0") => false,
-                            _ => false, // default to false for any other value
-                        };
-                    }
-                    None => {
-                        let err = RedisError::from((
-                            ErrorKind::ClientError,
-                            "No argument following ALLOW_NON_COVERED_SLOTS.",
-                        ));
-                        return unsafe { client_adapter.handle_redis_error(err, request_id) };
-                    }
-                },
+                b"ALLOW_NON_COVERED_SLOTS" => {
+                    allow_non_covered_slots = true;
+                }
                 _ => {
                     // Unknown or unsupported arg — safely skip or log
                     continue;

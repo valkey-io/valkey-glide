@@ -30,10 +30,7 @@ class ClusterScanCursor:
         self._ffi = _glide_ffi.ffi
         self._lib = _glide_ffi.lib
 
-        if new_cursor is not None:
-            self._cursor = new_cursor
-        else:
-            self._cursor = "0"
+        self._cursor = new_cursor or "0"
 
     def get_cursor(self) -> str:
         """
