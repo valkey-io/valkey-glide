@@ -5968,7 +5968,7 @@ public abstract class BaseClient
      * @param keys The keys that have been invalidated
      */
     protected void handleInvalidationMessage(String[] keys) {
-        commandManager.getGlideCoreClient().handleInvalidation(keys);
+        commandManager.handleInvalidation(keys);
 
         // Call user callback if configured
         if (cacheConfig != null && cacheConfig.getInvalidationCallback() != null) {
