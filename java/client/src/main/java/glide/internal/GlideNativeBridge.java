@@ -81,7 +81,15 @@ public class GlideNativeBridge {
 
     /** Enable client-side caching with tracking */
     public static native boolean enableClientTracking(
-            long clientPtr, boolean enabled, int maxSize, long ttlSeconds, int trackingMode);
+            long clientPtr, 
+            boolean enabled, 
+            int maxSize, 
+            long ttlSeconds, 
+            int trackingMode,
+            long redirectClientId,
+            String[] prefixes,
+            boolean broadcastMode,
+            boolean noLoop);
 
     /** Disable client-side caching */
     public static native boolean disableClientTracking(long clientPtr);

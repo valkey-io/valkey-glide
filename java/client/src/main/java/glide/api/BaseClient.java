@@ -5906,7 +5906,11 @@ public abstract class BaseClient
                         config.isEnabled(),
                         config.getMaxSize(),
                         config.getTtlSeconds().orElse(-1L),
-                        config.getTrackingMode().getValue())
+                        config.getTrackingMode().getValue(),
+                        config.getRedirectClientId().orElse(-1L),
+                        config.getPrefixes().toArray(new String[0]),
+                        config.isBroadcastMode(),
+                        config.isNoLoop())
                 .thenApply(
                         success -> {
                             if (success) {

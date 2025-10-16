@@ -382,13 +382,21 @@ public class GlideCoreClient implements AutoCloseable {
 
     /** Enable client-side caching with tracking */
     public boolean enableClientTracking(
-            boolean enabled, int maxSize, long ttlSeconds, int trackingMode) {
+            boolean enabled, 
+            int maxSize, 
+            long ttlSeconds, 
+            int trackingMode,
+            long redirectClientId,
+            String[] prefixes,
+            boolean broadcastMode,
+            boolean noLoop) {
         long handle = nativeClientHandle.get();
         if (handle == 0) {
             return false;
         }
         return GlideNativeBridge.enableClientTracking(
-                handle, enabled, maxSize, ttlSeconds, trackingMode);
+                handle, enabled, maxSize, ttlSeconds, trackingMode, 
+                redirectClientId, prefixes, broadcastMode, noLoop);
     }
 
     /** Disable client-side caching */

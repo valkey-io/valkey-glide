@@ -8,6 +8,7 @@ use glide_core::client::ConnectionRequest;
 use glide_core::errors::{error_message, error_type};
 use jni::JNIEnv;
 use jni::JavaVM;
+use jni::sys::jobjectArray;
 use jni::objects::{GlobalRef, JClass, JObject, JStaticMethodID, JValue};
 use jni::signature;
 use jni::sys::{jlong, jstring};
@@ -792,16 +793,31 @@ use jni::sys::{jboolean, jint};
 /// Enable client-side caching with tracking
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_glide_internal_GlideNativeBridge_enableClientTracking(
-    _env: JNIEnv,
+    mut env: JNIEnv,
     _class: JClass,
     client_ptr: jlong,
     enabled: jboolean,
     max_size: jint,
     ttl_seconds: jlong,
     tracking_mode: jint,
+    redirect_client_id: jlong,
+    prefixes: jobjectArray,
+    broadcast_mode: jboolean,
+    no_loop: jboolean,
 ) -> jboolean {
     let client_ptr = client_ptr as u64;
     let handle_table = get_handle_table();
+    
+    // Convert Java string array to Vec<String>
+    let prefixes_vec = if prefixes.is_null() {
+        Vec::new()
+    } else {
+        let prefixes_obj = unsafe { JObject::from_raw(prefixes) };
+        match convert_java_string_array_to_vec(&mut env, prefixes_obj) {
+            Ok(vec) => vec,
+            Err(_) => return 0, // false
+        }
+    };
     
     let config = ClientCacheConfig {
         enabled: enabled != 0,
@@ -813,6 +829,10 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_enableClientTrackin
             2 => TrackingMode::OptOut,
             _ => TrackingMode::Default,
         },
+        redirect_client_id: if redirect_client_id > 0 { Some(redirect_client_id as u64) } else { None },
+        prefixes: prefixes_vec,
+        broadcast_mode: broadcast_mode != 0,
+        no_loop: no_loop != 0,
     };
 
     let runtime = get_runtime();
