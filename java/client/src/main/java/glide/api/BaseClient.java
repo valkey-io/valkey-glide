@@ -1011,14 +1011,32 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<String> get(@NonNull String key) {
-        return commandManager.submitNewCommand(
-                Get, new String[] {key}, this::handleStringOrNullResponse);
+        // Check if caching is enabled
+        if (cacheConfig != null && cacheConfig.isEnabled()) {
+            // Use cache-aware get
+            return commandManager.getGlideCoreClient()
+                    .getWithCache(key)
+                    .thenApply(result -> result != null ? result.toString() : null);
+        } else {
+            // Use regular get (existing implementation)
+            return commandManager.submitNewCommand(
+                    Get, new String[] {key}, this::handleStringOrNullResponse);
+        }
     }
 
     @Override
     public CompletableFuture<GlideString> get(@NonNull GlideString key) {
-        return commandManager.submitNewCommand(
-                Get, new GlideString[] {key}, this::handleGlideStringOrNullResponse);
+        // Check if caching is enabled
+        if (cacheConfig != null && cacheConfig.isEnabled()) {
+            // Use cache-aware get
+            return commandManager.getGlideCoreClient()
+                    .getWithCache(key.toString())
+                    .thenApply(result -> result != null ? GlideString.of(result.toString()) : null);
+        } else {
+            // Use regular get (existing implementation)
+            return commandManager.submitNewCommand(
+                    Get, new GlideString[] {key}, this::handleGlideStringOrNullResponse);
+        }
     }
 
     @Override
@@ -5917,40 +5935,6 @@ public abstract class BaseClient
                 throw new RuntimeException("Failed to disable client tracking");
             }
         });
-    }
-
-    /**
-     * Get value with client-side caching.
-     *
-     * @param key The key to get
-     * @return A CompletableFuture that resolves to the value or null if not found
-     */
-    public CompletableFuture<String> getWithCache(@NonNull String key) {
-        if (cacheConfig != null && cacheConfig.isEnabled()) {
-            return commandManager.getGlideCoreClient()
-                    .getWithCache(key)
-                    .thenApply(result -> result != null ? result.toString() : null);
-        } else {
-            // Fallback to regular get
-            return get(key);
-        }
-    }
-
-    /**
-     * Get value with client-side caching (binary-safe).
-     *
-     * @param key The key to get
-     * @return A CompletableFuture that resolves to the value or null if not found
-     */
-    public CompletableFuture<GlideString> getWithCache(@NonNull GlideString key) {
-        if (cacheConfig != null && cacheConfig.isEnabled()) {
-            return commandManager.getGlideCoreClient()
-                    .getWithCache(key.toString())
-                    .thenApply(result -> result != null ? GlideString.of(result.toString()) : null);
-        } else {
-            // Fallback to regular get
-            return get(key);
-        }
     }
 
     /**
