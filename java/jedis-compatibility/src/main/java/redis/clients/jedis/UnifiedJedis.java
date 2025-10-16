@@ -678,6 +678,30 @@ public class UnifiedJedis implements Closeable {
         }
     }
 
+    // ========== CLIENT COMMANDS ==========
+
+    /**
+     * Get information and statistics about the current client connection. This method provides
+     * compatibility with the original Jedis CLIENT INFO command.
+     *
+     * @return Information and statistics about the current client connection
+     * @throws JedisException if the CLIENT INFO operation fails
+     */
+    public String clientInfo() {
+        checkNotClosed();
+        try {
+            Object result;
+            String[] infoCommands = new String[] {"CLIENT", "INFO"};
+            if (isClusterMode) {
+                return (String) glideClusterClient.customCommand(infoCommands).get().getSingleValue();
+            } else {
+                return (String) glideClient.customCommand(infoCommands).get();
+            }
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("CLIENT INFO operation failed", e);
+        }
+    }
+
     // ========== STRING COMMANDS ==========
 
     /**

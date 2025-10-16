@@ -14,6 +14,7 @@ use crate::iam::ServiceType;
 pub struct ConnectionRequest {
     pub read_from: Option<ReadFrom>,
     pub client_name: Option<String>,
+    pub lib_name: Option<String>,
     pub authentication_info: Option<AuthenticationInfo>,
     pub database_id: i64,
     pub protocol: Option<redis::ProtocolVersion>,
@@ -164,6 +165,7 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
         });
 
         let client_name = chars_to_string_option(&value.client_name);
+        let lib_name = chars_to_string_option(&value.lib_name);
         let authentication_info = value.authentication_info.0.map(|authentication_info| {
             let password = chars_to_string_option(&authentication_info.password);
             let username = chars_to_string_option(&authentication_info.username);
@@ -278,6 +280,7 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
         ConnectionRequest {
             read_from,
             client_name,
+            lib_name,
             authentication_info,
             database_id,
             protocol,
